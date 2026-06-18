@@ -7,8 +7,10 @@ use ax_code_tui::events::{
     MessageData, MessageInfo, MessagePartDeltaProps, MessageRole, PermissionRequestProps,
     QuestionRequestProps, RuntimeEvent, SessionData, SessionInfo,
 };
-use ax_code_tui::tui::app::{App, AppMode, SessionStatus, SessionSummary, ToolCall, ToolCallStatus};
-use ax_code_tui::tui::input::{handle_input, InputAction};
+use ax_code_tui::tui::app::{
+    App, AppMode, SessionStatus, SessionSummary, ToolCall, ToolCallStatus,
+};
+use ax_code_tui::tui::input::{InputAction, handle_input};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use support::mock_server::MockServer;
 
@@ -23,10 +25,15 @@ async fn test_no_dashboard_endpoint_on_startup() {
         base_url: server.url(),
         auth_token: None,
         directory: None,
+        session: None,
+        prompt: None,
     };
     let client = HeadlessClient::new(config).expect("Failed to create client");
     let result = client.connect().await;
-    assert!(result.is_ok(), "Startup should succeed without dashboard endpoints");
+    assert!(
+        result.is_ok(),
+        "Startup should succeed without dashboard endpoints"
+    );
     server.shutdown().await;
 }
 
@@ -161,7 +168,11 @@ fn test_question_prompt_navigate_and_select() {
             session_id: "sess-1".to_string(),
             id: "q-1".to_string(),
             question: "Choose an option".to_string(),
-            options: vec!["Option A".to_string(), "Option B".to_string(), "Option C".to_string()],
+            options: vec![
+                "Option A".to_string(),
+                "Option B".to_string(),
+                "Option C".to_string(),
+            ],
         },
     };
     app.handle_event(event);
@@ -364,7 +375,11 @@ fn test_message_accumulation() {
                 info: Some(MessageData {
                     id: format!("msg-{}", i),
                     session_id: "sess-1".to_string(),
-                    role: Some(if i % 2 == 0 { MessageRole::User } else { MessageRole::Assistant }),
+                    role: Some(if i % 2 == 0 {
+                        MessageRole::User
+                    } else {
+                        MessageRole::Assistant
+                    }),
                 }),
             },
         };
@@ -389,7 +404,10 @@ fn test_tool_call_lifecycle_start_complete() {
     app.tool_calls[0].result = Some("done".to_string());
     assert_eq!(app.active_tool_calls().len(), 0);
     assert_eq!(app.completed_tool_calls().len(), 1);
-    assert!(matches!(app.tool_calls[0].status, ToolCallStatus::Completed));
+    assert!(matches!(
+        app.tool_calls[0].status,
+        ToolCallStatus::Completed
+    ));
 }
 
 #[test]
@@ -417,7 +435,8 @@ fn test_session_status_transitions() {
     assert!(matches!(app.session_status, SessionStatus::Idle));
     app.session_status = SessionStatus::Running;
     assert!(matches!(app.session_status, SessionStatus::Running));
+    // request_abort stays Running until the server confirms via an event.
     let result = app.request_abort();
     assert!(result.is_some());
-    assert!(matches!(app.session_status, SessionStatus::Aborted));
+    assert!(matches!(app.session_status, SessionStatus::Running));
 }

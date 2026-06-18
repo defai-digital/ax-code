@@ -160,9 +160,9 @@ async fn handle_connection(
         response
     } else if request.starts_with("POST /session/") {
         "HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n".to_string()
-    } else if request.starts_with("POST /permission/reply") {
-        "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string()
-    } else if request.starts_with("POST /question/reply") {
+    } else if request.starts_with("POST /permission/reply")
+        || request.starts_with("POST /question/reply")
+    {
         "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string()
     } else {
         "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".to_string()

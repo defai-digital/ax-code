@@ -200,9 +200,21 @@ fn test_session_navigation() {
     let mut app = App::new();
 
     app.load_sessions(vec![
-        SessionSummary { id: "sess_001".to_string(), title: None, message_count: 0 },
-        SessionSummary { id: "sess_002".to_string(), title: None, message_count: 0 },
-        SessionSummary { id: "sess_003".to_string(), title: None, message_count: 0 },
+        SessionSummary {
+            id: "sess_001".to_string(),
+            title: None,
+            message_count: 0,
+        },
+        SessionSummary {
+            id: "sess_002".to_string(),
+            title: None,
+            message_count: 0,
+        },
+        SessionSummary {
+            id: "sess_003".to_string(),
+            title: None,
+            message_count: 0,
+        },
     ]);
 
     app.selected_session_index = 0;
@@ -234,8 +246,16 @@ fn test_session_selection() {
     app.show_session_list = true;
 
     app.load_sessions(vec![
-        SessionSummary { id: "sess_001".to_string(), title: None, message_count: 0 },
-        SessionSummary { id: "sess_002".to_string(), title: None, message_count: 0 },
+        SessionSummary {
+            id: "sess_001".to_string(),
+            title: None,
+            message_count: 0,
+        },
+        SessionSummary {
+            id: "sess_002".to_string(),
+            title: None,
+            message_count: 0,
+        },
     ]);
 
     app.selected_session_index = 1;
@@ -267,7 +287,9 @@ fn test_abort_session() {
     let session_id = app.request_abort();
 
     assert_eq!(session_id, Some("sess_123".to_string()));
-    assert_eq!(app.session_status, SessionStatus::Aborted);
+    // Status stays Running until the server confirms via an event; the TUI no
+    // longer optimistically flips to Aborted (which desynced on abort failure).
+    assert_eq!(app.session_status, SessionStatus::Running);
 }
 
 #[test]
@@ -316,8 +338,16 @@ fn test_input_session_navigation() {
     let mut app = App::new();
     app.show_session_list = true;
     app.load_sessions(vec![
-        SessionSummary { id: "sess_001".to_string(), title: None, message_count: 0 },
-        SessionSummary { id: "sess_002".to_string(), title: None, message_count: 0 },
+        SessionSummary {
+            id: "sess_001".to_string(),
+            title: None,
+            message_count: 0,
+        },
+        SessionSummary {
+            id: "sess_002".to_string(),
+            title: None,
+            message_count: 0,
+        },
     ]);
     app.selected_session_index = 0;
 

@@ -3,8 +3,10 @@
 //! Tests boundary conditions and edge cases for message handling,
 //! event processing, and UI state management.
 
+use ax_code_tui::events::{
+    MessageData, MessageInfo, MessagePartDeltaProps, MessageRole, RuntimeEvent,
+};
 use ax_code_tui::tui::app::{App, AppMode, Message};
-use ax_code_tui::events::{MessageRole, RuntimeEvent, MessageInfo, MessageData, MessagePartDeltaProps};
 
 // =============================================================================
 // Empty Message Handling

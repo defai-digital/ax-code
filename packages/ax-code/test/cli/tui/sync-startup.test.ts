@@ -101,7 +101,10 @@ describe("tui sync startup coordinator", () => {
     })
   })
 
-  test("skips workflow dashboard polling when disableWorkflowDashboardPoll is set", () => {
+  // ADR-035: Workflow dashboard polling is disabled by default. The
+  // disableWorkflowDashboardPoll flag ensures dashboard ownership stays with
+  // AX Code Desktop rather than the TUI's default startup path.
+  test("skips workflow dashboard polling when disableWorkflowDashboardPoll is set (ADR-035)", () => {
     const calls = {
       bootstrap: 0,
       debug: 0,

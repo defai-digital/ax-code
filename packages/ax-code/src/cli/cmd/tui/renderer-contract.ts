@@ -14,11 +14,12 @@ export type TuiRendererContractRequirement = {
     | "extension"
     | "packaging"
     | "visual"
+    | "routing"
   requirement: string
   gate: TuiRendererContractGate
 }
 
-export const TUI_RENDERER_CONTRACT_VERSION = "2026-06-10"
+export const TUI_RENDERER_CONTRACT_VERSION = "2026-06-17"
 
 export const TUI_RENDERER_CONTRACT: TuiRendererContractRequirement[] = [
   {
@@ -94,6 +95,20 @@ export const TUI_RENDERER_CONTRACT: TuiRendererContractRequirement[] = [
       "Design-system outputs (brand gradient runs, gauge fills, border charsets, glyph sets) match the checked-in visual snapshot for both truecolor and fallback profiles (ADR-031).",
     gate: "automated",
   },
+  {
+    id: "routing.session-first",
+    area: "routing",
+    requirement:
+      "Default TUI startup resolves to a session or new-session route. The launch policy never selects a dashboard/home route (ADR-035).",
+    gate: "automated",
+  },
+  {
+    id: "routing.dashboard-free",
+    area: "routing",
+    requirement:
+      "Workflow dashboard polling is not part of the default startup path. Dashboard ownership belongs to AX Code Desktop (ADR-035).",
+    gate: "automated",
+  },
 ]
 
 export const TUI_RENDERER_CONTRACT_REQUIRED_AREAS = [
@@ -108,4 +123,5 @@ export const TUI_RENDERER_CONTRACT_REQUIRED_AREAS = [
   "extension",
   "packaging",
   "visual",
+  "routing",
 ] as const

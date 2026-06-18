@@ -1,6 +1,6 @@
 //! Tests for the headless client.
 
-use ax_code_tui::client::{ClientConfig, HeadlessClient, DEFAULT_SERVER_URL};
+use ax_code_tui::client::{ClientConfig, DEFAULT_SERVER_URL, HeadlessClient};
 use ax_code_tui::events::RuntimeEvent;
 
 #[test]
@@ -17,6 +17,8 @@ fn test_client_creation() {
         base_url: "http://localhost:8080".to_string(),
         directory: Some("/tmp/test".to_string()),
         auth_token: Some("secret-token".to_string()),
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config);
@@ -32,6 +34,8 @@ fn test_client_creation_with_auth() {
         base_url: "http://localhost:4096".to_string(),
         directory: None,
         auth_token: Some("my-password".to_string()),
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config);
@@ -47,7 +51,10 @@ async fn test_parse_sse_events() {
     match event {
         RuntimeEvent::SessionCreated { properties } => {
             assert_eq!(properties.info.as_ref().unwrap().id, "sess_123");
-            assert_eq!(properties.info.as_ref().unwrap().title.as_deref(), Some("Test Session"));
+            assert_eq!(
+                properties.info.as_ref().unwrap().title.as_deref(),
+                Some("Test Session")
+            );
         }
         _ => panic!("Expected SessionCreated event"),
     }

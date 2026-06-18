@@ -10,20 +10,25 @@ use clap::Parser;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use tokio::sync::mpsc;
 
 use crate::client::{ClientConfig, HeadlessClient};
+use crate::diagnostics::{self, DiagnosticEvent};
 use crate::events::RuntimeEvent;
+use crate::launch_policy::{self, LaunchInput};
 use crate::tui::app::App;
-use crate::tui::input::{handle_input, InputAction};
+use crate::tui::input::{InputAction, handle_input};
 use crate::tui::render::render;
 
 /// Command-line arguments for the TUI binary.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "ax-code-tui", about = "AX Code native TUI client (experimental)")]
+#[command(
+    name = "ax-code-tui",
+    about = "AX Code native TUI client (experimental)"
+)]
 pub struct CliArgs {
     /// URL of the headless ax-code server.
     /// Format: http://host:port
@@ -55,6 +60,8 @@ impl CliArgs {
             base_url: self.server_url,
             auth_token: self.auth_token,
             directory: Some(self.directory),
+            session: self.session,
+            prompt: self.prompt,
         }
     }
 }
@@ -94,7 +101,30 @@ impl Runner {
         // Create the app state
         let mut app = App::new();
 
-        // Create the SSE event channel
+        // Check for legacy home rollback (ADR-035 Phase 5)
+        if diagnostics::check_legacy_rollback() {
+            app.set_status("Legacy home route active (AX_CODE_TUI_LEGACY_HOME=1)".to_string());
+        }
+
+        // Resolve launch route via launch policy (ADR-035)
+        let launch_input = LaunchInput {
+            explicit_session_id: self.config.session.clone(),
+            explicit_prompt: self.config.prompt.clone(),
+            recent_session_ids: Vec::new(), // TODO: fetch from server
+            has_project_context: false,
+        };
+        let _route = launch_policy::resolve_launch_route(&launch_input);
+
+        // Emit renderer startup diagnostic
+        DiagnosticEvent::RendererStartup {
+            renderer: "ratatui".to_string(),
+            success: true,
+            error: None,
+        }
+        .emit();
+
+        // Create the SSE event channel. We drain into a local mpsc so the
+        // poll-style render loop can consume events with try_recv().
         let (event_tx, mut event_rx) = mpsc::channel::<RuntimeEvent>(100);
 
         // Try to create the client
@@ -107,48 +137,31 @@ impl Runner {
             }
         };
 
-        // Spawn the client connection task if we have a client
-        let client_handle = if let Some(ref client) = client {
-            let base_url = client.base_url().to_string();
-            let event_tx = event_tx.clone();
-            Some(tokio::spawn(async move {
-                // Try to connect and subscribe
-                match reqwest::Client::new()
-                    .get(&format!("{}/global/event", base_url))
-                    .header(reqwest::header::ACCEPT, "text/event-stream")
-                    .send()
-                    .await
-                {
-                    Ok(response) if response.status().is_success() => {
-                        use futures_util::StreamExt;
-                        let mut stream = response.bytes_stream();
-                        let mut buffer = String::new();
-                        while let Some(chunk_result) = stream.next().await {
-                            if let Ok(chunk) = chunk_result {
-                                buffer.push_str(&String::from_utf8_lossy(&chunk));
-                                // Process complete lines from the buffer
-                                while let Some(newline_pos) = buffer.find('\n') {
-                                    let line = buffer[..newline_pos].trim_end_matches('\r').to_string();
-                                    buffer = buffer[newline_pos + 1..].to_string();
-                                    if let Some(data) = line.strip_prefix("data: ") {
-                                        if let Ok(event) = serde_json::from_str::<RuntimeEvent>(data) {
-                                            if event_tx.send(event).await.is_err() {
-                                                return;
-                                            }
-                                        }
-                                    }
-                                }
+        // Subscribe to the headless server's event stream via HeadlessClient.
+        // This applies the configured auth token (HeadlessClient::new sets the
+        // Authorization header in default_headers) and parses SSE with a
+        // cross-chunk buffer. The runner must not build its own reqwest client
+        // here — that previously bypassed auth entirely on /global/event.
+        let mut event_join_handle: Option<tokio::task::JoinHandle<()>> = None;
+        if let Some(ref client) = client {
+            match client.subscribe().await {
+                Ok(server_rx) => {
+                    // Bridge the server receiver into our local channel.
+                    let event_tx = event_tx.clone();
+                    event_join_handle = Some(tokio::spawn(async move {
+                        let mut server_rx = server_rx;
+                        while let Some(event) = server_rx.recv().await {
+                            if event_tx.send(event).await.is_err() {
+                                return;
                             }
                         }
-                    }
-                    _ => {
-                        // Connection failed, just exit the task
-                    }
+                    }));
                 }
-            }))
-        } else {
-            None
-        };
+                Err(e) => {
+                    app.set_status(format!("Event stream failed: {}", e));
+                }
+            }
+        }
 
         // Main event loop
         loop {
@@ -181,7 +194,10 @@ impl Runner {
                         request_id,
                     } => {
                         if let Some(ref client) = client {
-                            if let Err(e) = client.reply_permission(&session_id, &request_id, true).await {
+                            if let Err(e) = client
+                                .reply_permission(&session_id, &request_id, true)
+                                .await
+                            {
                                 app.set_status(format!("Permission reply failed: {}", e));
                             }
                         }
@@ -191,7 +207,10 @@ impl Runner {
                         request_id,
                     } => {
                         if let Some(ref client) = client {
-                            if let Err(e) = client.reply_permission(&session_id, &request_id, false).await {
+                            if let Err(e) = client
+                                .reply_permission(&session_id, &request_id, false)
+                                .await
+                            {
                                 app.set_status(format!("Permission reply failed: {}", e));
                             }
                         }
@@ -202,7 +221,10 @@ impl Runner {
                         answer,
                     } => {
                         if let Some(ref client) = client {
-                            if let Err(e) = client.reply_question(&session_id, &request_id, &answer).await {
+                            if let Err(e) = client
+                                .reply_question(&session_id, &request_id, &answer)
+                                .await
+                            {
                                 app.set_status(format!("Question reply failed: {}", e));
                             }
                         }
@@ -213,7 +235,9 @@ impl Runner {
                     } => {
                         // Treat rejection as answering with empty string
                         if let Some(ref client) = client {
-                            if let Err(e) = client.reply_question(&session_id, &request_id, "").await {
+                            if let Err(e) =
+                                client.reply_question(&session_id, &request_id, "").await
+                            {
                                 app.set_status(format!("Question reject failed: {}", e));
                             }
                         }
@@ -238,8 +262,10 @@ impl Runner {
             }
         }
 
-        // Clean up client task
-        if let Some(handle) = client_handle {
+        // Clean up the event bridge task. subscribe()'s own SSE task exits
+        // when the server closes the stream or when our bridge drops the
+        // receiver (event_tx goes out of scope on return).
+        if let Some(handle) = event_join_handle {
             handle.abort();
         }
 
@@ -293,12 +319,18 @@ mod tests {
             "token",
             "--directory",
             "/test",
+            "--session",
+            "sess-123",
+            "--prompt",
+            "Hello world",
         ]);
 
         let config = args.into_config();
         assert_eq!(config.base_url, "http://test:3000");
         assert_eq!(config.auth_token, Some("token".to_string()));
         assert_eq!(config.directory, Some("/test".to_string()));
+        assert_eq!(config.session, Some("sess-123".to_string()));
+        assert_eq!(config.prompt, Some("Hello world".to_string()));
     }
 
     #[test]

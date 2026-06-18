@@ -12,13 +12,26 @@ pub enum InputAction {
     /// Submit a prompt.
     SubmitPrompt(String),
     /// Accept a permission request.
-    AcceptPermission { session_id: String, request_id: String },
+    AcceptPermission {
+        session_id: String,
+        request_id: String,
+    },
     /// Reject a permission request.
-    RejectPermission { session_id: String, request_id: String },
+    RejectPermission {
+        session_id: String,
+        request_id: String,
+    },
     /// Answer a question.
-    AnswerQuestion { session_id: String, request_id: String, answer: String },
+    AnswerQuestion {
+        session_id: String,
+        request_id: String,
+        answer: String,
+    },
     /// Reject a question.
-    RejectQuestion { session_id: String, request_id: String },
+    RejectQuestion {
+        session_id: String,
+        request_id: String,
+    },
     /// Abort the current session.
     AbortSession { session_id: String },
     /// Switch to a different session.
@@ -124,7 +137,7 @@ fn handle_input_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
             InputAction::None
         }
         KeyCode::End => {
-            app.cursor_position = app.prompt.len();
+            app.cursor_position = app.prompt.chars().count();
             InputAction::None
         }
         // Regular character input
@@ -283,7 +296,7 @@ fn handle_question_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
 
 /// Select a specific question option by index.
 fn select_question_option(app: &mut App, index: usize) -> InputAction {
-    if let Some(req) = app.pending_questions.last_mut() {
+    if let Some(req) = app.pending_questions.first_mut() {
         if index < req.options.len() {
             req.selected = index;
             if let Some((session_id, request_id, answer)) = app.select_question() {

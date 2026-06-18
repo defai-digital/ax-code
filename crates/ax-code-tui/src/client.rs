@@ -7,7 +7,7 @@
 //! - Permission and question responses
 
 use anyhow::{Context, Result};
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use reqwest::{Client, StatusCode};
 use serde::Serialize;
 use tokio::sync::mpsc;
@@ -23,6 +23,10 @@ pub struct ClientConfig {
     pub base_url: String,
     pub directory: Option<String>,
     pub auth_token: Option<String>,
+    /// Session ID to attach to (from --session CLI arg).
+    pub session: Option<String>,
+    /// Initial prompt to send (from --prompt CLI arg).
+    pub prompt: Option<String>,
 }
 
 impl Default for ClientConfig {
@@ -31,6 +35,8 @@ impl Default for ClientConfig {
             base_url: DEFAULT_SERVER_URL.to_string(),
             directory: None,
             auth_token: None,
+            session: None,
+            prompt: None,
         }
     }
 }
@@ -47,16 +53,18 @@ pub struct HeadlessClient {
 impl HeadlessClient {
     /// Create a new client with the given configuration.
     pub fn new(config: ClientConfig) -> Result<Self> {
-        let mut builder = Client::builder()
-            .timeout(std::time::Duration::from_secs(30));
+        let mut builder = Client::builder().timeout(std::time::Duration::from_secs(30));
 
         if let Some(ref token) = config.auth_token {
             // Basic auth with empty username and token as password
             let header_value = format!("Basic {}", BASE64_STANDARD.encode(format!(":{}", token)));
             builder = builder.default_headers(
-                [(reqwest::header::AUTHORIZATION, reqwest::header::HeaderValue::from_str(&header_value)?)]
-                    .into_iter()
-                    .collect(),
+                [(
+                    reqwest::header::AUTHORIZATION,
+                    reqwest::header::HeaderValue::from_str(&header_value)?,
+                )]
+                .into_iter()
+                .collect(),
             );
         }
 
@@ -72,17 +80,15 @@ impl HeadlessClient {
     /// Connect to the server and verify availability.
     pub async fn connect(&self) -> Result<()> {
         let url = format!("{}/global/health", self.config.base_url);
-        let response = self.http
+        let response = self
+            .http
             .get(&url)
             .send()
             .await
             .context("Failed to connect to headless server")?;
 
         if !response.status().is_success() {
-            anyhow::bail!(
-                "Headless server health check failed: {}",
-                response.status()
-            );
+            anyhow::bail!("Headless server health check failed: {}", response.status());
         }
 
         Ok(())
@@ -95,7 +101,8 @@ impl HeadlessClient {
     /// by dropping the returned receiver.
     pub async fn subscribe(&self) -> Result<mpsc::Receiver<RuntimeEvent>> {
         let url = format!("{}/global/event", self.config.base_url);
-        let response = self.http
+        let response = self
+            .http
             .get(&url)
             .header(reqwest::header::ACCEPT, "text/event-stream")
             .header("X-Accel-Buffering", "no")
@@ -104,25 +111,28 @@ impl HeadlessClient {
             .context("Failed to subscribe to event stream")?;
 
         if !response.status().is_success() {
-            anyhow::bail!(
-                "Event subscription failed: {}",
-                response.status()
-            );
+            anyhow::bail!("Event subscription failed: {}", response.status());
         }
 
         let (tx, rx) = mpsc::channel(256);
 
-        // Spawn a task to parse SSE events
+        // Spawn a task to parse SSE events. A carry-over buffer is required
+        // because reqwest's `bytes_stream()` splits on network chunk
+        // boundaries, which are NOT aligned to SSE line boundaries. A single
+        // `data: {...}\n` line commonly arrives across two chunks.
         tokio::spawn(async move {
             use futures_util::StreamExt;
             let mut stream = response.bytes_stream();
+            let mut buffer = String::new();
 
             while let Some(chunk_result) = stream.next().await {
                 match chunk_result {
                     Ok(chunk) => {
-                        let text = String::from_utf8_lossy(&chunk);
-                        for event in parse_sse_events(&text) {
+                        buffer.push_str(&String::from_utf8_lossy(&chunk));
+                        let events = drain_complete_sse_lines(&mut buffer);
+                        for event in events {
                             if tx.send(event).await.is_err() {
+                                // Receiver dropped: TUI is shutting down.
                                 return;
                             }
                         }
@@ -151,7 +161,8 @@ impl HeadlessClient {
             prompt: String,
         }
 
-        let response = self.http
+        let response = self
+            .http
             .post(&url)
             .json(&PromptBody {
                 prompt: prompt.to_string(),
@@ -169,7 +180,12 @@ impl HeadlessClient {
     }
 
     /// Reply to a permission request.
-    pub async fn reply_permission(&self, session_id: &str, permission_id: &str, accepted: bool) -> Result<()> {
+    pub async fn reply_permission(
+        &self,
+        session_id: &str,
+        permission_id: &str,
+        accepted: bool,
+    ) -> Result<()> {
         let url = format!("{}/permission/reply", self.config.base_url);
 
         #[derive(Serialize)]
@@ -179,7 +195,8 @@ impl HeadlessClient {
             accepted: bool,
         }
 
-        let response = self.http
+        let response = self
+            .http
             .post(&url)
             .json(&PermissionReply {
                 session_id: session_id.to_string(),
@@ -199,7 +216,12 @@ impl HeadlessClient {
     }
 
     /// Reply to a question.
-    pub async fn reply_question(&self, session_id: &str, question_id: &str, answer: &str) -> Result<()> {
+    pub async fn reply_question(
+        &self,
+        session_id: &str,
+        question_id: &str,
+        answer: &str,
+    ) -> Result<()> {
         let url = format!("{}/question/reply", self.config.base_url);
 
         #[derive(Serialize)]
@@ -209,7 +231,8 @@ impl HeadlessClient {
             answer: String,
         }
 
-        let response = self.http
+        let response = self
+            .http
             .post(&url)
             .json(&QuestionReply {
                 session_id: session_id.to_string(),
@@ -236,7 +259,8 @@ impl HeadlessClient {
             urlencoding::encode(session_id)
         );
 
-        let response = self.http
+        let response = self
+            .http
             .post(&url)
             .send()
             .await
@@ -251,19 +275,124 @@ impl HeadlessClient {
     }
 }
 
-/// Parse SSE events from a text chunk.
-fn parse_sse_events(text: &str) -> Vec<RuntimeEvent> {
+/// Drain complete SSE lines from `buffer`, leaving any partial trailing line
+/// in the buffer for the next chunk.
+///
+/// SSE frames are newline-terminated. TCP/SSE chunks are NOT aligned to line
+/// boundaries, so callers must keep a running buffer: feed each incoming chunk
+/// into it, then call this to extract the events from the now-complete lines.
+/// Lines ending with `\r\n` (CRLF) are handled by trimming a trailing `\r`.
+/// Lines that do not start with `data: ` (comments, `event:`, `id:`, blank
+/// keep-alive lines) are ignored. Unparseable `data:` payloads are logged at
+/// debug level and skipped so one bad event can't kill the whole stream.
+pub(crate) fn drain_complete_sse_lines(buffer: &mut String) -> Vec<RuntimeEvent> {
     let mut events = Vec::new();
 
-    for line in text.lines() {
+    while let Some(newline_pos) = buffer.find('\n') {
+        let line = buffer[..newline_pos].trim_end_matches('\r').to_string();
+        // Advance the buffer past the consumed line + its newline.
+        *buffer = buffer[newline_pos + 1..].to_string();
+
         if let Some(data) = line.strip_prefix("data: ") {
-            if let Ok(event) = serde_json::from_str::<RuntimeEvent>(data) {
-                events.push(event);
-            } else {
-                tracing::debug!("Failed to parse SSE event: {}", data);
+            match serde_json::from_str::<RuntimeEvent>(data) {
+                Ok(event) => events.push(event),
+                Err(_) => tracing::debug!("Failed to parse SSE event: {}", data),
             }
         }
     }
 
     events
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // === MEDIUM 3: cross-chunk SSE buffering ===
+
+    #[test]
+    fn test_sse_single_complete_line() {
+        let mut buf =
+            "data: {\"type\":\"server.heartbeat\"}\n".to_string();
+        let events = drain_complete_sse_lines(&mut buf);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], RuntimeEvent::ServerHeartbeat));
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_sse_event_split_across_chunks() {
+        // The exact regression from the original bug: one `data:` line arrives
+        // split across two chunks. The first chunk must NOT parse anything and
+        // must retain the partial line in the buffer; the second completes it.
+        let mut buf = "data: {\"type\":\"server".to_string();
+        let first = drain_complete_sse_lines(&mut buf);
+        assert!(first.is_empty(), "no complete line yet");
+        assert!(!buf.is_empty(), "partial line retained");
+
+        buf.push_str(".heartbeat\"}\n");
+        let second = drain_complete_sse_lines(&mut buf);
+        assert_eq!(second.len(), 1);
+        assert!(matches!(second[0], RuntimeEvent::ServerHeartbeat));
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_sse_handles_crlf_endings() {
+        let mut buf =
+            "data: {\"type\":\"server.connected\"}\r\n".to_string();
+        let events = drain_complete_sse_lines(&mut buf);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], RuntimeEvent::ServerConnected));
+    }
+
+    #[test]
+    fn test_sse_ignores_non_data_lines() {
+        // Comments (:), event/id fields, and blank keep-alive lines must be
+        // skipped without erroring — only `data:` payloads become events.
+        let mut buf = [
+            ": keep-alive",
+            "event: message",
+            "id: 42",
+            "",
+            "data: {\"type\":\"server.heartbeat\"}",
+            "",
+        ]
+        .join("\n");
+        buf.push('\n');
+        let events = drain_complete_sse_lines(&mut buf);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], RuntimeEvent::ServerHeartbeat));
+    }
+
+    #[test]
+    fn test_sse_skips_unparseable_payload() {
+        // One malformed event must not break the stream; the next valid one
+        // still parses.
+        let mut buf = [
+            "data: {not valid json}",
+            "data: {\"type\":\"server.heartbeat\"}",
+        ]
+        .join("\n");
+        buf.push('\n');
+        let events = drain_complete_sse_lines(&mut buf);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], RuntimeEvent::ServerHeartbeat));
+    }
+
+    #[test]
+    fn test_sse_multiple_events_one_chunk() {
+        let mut buf = [
+            "data: {\"type\":\"server.connected\"}",
+            "data: {\"type\":\"server.heartbeat\"}",
+            "data: {\"type\":\"server.heartbeat\"}",
+        ]
+        .join("\n");
+        buf.push('\n');
+        let events = drain_complete_sse_lines(&mut buf);
+        assert_eq!(events.len(), 3);
+        assert!(matches!(events[0], RuntimeEvent::ServerConnected));
+        assert!(matches!(events[1], RuntimeEvent::ServerHeartbeat));
+        assert!(matches!(events[2], RuntimeEvent::ServerHeartbeat));
+    }
 }

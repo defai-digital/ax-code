@@ -1,3 +1,9 @@
+// Workflow dialog component (ADR-035).
+//
+// This dialog is owned by the workflow runtime / AX Code Desktop, not by the
+// default TUI startup path. It is triggered on demand when the user explicitly
+// opens the workflow view or when desktop requests it.
+
 import { createMemo, createResource, createSignal, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useDialog, type DialogContext } from "../../ui/dialog"

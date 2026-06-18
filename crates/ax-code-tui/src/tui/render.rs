@@ -63,7 +63,7 @@ fn render_main_vertical(frame: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
+            Constraint::Length(3), // Header
             Constraint::Min(10),   // Transcript
             Constraint::Length(3), // Footer (prompt)
             Constraint::Length(1), // Status bar
@@ -78,10 +78,7 @@ fn render_main_vertical(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Render the header with session info.
 fn render_header(frame: &mut Frame, app: &App, area: Rect) {
-    let title = app
-        .session_title
-        .as_deref()
-        .unwrap_or("AX Code TUI");
+    let title = app.session_title.as_deref().unwrap_or("AX Code TUI");
 
     let session_info = app
         .session_id
@@ -113,16 +110,12 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     let header_line = Line::from(vec![
         Span::styled(
             format!("{}{}", title, session_info),
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(
-            status_indicator,
-            Style::default().fg(status_color),
-        ),
-        Span::styled(
-            tool_info,
-            Style::default().fg(Color::Yellow),
-        ),
+        Span::styled(status_indicator, Style::default().fg(status_color)),
+        Span::styled(tool_info, Style::default().fg(Color::Yellow)),
     ]);
 
     let header = Paragraph::new(header_line)
@@ -142,9 +135,13 @@ fn render_transcript(frame: &mut Frame, app: &App, area: Rect) {
         .skip(app.scroll_offset)
         .map(|msg| {
             let role_style = match msg.role {
-                MessageRole::User => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                MessageRole::User => Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
                 MessageRole::Assistant => Style::default().fg(Color::Blue),
-                MessageRole::System => Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC),
+                MessageRole::System => Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::ITALIC),
             };
 
             let role_prefix = match msg.role {
@@ -196,31 +193,25 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
 
     // Show cursor if in input mode
     if app.mode == AppMode::Input {
-        frame.set_cursor_position((
-            area.x + app.cursor_position as u16 + 1,
-            area.y + 1,
-        ));
+        frame.set_cursor_position((area.x + app.cursor_position as u16 + 1, area.y + 1));
     }
 }
 
 /// Render the status bar.
 fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let width = area.width as usize;
-    let status_text = App::format_status_bar(
-        app.mode,
-        app.status_message.as_deref(),
-        width,
-    );
+    let status_text = App::format_status_bar(app.mode, app.status_message.as_deref(), width);
 
-    let status_bar = Paragraph::new(status_text)
-        .style(Style::default().fg(Color::Black).bg(Color::Gray));
+    let status_bar =
+        Paragraph::new(status_text).style(Style::default().fg(Color::Black).bg(Color::Gray));
 
     frame.render_widget(status_bar, area);
 }
 
 /// Render the permission request modal.
 fn render_permission_modal(frame: &mut Frame, app: &App, area: Rect) {
-    if let Some(req) = app.pending_permissions.last() {
+    // FIFO: the front request is the one the user is currently answering.
+    if let Some(req) = app.pending_permissions.first() {
         let modal_area = centered_rect(60, 40, area);
 
         let text = format!(
@@ -245,7 +236,8 @@ fn render_permission_modal(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Render the question request modal.
 fn render_question_modal(frame: &mut Frame, app: &App, area: Rect) {
-    if let Some(req) = app.pending_questions.last() {
+    // FIFO: the front request is the one the user is currently answering.
+    if let Some(req) = app.pending_questions.first() {
         let modal_area = centered_rect(70, 50, area);
 
         let items: Vec<ListItem> = req
@@ -255,7 +247,9 @@ fn render_question_modal(frame: &mut Frame, app: &App, area: Rect) {
             .map(|(i, opt)| {
                 let prefix = if i == req.selected { "▶ " } else { "  " };
                 let style = if i == req.selected {
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
@@ -357,7 +351,7 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(completed_tools.len().min(10) as u16 + 2), // Tool list
-            Constraint::Min(5), // Result preview
+            Constraint::Min(5),                                           // Result preview
         ])
         .split(area);
 
@@ -390,7 +384,10 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             ListItem::new(Line::from(vec![
-                Span::styled(format!("{} ", status_icon), Style::default().fg(status_color)),
+                Span::styled(
+                    format!("{} ", status_icon),
+                    Style::default().fg(status_color),
+                ),
                 Span::styled(&tool.tool_name, style),
             ]))
         })
@@ -447,11 +444,8 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
                 width: panel_chunks[1].width,
                 height: 1,
             };
-            let hint = Paragraph::new(format!(
-                " [↑↓] Navigate{}[t] Close ",
-                expand_hint
-            ))
-            .style(Style::default().fg(Color::Black).bg(Color::Gray));
+            let hint = Paragraph::new(format!(" [↑↓] Navigate{}[t] Close ", expand_hint))
+                .style(Style::default().fg(Color::Black).bg(Color::Gray));
             frame.render_widget(hint, hint_area);
         }
     }

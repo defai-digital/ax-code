@@ -336,6 +336,21 @@ fn test_input_question_escape() {
 fn test_scroll() {
     let mut app = App::new();
 
+    // Seed a transcript so scroll_down has somewhere to go. Without messages
+    // the new bounded scroll_down stays at 0 (you cannot scroll past nothing).
+    use ax_code_tui::events::{MessageData, MessageInfo, MessageRole, RuntimeEvent};
+    for i in 0..5 {
+        app.handle_event(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: format!("m{}", i),
+                    session_id: "s".to_string(),
+                    role: Some(MessageRole::Assistant),
+                }),
+            },
+        });
+    }
+
     app.scroll_down();
     assert_eq!(app.scroll_offset, 1);
 
@@ -350,5 +365,21 @@ fn test_scroll() {
 
     // Can't scroll below 0
     app.scroll_up();
+    assert_eq!(app.scroll_offset, 0);
+
+    // Can't scroll past the last message (clamped to messages.len()).
+    for _ in 0..20 {
+        app.scroll_down();
+    }
+    assert_eq!(app.scroll_offset, app.messages.len());
+}
+
+#[test]
+fn test_scroll_empty_transcript_is_clamped_to_zero() {
+    // No messages => scroll_down is a no-op (regression for the old unbounded
+    // behavior that let users scroll into a blank transcript).
+    let mut app = App::new();
+    app.scroll_down();
+    app.scroll_down();
     assert_eq!(app.scroll_offset, 0);
 }

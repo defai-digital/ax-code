@@ -25,8 +25,8 @@ pub fn load_fixture(name: &str) -> Vec<String> {
 
 /// Load and parse events from a JSON string.
 pub fn parse_events(json: &str) -> Vec<String> {
-    let events: Vec<Value> = serde_json::from_str(json)
-        .unwrap_or_else(|e| panic!("Failed to parse events JSON: {}", e));
+    let events: Vec<Value> =
+        serde_json::from_str(json).unwrap_or_else(|e| panic!("Failed to parse events JSON: {}", e));
 
     events
         .into_iter()
@@ -50,7 +50,10 @@ mod tests {
         let events = load_fixture("streaming_message");
         assert!(!events.is_empty());
         // Should have multiple delta events
-        let delta_count = events.iter().filter(|e| e.contains("message.part.delta")).count();
+        let delta_count = events
+            .iter()
+            .filter(|e| e.contains("message.part.delta"))
+            .count();
         assert!(delta_count >= 2);
     }
 

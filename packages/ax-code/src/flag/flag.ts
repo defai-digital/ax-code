@@ -312,10 +312,10 @@ defineBooleanFlag("AX_CODE_NATIVE_PARSER", true)
 
 defineBooleanFlag("AX_CODE_DISABLE_FILETIME_CHECK")
 
-// Session-first TUI launch is on by default (ADR-035). When enabled, the TUI
+// Session-first TUI launch is off by default (ADR-035). When enabled, the TUI
 // auto-resumes the most recent session instead of landing on the home/new-session
-// screen. Opt out with AX_CODE_TUI_SESSION_FIRST=0 for the legacy behavior.
-defineBooleanFlag("AX_CODE_TUI_SESSION_FIRST", true)
+// screen. Opt in with AX_CODE_TUI_SESSION_FIRST=1 for the session-first behavior.
+defineBooleanFlag("AX_CODE_TUI_SESSION_FIRST")
 
 // Periodic workflow dashboard polling adds background fetches every 10s when
 // AX_CODE_WORKFLOW_RUNTIME is enabled. Disable with this flag to reduce startup

@@ -3,6 +3,8 @@ import fs from "fs/promises"
 import path from "path"
 import { TUI_RENDERER_CONTRACT, TUI_RENDERER_CONTRACT_REQUIRED_AREAS } from "../../../src/cli/cmd/tui/renderer-contract"
 import { TUI_PERFORMANCE_CRITERIA } from "../../../src/cli/cmd/tui/performance-criteria"
+import { resolveSessionFirstRoute } from "../../../src/cli/cmd/tui/navigation/launch-policy"
+import { resolveDesktopHandoff } from "../../../src/cli/cmd/tui/navigation/desktop-handoff"
 
 const SRC_ROOT = path.resolve(import.meta.dir, "../../../src")
 const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
@@ -29,6 +31,8 @@ const PURE_TUI_FILES = [
   "routes/session/view-model.ts",
   "ui/dialog-select-view-model.ts",
   "component/prompt/view-model.ts",
+  "navigation/launch-policy.ts",
+  "navigation/desktop-handoff.ts",
 ].map((file) => path.join(TUI_SRC, file))
 
 async function files(dir: string): Promise<string[]> {
@@ -112,5 +116,40 @@ describe("tui renderer replacement contract", () => {
         "visualization.terminal-native",
       ]),
     )
+  })
+
+  test("includes routing contract requirements for ADR-035", () => {
+    const routingItems = TUI_RENDERER_CONTRACT.filter((item) => item.area === "routing")
+    const ids = routingItems.map((item) => item.id)
+    expect(ids).toContain("routing.session-first")
+    expect(ids).toContain("routing.dashboard-free")
+  })
+
+  test("asserts session-first launch policy never returns dashboard route (ADR-035)", () => {
+    const inputs = [
+      { explicitSessionID: undefined, explicitPrompt: undefined, recentSessionIDs: [], hasProjectContext: false },
+      { explicitSessionID: undefined, explicitPrompt: undefined, recentSessionIDs: [], hasProjectContext: true },
+      { explicitSessionID: "sess-1", explicitPrompt: undefined, recentSessionIDs: [], hasProjectContext: false },
+      { explicitSessionID: undefined, explicitPrompt: "hi", recentSessionIDs: [], hasProjectContext: false },
+      { explicitSessionID: undefined, explicitPrompt: undefined, recentSessionIDs: ["recent-1"], hasProjectContext: true },
+    ]
+    for (const input of inputs) {
+      const result = resolveSessionFirstRoute(input)
+      expect(result.type === "session" || result.type === "new-session").toBe(true)
+    }
+  })
+
+  test("asserts desktop handoff exists and routes are dashboard-free (ADR-035)", () => {
+    const darwin = resolveDesktopHandoff({ platform: "darwin" })
+    expect(darwin.type).toBe("not-installed")
+
+    const linux = resolveDesktopHandoff({ platform: "linux" })
+    expect(linux.type).toBe("unsupported")
+
+    const withUrl = resolveDesktopHandoff({ platform: "darwin", desktopUrl: "http://localhost:3000" })
+    expect(withUrl.type).toBe("message")
+    if (withUrl.type === "message") {
+      expect(withUrl.message).toContain("http://localhost:3000")
+    }
   })
 })

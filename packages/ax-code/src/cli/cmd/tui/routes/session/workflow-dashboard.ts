@@ -1,3 +1,12 @@
+// Workflow dashboard view-model (ADR-035).
+//
+// This module is retained for the workflow dialog and AX Code Desktop use.
+// It is NOT part of the default TUI startup dashboard ownership — dashboard
+// and workflow supervision ownership moves to AX Code Desktop (ADR-035).
+//
+// The default TUI startup path never fetches this endpoint unless the user
+// explicitly opens the workflow dialog or desktop requests it on demand.
+
 import type {
   WorkflowArtifactEventRecord,
   WorkflowRunDashboardResponse,

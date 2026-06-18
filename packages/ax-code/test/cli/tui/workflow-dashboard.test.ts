@@ -20,6 +20,9 @@ import {
   visibleWorkflowSidebarRuns,
 } from "../../../src/cli/cmd/tui/routes/session/workflow-status"
 
+// ADR-035: These tests cover the workflow dialog / AX Code Desktop view model.
+// They do NOT imply default TUI dashboard ownership. The default startup path
+// never fetches workflow endpoints unless the user opens the dialog on demand.
 describe("tui workflow dashboard view model", () => {
   test("renders an empty workflow dashboard state", () => {
     const items = workflowDashboardItems([])

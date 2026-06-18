@@ -3,20 +3,15 @@
 use crate::events::{MessageRole, RuntimeEvent};
 
 /// Session status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SessionStatus {
     /// No active session.
+    #[default]
     Idle,
     /// Session is running.
     Running,
     /// Session was aborted.
     Aborted,
-}
-
-impl Default for SessionStatus {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 /// Main application state.
@@ -62,20 +57,15 @@ pub struct App {
 }
 
 /// Application mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum AppMode {
     /// Normal input mode.
+    #[default]
     Input,
     /// Permission response mode.
     Permission,
     /// Question response mode.
     Question,
-}
-
-impl Default for AppMode {
-    fn default() -> Self {
-        Self::Input
-    }
 }
 
 /// A message in the session transcript.
@@ -164,6 +154,22 @@ impl App {
         self.session_id.as_deref()
     }
 
+    /// Reset `mode` to `Input` once no permissions or questions are pending.
+    ///
+    /// Permission/question requests are FIFO: the oldest pending request is the
+    /// one currently being rendered. When it is resolved (locally or via an
+    /// out-of-band `*Replied`/`*Rejected` event), the next oldest takes its
+    /// place; only when the queue is fully drained do we return to `Input`.
+    fn reset_mode_if_idle(&mut self) {
+        if self.pending_permissions.is_empty() && self.pending_questions.is_empty() {
+            self.mode = AppMode::Input;
+        } else if !self.pending_permissions.is_empty() {
+            self.mode = AppMode::Permission;
+        } else {
+            self.mode = AppMode::Question;
+        }
+    }
+
     /// Set a status message to display.
     pub fn set_status(&mut self, message: String) {
         self.status_message = Some(message);
@@ -222,7 +228,11 @@ impl App {
             }
             RuntimeEvent::MessagePartDelta { properties } => {
                 // Find message by ID and append delta to content
-                if let Some(msg) = self.messages.iter_mut().find(|m| m.id == properties.message_id) {
+                if let Some(msg) = self
+                    .messages
+                    .iter_mut()
+                    .find(|m| m.id == properties.message_id)
+                {
                     if properties.field == "content" {
                         msg.content.push_str(&properties.delta);
                     }
@@ -237,9 +247,14 @@ impl App {
                 });
                 self.mode = AppMode::Permission;
             }
-            RuntimeEvent::PermissionReplied { .. } => {
-                // Remove the permission from pending list
-                // (The actual removal happens when we send the reply)
+            RuntimeEvent::PermissionReplied { properties } => {
+                // The server confirmed a permission reply (may be our own, an
+                // out-of-band desktop reply, or a server-side timeout). Remove
+                // the matching request by id so we don't keep showing a stale
+                // modal for an already-resolved request.
+                self.pending_permissions
+                    .retain(|p| p.request_id != properties.request_id);
+                self.reset_mode_if_idle();
             }
             RuntimeEvent::QuestionAsked { properties } => {
                 self.pending_questions.push(QuestionRequest {
@@ -251,8 +266,15 @@ impl App {
                 });
                 self.mode = AppMode::Question;
             }
-            RuntimeEvent::QuestionReplied { .. } | RuntimeEvent::QuestionRejected { .. } => {
-                // Remove the question from pending list
+            RuntimeEvent::QuestionReplied { properties } => {
+                self.pending_questions
+                    .retain(|q| q.request_id != properties.request_id);
+                self.reset_mode_if_idle();
+            }
+            RuntimeEvent::QuestionRejected { properties } => {
+                self.pending_questions
+                    .retain(|q| q.request_id != properties.request_id);
+                self.reset_mode_if_idle();
             }
             RuntimeEvent::TodoUpdated { .. } => {
                 // TODO: Update todo display
@@ -271,7 +293,11 @@ impl App {
                 self.session_status = SessionStatus::Running;
             }
             RuntimeEvent::ToolCallComplete { properties } => {
-                if let Some(tool_call) = self.tool_calls.iter_mut().find(|t| t.call_id == properties.call_id) {
+                if let Some(tool_call) = self
+                    .tool_calls
+                    .iter_mut()
+                    .find(|t| t.call_id == properties.call_id)
+                {
                     tool_call.status = if properties.error.is_some() {
                         ToolCallStatus::Failed
                     } else {
@@ -281,7 +307,11 @@ impl App {
                     tool_call.error = properties.error;
                 }
                 // If no more running tools, session is idle
-                if !self.tool_calls.iter().any(|t| t.status == ToolCallStatus::Running) {
+                if !self
+                    .tool_calls
+                    .iter()
+                    .any(|t| t.status == ToolCallStatus::Running)
+                {
                     self.session_status = SessionStatus::Idle;
                 }
             }
@@ -309,7 +339,11 @@ impl App {
     /// Insert a character at the cursor position.
     pub fn insert_char(&mut self, c: char) {
         if self.mode == AppMode::Input {
-            self.prompt.insert(self.cursor_position, c);
+            // cursor_position is a char index; String::insert takes a byte
+            // index that must lie on a UTF-8 code-point boundary. Convert via
+            // char_indices() so multi-byte input (CJK, emoji) does not panic.
+            let byte_idx = byte_index_at_char(&self.prompt, self.cursor_position);
+            self.prompt.insert(byte_idx, c);
             self.cursor_position += 1;
         }
     }
@@ -318,7 +352,9 @@ impl App {
     pub fn backspace(&mut self) {
         if self.mode == AppMode::Input && self.cursor_position > 0 {
             self.cursor_position -= 1;
-            self.prompt.remove(self.cursor_position);
+            // Remove the char now sitting at the (decremented) char cursor.
+            let byte_idx = byte_index_at_char(&self.prompt, self.cursor_position);
+            self.prompt.remove(byte_idx);
         }
     }
 
@@ -331,7 +367,7 @@ impl App {
 
     /// Move cursor right.
     pub fn move_cursor_right(&mut self) {
-        if self.mode == AppMode::Input && self.cursor_position < self.prompt.len() {
+        if self.mode == AppMode::Input && self.cursor_position < self.prompt.chars().count() {
             self.cursor_position += 1;
         }
     }
@@ -357,31 +393,46 @@ impl App {
     }
 
     /// Scroll transcript down.
+    ///
+    /// Clamped so the user cannot scroll past the last message. The visible
+    /// window size is not known here (it depends on terminal height and is
+    /// computed in render.rs), so we clamp to `messages.len()` — render's
+    /// `skip(scroll_offset)` will simply produce an empty list once the offset
+    /// reaches the end, never an underflow.
     pub fn scroll_down(&mut self) {
-        self.scroll_offset += 1;
+        let max_offset = self.messages.len();
+        if self.scroll_offset < max_offset {
+            self.scroll_offset += 1;
+        }
     }
 
-    /// Accept the current permission request.
+    /// Accept the current (front) permission request.
+    ///
+    /// Permissions are FIFO: the front of `pending_permissions` is the request
+    /// currently rendered in the modal. Removing from the front ensures we
+    /// answer requests in the order the server asked them, not LIFO.
     pub fn accept_permission(&mut self) -> Option<(String, String)> {
-        if let Some(req) = self.pending_permissions.pop() {
-            self.mode = AppMode::Input;
-            return Some((req.session_id, req.request_id));
+        if self.pending_permissions.is_empty() {
+            return None;
         }
-        None
+        let req = self.pending_permissions.remove(0);
+        self.reset_mode_if_idle();
+        Some((req.session_id, req.request_id))
     }
 
-    /// Reject the current permission request.
+    /// Reject the current (front) permission request.
     pub fn reject_permission(&mut self) -> Option<(String, String)> {
-        if let Some(req) = self.pending_permissions.pop() {
-            self.mode = AppMode::Input;
-            return Some((req.session_id, req.request_id));
+        if self.pending_permissions.is_empty() {
+            return None;
         }
-        None
+        let req = self.pending_permissions.remove(0);
+        self.reset_mode_if_idle();
+        Some((req.session_id, req.request_id))
     }
 
     /// Move question selection up.
     pub fn question_up(&mut self) {
-        if let Some(q) = self.pending_questions.last_mut() {
+        if let Some(q) = self.pending_questions.first_mut() {
             if q.selected > 0 {
                 q.selected -= 1;
             }
@@ -390,30 +441,32 @@ impl App {
 
     /// Move question selection down.
     pub fn question_down(&mut self) {
-        if let Some(q) = self.pending_questions.last_mut() {
+        if let Some(q) = self.pending_questions.first_mut() {
             if q.selected < q.options.len().saturating_sub(1) {
                 q.selected += 1;
             }
         }
     }
 
-    /// Select the current question option.
+    /// Select the current (front) question option.
     pub fn select_question(&mut self) -> Option<(String, String, String)> {
-        if let Some(req) = self.pending_questions.pop() {
-            let answer = req.options.get(req.selected).cloned().unwrap_or_default();
-            self.mode = AppMode::Input;
-            return Some((req.session_id, req.request_id, answer));
+        if self.pending_questions.is_empty() {
+            return None;
         }
-        None
+        let req = self.pending_questions.remove(0);
+        let answer = req.options.get(req.selected).cloned().unwrap_or_default();
+        self.reset_mode_if_idle();
+        Some((req.session_id, req.request_id, answer))
     }
 
-    /// Reject the current question.
+    /// Reject the current (front) question.
     pub fn reject_question(&mut self) -> Option<(String, String)> {
-        if let Some(req) = self.pending_questions.pop() {
-            self.mode = AppMode::Input;
-            return Some((req.session_id, req.request_id));
+        if self.pending_questions.is_empty() {
+            return None;
         }
-        None
+        let req = self.pending_questions.remove(0);
+        self.reset_mode_if_idle();
+        Some((req.session_id, req.request_id))
     }
 
     // === Session switching ===
@@ -459,9 +512,15 @@ impl App {
     // === Interrupt/Abort ===
 
     /// Request to abort the current session.
+    ///
+    /// Keeps `session_status` as `Running` until the server confirms. The
+    /// runner sends the HTTP abort and the authoritative terminal status
+    /// arrives via later events (`ToolCallComplete` draining running tools, or
+    /// a `SessionStatus`/`SessionError` event). Flipping to `Aborted`
+    /// optimistically here would desync the indicator if the abort HTTP call
+    /// fails or the server rejects it.
     pub fn request_abort(&mut self) -> Option<String> {
         if self.session_status == SessionStatus::Running {
-            self.session_status = SessionStatus::Aborted;
             self.status_message = Some("Aborting session...".to_string());
             return self.session_id.clone();
         }
@@ -470,12 +529,16 @@ impl App {
 
     /// Clear completed tool calls from the list.
     pub fn clear_completed_tools(&mut self) {
-        self.tool_calls.retain(|t| t.status == ToolCallStatus::Running);
+        self.tool_calls
+            .retain(|t| t.status == ToolCallStatus::Running);
     }
 
     /// Get active (running) tool calls.
     pub fn active_tool_calls(&self) -> Vec<&ToolCall> {
-        self.tool_calls.iter().filter(|t| t.status == ToolCallStatus::Running).collect()
+        self.tool_calls
+            .iter()
+            .filter(|t| t.status == ToolCallStatus::Running)
+            .collect()
     }
 
     /// Check if session is currently running.
@@ -523,7 +586,9 @@ impl App {
 
     /// Get the currently selected completed tool.
     pub fn selected_completed_tool(&self) -> Option<&ToolCall> {
-        self.completed_tool_calls().get(self.selected_tool_index).copied()
+        self.completed_tool_calls()
+            .get(self.selected_tool_index)
+            .copied()
     }
 
     /// Truncate a string to a maximum length with ellipsis.
@@ -557,6 +622,9 @@ impl App {
     ///
     /// Returns a formatted string containing mode indicator, status message,
     /// and keybinding hints, truncated to fit within the given width.
+    ///
+    /// Truncation is char-based so multi-byte UTF-8 status text (server
+    /// errors, localized messages) cannot panic by slicing mid-codepoint.
     pub fn format_status_bar(mode: AppMode, status: Option<&str>, width: usize) -> String {
         let mode_indicator = match mode {
             AppMode::Input => "INPUT",
@@ -566,16 +634,22 @@ impl App {
 
         let status_text = status.unwrap_or("Ready");
 
-        // Calculate available space for status message
+        // Calculate available space for status message. `width` covers the
+        // whole bar in display columns; the prefix/suffix are ASCII so their
+        // byte and char widths coincide.
         let prefix = format!(" [{}] ", mode_indicator);
-        let suffix = " "; // Space at end
+        let suffix = " ";
 
-        let overhead = prefix.len() + suffix.len();
+        let overhead = prefix.chars().count() + suffix.chars().count();
         let max_status_len = width.saturating_sub(overhead);
 
-        // Truncate status if needed
-        let display_status = if status_text.len() > max_status_len && max_status_len > 3 {
-            format!("{}...", &status_text[..max_status_len.saturating_sub(3)])
+        // Truncate status (by char count) if needed.
+        let display_status = if status_text.chars().count() > max_status_len && max_status_len > 3 {
+            let truncated: String = status_text
+                .chars()
+                .take(max_status_len.saturating_sub(3))
+                .collect();
+            format!("{}...", truncated)
         } else if max_status_len <= 3 {
             "...".to_string()
         } else {
@@ -606,5 +680,291 @@ impl App {
 impl Default for App {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Convert a char index into a byte index that lies on a UTF-8 code-point
+/// boundary of `s`.
+///
+/// `String::insert` / `String::remove` take byte indices and panic if the
+/// index is not on a boundary. The TUI tracks the cursor as a char index
+/// (which matches column-based rendering), so every insert/remove site must
+/// round-trip through this helper. If `char_idx` is at or past the last char,
+/// returns `s.len()` (the valid "end of string" boundary).
+fn byte_index_at_char(s: &str, char_idx: usize) -> usize {
+    s.char_indices()
+        .nth(char_idx)
+        .map(|(byte_idx, _)| byte_idx)
+        .unwrap_or_else(|| s.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events::{MessageData, MessageInfo, RequestReplyProps, RuntimeEvent};
+
+    // === HIGH 1: multi-byte prompt editing must not panic ===
+
+    #[test]
+    fn test_insert_char_multibyte_cjk() {
+        // CJK chars are 3 bytes each; char index 1 is byte index 3, NOT 1.
+        let mut app = App::new();
+        app.insert_char('你');
+        app.insert_char('好');
+        assert_eq!(app.prompt, "你好");
+        assert_eq!(app.cursor_position, 2);
+    }
+
+    #[test]
+    fn test_insert_char_in_the_middle_of_emoji() {
+        // Insert between two 4-byte emoji — the cursor sits at a char boundary
+        // that is NOT a byte boundary under naive byte indexing.
+        let mut app = App::new();
+        app.insert_char('🚀'); // 4 bytes
+        app.insert_char('🌍'); // 4 bytes
+        app.cursor_position = 1; // between the two emoji
+        app.insert_char('X');
+        assert_eq!(app.prompt, "🚀X🌍");
+    }
+
+    #[test]
+    fn test_backspace_multibyte() {
+        let mut app = App::new();
+        for c in "こんにちは".chars() {
+            app.insert_char(c);
+        }
+        app.backspace(); // delete 'は' (3 bytes) -> last char
+        assert_eq!(app.prompt, "こんにち");
+        // The previous buggy byte-remove would have panicked here.
+    }
+
+    #[test]
+    fn test_move_cursor_right_multibyte_bound() {
+        let mut app = App::new();
+        for c in "あいう".chars() {
+            app.insert_char(c);
+        }
+        app.cursor_position = 0;
+        app.move_cursor_right();
+        app.move_cursor_right();
+        app.move_cursor_right();
+        // Past end: should not advance beyond char count (3), regardless of byte len (9).
+        app.move_cursor_right();
+        assert_eq!(app.cursor_position, 3);
+    }
+
+    // === HIGH 2: format_status_bar must not panic on multi-byte text ===
+
+    #[test]
+    fn test_format_status_bar_multibyte_truncation() {
+        // Japanese status text; byte-slicing at a 3-byte-char offset previously
+        // panicked. Now truncation is char-based.
+        let status = "エラーが発生しました";
+        let formatted = App::format_status_bar(AppMode::Input, Some(status), 20);
+        assert!(formatted.starts_with(" [INPUT] "));
+        assert!(formatted.ends_with(' '));
+    }
+
+    #[test]
+    fn test_format_status_bar_very_narrow() {
+        // Tiny width exercises the max_status_len <= 3 branch with multi-byte text.
+        let formatted = App::format_status_bar(AppMode::Input, Some("テスト"), 5);
+        // Must not panic and must fit the contract: prefix + body + suffix.
+        assert!(formatted.contains("...") || formatted.contains("テスト"));
+    }
+
+    // === MEDIUM 1: out-of-band replies clear stale modals ===
+
+    #[test]
+    fn test_permission_replied_event_clears_pending() {
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::PermissionAsked {
+            properties: crate::events::PermissionRequestProps {
+                session_id: "s1".to_string(),
+                id: "p1".to_string(),
+                description: "run bash".to_string(),
+                permission_type: Some("bash".to_string()),
+            },
+        });
+        assert_eq!(app.pending_permissions.len(), 1);
+        assert!(matches!(app.mode, AppMode::Permission));
+
+        // Server reports the permission was replied out-of-band.
+        app.handle_event(RuntimeEvent::PermissionReplied {
+            properties: RequestReplyProps {
+                session_id: "s1".to_string(),
+                request_id: "p1".to_string(),
+            },
+        });
+        assert!(app.pending_permissions.is_empty());
+        assert!(matches!(app.mode, AppMode::Input));
+    }
+
+    #[test]
+    fn test_question_replied_event_clears_pending() {
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::QuestionAsked {
+            properties: crate::events::QuestionRequestProps {
+                session_id: "s1".to_string(),
+                id: "q1".to_string(),
+                question: "pick one".to_string(),
+                options: vec!["a".to_string(), "b".to_string()],
+            },
+        });
+        assert!(matches!(app.mode, AppMode::Question));
+
+        app.handle_event(RuntimeEvent::QuestionReplied {
+            properties: RequestReplyProps {
+                session_id: "s1".to_string(),
+                request_id: "q1".to_string(),
+            },
+        });
+        assert!(app.pending_questions.is_empty());
+        assert!(matches!(app.mode, AppMode::Input));
+    }
+
+    #[test]
+    fn test_permission_replied_for_other_id_keeps_oldest() {
+        // Only the matching request should be cleared; others stay.
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::PermissionAsked {
+            properties: crate::events::PermissionRequestProps {
+                session_id: "s1".to_string(),
+                id: "p1".to_string(),
+                description: "a".to_string(),
+                permission_type: None,
+            },
+        });
+        app.handle_event(RuntimeEvent::PermissionAsked {
+            properties: crate::events::PermissionRequestProps {
+                session_id: "s1".to_string(),
+                id: "p2".to_string(),
+                description: "b".to_string(),
+                permission_type: None,
+            },
+        });
+        app.handle_event(RuntimeEvent::PermissionReplied {
+            properties: RequestReplyProps {
+                session_id: "s1".to_string(),
+                request_id: "p2".to_string(),
+            },
+        });
+        // p2 cleared out-of-band, p1 still pending.
+        assert_eq!(app.pending_permissions.len(), 1);
+        assert_eq!(app.pending_permissions[0].request_id, "p1");
+    }
+
+    // === MEDIUM 2: FIFO ordering for multiple pending requests ===
+
+    #[test]
+    fn test_permissions_are_fifo_not_lifo() {
+        let mut app = App::new();
+        for id in ["p1", "p2", "p3"] {
+            app.handle_event(RuntimeEvent::PermissionAsked {
+                properties: crate::events::PermissionRequestProps {
+                    session_id: "s".to_string(),
+                    id: id.to_string(),
+                    description: id.to_string(),
+                    permission_type: None,
+                },
+            });
+        }
+        // Accept must resolve p1 first (front), not p3 (back).
+        let first = app.accept_permission().expect("first accept");
+        assert_eq!(first.1, "p1");
+        let second = app.accept_permission().expect("second accept");
+        assert_eq!(second.1, "p2");
+        let third = app.accept_permission().expect("third accept");
+        assert_eq!(third.1, "p3");
+        assert!(app.accept_permission().is_none());
+    }
+
+    #[test]
+    fn test_questions_are_fifo_not_lifo() {
+        let mut app = App::new();
+        for id in ["q1", "q2"] {
+            app.handle_event(RuntimeEvent::QuestionAsked {
+                properties: crate::events::QuestionRequestProps {
+                    session_id: "s".to_string(),
+                    id: id.to_string(),
+                    question: id.to_string(),
+                    options: vec!["opt".to_string()],
+                },
+            });
+        }
+        let first = app.select_question().expect("first select");
+        assert_eq!(first.1, "q1");
+        let second = app.select_question().expect("second select");
+        assert_eq!(second.1, "q2");
+    }
+
+    #[test]
+    fn test_accept_permission_advances_to_next_then_input() {
+        // With multiple pending, resolving one should NOT drop to Input while
+        // others remain; mode stays Permission until the queue drains.
+        let mut app = App::new();
+        for id in ["p1", "p2"] {
+            app.handle_event(RuntimeEvent::PermissionAsked {
+                properties: crate::events::PermissionRequestProps {
+                    session_id: "s".to_string(),
+                    id: id.to_string(),
+                    description: id.to_string(),
+                    permission_type: None,
+                },
+            });
+        }
+        app.accept_permission();
+        assert!(matches!(app.mode, AppMode::Permission)); // still one left
+        app.accept_permission();
+        assert!(matches!(app.mode, AppMode::Input)); // drained
+    }
+
+    // === LOW 1: scroll_down is bounded ===
+
+    #[test]
+    fn test_scroll_down_bounded_by_message_count() {
+        let mut app = App::new();
+        for i in 0..3 {
+            app.handle_event(RuntimeEvent::MessageUpdated {
+                properties: MessageInfo {
+                    info: Some(MessageData {
+                        id: format!("m{}", i),
+                        session_id: "s".to_string(),
+                        role: Some(crate::events::MessageRole::Assistant),
+                    }),
+                },
+            });
+        }
+        assert_eq!(app.messages.len(), 3);
+
+        // scroll_down past the end must clamp at messages.len() (3), not grow.
+        for _ in 0..10 {
+            app.scroll_down();
+        }
+        assert_eq!(app.scroll_offset, 3);
+    }
+
+    // === LOW 2: request_abort does not optimistically flip status ===
+
+    #[test]
+    fn test_request_abort_keeps_running_until_confirm() {
+        let mut app = App::new();
+        app.session_id = Some("s".to_string());
+        app.session_status = SessionStatus::Running;
+        let result = app.request_abort();
+        assert!(result.is_some());
+        assert!(matches!(app.session_status, SessionStatus::Running));
+    }
+
+    // === helper coverage ===
+
+    #[test]
+    fn test_byte_index_at_char_helper() {
+        // 'a' = 1 byte, '日' = 3 bytes. char idx 2 -> byte idx 4.
+        assert_eq!(byte_index_at_char("a日b", 0), 0);
+        assert_eq!(byte_index_at_char("a日b", 1), 1);
+        assert_eq!(byte_index_at_char("a日b", 2), 4);
+        assert_eq!(byte_index_at_char("a日b", 3), 5); // end of string
+        assert_eq!(byte_index_at_char("a日b", 99), 5); // past end -> len
     }
 }

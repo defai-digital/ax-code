@@ -19,13 +19,18 @@ async fn test_server_attach_healthy() {
         base_url: server.url(),
         auth_token: None,
         directory: None,
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config).expect("Failed to create client");
 
     // Health check should succeed
     let result = client.connect().await;
-    assert!(result.is_ok(), "Health check should succeed for healthy server");
+    assert!(
+        result.is_ok(),
+        "Health check should succeed for healthy server"
+    );
 
     server.shutdown().await;
 }
@@ -39,13 +44,18 @@ async fn test_server_attach_unhealthy() {
         base_url: server.url(),
         auth_token: None,
         directory: None,
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config).expect("Failed to create client");
 
     // Health check should fail
     let result = client.connect().await;
-    assert!(result.is_err(), "Health check should fail for unhealthy server");
+    assert!(
+        result.is_err(),
+        "Health check should fail for unhealthy server"
+    );
 
     server.shutdown().await;
 }
@@ -58,13 +68,18 @@ async fn test_server_attach_with_auth() {
         base_url: server.url(),
         auth_token: Some("test-token-123".to_string()),
         directory: Some("/test/dir".to_string()),
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config).expect("Failed to create client with auth");
 
     // Should still work with auth token
     let result = client.connect().await;
-    assert!(result.is_ok(), "Health check should succeed with auth token");
+    assert!(
+        result.is_ok(),
+        "Health check should succeed with auth token"
+    );
 
     server.shutdown().await;
 }
@@ -80,6 +95,8 @@ async fn test_server_connection_refused() {
         base_url: "http://127.0.0.1:1".to_string(), // Port 1 is unlikely to be open
         auth_token: None,
         directory: None,
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config).expect("Failed to create client");
@@ -95,13 +112,18 @@ async fn test_server_invalid_url() {
         base_url: "not-a-valid-url".to_string(),
         auth_token: None,
         directory: None,
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config).expect("Failed to create client");
 
     // Should fail on connection attempt
     let result = client.connect().await;
-    assert!(result.is_err(), "Invalid URL should cause connection failure");
+    assert!(
+        result.is_err(),
+        "Invalid URL should cause connection failure"
+    );
 }
 
 // =============================================================================
@@ -140,6 +162,8 @@ async fn test_mock_server_multiple_events() {
         base_url: server.url(),
         auth_token: None,
         directory: None,
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config).expect("Failed to create client");
@@ -168,11 +192,16 @@ async fn test_fixture_session_created_replay() {
         base_url: server.url(),
         auth_token: None,
         directory: None,
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config).expect("Failed to create client");
     let result = client.connect().await;
-    assert!(result.is_ok(), "Should connect to server with queued events");
+    assert!(
+        result.is_ok(),
+        "Should connect to server with queued events"
+    );
 
     server.shutdown().await;
 }
@@ -191,6 +220,8 @@ async fn test_fixture_streaming_message_replay() {
         base_url: server.url(),
         auth_token: None,
         directory: None,
+        session: None,
+        prompt: None,
     };
 
     let client = HeadlessClient::new(config).expect("Failed to create client");
