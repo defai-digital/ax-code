@@ -35,7 +35,13 @@ export function errorPayloadMessage(value: unknown): string | undefined {
 
 export function unknownErrorMessage(error: unknown, fallback = "An error occurred") {
   if (!error) return fallback
-  return errorPayloadMessage(error) ?? String(error)
+  const payloadMessage = errorPayloadMessage(error)
+  if (payloadMessage) return payloadMessage
+  try {
+    return String(error)
+  } catch {
+    return fallback
+  }
 }
 
 export function textErrorMessage(text: string) {

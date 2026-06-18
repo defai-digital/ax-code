@@ -55,4 +55,14 @@ describe("tui error message decoding", () => {
     expect(unknownErrorMessage(undefined)).toBe("An error occurred")
     expect(unknownErrorMessage("plain error")).toBe("plain error")
   })
+
+  test("falls back when unknown error string conversion throws", () => {
+    const broken = {
+      [Symbol.toPrimitive]() {
+        throw new Error("cannot stringify")
+      },
+    }
+
+    expect(unknownErrorMessage(broken, "fallback message")).toBe("fallback message")
+  })
 })
