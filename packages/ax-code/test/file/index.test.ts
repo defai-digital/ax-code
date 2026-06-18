@@ -897,6 +897,20 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("does not treat negative limits as from-the-end slices", async () => {
+      await using tmp = await setupSearchableRepo()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await File.init()
+
+          expect(await File.search({ query: "", type: "file", limit: -1 })).toEqual([])
+          expect(await File.search({ query: "main", type: "file", limit: -1 })).toEqual([])
+        },
+      })
+    })
+
     test("query starting with dot prefers hidden files", async () => {
       await using tmp = await setupSearchableRepo()
 

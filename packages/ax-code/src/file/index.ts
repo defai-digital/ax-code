@@ -331,6 +331,12 @@ export namespace File {
     return [...visible, ...hiddenItems]
   }
 
+  function normalizeSearchLimit(limit: number | undefined) {
+    if (limit === undefined) return 100
+    if (!Number.isFinite(limit)) return 100
+    return Math.max(0, Math.floor(limit))
+  }
+
   interface State {
     cache: Entry
     scan: Promise<void> | undefined
@@ -650,7 +656,8 @@ export namespace File {
     const { cache } = await state()
 
     const query = input.query.trim()
-    const limit = input.limit ?? 100
+    const limit = normalizeSearchLimit(input.limit)
+    if (limit === 0) return []
     const kind = input.type ?? (input.dirs === false ? "file" : "all")
     log.info("search", { query, kind })
 
