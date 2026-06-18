@@ -187,8 +187,8 @@ export namespace Planner {
               }
             } else {
               plan.phasesFailed++
-              error = String(result.reason)
-              warnings.push(`Phase "${phase.name}" failed: ${result.reason}`)
+              error = toErrorMessage(result.reason)
+              warnings.push(`Phase "${phase.name}" failed: ${error}`)
             }
 
             if (succeeded) continue

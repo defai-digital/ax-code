@@ -140,6 +140,53 @@ describe("planner.execute", () => {
     expect(result.success).toBe(true)
   })
 
+  test("parallel rejected phases with unprintable reasons become failed results", async () => {
+    const plan = Planner.create("test", [
+      {
+        name: "first",
+        canRunInParallel: true,
+        fallbackStrategy: "replan",
+        maxRetries: 0,
+      },
+      {
+        name: "second",
+        canRunInParallel: true,
+      },
+    ])
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+
+    let replanError: string | undefined
+    const result = await Planner.execute(
+      plan,
+      async (phase) => {
+        if (phase.id === "phase-1") throw failure
+        return {
+          phaseId: phase.id,
+          success: true,
+          duration: 0,
+          tokensUsed: 0,
+          filesModified: [],
+          wasRetry: false,
+          retryAttempt: 1,
+        }
+      },
+      {
+        onReplan: async ({ error }) => {
+          replanError = error
+          return []
+        },
+      },
+    )
+
+    expect(result.success).toBe(false)
+    expect(replanError).toBe("Unknown error")
+    expect(result.warnings).toContain('Phase "first": replan returned no phases — aborting')
+  })
+
   test("times out a phase when it exceeds phaseTimeoutMs", async () => {
     const plan = Planner.create("test", [{ name: "slow", maxRetries: 0 }])
 
