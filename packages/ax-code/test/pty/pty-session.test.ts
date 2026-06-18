@@ -5,6 +5,8 @@ import { Pty } from "../../src/pty"
 import type { PtyID } from "../../src/pty/schema"
 import { tmpdir } from "../fixture/fixture"
 import { setTimeout as sleep } from "node:timers/promises"
+import fs from "fs/promises"
+import path from "path"
 
 const wait = async (fn: () => boolean, ms = 5000) => {
   const end = Date.now() + ms
@@ -150,6 +152,29 @@ describe("pty", () => {
         } finally {
           await Pty.remove(info.id)
         }
+      },
+    })
+  })
+
+  test("rejects cwd symlinks that escape the project directory", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    const link = path.join(dir.path, "outside-link")
+    await fs.symlink(outside.path, link)
+
+    await Instance.provide({
+      directory: dir.path,
+      fn: async () => {
+        await expect(
+          Pty.create({
+            command: "/usr/bin/env",
+            args: ["true"],
+            cwd: link,
+            title: "escaped-cwd",
+          }),
+        ).rejects.toThrow("PTY cwd escapes project directory")
       },
     })
   })

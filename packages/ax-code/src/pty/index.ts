@@ -10,6 +10,8 @@ import { Shell } from "@/shell/shell"
 import { Plugin } from "@/plugin"
 import { Env } from "@/util/env"
 import { PtyID } from "./schema"
+import fs from "fs/promises"
+import path from "path"
 
 export namespace Pty {
   const log = Log.create({ service: "pty" })
@@ -308,10 +310,13 @@ export namespace Pty {
       args.push("-l")
     }
 
-    if (input.cwd && !Filesystem.contains(Instance.directory, input.cwd)) {
-      throw new Error(`PTY cwd escapes project directory: ${input.cwd}`)
+    const cwd = input.cwd ? path.resolve(current.dir, input.cwd) : current.dir
+    if (input.cwd) {
+      const [projectRoot, targetCwd] = await Promise.all([fs.realpath(Instance.directory), fs.realpath(cwd)])
+      if (!Filesystem.contains(projectRoot, targetCwd)) {
+        throw new Error(`PTY cwd escapes project directory: ${input.cwd}`)
+      }
     }
-    const cwd = input.cwd || current.dir
     const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const baseEnv = Env.sanitize({
       ...Env.sanitize(process.env),
