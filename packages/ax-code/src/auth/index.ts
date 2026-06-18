@@ -33,8 +33,15 @@ function normalizeProviderID(providerID: string) {
   return providerID.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
 }
 
+function isEnoent(error: unknown): error is { code: "ENOENT" } {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
+}
+
 function readAuthData() {
-  return Filesystem.readJson<Record<string, unknown>>(file).catch(() => ({}) as Record<string, unknown>)
+  return Filesystem.readJson<Record<string, unknown>>(file).catch((error) => {
+    if (isEnoent(error)) return {} as Record<string, unknown>
+    throw error
+  })
 }
 
 async function cleanupAuthLockFile() {

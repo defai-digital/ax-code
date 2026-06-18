@@ -76,6 +76,29 @@ test("all returns empty for corrupted auth file", async () => {
   expect(await Auth.get("anthropic")).toBeUndefined()
 })
 
+test("set does not overwrite corrupted auth file", async () => {
+  const corrupted = "{ invalid json"
+  await Bun.write(file, corrupted)
+
+  await expect(
+    Auth.set("anthropic", {
+      type: "api",
+      key: "sk-test",
+    }),
+  ).rejects.toMatchObject({ name: "AuthError" })
+
+  expect(await Bun.file(file).text()).toBe(corrupted)
+})
+
+test("remove does not overwrite corrupted auth file", async () => {
+  const corrupted = "{ invalid json"
+  await Bun.write(file, corrupted)
+
+  await expect(Auth.remove("anthropic")).rejects.toMatchObject({ name: "AuthError" })
+
+  expect(await Bun.file(file).text()).toBe(corrupted)
+})
+
 test("all filters invalid auth entries and keeps valid ones", async () => {
   await Bun.write(
     file,
