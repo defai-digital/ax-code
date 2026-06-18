@@ -28,6 +28,10 @@ type AttachmentFilePart = Omit<MessageV2.FilePart, "id" | "messageID" | "session
 
 type AttachDraftContext = <T extends object>(part: T) => T & { messageID: MessageID; sessionID: SessionID }
 
+export function normalizeDocumentSymbolEnvelopeData<T>(data: unknown): T[] {
+  return Array.isArray(data) ? (data as T[]) : []
+}
+
 async function documentSymbolsForRangeExpansion(
   uri: string,
 ): Promise<Awaited<ReturnType<typeof LSP.documentSymbolEnvelope>>["data"]> {
@@ -35,13 +39,13 @@ async function documentSymbolsForRangeExpansion(
     log.debug("cached document symbols unavailable for range expansion", { uri, error })
     return undefined
   })
-  if (cached) return cached.data
+  if (cached) return normalizeDocumentSymbolEnvelopeData(cached.data)
 
   const live = await LSP.documentSymbolEnvelope(uri, { cache: true }).catch((error) => {
     log.debug("document symbols unavailable for range expansion", { uri, error })
     return undefined
   })
-  return live?.data ?? []
+  return normalizeDocumentSymbolEnvelopeData(live?.data)
 }
 
 function createReadToolContext(input: { sessionID: SessionID; messageID: MessageID; agentName: string }): Tool.Context {
