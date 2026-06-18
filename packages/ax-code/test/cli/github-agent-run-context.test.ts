@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
+  formatGitHubAgentExistingPrCheckWarning,
   formatGitHubAgentFailureMessage,
+  formatGitHubAgentPermissionCheckFailureMessage,
   formatGitHubAgentToolTitle,
   parseGitHubRunContextText,
 } from "../../src/cli/cmd/github-agent/index"
@@ -70,5 +72,27 @@ describe("cli.github-agent failure messages", () => {
     const failure = new Process.RunFailedError(["git", "push"], 1, Buffer.from("stdout"), Buffer.from("denied"))
 
     expect(formatGitHubAgentFailureMessage(failure)).toBe("denied")
+  })
+
+  test("formats permission check failures safely", () => {
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+
+    expect(formatGitHubAgentPermissionCheckFailureMessage("octocat", failure)).toBe(
+      "Failed to check permissions for user octocat: Unknown error",
+    )
+  })
+
+  test("formats existing PR check warnings safely", () => {
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+
+    expect(formatGitHubAgentExistingPrCheckWarning(failure)).toBe("Failed to check for existing PR: Unknown error")
   })
 })

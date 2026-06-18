@@ -82,6 +82,14 @@ export function formatGitHubAgentFailureMessage(error: unknown): string {
   return toErrorMessage(error)
 }
 
+export function formatGitHubAgentPermissionCheckFailureMessage(actor: string | undefined, error: unknown): string {
+  return `Failed to check permissions for user ${actor}: ${formatGitHubAgentFailureMessage(error)}`
+}
+
+export function formatGitHubAgentExistingPrCheckWarning(error: unknown): string {
+  return `Failed to check for existing PR: ${formatGitHubAgentFailureMessage(error)}`
+}
+
 export const GithubCommand = cmd({
   command: "github",
   describe: "manage GitHub agent",
@@ -1149,8 +1157,8 @@ export const GithubRunCommand = cmd({
           permission = response.data.permission
           console.log(`  permission: ${permission}`)
         } catch (error) {
-          console.error(`Failed to check permissions: ${error}`)
-          throw new Error(`Failed to check permissions for user ${actor}: ${error}`, { cause: error })
+          console.error(`Failed to check permissions: ${formatGitHubAgentFailureMessage(error)}`)
+          throw new Error(formatGitHubAgentPermissionCheckFailureMessage(actor, error), { cause: error })
         }
 
         if (!["admin", "write"].includes(permission)) throw new Error(`User ${actor} does not have write permissions`)
@@ -1275,7 +1283,7 @@ export const GithubRunCommand = cmd({
           }
         } catch (e) {
           // If the check fails, proceed to create — we'll get a clear error if a PR already exists
-          core.warning(`Failed to check for existing PR: ${e}`)
+          core.warning(formatGitHubAgentExistingPrCheckWarning(e))
         }
 
         // Verify there are commits between base and head before creating the PR.
