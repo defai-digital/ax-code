@@ -555,9 +555,10 @@ describe("CodeIntelligence tool envelope (§S4)", () => {
           {
             operation: "buildContext",
             query: "explain buildContextTarget",
-            maxSymbols: 1,
-            maxSnippets: 1,
-          },
+            maxSymbols: "1",
+            maxSnippets: "1",
+            maxDepth: "1",
+          } as any,
           ctx,
         )
 

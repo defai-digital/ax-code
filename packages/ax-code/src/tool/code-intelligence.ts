@@ -105,15 +105,16 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       .describe("Optional graph-context seeds: symbol id, absolute file path, or symbol name"),
     kind: z.enum(NODE_KINDS).optional().describe("Optional kind filter for findSymbol/findSymbolByPrefix"),
     limit: z
+      .coerce
       .number()
       .int()
       .min(1)
       .max(MAX_RESULTS)
       .optional()
       .describe(`Max results to return (default ${MAX_RESULTS})`),
-    maxSymbols: z.number().int().min(1).max(20).optional().describe("Max selected symbols for buildContext"),
-    maxSnippets: z.number().int().min(0).max(12).optional().describe("Max source snippets for buildContext"),
-    maxDepth: z.number().int().min(1).max(3).optional().describe("Max graph depth for buildContext impact summary"),
+    maxSymbols: z.coerce.number().int().min(1).max(20).optional().describe("Max selected symbols for buildContext"),
+    maxSnippets: z.coerce.number().int().min(0).max(12).optional().describe("Max source snippets for buildContext"),
+    maxDepth: z.coerce.number().int().min(1).max(3).optional().describe("Max graph depth for buildContext impact summary"),
     includeImpact: z.boolean().optional().describe("Whether buildContext should include a bounded impact summary"),
     freshness: z
       .enum(["preferGraph", "requireFresh", "allowStaleWithWarning"])
