@@ -836,8 +836,16 @@ export namespace Config {
     return plugins
   }
 
+  function isFileUrl(value: string) {
+    try {
+      return new URL(value).protocol === "file:"
+    } catch {
+      return false
+    }
+  }
+
   async function isLocalFilePlugin(plugin: string, dir: string) {
-    if (!plugin.startsWith("file://")) return false
+    if (!isFileUrl(plugin)) return false
     try {
       const pluginPath = fileURLToPath(plugin)
       const resolved = await fs.realpath(path.resolve(pluginPath))
@@ -894,7 +902,7 @@ export namespace Config {
    * getPluginName("@scope/pkg@1.0.0") // "@scope/pkg"
    */
   export function getPluginName(plugin: string): string {
-    if (plugin.startsWith("file://")) {
+    if (isFileUrl(plugin)) {
       try {
         return path.parse(new URL(plugin).pathname).name
       } catch {

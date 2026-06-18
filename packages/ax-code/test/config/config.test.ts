@@ -2108,6 +2108,10 @@ describe("getPluginName", () => {
     expect(Config.getPluginName("file:///some/path/my-plugin.js")).toBe("my-plugin")
   })
 
+  test("extracts name from file:// URL case-insensitively", () => {
+    expect(Config.getPluginName("FILE:///path/to/plugin/foo.js")).toBe("foo")
+  })
+
   test("keeps malformed file:// plugin specifiers as their own names", () => {
     expect(Config.getPluginName("file://%")).toBe("file://%")
   })

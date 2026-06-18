@@ -7,7 +7,7 @@ import { BunProc } from "../bun"
 import { Session } from "../session"
 import { NamedError } from "@ax-code/util/error"
 import { Env } from "@/util/env"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { withTimeout } from "@/util/timeout"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
@@ -33,6 +33,14 @@ export namespace Plugin {
 
   // Old npm package names for plugins that are now built-in — skip if users still have them in config
   const DEPRECATED_PLUGIN_PACKAGES = ["ax-code-openai-codex-auth", "ax-code-copilot-auth"]
+
+  function isFileUrl(value: string) {
+    try {
+      return new URL(value).protocol === "file:"
+    } catch {
+      return false
+    }
+  }
 
   const state = Instance.state(
     async () => {
@@ -65,7 +73,7 @@ export namespace Plugin {
       for (let plugin of plugins) {
         if (DEPRECATED_PLUGIN_PACKAGES.some((pkg) => plugin.includes(pkg))) continue
         log.info("loading plugin", { path: plugin })
-        if (!plugin.startsWith("file://")) {
+        if (!isFileUrl(plugin)) {
           const idx = plugin.lastIndexOf("@")
           const pkg = idx > 0 ? plugin.substring(0, idx) : plugin
           const version = idx > 0 ? plugin.substring(idx + 1) : "latest"
@@ -90,6 +98,7 @@ export namespace Plugin {
             Session.publishError({ message })
             continue
           }
+          plugin = pathToFileURL(pluginPath).href
         }
 
         await withTimeout(import(plugin), 15_000, `loading plugin timed out: ${plugin}`)
