@@ -719,6 +719,27 @@ describe("ProviderTransform.message - empty image handling", () => {
     })
   })
 
+  test("should replace empty base64 image with case-insensitive data URL scheme", () => {
+    const msgs = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "What is in this image?" },
+          { type: "image", image: "DATA:image/png;base64," },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, mockModel, {})
+
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toHaveLength(2)
+    expect(result[0].content[1]).toEqual({
+      type: "text",
+      text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
+    })
+  })
+
   test("should keep valid base64 images unchanged", () => {
     const validBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="

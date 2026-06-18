@@ -133,13 +133,13 @@ export namespace ProviderTransform {
         let mime: string
         if (part.type === "image") {
           const imageStr = part.image.toString()
-          if (imageStr.startsWith("data:")) {
+          if (/^data:/i.test(imageStr)) {
             const semiIdx = imageStr.indexOf(";", 5)
             mime = semiIdx === -1 ? imageStr.slice(5) : imageStr.slice(5, semiIdx)
             // Empty `data:<mime>;base64,` — payload is empty.
             if (semiIdx !== -1) {
               const commaIdx = imageStr.indexOf(",", semiIdx + 1)
-              if (commaIdx === imageStr.length - 1 && imageStr.slice(semiIdx + 1, commaIdx) === "base64") {
+              if (commaIdx === imageStr.length - 1 && imageStr.slice(semiIdx + 1, commaIdx).toLowerCase() === "base64") {
                 return {
                   type: "text" as const,
                   text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",
