@@ -1,7 +1,9 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { BunProc } from "../src/bun"
+import { Global } from "../src/global"
+import { tmpdir } from "./fixture/fixture"
 
 describe("BunProc registry structural guard", () => {
   test("should not contain hardcoded registry parameters", async () => {
@@ -69,5 +71,29 @@ describe("BunProc registry behavior", () => {
     })
 
     expect(args).toContain("--no-cache")
+  })
+
+  test("does not overwrite malformed cache package manifest during install", async () => {
+    await using tmp = await tmpdir()
+    const originalCache = Global.Path.cache
+    const manifest = path.join(tmp.path, "package.json")
+    const malformed = "{not json"
+    await fs.writeFile(manifest, malformed)
+
+    const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+      code: 0,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+    }))
+
+    try {
+      ;(Global.Path as { cache: string }).cache = tmp.path
+      await expect(BunProc.install("example-plugin", "1.0.0")).rejects.toThrow("Failed to parse JSON")
+      expect(run).not.toHaveBeenCalled()
+      expect(await fs.readFile(manifest, "utf-8")).toBe(malformed)
+    } finally {
+      run.mockRestore()
+      ;(Global.Path as { cache: string }).cache = originalCache
+    }
   })
 })

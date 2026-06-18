@@ -146,11 +146,14 @@ export namespace BunProc {
 
     const mod = path.join(Global.Path.cache, "node_modules", pkg)
     const pkgjsonPath = path.join(Global.Path.cache, "package.json")
-    const parsed = await Filesystem.readJson<{ dependencies: Record<string, string> }>(pkgjsonPath).catch(async () => {
-      const result = { dependencies: {} as Record<string, string> }
-      await Filesystem.writeJson(pkgjsonPath, result)
-      return result
-    })
+    const parsed = await Filesystem.readJson<{ dependencies: Record<string, string> }>(pkgjsonPath).catch(
+      async (error) => {
+        if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") throw error
+        const result = { dependencies: {} as Record<string, string> }
+        await Filesystem.writeJson(pkgjsonPath, result)
+        return result
+      },
+    )
     if (!parsed.dependencies) parsed.dependencies = {} as Record<string, string>
     const dependencies = parsed.dependencies
     const modExists = await Filesystem.exists(mod)
