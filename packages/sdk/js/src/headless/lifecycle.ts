@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { createServer } from "node:net"
+import { resolveSpawnCommand } from "../internal/server-shared.js"
 import { withDirectoryHeaders } from "../protocol.js"
 
 const SIGKILL_GRACE_MS = 300
@@ -120,19 +121,20 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     authUsername: username,
     envKeys: Object.keys(options.env ?? {}).sort(),
   }
+  const env = {
+    ...process.env,
+    ...options.env,
+    AX_CODE_SERVER_PASSWORD: password,
+    AX_CODE_SERVER_USERNAME: username,
+    ...(options.directory ? { AX_CODE_PROJECT: options.directory } : {}),
+    ...(options.config ? { AX_CODE_CONFIG_CONTENT: JSON.stringify(options.config) } : {}),
+  }
 
-  const proc = spawn(binary, args, {
+  const proc = spawn(resolveSpawnCommand(binary, env), args, {
     cwd: options.directory,
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
-    env: {
-      ...process.env,
-      ...options.env,
-      AX_CODE_SERVER_PASSWORD: password,
-      AX_CODE_SERVER_USERNAME: username,
-      ...(options.directory ? { AX_CODE_PROJECT: options.directory } : {}),
-      ...(options.config ? { AX_CODE_CONFIG_CONTENT: JSON.stringify(options.config) } : {}),
-    },
+    env,
   })
   const closed = new Promise<void>((resolve) => {
     proc.once("exit", () => resolve())

@@ -8,6 +8,7 @@ import {
   buildAuthHeaders,
   waitForServerReady,
   closeProcGracefully,
+  resolveSpawnCommand,
 } from "./internal/server-shared.js"
 
 export type ServerOptions = {
@@ -43,14 +44,16 @@ export async function createAxCodeServer(options?: ServerOptions) {
   const password = resolved.auth?.password ?? randomBytes(24).toString("base64url")
   const headers = buildAuthHeaders(username, password)
 
-  const proc = spawn(`ax-code`, args, {
+  const env = {
+    ...process.env,
+    AX_CODE_SERVER_USERNAME: username,
+    AX_CODE_SERVER_PASSWORD: password,
+    AX_CODE_CONFIG_CONTENT: JSON.stringify(resolved.config ?? {}),
+  }
+
+  const proc = spawn(resolveSpawnCommand(`ax-code`, env), args, {
     signal: resolved.signal,
-    env: {
-      ...process.env,
-      AX_CODE_SERVER_USERNAME: username,
-      AX_CODE_SERVER_PASSWORD: password,
-      AX_CODE_CONFIG_CONTENT: JSON.stringify(resolved.config ?? {}),
-    },
+    env,
   }) as Proc
 
   const url = await waitForServerReady(proc, { timeout: resolved.timeout, signal: resolved.signal })
@@ -82,13 +85,15 @@ export function createAxCodeTui(options?: TuiOptions) {
     args.push(`--agent=${options.agent}`)
   }
 
-  const proc = spawn(`ax-code`, args, {
+  const env = {
+    ...process.env,
+    AX_CODE_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
+  }
+
+  const proc = spawn(resolveSpawnCommand(`ax-code`, env), args, {
     signal: options?.signal,
     stdio: "inherit",
-    env: {
-      ...process.env,
-      AX_CODE_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
-    },
+    env,
   }) as Proc
 
   return {

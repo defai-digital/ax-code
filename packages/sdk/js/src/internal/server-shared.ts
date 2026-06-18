@@ -1,4 +1,6 @@
 import { type ChildProcess } from "node:child_process"
+import { constants, accessSync } from "node:fs"
+import path from "node:path"
 
 /**
  * Shared utilities for SDK server lifecycle modules.
@@ -64,6 +66,43 @@ export function buildAuthHeaders(username: string, password: string) {
   return {
     Authorization: "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
   }
+}
+
+/**
+ * Resolve a command through the same environment that will be passed to spawn.
+ *
+ * Bun currently resolves bare commands against the process startup PATH rather
+ * than a PATH mutated later on process.env. The SDK tests and embedders rely on
+ * runtime PATH overlays, so resolve the executable before spawn sees it.
+ */
+export function resolveSpawnCommand(command: string, env: NodeJS.ProcessEnv = process.env) {
+  if (!command || command.includes("/") || command.includes("\\") || path.isAbsolute(command)) return command
+
+  const pathValue = env.PATH ?? env.Path ?? env.path
+  if (!pathValue) return command
+
+  const extensions = executableExtensions(command, env)
+  for (const entry of pathValue.split(path.delimiter)) {
+    if (!entry) continue
+    for (const extension of extensions) {
+      const candidate = path.join(entry, command + extension)
+      try {
+        accessSync(candidate, constants.X_OK)
+        return candidate
+      } catch {}
+    }
+  }
+
+  return command
+}
+
+function executableExtensions(command: string, env: NodeJS.ProcessEnv) {
+  if (process.platform !== "win32") return [""]
+
+  const pathext = env.PATHEXT ?? env.PathExt ?? ".COM;.EXE;.BAT;.CMD"
+  const commandLower = command.toLowerCase()
+  const extensions = ["", ...pathext.split(";").filter(Boolean)]
+  return [...new Set(extensions.filter((extension) => !extension || !commandLower.endsWith(extension.toLowerCase())))]
 }
 
 /**
