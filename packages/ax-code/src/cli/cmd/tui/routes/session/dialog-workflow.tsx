@@ -18,6 +18,8 @@ import {
   workflowRunControlItems,
   workflowRunDetailItems,
   workflowTemplateSaveItems,
+  normalizeWorkflowDashboardRuns,
+  normalizeWorkflowRunArtifacts,
   type WorkflowTemplateSaveScope,
   type WorkflowEvalSummary,
   type WorkflowRunArtifact,
@@ -45,7 +47,7 @@ export function DialogWorkflow() {
           toast.show({ message: workflowErrorMessage(result.error, "Failed to load workflow runs"), variant: "error" })
           return info.value ?? []
         }
-        return result.data ?? []
+        return normalizeWorkflowDashboardRuns(result.data)
       } catch (error) {
         toast.show({
           message: error instanceof Error ? error.message : "Failed to load workflow runs",
@@ -353,7 +355,7 @@ function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
           })
           return info.value ?? []
         }
-        return result.data ?? []
+        return normalizeWorkflowRunArtifacts(result.data)
       } catch (error) {
         toast.show({
           message: error instanceof Error ? error.message : "Failed to load workflow artifact",

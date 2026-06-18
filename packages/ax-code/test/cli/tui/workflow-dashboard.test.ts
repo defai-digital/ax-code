@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
   formatWorkflowDuration,
+  normalizeWorkflowDashboardRuns,
+  normalizeWorkflowRunArtifacts,
   statusCategory,
   workflowArtifactDetailItems,
   workflowArtifactIDFromDetailValue,
@@ -65,6 +67,36 @@ describe("tui workflow dashboard view model", () => {
     expect(items[0]?.footer).toContain("2 verification")
     expect(items[0]?.footer).toContain("3 evidence")
     expect(items[0]?.footer).toContain("4 artifacts")
+  })
+
+  test("normalizes malformed workflow dashboard run payloads", () => {
+    const run = workflowDashboardRun()
+    expect(normalizeWorkflowDashboardRuns(null)).toEqual([])
+    expect(normalizeWorkflowDashboardRuns({ runID: "wfr_1" })).toEqual([])
+    expect(
+      normalizeWorkflowDashboardRuns([
+        run,
+        null,
+        { ...run, childCounts: undefined },
+        { ...run, artifactCounts: { summary: 1, finding: "2" } },
+        { ...run, budgetUsage: undefined },
+      ]),
+    ).toEqual([run])
+  })
+
+  test("normalizes malformed workflow artifact payloads", () => {
+    const artifact = workflowRunDetail().artifacts[0]
+    expect(normalizeWorkflowRunArtifacts(null)).toEqual([])
+    expect(normalizeWorkflowRunArtifacts({ id: "artifact_1" })).toEqual([])
+    expect(
+      normalizeWorkflowRunArtifacts([
+        artifact,
+        null,
+        { ...artifact, evidenceRefs: undefined },
+        { ...artifact, time: undefined },
+        { ...artifact, exposeToMainContext: "true" },
+      ]),
+    ).toEqual([artifact])
   })
 
   test("renders workflow detail rows for phases, children, artifacts, and budget evidence", () => {

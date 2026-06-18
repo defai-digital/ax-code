@@ -14,6 +14,7 @@ import type {
   WorkflowRunGetResponse,
 } from "@ax-code/sdk/v2"
 import { truncate } from "@/util/format"
+import { isRecord } from "@/util/record"
 
 export type WorkflowDashboardRun = WorkflowRunDashboardResponse[number]
 export type WorkflowRunDetail = WorkflowRunGetResponse
@@ -44,6 +45,55 @@ const MAX_TITLE = 46
 const MAX_DESCRIPTION = 118
 const MAX_FOOTER = 118
 const ARTIFACT_DETAIL_VALUE_PREFIX = "workflow.detail.artifact."
+const REQUIRED_CHILD_COUNT_FIELDS = ["queued", "running", "blockedPermission", "blockedQuestion", "completed"] as const
+
+function hasNumberFields(input: unknown, fields: readonly string[]) {
+  return isRecord(input) && fields.every((field) => typeof input[field] === "number")
+}
+
+function hasOnlyNumberValues(input: unknown) {
+  return isRecord(input) && Object.values(input).every((value) => typeof value === "number")
+}
+
+function isWorkflowDashboardRun(input: unknown): input is WorkflowDashboardRun {
+  return (
+    isRecord(input) &&
+    typeof input.runID === "string" &&
+    typeof input.name === "string" &&
+    typeof input.status === "string" &&
+    typeof input.effort === "string" &&
+    typeof input.elapsedMs === "number" &&
+    typeof input.verificationEnvelopeCount === "number" &&
+    typeof input.evidenceRefCount === "number" &&
+    hasNumberFields(input.childCounts, REQUIRED_CHILD_COUNT_FIELDS) &&
+    hasOnlyNumberValues(input.artifactCounts) &&
+    isRecord(input.budgetUsage) &&
+    isRecord(input.budgetLimit) &&
+    isRecord(input.models)
+  )
+}
+
+function isWorkflowRunArtifact(input: unknown): input is WorkflowRunArtifact {
+  return (
+    isRecord(input) &&
+    typeof input.id === "string" &&
+    typeof input.runID === "string" &&
+    typeof input.kind === "string" &&
+    typeof input.retention === "string" &&
+    typeof input.exposeToMainContext === "boolean" &&
+    Array.isArray(input.evidenceRefs) &&
+    isRecord(input.time) &&
+    typeof input.time.created === "number"
+  )
+}
+
+export function normalizeWorkflowDashboardRuns(data: unknown): WorkflowDashboardRun[] {
+  return Array.isArray(data) ? data.filter(isWorkflowDashboardRun) : []
+}
+
+export function normalizeWorkflowRunArtifacts(data: unknown): WorkflowRunArtifact[] {
+  return Array.isArray(data) ? data.filter(isWorkflowRunArtifact) : []
+}
 
 export function workflowDashboardItems(runs: WorkflowDashboardRun[]): WorkflowDashboardItem[] {
   if (runs.length === 0) {
