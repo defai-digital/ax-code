@@ -344,14 +344,19 @@ export namespace MCP {
   // bulk-connect in state() and the explicit connect() — otherwise servers
   // connected at startup (the common case) would stall on reconnect.
   function registerClientOnClose(name: string, client: MCPClient) {
-    client.onclose = () => {
-      void state().then((s) => {
-        if (s.clients[name] === client) {
-          delete s.clients[name]
-          s.status[name] = { status: "failed", error: "Server closed the connection" }
-        }
-      })
-    }
+    client.onclose = Instance.bind(() => {
+      void Promise.resolve()
+        .then(() => state())
+        .then((s) => {
+          if (s.clients[name] === client) {
+            delete s.clients[name]
+            s.status[name] = { status: "failed", error: "Server closed the connection" }
+          }
+        })
+        .catch((error) => {
+          log.warn("MCP client close handler failed", { name, error: toErrorMessage(error) })
+        })
+    })
   }
 
   function needsTrustStatus(decision: McpTrust.Decision): Status {
@@ -425,6 +430,7 @@ export namespace MCP {
         await closeIfPossible(existingClient, name, "replacing existing client")
       }
       s.clients[name] = result.mcpClient
+      registerClientOnClose(name, result.mcpClient)
       s.status[name] = result.status
       cachedTools = undefined
       toolsCacheGeneration++

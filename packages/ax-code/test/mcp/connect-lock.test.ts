@@ -23,6 +23,7 @@ resetGate()
 
 mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
+    onclose?: () => void
     transport?: unknown
 
     async connect(transport: unknown) {
@@ -35,6 +36,8 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
       if (failListTools) throw new Error("list failed")
       return { tools: [] }
     }
+
+    setNotificationHandler() {}
 
     async close() {}
   },
@@ -95,6 +98,38 @@ test("MCP client teardown kills process trees before closing clients", async () 
   expect(source).toContain("rememberClientTransport(client, transport)")
   expect(source).toContain('await closeIfPossible(client, name, "disconnecting")')
   expect(source).toContain('await closeIfPossible(existingClient, name, "replacing existing client")')
+})
+
+test("clients added dynamically clear stale state when they close outside the instance context", async () => {
+  await using tmp = await tmpdir({ git: true })
+  let client: { onclose?: () => void } | undefined
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const add = MCP.add("dynamic-close", {
+        type: "local",
+        command: ["mock-mcp-server"],
+      })
+
+      await connectStarted
+      releaseConnect()
+      await add
+
+      client = (await MCP.clients())["dynamic-close"] as { onclose?: () => void }
+      expect(client?.onclose).toBeFunction()
+    },
+  })
+
+  expect(() => client?.onclose?.()).not.toThrow()
+  await sleep(0)
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect((await MCP.clients())["dynamic-close"]).toBeUndefined()
+    },
+  })
 })
 
 test("tools closes and kills MCP clients when listTools fails", async () => {
