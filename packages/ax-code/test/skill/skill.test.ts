@@ -469,6 +469,49 @@ description: A skill in the .agents/skills directory.
   })
 })
 
+test("skips configured skill paths whose symlink target escapes workspace and home", async () => {
+  await using root = await tmpdir()
+  const workspace = path.join(root.path, "workspace")
+  const home = path.join(root.path, "home")
+  const outside = path.join(root.path, "outside")
+  await fs.mkdir(path.join(outside, "external-skill"), { recursive: true })
+  await fs.mkdir(home)
+  await Bun.write(
+    path.join(outside, "external-skill", "SKILL.md"),
+    `---
+name: escaped-config-skill
+description: Skill outside the allowed config path boundary.
+---
+
+# Escaped Config Skill
+`,
+  )
+  await fs.mkdir(workspace)
+  await fs.symlink(outside, path.join(workspace, "linked-skills"), "dir")
+  await Bun.write(
+    path.join(workspace, "ax-code.json"),
+    JSON.stringify({
+      skills: {
+        paths: ["linked-skills"],
+      },
+    }),
+  )
+
+  const originalHome = process.env.AX_CODE_TEST_HOME
+  process.env.AX_CODE_TEST_HOME = home
+  try {
+    await Instance.provide({
+      directory: workspace,
+      fn: async () => {
+        const skills = userSkills(await Skill.all())
+        expect(skills.find((skill) => skill.name === "escaped-config-skill")).toBeUndefined()
+      },
+    })
+  } finally {
+    process.env.AX_CODE_TEST_HOME = originalHome
+  }
+})
+
 test("parses paths from YAML array in frontmatter", async () => {
   await using tmp = await tmpdir({
     git: true,

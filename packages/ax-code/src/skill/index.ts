@@ -1,3 +1,4 @@
+import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { pathToFileURL } from "url"
@@ -148,6 +149,15 @@ export namespace Skill {
     }
   }
 
+  async function realpathOrResolved(input: string) {
+    const resolved = path.resolve(input)
+    return fs.realpath(resolved).catch(() => resolved)
+  }
+
+  function isContainedIn(root: string, target: string) {
+    return target === root || target.startsWith(root + path.sep)
+  }
+
   export const BUILTIN_NAMES = new Set(["debug-only", "debug-n-fix", "improve-overall", "improve-security", "mcp"])
 
   declare const AX_CODE_BUILTIN_SKILLS: unknown
@@ -252,15 +262,10 @@ export namespace Skill {
       const dir = path.isAbsolute(expanded) ? expanded : path.join(ctx.directory, expanded)
       // Resolve symlinks and normalize before the containment check
       // so `../../etc` can't escape via relative path segments.
-      const resolved = path.resolve(dir)
-      const home = os.homedir()
-      const workspace = path.resolve(ctx.directory)
-      if (
-        !resolved.startsWith(workspace + path.sep) &&
-        !resolved.startsWith(home + path.sep) &&
-        resolved !== workspace &&
-        resolved !== home
-      ) {
+      const resolved = await realpathOrResolved(dir)
+      const home = await realpathOrResolved(os.homedir())
+      const workspace = await realpathOrResolved(ctx.directory)
+      if (!isContainedIn(workspace, resolved) && !isContainedIn(home, resolved)) {
         log.warn("skill path outside workspace and home; skipping", { path: dir, resolved })
         continue
       }
