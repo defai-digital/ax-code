@@ -249,7 +249,11 @@ export const GlobalRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(getGlobalHealthInfo(c.req.query("directory")))
+        const directory = c.req.query("directory")
+        if (directory?.includes("\0")) {
+          return invalidRequest(c, { message: "Directory contains null byte", details: { resource: "directory" } })
+        }
+        return c.json(getGlobalHealthInfo(directory))
       },
     )
     .get(

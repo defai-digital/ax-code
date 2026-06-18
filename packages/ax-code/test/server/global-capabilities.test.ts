@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { Installation } from "../../src/installation"
 import { Server } from "../../src/server/server"
+import path from "path"
 
 test("GET /global/health exposes structured readiness without breaking the stable health flag", async () => {
   const response = await Server.Default().request("/global/health")
@@ -50,6 +51,18 @@ test("GET /global/health exposes structured readiness without breaking the stabl
     completed: expect.any(Number),
     failed: expect.any(Number),
     aborted: expect.any(Number),
+  })
+})
+
+test("GET /global/health rejects null byte directory with 400 instead of 500", async () => {
+  const response = await Server.Default().request(
+    `/global/health?directory=${encodeURIComponent(path.join(process.cwd(), "\0bad"))}`,
+  )
+
+  expect(response.status).toBe(400)
+  expect(await response.json()).toMatchObject({
+    name: "InvalidRequestError",
+    details: { resource: "directory" },
   })
 })
 
