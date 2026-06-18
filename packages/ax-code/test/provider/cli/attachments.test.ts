@@ -43,6 +43,19 @@ describe("materializeCliAttachments", () => {
     }
   })
 
+  test("skips invalid base64 attachment payloads instead of materializing garbage", async () => {
+    const prompt: LanguageModelV3Prompt = [
+      {
+        role: "user",
+        content: [{ type: "file", data: "data:image/png;base64,not base64!!", mediaType: "image/png" } as any],
+      },
+      { role: "user", content: [{ type: "file", data: "%%%not-base64%%%", mediaType: "application/pdf" } as any] },
+    ]
+    const result = await materializeCliAttachments(prompt)
+    expect(result.refs).toEqual([])
+    await result.cleanup()
+  })
+
   test("keeps remote URLs as references without writing a temp file", async () => {
     const prompt: LanguageModelV3Prompt = [
       {
