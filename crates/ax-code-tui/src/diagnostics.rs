@@ -32,7 +32,7 @@ pub enum DiagnosticEvent {
     #[serde(rename = "tui.workflow.dashboardFetchSkipped")]
     WorkflowDashboardFetchSkipped { reason: String },
 
-    /// Workflow dashboard fetch triggereded on demand.
+    /// Workflow dashboard fetch triggered on demand.
     #[serde(rename = "tui.workflow.dashboardFetchOnDemand")]
     WorkflowDashboardFetchOnDemand { session_id: String },
 

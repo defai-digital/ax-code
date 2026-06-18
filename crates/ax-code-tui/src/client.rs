@@ -148,6 +148,35 @@ impl HeadlessClient {
         Ok(rx)
     }
 
+    /// Create a new session on the server.
+    ///
+    /// Returns the newly assigned session ID. The server's
+    /// `SessionCreated` SSE event will also arrive on the subscribed
+    /// event stream, which the `App` uses to populate transcript state.
+    pub async fn create_session(&self) -> Result<String> {
+        let url = format!("{}/session", self.config.base_url);
+        let response = self
+            .http
+            .post(&url)
+            .send()
+            .await
+            .context("Failed to create session")?;
+
+        if !response.status().is_success() {
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Session creation failed: {}", text);
+        }
+
+        let body: serde_json::Value = response
+            .json()
+            .await
+            .context("Failed to parse session creation response")?;
+        body["id"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow::anyhow!("Session creation response missing 'id'"))
+    }
+
     /// Send a prompt to the current session.
     pub async fn send_prompt(&self, session_id: &str, prompt: &str) -> Result<()> {
         let url = format!(

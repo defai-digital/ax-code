@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 use crate::client::{ClientConfig, HeadlessClient};
 use crate::diagnostics::{self, DiagnosticEvent};
 use crate::events::RuntimeEvent;
-use crate::launch_policy::{self, LaunchInput};
+use crate::launch_policy::{self, LaunchInput, LaunchRoute};
 use crate::tui::app::App;
 use crate::tui::input::{InputAction, handle_input};
 use crate::tui::render::render;
@@ -106,14 +106,17 @@ impl Runner {
             app.set_status("Legacy home route active (AX_CODE_TUI_LEGACY_HOME=1)".to_string());
         }
 
-        // Resolve launch route via launch policy (ADR-035)
+        // Resolve launch route via launch policy (ADR-035).
+        // The route is consumed after the client and SSE subscription
+        // are ready so we can create/attach sessions and send prompts.
         let launch_input = LaunchInput {
             explicit_session_id: self.config.session.clone(),
             explicit_prompt: self.config.prompt.clone(),
-            recent_session_ids: Vec::new(), // TODO: fetch from server
+            // TODO: requires GET /session list endpoint from server
+            recent_session_ids: Vec::new(),
             has_project_context: false,
         };
-        let _route = launch_policy::resolve_launch_route(&launch_input);
+        let route = launch_policy::resolve_launch_route(&launch_input);
 
         // Emit renderer startup diagnostic
         DiagnosticEvent::RendererStartup {
@@ -159,6 +162,34 @@ impl Runner {
                 }
                 Err(e) => {
                     app.set_status(format!("Event stream failed: {}", e));
+                }
+            }
+        }
+
+        // Apply the resolved launch route: attach to an existing session
+        // or create a new one (optionally sending an initial prompt).
+        // This runs after SSE subscription so SessionCreated events are
+        // captured by the event stream.
+        if let Some(ref client) = client {
+            match &route {
+                LaunchRoute::Session { session_id } => {
+                    app.session_id = Some(session_id.clone());
+                    app.set_status(format!("Attached to session: {}", session_id));
+                }
+                LaunchRoute::NewSession { prompt } => {
+                    match client.create_session().await {
+                        Ok(session_id) => {
+                            app.session_id = Some(session_id.clone());
+                            if let Some(initial_prompt) = prompt {
+                                if let Err(e) = client.send_prompt(&session_id, initial_prompt).await {
+                                    app.set_status(format!("Failed to send initial prompt: {}", e));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            app.set_status(format!("Failed to create session: {}", e));
+                        }
+                    }
                 }
             }
         }
