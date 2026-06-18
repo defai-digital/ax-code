@@ -1,4 +1,5 @@
 import { Filesystem } from "@/util/filesystem"
+import { isRecord } from "@/util/record"
 import path from "path"
 import type { AppContextCheckData } from "./app-context-schema"
 
@@ -117,15 +118,16 @@ export async function contextChecks(input: { root: string; dir: string }) {
   const out: AppContextCheckData[] = []
 
   for (const file of pkgs) {
-    const json = await Filesystem.readJson<{ scripts?: Record<string, string> }>(file).catch(() => null)
-    const scripts = json?.scripts
-    if (!scripts) continue
+    const json = await Filesystem.readJson<unknown>(file).catch(() => null)
+    if (!isRecord(json) || !isRecord(json.scripts)) continue
+    const scripts = json.scripts
 
     const cwd = path.dirname(file)
     const manager = await packageManager(cwd, input.root)
 
     for (const name of order) {
-      if (!scripts[name]) continue
+      const script = scripts[name]
+      if (typeof script !== "string" || !script) continue
       const command = checkCommand({ manager, root: input.root, cwd, name })
       if (addCheck(out, seen, { root: input.root, cwd, name, command })) return out
     }

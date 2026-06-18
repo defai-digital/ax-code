@@ -38,6 +38,31 @@ test("GET /context returns project context metadata", async () => {
   expect(payload.checks?.some((check) => check.command === "npm run typecheck")).toBe(true)
 })
 
+test("GET /context ignores non-string package scripts", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Bun.write(
+    path.join(tmp.path, "package.json"),
+    JSON.stringify({
+      scripts: {
+        typecheck: true,
+        test: false,
+        lint: "eslint .",
+      },
+    }),
+  )
+
+  const response = await Server.Default().request(directoryUrl("/context", tmp.path))
+  expect(response.status).toBe(200)
+
+  const payload = (await response.json()) as {
+    checks?: Array<{ title: string; command: string }>
+  }
+
+  expect(payload.checks?.some((check) => check.command === "npm run typecheck")).toBe(false)
+  expect(payload.checks?.some((check) => check.command === "npm run test")).toBe(false)
+  expect(payload.checks?.some((check) => check.command === "npm run lint")).toBe(true)
+})
+
 test("POST /context/template creates the requested context template", async () => {
   await using tmp = await tmpdir({ git: true })
 
