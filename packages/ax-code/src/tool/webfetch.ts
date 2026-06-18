@@ -28,8 +28,13 @@ export const WebFetchTool = Tool.define("webfetch", {
     timeout: z.coerce.number().min(1).describe("Optional timeout in seconds (max 120)").optional(),
   }),
   async execute(params, ctx) {
-    // Validate URL
-    if (!params.url.startsWith("http://") && !params.url.startsWith("https://")) {
+    let parsedUrl: URL
+    try {
+      parsedUrl = new URL(params.url)
+    } catch {
+      throw new Error("URL must start with http:// or https://")
+    }
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
       throw new Error("URL must start with http:// or https://")
     }
 

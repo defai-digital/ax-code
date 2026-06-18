@@ -109,6 +109,26 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("accepts URL schemes case-insensitively", async () => {
+    await withFetch(
+      async () =>
+        new Response("uppercase scheme ok", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "HTTPS://93.184.216.34/file.txt", format: "text" }, ctx)
+            expect(result.output).toBe("uppercase scheme ok")
+          },
+        })
+      },
+    )
+  })
+
   test("cancels the first response body before Cloudflare retry", async () => {
     let calls = 0
     let cancelled = 0
