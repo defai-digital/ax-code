@@ -75,7 +75,7 @@ export namespace Command {
 
   export function hints(template: string) {
     const result: string[] = []
-    const numbered = template.match(/\$\d+/g)
+    const numbered = template.match(/\$\d+(?![A-Za-z0-9_])/g)
     if (numbered) {
       for (const match of [...new Set(numbered)].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))) {
         result.push(match)

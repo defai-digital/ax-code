@@ -10,6 +10,10 @@ describe("Command.hints", () => {
     expect(Command.hints("$ARGUMENTS with $10 and $2")).toEqual(["$2", "$10", "$ARGUMENTS"])
   })
 
+  test("does not expose partial numbered placeholder prefixes", () => {
+    expect(Command.hints("keep $1abc and $1_name but replace $1")).toEqual(["$1"])
+  })
+
   test("labels and truncates MCP prompt templates as untrusted content", async () => {
     const text = await Command.mcpPromptTemplateText({
       client: "docs",
