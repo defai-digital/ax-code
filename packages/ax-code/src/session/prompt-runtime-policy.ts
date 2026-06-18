@@ -1,11 +1,12 @@
 import z from "zod"
 import { Isolation } from "@/isolation"
 import type { Isolation as IsolationConfig } from "@/config/schema"
+import { JsonBoolean } from "@/util/schema"
 
 export const PromptIsolationPolicy = z
   .object({
     mode: z.enum(["read-only", "workspace-write", "full-access"]).optional(),
-    network: z.boolean().optional(),
+    network: JsonBoolean.optional(),
   })
   .strict()
 export type PromptIsolationPolicy = z.infer<typeof PromptIsolationPolicy>

@@ -12,12 +12,17 @@ describe("session prompt input schema", () => {
         edit: "true",
         bash: "false",
       },
+      isolation: {
+        mode: "workspace-write",
+        network: "false",
+      },
       parts: [{ type: "text", text: "hello" }],
     })
 
     expect(prompt.userSelectedAgent).toBe(true)
     expect(prompt.noReply).toBe(false)
     expect(prompt.tools).toEqual({ edit: true, bash: false })
+    expect(prompt.isolation).toEqual({ mode: "workspace-write", network: false })
 
     const loop = LoopInput.parse({
       sessionID: prompt.sessionID,
