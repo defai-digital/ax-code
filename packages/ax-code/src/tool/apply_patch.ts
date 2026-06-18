@@ -87,10 +87,6 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       const filePath = resolvePatchPath(hunk.path)
       const movePath = hunk.type === "update" && hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
       await assertExternalDirectory(ctx, filePath)
-      // BUG-293 DEFERRED: The symlink check and subsequent file write
-      // are not atomic (TOCTOU). A true atomic fix requires OS-level
-      // primitives (e.g. O_NOFOLLOW + openat). The existing check is
-      // defense-in-depth and sufficient for the threat model.
       await assertSymlinkInsideProject(filePath)
       Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
       const fileRelativePath = normalizeToWorkspacePath(filePath, Instance.worktree)
@@ -368,6 +364,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           case "add":
             await fs.mkdir(path.dirname(change.filePath), { recursive: true })
             await FileTime.withLock(change.filePath, async () => {
+              await assertSymlinkInsideProject(change.filePath)
+
               const current = await readFileIfExists(change.filePath)
               if (!change.existed && current !== undefined) {
                 throw new Error(`apply_patch conflict: ${change.filePath} was created between verification and write`)
@@ -384,6 +382,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           case "update":
             await FileTime.withLock(change.filePath, async () => {
+              await assertSymlinkInsideProject(change.filePath)
+
               const current = await readFileIfExists(change.filePath)
               if (current !== undefined && current !== change.oldContent)
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
@@ -401,6 +401,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               const [first, second] = [change.filePath, dest].sort()
               if (first === second) {
                 await FileTime.withLock(first, async () => {
+                  await assertSymlinkInsideProject(change.filePath)
+                  await assertSymlinkInsideProject(dest)
+
                   const current = await readFileIfExists(change.filePath)
                   if (current !== change.oldContent) {
                     throw new Error(
@@ -417,6 +420,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               } else {
                 await FileTime.withLock(first, async () => {
                   await FileTime.withLock(second, async () => {
+                    await assertSymlinkInsideProject(change.filePath)
+                    await assertSymlinkInsideProject(dest)
+
                     const currentSource = await readFileIfExists(change.filePath)
                     if (currentSource !== change.oldContent) {
                       throw new Error(
@@ -447,6 +453,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           case "delete":
             await FileTime.withLock(change.filePath, async () => {
+              await assertSymlinkInsideProject(change.filePath)
+
               activeDirty = true
               await fs.unlink(change.filePath).catch((error: any) => {
                 if (error?.code !== "ENOENT") throw error

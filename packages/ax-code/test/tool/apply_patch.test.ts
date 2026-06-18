@@ -362,6 +362,46 @@ describe("tool.apply_patch freeform", () => {
     },
   )
 
+  test.skipIf(process.platform === "win32")(
+    "revalidates add parent symlink inside the file lock before writing",
+    async () => {
+      await using fixture = await tmpdir()
+      const { ctx } = makeCtx()
+
+      await Instance.provide({
+        directory: fixture.path,
+        fn: async () => {
+          const outside = path.join(fixture.path, "..", `apply-patch-late-parent-${Date.now()}`)
+          const parent = path.join(fixture.path, "late-parent")
+          const target = path.join(parent, "new.txt")
+          await fs.mkdir(outside, { recursive: true })
+
+          const originalWithLock = FileTime.withLock.bind(FileTime)
+          const withLockSpy = spyOn(FileTime, "withLock").mockImplementation(async (filePath, fn) => {
+            if (String(filePath) === target) {
+              await fs.rm(parent, { recursive: true, force: true })
+              await fs.symlink(outside, parent)
+            }
+            return originalWithLock(filePath, fn)
+          })
+
+          try {
+            const patchText = "*** Begin Patch\n*** Add File: late-parent/new.txt\n+hello\n*** End Patch"
+
+            await expect(execute({ patchText }, ctx)).rejects.toThrow(
+              "Access denied: parent directory escapes project directory",
+            )
+            await expect(fs.readFile(path.join(outside, "new.txt"), "utf-8")).rejects.toThrow()
+          } finally {
+            withLockSpy.mockRestore()
+            await fs.rm(parent, { recursive: true, force: true }).catch(() => undefined)
+            await fs.rm(outside, { recursive: true, force: true })
+          }
+        },
+      })
+    },
+  )
+
   test.skipIf(process.platform === "win32")("rejects move destination symlink that escapes the project", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
