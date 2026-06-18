@@ -47,7 +47,9 @@ export function time(ms?: number) {
 
 export function stamp(ms?: number) {
   if (ms == null) return "unknown"
-  return new Date(ms).toISOString().replace("T", " ").slice(0, 19)
+  const date = new Date(ms)
+  if (!Number.isFinite(date.getTime())) return "unknown"
+  return date.toISOString().replace("T", " ").slice(0, 19)
 }
 
 export function num(value?: number) {

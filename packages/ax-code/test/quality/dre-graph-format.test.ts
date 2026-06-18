@@ -27,6 +27,9 @@ describe("quality.dre-graph-format", () => {
     expect(time(59_900)).toBe("59s")
     expect(time(125_000)).toBe("2m 5s")
     expect(stamp(undefined)).toBe("unknown")
+    expect(stamp(Number.NaN)).toBe("unknown")
+    expect(stamp(Number.POSITIVE_INFINITY)).toBe("unknown")
+    expect(stamp(8_640_000_000_000_001)).toBe("unknown")
     expect(stamp(Date.UTC(2026, 4, 17, 12, 34, 56))).toBe("2026-05-17 12:34:56")
   })
 
