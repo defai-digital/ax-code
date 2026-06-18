@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { Flag } from "../../src/flag/flag"
+import { Flag, parsePositiveIntegerFlagValue } from "../../src/flag/flag"
 
 const originalConfigContent = process.env["AX_CODE_CONFIG_CONTENT"]
 const originalModelsPath = process.env["AX_CODE_MODELS_PATH"]
@@ -66,4 +66,16 @@ test("runtime config/model flags read process.env at access time", () => {
   expect(Flag.AX_CODE_CONFIG_CONTENT).toBe('{"username":"second"}')
   expect(Flag.AX_CODE_MODELS_PATH).toBe("/tmp/second-models.json")
   expect(Flag.AX_CODE_MODELS_URL).toBe("https://example.com/second-models.json")
+})
+
+test("positive integer flag parser rejects non-decimal numerics", () => {
+  expect(parsePositiveIntegerFlagValue(undefined)).toBeUndefined()
+  expect(parsePositiveIntegerFlagValue("")).toBeUndefined()
+  expect(parsePositiveIntegerFlagValue("42")).toBe(42)
+  expect(parsePositiveIntegerFlagValue(" 42 ")).toBe(42)
+  expect(parsePositiveIntegerFlagValue("0")).toBeUndefined()
+  expect(parsePositiveIntegerFlagValue("-1")).toBeUndefined()
+  expect(parsePositiveIntegerFlagValue("1.5")).toBeUndefined()
+  expect(parsePositiveIntegerFlagValue("1e3")).toBeUndefined()
+  expect(parsePositiveIntegerFlagValue("0x10")).toBeUndefined()
 })

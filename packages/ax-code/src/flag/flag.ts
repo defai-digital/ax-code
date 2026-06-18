@@ -42,6 +42,14 @@ function defineBooleanFlagWithOverride(name: string, overrideName: string, fallb
   })
 }
 
+export function parsePositiveIntegerFlagValue(value: string | undefined) {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (!/^\d+$/.test(trimmed)) return undefined
+  const parsed = Number(trimmed)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
 export namespace Flag {
   export const AX_CODE_GIT_BASH_PATH = process.env["AX_CODE_GIT_BASH_PATH"]
   export const AX_CODE_CONFIG = process.env["AX_CODE_CONFIG"]
@@ -205,10 +213,7 @@ export namespace Flag {
   export const AX_CODE_STRICT_CONFIG_DEPS = truthy("AX_CODE_STRICT_CONFIG_DEPS")
 
   function number(key: string) {
-    const value = process.env[key]
-    if (!value) return undefined
-    const parsed = Number(value)
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+    return parsePositiveIntegerFlagValue(process.env[key])
   }
 }
 
