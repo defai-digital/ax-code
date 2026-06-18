@@ -1,6 +1,7 @@
 import { type ToolKind } from "@agentclientprotocol/sdk"
 import { applyPatch } from "diff"
-import { pathToFileURL } from "url"
+import path from "path"
+import { fileURLToPath, pathToFileURL } from "url"
 import { providerModelKey } from "../provider/model-key"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
@@ -129,8 +130,8 @@ export async function defaultModel(
 export function parseUri(uri: string): ParsedACPResource {
   try {
     if (uri.startsWith("file://")) {
-      const path = new URL(uri).pathname
-      const name = path.split("/").pop() || path
+      const filepath = fileURLToPath(uri)
+      const name = path.basename(filepath) || filepath
       return {
         type: "file",
         url: uri,
