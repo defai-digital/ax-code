@@ -68,7 +68,7 @@ export namespace TaskQueue {
     sourceMessageID: z.string().optional(),
     sourceTaskID: z.string().optional(),
     payload: Payload.optional().default({}),
-    priority: z.number().int().min(-1000).max(1000).optional().default(0),
+    priority: z.coerce.number().int().min(-1000).max(1000).optional().default(0),
   })
   export type EnqueueInput = z.input<typeof EnqueueInput>
 
@@ -92,7 +92,7 @@ export namespace TaskQueue {
       agent: z.string().trim().min(1).nullable().optional(),
       model: z.unknown().optional(),
       payload: Payload.optional(),
-      priority: z.number().int().min(-1000).max(1000).optional(),
+      priority: z.coerce.number().int().min(-1000).max(1000).optional(),
     })
     .refine((input) => Object.keys(input).length > 0, {
       message: "At least one editable queue field is required",

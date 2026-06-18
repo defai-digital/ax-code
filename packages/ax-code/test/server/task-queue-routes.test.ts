@@ -30,6 +30,7 @@ describe("task queue routes", () => {
             title: "Queue a route-level task",
             worktree: "wt-route",
             payload: { prompt: "ship gui" },
+            priority: "5",
           }),
         })
         expect(createdResponse.status).toBe(200)
@@ -38,11 +39,13 @@ describe("task queue routes", () => {
           sessionID: string
           status: string
           worktree?: string
+          priority: number
         }
         expect(created.id).toStartWith("tsk_")
         expect(created.sessionID).toBe(session.id)
         expect(created.status).toBe("queued")
         expect(created.worktree).toBe("wt-route")
+        expect(created.priority).toBe(5)
 
         const listResponse = await app.request(`/task-queue?${directoryQuery}&sessionID=${created.sessionID}`)
         expect(listResponse.status).toBe(200)
@@ -57,6 +60,7 @@ describe("task queue routes", () => {
             title: "Edited route-level task",
             worktree: null,
             payload: { prompt: "ship edited gui" },
+            priority: "3",
           }),
         })
         expect(editResponse.status).toBe(200)
@@ -64,6 +68,7 @@ describe("task queue routes", () => {
           id: created.id,
           title: "Edited route-level task",
           payload: { prompt: "ship edited gui" },
+          priority: 3,
         })
 
         const externalStatusResponse = await app.request(`/task-queue/${created.id}/status?${directoryQuery}`, {
