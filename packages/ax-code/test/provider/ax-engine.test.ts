@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import fs from "fs/promises"
 import path from "path"
 
 import { tmpdir } from "../fixture/fixture"
@@ -17,6 +18,7 @@ import {
   evaluateDiskStatus,
   evaluateAxEngineCapabilityFromModels,
   evaluatePlatformEligibility,
+  getModelStatus,
   isPlausiblySupportedHost,
   markPrepared,
   normalizeQuantization,
@@ -26,6 +28,7 @@ import {
   prepareAxEngine,
   resolveDownloadDestination,
 } from "../../src/provider/ax-engine"
+import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 
 const originalFetch = globalThis.fetch
 
@@ -162,6 +165,29 @@ describe("ax-engine model cache", () => {
       "model path does not exist",
     )
     await expect(markPrepared({ modelPath: tmp.path })).rejects.toThrow("model-manifest.json")
+  })
+
+  test("reports malformed prepared model state instead of treating it as a missing model", async () => {
+    await using tmp = await tmpdir()
+    const originalPrepareState = AxEnginePaths.prepareState
+    const malformed = "{not json"
+    const prepareState = path.join(tmp.path, "prepare.json")
+    await fs.writeFile(prepareState, malformed)
+
+    try {
+      ;(AxEnginePaths as { prepareState: string }).prepareState = prepareState
+      const status = await getModelStatus({
+        modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+        quantization: "mlx4bit",
+      })
+
+      expect(status.present).toBe(false)
+      expect(status.blockers).toContainEqual(expect.stringContaining("failed to read prepared model state"))
+      expect(status.blockers).not.toContainEqual(expect.stringContaining("prepare Qwen3-Coder-Next"))
+      expect(await fs.readFile(prepareState, "utf8")).toBe(malformed)
+    } finally {
+      ;(AxEnginePaths as { prepareState: string }).prepareState = originalPrepareState
+    }
   })
 })
 

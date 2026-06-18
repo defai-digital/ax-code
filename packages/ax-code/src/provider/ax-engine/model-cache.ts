@@ -184,11 +184,12 @@ async function hasManifest(dir: string) {
   return exists(path.join(dir, "model-manifest.json"))
 }
 
-async function readPrepareState(): Promise<AxEnginePrepareState | undefined> {
+async function readPrepareState(): Promise<{ state?: AxEnginePrepareState; error?: unknown }> {
   try {
-    return AxEnginePrepareState.parse(await Filesystem.readJson(AxEnginePaths.prepareState))
-  } catch {
-    return undefined
+    return { state: AxEnginePrepareState.parse(await Filesystem.readJson(AxEnginePaths.prepareState)) }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return {}
+    return { error }
   }
 }
 
@@ -213,7 +214,19 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
   const quantization = normalizeQuantization(options.quantization, modelID)
   const configured =
     typeof options.modelPath === "string" && options.modelPath.trim() ? options.modelPath.trim() : undefined
-  const prepared = await readPrepareState()
+  const preparedResult = await readPrepareState()
+  if (preparedResult.error) {
+    return {
+      present: false,
+      modelID,
+      quantization,
+      complete: false,
+      blockers: [
+        `${AX_ENGINE_ERROR.ModelMissing}: failed to read prepared model state (${toErrorMessage(preparedResult.error)})`,
+      ],
+    }
+  }
+  const prepared = preparedResult.state
   const preparedPath =
     prepared?.modelID === modelID && prepared.quantization === quantization ? prepared.path : undefined
 
