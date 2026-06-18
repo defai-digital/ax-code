@@ -1,5 +1,6 @@
 //! Tests for the TUI runner module.
 
+use ax_code_tui::client::DEFAULT_SERVER_URL;
 use ax_code_tui::runner::CliArgs;
 use clap::Parser;
 
@@ -80,7 +81,7 @@ fn test_runner_cli_args_into_config_defaults() {
     let args = CliArgs::parse_from(["ax-code-tui"]);
     let config = args.into_config();
 
-    assert_eq!(config.base_url, "http://localhost:3000");
+    assert_eq!(config.base_url, DEFAULT_SERVER_URL);
     assert!(config.auth_token.is_none());
     assert_eq!(config.directory, Some(".".to_string()));
 }

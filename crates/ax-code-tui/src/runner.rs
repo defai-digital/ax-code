@@ -15,7 +15,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 use tokio::sync::mpsc;
 
-use crate::client::{ClientConfig, HeadlessClient};
+use crate::client::{ClientConfig, DEFAULT_SERVER_URL, HeadlessClient};
 use crate::diagnostics::{self, DiagnosticEvent};
 use crate::events::RuntimeEvent;
 use crate::launch_policy::{self, LaunchInput, LaunchRoute};
@@ -32,7 +32,7 @@ use crate::tui::render::render;
 pub struct CliArgs {
     /// URL of the headless ax-code server.
     /// Format: http://host:port
-    #[arg(long, default_value = "http://localhost:3000")]
+    #[arg(long, default_value = DEFAULT_SERVER_URL)]
     pub server_url: String,
 
     /// Auth token for the server.
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn test_cli_args_default() {
         let args = CliArgs::parse_from(["ax-code-tui"]);
-        assert_eq!(args.server_url, "http://localhost:3000");
+        assert_eq!(args.server_url, DEFAULT_SERVER_URL);
         assert_eq!(args.directory, ".");
         assert!(args.auth_token.is_none());
         assert!(args.prompt.is_none());
