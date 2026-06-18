@@ -1,9 +1,10 @@
 use rand::Rng;
-use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-static LAST_TIMESTAMP: AtomicI64 = AtomicI64::new(0);
-static COUNTER: AtomicU32 = AtomicU32::new(0);
+static LAST_ID_STATE: AtomicU64 = AtomicU64::new(0);
+const COUNTER_MASK: u64 = 0xFF;
+const MAX_COUNTER: u64 = COUNTER_MASK;
 
 const PREFIXES: &[(&str, &str)] = &[
     ("session", "ses"),
@@ -49,48 +50,59 @@ fn now_ms() -> i64 {
         .as_millis() as i64
 }
 
-pub fn ascending(prefix_name: &str) -> Result<String, String> {
-    let pfx = get_prefix(prefix_name).ok_or_else(|| format!("unknown prefix: {prefix_name}"))?;
-
-    // BUG-276: Use compare_exchange loop to atomically update timestamp+counter
-    let (ts, cnt) = loop {
-        let current = now_ms();
-        let prev = LAST_TIMESTAMP.load(Ordering::SeqCst);
-        if current != prev {
-            // Try to claim this new timestamp
-            if LAST_TIMESTAMP
-                .compare_exchange(prev, current, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                COUNTER.store(1, Ordering::SeqCst);
-                break (current, 1u32);
-            }
-            // Another thread beat us; retry
-            continue;
+fn next_state_parts(prev: u64, current: u64) -> Option<(u64, u64, u64)> {
+    let prev_ts = prev >> 8;
+    let prev_counter = prev & COUNTER_MASK;
+    let next_ts = current.max(prev_ts);
+    let next_counter = if next_ts == prev_ts {
+        if prev_counter >= MAX_COUNTER {
+            return None;
         }
-        // Same timestamp: just bump the counter
-        let c = COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
-        if c > 255 {
-            // Counter overflow — spin until the next millisecond so IDs stay unique.
+        prev_counter + 1
+    } else {
+        0
+    };
+    let next = (next_ts << 8) | next_counter;
+    Some((next_ts, next_counter, next))
+}
+
+fn reserve_timestamp_counter(current: u64) -> (u64, u64) {
+    // Keep timestamp and counter in one atomic word. Updating them as separate
+    // atomics can reset the counter after another caller has already incremented
+    // it, which makes IDs generated in the same millisecond sort backwards.
+    loop {
+        let prev = LAST_ID_STATE.load(Ordering::SeqCst);
+        let Some((next_ts, next_counter, next)) = next_state_parts(prev, current) else {
             std::thread::yield_now();
             continue;
+        };
+        if LAST_ID_STATE
+            .compare_exchange(prev, next, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            break (next_ts, next_counter);
         }
-        break (current, c);
-    };
-
-    // BUG-028: Reduced shift from 12 to 8 bits to prevent 48-bit overflow.
-    // 40 bits for timestamp (~34,800 years of ms) + 8 bits for counter (256/ms).
-    let now = (((ts as u64) << 8) | (cnt as u64)) & 0xFFFF_FFFF_FFFF;
-
-    let mut time_bytes = [0u8; 6];
-    for (i, byte) in time_bytes.iter_mut().enumerate() {
-        *byte = ((now >> (40 - 8 * i)) & 0xFF) as u8;
     }
+}
 
-    let hex = hex_encode(&time_bytes);
+pub fn ascending(prefix_name: &str) -> Result<String, String> {
+    let pfx = get_prefix(prefix_name).ok_or_else(|| format!("unknown prefix: {prefix_name}"))?;
+    let (ts, cnt) = reserve_timestamp_counter(now_ms().max(0) as u64);
+    let hex = encode_sort_key(ts, cnt);
     let random = random_base62(14);
 
     Ok(format!("{pfx}_{hex}{random}"))
+}
+
+fn encode_sort_key(ts: u64, cnt: u64) -> String {
+    let sortable = ((ts << 8) | cnt) & 0xFFFF_FFFF_FFFF;
+
+    let mut time_bytes = [0u8; 6];
+    for (i, byte) in time_bytes.iter_mut().enumerate() {
+        *byte = ((sortable >> (40 - 8 * i)) & 0xFF) as u8;
+    }
+
+    hex_encode(&time_bytes)
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
@@ -125,6 +137,36 @@ mod tests {
         let id1 = ascending("code_node").unwrap();
         let id2 = ascending("code_node").unwrap();
         assert!(id2 > id1, "IDs should be ascending: {} vs {}", id1, id2);
+    }
+
+    #[test]
+    fn test_next_state_same_timestamp_increments_counter() {
+        let prev = (1000u64 << 8) | 4;
+        let (ts, counter, next) = next_state_parts(prev, 1000).unwrap();
+        assert_eq!(ts, 1000);
+        assert_eq!(counter, 5);
+        assert_eq!(next, (1000u64 << 8) | 5);
+        assert!(encode_sort_key(ts, counter) > encode_sort_key(1000, 4));
+    }
+
+    #[test]
+    fn test_next_state_clock_rollback_keeps_logical_timestamp() {
+        let prev = (1000u64 << 8) | 7;
+        let (ts, counter, next) = next_state_parts(prev, 999).unwrap();
+        assert_eq!(ts, 1000);
+        assert_eq!(counter, 8);
+        assert_eq!(next, (1000u64 << 8) | 8);
+        assert!(encode_sort_key(ts, counter) > encode_sort_key(1000, 7));
+    }
+
+    #[test]
+    fn test_next_state_counter_overflow_waits_for_later_timestamp() {
+        let prev = (1000u64 << 8) | MAX_COUNTER;
+        assert!(next_state_parts(prev, 1000).is_none());
+        let (ts, counter, next) = next_state_parts(prev, 1001).unwrap();
+        assert_eq!(ts, 1001);
+        assert_eq!(counter, 0);
+        assert_eq!(next, 1001u64 << 8);
     }
 
     #[test]
