@@ -97,6 +97,34 @@ test("path route resolves symlinked directory requests to their canonical path",
   }
 })
 
+test("path route preserves literal percent-encoded sequences in query directories", async () => {
+  await using tmp = await tmpdir()
+  const target = path.join(tmp.path, "literal%2Fdir")
+  await fs.mkdir(target, { recursive: true })
+
+  const response = await Server.Default().request(`/path?directory=${encodeURIComponent(target)}`)
+
+  expect(response.status).toBe(200)
+  const body = (await response.json()) as { directory: string }
+  expect(body.directory).toBe(target)
+})
+
+test("path route still decodes encoded directory headers", async () => {
+  await using tmp = await tmpdir()
+  const target = path.join(tmp.path, "header encoded")
+  await fs.mkdir(target, { recursive: true })
+
+  const response = await Server.Default().request("/path", {
+    headers: {
+      "x-opencode-directory": encodeURIComponent(target),
+    },
+  })
+
+  expect(response.status).toBe(200)
+  const body = (await response.json()) as { directory: string }
+  expect(body.directory).toBe(target)
+})
+
 test("runtime status routes stay mounted at their public paths", async () => {
   await using tmp = await tmpdir({ git: true })
   const app = Server.Default()

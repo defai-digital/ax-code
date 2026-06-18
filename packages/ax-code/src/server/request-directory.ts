@@ -24,12 +24,11 @@ const DANGEROUS_ROOTS = new Set([
 const SENSITIVE_HOME_DIRECTORIES = [".ssh", ".gnupg", ".aws", ".azure", ".config/gcloud", ".docker", ".kube", ".npm"]
 
 export function requestDirectory(c: Context): string | Response {
-  const raw =
-    c.req.query("directory") ||
-    c.req.header("x-ax-code-directory") ||
-    c.req.header("x-opencode-directory") ||
-    process.cwd()
+  const queryDirectory = c.req.query("directory")
+  const headerDirectory = c.req.header("x-ax-code-directory") || c.req.header("x-opencode-directory")
   const decoded = (() => {
+    if (queryDirectory) return queryDirectory
+    const raw = headerDirectory || process.cwd()
     try {
       return decodeURIComponent(raw)
     } catch {
