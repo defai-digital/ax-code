@@ -215,6 +215,7 @@ impl App {
                     if !self.event_targets_current_session(&info.id) {
                         return;
                     }
+                    self.clear_active_session_state();
                 }
                 self.status_message = Some("Session deleted".to_string());
             }
@@ -747,6 +748,18 @@ impl App {
         self.session_id = Some(summary.id.clone());
         self.session_title = summary.title.clone();
         self.session_status = SessionStatus::Idle;
+        self.clear_session_runtime_state();
+        self.status_message = Some(format!("Switched to session: {}", summary.id));
+    }
+
+    fn clear_active_session_state(&mut self) {
+        self.session_id = None;
+        self.session_title = None;
+        self.session_status = SessionStatus::Idle;
+        self.clear_session_runtime_state();
+    }
+
+    fn clear_session_runtime_state(&mut self) {
         self.messages.clear();
         self.message_text_parts.clear();
         self.pending_permissions.clear();
@@ -756,7 +769,6 @@ impl App {
         self.scroll_offset = 0;
         self.selected_tool_index = 0;
         self.tool_result_expanded = false;
-        self.status_message = Some(format!("Switched to session: {}", summary.id));
     }
 
     // === Interrupt/Abort ===
@@ -1495,6 +1507,70 @@ mod tests {
         assert!(app.tool_calls.is_empty());
         assert_eq!(app.mode, AppMode::Input);
         assert_eq!(app.session_status, SessionStatus::Idle);
+    }
+
+    #[test]
+    fn test_session_deleted_clears_current_session_state() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+        app.session_title = Some("Current".to_string());
+        app.session_status = SessionStatus::Running;
+        app.mode = AppMode::Permission;
+        app.scroll_offset = 10;
+        app.tool_result_expanded = true;
+        app.messages.push(Message {
+            id: "msg1".to_string(),
+            role: crate::events::MessageRole::Assistant,
+            content: "stale".to_string(),
+            is_streaming: false,
+        });
+        app.message_text_parts.push(MessageTextPart {
+            message_id: "msg1".to_string(),
+            part_id: "part1".to_string(),
+            text: "stale".to_string(),
+        });
+        app.pending_permissions.push(PermissionRequest {
+            session_id: "s1".to_string(),
+            request_id: "perm1".to_string(),
+            permission_type: "bash".to_string(),
+            description: "run".to_string(),
+        });
+        app.pending_questions.push(QuestionRequest {
+            session_id: "s1".to_string(),
+            request_id: "q1".to_string(),
+            question: "continue?".to_string(),
+            options: vec!["yes".to_string()],
+            selected: 0,
+        });
+        app.tool_calls.push(ToolCall {
+            call_id: "call1".to_string(),
+            tool_name: "bash".to_string(),
+            status: ToolCallStatus::Running,
+            result: None,
+            error: None,
+        });
+
+        app.handle_event(RuntimeEvent::SessionDeleted {
+            properties: crate::events::SessionInfo {
+                info: Some(crate::events::SessionData {
+                    id: "s1".to_string(),
+                    title: None,
+                }),
+            },
+        });
+
+        assert!(app.session_id.is_none());
+        assert!(app.session_title.is_none());
+        assert!(app.messages.is_empty());
+        assert!(app.message_text_parts.is_empty());
+        assert!(app.pending_permissions.is_empty());
+        assert!(app.pending_questions.is_empty());
+        assert!(app.tool_calls.is_empty());
+        assert_eq!(app.session_status, SessionStatus::Idle);
+        assert_eq!(app.mode, AppMode::Input);
+        assert_eq!(app.scroll_offset, 0);
+        assert!(!app.tool_result_expanded);
+        assert_eq!(app.status_message.as_deref(), Some("Session deleted"));
     }
 
     #[test]
