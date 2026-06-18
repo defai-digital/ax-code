@@ -233,9 +233,13 @@ impl App {
                 if !self.event_targets_current_session_option(properties.session_id.as_deref()) {
                     return;
                 }
-                if let Some(error) = properties.error {
-                    self.status_message = Some(format!("Error: {}", error));
-                }
+                let error = properties
+                    .error
+                    .map(|error| error.to_string())
+                    .unwrap_or_else(|| "Unknown error".to_string());
+                self.session_status = SessionStatus::Idle;
+                self.fail_running_tool_calls(&error);
+                self.status_message = Some(format!("Error: {}", error));
             }
             RuntimeEvent::MessageUpdated { properties } => {
                 if let Some(info) = properties.info {
@@ -552,6 +556,15 @@ impl App {
             self.session_status = SessionStatus::Running;
         } else {
             self.session_status = SessionStatus::Idle;
+        }
+    }
+
+    fn fail_running_tool_calls(&mut self, error: &str) {
+        for tool_call in &mut self.tool_calls {
+            if tool_call.status == ToolCallStatus::Running {
+                tool_call.status = ToolCallStatus::Failed;
+                tool_call.error = Some(error.to_string());
+            }
         }
     }
 
@@ -1016,7 +1029,7 @@ mod tests {
     use crate::events::{
         MessageData, MessageInfo, MessagePartData, MessagePartDeltaProps, MessagePartInfo,
         MessagePartRemovedProps, MessageRemovedProps, RequestReplyProps, RuntimeEvent,
-        SessionStatusProps, ToolPartState,
+        SessionErrorProps, SessionStatusProps, ToolPartState,
     };
 
     // === HIGH 1: multi-byte prompt editing must not panic ===
@@ -1442,6 +1455,74 @@ mod tests {
         });
 
         assert_eq!(app.session_status, SessionStatus::Idle);
+    }
+
+    #[test]
+    fn test_session_error_marks_running_session_idle_and_fails_tools() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+        app.session_status = SessionStatus::Running;
+        app.tool_calls.push(ToolCall {
+            call_id: "call_running".to_string(),
+            tool_name: "bash".to_string(),
+            status: ToolCallStatus::Running,
+            result: None,
+            error: None,
+        });
+        app.tool_calls.push(ToolCall {
+            call_id: "call_done".to_string(),
+            tool_name: "read".to_string(),
+            status: ToolCallStatus::Completed,
+            result: Some("ok".to_string()),
+            error: None,
+        });
+
+        app.handle_event(RuntimeEvent::SessionError {
+            properties: SessionErrorProps {
+                session_id: Some("s1".to_string()),
+                error: Some(serde_json::json!({ "name": "AbortError", "message": "cancelled" })),
+            },
+        });
+
+        assert_eq!(app.session_status, SessionStatus::Idle);
+        assert_eq!(app.tool_calls[0].status, ToolCallStatus::Failed);
+        assert!(
+            app.tool_calls[0]
+                .error
+                .as_deref()
+                .is_some_and(|error| error.contains("cancelled"))
+        );
+        assert_eq!(app.tool_calls[1].status, ToolCallStatus::Completed);
+        assert!(
+            app.status_message
+                .as_deref()
+                .is_some_and(|message| message.contains("cancelled"))
+        );
+    }
+
+    #[test]
+    fn test_session_error_ignores_other_session() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+        app.session_status = SessionStatus::Running;
+        app.tool_calls.push(ToolCall {
+            call_id: "call_running".to_string(),
+            tool_name: "bash".to_string(),
+            status: ToolCallStatus::Running,
+            result: None,
+            error: None,
+        });
+
+        app.handle_event(RuntimeEvent::SessionError {
+            properties: SessionErrorProps {
+                session_id: Some("s2".to_string()),
+                error: Some(serde_json::json!("other session failed")),
+            },
+        });
+
+        assert_eq!(app.session_status, SessionStatus::Running);
+        assert_eq!(app.tool_calls[0].status, ToolCallStatus::Running);
+        assert!(app.status_message.is_none());
     }
 
     #[test]
