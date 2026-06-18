@@ -61,7 +61,7 @@ function booleanValue(value: unknown, fallback: boolean) {
 }
 
 function numberValue(value: unknown, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback
 }
 
 function interleavedValue(value: unknown): Provider.Model["capabilities"]["interleaved"] {
