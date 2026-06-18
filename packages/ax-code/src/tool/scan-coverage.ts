@@ -29,8 +29,14 @@ const MAX_FINDINGS_IN_SCAN_OUTPUT = 40
 export const SCAN_TOOL_COMMON_PARAMETERS = {
   excludeTests: z.boolean().optional().describe("Skip test files (default true)"),
   include: z.array(z.string()).optional().describe("Glob patterns to include (default: TS/JS sources)"),
-  maxFiles: z.number().int().min(1).max(5000).optional().describe("Max files to scan (default 500)"),
-  maxFindingsPerFile: z.number().int().min(1).max(200).optional().describe("Max findings per file (default 20)"),
+  maxFiles: z.coerce.number().int().min(1).max(5000).optional().describe("Max files to scan (default 500)"),
+  maxFindingsPerFile: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe("Max findings per file (default 20)"),
 }
 
 type ScanToolCommonInput = {

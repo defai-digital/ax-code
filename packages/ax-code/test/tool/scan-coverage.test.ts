@@ -1,16 +1,28 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
+import z from "zod"
 import { Instance } from "../../src/project/instance"
 import {
   buildScanToolResult,
   dedupCoverageNotice,
   hasSourceFile,
   scanCoverageNotice,
+  SCAN_TOOL_COMMON_PARAMETERS,
   scanToolCommonDetectInput,
 } from "../../src/tool/scan-coverage"
 import { tmpdir } from "../fixture/fixture"
 
 describe("scan coverage notices", () => {
+  test("coerces common numeric tool parameters from string values", () => {
+    const parsed = z.object(SCAN_TOOL_COMMON_PARAMETERS).parse({
+      maxFiles: "12",
+      maxFindingsPerFile: "3",
+    })
+
+    expect(parsed.maxFiles).toBe(12)
+    expect(parsed.maxFindingsPerFile).toBe(3)
+  })
+
   test("builds common detect input for scan tool wrappers", () => {
     expect(
       scanToolCommonDetectInput({
