@@ -274,8 +274,7 @@ impl HeadlessClient {
         }
 
         let response = self
-            .http
-            .post(&url)
+            .with_directory_query(self.http.post(&url))
             .json(&PermissionReply {
                 reply: if accepted { "once" } else { "reject" },
             })
@@ -310,8 +309,7 @@ impl HeadlessClient {
         }
 
         let response = self
-            .http
-            .post(&url)
+            .with_directory_query(self.http.post(&url))
             .json(&QuestionReply { answers })
             .send()
             .await
@@ -334,8 +332,7 @@ impl HeadlessClient {
         );
 
         let response = self
-            .http
-            .post(&url)
+            .with_directory_query(self.http.post(&url))
             .send()
             .await
             .context("Failed to reject question")?;

@@ -253,15 +253,15 @@ pub fn question_asked_event(
 }
 
 fn is_permission_reply_request(request: &str) -> bool {
-    request.starts_with("POST /permission/") && request.contains("/reply ")
+    request.starts_with("POST /permission/") && (request.contains("/reply ") || request.contains("/reply?"))
 }
 
 fn is_question_reply_request(request: &str) -> bool {
-    request.starts_with("POST /question/") && request.contains("/reply ")
+    request.starts_with("POST /question/") && (request.contains("/reply ") || request.contains("/reply?"))
 }
 
 fn is_question_reject_request(request: &str) -> bool {
-    request.starts_with("POST /question/") && request.contains("/reject ")
+    request.starts_with("POST /question/") && (request.contains("/reject ") || request.contains("/reject?"))
 }
 
 /// Create a tool call start event JSON.
