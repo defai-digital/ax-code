@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { decodeMcpDebugServerInfoValue, parseMcpDebugServerInfoText } from "../../src/cli/cmd/mcp"
+import { decodeMcpDebugServerInfoValue, parseMcpDebugServerInfoText, parseMcpLocalCommand } from "../../src/cli/cmd/mcp"
 
 describe("mcp debug response decoding", () => {
   test("decodeMcpDebugServerInfoValue extracts parsed server info", () => {
@@ -42,5 +42,17 @@ describe("mcp debug response decoding", () => {
     })
     expect(parseMcpDebugServerInfoText("{not json")).toBeUndefined()
     expect(parseMcpDebugServerInfoText("")).toBeUndefined()
+  })
+})
+
+describe("mcp local command parsing", () => {
+  test("preserves quoted arguments when storing custom local commands", () => {
+    expect(parseMcpLocalCommand('node server.js --root "My Project" --label=\'local mcp\'')).toEqual([
+      "node",
+      "server.js",
+      "--root",
+      "My Project",
+      "--label=local mcp",
+    ])
   })
 })

@@ -24,6 +24,7 @@ import { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { parseJsonPayload } from "../../util/json-value"
 import { toErrorMessage } from "../../util/error-message"
+import { parseShellArgs } from "../../util/shell-args"
 
 // Above this many MCP tools, LLM tool-selection accuracy degrades and the
 // extra schema overhead noticeably eats context. Mirrors the empirical
@@ -73,6 +74,10 @@ export function parseMcpDebugServerInfoText(text: string): unknown | undefined {
   const parsed = parseJsonPayload(text)
   if (parsed === undefined) return undefined
   return decodeMcpDebugServerInfoValue(parsed)
+}
+
+export function parseMcpLocalCommand(input: string): string[] {
+  return parseShellArgs(input)
 }
 
 export const McpCommand = cmd({
@@ -721,7 +726,7 @@ export const McpAddCommand = cmd({
 
           const mcpConfig: Config.Mcp = {
             type: "local",
-            command: command.trim().split(/\s+/),
+            command: parseMcpLocalCommand(command),
           }
 
           await addMcpToConfig(name, mcpConfig, configPath)
