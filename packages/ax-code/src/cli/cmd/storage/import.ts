@@ -3,6 +3,7 @@ import { cmd } from "../cmd"
 import { bootstrap } from "../../bootstrap"
 import { EOL } from "os"
 import { Filesystem } from "../../../util/filesystem"
+import { toErrorMessage } from "../../../util/error-message"
 import type { SessionTransfer } from "./transfer"
 import { writeTransfer } from "./transfer"
 import z from "zod"
@@ -61,7 +62,7 @@ export async function readSessionTransferFile(file: string): Promise<
     if (code === "ENOENT") {
       return { error: `File not found: ${file}` }
     }
-    const message = error instanceof Error ? error.message : String(error)
+    const message = toErrorMessage(error)
     return { error: `Failed to read ${file}: ${message}` }
   }
 }

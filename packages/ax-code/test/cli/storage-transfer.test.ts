@@ -1,13 +1,21 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { Filesystem } from "../../src/util/filesystem"
 import { readSessionTransferFile } from "../../src/cli/cmd/storage/import"
 import { buildTransfer, writeTransfer } from "../../src/cli/cmd/storage/transfer"
 import { tmpdir } from "../fixture/fixture"
+
+let readJsonSpy: ReturnType<typeof spyOn<typeof Filesystem, "readJson">> | undefined
+
+afterEach(() => {
+  readJsonSpy?.mockRestore()
+  readJsonSpy = undefined
+})
 
 describe("storage transfer", () => {
   test("reports corrupt import files as read failures, not missing files", async () => {
@@ -21,6 +29,21 @@ describe("storage transfer", () => {
 
     expect(result.error).toStartWith("Failed to read ")
     expect(result.error).not.toContain("File not found")
+  })
+
+  test("reports unprintable import read failures", async () => {
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+    readJsonSpy = spyOn(Filesystem, "readJson").mockImplementation(async () => {
+      throw failure
+    })
+
+    const result = await readSessionTransferFile("/tmp/session-export.json")
+
+    expect(result.error).toBe("Failed to read /tmp/session-export.json: Unknown error")
   })
 
   test("reports schema-invalid import files before DB import starts", async () => {
