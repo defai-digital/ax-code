@@ -65,7 +65,7 @@ export namespace Project {
     })()
     const sandboxes = (() => {
       const next = z.array(z.string()).safeParse(row.sandboxes)
-      if (next.success) return next.data
+      if (next.success) return [...new Set(next.data.map(normalizeSandboxDirectory))]
       log.warn("invalid project sandboxes", { projectID: row.id })
       return []
     })()

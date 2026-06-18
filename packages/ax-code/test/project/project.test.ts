@@ -470,6 +470,25 @@ describe("Project.list and Project.get", () => {
     expect(Project.list().some((item) => item.id === project.id)).toBe(true)
   })
 
+  test("normalizes legacy sandbox rows in project info", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { project } = await Project.fromDirectory(tmp.path)
+    const target = path.join(tmp.path, "legacy-sandbox")
+    await fs.mkdir(target)
+    const nonCanonical = `${target}${path.sep}..${path.sep}${path.basename(target)}`
+    const expected = Filesystem.resolve(target)
+
+    Database.use((db) => {
+      db.update(ProjectTable)
+        .set({ sandboxes: [nonCanonical, expected] })
+        .where(eq(ProjectTable.id, project.id))
+        .run()
+    })
+
+    expect(Project.get(project.id)?.sandboxes).toEqual([expected])
+    expect(Project.list().find((item) => item.id === project.id)?.sandboxes).toEqual([expected])
+  })
+
   test("fromDirectory recovers from malformed stored project rows", async () => {
     await using tmp = await tmpdir({ git: true })
     const { project } = await Project.fromDirectory(tmp.path)
