@@ -130,6 +130,18 @@ describe("headless backend lifecycle", () => {
     ).rejects.toThrow("startHeadlessBackend only binds the HTTP API to loopback hostnames by default")
   })
 
+  test("refuses malformed IPv4 loopback-looking hostnames", async () => {
+    for (const hostname of ["127..0.1", "127.0.0.", "127.0.0.1."]) {
+      await expect(
+        startHeadlessBackend({
+          hostname,
+          reservePort: async () => 18456,
+          fetch: (async () => jsonResponse({ healthy: true })) as typeof fetch,
+        }),
+      ).rejects.toThrow("startHeadlessBackend only binds the HTTP API to loopback hostnames by default")
+    }
+  })
+
   test("allows explicit network HTTP binds for secured service integrations", async () => {
     await using fake = await createReadyFakeAxCode()
 

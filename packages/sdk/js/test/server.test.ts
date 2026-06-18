@@ -51,6 +51,14 @@ describe("createAxCodeServer", () => {
     )
   })
 
+  test("refuses malformed IPv4 loopback-looking hostnames", async () => {
+    for (const hostname of ["127..0.1", "127.0.0.", "127.0.0.1."]) {
+      await expect(createAxCodeServer({ hostname })).rejects.toThrow(
+        "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
+      )
+    }
+  })
+
   test("allows explicit network HTTP binds for secured service integrations", async () => {
     await using fake = await createReadyFakeAxCode()
 
@@ -97,6 +105,14 @@ describe("createAxCodeServer", () => {
     await expect(createAxCodeServerV2({ hostname: "0.0.0.0" })).rejects.toThrow(
       "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
     )
+  })
+
+  test("v2 refuses malformed IPv4 loopback-looking hostnames", async () => {
+    for (const hostname of ["127..0.1", "127.0.0.", "127.0.0.1."]) {
+      await expect(createAxCodeServerV2({ hostname })).rejects.toThrow(
+        "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
+      )
+    }
   })
 
   test("v2 allows explicit network HTTP binds for secured service integrations", async () => {

@@ -196,9 +196,12 @@ function isLoopbackHostname(hostname: string) {
 
 function isIpv4Loopback(hostname: string) {
   const parts = hostname.split(".")
-  if (parts.length !== 4) return false
-  const numbers = parts.map((part) => Number(part))
-  return numbers.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) && numbers[0] === 127
+  if (parts.length !== 4 || parts[0] !== "127") return false
+  return parts.every((part) => {
+    if (!/^\d+$/.test(part)) return false
+    const value = Number(part)
+    return value >= 0 && value <= 255
+  })
 }
 
 /**

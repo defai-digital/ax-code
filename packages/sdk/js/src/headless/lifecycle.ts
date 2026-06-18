@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { createServer } from "node:net"
-import { resolveSpawnCommand } from "../internal/server-shared.js"
+import { assertSdkHttpLoopbackBind, resolveSpawnCommand } from "../internal/server-shared.js"
 import { withDirectoryHeaders } from "../protocol.js"
 
 const SIGKILL_GRACE_MS = 300
@@ -88,7 +88,7 @@ export class HeadlessBackendStartupError extends Error {
 
 export async function startHeadlessBackend(options: HeadlessBackendOptions = {}): Promise<HeadlessBackendHandle> {
   const hostname = options.hostname ?? "127.0.0.1"
-  assertSdkHttpLoopbackBind(hostname, options.allowNetworkBind)
+  assertSdkHttpLoopbackBind(hostname, options.allowNetworkBind, "startHeadlessBackend")
   const reservePort = options.reservePort ?? reserveLoopbackPort
   const port =
     options.port && options.port > 0
@@ -302,27 +302,6 @@ async function reserveLoopbackPort(hostname: string): Promise<number> {
       })
     })
   })
-}
-
-function assertSdkHttpLoopbackBind(hostname: string, allowNetworkBind: boolean | undefined) {
-  if (allowNetworkBind || isLoopbackHostname(hostname)) return
-  throw new Error(
-    "startHeadlessBackend only binds the HTTP API to loopback hostnames by default. " +
-      `Refusing hostname ${hostname}. ` +
-      "Use @ax-code/sdk/grpc for desktop native transports, or pass allowNetworkBind: true only for an explicitly secured server.",
-  )
-}
-
-function isLoopbackHostname(hostname: string) {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "")
-  return normalized === "localhost" || normalized === "::1" || isIpv4Loopback(normalized)
-}
-
-function isIpv4Loopback(hostname: string) {
-  const parts = hostname.split(".")
-  if (parts.length !== 4) return false
-  const numbers = parts.map((part) => Number(part))
-  return numbers.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) && numbers[0] === 127
 }
 
 async function waitForBackendHealth(input: {
