@@ -68,6 +68,7 @@ import {
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
 import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
+import { formatTuiLogError } from "./util/log-error"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
@@ -214,7 +215,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         return Session
       })
       .catch((error) => {
-        finishSessionRouteImport({ ok: false, error: String(error) })
+        finishSessionRouteImport({ ok: false, error: formatTuiLogError(error) })
         throw error
       })
       .finally(() => {
