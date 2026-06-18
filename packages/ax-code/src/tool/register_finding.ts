@@ -28,7 +28,7 @@ export const RegisterFindingTool = Tool.define("register_finding", {
     evidence: z.array(z.string()),
     evidenceRefs: z.array(EvidenceRef).optional(),
     suggestedNextAction: z.string().min(1),
-    confidence: z.number().min(0).max(1).optional(),
+    confidence: z.coerce.number().min(0).max(1).optional(),
     ruleId: z.string().regex(RULE_ID_PATTERN).optional(),
     tool: z.string().min(1).optional(),
   }),

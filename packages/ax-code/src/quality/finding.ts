@@ -11,8 +11,8 @@ export const ArtifactRefKindEnum = z.enum(ArtifactRefKind)
 export const FindingAnchor = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("line"),
-    line: z.number().int().min(1),
-    endLine: z.number().int().min(1).optional(),
+    line: z.coerce.number().int().min(1),
+    endLine: z.coerce.number().int().min(1).optional(),
   }),
   z.object({
     kind: z.literal("symbol"),
@@ -43,7 +43,7 @@ export const FindingSchema = z.object({
   workflow: WorkflowEnum,
   category: CategoryEnum,
   severity: SeverityEnum,
-  confidence: z.number().min(0).max(1).optional(),
+  confidence: z.coerce.number().min(0).max(1).optional(),
   summary: z.string().min(1).max(200),
   file: z.string().min(1),
   anchor: FindingAnchor,

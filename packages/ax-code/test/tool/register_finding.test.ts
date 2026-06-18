@@ -192,6 +192,22 @@ describe("RegisterFindingTool", () => {
     expect(result.metadata.finding.ruleId).toBe("axcode:bug-empty-catch")
   })
 
+  test("coerces numeric confidence and line anchors from string values", async () => {
+    const tool = await RegisterFindingTool.init()
+    const result = await tool.execute(
+      {
+        ...validInput,
+        anchor: { kind: "line", line: "42", endLine: "45" },
+        confidence: "0.83",
+      } as any,
+      ctx,
+    )
+
+    expect(result.metadata.finding.anchor).toEqual({ kind: "line", line: 42, endLine: 45 })
+    expect(result.metadata.finding.confidence).toBe(0.83)
+    expect(result.output).toContain("src/server/routes/list.ts:42-45")
+  })
+
   test("source.tool defaults to 'review' but accepts user override", async () => {
     const tool = await RegisterFindingTool.init()
     const def = await tool.execute(validInput, ctx)
