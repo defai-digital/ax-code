@@ -572,6 +572,34 @@ test("ask - throws RejectedError when action is deny", async () => {
   })
 })
 
+test("DeniedError - safely formats non-JSON-safe rulesets", () => {
+  const ruleset: Record<string, unknown> = {
+    permission: "bash",
+    count: 1n,
+  }
+  ruleset.self = ruleset
+
+  const err = new Permission.DeniedError({ ruleset, agent: "reviewer" })
+
+  expect(err.message).toContain('"count":"1"')
+  expect(err.message).toContain('"self":"[Circular]"')
+  expect(err.message).toContain('running as the "reviewer" agent')
+  expect(err.ruleset).toBe(ruleset)
+  expect(err.agent).toBe("reviewer")
+})
+
+test("DeniedError - falls back when ruleset serialization throws", () => {
+  const err = new Permission.DeniedError({
+    ruleset: {
+      toJSON() {
+        throw new Error("boom")
+      },
+    },
+  })
+
+  expect(err.message).toContain("[Unserializable ruleset]")
+})
+
 test("ask - returns pending promise when action is ask", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

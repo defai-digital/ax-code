@@ -99,13 +99,31 @@ export namespace Permission {
     }
   }
 
+  function formatRulesetForDeniedError(ruleset: unknown) {
+    const seen = new WeakSet<object>()
+    try {
+      return (
+        JSON.stringify(ruleset, (_key, value) => {
+          if (typeof value === "bigint") return value.toString()
+          if (value && typeof value === "object") {
+            if (seen.has(value)) return "[Circular]"
+            seen.add(value)
+          }
+          return value
+        }) ?? "undefined"
+      )
+    } catch {
+      return "[Unserializable ruleset]"
+    }
+  }
+
   export class DeniedError extends Error {
     override readonly name = "PermissionDeniedError"
     readonly ruleset: unknown
     readonly agent?: string
 
     constructor(input: { ruleset: unknown; agent?: string; options?: ErrorOptions }) {
-      const base = `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(input.ruleset)}`
+      const base = `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${formatRulesetForDeniedError(input.ruleset)}`
       super(
         input.agent
           ? `${base}\n\nThis is because you are running as the "${input.agent}" agent, which is read-only and cannot modify files. You should inform the user that this task requires code changes, and suggest they switch to the Dev agent (press Tab or use @build).`
