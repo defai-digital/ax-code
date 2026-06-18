@@ -1148,6 +1148,24 @@ mod tests {
     }
 
     #[test]
+    fn test_permission_asked_uses_metadata_description() {
+        let mut app = App::new();
+        let event: RuntimeEvent = serde_json::from_str(
+            r#"{"type":"permission.asked","properties":{"sessionID":"s1","id":"p1","permission":"file_write","patterns":["/tmp/file"],"metadata":{"description":"Write /tmp/file"},"always":[]}}"#,
+        )
+        .expect("permission event");
+
+        app.handle_event(event);
+
+        assert_eq!(app.pending_permissions.len(), 1);
+        assert_eq!(app.pending_permissions[0].description, "Write /tmp/file");
+        assert_eq!(
+            app.pending_permissions[0].permission_type,
+            "file_write".to_string()
+        );
+    }
+
+    #[test]
     fn test_question_replied_event_clears_pending() {
         let mut app = App::new();
         app.handle_event(RuntimeEvent::QuestionAsked {

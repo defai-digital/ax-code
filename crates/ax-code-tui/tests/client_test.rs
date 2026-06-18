@@ -91,7 +91,7 @@ async fn test_parse_permission_event() {
 
 #[tokio::test]
 async fn test_parse_headless_permission_event() {
-    let json = r#"{"type":"permission.asked","properties":{"sessionID":"sess_123","id":"perm_789","permission":"file_write","patterns":["/tmp/file"],"metadata":{},"always":[]}}"#;
+    let json = r#"{"type":"permission.asked","properties":{"sessionID":"sess_123","id":"perm_789","permission":"file_write","patterns":["/tmp/file"],"metadata":{"description":"Write /tmp/file"},"always":[]}}"#;
     let event: RuntimeEvent = serde_json::from_str(json).unwrap();
 
     match event {
@@ -99,6 +99,7 @@ async fn test_parse_headless_permission_event() {
             assert_eq!(properties.session_id, "sess_123");
             assert_eq!(properties.id, "perm_789");
             assert_eq!(properties.permission_type.as_deref(), Some("file_write"));
+            assert_eq!(properties.description, "Write /tmp/file");
         }
         _ => panic!("Expected PermissionAsked event"),
     }

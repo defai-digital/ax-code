@@ -281,21 +281,58 @@ pub struct MessagePartRemovedProps {
     pub part_id: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct PermissionRequestProps {
-    #[serde(rename = "sessionID", default)]
     pub session_id: String,
-    #[serde(default, alias = "requestID")]
     pub id: String,
-    #[serde(default)]
     pub description: String,
-    #[serde(
-        default,
-        rename = "permission_type",
-        alias = "permissionType",
-        alias = "permission"
-    )]
     pub permission_type: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for PermissionRequestProps {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Default, Deserialize)]
+        struct RawPermissionRequestProps {
+            #[serde(rename = "sessionID", default)]
+            session_id: String,
+            #[serde(default, alias = "requestID")]
+            id: String,
+            #[serde(default)]
+            description: String,
+            #[serde(
+                default,
+                rename = "permission_type",
+                alias = "permissionType",
+                alias = "permission"
+            )]
+            permission_type: Option<String>,
+            #[serde(default)]
+            metadata: PermissionMetadataProps,
+        }
+
+        let raw = RawPermissionRequestProps::deserialize(deserializer)?;
+        let description = if !raw.description.is_empty() {
+            raw.description
+        } else {
+            raw.metadata.description.unwrap_or_default()
+        };
+
+        Ok(Self {
+            session_id: raw.session_id,
+            id: raw.id,
+            description,
+            permission_type: raw.permission_type,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct PermissionMetadataProps {
+    #[serde(default)]
+    description: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
