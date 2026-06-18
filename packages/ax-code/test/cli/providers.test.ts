@@ -206,6 +206,52 @@ describe("providers command", () => {
     }
   })
 
+  test("well-known login rejects empty auth command tokens", async () => {
+    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
+    const confirmSpy = spyOn(prompts, "confirm").mockResolvedValue(true)
+    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
+    const successSpy = spyOn(prompts.log, "success").mockImplementation(() => {})
+
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    stdout.end(" \n")
+    stderr.end()
+
+    spyOn(Process, "spawn").mockReturnValue({
+      exited: Promise.resolve(0),
+      stdout,
+      stderr,
+    } as any)
+    spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+      ok: true,
+      async json() {
+        return {
+          auth: {
+            command: ["empty-auth-command"],
+            env: "MY_AUTH_TOKEN",
+          },
+        }
+      },
+    } as any)
+
+    try {
+      await ProvidersLoginCommand.handler({ url: "https://example.com" } as any)
+
+      expect(errorSpy).toHaveBeenCalledWith("Auth command returned an empty token")
+      expect(successSpy).not.toHaveBeenCalled()
+      expect(await Auth.get("https://example.com")).toBeUndefined()
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      confirmSpy.mockRestore()
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      successSpy.mockRestore()
+    }
+  })
+
   test("well-known login treats URL schemes case-insensitively", async () => {
     const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})

@@ -576,10 +576,16 @@ export const ProvidersLoginCommand = cmd({
             prompts.outro("Done")
             return
           }
+          const trimmedToken = token.trim()
+          if (!trimmedToken) {
+            prompts.log.error("Auth command returned an empty token")
+            prompts.outro("Done")
+            return
+          }
           await setProviderAuth(url, {
             type: "wellknown",
             key: wellknown.auth.env,
-            token: token.trim(),
+            token: trimmedToken,
           })
           prompts.log.success("Logged into " + url)
           prompts.outro("Done")
