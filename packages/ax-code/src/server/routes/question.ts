@@ -67,10 +67,10 @@ export const QuestionRoutes = lazy(() =>
         // malformed answers from SDK/external clients are rejected instead of
         // silently becoming constraints for the assistant. See #242.
         const validation = validateQuestionAnswers(request.questions, json.answers)
-        if (validation) {
-          return invalidRequest(c, { message: validation })
+        if (!validation.ok) {
+          return invalidRequest(c, { message: validation.message })
         }
-        await Question.reply({ requestID, answers: json.answers })
+        await Question.reply({ requestID, answers: validation.answers })
         return c.json(true)
       }),
     )
@@ -118,35 +118,40 @@ export const QuestionRoutes = lazy(() =>
  *  - when multiple !== true, an answer may contain at most one value
  *  - when custom === false, every value must match one of the option labels
  */
-function validateQuestionAnswers(questions: Question.Info[], answers: Question.Answer[]): string | null {
+function validateQuestionAnswers(
+  questions: Question.Info[],
+  answers: Question.Answer[],
+): { ok: true; answers: Question.Answer[] } | { ok: false; message: string } {
   if (answers.length !== questions.length) {
-    return `Expected ${questions.length} answer(s) but received ${answers.length}`
+    return { ok: false, message: `Expected ${questions.length} answer(s) but received ${answers.length}` }
   }
+  const normalized: Question.Answer[] = []
   for (let i = 0; i < questions.length; i++) {
     const question = questions[i]
     const answer = answers[i] ?? []
     const index = i + 1
     // Reject empty / whitespace-only answers.
-    const cleaned = answer.map((v) => (typeof v === "string" ? v.trim() : v))
+    const cleaned = answer.map((v) => v.trim())
     if (cleaned.some((v) => !v)) {
-      return `Question ${index}: answers must not be empty`
+      return { ok: false, message: `Question ${index}: answers must not be empty` }
     }
     // Reject duplicate selections within a single answer.
     if (new Set(cleaned).size !== cleaned.length) {
-      return `Question ${index}: duplicate selections are not allowed`
+      return { ok: false, message: `Question ${index}: duplicate selections are not allowed` }
     }
     // Single-select (multiple !== true) must contain at most one value.
     if (question.multiple !== true && cleaned.length > 1) {
-      return `Question ${index}: only one selection is allowed`
+      return { ok: false, message: `Question ${index}: only one selection is allowed` }
     }
     // When custom answers are disabled, every value must be a known option.
     if (question.custom === false) {
       const labels = new Set(question.options.map((o) => o.label))
-      const unknown = cleaned.filter((v) => !labels.has(v as string))
+      const unknown = cleaned.filter((v) => !labels.has(v))
       if (unknown.length > 0) {
-        return `Question ${index}: invalid option "${unknown[0]}"`
+        return { ok: false, message: `Question ${index}: invalid option "${unknown[0]}"` }
       }
     }
+    normalized.push(cleaned)
   }
-  return null
+  return { ok: true, answers: normalized }
 }

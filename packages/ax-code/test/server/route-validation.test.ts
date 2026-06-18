@@ -12,6 +12,7 @@ import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
 import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
 import { PermissionID } from "../../src/permission/schema"
+import { Question } from "../../src/question"
 import { QuestionID } from "../../src/question/schema"
 import { appErrorEnvelope } from "../../src/server/error"
 import { DefaultQueryNumber, OptionalQueryNumber } from "../../src/server/routes/query"
@@ -289,6 +290,54 @@ describe("server route validation", () => {
           status: 404,
           details: { resource: "question" },
         })
+      },
+    })
+  })
+
+  test("question reply route normalizes accepted answers before resolving", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const askPromise = Question.ask({
+          sessionID: SessionID.ascending(),
+          questions: [
+            {
+              question: "Which option should be used?",
+              header: "Choice",
+              options: [
+                { label: "Option 1", description: "First option" },
+                { label: "Option 2", description: "Second option" },
+              ],
+              custom: false,
+            },
+          ],
+        })
+
+        try {
+          let pending = await Question.list()
+          for (let attempt = 0; pending.length === 0 && attempt < 10; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 1))
+            pending = await Question.list()
+          }
+          expect(pending.length).toBe(1)
+
+          const response = await Server.Default().request(`/question/${pending[0].id}/reply`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ answers: [["  Option 1  "]] }),
+          })
+
+          expect(response.status).toBe(200)
+          expect(await response.json()).toBe(true)
+          await expect(askPromise).resolves.toEqual([["Option 1"]])
+        } catch (error) {
+          const remaining = (await Question.list())[0]
+          if (remaining) {
+            await Question.reject(remaining.id).catch(() => {})
+          }
+          await askPromise.catch(() => {})
+          throw error
+        }
       },
     })
   })
