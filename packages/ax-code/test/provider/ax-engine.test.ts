@@ -44,6 +44,8 @@ describe("ax-engine platform gate", () => {
     expect(parseMacosMajor("16.0")).toBe(16)
     expect(parseMacosMajor("15.6.1")).toBe(15)
     expect(parseMacosMajor("not-a-version")).toBeUndefined()
+    expect(parseMacosMajor("15beta")).toBeUndefined()
+    expect(parseMacosMajor("15x.1")).toBeUndefined()
 
     expect(parseChipGeneration("Apple M1 Max")).toBe("m1")
     expect(parseChipGeneration("Apple M2 Max")).toBe("m2")

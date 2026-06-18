@@ -31,7 +31,9 @@ export type AxEnginePlatformProbeInput = {
 
 export function parseMacosMajor(version: string | undefined) {
   if (!version) return undefined
-  const major = Number.parseInt(version.split(".")[0] ?? "", 10)
+  const match = version.match(/^(\d+)(?:\.\d+)*$/)
+  if (!match) return undefined
+  const major = Number(match[1])
   return Number.isFinite(major) ? major : undefined
 }
 
