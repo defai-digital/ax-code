@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { AuditRecord } from "../../src/audit/index"
-import { AuditExport } from "../../src/audit/export"
+import { AuditExport, formatAuditTimestamp } from "../../src/audit/export"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Recorder } from "../../src/replay/recorder"
@@ -45,6 +45,13 @@ import { tmpdir } from "../fixture/fixture"
  */
 
 describe("R21: SIEM-compatible audit schema", () => {
+  test("formats malformed audit timestamps without throwing", () => {
+    expect(formatAuditTimestamp(Date.parse("2026-04-01T00:00:00Z"))).toBe("2026-04-01T00:00:00.000Z")
+    expect(formatAuditTimestamp(Number.NaN)).toBe("1970-01-01T00:00:00.000Z")
+    expect(formatAuditTimestamp(Number.POSITIVE_INFINITY)).toBe("1970-01-01T00:00:00.000Z")
+    expect(formatAuditTimestamp(8_640_000_000_000_001)).toBe("1970-01-01T00:00:00.000Z")
+  })
+
   test("audit records are valid JSON with required SIEM fields", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

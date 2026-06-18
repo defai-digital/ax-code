@@ -13,6 +13,11 @@ function summarizeText(text: string | undefined, max: number): string {
   return text.slice(0, max - 3) + "..."
 }
 
+export function formatAuditTimestamp(timestamp: number): string {
+  const date = new Date(timestamp)
+  return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString()
+}
+
 function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number, ctx?: ExportContext): AuditRecord {
   const toolId = "callID" in event ? (event as { callID: string }).callID : undefined
   const base: AuditRecord = {
@@ -20,7 +25,7 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
     session_id: sessionID,
     step_id: event.stepIndex?.toString(),
     tool_id: toolId,
-    timestamp: new Date(timestamp).toISOString(),
+    timestamp: formatAuditTimestamp(timestamp),
     event_type: event.type,
     policy: ctx?.policy,
   }
