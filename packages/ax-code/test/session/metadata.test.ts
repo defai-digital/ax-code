@@ -53,6 +53,30 @@ describe("session metadata product schemas", () => {
     ).toThrow("Reserved session metadata is too large")
   })
 
+  test("rejects non-JSON-serializable reserved metadata without native stringify errors", () => {
+    expect(() =>
+      SessionMetadata.validate({
+        app: { label: "Pinned", pinned: 1n },
+      }),
+    ).toThrow("Reserved session metadata must be JSON-serializable")
+  })
+
+  test("rejects circular reserved metadata without recursive unsafe-key scanning", () => {
+    const app: Record<string, unknown> = { label: "Pinned", token: "secret-value" }
+    app.self = app
+
+    expect(() =>
+      SessionMetadata.validate({
+        app,
+      }),
+    ).toThrow("Reserved session metadata must be JSON-serializable")
+    expect(() =>
+      SessionMetadata.validate({
+        app,
+      }),
+    ).toThrow("unsafe key")
+  })
+
   test("setProductMetadata merges only the owned namespace and publishes session.updated", async () => {
     await Instance.provide({
       directory: projectRoot,

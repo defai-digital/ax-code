@@ -84,9 +84,13 @@ export namespace SessionMetadata {
     .record(z.string(), z.unknown())
     .superRefine((metadata, ctx) => {
       const product = productOnly(metadata)
-      const encoded = JSON.stringify(product)
-      const bytes = encoded ? Buffer.byteLength(encoded, "utf8") : 0
-      if (bytes > MAX_PRODUCT_METADATA_BYTES) {
+      const bytes = productMetadataByteLength(product)
+      if (bytes === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Reserved session metadata must be JSON-serializable",
+        })
+      } else if (bytes > MAX_PRODUCT_METADATA_BYTES) {
         ctx.addIssue({
           code: "custom",
           message: `Reserved session metadata is too large: ${bytes} bytes (max ${MAX_PRODUCT_METADATA_BYTES})`,
@@ -146,18 +150,30 @@ export namespace SessionMetadata {
     return result
   }
 
+  function productMetadataByteLength(product: Partial<Record<Namespace, unknown>>): number | undefined {
+    try {
+      const encoded = JSON.stringify(product)
+      return encoded ? Buffer.byteLength(encoded, "utf8") : 0
+    } catch {
+      return undefined
+    }
+  }
+
   function unsafeKeyIssues(
     input: unknown,
     path: Array<string | number> = [],
+    seen = new WeakSet<object>(),
   ): Array<{ path: Array<string | number>; key: string }> {
     if (!input || typeof input !== "object") return []
+    if (seen.has(input)) return []
+    seen.add(input)
     if (Array.isArray(input)) {
-      return input.flatMap((item, index) => unsafeKeyIssues(item, [...path, index]))
+      return input.flatMap((item, index) => unsafeKeyIssues(item, [...path, index], seen))
     }
     const issues: Array<{ path: Array<string | number>; key: string }> = []
     for (const [key, value] of Object.entries(input)) {
       if (isUnsafeKey(key)) issues.push({ path: [...path, key], key })
-      issues.push(...unsafeKeyIssues(value, [...path, key]))
+      issues.push(...unsafeKeyIssues(value, [...path, key], seen))
     }
     return issues
   }
