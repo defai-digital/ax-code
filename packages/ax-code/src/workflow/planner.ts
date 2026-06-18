@@ -1,4 +1,5 @@
 import z from "zod"
+import { JsonBoolean } from "@/util/schema"
 import {
   WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
   WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD,
@@ -67,9 +68,9 @@ export type WorkflowDryRunChild = {
 
 export const WorkflowDryRunInput = z.object({
   spec: WorkflowSpecV1,
-  allowScaleBeyondDefaults: z.boolean().default(false),
-  allowWriteWorkflows: z.boolean().default(false),
-  durableChildren: z.boolean().default(true),
+  allowScaleBeyondDefaults: JsonBoolean.default(false),
+  allowWriteWorkflows: JsonBoolean.default(false),
+  durableChildren: JsonBoolean.default(true),
 })
 export type WorkflowDryRunInput = z.input<typeof WorkflowDryRunInput>
 

@@ -1,7 +1,41 @@
 import { describe, expect, test } from "bun:test"
-import { WorkflowFixtureSpecs, WorkflowPlanError, planWorkflowDryRun, parseWorkflowSpecV1 } from "../../src/workflow"
+import {
+  WorkflowDryRunInput,
+  WorkflowFixtureSpecs,
+  WorkflowPlanError,
+  WorkflowScheduler,
+  planWorkflowDryRun,
+  parseWorkflowSpecV1,
+} from "../../src/workflow"
 
 describe("workflow dry-run planner", () => {
+  test("parses string booleans in workflow start options from JSON clients", () => {
+    const spec = parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun)
+
+    const dryRun = WorkflowDryRunInput.parse({
+      spec,
+      allowScaleBeyondDefaults: "true",
+      allowWriteWorkflows: "false",
+      durableChildren: "0",
+    })
+    expect(dryRun.allowScaleBeyondDefaults).toBe(true)
+    expect(dryRun.allowWriteWorkflows).toBe(false)
+    expect(dryRun.durableChildren).toBe(false)
+
+    const startOptions = WorkflowScheduler.StartOptions.parse({
+      allowScaleBeyondDefaults: "1",
+      allowWriteWorkflows: "false",
+      durableChildren: "true",
+      enqueueChildren: "0",
+    })
+    expect(startOptions).toEqual({
+      allowScaleBeyondDefaults: true,
+      allowWriteWorkflows: false,
+      durableChildren: true,
+      enqueueChildren: false,
+    })
+  })
+
   test("expands a noop workflow without starting children", () => {
     const plan = planWorkflowDryRun({
       spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun),

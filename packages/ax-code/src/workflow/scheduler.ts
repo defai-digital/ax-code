@@ -3,6 +3,7 @@ import { Instance } from "../project/instance"
 import { Session } from "../session"
 import type { TaskQueueID } from "../session/schema"
 import { KeyedSerialQueue } from "../util/queue"
+import { JsonBoolean } from "../util/schema"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
 import { planWorkflowDryRun, type WorkflowDryRunPhase } from "./planner"
@@ -30,10 +31,10 @@ const startLocks = Instance.state(
 
 export namespace WorkflowScheduler {
   export const StartOptions = z.object({
-    allowScaleBeyondDefaults: z.boolean().default(false),
-    allowWriteWorkflows: z.boolean().default(false),
-    durableChildren: z.boolean().default(true),
-    enqueueChildren: z.boolean().default(true),
+    allowScaleBeyondDefaults: JsonBoolean.default(false),
+    allowWriteWorkflows: JsonBoolean.default(false),
+    durableChildren: JsonBoolean.default(true),
+    enqueueChildren: JsonBoolean.default(true),
   })
   export type StartOptions = z.input<typeof StartOptions> & {
     dispatchExecutor?: WorkflowDispatchExecutor
