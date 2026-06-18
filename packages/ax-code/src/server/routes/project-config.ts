@@ -10,13 +10,14 @@ import { FeatureFlag } from "@/util/feature-flags"
 import { toErrorMessage } from "@/util/error-message"
 import { parseJsonResult } from "@/util/json-value"
 import { isRecord } from "@/util/record"
+import { JsonBoolean } from "./query"
 
 const log = Log.create({ service: "project-config" })
 
 const PROJECT_CONFIG_PERSIST_ERROR = "Failed to persist configuration"
 
 export const BooleanFeatureState = z.object({
-  enabled: z.boolean(),
+  enabled: JsonBoolean,
 })
 
 function createPersistErrorLogger(log: ReturnType<typeof Log.create>, context: string) {

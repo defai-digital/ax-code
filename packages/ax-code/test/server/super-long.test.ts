@@ -162,6 +162,39 @@ describe("super-long route", () => {
     })
   })
 
+  test("PUT accepts string boolean feature state from JSON clients", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Bun.write(configPath, JSON.stringify({ model: "qwen3.7-max" }))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const putSuperLong = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: "false" }),
+          })
+          expect(putSuperLong.status).toBe(200)
+          expect(await putSuperLong.json()).toEqual({ enabled: false })
+
+          const putAutonomous = await Server.Default().request(`/autonomous?directory=${encodeURIComponent(tmp.path)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: "true" }),
+          })
+          expect(putAutonomous.status).toBe(200)
+          expect(await putAutonomous.json()).toEqual({ enabled: true })
+
+          const updated = JSON.parse(await Bun.file(configPath).text())
+          expect(updated.super_long).toBe(false)
+          expect(updated.autonomous).toBe(true)
+        },
+      })
+    })
+  })
+
   test("rejects enabling Super-Long when autonomous mode is disabled", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
