@@ -160,16 +160,16 @@ export function encrypt(plaintext: string): EncryptedValue {
  * traceable via logs — previously the failure was completely invisible.
  */
 export function decrypt(value: EncryptedValue): string {
-  const encrypted = Buffer.from(value.encrypted, "base64")
-  const iv = Buffer.from(value.iv, "base64")
-  const tag = Buffer.from(value.tag, "base64")
+  const encrypted = decodeBase64Field(value.encrypted, "encrypted")
+  const iv = decodeBase64Field(value.iv, "iv", IV_LENGTH)
+  const tag = decodeBase64Field(value.tag, "tag", AUTH_TAG_LENGTH)
   // Legacy entries lack an explicit salt field. For those, the IV was
   // used as the salt during encryption. iv.subarray(0, SALT_LENGTH)
   // returns only 16 bytes (IV_LENGTH) instead of the full 32-byte
   // SALT_LENGTH — this is a known limitation preserved for backward
   // compatibility. Callers should re-encrypt via encrypt() to migrate
   // legacy entries to a proper 32-byte random salt.
-  const salt = value.salt ? Buffer.from(value.salt, "base64") : iv.subarray(0, SALT_LENGTH)
+  const salt = value.salt ? decodeBase64Field(value.salt, "salt", SALT_LENGTH) : iv.subarray(0, SALT_LENGTH)
 
   // v2 entries were derived with the reduced iteration count.
   if (value.version >= 2) {
@@ -214,6 +214,18 @@ export function decrypt(value: EncryptedValue): string {
 
   // No install secret means machineId === legacyMachineId, all attempts exhausted
   throw new Error("decryption failed — all key derivation attempts exhausted")
+}
+
+function decodeBase64Field(value: string, field: string, expectedLength?: number): Buffer {
+  const normalized = value.replace(/\s+/g, "")
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) {
+    throw new Error(`invalid encrypted auth field: ${field}`)
+  }
+  const decoded = Buffer.from(normalized, "base64")
+  if (expectedLength !== undefined && decoded.length !== expectedLength) {
+    throw new Error(`invalid encrypted auth field length: ${field}`)
+  }
+  return decoded
 }
 
 function decryptWith(encrypted: Buffer, iv: Buffer, salt: Buffer, tag: Buffer, iterations: number): string {

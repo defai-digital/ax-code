@@ -52,6 +52,18 @@ test("decrypt still reads v1 entries written with full-iteration PBKDF2", () => 
   expect(decrypt(v1)).toBe("legacy-key")
 })
 
+test("decrypt rejects malformed encrypted auth fields", () => {
+  const value = encrypt("super-secret-key")
+  expect(() => decrypt({ ...value, iv: "not base64!!" })).toThrow("invalid encrypted auth field: iv")
+})
+
+test("decrypt rejects encrypted auth fields with invalid fixed lengths", () => {
+  const value = encrypt("super-secret-key")
+  const short = Buffer.from("short").toString("base64")
+  expect(() => decrypt({ ...value, tag: short })).toThrow("invalid encrypted auth field length: tag")
+  expect(() => decrypt({ ...value, salt: short })).toThrow("invalid encrypted auth field length: salt")
+})
+
 test("decryptField marks v1 entries for re-encryption", () => {
   const obj = { type: "api", key: encryptV1("legacy-key") } as Record<string, unknown>
   const result = decryptField(obj, "key")
