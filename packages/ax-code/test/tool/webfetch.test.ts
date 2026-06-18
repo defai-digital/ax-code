@@ -90,9 +90,19 @@ describe("tool.webfetch", () => {
           directory: projectRoot,
           fn: async () => {
             const webfetch = await WebFetchTool.init()
-            const result = await webfetch.execute({ url: "https://93.184.216.34/file.txt", format: "text" }, ctx)
+            let timeoutMetadata: unknown
+            const result = await webfetch.execute(
+              { url: "https://93.184.216.34/file.txt", format: "text", timeout: "2" } as any,
+              {
+                ...ctx,
+                ask: async (request: { metadata?: { timeout?: unknown } }) => {
+                  timeoutMetadata = request.metadata?.timeout
+                },
+              } as any,
+            )
             expect(result.output).toBe("hello from webfetch")
             expect(result.attachments).toBeUndefined()
+            expect(timeoutMetadata).toBe(2)
           },
         })
       },

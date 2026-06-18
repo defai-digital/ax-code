@@ -97,7 +97,7 @@ describe("tool.bash", () => {
         const result = await bash.execute(
           {
             command,
-            timeout: 50,
+            timeout: "50" as any,
             description: "Wait past timeout",
           },
           ctx,
