@@ -194,6 +194,8 @@ describe("scheduled task routes", () => {
           { schedule: { type: "daily", time: "99:99" }, resource: "schedule.time" },
           { schedule: { type: "weekly", day: 2, time: "24:00" }, resource: "schedule.time" },
           { schedule: { type: "cron", expression: "bad cron" }, resource: "schedule.cron" },
+          { schedule: { type: "cron", expression: "0,,15 * * * *" }, resource: "schedule.cron" },
+          { schedule: { type: "cron", expression: "0, * * * *" }, resource: "schedule.cron" },
           { schedule: { type: "daily", time: "09:00", timezone: "Not/AZone" }, resource: "schedule.timezone" },
         ]
 

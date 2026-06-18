@@ -656,6 +656,7 @@ function parseCronField(value: string, min: number, max: number): Set<number> | 
   if (value === "*") return rangeSet(min, max)
   const result = new Set<number>()
   for (const part of value.split(",")) {
+    if (part === "") return undefined
     const stepMatch = /^(\*|(\d+)-(\d+))\/(\d+)$/.exec(part)
     if (stepMatch) {
       const lo = stepMatch[1] === "*" ? min : Number(stepMatch[2])
