@@ -271,6 +271,10 @@ describe("session.prompt helpers", () => {
     expect(shellArgs("/bin/bash", "echo hi", "darwin")[0]).toBe("-c")
     expect(shellArgs("/bin/zsh", "echo hi", "darwin")[0]).toBe("-c")
     expect(shellArgs("C:\\Windows\\System32\\cmd.exe", "dir", "win32")).toEqual(["/c", "dir"])
+    expect(shellArgs("C:\\Windows\\System32\\CMD.EXE", "dir", "win32")).toEqual(["/c", "dir"])
+    expect(
+      shellArgs("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\POWERSHELL.EXE", "Get-ChildItem", "win32"),
+    ).toEqual(["-NoProfile", "-Command", "Get-ChildItem"])
     expect(shellArgs("C:\\Program Files\\PowerShell\\7\\pwsh.exe", "Get-ChildItem", "win32")).toEqual([
       "-NoProfile",
       "-Command",

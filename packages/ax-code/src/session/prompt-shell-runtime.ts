@@ -53,7 +53,8 @@ export function shellOutputMetadata(state: ShellOutputState) {
 }
 
 function shellKey(shell: string, platform = process.platform) {
-  const name = platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)
+  const base = platform === "win32" ? path.win32.basename(shell) : path.basename(shell)
+  const name = platform === "win32" ? base.replace(/\.(?:exe|cmd|bat|com)$/i, "") : base
   return name.toLowerCase()
 }
 
