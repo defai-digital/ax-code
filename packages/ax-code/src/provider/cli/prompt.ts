@@ -48,8 +48,17 @@ function stringifyPromptValue(value: unknown): string {
     )
   } catch (error) {
     return JSON.stringify({
-      serialization_error: error instanceof Error ? error.message : String(error),
+      serialization_error: stringifyUnknownError(error),
     })
+  }
+}
+
+function stringifyUnknownError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  try {
+    return String(error)
+  } catch {
+    return "Unknown serialization error"
   }
 }
 

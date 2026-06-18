@@ -113,6 +113,32 @@ describe("promptToText", () => {
     expect(promptToText(prompt)).toBe('[Assistant]: [Tool: debug({"count":"1","self":"[Circular]"})]')
   })
 
+  test("formats assistant tool calls when input serialization throws non-printable values", () => {
+    const broken = function brokenThrowable() {
+      return undefined
+    }
+    Object.defineProperty(broken, Symbol.toPrimitive, {
+      value() {
+        throw new Error("cannot stringify")
+      },
+    })
+    const input = {
+      toJSON() {
+        throw broken
+      },
+    }
+    const prompt: LanguageModelV3Prompt = [
+      {
+        role: "assistant",
+        content: [{ type: "tool-call", toolCallId: "1", toolName: "debug", input }],
+      },
+    ] as unknown as LanguageModelV3Prompt
+
+    expect(promptToText(prompt)).toBe(
+      '[Assistant]: [Tool: debug({"serialization_error":"Unknown serialization error"})]',
+    )
+  })
+
   test("formats tool results", () => {
     const prompt: LanguageModelV3Prompt = [
       {
