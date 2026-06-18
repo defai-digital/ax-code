@@ -28,6 +28,19 @@ describe("doctor running instances", () => {
       detail: "No other ax-code processes",
     })
   })
+
+  test("ignores malformed non-decimal pgrep pid fields", async () => {
+    const check = await getRunningInstancesCheck({
+      currentPid: 100,
+      run: async () => "0x10 ax-code\n1e3 ax-code\n100 ax-code doctor\n",
+    })
+
+    expect(check).toEqual({
+      name: "Running instances",
+      status: "ok",
+      detail: "No other ax-code processes",
+    })
+  })
 })
 
 describe("doctor recent logs", () => {

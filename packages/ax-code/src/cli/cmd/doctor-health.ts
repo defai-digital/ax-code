@@ -22,6 +22,12 @@ function isLogFile(name: string) {
   return name.endsWith(".log")
 }
 
+function parseDecimalPid(value: string): number | undefined {
+  if (!/^\d+$/.test(value)) return undefined
+  const pid = Number(value)
+  return Number.isSafeInteger(pid) ? pid : undefined
+}
+
 export async function getRunningInstancesCheck(
   input: {
     currentPid?: number
@@ -44,13 +50,13 @@ export async function getRunningInstancesCheck(
     .filter(Boolean)
     .map((line) => {
       const firstSpace = line.indexOf(" ")
-      if (firstSpace === -1) return { pid: Number(line), command: "" }
+      if (firstSpace === -1) return { pid: parseDecimalPid(line), command: "" }
       return {
-        pid: Number(line.slice(0, firstSpace)),
+        pid: parseDecimalPid(line.slice(0, firstSpace)),
         command: line.slice(firstSpace + 1),
       }
     })
-    .filter((item) => Number.isFinite(item.pid) && item.pid !== currentPid)
+    .filter((item): item is { pid: number; command: string } => item.pid !== undefined && item.pid !== currentPid)
     .filter((item) => !isReadOnlyAxCodeCommand(item.command))
 
   if (others.length === 0) {
