@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import fs from "fs/promises"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -102,6 +103,37 @@ describe("SuperLongRuntime", () => {
       const next = await SuperLongRuntime.reservePacing({ key, now: 1_001, policy })
 
       expect(next.state?.timestamps).toEqual([1_000, 1_001])
+    })
+  })
+
+  test("does not overwrite a malformed durable runtime store", async () => {
+    await withRuntimeStore(async (SuperLongRuntime, storePath) => {
+      const malformed = "{not json"
+      await fs.writeFile(storePath, malformed)
+
+      await expect(SuperLongRuntime.sessionStartedAt({ sessionID: "ses_qwen", now: 1_000 })).rejects.toThrow(
+        "Failed to parse JSON",
+      )
+      expect(await fs.readFile(storePath, "utf8")).toBe(malformed)
+    })
+  })
+
+  test("does not overwrite a structurally invalid durable runtime store", async () => {
+    await withRuntimeStore(async (SuperLongRuntime, storePath) => {
+      await fs.writeFile(storePath, "[]")
+
+      await expect(
+        SuperLongRuntime.reservePacing({
+          key: "alibaba-coding-plan/qwen3.7-max",
+          now: 1_000,
+          policy: {
+            windowMs: 1_000,
+            maxRequests: 10,
+            minDelayMs: 100,
+          },
+        }),
+      ).rejects.toThrow("Invalid super-long runtime store")
+      expect(await fs.readFile(storePath, "utf8")).toBe("[]")
     })
   })
 })

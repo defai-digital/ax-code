@@ -107,11 +107,17 @@ export namespace SuperLongRuntime {
 
   async function readStore(): Promise<Store> {
     const filepath = storePath()
-    const store: Store = await Filesystem.readJson<Store>(filepath).catch((error) => {
+    const raw = await Filesystem.readJson<unknown>(filepath).catch((error) => {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return {} as Store
-      log.warn("failed to read super-long runtime store; starting from empty state", { filepath, error })
-      return {} as Store
+      log.warn("failed to read super-long runtime store", { filepath, error })
+      throw error
     })
+    if (!validRecord(raw)) {
+      const error = new Error("Invalid super-long runtime store: expected object")
+      log.warn("failed to read super-long runtime store", { filepath, error })
+      throw error
+    }
+    const store = raw as Store
     return {
       runs: validRecord(store.runs) ? store.runs : {},
       pacing: validRecord(store.pacing) ? store.pacing : {},
