@@ -19,7 +19,7 @@ import { iife } from "@/util/iife"
 import { Global } from "../global"
 import path from "path"
 import fs from "fs/promises"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
 import { isNonEmptyRecord, recordCount } from "@/util/record"
@@ -56,6 +56,14 @@ import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
+
+  function isFileUrlSpecifier(value: string) {
+    try {
+      return new URL(value).protocol === "file:"
+    } catch {
+      return false
+    }
+  }
 
   // Emitted after background model discovery (CLI subprocess probes, local
   // LLM model-list fetches) finishes mutating the provider state. The TUI
@@ -837,7 +845,8 @@ export namespace Provider {
         // Prevents supply-chain attacks where compromised remote data (ModelsDev)
         // or a malicious config could trigger installation of arbitrary packages.
         const NPM_ALLOWLIST = /^@ai-sdk\//
-        if (!model.api.npm.startsWith("file://") && !NPM_ALLOWLIST.test(model.api.npm)) {
+        const isFileUrl = isFileUrlSpecifier(model.api.npm)
+        if (!isFileUrl && !NPM_ALLOWLIST.test(model.api.npm)) {
           throw new InitError(
             { providerID: model.providerID },
             {
@@ -849,7 +858,7 @@ export namespace Provider {
         }
 
         let installedPath: string
-        if (!model.api.npm.startsWith("file://")) {
+        if (!isFileUrl) {
           const cached = providerInstallFailures.get(model.api.npm)
           if (cached && Date.now() - cached.at < PROVIDER_INSTALL_NEGATIVE_CACHE_MS) {
             // Surface the cached install error instead of re-running install
@@ -895,7 +904,7 @@ export namespace Provider {
             )
           }
           log.info("loading local provider", { pkg: model.api.npm })
-          installedPath = model.api.npm
+          installedPath = pathToFileURL(filePath).href
         }
 
         const mod = await withTimeout(
