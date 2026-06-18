@@ -25,6 +25,7 @@ import { spawn } from "node:child_process"
 import { flushTuiStdout } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
 import { parseTuiJsonPayload } from "./util/json"
+import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
 import {
@@ -106,9 +107,16 @@ async function shouldRunStartupUpgradeCheck() {
   const intervalMs = tuiUpgradeCheckIntervalMs()
   const statePath = tuiUpgradeCheckStatePath()
   const nowMs = Date.now()
-  const state = await Filesystem.readJson<TuiStartupUpgradeCheckState>(statePath).catch(() => undefined)
+  const persisted = await readOptionalJsonState<TuiStartupUpgradeCheckState>(statePath)
+  if (persisted.status === "invalid") {
+    log.debug("skipping startup upgrade check because state failed to load", {
+      statePath,
+      error: persisted.error,
+    })
+    return false
+  }
   const shouldRun = shouldRunTuiStartupUpgradeCheck({
-    state,
+    state: persisted.status === "found" ? persisted.value : undefined,
     currentVersion: Installation.VERSION,
     nowMs,
     intervalMs,
