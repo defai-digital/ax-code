@@ -178,6 +178,10 @@ export namespace ACP {
     return parsed
   }
 
+  function sessionUpdatedMs(session: { time: { updated: unknown } }): number {
+    return typeof session.time.updated === "number" && Number.isFinite(session.time.updated) ? session.time.updated : 0
+  }
+
   async function getContextLimit(
     sdk: OpencodeClient,
     providerID: ProviderID,
@@ -644,19 +648,19 @@ export namespace ACP {
           )
           .then((x) => x.data ?? [])
 
-        const sorted = sessions.toSorted((a, b) => b.time.updated - a.time.updated)
-        const filtered = cursor !== undefined ? sorted.filter((s) => s.time.updated < cursor) : sorted
+        const sorted = sessions.toSorted((a, b) => sessionUpdatedMs(b) - sessionUpdatedMs(a))
+        const filtered = cursor !== undefined ? sorted.filter((s) => sessionUpdatedMs(s) < cursor) : sorted
         const page = filtered.slice(0, limit)
 
         const entries: SessionInfo[] = page.map((session) => ({
           sessionId: session.id,
           cwd: session.directory,
           title: session.title,
-          updatedAt: new Date(session.time.updated).toISOString(),
+          updatedAt: new Date(sessionUpdatedMs(session)).toISOString(),
         }))
 
         const last = page[page.length - 1]
-        const next = filtered.length > limit && last ? String(last.time.updated) : undefined
+        const next = filtered.length > limit && last ? String(sessionUpdatedMs(last)) : undefined
 
         const response: ListSessionsResponse = {
           sessions: entries,
