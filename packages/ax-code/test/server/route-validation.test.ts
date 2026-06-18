@@ -2,6 +2,7 @@ import path from "path"
 import fs from "fs/promises"
 import os from "os"
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import z from "zod"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
@@ -13,6 +14,7 @@ import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
 import { PermissionID } from "../../src/permission/schema"
 import { QuestionID } from "../../src/question/schema"
 import { appErrorEnvelope } from "../../src/server/error"
+import { DefaultQueryNumber, OptionalQueryNumber } from "../../src/server/routes/query"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -606,6 +608,26 @@ describe("server route validation", () => {
           sessionListSpy.mockRestore()
           globalListSpy.mockRestore()
         }
+      },
+    })
+  })
+
+  test("optional query numbers treat bare keys as omitted", async () => {
+    const optional = OptionalQueryNumber(z.number().int().positive())
+    const defaulted = DefaultQueryNumber(z.number().int().positive(), 25)
+
+    expect(optional.parse("")).toBeUndefined()
+    expect(defaulted.parse("")).toBe(25)
+    expect(optional.safeParse("abc").success).toBe(false)
+
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const bare = await Server.Default().request("/find/file?query=package&limit")
+        expect(bare.status).toBe(200)
+
+        const invalid = await Server.Default().request("/find/file?query=package&limit=abc")
+        expect(invalid.status).toBe(400)
       },
     })
   })

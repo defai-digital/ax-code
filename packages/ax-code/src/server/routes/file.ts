@@ -8,6 +8,7 @@ import { LSP } from "../../lsp"
 import { Instance } from "../../project/instance"
 import { lazy } from "../../util/lazy"
 import { MAX_PATH_LENGTH } from "../constants"
+import { OptionalQueryNumber } from "./query"
 
 const FilePathQuery = z.object({
   path: z.string().max(MAX_PATH_LENGTH),
@@ -71,7 +72,7 @@ export const FileRoutes = lazy(() =>
           query: z.string(),
           dirs: z.enum(["true", "false"]).optional(),
           type: z.enum(["file", "directory"]).optional(),
-          limit: z.coerce.number().int().min(1).max(200).optional(),
+          limit: OptionalQueryNumber(z.number().int().min(1).max(200)),
         }),
       ),
       async (c) => {

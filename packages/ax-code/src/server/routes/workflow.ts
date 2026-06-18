@@ -37,6 +37,7 @@ import {
 import type { SessionID } from "@/session/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { OptionalQueryNumber } from "./query"
 
 const WorkflowTemplateIDSchema = z
   .string()
@@ -49,11 +50,11 @@ const WORKFLOW_TEMPLATE_ID_PARAM = z.object({ templateID: WorkflowTemplateIDSche
 const WorkflowRunListQuery = z.object({
   parentSessionID: z.string().min(1).optional(),
   status: WorkflowRunState.Status.optional(),
-  limit: z.coerce.number().int().positive().max(500).optional(),
+  limit: OptionalQueryNumber(z.number().int().positive().max(500)),
 })
 
 const WorkflowRunDashboardQuery = WorkflowRunListQuery.extend({
-  now: z.coerce.number().int().min(0).optional(),
+  now: OptionalQueryNumber(z.number().int().min(0)),
 })
 
 const WorkflowRunCreateBody = z

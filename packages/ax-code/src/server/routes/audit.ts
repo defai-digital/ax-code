@@ -12,17 +12,18 @@ import { Log } from "../../util/log"
 import { SESSION_ID_PARAM } from "./route-params"
 import { parseCurrentProjectSessionID } from "./session-lookup"
 import { Instance } from "../../project/instance"
+import { DefaultQueryNumber, OptionalQueryNumber } from "./query"
 
 const log = Log.create({ service: "audit.routes" })
 const AUDIT_EXPORT_DEFAULT_LIMIT = 10_000
 const AUDIT_EXPORT_MAX_LIMIT = 10_000
 
 const AuditExportLimitQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(AUDIT_EXPORT_MAX_LIMIT).optional().default(AUDIT_EXPORT_DEFAULT_LIMIT),
+  limit: DefaultQueryNumber(z.number().int().min(1).max(AUDIT_EXPORT_MAX_LIMIT), AUDIT_EXPORT_DEFAULT_LIMIT),
 })
 
 const AuditExportAllQuery = AuditExportLimitQuery.extend({
-  since: z.coerce.number().int().min(0).optional(),
+  since: OptionalQueryNumber(z.number().int().min(0)),
   risk: z
     .enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"])
     .optional()
@@ -141,7 +142,7 @@ export const AuditRoutes = lazy(() =>
         },
       }),
       validator("param", SESSION_ID_PARAM),
-      validator("query", z.object({ fromStep: z.coerce.number().int().min(0).optional() })),
+      validator("query", z.object({ fromStep: OptionalQueryNumber(z.number().int().min(0)) })),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
         const fromStep = c.req.valid("query").fromStep

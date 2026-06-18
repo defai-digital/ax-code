@@ -7,13 +7,14 @@ import { TaskQueueID, SessionID } from "@/session/schema"
 import { TaskQueueExecutor } from "@/session/task-queue-executor"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { OptionalQueryNumber } from "./query"
 
 const TASK_QUEUE_ID_PARAM = z.object({ taskID: TaskQueueID.zod })
 
 const TaskQueueListQuery = z.object({
   sessionID: SessionID.zod.optional(),
   status: TaskQueue.Status.optional(),
-  limit: z.coerce.number().int().positive().max(500).optional(),
+  limit: OptionalQueryNumber(z.number().int().positive().max(500)),
 })
 
 const TaskQueueEnqueueBody = TaskQueue.EnqueueInput

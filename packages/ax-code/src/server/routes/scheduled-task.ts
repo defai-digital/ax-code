@@ -6,17 +6,18 @@ import { ScheduledTask } from "@/session/scheduled-task"
 import { ScheduledTaskID } from "@/session/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { OptionalQueryNumber } from "./query"
 
 const SCHEDULED_TASK_ID_PARAM = z.object({ scheduledTaskID: ScheduledTaskID.zod })
 
 const ScheduledTaskListQuery = z.object({
   status: ScheduledTask.Status.optional(),
-  dueBefore: z.coerce.number().int().positive().optional(),
-  limit: z.coerce.number().int().positive().max(500).optional(),
+  dueBefore: OptionalQueryNumber(z.number().int().positive()),
+  limit: OptionalQueryNumber(z.number().int().positive().max(500)),
 })
 
 const ScheduledTaskRunDueQuery = z.object({
-  now: z.coerce.number().int().positive().optional(),
+  now: OptionalQueryNumber(z.number().int().positive()),
 })
 
 const ScheduledTaskUpdateBody = ScheduledTask.UpdateInput.omit({ id: true })

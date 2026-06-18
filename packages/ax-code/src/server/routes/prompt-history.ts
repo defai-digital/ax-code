@@ -6,9 +6,10 @@ import { lazy } from "@/util/lazy"
 import { PromptHistory } from "@/prompt-history"
 import { PromptHistoryEntry } from "@/prompt-history/schema"
 import { errors } from "../error"
+import { OptionalQueryNumber } from "./query"
 
 const PromptHistoryListQuery = z.object({
-  limit: z.coerce.number().int().positive().max(PromptHistory.MAX_ENTRIES).optional(),
+  limit: OptionalQueryNumber(z.number().int().positive().max(PromptHistory.MAX_ENTRIES)),
 })
 
 export const PromptHistoryRoutes = lazy(() =>
