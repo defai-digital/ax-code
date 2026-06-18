@@ -120,6 +120,31 @@ describe("GET /session", () => {
     })
   })
 
+  test("session patch rejects empty archived timestamps", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "empty-archive-route-session" })
+        const app = Server.Default()
+
+        try {
+          const response = await app.request(`/session/${session.id}?directory=${encodeURIComponent(tmp.path)}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ time: { archived: "" } }),
+          })
+
+          expect(response.status).toBe(400)
+          expect((await Session.get(session.id)).time.archived).toBeUndefined()
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("uses canonical request directory when filtering sessions", async () => {
     await using tmp = await tmpdir({ git: true })
     const link = path.join(tmp.path, "..", `${path.basename(tmp.path)}-session-list-link`)

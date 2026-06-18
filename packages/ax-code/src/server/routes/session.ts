@@ -34,6 +34,7 @@ import { parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./ro
 import { parseCurrentProjectSessionID, requireCurrentProjectSession } from "./session-lookup"
 import { JsonBoolean, OptionalQueryNumber, QueryBoolean } from "./query"
 import { Instance } from "@/project/instance"
+import { JsonNumber } from "@/util/schema"
 
 const log = Log.create({ service: "server" })
 
@@ -653,7 +654,7 @@ export const SessionRoutes = lazy(() =>
           title: z.string().optional(),
           time: z
             .object({
-              archived: z.coerce.number().optional(),
+              archived: JsonNumber(z.number()).optional(),
             })
             .optional(),
           metadata: Session.Metadata.optional(),
