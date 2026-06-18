@@ -20,6 +20,8 @@ import {
   CLI_PROVIDERS,
   OFFLINE_PROVIDERS,
   configUpdateParams,
+  normalizeConfiguredProvidersPayload,
+  normalizeProviderListPayload,
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
@@ -154,8 +156,7 @@ export function createDialogProviderOptions() {
 
   async function refreshConfiguredProviders() {
     const response = await sdk.client.config.providers({}, { throwOnError: true })
-    const data = response.data
-    if (!data) return
+    const data = normalizeConfiguredProvidersPayload<(typeof sync.data.provider)[number]>(response.data)
     sync.set("provider", data.providers)
     sync.set("provider_default", data.default)
     sync.set("provider_loaded", true)
@@ -188,17 +189,15 @@ export function createDialogProviderOptions() {
     }
     if (!provider || Object.keys(provider.models).length === 0) {
       const response = await sdk.client.provider.list({}, { throwOnError: true })
-      const data = response.data
-      const available = data?.all.find((item) => item.id === providerID) as
+      const data = normalizeProviderListPayload(response.data)
+      const available = data.all.find((item) => item.id === providerID) as
         | (typeof sync.data.provider)[number]
         | undefined
-      if (data) {
-        sync.set("provider_next", data)
-      }
+      sync.set("provider_next", data)
       if (providerID !== "ax-engine" && available && Object.keys(available.models).length > 0) {
         const existing = sync.data.provider.filter((item) => item.id !== providerID)
         sync.set("provider", [...existing, available])
-        sync.set("provider_default", providerID, data?.default[providerID] ?? Object.keys(available.models)[0] ?? "")
+        sync.set("provider_default", providerID, data.default[providerID] ?? Object.keys(available.models)[0] ?? "")
         sync.set("provider_loaded", true)
         sync.set("provider_failed", false)
         provider = available

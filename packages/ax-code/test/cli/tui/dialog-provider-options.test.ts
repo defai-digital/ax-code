@@ -3,6 +3,8 @@ import {
   CLI_BINARIES,
   CLI_PROVIDERS,
   configUpdateParams,
+  normalizeConfiguredProvidersPayload,
+  normalizeProviderListPayload,
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
@@ -10,7 +12,7 @@ import {
 } from "../../../src/cli/cmd/tui/component/dialog-provider-options"
 
 function provider(id: string, name = id) {
-  return { id, name } as any
+  return { id, name, models: {} } as any
 }
 
 describe("provider dialog options", () => {
@@ -82,6 +84,41 @@ describe("provider dialog options", () => {
   test("wraps config update body for the generated SDK", () => {
     expect(configUpdateParams({ provider: { "ax-engine": { name: "AX Engine (Local)" } } })).toEqual({
       config: { provider: { "ax-engine": { name: "AX Engine (Local)" } } },
+    })
+  })
+
+  test("normalizes malformed configured provider payloads", () => {
+    expect(normalizeConfiguredProvidersPayload(null)).toEqual({ providers: [], default: {} })
+    expect(
+      normalizeConfiguredProvidersPayload({
+        providers: [provider("openai", "OpenAI"), { id: "missing-name" }, null],
+        default: { openai: "gpt-4.1", invalid: 42 },
+      }),
+    ).toEqual({
+      providers: [provider("openai", "OpenAI")],
+      default: { openai: "gpt-4.1" },
+    })
+  })
+
+  test("normalizes malformed provider list payloads", () => {
+    expect(normalizeProviderListPayload(null)).toEqual({ all: [], connected: [], default: {} })
+    expect(
+      normalizeProviderListPayload({
+        all: { id: "openai", name: "OpenAI" },
+        connected: ["openai", null, 42],
+        default: ["gpt-4.1"],
+      }),
+    ).toEqual({ all: [], connected: ["openai"], default: {} })
+    expect(
+      normalizeProviderListPayload({
+        all: [provider("openai", "OpenAI"), { id: "missing-name" }],
+        connected: "openai",
+        default: { openai: "gpt-4.1", invalid: false },
+      }),
+    ).toEqual({
+      all: [provider("openai", "OpenAI")],
+      connected: [],
+      default: { openai: "gpt-4.1" },
     })
   })
 
