@@ -78,10 +78,17 @@ describe("OpenAPI snapshot contract", () => {
       },
       {
         className: "Audit",
-        methodName: "exportAll",
+        methodName: "export",
         optionalParameters: false,
-        optional: ["since?: number"],
-        required: ["since: number"],
+        optional: ["limit?: number"],
+        required: ["limit: number"],
+      },
+      {
+        className: "Audit",
+        methodName: "exportAll",
+        optionalParameters: true,
+        optional: ["limit?: number", "since?: number"],
+        required: ["limit: number", "since: number"],
       },
       {
         className: "Audit",

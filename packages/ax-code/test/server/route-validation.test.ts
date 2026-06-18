@@ -619,7 +619,9 @@ describe("server route validation", () => {
     expect(optional.isOptional()).toBe(true)
     expect(optional.parse("")).toBeUndefined()
     expect(optional.parse(undefined)).toBeUndefined()
+    expect(defaulted.isOptional()).toBe(true)
     expect(defaulted.parse("")).toBe(25)
+    expect(defaulted.parse(undefined)).toBe(25)
     expect(optional.safeParse("abc").success).toBe(false)
 
     await Instance.provide({

@@ -11616,9 +11616,9 @@ export type AuditExportData = {
   path: {
     sessionID: string
   }
-  query: {
+  query?: {
     directory?: string
-    limit: number
+    limit?: number
   }
   url: "/audit/export/{sessionID}"
 }
@@ -11633,9 +11633,9 @@ export type AuditExportResponses = {
 export type AuditExportAllData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     directory?: string
-    limit: number
+    limit?: number
     since?: number
     /**
      * Filter sessions by minimum risk level

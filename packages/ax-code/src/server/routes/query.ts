@@ -19,5 +19,5 @@ export function OptionalQueryNumber(schema: z.ZodNumber) {
 }
 
 export function DefaultQueryNumber(schema: z.ZodNumber, defaultValue: number) {
-  return z.preprocess(normalizeEmptyQueryValue, schema.default(defaultValue))
+  return z.preprocess(normalizeEmptyQueryValue, schema.optional()).default(defaultValue)
 }

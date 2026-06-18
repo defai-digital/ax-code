@@ -4844,7 +4844,7 @@ export class Audit extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      limit: number
+      limit?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4873,9 +4873,9 @@ export class Audit extends HeyApiClient {
    * Export all audit events for the current project, optionally filtered by date.
    */
   public exportAll<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      limit: number
+      limit?: number
       since?: number
       risk?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
       type?: string
