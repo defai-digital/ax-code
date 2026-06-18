@@ -68,6 +68,12 @@ describe("mcp templates", () => {
       expect(() => Config.McpRemote.parse(config)).not.toThrow()
     })
 
+    test("remote schema rejects invalid and non-HTTP URLs", () => {
+      expect(Config.McpRemote.safeParse({ type: "remote", url: "https://mcp.example.com/mcp" }).success).toBe(true)
+      expect(Config.McpRemote.safeParse({ type: "remote", url: "not a url" }).success).toBe(false)
+      expect(Config.McpRemote.safeParse({ type: "remote", url: "file:///tmp/mcp.sock" }).success).toBe(false)
+    })
+
     test("every local template config validates against the McpLocal schema", () => {
       for (const template of TEMPLATES.filter((t) => t.type === "local")) {
         // Simulate collected env for declared required vars.

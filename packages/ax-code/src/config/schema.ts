@@ -20,6 +20,17 @@ const McpLocalCommand = z
     message: "Command executable must be a non-empty string",
     path: [0],
   })
+const McpRemoteUrl = z.string().refine(
+  (value) => {
+    try {
+      const url = new URL(value)
+      return url.protocol === "http:" || url.protocol === "https:"
+    } catch {
+      return false
+    }
+  },
+  { message: "Remote MCP URL must be a valid HTTP(S) URL" },
+)
 
 const McpTimeout = z
   .number()
@@ -66,7 +77,7 @@ export type McpOAuth = z.infer<typeof McpOAuth>
 export const McpRemote = z
   .object({
     type: z.literal("remote").describe("Type of MCP server connection"),
-    url: z.string().describe("URL of the remote MCP server"),
+    url: McpRemoteUrl.describe("URL of the remote MCP server"),
     enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
     headers: z.record(z.string(), z.string()).optional().describe("Headers to send with the request"),
     oauth: z

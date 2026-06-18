@@ -416,6 +416,39 @@ describe("server route validation", () => {
     })
   })
 
+  test("mcp add rejects remote configs with invalid URLs", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const invalidUrl = await Server.Default().request("/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...ServerRuntimeAuth.headers() },
+          body: JSON.stringify({
+            name: "remote",
+            config: {
+              type: "remote",
+              url: "not a url",
+            },
+          }),
+        })
+        expect(invalidUrl.status).toBe(400)
+
+        const nonHttpUrl = await Server.Default().request("/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...ServerRuntimeAuth.headers() },
+          body: JSON.stringify({
+            name: "remote",
+            config: {
+              type: "remote",
+              url: "file:///tmp/mcp.sock",
+            },
+          }),
+        })
+        expect(nonHttpUrl.status).toBe(400)
+      },
+    })
+  })
+
   test("mutating mcp routes require runtime authorization", async () => {
     await Instance.provide({
       directory: root,
