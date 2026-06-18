@@ -80,6 +80,11 @@ export function parseMcpLocalCommand(input: string): string[] {
   return parseShellArgs(input)
 }
 
+export function formatMcpDebugEpochSeconds(seconds: number): string {
+  const date = new Date(seconds * 1000)
+  return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString()
+}
+
 export const McpCommand = cmd({
   command: "mcp",
   describe: "manage MCP (Model Context Protocol) servers",
@@ -871,9 +876,10 @@ export const McpDebugCommand = cmd({
         if (entry?.tokens) {
           prompts.log.info(`  Access token: present`)
           if (entry.tokens.expiresAt) {
-            const expiresDate = new Date(entry.tokens.expiresAt * 1000)
             const isExpired = entry.tokens.expiresAt < Date.now() / 1000
-            prompts.log.info(`  Expires: ${expiresDate.toISOString()} ${isExpired ? "(EXPIRED)" : ""}`)
+            prompts.log.info(
+              `  Expires: ${formatMcpDebugEpochSeconds(entry.tokens.expiresAt)} ${isExpired ? "(EXPIRED)" : ""}`,
+            )
           }
           if (entry.tokens.refreshToken) {
             prompts.log.info(`  Refresh token: present`)
@@ -882,8 +888,9 @@ export const McpDebugCommand = cmd({
         if (entry?.clientInfo) {
           prompts.log.info(`  Client ID: ${entry.clientInfo.clientId}`)
           if (entry.clientInfo.clientSecretExpiresAt) {
-            const expiresDate = new Date(entry.clientInfo.clientSecretExpiresAt * 1000)
-            prompts.log.info(`  Client secret expires: ${expiresDate.toISOString()}`)
+            prompts.log.info(
+              `  Client secret expires: ${formatMcpDebugEpochSeconds(entry.clientInfo.clientSecretExpiresAt)}`,
+            )
           }
         }
 

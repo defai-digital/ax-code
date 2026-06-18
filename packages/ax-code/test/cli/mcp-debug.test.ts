@@ -1,7 +1,21 @@
 import { describe, expect, test } from "bun:test"
-import { decodeMcpDebugServerInfoValue, parseMcpDebugServerInfoText, parseMcpLocalCommand } from "../../src/cli/cmd/mcp"
+import {
+  decodeMcpDebugServerInfoValue,
+  formatMcpDebugEpochSeconds,
+  parseMcpDebugServerInfoText,
+  parseMcpLocalCommand,
+} from "../../src/cli/cmd/mcp"
 
 describe("mcp debug response decoding", () => {
+  test("formats malformed auth expiry timestamps without throwing", () => {
+    expect(formatMcpDebugEpochSeconds(Date.parse("2026-04-01T00:00:00Z") / 1000)).toBe(
+      "2026-04-01T00:00:00.000Z",
+    )
+    expect(formatMcpDebugEpochSeconds(Number.NaN)).toBe("1970-01-01T00:00:00.000Z")
+    expect(formatMcpDebugEpochSeconds(Number.POSITIVE_INFINITY)).toBe("1970-01-01T00:00:00.000Z")
+    expect(formatMcpDebugEpochSeconds(8_640_000_000_000_001)).toBe("1970-01-01T00:00:00.000Z")
+  })
+
   test("decodeMcpDebugServerInfoValue extracts parsed server info", () => {
     expect(
       decodeMcpDebugServerInfoValue({
