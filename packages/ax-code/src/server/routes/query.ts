@@ -1,4 +1,5 @@
 import z from "zod"
+import { JsonBoolean } from "@/util/schema"
 
 export const QueryBoolean = z.preprocess((value) => {
   if (typeof value !== "string") return value
@@ -9,13 +10,7 @@ export const QueryBoolean = z.preprocess((value) => {
   return value
 }, z.boolean())
 
-export const JsonBoolean = z.preprocess((value) => {
-  if (typeof value !== "string") return value
-  const normalized = value.trim().toLowerCase()
-  if (normalized === "true" || normalized === "1") return true
-  if (normalized === "false" || normalized === "0") return false
-  return value
-}, z.boolean())
+export { JsonBoolean }
 
 function normalizeQueryNumberValue(value: unknown) {
   if (typeof value !== "string") return value
