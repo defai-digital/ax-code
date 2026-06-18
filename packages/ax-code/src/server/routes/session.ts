@@ -32,7 +32,7 @@ import { errors, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
 import { parseCurrentProjectSessionID, requireCurrentProjectSession } from "./session-lookup"
-import { OptionalQueryNumber, QueryBoolean } from "./query"
+import { JsonBoolean, OptionalQueryNumber, QueryBoolean } from "./query"
 import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "server" })
@@ -813,7 +813,7 @@ export const SessionRoutes = lazy(() =>
         z.object({
           providerID: ProviderID.zod,
           modelID: ModelID.zod,
-          auto: z.boolean().optional().default(false),
+          auto: JsonBoolean.optional().default(false),
         }),
       ),
       async (c) => {

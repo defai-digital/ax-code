@@ -204,6 +204,7 @@ describe("server route validation", () => {
             body: JSON.stringify({
               providerID: "test",
               modelID: "test",
+              auto: "false",
             }),
           })
 

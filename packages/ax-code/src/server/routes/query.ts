@@ -9,6 +9,14 @@ export const QueryBoolean = z.preprocess((value) => {
   return value
 }, z.boolean())
 
+export const JsonBoolean = z.preprocess((value) => {
+  if (typeof value !== "string") return value
+  const normalized = value.trim().toLowerCase()
+  if (normalized === "true" || normalized === "1") return true
+  if (normalized === "false" || normalized === "0") return false
+  return value
+}, z.boolean())
+
 function normalizeQueryNumberValue(value: unknown) {
   if (typeof value !== "string") return value
   const trimmed = value.trim()
