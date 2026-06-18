@@ -174,6 +174,7 @@ fn test_question_prompt_navigate_and_select() {
                 "Option B".to_string(),
                 "Option C".to_string(),
             ],
+            items: vec![],
         },
     };
     app.handle_event(event);
@@ -184,8 +185,8 @@ fn test_question_prompt_navigate_and_select() {
     assert_eq!(app.pending_questions.last().unwrap().selected, 0);
     let result = app.select_question();
     assert!(result.is_some());
-    let (_, _, answer) = result.unwrap();
-    assert_eq!(answer, "Option A");
+    let (_, _, answers) = result.unwrap();
+    assert_eq!(answers, vec![vec!["Option A".to_string()]]);
 }
 
 #[test]
@@ -361,6 +362,7 @@ fn test_mode_transition_input_to_question() {
             id: "q-1".to_string(),
             question: "Test?".to_string(),
             options: vec!["Yes".to_string(), "No".to_string()],
+            items: vec![],
         },
     };
     app.handle_event(event);

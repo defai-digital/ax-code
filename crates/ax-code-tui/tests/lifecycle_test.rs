@@ -135,7 +135,9 @@ async fn test_question_reply_and_reject_use_headless_routes() {
     };
     let client = HeadlessClient::new(config).expect("Failed to create client");
 
-    let reply = client.reply_question("sess_123", "q_123", "A").await;
+    let reply = client
+        .reply_question("sess_123", "q_123", vec![vec!["A".to_string()]])
+        .await;
     assert!(
         reply.is_ok(),
         "Question reply should use /question/:requestID/reply"

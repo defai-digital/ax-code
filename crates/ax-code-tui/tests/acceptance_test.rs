@@ -275,6 +275,7 @@ fn acceptance_functional_parity_question_flow() {
             id: "q-1".to_string(),
             question: "Pick one".to_string(),
             options: vec!["A".to_string(), "B".to_string()],
+            items: vec![],
         },
     });
 

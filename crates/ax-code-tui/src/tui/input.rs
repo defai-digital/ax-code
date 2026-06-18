@@ -25,7 +25,7 @@ pub enum InputAction {
     AnswerQuestion {
         session_id: String,
         request_id: String,
-        answer: String,
+        answers: Vec<Vec<String>>,
     },
     /// Reject a question.
     RejectQuestion {
@@ -269,11 +269,11 @@ fn handle_question_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
         KeyCode::Char('9') => select_question_option(app, 8),
         // Enter selects current
         KeyCode::Enter => {
-            if let Some((session_id, request_id, answer)) = app.select_question() {
+            if let Some((session_id, request_id, answers)) = app.select_question() {
                 InputAction::AnswerQuestion {
                     session_id,
                     request_id,
-                    answer,
+                    answers,
                 }
             } else {
                 InputAction::None
@@ -299,11 +299,11 @@ fn select_question_option(app: &mut App, index: usize) -> InputAction {
     if let Some(req) = app.pending_questions.first_mut() {
         if index < req.options.len() {
             req.selected = index;
-            if let Some((session_id, request_id, answer)) = app.select_question() {
+            if let Some((session_id, request_id, answers)) = app.select_question() {
                 return InputAction::AnswerQuestion {
                     session_id,
                     request_id,
-                    answer,
+                    answers,
                 };
             }
         }

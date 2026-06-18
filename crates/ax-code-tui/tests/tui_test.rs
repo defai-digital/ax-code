@@ -127,6 +127,7 @@ fn test_app_handle_question_asked() {
             id: "q_001".to_string(),
             question: "Which option?".to_string(),
             options: vec!["A".to_string(), "B".to_string(), "C".to_string()],
+            items: vec![],
         },
     };
 
@@ -279,6 +280,7 @@ fn test_input_question_navigate_and_select() {
             id: "q_001".to_string(),
             question: "Choose".to_string(),
             options: vec!["Option A".to_string(), "Option B".to_string()],
+            items: vec![],
         },
     });
 
@@ -297,11 +299,11 @@ fn test_input_question_navigate_and_select() {
         InputAction::AnswerQuestion {
             session_id,
             request_id,
-            answer,
+            answers,
         } => {
             assert_eq!(session_id, "sess_123");
             assert_eq!(request_id, "q_001");
-            assert_eq!(answer, "Option B");
+            assert_eq!(answers, vec![vec!["Option B".to_string()]]);
         }
         _ => panic!("Expected AnswerQuestion"),
     }
@@ -317,6 +319,7 @@ fn test_input_question_escape() {
             id: "q_001".to_string(),
             question: "Choose".to_string(),
             options: vec!["A".to_string()],
+            items: vec![],
         },
     });
 

@@ -123,7 +123,7 @@ async fn test_parse_question_event() {
 
 #[tokio::test]
 async fn test_parse_headless_question_event() {
-    let json = r#"{"type":"question.asked","properties":{"sessionID":"sess_123","id":"q_001","questions":[{"question":"Which option?","header":"Choice","options":[{"label":"A","description":"first"},{"label":"B","description":"second"}],"custom":false}]}}"#;
+    let json = r#"{"type":"question.asked","properties":{"sessionID":"sess_123","id":"q_001","questions":[{"question":"Which option?","header":"Choice","options":[{"label":"A","description":"first"},{"label":"B","description":"second"}],"custom":false},{"question":"Run tests?","header":"Tests","options":[{"label":"Yes","description":""},{"label":"No","description":""}],"custom":false}]}}"#;
     let event: RuntimeEvent = serde_json::from_str(json).unwrap();
 
     match event {
@@ -132,6 +132,9 @@ async fn test_parse_headless_question_event() {
             assert_eq!(properties.id, "q_001");
             assert_eq!(properties.display_question(), "Which option?");
             assert_eq!(properties.display_options(), vec!["A", "B"]);
+            assert_eq!(properties.items.len(), 2);
+            assert_eq!(properties.items[1].question, "Run tests?");
+            assert_eq!(properties.items[1].options, vec!["Yes", "No"]);
         }
         _ => panic!("Expected QuestionAsked event"),
     }

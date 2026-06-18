@@ -247,11 +247,11 @@ impl Runner {
                     InputAction::AnswerQuestion {
                         session_id,
                         request_id,
-                        answer,
+                        answers,
                     } => {
                         if let Some(ref client) = client {
                             if let Err(e) = client
-                                .reply_question(&session_id, &request_id, &answer)
+                                .reply_question(&session_id, &request_id, answers)
                                 .await
                             {
                                 app.set_status(format!("Question reply failed: {}", e));

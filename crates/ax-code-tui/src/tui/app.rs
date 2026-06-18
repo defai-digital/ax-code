@@ -36,6 +36,8 @@ pub struct App {
     pub pending_permissions: Vec<PermissionRequest>,
     /// Pending questions.
     pub pending_questions: Vec<QuestionRequest>,
+    /// Answers collected for multi-question requests.
+    question_answer_progress: Vec<QuestionAnswerProgress>,
     /// Active tool calls.
     pub tool_calls: Vec<ToolCall>,
     /// Current mode (input, permission, question).
@@ -105,6 +107,15 @@ pub struct QuestionRequest {
     pub question: String,
     pub options: Vec<String>,
     pub selected: usize,
+    pub index: usize,
+    pub total: usize,
+}
+
+#[derive(Debug, Clone)]
+struct QuestionAnswerProgress {
+    request_id: String,
+    answers: Vec<Vec<String>>,
+    total: usize,
 }
 
 /// A tool call in progress.
@@ -147,6 +158,7 @@ impl App {
             cursor_position: 0,
             pending_permissions: Vec::new(),
             pending_questions: Vec::new(),
+            question_answer_progress: Vec::new(),
             tool_calls: Vec::new(),
             mode: AppMode::Input,
             status_message: None,
@@ -354,15 +366,26 @@ impl App {
                 if !self.event_targets_current_session(&properties.session_id) {
                     return;
                 }
-                let question = properties.display_question();
-                let options = properties.display_options();
-                self.pending_questions.push(QuestionRequest {
-                    session_id: properties.session_id,
-                    request_id: properties.id,
-                    question,
-                    options,
-                    selected: 0,
-                });
+                let items = if properties.items.is_empty() {
+                    vec![crate::events::QuestionPromptProps {
+                        question: properties.display_question(),
+                        options: properties.display_options(),
+                    }]
+                } else {
+                    properties.items.clone()
+                };
+                let total = items.len();
+                for (index, item) in items.iter().enumerate() {
+                    self.pending_questions.push(QuestionRequest {
+                        session_id: properties.session_id.clone(),
+                        request_id: properties.id.clone(),
+                        question: item.question.clone(),
+                        options: item.options.clone(),
+                        selected: 0,
+                        index,
+                        total,
+                    });
+                }
                 self.mode = AppMode::Question;
             }
             RuntimeEvent::QuestionReplied { properties } => {
@@ -371,6 +394,8 @@ impl App {
                 }
                 self.pending_questions
                     .retain(|q| q.request_id != properties.request_id);
+                self.question_answer_progress
+                    .retain(|progress| progress.request_id != properties.request_id);
                 self.reset_mode_if_idle();
             }
             RuntimeEvent::QuestionRejected { properties } => {
@@ -379,6 +404,8 @@ impl App {
                 }
                 self.pending_questions
                     .retain(|q| q.request_id != properties.request_id);
+                self.question_answer_progress
+                    .retain(|progress| progress.request_id != properties.request_id);
                 self.reset_mode_if_idle();
             }
             RuntimeEvent::TodoUpdated { .. } => {
@@ -699,14 +726,44 @@ impl App {
     }
 
     /// Select the current (front) question option.
-    pub fn select_question(&mut self) -> Option<(String, String, String)> {
+    pub fn select_question(&mut self) -> Option<(String, String, Vec<Vec<String>>)> {
         if self.pending_questions.is_empty() {
             return None;
         }
         let req = self.pending_questions.remove(0);
         let answer = req.options.get(req.selected).cloned().unwrap_or_default();
+        let answers = {
+            let progress = self
+                .question_answer_progress
+                .iter_mut()
+                .find(|progress| progress.request_id == req.request_id);
+            let progress = if let Some(progress) = progress {
+                progress
+            } else {
+                self.question_answer_progress.push(QuestionAnswerProgress {
+                    request_id: req.request_id.clone(),
+                    answers: Vec::with_capacity(req.total),
+                    total: req.total,
+                });
+                self.question_answer_progress
+                    .last_mut()
+                    .expect("just inserted question progress")
+            };
+            progress.answers.push(vec![answer]);
+            if progress.answers.len() >= progress.total {
+                Some(progress.answers.clone())
+            } else {
+                None
+            }
+        };
         self.reset_mode_if_idle();
-        Some((req.session_id, req.request_id, answer))
+        if let Some(answers) = answers {
+            self.question_answer_progress
+                .retain(|progress| progress.request_id != req.request_id);
+            Some((req.session_id, req.request_id, answers))
+        } else {
+            None
+        }
     }
 
     /// Reject the current (front) question.
@@ -715,6 +772,10 @@ impl App {
             return None;
         }
         let req = self.pending_questions.remove(0);
+        self.pending_questions
+            .retain(|question| question.request_id != req.request_id);
+        self.question_answer_progress
+            .retain(|progress| progress.request_id != req.request_id);
         self.reset_mode_if_idle();
         Some((req.session_id, req.request_id))
     }
@@ -795,6 +856,7 @@ impl App {
         self.message_text_parts.clear();
         self.pending_permissions.clear();
         self.pending_questions.clear();
+        self.question_answer_progress.clear();
         self.tool_calls.clear();
         self.mode = AppMode::Input;
         self.scroll_offset = 0;
@@ -1174,6 +1236,7 @@ mod tests {
                 id: "q1".to_string(),
                 question: "pick one".to_string(),
                 options: vec!["a".to_string(), "b".to_string()],
+                items: vec![],
             },
         });
         assert!(matches!(app.mode, AppMode::Question));
@@ -1184,6 +1247,36 @@ mod tests {
                 request_id: "q1".to_string(),
             },
         });
+        assert!(app.pending_questions.is_empty());
+        assert!(matches!(app.mode, AppMode::Input));
+    }
+
+    #[test]
+    fn test_multi_question_request_collects_answers_before_reply() {
+        let mut app = App::new();
+        let event: RuntimeEvent = serde_json::from_str(
+            r#"{"type":"question.asked","properties":{"sessionID":"s1","id":"q1","questions":[{"question":"Which fix?","header":"Fix","options":[{"label":"Quick","description":""},{"label":"Full","description":""}]},{"question":"Run tests?","header":"Tests","options":[{"label":"Yes","description":""},{"label":"No","description":""}]}]}}"#,
+        )
+        .expect("question event");
+
+        app.handle_event(event);
+
+        assert_eq!(app.pending_questions.len(), 2);
+        assert!(matches!(app.mode, AppMode::Question));
+
+        app.question_down();
+        let first = app.select_question();
+        assert!(first.is_none());
+        assert_eq!(app.pending_questions.len(), 1);
+        assert!(matches!(app.mode, AppMode::Question));
+
+        let second = app.select_question().expect("complete answers");
+        assert_eq!(second.0, "s1");
+        assert_eq!(second.1, "q1");
+        assert_eq!(
+            second.2,
+            vec![vec!["Full".to_string()], vec!["Yes".to_string()]]
+        );
         assert!(app.pending_questions.is_empty());
         assert!(matches!(app.mode, AppMode::Input));
     }
@@ -1254,6 +1347,7 @@ mod tests {
                     id: id.to_string(),
                     question: id.to_string(),
                     options: vec!["opt".to_string()],
+                    items: vec![],
                 },
             });
         }
@@ -1672,6 +1766,7 @@ mod tests {
                 id: "q_s2".to_string(),
                 question: "other?".to_string(),
                 options: vec!["yes".to_string()],
+                items: vec![],
             },
         });
         app.handle_event(RuntimeEvent::ToolCallStart {
@@ -1724,6 +1819,8 @@ mod tests {
             question: "continue?".to_string(),
             options: vec!["yes".to_string()],
             selected: 0,
+            index: 0,
+            total: 1,
         });
         app.tool_calls.push(ToolCall {
             call_id: "call1".to_string(),

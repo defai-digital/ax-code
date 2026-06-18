@@ -190,6 +190,7 @@ fn smoke_question_navigate_select_flow() {
                 "Quick fix".to_string(),
                 "Skip".to_string(),
             ],
+            items: vec![],
         },
     });
 
@@ -204,8 +205,8 @@ fn smoke_question_navigate_select_flow() {
     // 4. User selects
     let result = app.select_question();
     assert!(result.is_some());
-    let (_, _, answer) = result.unwrap();
-    assert_eq!(answer, "Quick fix");
+    let (_, _, answers) = result.unwrap();
+    assert_eq!(answers, vec![vec!["Quick fix".to_string()]]);
 
     // 5. TUI returns to input mode
     assert!(matches!(app.mode, AppMode::Input));
@@ -221,6 +222,7 @@ fn smoke_question_cancel_flow() {
             id: "q-smoke-2".to_string(),
             question: "Confirm?".to_string(),
             options: vec!["Yes".to_string(), "No".to_string()],
+            items: vec![],
         },
     });
 

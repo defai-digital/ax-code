@@ -249,7 +249,7 @@ impl HeadlessClient {
         &self,
         _session_id: &str,
         question_id: &str,
-        answer: &str,
+        answers: Vec<Vec<String>>,
     ) -> Result<()> {
         let url = format!(
             "{}/question/{}/reply",
@@ -265,9 +265,7 @@ impl HeadlessClient {
         let response = self
             .http
             .post(&url)
-            .json(&QuestionReply {
-                answers: vec![vec![answer.to_string()]],
-            })
+            .json(&QuestionReply { answers })
             .send()
             .await
             .context("Failed to reply to question")?;

@@ -341,6 +341,7 @@ pub struct QuestionRequestProps {
     pub id: String,
     pub question: String,
     pub options: Vec<String>,
+    pub items: Vec<QuestionPromptProps>,
 }
 
 impl QuestionRequestProps {
@@ -351,6 +352,12 @@ impl QuestionRequestProps {
     pub fn display_options(&self) -> Vec<String> {
         self.options.clone()
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct QuestionPromptProps {
+    pub question: String,
+    pub options: Vec<String>,
 }
 
 impl<'de> Deserialize<'de> for QuestionRequestProps {
@@ -373,39 +380,36 @@ impl<'de> Deserialize<'de> for QuestionRequestProps {
         }
 
         let raw = RawQuestionRequestProps::deserialize(deserializer)?;
-        let first_question = raw.questions.first();
-        let question = if !raw.question.is_empty() {
-            raw.question
+        let items = if raw.questions.is_empty() {
+            vec![QuestionPromptProps {
+                question: raw.question,
+                options: raw.options,
+            }]
         } else {
-            first_question
-                .map(|q| {
-                    if !q.question.is_empty() {
+            raw.questions
+                .iter()
+                .map(|q| QuestionPromptProps {
+                    question: if !q.question.is_empty() {
                         q.question.clone()
                     } else {
                         q.header.clone()
-                    }
-                })
-                .unwrap_or_default()
-        };
-
-        let options = if !raw.options.is_empty() {
-            raw.options
-        } else {
-            first_question
-                .map(|q| {
-                    q.options
+                    },
+                    options: q
+                        .options
                         .iter()
                         .map(|option| option.label.clone())
-                        .collect()
+                        .collect(),
                 })
-                .unwrap_or_default()
+                .collect()
         };
+        let first = items.first().cloned().unwrap_or_default();
 
         Ok(Self {
             session_id: raw.session_id,
             id: raw.id,
-            question,
-            options,
+            question: first.question.clone(),
+            options: first.options.clone(),
+            items,
         })
     }
 }
