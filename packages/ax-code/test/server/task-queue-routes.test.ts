@@ -109,6 +109,14 @@ describe("task queue routes", () => {
         expect(sendNowResponse.status).toBe(200)
         expect(await sendNowResponse.json()).toMatchObject({ id: created.id, status: "queued", position: 0 })
 
+        const reorderResponse = await app.request(`/task-queue/${created.id}/reorder?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ position: "0" }),
+        })
+        expect(reorderResponse.status).toBe(200)
+        expect(await reorderResponse.json()).toMatchObject({ id: created.id, position: 0 })
+
         const deleteResponse = await app.request(`/task-queue/${created.id}?${directoryQuery}`, {
           method: "DELETE",
         })
