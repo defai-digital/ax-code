@@ -91,3 +91,39 @@ describe("Log.init", () => {
     expect(warnings.join("")).toContain(`falling back to ${fallback}`)
   })
 })
+
+describe("Log.create", () => {
+  test("does not throw when structured extras contain bigint values", async () => {
+    const lines: string[] = []
+    await Log.init(
+      { print: true },
+      {
+        stderrWrite: (msg) => {
+          lines.push(msg)
+        },
+      },
+    )
+
+    expect(() => Log.create({ service: "test-log-bigint" }).info("message", { metadata: { count: 1n } })).not.toThrow()
+
+    expect(lines.join("")).toContain('metadata={"count":"1"}')
+  })
+
+  test("does not throw when structured extras contain circular references", async () => {
+    const lines: string[] = []
+    await Log.init(
+      { print: true },
+      {
+        stderrWrite: (msg) => {
+          lines.push(msg)
+        },
+      },
+    )
+    const metadata: Record<string, unknown> = { name: "root" }
+    metadata.self = metadata
+
+    expect(() => Log.create({ service: "test-log-circular" }).warn("message", { metadata })).not.toThrow()
+
+    expect(lines.join("")).toContain('metadata={"name":"root","self":"[Circular]"}')
+  })
+})

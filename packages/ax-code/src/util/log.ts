@@ -284,6 +284,24 @@ export namespace Log {
       : result
   }
 
+  function stringifyLogObject(value: object): string {
+    const seen = new WeakSet<object>()
+    try {
+      return (
+        JSON.stringify(value, (_key, next) => {
+          if (typeof next === "bigint") return next.toString()
+          if (typeof next === "object" && next !== null) {
+            if (seen.has(next)) return "[Circular]"
+            seen.add(next)
+          }
+          return next
+        }) ?? String(value)
+      )
+    } catch (error) {
+      return `[Unserializable: ${toErrorMessage(error)}]`
+    }
+  }
+
   let last = Date.now()
   export function create(tags?: Record<string, any>) {
     tags = tags || {}
@@ -308,7 +326,7 @@ export namespace Log {
         .map(([key, value]) => {
           const prefix = `${key}=`
           if (value instanceof Error) return prefix + formatError(value)
-          if (typeof value === "object") return prefix + JSON.stringify(value)
+          if (typeof value === "object") return prefix + stringifyLogObject(value)
           return prefix + value
         })
         .join(" ")
