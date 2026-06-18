@@ -1,6 +1,6 @@
 //! Tests for TUI event handling and input.
 
-use ax_code_tui::events::{MessageRole, RuntimeEvent};
+use ax_code_tui::events::{MessagePartDeltaProps, MessageRole, RuntimeEvent};
 use ax_code_tui::tui::{App, AppMode, InputAction};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
@@ -77,7 +77,8 @@ fn test_app_handle_message_part_delta() {
 
     // Then add delta
     app.handle_event(RuntimeEvent::MessagePartDelta {
-        properties: ax_code_tui::events::MessagePartDeltaProps {
+        properties: MessagePartDeltaProps {
+            session_id: "s".to_string(),
             message_id: "msg_001".to_string(),
             part_id: "part_001".to_string(),
             field: "content".to_string(),
@@ -86,7 +87,8 @@ fn test_app_handle_message_part_delta() {
     });
 
     app.handle_event(RuntimeEvent::MessagePartDelta {
-        properties: ax_code_tui::events::MessagePartDeltaProps {
+        properties: MessagePartDeltaProps {
+            session_id: "s".to_string(),
             message_id: "msg_001".to_string(),
             part_id: "part_001".to_string(),
             field: "content".to_string(),

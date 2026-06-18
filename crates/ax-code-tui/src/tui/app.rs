@@ -275,7 +275,10 @@ impl App {
                 self.scroll_offset = self.scroll_offset.min(self.messages.len());
             }
             RuntimeEvent::MessagePartDelta { properties } => {
-                if !self.message_targets_current_session(&properties.message_id) {
+                if !self.message_event_targets_current_session(
+                    &properties.session_id,
+                    &properties.message_id,
+                ) {
                     return;
                 }
                 if properties.field == "text" || properties.field == "content" {
@@ -459,6 +462,17 @@ impl App {
 
     fn message_targets_current_session(&self, message_id: &str) -> bool {
         self.session_id.is_none() || self.messages.iter().any(|m| m.id == message_id)
+    }
+
+    fn message_event_targets_current_session(
+        &self,
+        event_session_id: &str,
+        message_id: &str,
+    ) -> bool {
+        if !event_session_id.is_empty() {
+            return self.event_targets_current_session(event_session_id);
+        }
+        self.message_targets_current_session(message_id)
     }
 
     fn ensure_message(&mut self, message_id: &str) {
@@ -1289,6 +1303,7 @@ mod tests {
 
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
+                session_id: "s".to_string(),
                 message_id: "m1".to_string(),
                 part_id: "p1".to_string(),
                 field: "text".to_string(),
@@ -1297,6 +1312,38 @@ mod tests {
         });
 
         assert_eq!(app.messages[0].content, "streamed text");
+    }
+
+    #[test]
+    fn test_message_part_delta_uses_session_id_before_message_update() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+
+        app.handle_event(RuntimeEvent::MessagePartDelta {
+            properties: MessagePartDeltaProps {
+                session_id: "s2".to_string(),
+                message_id: "m_other".to_string(),
+                part_id: "p1".to_string(),
+                field: "text".to_string(),
+                delta: "wrong".to_string(),
+            },
+        });
+
+        assert!(app.messages.is_empty());
+
+        app.handle_event(RuntimeEvent::MessagePartDelta {
+            properties: MessagePartDeltaProps {
+                session_id: "s1".to_string(),
+                message_id: "m_current".to_string(),
+                part_id: "p1".to_string(),
+                field: "text".to_string(),
+                delta: "first chunk".to_string(),
+            },
+        });
+
+        assert_eq!(app.messages.len(), 1);
+        assert_eq!(app.messages[0].id, "m_current");
+        assert_eq!(app.messages[0].content, "first chunk");
     }
 
     #[test]
@@ -1335,6 +1382,7 @@ mod tests {
         let mut app = App::new();
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
+                session_id: "s".to_string(),
                 message_id: "m1".to_string(),
                 part_id: "p1".to_string(),
                 field: "text".to_string(),
@@ -1365,6 +1413,7 @@ mod tests {
         let mut app = App::new();
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
+                session_id: "s".to_string(),
                 message_id: "m1".to_string(),
                 part_id: "p1".to_string(),
                 field: "text".to_string(),
@@ -1391,6 +1440,7 @@ mod tests {
         for (part_id, delta) in [("p1", "hello "), ("p2", "world")] {
             app.handle_event(RuntimeEvent::MessagePartDelta {
                 properties: MessagePartDeltaProps {
+                    session_id: "s".to_string(),
                     message_id: "m1".to_string(),
                     part_id: part_id.to_string(),
                     field: "text".to_string(),
@@ -1553,6 +1603,7 @@ mod tests {
         });
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
+                session_id: "s".to_string(),
                 message_id: "msg_s2".to_string(),
                 part_id: "part_s2".to_string(),
                 field: "text".to_string(),

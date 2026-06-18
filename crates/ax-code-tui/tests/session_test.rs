@@ -427,6 +427,7 @@ fn test_select_session_updates_active_session_and_clears_stale_state() {
     });
     app.handle_event(RuntimeEvent::MessagePartDelta {
         properties: MessagePartDeltaProps {
+            session_id: "sess_001".to_string(),
             message_id: "msg_old".to_string(),
             part_id: "part_old".to_string(),
             field: "text".to_string(),

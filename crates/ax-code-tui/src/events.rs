@@ -259,6 +259,8 @@ pub struct ToolPartState {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MessagePartDeltaProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
     #[serde(rename = "messageID", default)]
     pub message_id: String,
     #[serde(rename = "partID", default)]

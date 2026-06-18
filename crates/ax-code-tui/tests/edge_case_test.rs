@@ -121,6 +121,7 @@ fn test_rapid_message_deltas() {
     for i in 0..100 {
         let delta_event = RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
+                session_id: "s".to_string(),
                 message_id: "msg-rapid".to_string(),
                 part_id: format!("part-{}", i),
                 field: "content".to_string(),

@@ -146,11 +146,12 @@ async fn test_parse_unknown_event() {
 
 #[tokio::test]
 async fn test_parse_message_part_delta() {
-    let json = r#"{"type":"message.part.delta","properties":{"messageID":"msg_123","partID":"part_456","field":"content","delta":"Hello world"}}"#;
+    let json = r#"{"type":"message.part.delta","properties":{"sessionID":"sess_123","messageID":"msg_123","partID":"part_456","field":"content","delta":"Hello world"}}"#;
     let event: RuntimeEvent = serde_json::from_str(json).unwrap();
 
     match event {
         RuntimeEvent::MessagePartDelta { properties } => {
+            assert_eq!(properties.session_id, "sess_123");
             assert_eq!(properties.message_id, "msg_123");
             assert_eq!(properties.part_id, "part_456");
             assert_eq!(properties.field, "content");

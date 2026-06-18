@@ -113,6 +113,7 @@ fn test_message_streaming() {
     app.handle_event(create_event);
     let delta_event = RuntimeEvent::MessagePartDelta {
         properties: MessagePartDeltaProps {
+            session_id: "s".to_string(),
             message_id: "msg-stream".to_string(),
             part_id: "part-1".to_string(),
             field: "content".to_string(),

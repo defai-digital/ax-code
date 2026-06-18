@@ -107,6 +107,7 @@ fn smoke_resize_during_streaming_no_crash() {
     for i in 0..100 {
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
+                session_id: "s".to_string(),
                 message_id: "msg-resize".to_string(),
                 part_id: format!("part-{}", i),
                 field: "content".to_string(),
@@ -257,6 +258,7 @@ fn smoke_interrupt_abort_during_streaming() {
     for i in 0..10 {
         app.handle_event(RuntimeEvent::MessagePartDelta {
             properties: MessagePartDeltaProps {
+                session_id: "sess-1".to_string(),
                 message_id: "msg-stream".to_string(),
                 part_id: format!("part-{}", i),
                 field: "content".to_string(),

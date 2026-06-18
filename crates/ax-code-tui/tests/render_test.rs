@@ -227,6 +227,7 @@ fn test_app_message_delta_keeps_streaming() {
     // This tests that delta doesn't change the streaming status.
     let delta_event = RuntimeEvent::MessagePartDelta {
         properties: MessagePartDeltaProps {
+            session_id: "s".to_string(),
             message_id: "msg-1".to_string(),
             part_id: "part-1".to_string(),
             field: "content".to_string(),

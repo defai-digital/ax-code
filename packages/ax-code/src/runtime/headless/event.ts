@@ -9,7 +9,10 @@ export type HeadlessMessageEvent<
   | { type: "message.updated"; properties: { info: TMessage } }
   | { type: "message.removed"; properties: { sessionID: string; messageID: string } }
   | { type: "message.part.updated"; properties: { part: TPart } }
-  | { type: "message.part.delta"; properties: { messageID: string; partID: string; field: string; delta: string } }
+  | {
+      type: "message.part.delta"
+      properties: { sessionID: string; messageID: string; partID: string; field: string; delta: string }
+    }
   | { type: "message.part.removed"; properties: { messageID: string; partID: string } }
 
 export type HeadlessRequestEvent =
