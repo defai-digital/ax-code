@@ -11,6 +11,7 @@ import { URL } from "url"
 import { Log } from "@/util/log"
 import { isLocalHostname } from "@/util/local-host"
 import { axEngineLoader } from "./ax-engine/provider-loader"
+import { isRecord } from "@/util/record"
 
 const log = Log.create({ service: "provider.loaders" })
 
@@ -55,34 +56,54 @@ function asOllamaTags(input: unknown): { models: { name: string }[] } | null {
   }
 }
 
+function booleanValue(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback
+}
+
+function numberValue(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback
+}
+
+function interleavedValue(value: unknown): Provider.Model["capabilities"]["interleaved"] {
+  if (typeof value === "boolean") return value
+  if (isRecord(value) && (value.field === "reasoning_content" || value.field === "reasoning_details")) {
+    return { field: value.field }
+  }
+  return false
+}
+
 function openAICompatibleCapabilities(item: OpenAICompatibleModelItem): Provider.Model["capabilities"] {
+  const capabilities: Record<string, unknown> = isRecord(item.capabilities) ? item.capabilities : {}
+  const input: Record<string, unknown> = isRecord(capabilities.input) ? capabilities.input : {}
+  const output: Record<string, unknown> = isRecord(capabilities.output) ? capabilities.output : {}
   return {
-    temperature: item.capabilities?.temperature ?? true,
-    reasoning: item.capabilities?.reasoning ?? false,
-    attachment: item.capabilities?.attachment ?? false,
-    toolcall: item.capabilities?.toolcall ?? true,
+    temperature: booleanValue(capabilities.temperature, true),
+    reasoning: booleanValue(capabilities.reasoning, false),
+    attachment: booleanValue(capabilities.attachment, false),
+    toolcall: booleanValue(capabilities.toolcall, true),
     input: {
-      text: item.capabilities?.input?.text ?? true,
-      audio: item.capabilities?.input?.audio ?? false,
-      image: item.capabilities?.input?.image ?? false,
-      video: item.capabilities?.input?.video ?? false,
-      pdf: item.capabilities?.input?.pdf ?? false,
+      text: booleanValue(input.text, true),
+      audio: booleanValue(input.audio, false),
+      image: booleanValue(input.image, false),
+      video: booleanValue(input.video, false),
+      pdf: booleanValue(input.pdf, false),
     },
     output: {
-      text: item.capabilities?.output?.text ?? true,
-      audio: item.capabilities?.output?.audio ?? false,
-      image: item.capabilities?.output?.image ?? false,
-      video: item.capabilities?.output?.video ?? false,
-      pdf: item.capabilities?.output?.pdf ?? false,
+      text: booleanValue(output.text, true),
+      audio: booleanValue(output.audio, false),
+      image: booleanValue(output.image, false),
+      video: booleanValue(output.video, false),
+      pdf: booleanValue(output.pdf, false),
     },
-    interleaved: item.capabilities?.interleaved ?? false,
+    interleaved: interleavedValue(capabilities.interleaved),
   }
 }
 
 function openAICompatibleLimit(item: OpenAICompatibleModelItem): Provider.Model["limit"] {
+  const limit: Record<string, unknown> = isRecord(item.limit) ? item.limit : {}
   return {
-    context: item.limit?.context ?? item.context_length ?? item.max_context_length ?? 128000,
-    output: item.limit?.output ?? item.max_output_tokens ?? 4096,
+    context: numberValue(limit.context, numberValue(item.context_length, numberValue(item.max_context_length, 128000))),
+    output: numberValue(limit.output, numberValue(item.max_output_tokens, 4096)),
   }
 }
 

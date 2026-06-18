@@ -363,6 +363,61 @@ describe("offline provider loaders", () => {
     })
   })
 
+  test("ax-studio sanitizes discovered model capability and limit fields", async () => {
+    process.env.AX_STUDIO_HOST = "http://localhost:18080"
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:18080/v1/models") {
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: "valid-model",
+                capabilities: {
+                  temperature: "yes",
+                  reasoning: true,
+                  input: { text: false, image: "yes" },
+                  output: { audio: "no" },
+                  interleaved: { field: "invalid" },
+                },
+                limit: { context: "large", output: {} },
+                max_context_length: "8192",
+                max_output_tokens: "2048",
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        )
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const providers = await Provider.list()
+        const model = providers[ProviderID.make("ax-studio")].models[ModelID.make("valid-model")]
+        expect(model.capabilities.temperature).toBe(true)
+        expect(model.capabilities.reasoning).toBe(true)
+        expect(model.capabilities.input.text).toBe(false)
+        expect(model.capabilities.input.image).toBe(false)
+        expect(model.capabilities.output.audio).toBe(false)
+        expect(model.capabilities.interleaved).toBe(false)
+        expect(model.limit).toEqual({ context: 128000, output: 4096 })
+      },
+    })
+  })
+
   test("ax-studio applies model filters to discovered models", async () => {
     process.env.AX_STUDIO_HOST = "http://localhost:18080"
     globalThis.fetch = (async (input: string | URL | Request) => {
