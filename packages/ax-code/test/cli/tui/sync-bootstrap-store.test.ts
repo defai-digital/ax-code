@@ -8,6 +8,7 @@ import {
   normalizeBootstrapRecord,
   normalizeBootstrapSessionBuckets,
   normalizeBootstrapValue,
+  normalizeProviderBootstrapPayload,
 } from "../../../src/cli/cmd/tui/context/sync-bootstrap-store"
 
 describe("tui sync bootstrap store", () => {
@@ -40,6 +41,22 @@ describe("tui sync bootstrap store", () => {
       provider_loaded: true,
       provider_failed: false,
     })
+  })
+
+  test("normalizes malformed provider bootstrap payloads", () => {
+    expect(normalizeProviderBootstrapPayload(null)).toEqual({ providers: [], default: {} })
+    expect(
+      normalizeProviderBootstrapPayload({
+        providers: { id: "openai" },
+        default: ["openai"],
+      }),
+    ).toEqual({ providers: [], default: {} })
+    expect(
+      normalizeProviderBootstrapPayload({
+        providers: ["openai"],
+        default: { chat: "openai", invalid: 123 },
+      }),
+    ).toEqual({ providers: ["openai"], default: { chat: "openai" } })
   })
 
   test("creates provider bootstrap failure state", () => {

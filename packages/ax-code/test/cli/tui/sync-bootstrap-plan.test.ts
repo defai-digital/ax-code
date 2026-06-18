@@ -98,6 +98,37 @@ describe("tui sync bootstrap plan", () => {
     expect(ready).toEqual([false])
   })
 
+  test("sanitizes malformed provider bootstrap response data", async () => {
+    const applied: Array<{
+      provider_loaded: boolean
+      provider_failed: boolean
+      provider?: unknown[]
+      provider_default?: Record<string, string>
+    }> = []
+
+    await createProviderBootstrapTask({
+      providersPromise: () =>
+        Promise.resolve({
+          data: {
+            providers: { id: "openai" },
+            default: { chat: "openai", invalid: 123 },
+          } as unknown as { providers: string[]; default: Record<string, string> },
+        }),
+      applyState(value) {
+        applied.push(value)
+      },
+    })()
+
+    expect(applied).toEqual([
+      {
+        provider: [],
+        provider_default: { chat: "openai" },
+        provider_loaded: true,
+        provider_failed: false,
+      },
+    ])
+  })
+
   test("applies provider failure state, reports readiness, and rethrows", async () => {
     const failures: Array<{ provider_loaded: boolean; provider_failed: boolean }> = []
     const ready: boolean[] = []

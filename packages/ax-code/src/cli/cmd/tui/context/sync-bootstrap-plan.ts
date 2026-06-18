@@ -22,6 +22,7 @@ import {
   normalizeBootstrapRecord,
   normalizeBootstrapSessionBuckets,
   normalizeBootstrapValue,
+  normalizeProviderBootstrapPayload,
 } from "./sync-bootstrap-store"
 import type { BootstrapResponse, BootstrapTask } from "./sync-bootstrap-task"
 import { createBootstrapResponseTask, createBootstrapTask } from "./sync-bootstrap-task"
@@ -69,7 +70,7 @@ export function createProviderBootstrapTask<T>(input: {
   return () =>
     input
       .providersPromise()
-      .then((response) => normalizeBootstrapValue(response.data, { providers: [], default: {} }))
+      .then((response) => normalizeProviderBootstrapPayload<T>(response.data))
       .then((providers) => {
         input.applyState(createProviderBootstrapSuccess(providers))
         input.onReady?.(false)
