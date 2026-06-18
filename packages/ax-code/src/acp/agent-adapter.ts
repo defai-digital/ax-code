@@ -129,7 +129,8 @@ export async function defaultModel(
 
 export function parseUri(uri: string): ParsedACPResource {
   try {
-    if (uri.startsWith("file://")) {
+    const url = new URL(uri)
+    if (url.protocol === "file:") {
       const filepath = fileURLToPath(uri)
       const name = path.basename(filepath) || filepath
       return {
@@ -139,14 +140,13 @@ export function parseUri(uri: string): ParsedACPResource {
         mime: "text/plain",
       }
     }
-    if (uri.startsWith("zed://")) {
-      const url = new URL(uri)
-      const path = url.searchParams.get("path")
-      if (path) {
-        const name = path.split("/").pop() || path
+    if (url.protocol === "zed:") {
+      const zedPath = url.searchParams.get("path")
+      if (zedPath) {
+        const name = zedPath.split("/").pop() || zedPath
         return {
           type: "file",
-          url: pathToFileURL(path).href,
+          url: pathToFileURL(zedPath).href,
           filename: name,
           mime: "text/plain",
         }
