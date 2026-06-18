@@ -57,6 +57,26 @@ import {
 import { parseGitHubRemote, extractResponseText, formatPromptTooLargeError, checkTruncation } from "./types"
 export { parseGitHubRemote, extractResponseText, formatPromptTooLargeError }
 
+export function formatGitHubAgentToolTitle(input: { title?: unknown; input?: unknown }): string {
+  if (typeof input.title === "string" && input.title.length > 0) return input.title
+  if (!isNonEmptyRecord(input.input)) return "Unknown"
+  const seen = new WeakSet<object>()
+  try {
+    return (
+      JSON.stringify(input.input, (_key, value) => {
+        if (typeof value === "bigint") return value.toString()
+        if (value && typeof value === "object") {
+          if (seen.has(value)) return "[Circular]"
+          seen.add(value)
+        }
+        return value
+      }) ?? "Unknown"
+    )
+  } catch {
+    return "Unknown"
+  }
+}
+
 export const GithubCommand = cmd({
   command: "github",
   describe: "manage GitHub agent",
@@ -765,8 +785,7 @@ export const GithubRunCommand = cmd({
 
           if (part.type === "tool" && part.state.status === "completed") {
             const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
-            const title =
-              part.state.title || (isNonEmptyRecord(part.state.input) ? JSON.stringify(part.state.input) : "Unknown")
+            const title = formatGitHubAgentToolTitle({ title: part.state.title, input: part.state.input })
             console.log()
             printEvent(color, tool, title)
           }
