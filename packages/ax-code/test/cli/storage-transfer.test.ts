@@ -23,6 +23,19 @@ describe("storage transfer", () => {
     expect(result.error).not.toContain("File not found")
   })
 
+  test("reports schema-invalid import files before DB import starts", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "invalid-shape.json"), JSON.stringify({ info: { id: "ses_import" } }))
+      },
+    })
+
+    const result = await readSessionTransferFile(path.join(tmp.path, "invalid-shape.json"))
+
+    expect(result.error).toContain("Invalid session transfer file")
+    expect(result.error).toContain("messages")
+  })
+
   test("exports and reimports replay events with the session payload", async () => {
     await using tmp = await tmpdir({
       git: true,

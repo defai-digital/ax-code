@@ -5,6 +5,39 @@ import { EOL } from "os"
 import { Filesystem } from "../../../util/filesystem"
 import type { SessionTransfer } from "./transfer"
 import { writeTransfer } from "./transfer"
+import z from "zod"
+
+const TransferRecord = z.object({ id: z.string().min(1) }).passthrough()
+const TransferEvent = z
+  .object({
+    id: z.string().optional(),
+    stepID: z.string().optional(),
+    sequence: z.number(),
+    timeCreated: z.number(),
+    event: z.object({ type: z.string().min(1) }).passthrough(),
+  })
+  .passthrough()
+const SessionTransferFile = z
+  .object({
+    info: TransferRecord,
+    messages: z.array(
+      z
+        .object({
+          info: TransferRecord,
+          parts: z.array(z.unknown()),
+        })
+        .passthrough(),
+    ),
+    events: z.array(TransferEvent).optional(),
+  })
+  .passthrough()
+
+function formatTransferFileIssue(error: z.ZodError) {
+  const issue = error.issues[0]
+  if (!issue) return "unknown schema error"
+  const path = issue.path.length > 0 ? issue.path.join(".") : "<root>"
+  return `${path}: ${issue.message}`
+}
 
 export async function readSessionTransferFile(file: string): Promise<
   | {
@@ -17,7 +50,12 @@ export async function readSessionTransferFile(file: string): Promise<
     }
 > {
   try {
-    return { data: await Filesystem.readJson<SessionTransfer>(file) }
+    const raw = await Filesystem.readJson<unknown>(file)
+    const parsed = SessionTransferFile.safeParse(raw)
+    if (!parsed.success) {
+      return { error: `Invalid session transfer file ${file}: ${formatTransferFileIssue(parsed.error)}` }
+    }
+    return { data: parsed.data as SessionTransfer }
   } catch (error) {
     const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined
     if (code === "ENOENT") {
