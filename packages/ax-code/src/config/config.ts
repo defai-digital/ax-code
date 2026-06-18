@@ -860,7 +860,11 @@ export namespace Config {
    */
   export function getPluginName(plugin: string): string {
     if (plugin.startsWith("file://")) {
-      return path.parse(new URL(plugin).pathname).name
+      try {
+        return path.parse(new URL(plugin).pathname).name
+      } catch {
+        return plugin
+      }
     }
     const lastAt = plugin.lastIndexOf("@")
     if (lastAt > 0) {

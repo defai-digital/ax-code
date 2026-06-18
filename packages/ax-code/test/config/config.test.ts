@@ -2003,6 +2003,10 @@ describe("getPluginName", () => {
     expect(Config.getPluginName("file:///some/path/my-plugin.js")).toBe("my-plugin")
   })
 
+  test("keeps malformed file:// plugin specifiers as their own names", () => {
+    expect(Config.getPluginName("file://%")).toBe("file://%")
+  })
+
   test("extracts name from npm package with version", () => {
     expect(Config.getPluginName("oh-my-opencode@2.4.3")).toBe("oh-my-opencode")
     expect(Config.getPluginName("some-plugin@1.0.0")).toBe("some-plugin")
@@ -2048,6 +2052,12 @@ describe("deduplicatePlugins", () => {
     const result = Config.deduplicatePlugins(plugins)
 
     expect(result).toEqual(["a-plugin@1.0.0", "b-plugin@1.0.0", "c-plugin@1.0.0"])
+  })
+
+  test("does not throw when deduplicating malformed file plugin specifiers", () => {
+    const plugins = ["file://%", "file:///project/.ax-code/plugin/local.js"]
+
+    expect(Config.deduplicatePlugins(plugins)).toEqual(plugins)
   })
 
   test("local plugin directory overrides global ax-code.json plugin", async () => {
