@@ -72,4 +72,12 @@ describe("provider CLI raw stream text", () => {
     expect(qoderCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
     expect(grokBuildCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
   })
+
+  test("raw complete fallback preserves model whitespace", () => {
+    expect(claudeCodeParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+    expect(geminiCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+    expect(codexCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+    expect(qoderCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+    expect(grokBuildCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+  })
 })

@@ -38,6 +38,11 @@ function rawTextLine(line: string): string | null {
   return text.trim().length > 0 ? text : null
 }
 
+function rawCompleteText(output: string): string {
+  const text = output.replace(/\r?\n$/, "")
+  return text.trim().length > 0 ? text : ""
+}
+
 export const claudeCodeParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")
@@ -52,7 +57,7 @@ export const claudeCodeParser: CliOutputParser = {
         if (text) parts.push(text)
       }
     }
-    return { text: parts.join("\n") || output.trim() }
+    return { text: parts.join("\n") || rawCompleteText(output) }
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
@@ -79,7 +84,7 @@ export const geminiCliParser: CliOutputParser = {
         if (text) parts.push(text)
       }
     }
-    return { text: parts.join("\n") || output.trim() }
+    return { text: parts.join("\n") || rawCompleteText(output) }
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
@@ -120,7 +125,7 @@ export const codexCliParser: CliOutputParser = {
       if (typeof event.content === "string") parts.push(event.content)
       if (typeof event.text === "string") parts.push(event.text)
     }
-    return { text: parts.join("\n") || output.trim() }
+    return { text: parts.join("\n") || rawCompleteText(output) }
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
@@ -152,7 +157,7 @@ export const qoderCliParser: CliOutputParser = {
       if (typeof event.content === "string") parts.push(event.content)
       if (typeof event.text === "string") parts.push(event.text)
     }
-    return { text: parts.join("\n") || output.trim() }
+    return { text: parts.join("\n") || rawCompleteText(output) }
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
@@ -183,7 +188,7 @@ export const grokBuildCliParser: CliOutputParser = {
       if (typeof event.content === "string") parts.push(event.content)
       if (typeof event.text === "string") parts.push(event.text)
     }
-    return { text: parts.join("\n") || output.trim() }
+    return { text: parts.join("\n") || rawCompleteText(output) }
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
