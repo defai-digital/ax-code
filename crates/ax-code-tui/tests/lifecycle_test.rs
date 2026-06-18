@@ -103,6 +103,27 @@ async fn test_create_session_uses_headless_route() {
 }
 
 #[tokio::test]
+async fn test_list_recent_session_ids_uses_headless_session_route() {
+    let server = MockServer::start().await;
+    let config = ClientConfig {
+        base_url: server.url(),
+        auth_token: None,
+        directory: Some("/workspace/project".to_string()),
+        session: None,
+        prompt: None,
+    };
+    let client = HeadlessClient::new(config).expect("Failed to create client");
+
+    let session_ids = client
+        .list_recent_session_ids()
+        .await
+        .expect("list recent session ids");
+    assert_eq!(session_ids, vec!["recent-session", "older-session"]);
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn test_permission_reply_uses_headless_route() {
     let server = MockServer::start().await;
     let config = ClientConfig {

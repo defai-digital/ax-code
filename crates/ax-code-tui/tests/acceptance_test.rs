@@ -349,6 +349,21 @@ fn acceptance_rollback_skips_session_first_runner_route() {
     );
 }
 
+#[test]
+fn acceptance_runner_route_auto_resumes_recent_session() {
+    let input = LaunchInput {
+        recent_session_ids: vec!["recent".to_string()],
+        ..Default::default()
+    };
+
+    assert_eq!(
+        resolve_runner_launch_route(&input, false),
+        Some(LaunchRoute::Session {
+            session_id: "recent".to_string()
+        })
+    );
+}
+
 // =============================================================================
 // Acceptance: Diagnostic observability
 // =============================================================================

@@ -9,7 +9,7 @@
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use reqwest::{Client, StatusCode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
 use crate::events::RuntimeEvent;
@@ -48,6 +48,11 @@ pub type EventStream = std::pin::Pin<Box<dyn futures_util::Stream<Item = Runtime
 pub struct HeadlessClient {
     config: ClientConfig,
     http: Client,
+}
+
+#[derive(Debug, Deserialize)]
+struct SessionListItem {
+    id: String,
 }
 
 impl HeadlessClient {
@@ -175,6 +180,44 @@ impl HeadlessClient {
             .as_str()
             .map(|s| s.to_string())
             .ok_or_else(|| anyhow::anyhow!("Session creation response missing 'id'"))
+    }
+
+    /// List recent root sessions for the configured workspace directory.
+    ///
+    /// The headless `/session` route is already sorted by most recently updated,
+    /// so callers can pass these IDs directly to launch policy auto-resume.
+    pub async fn list_recent_session_ids(&self) -> Result<Vec<String>> {
+        let url = format!("{}/session", self.config.base_url);
+        let mut request = self
+            .http
+            .get(&url)
+            .query(&[("roots", "true"), ("limit", "100")]);
+        if let Some(directory) = self.config.directory.as_deref() {
+            request = request.query(&[("directory", directory)]);
+        }
+
+        let response = request.send().await.context("Failed to list sessions")?;
+
+        if !response.status().is_success() {
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Session list failed: {}", text);
+        }
+
+        let sessions: Vec<SessionListItem> = response
+            .json()
+            .await
+            .context("Failed to parse session list response")?;
+        Ok(sessions
+            .into_iter()
+            .filter_map(|session| {
+                let id = session.id.trim();
+                if id.is_empty() {
+                    None
+                } else {
+                    Some(id.to_string())
+                }
+            })
+            .collect())
     }
 
     /// Send a prompt to the current session.

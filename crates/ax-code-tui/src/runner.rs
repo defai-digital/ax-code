@@ -107,18 +107,6 @@ impl Runner {
             app.set_status("Legacy home route active (AX_CODE_TUI_LEGACY_HOME=1)".to_string());
         }
 
-        // Resolve launch route via launch policy (ADR-035).
-        // The route is consumed after the client and SSE subscription
-        // are ready so we can create/attach sessions and send prompts.
-        let launch_input = LaunchInput {
-            explicit_session_id: self.config.session.clone(),
-            explicit_prompt: self.config.prompt.clone(),
-            // TODO: requires GET /session list endpoint from server
-            recent_session_ids: Vec::new(),
-            has_project_context: false,
-        };
-        let route = resolve_runner_launch_route(&launch_input, legacy_home_requested);
-
         // Emit renderer startup diagnostic
         DiagnosticEvent::RendererStartup {
             renderer: "ratatui".to_string(),
@@ -166,6 +154,31 @@ impl Runner {
                 }
             }
         }
+
+        let recent_session_ids = if legacy_home_requested {
+            Vec::new()
+        } else if let Some(ref client) = client {
+            match client.list_recent_session_ids().await {
+                Ok(ids) => ids,
+                Err(e) => {
+                    app.set_status(format!("Session list failed: {}", e));
+                    Vec::new()
+                }
+            }
+        } else {
+            Vec::new()
+        };
+
+        // Resolve launch route via launch policy (ADR-035).
+        // The route is consumed after the client and SSE subscription
+        // are ready so we can create/attach sessions and send prompts.
+        let launch_input = LaunchInput {
+            explicit_session_id: self.config.session.clone(),
+            explicit_prompt: self.config.prompt.clone(),
+            recent_session_ids,
+            has_project_context: false,
+        };
+        let route = resolve_runner_launch_route(&launch_input, legacy_home_requested);
 
         // Apply the resolved launch route: attach to an existing session
         // or create a new one (optionally sending an initial prompt).
