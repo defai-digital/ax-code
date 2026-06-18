@@ -63,8 +63,12 @@ function stalenessNotice(sections: ProjectMemory["sections"]): string | undefine
   )
 
   if (scanned.length === 0) return undefined
-  const oldest = scanned.reduce((a, b) => (a.scannedAt! < b.scannedAt! ? a : b))
-  const age = Date.now() - new Date(oldest.scannedAt!).getTime()
+  const times = scanned.map((section) => new Date(section.scannedAt!).getTime())
+  if (times.some((time) => !Number.isFinite(time))) {
+    return `> Note: project scan timestamp is invalid. Run \`ax-code memory warmup\` to refresh.`
+  }
+  const oldest = Math.min(...times)
+  const age = Date.now() - oldest
   if (age < STALE_THRESHOLD_MS) return undefined
   return `> Note: project scan is over 30 days old. Run \`ax-code memory warmup\` to refresh.`
 }

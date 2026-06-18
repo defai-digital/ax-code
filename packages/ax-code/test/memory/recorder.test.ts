@@ -547,6 +547,53 @@ describe("memory.recorder", () => {
     expect(new Date(memory.sections.config!.scannedAt!).getTime()).toBeGreaterThan(Date.now() - 5000)
   })
 
+  test("buildContext warns when scannedAt is malformed", async () => {
+    await using tmp = await tmpdir()
+    const memory = {
+      version: 1,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      projectRoot: tmp.path,
+      contentHash: "",
+      maxTokens: 4000,
+      totalTokens: 1,
+      sections: {
+        config: {
+          content: "package manager: pnpm",
+          tokens: 1,
+          scannedAt: "not-a-date",
+        },
+      },
+    }
+
+    const ctx = buildContext(memory as any)
+    expect(ctx).toContain("project scan timestamp is invalid")
+    expect(ctx).toContain("ax-code memory warmup")
+  })
+
+  test("buildContext does not warn for fresh scannedAt timestamps", async () => {
+    await using tmp = await tmpdir()
+    const memory = {
+      version: 1,
+      created: new Date().toISOString(),
+      updated: new Date().toISOString(),
+      projectRoot: tmp.path,
+      contentHash: "",
+      maxTokens: 4000,
+      totalTokens: 1,
+      sections: {
+        config: {
+          content: "package manager: pnpm",
+          tokens: 1,
+          scannedAt: new Date().toISOString(),
+        },
+      },
+    }
+
+    const ctx = buildContext(memory as any)
+    expect(ctx).not.toContain("memory warmup")
+  })
+
   test("buildContext escapes literal <project-memory> tags in user-controlled text", async () => {
     await using tmp = await tmpdir()
 
