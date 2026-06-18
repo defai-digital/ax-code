@@ -15,7 +15,7 @@ import { Log } from "../../util/log"
 import { AX_ENGINE_MODEL_IDS, getAxEngineStatus, prepareAxEngine, stopServer } from "@/provider/ax-engine"
 import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
-import { JsonBoolean } from "@/util/schema"
+import { JsonBoolean, JsonNumber } from "@/util/schema"
 
 const log = Log.create({ service: "server" })
 
@@ -297,7 +297,7 @@ export const ProviderRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          method: z.coerce.number().int().min(0).meta({ description: "Auth method index" }),
+          method: JsonNumber(z.number().int().min(0)).meta({ description: "Auth method index" }),
           inputs: z.record(z.string(), z.string()).optional().meta({ description: "Prompt inputs" }),
         }),
       ),
@@ -333,7 +333,7 @@ export const ProviderRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          method: z.coerce.number().int().min(0).meta({ description: "Auth method index" }),
+          method: JsonNumber(z.number().int().min(0)).meta({ description: "Auth method index" }),
           code: z.string().optional().meta({ description: "OAuth authorization code" }),
         }),
       ),

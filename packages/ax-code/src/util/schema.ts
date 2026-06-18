@@ -15,3 +15,15 @@ export const JsonBoolean = z.preprocess((value) => {
   if (normalized === "false" || normalized === "0") return false
   return value
 }, z.boolean())
+
+function normalizeJsonNumberValue(value: unknown) {
+  if (typeof value !== "string") return value
+  const trimmed = value.trim()
+  if (trimmed === "") return value
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : value
+}
+
+export function JsonNumber(schema: z.ZodNumber) {
+  return z.preprocess(normalizeJsonNumberValue, schema)
+}

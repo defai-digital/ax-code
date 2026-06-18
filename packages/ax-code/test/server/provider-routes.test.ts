@@ -134,6 +134,24 @@ describe("provider routes", () => {
     })
   })
 
+  test("oauth authorize rejects empty method index at validation", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const response = await Server.Default().request(`/provider/xai/oauth/authorize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: "" }),
+        })
+        expect(response.status).toBe(400)
+        const body = (await response.json()) as { name: string }
+        expect(body.name).toBe("InvalidRequestError")
+      },
+    })
+  })
+
   test("ax-engine request schemas parse string boolean flags from JSON clients", () => {
     const prepare = AxEnginePrepareBody.parse({
       download: "false",
