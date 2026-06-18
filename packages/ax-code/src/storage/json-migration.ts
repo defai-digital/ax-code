@@ -13,6 +13,7 @@ import path from "path"
 import { existsSync } from "fs"
 import { Filesystem } from "../util/filesystem"
 import { Glob } from "../util/glob"
+import { toErrorMessage } from "../util/error-message"
 
 export namespace JsonMigration {
   const log = Log.create({ service: "json-migration" })
@@ -66,6 +67,10 @@ export namespace JsonMigration {
   type TodoInsert = typeof TodoTable.$inferInsert
   type PermissionInsert = typeof PermissionTable.$inferInsert
   type SessionShareInsert = typeof SessionShareTable.$inferInsert
+
+  export function formatMigrationError(error: unknown): string {
+    return toErrorMessage(error)
+  }
 
   export async function run(sqlite: Database, options?: Options) {
     const storageDir = path.join(Global.Path.data, "storage")
@@ -136,7 +141,7 @@ export namespace JsonMigration {
           try {
             items[i] = await Filesystem.readJson(files[start + i])
           } catch (err) {
-            errs.push(`failed to read ${files[start + i]}: ${err}`)
+            errs.push(`failed to read ${files[start + i]}: ${formatMigrationError(err)}`)
           }
         }
       }
@@ -158,7 +163,7 @@ export namespace JsonMigration {
         return values.length
       } catch (e) {
         log.warn(`batch insert failed for ${label}, falling back to per-row`, {
-          error: String(e),
+          error: formatMigrationError(e),
           count: values.length,
         })
       }
@@ -168,7 +173,7 @@ export namespace JsonMigration {
           execute([value] as T[])
           count++
         } catch (e) {
-          const msg = `failed to migrate ${label} record: ${e}`
+          const msg = `failed to migrate ${label} record: ${formatMigrationError(e)}`
           errs.push(msg)
           log.error(msg)
         }

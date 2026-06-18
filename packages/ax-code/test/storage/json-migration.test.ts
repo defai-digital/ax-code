@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test"
 import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import { migrate } from "drizzle-orm/bun-sqlite/migrator"
@@ -6,6 +6,7 @@ import path from "path"
 import fs from "fs/promises"
 import { readFileSync, readdirSync } from "fs"
 import { JsonMigration } from "../../src/storage/json-migration"
+import { Filesystem } from "../../src/util/filesystem"
 import { Global } from "../../src/global"
 import { ProjectTable } from "../../src/project/project.sql"
 import { ProjectID } from "../../src/project/schema"
@@ -655,6 +656,47 @@ describe("JSON to SQLite migration", () => {
     const projects = db.select().from(ProjectTable).all()
     expect(projects.length).toBe(1)
     expect(projects[0].id).toBe(ProjectID.make("proj_test123abc"))
+  })
+
+  test("continues when a JSON read failure cannot be stringified", async () => {
+    await writeProject(storageDir, {
+      id: "proj_test123abc",
+      worktree: "/",
+      time: { created: Date.now(), updated: Date.now() },
+      sandboxes: [],
+    })
+    await Bun.write(path.join(storageDir, "project", "unprintable.json"), JSON.stringify({ worktree: "/" }))
+
+    const originalReadJson = Filesystem.readJson
+    const readJsonSpy = spyOn(Filesystem, "readJson").mockImplementation(async (file: string) => {
+      if (file.endsWith("unprintable.json")) {
+        throw {
+          toString() {
+            throw new Error("cannot stringify")
+          },
+        }
+      }
+      return originalReadJson(file)
+    })
+
+    try {
+      const stats = await JsonMigration.run(sqlite)
+
+      expect(stats.projects).toBe(1)
+      expect(stats.errors.some((x) => x.includes("unprintable.json") && x.includes("Unknown error"))).toBe(true)
+    } finally {
+      readJsonSpy.mockRestore()
+    }
+  })
+
+  test("formats unprintable migration errors safely", () => {
+    const error = {
+      toString() {
+        throw new Error("cannot stringify")
+      },
+    }
+
+    expect(JsonMigration.formatMigrationError(error)).toBe("Unknown error")
   })
 
   test("skips invalid todo entries while preserving source positions", async () => {
