@@ -923,9 +923,11 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(local).toContain("shouldSurfaceOptionalStateError")
     expect(local).toContain("if (state.saveWarningShown) return")
     expect(local).toContain("state.saveWarningShown = false")
-    expect(local).toContain('log.warn("failed to load local model preferences"')
+    expect(local).toContain("readOptionalJsonState<any>(filePath)")
+    expect(local).toContain("persistenceBlocked: false")
+    expect(local).toContain("if (state.persistenceBlocked)")
+    expect(local).toContain("persistence disabled to avoid overwriting state")
     expect(local).toContain('"Failed to load model preferences"')
-    expect(local).toContain('"code" in error && error.code === "ENOENT"')
   })
 
   test("surfaces prompt history persistence failures instead of silently dropping them", async () => {

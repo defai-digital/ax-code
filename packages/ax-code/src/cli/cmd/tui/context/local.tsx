@@ -32,6 +32,7 @@ import {
 import { Log } from "@/util/log"
 import { modelDisplayInfo } from "@tui/component/model-vision-label"
 import { modelSelectableForProvider } from "@/provider/model-selectability"
+import { readOptionalJsonState } from "@tui/util/optional-json-state"
 
 const log = Log.create({ service: "tui.local" })
 
@@ -178,6 +179,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const state = {
         pending: false,
         saveWarningShown: false,
+        persistenceBlocked: false,
       }
 
       function rememberRecentModel(model: ProviderModelKeyInput) {
@@ -185,6 +187,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
 
       function save() {
+        if (state.persistenceBlocked) {
+          state.pending = true
+          return
+        }
         if (!modelStore.ready) {
           state.pending = true
           return
@@ -212,22 +218,27 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           })
       }
 
-      Filesystem.readJson(filePath)
-        .then((x: any) => {
-          setModelStore("recent", normalizeRecentModels(x?.recent))
-          setModelStore("favorite", providerModelList(x?.favorite))
-          setModelStore("variant", normalizeModelVariantStore(x?.variant))
-        })
-        .catch((error) => {
-          if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return
-          log.warn("failed to load local model preferences", { filePath, error })
-          if (shouldSurfaceOptionalStateError(error)) {
-            toast.show({
-              message: optionalStateErrorMessage(error, "Failed to load model preferences"),
-              variant: "warning",
-              duration: 3000,
+      readOptionalJsonState<any>(filePath)
+        .then((result) => {
+          if (result.status === "missing") return
+          if (result.status === "invalid") {
+            state.persistenceBlocked = true
+            log.warn("failed to load local model preferences; persistence disabled to avoid overwriting state", {
+              filePath,
+              error: result.error,
             })
+            if (shouldSurfaceOptionalStateError(result.error)) {
+              toast.show({
+                message: optionalStateErrorMessage(result.error, "Failed to load model preferences"),
+                variant: "warning",
+                duration: 3000,
+              })
+            }
+            return
           }
+          setModelStore("recent", normalizeRecentModels(result.value?.recent))
+          setModelStore("favorite", providerModelList(result.value?.favorite))
+          setModelStore("variant", normalizeModelVariantStore(result.value?.variant))
         })
         .finally(() => {
           setModelStore("ready", true)
@@ -513,7 +524,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         ready: false,
         pinned: [],
       })
-      const state = { pending: false, saveWarningShown: false, disposed: false }
+      const state = { pending: false, saveWarningShown: false, disposed: false, persistenceBlocked: false }
 
       onCleanup(() => {
         state.disposed = true
@@ -521,6 +532,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       function save() {
         if (state.disposed) return
+        if (state.persistenceBlocked) {
+          state.pending = true
+          return
+        }
         if (!sessionStore.ready) {
           state.pending = true
           return
@@ -538,11 +553,19 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           })
       }
 
-      Filesystem.readJson(filePath)
-        .then((x: any) => {
-          if (Array.isArray(x?.pinned)) setSessionStore("pinned", x.pinned)
+      readOptionalJsonState<any>(filePath)
+        .then((result) => {
+          if (result.status === "missing") return
+          if (result.status === "invalid") {
+            state.persistenceBlocked = true
+            log.warn("failed to load session pin state; persistence disabled to avoid overwriting state", {
+              filePath,
+              error: result.error,
+            })
+            return
+          }
+          if (Array.isArray(result.value?.pinned)) setSessionStore("pinned", result.value.pinned)
         })
-        .catch(() => {})
         .finally(() => {
           setSessionStore("ready", true)
           if (state.pending) save()
