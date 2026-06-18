@@ -187,6 +187,14 @@ fn test_truncate_result_multibyte_utf8() {
 }
 
 #[test]
+fn test_truncate_result_tiny_limits_fit() {
+    assert_eq!(App::truncate_result("abcdef", 0), "");
+    assert_eq!(App::truncate_result("abcdef", 1), ".");
+    assert_eq!(App::truncate_result("abcdef", 2), "..");
+    assert_eq!(App::truncate_result("abcdef", 3), "...");
+}
+
+#[test]
 fn test_format_tool_preview_with_result() {
     let tool = ToolCall {
         call_id: "call_001".to_string(),

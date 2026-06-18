@@ -176,21 +176,19 @@ impl Runner {
                     app.session_id = Some(session_id.clone());
                     app.set_status(format!("Attached to session: {}", session_id));
                 }
-                LaunchRoute::NewSession { prompt } => {
-                    match client.create_session().await {
-                        Ok(session_id) => {
-                            app.session_id = Some(session_id.clone());
-                            if let Some(initial_prompt) = prompt {
-                                if let Err(e) = client.send_prompt(&session_id, initial_prompt).await {
-                                    app.set_status(format!("Failed to send initial prompt: {}", e));
-                                }
+                LaunchRoute::NewSession { prompt } => match client.create_session().await {
+                    Ok(session_id) => {
+                        app.session_id = Some(session_id.clone());
+                        if let Some(initial_prompt) = prompt {
+                            if let Err(e) = client.send_prompt(&session_id, initial_prompt).await {
+                                app.set_status(format!("Failed to send initial prompt: {}", e));
                             }
                         }
-                        Err(e) => {
-                            app.set_status(format!("Failed to create session: {}", e));
-                        }
                     }
-                }
+                    Err(e) => {
+                        app.set_status(format!("Failed to create session: {}", e));
+                    }
+                },
             }
         }
 

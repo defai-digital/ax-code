@@ -598,8 +598,10 @@ impl App {
         let char_count = result.chars().count();
         if char_count <= max_len {
             result.to_string()
+        } else if max_len == 0 {
+            String::new()
         } else if max_len <= 3 {
-            "...".to_string()
+            ".".repeat(max_len)
         } else {
             let truncated: String = result.chars().take(max_len.saturating_sub(3)).collect();
             format!("{}...", truncated)
@@ -626,6 +628,10 @@ impl App {
     /// Truncation is char-based so multi-byte UTF-8 status text (server
     /// errors, localized messages) cannot panic by slicing mid-codepoint.
     pub fn format_status_bar(mode: AppMode, status: Option<&str>, width: usize) -> String {
+        if width == 0 {
+            return String::new();
+        }
+
         let mode_indicator = match mode {
             AppMode::Input => "INPUT",
             AppMode::Permission => "PERMISSION (y/n)",
@@ -641,17 +647,27 @@ impl App {
         let suffix = " ";
 
         let overhead = prefix.chars().count() + suffix.chars().count();
+        if width <= overhead {
+            return format!("{}{}", prefix, suffix)
+                .chars()
+                .take(width)
+                .collect();
+        }
+
         let max_status_len = width.saturating_sub(overhead);
 
         // Truncate status (by char count) if needed.
-        let display_status = if status_text.chars().count() > max_status_len && max_status_len > 3 {
-            let truncated: String = status_text
-                .chars()
-                .take(max_status_len.saturating_sub(3))
-                .collect();
-            format!("{}...", truncated)
-        } else if max_status_len <= 3 {
-            "...".to_string()
+        let status_len = status_text.chars().count();
+        let display_status = if status_len > max_status_len {
+            if max_status_len <= 3 {
+                ".".repeat(max_status_len)
+            } else {
+                let truncated: String = status_text
+                    .chars()
+                    .take(max_status_len.saturating_sub(3))
+                    .collect();
+                format!("{}...", truncated)
+            }
         } else {
             status_text.to_string()
         };
@@ -769,8 +785,8 @@ mod tests {
     fn test_format_status_bar_very_narrow() {
         // Tiny width exercises the max_status_len <= 3 branch with multi-byte text.
         let formatted = App::format_status_bar(AppMode::Input, Some("テスト"), 5);
-        // Must not panic and must fit the contract: prefix + body + suffix.
-        assert!(formatted.contains("...") || formatted.contains("テスト"));
+        // Must not panic and must fit the available width.
+        assert_eq!(formatted.chars().count(), 5);
     }
 
     // === MEDIUM 1: out-of-band replies clear stale modals ===

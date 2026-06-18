@@ -322,7 +322,11 @@ pub(crate) fn drain_complete_sse_lines(buffer: &mut String) -> Vec<RuntimeEvent>
         // Advance the buffer past the consumed line + its newline.
         *buffer = buffer[newline_pos + 1..].to_string();
 
-        if let Some(data) = line.strip_prefix("data: ") {
+        if let Some(data) = line
+            .strip_prefix("data:")
+            .map(str::trim_start)
+            .filter(|data| !data.is_empty())
+        {
             match serde_json::from_str::<RuntimeEvent>(data) {
                 Ok(event) => events.push(event),
                 Err(_) => tracing::debug!("Failed to parse SSE event: {}", data),
@@ -341,8 +345,7 @@ mod tests {
 
     #[test]
     fn test_sse_single_complete_line() {
-        let mut buf =
-            "data: {\"type\":\"server.heartbeat\"}\n".to_string();
+        let mut buf = "data: {\"type\":\"server.heartbeat\"}\n".to_string();
         let events = drain_complete_sse_lines(&mut buf);
         assert_eq!(events.len(), 1);
         assert!(matches!(events[0], RuntimeEvent::ServerHeartbeat));
@@ -368,11 +371,20 @@ mod tests {
 
     #[test]
     fn test_sse_handles_crlf_endings() {
-        let mut buf =
-            "data: {\"type\":\"server.connected\"}\r\n".to_string();
+        let mut buf = "data: {\"type\":\"server.connected\"}\r\n".to_string();
         let events = drain_complete_sse_lines(&mut buf);
         assert_eq!(events.len(), 1);
         assert!(matches!(events[0], RuntimeEvent::ServerConnected));
+    }
+
+    #[test]
+    fn test_sse_accepts_data_without_space() {
+        // SSE allows "data:<payload>" as well as "data: <payload>". Some
+        // proxies normalize the whitespace, so the parser must accept both.
+        let mut buf = "data:{\"type\":\"server.heartbeat\"}\n".to_string();
+        let events = drain_complete_sse_lines(&mut buf);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], RuntimeEvent::ServerHeartbeat));
     }
 
     #[test]

@@ -298,11 +298,12 @@ fn acceptance_functional_parity_abort() {
     assert!(result.is_some());
     assert!(matches!(app.session_status, SessionStatus::Running));
     // A transient status message tells the user the abort is in flight.
-    assert!(app
-        .status_message
-        .as_deref()
-        .unwrap_or("")
-        .contains("Aborting"));
+    assert!(
+        app.status_message
+            .as_deref()
+            .unwrap_or("")
+            .contains("Aborting")
+    );
 }
 
 // =============================================================================

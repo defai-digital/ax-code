@@ -45,7 +45,15 @@ fn test_format_status_bar_truncation() {
 fn test_format_status_bar_very_narrow() {
     let result = App::format_status_bar(AppMode::Input, Some("Status"), 10);
     // Should show ellipsis when too narrow
-    assert!(result.contains("..."));
+    assert_eq!(result.chars().count(), 10);
+}
+
+#[test]
+fn test_format_status_bar_tiny_width_fits() {
+    for width in 0..12 {
+        let result = App::format_status_bar(AppMode::Permission, Some("Status"), width);
+        assert_eq!(result.chars().count(), width);
+    }
 }
 
 #[test]

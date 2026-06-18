@@ -1,11 +1,11 @@
 //! Rendering logic using Ratatui.
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
 
 use super::app::{App, AppMode, SessionStatus};
@@ -192,8 +192,12 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(prompt, area);
 
     // Show cursor if in input mode
-    if app.mode == AppMode::Input {
-        frame.set_cursor_position((area.x + app.cursor_position as u16 + 1, area.y + 1));
+    if app.mode == AppMode::Input && area.width > 1 && area.height > 1 {
+        let inner_width = area.width.saturating_sub(2);
+        let cursor_offset = app
+            .cursor_position
+            .min(inner_width.saturating_sub(1) as usize) as u16;
+        frame.set_cursor_position((area.x + cursor_offset + 1, area.y + 1));
     }
 }
 
