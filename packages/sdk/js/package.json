@@ -8,7 +8,7 @@
     "typecheck": "tsgo --noEmit",
     "validate:openapi": "bun ./script/validate-openapi.ts",
     "build": "bun ./script/build.ts",
-    "test": "bun test"
+    "test": "bun test --max-concurrency=1"
   },
   "exports": {
     ".": "./dist/index.js",
