@@ -3,7 +3,9 @@ import {
   claudeCodeParser,
   codexCliParser,
   geminiCliParser,
+  grokBuildCliParser,
   parseCliJsonEventLine,
+  qoderCliParser,
 } from "../../../src/provider/cli/parser"
 
 describe("claudeCodeParser", () => {
@@ -62,5 +64,12 @@ describe("provider CLI parser nested content", () => {
       ),
     ).toEqual({ text: "OK" })
     expect(codexCliParser.parseStreamLine('{"type":"item.completed","item":{"text":123,"content":"OK"}}')).toBe("OK")
+  })
+})
+
+describe("provider CLI raw stream text", () => {
+  test("qoder and grok parsers preserve whitespace in non-JSON stream lines", () => {
+    expect(qoderCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
+    expect(grokBuildCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
   })
 })

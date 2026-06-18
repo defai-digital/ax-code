@@ -33,6 +33,11 @@ function textFromContentBlocks(value: unknown): string {
     .join("")
 }
 
+function rawTextLine(line: string): string | null {
+  const text = line.replace(/\r$/, "")
+  return text.trim().length > 0 ? text : null
+}
+
 export const claudeCodeParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")
@@ -151,7 +156,7 @@ export const qoderCliParser: CliOutputParser = {
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
-    if (!event) return line.trim() || null
+    if (!event) return rawTextLine(line)
     if (event.type === "result") {
       if (typeof event.content === "string") return event.content
       if (typeof event.text === "string") return event.text
@@ -182,7 +187,7 @@ export const grokBuildCliParser: CliOutputParser = {
   },
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
-    if (!event) return line.trim() || null
+    if (!event) return rawTextLine(line)
     if (event.type === "result") {
       if (typeof event.content === "string") return event.content
       if (typeof event.text === "string") return event.text
