@@ -38,8 +38,8 @@ const AuditPruneCommand = cmd({
 
 export function validateAuditPruneDays(days: unknown): number {
   const value = Number(days)
-  if (!Number.isFinite(value) || value < 1) {
-    throw new Error("--days must be at least 1")
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error("--days must be a positive integer")
   }
   return value
 }

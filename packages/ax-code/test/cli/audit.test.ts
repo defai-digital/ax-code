@@ -4,9 +4,10 @@ import { parseAuditExportSince, validateAuditPruneDays } from "../../src/cli/cmd
 
 describe("audit cli", () => {
   test("rejects non-positive prune day windows", () => {
-    expect(() => validateAuditPruneDays(-1)).toThrow("--days must be at least 1")
-    expect(() => validateAuditPruneDays(0)).toThrow("--days must be at least 1")
-    expect(() => validateAuditPruneDays(Number.NaN)).toThrow("--days must be at least 1")
+    expect(() => validateAuditPruneDays(-1)).toThrow("--days must be a positive integer")
+    expect(() => validateAuditPruneDays(0)).toThrow("--days must be a positive integer")
+    expect(() => validateAuditPruneDays(0.5)).toThrow("--days must be a positive integer")
+    expect(() => validateAuditPruneDays(Number.NaN)).toThrow("--days must be a positive integer")
     expect(validateAuditPruneDays(1)).toBe(1)
   })
 
