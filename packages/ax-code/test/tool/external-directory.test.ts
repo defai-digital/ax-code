@@ -109,6 +109,75 @@ describe("tool.assertExternalDirectory", () => {
     expect(req!.always).toEqual([expected])
   })
 
+  test.skipIf(process.platform === "win32")(
+    "asks with canonical glob when external file path uses a symlinked parent",
+    async () => {
+      await using project = await tmpdir()
+      await using outside = await tmpdir()
+      await using aliasRoot = await tmpdir()
+      const realDir = path.join(outside.path, "real")
+      const linkDir = path.join(aliasRoot.path, "link")
+      await fs.mkdir(realDir)
+      await fs.symlink(realDir, linkDir)
+
+      const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
+      const ctx: Tool.Context = {
+        ...baseCtx,
+        ask: async (req) => {
+          requests.push(req)
+        },
+      }
+
+      await Instance.provide({
+        directory: project.path,
+        fn: async () => {
+          await assertExternalDirectory(ctx, path.join(linkDir, "file.txt"))
+        },
+      })
+
+      const expected = path.join(realDir, "*").replaceAll("\\", "/")
+      const req = requests.find((r) => r.permission === "external_directory")
+      expect(req).toBeDefined()
+      expect(req!.patterns).toEqual([expected])
+      expect(req!.always).toEqual([expected])
+      expect(req!.metadata.parentDir).toBe(realDir)
+      expect(req!.metadata.filepath).toBe(path.join(realDir, "file.txt"))
+    },
+  )
+
+  test.skipIf(process.platform === "win32")("asks with canonical glob when external file is a symlink", async () => {
+    await using project = await tmpdir()
+    await using outside = await tmpdir()
+    await using aliasRoot = await tmpdir()
+    const realFile = path.join(outside.path, "secret.txt")
+    const linkFile = path.join(aliasRoot.path, "secret-link.txt")
+    await fs.writeFile(realFile, "secret")
+    await fs.symlink(realFile, linkFile)
+
+    const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
+    const ctx: Tool.Context = {
+      ...baseCtx,
+      ask: async (req) => {
+        requests.push(req)
+      },
+    }
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await assertExternalDirectory(ctx, linkFile)
+      },
+    })
+
+    const expected = path.join(outside.path, "*").replaceAll("\\", "/")
+    const req = requests.find((r) => r.permission === "external_directory")
+    expect(req).toBeDefined()
+    expect(req!.patterns).toEqual([expected])
+    expect(req!.always).toEqual([expected])
+    expect(req!.metadata.parentDir).toBe(outside.path)
+    expect(req!.metadata.filepath).toBe(realFile)
+  })
+
   test("skips prompting when bypass=true", async () => {
     const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
     const ctx: Tool.Context = {

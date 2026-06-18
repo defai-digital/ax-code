@@ -11,6 +11,32 @@ type Options = {
   kind?: Kind
 }
 
+async function canonicalizePermissionTarget(target: string, kind: Kind) {
+  const requested = path.resolve(target)
+  if (kind === "directory") {
+    const parentDir = await fs.realpath(requested).catch(() => requested)
+    return {
+      filepath: parentDir,
+      parentDir,
+    }
+  }
+
+  const realTarget = await fs.realpath(requested).catch(() => undefined)
+  if (realTarget) {
+    return {
+      filepath: realTarget,
+      parentDir: path.dirname(realTarget),
+    }
+  }
+
+  const requestedParent = path.dirname(requested)
+  const parentDir = await fs.realpath(requestedParent).catch(() => requestedParent)
+  return {
+    filepath: path.join(parentDir, path.basename(requested)),
+    parentDir,
+  }
+}
+
 /**
  * Reject when `target` lives inside the project but resolves through a symlink
  * to a path outside the project. No-op for paths already outside the project —
@@ -73,7 +99,9 @@ export async function assertExternalDirectory(ctx: Tool.Context, target?: string
   if (Instance.containsPath(target)) return
 
   const kind = options?.kind ?? "file"
-  const parentDir = kind === "directory" ? target : path.dirname(target)
+  const { filepath, parentDir } = await canonicalizePermissionTarget(target, kind)
+  if (Instance.containsPath(filepath)) return
+
   const glob = path.join(parentDir, "*").replaceAll("\\", "/")
 
   await ctx.ask({
@@ -81,7 +109,7 @@ export async function assertExternalDirectory(ctx: Tool.Context, target?: string
     patterns: [glob],
     always: [glob],
     metadata: {
-      filepath: target,
+      filepath,
       parentDir,
     },
   })
