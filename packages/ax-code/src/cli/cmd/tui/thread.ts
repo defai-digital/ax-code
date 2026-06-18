@@ -25,6 +25,7 @@ import { runtimeMode } from "@/installation/runtime-mode"
 import { spawn } from "node:child_process"
 import { flushTuiStdout } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
+import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
 import { hasExplicitNetworkBindFlag } from "./util/network-flags"
 import { readOptionalJsonState } from "./util/optional-json-state"
@@ -555,7 +556,7 @@ export const TuiThreadCommand = cmd({
         worker.onerror = (e) => {
           DiagnosticLog.recordProcess("tui.workerError", { error: e, target: backend.target })
           Log.Default.error(e)
-          UI.error(`Worker failed to load (${backend.target}): ${e instanceof ErrorEvent ? e.message : String(e)}`)
+          UI.error(formatWorkerLoadError(backend.target, e))
           process.exit(1)
         }
         worker.onmessageerror = (e) => {
