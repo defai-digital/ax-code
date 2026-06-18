@@ -16,7 +16,8 @@ export function resolvePromptLoopAssistantExit(
   input: {
     sessionID: SessionID
     lastUserID: string
-    lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish">
+    lastUserCreatedAt?: number
+    lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish"> & { time?: Pick<MessageV2.Assistant["time"], "created"> }
     hasPendingSubtask: boolean
   },
   deps: PromptLoopAssistantExitDeps = {},

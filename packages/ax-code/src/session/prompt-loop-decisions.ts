@@ -18,7 +18,8 @@ type AssistantLoopExitDecision =
 
 type AssistantTurnCursor = {
   lastUserID: string
-  lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish">
+  lastUserCreatedAt?: number
+  lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish"> & { time?: Pick<MessageV2.Assistant["time"], "created"> }
 }
 
 type RespondedAssistantTurnCursor = AssistantTurnCursor & {
@@ -294,7 +295,12 @@ export function processorLoopDecision(input: {
 }
 
 export function assistantRespondedAfterUser(input: AssistantTurnCursor): input is RespondedAssistantTurnCursor {
-  return Boolean(input.lastAssistant?.finish && input.lastUserID < input.lastAssistant.id)
+  if (!input.lastAssistant?.finish) return false
+  // Prefer wall-clock timestamps to avoid ID-space ordering bugs across clients
+  if (input.lastUserCreatedAt !== undefined && input.lastAssistant.time?.created !== undefined) {
+    return input.lastUserCreatedAt < input.lastAssistant.time.created
+  }
+  return input.lastUserID < input.lastAssistant.id
 }
 
 export function assistantLoopExitDecision(

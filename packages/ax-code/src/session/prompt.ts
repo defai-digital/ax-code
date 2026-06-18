@@ -328,6 +328,7 @@ export namespace SessionPrompt {
       const assistantExit = resolvePromptLoopAssistantExit({
         sessionID,
         lastUserID: lastUser.id,
+        lastUserCreatedAt: lastUser.time.created,
         lastAssistant,
         hasPendingSubtask: tasks.some((t) => t.type === "subtask"),
       })
