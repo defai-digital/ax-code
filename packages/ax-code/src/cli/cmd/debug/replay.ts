@@ -41,6 +41,11 @@ type RecordedEnvelope = {
   symbols?: unknown
 }
 
+export function formatDebugReplayTimestamp(timestamp: number): string {
+  const date = new Date(timestamp)
+  return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString()
+}
+
 async function rerun(args: RecordedArgs): Promise<RecordedEnvelope> {
   // Must mirror src/tool/lsp.ts's operation dispatch. We call the
   // envelope-returning variants directly so we can diff envelopes,
@@ -161,7 +166,7 @@ export const ReplayCommand = cmd({
         console.log(`  audit id:    ${row.id}`)
         console.log(`  tool:        ${row.tool}`)
         console.log(`  operation:   ${row.operation}`)
-        console.log(`  recorded at: ${new Date(row.time_created).toISOString()}`)
+        console.log(`  recorded at: ${formatDebugReplayTimestamp(row.time_created)}`)
         console.log(`  error_code:  ${row.error_code}`)
         console.log("")
         console.log("  replay skipped: original call failed before reaching LSP; args may be incomplete.")
@@ -213,7 +218,7 @@ export const ReplayCommand = cmd({
       console.log(`  audit id:    ${row.id}`)
       console.log(`  tool:        ${row.tool}`)
       console.log(`  operation:   ${row.operation}`)
-      console.log(`  recorded at: ${new Date(row.time_created).toISOString()}`)
+      console.log(`  recorded at: ${formatDebugReplayTimestamp(row.time_created)}`)
       if (row.error_code) {
         console.log(`  error_code:  ${row.error_code} (original call failed)`)
       }
