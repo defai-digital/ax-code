@@ -233,7 +233,7 @@ impl App {
                     .iter_mut()
                     .find(|m| m.id == properties.message_id)
                 {
-                    if properties.field == "content" {
+                    if properties.field == "text" || properties.field == "content" {
                         msg.content.push_str(&properties.delta);
                     }
                 }
@@ -759,7 +759,9 @@ fn byte_index_at_char(s: &str, char_idx: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::{MessageData, MessageInfo, RequestReplyProps, RuntimeEvent};
+    use crate::events::{
+        MessageData, MessageInfo, MessagePartDeltaProps, RequestReplyProps, RuntimeEvent,
+    };
 
     // === HIGH 1: multi-byte prompt editing must not panic ===
 
@@ -1000,6 +1002,31 @@ mod tests {
             app.scroll_down();
         }
         assert_eq!(app.scroll_offset, 3);
+    }
+
+    #[test]
+    fn test_message_part_delta_accepts_headless_text_field() {
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: "m1".to_string(),
+                    session_id: "s".to_string(),
+                    role: Some(crate::events::MessageRole::Assistant),
+                }),
+            },
+        });
+
+        app.handle_event(RuntimeEvent::MessagePartDelta {
+            properties: MessagePartDeltaProps {
+                message_id: "m1".to_string(),
+                part_id: "p1".to_string(),
+                field: "text".to_string(),
+                delta: "streamed text".to_string(),
+            },
+        });
+
+        assert_eq!(app.messages[0].content, "streamed text");
     }
 
     // === LOW 2: request_abort does not optimistically flip status ===
