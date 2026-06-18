@@ -140,6 +140,14 @@ describe("ax-engine model cache", () => {
 `),
     ).toBe(344662584 * 1024)
 
+    for (const available of ["0x100", "1e6", "12.5"]) {
+      expect(
+        parseDfPkAvailableBytes(`Filesystem 1024-blocks Used Available Capacity Mounted on
+/dev/disk3s5 994662584 650000000 ${available} 66% /System/Volumes/Data
+`),
+      ).toBeUndefined()
+    }
+
     expect(
       evaluateDiskStatus({
         path: "/tmp/ax-engine",

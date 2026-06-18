@@ -120,8 +120,10 @@ export function parseDfPkAvailableBytes(text: string): number | undefined {
   const dataLine = lines.at(-1)
   if (!dataLine || lines.length < 2) return undefined
   const columns = dataLine.split(/\s+/)
-  const availableBlocks = Number(columns[3])
-  if (!Number.isFinite(availableBlocks) || availableBlocks < 0) return undefined
+  const available = columns[3]
+  if (available === undefined || !/^\d+$/.test(available)) return undefined
+  const availableBlocks = Number(available)
+  if (!Number.isSafeInteger(availableBlocks)) return undefined
   return availableBlocks * 1024
 }
 
