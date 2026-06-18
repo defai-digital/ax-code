@@ -11,6 +11,7 @@ import { SuperLongPolicy } from "../../session/super-long-policy"
 import { SuperLongRuntime } from "../../session/super-long-runtime"
 import type { Config } from "../../config/config"
 import { errors, serviceUnavailable } from "../error"
+import { SessionID } from "../../session/schema"
 
 const log = Log.create({ service: "super-long" })
 const SUPER_LONG_OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
@@ -28,6 +29,11 @@ const SuperLongStatus = z
     remainingMs: z.number().nullable(),
   })
   .meta({ ref: "SuperLongStatus" })
+
+const SuperLongStatusQuery = z.object({
+  model: z.string().optional(),
+  sessionID: SessionID.zod.optional(),
+})
 
 function configuredModelID(config: Config.Info | undefined, explicitModel?: string) {
   const model = explicitModel ?? config?.model ?? ""
@@ -136,15 +142,17 @@ export const SuperLongRoutes = lazy(() =>
           },
         },
       }),
+      validator("query", SuperLongStatusQuery),
       async (c) => {
+        const query = c.req.valid("query")
         const config = await readProjectConfig()
         // Capture runtime state BEFORE reconciliation so the source
         // field reflects the original runtime precedence (config,
         // env, session override, or model default).
-        const runtimeState = superLongRuntimeState(config, c.req.query("model"))
+        const runtimeState = superLongRuntimeState(config, query.model)
         // Compute from config + model default (ignoring env), same
         // as GET /, so the status endpoint is consistent.
-        const configState = superLongConfigState(config, c.req.query("model"))
+        const configState = superLongConfigState(config, query.model)
         const enabled = autonomousEnabled(config) && configState.enabled
         // Reconcile: clear the session override and align the base
         // env so in-process readers see the config-derived state,
@@ -154,7 +162,7 @@ export const SuperLongRoutes = lazy(() =>
         const runtimeConfig = SuperLongPolicy.fromConfig(config?.super_long)
         const durationDecision = SuperLongPolicy.duration(runtimeConfig.requestedDurationMs)
         const durationMs = durationDecision.ok ? durationDecision.durationMs : null
-        const sessionID = c.req.query("sessionID")
+        const sessionID = query.sessionID
         const startedAt = sessionID
           ? await SuperLongRuntime.peekSessionStartedAt(sessionID).catch(() => undefined)
           : undefined

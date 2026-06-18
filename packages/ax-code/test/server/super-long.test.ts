@@ -262,6 +262,27 @@ describe("super-long route", () => {
     })
   })
 
+  test("status rejects malformed sessionID query values", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const response = await Server.Default().request(
+            `/super-long/status?directory=${encodeURIComponent(tmp.path)}&sessionID=not-a-session`,
+          )
+
+          expect(response.status).toBe(400)
+          expect(await response.json()).toMatchObject({
+            name: "InvalidRequestError",
+            status: 400,
+          })
+        },
+      })
+    })
+  })
+
   test("disabling autonomous suppresses super-long; re-enabling restores config state", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
