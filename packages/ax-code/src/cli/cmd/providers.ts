@@ -30,6 +30,15 @@ import {
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
+function isHttpProviderUrl(input: string) {
+  try {
+    const protocol = new URL(input).protocol
+    return protocol === "http:" || protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
 async function setProviderAuth(provider: string, info: Auth.Info) {
   await Auth.set(provider, info)
   await Provider.invalidate().catch(() => {})
@@ -469,7 +478,7 @@ export const ProvidersLoginCommand = cmd({
     prompts.intro("Add credential")
 
     // Fast path: positional arg used as provider name (not a URL)
-    const directProvider = args.url && !args.url.startsWith("http") ? args.url : undefined
+    const directProvider = args.url && !isHttpProviderUrl(args.url) ? args.url : undefined
     if (directProvider) {
       const provider = directProvider
       const key = await prompts.password({

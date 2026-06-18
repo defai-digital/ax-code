@@ -206,6 +206,44 @@ describe("providers command", () => {
     }
   })
 
+  test("well-known login treats URL schemes case-insensitively", async () => {
+    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
+    const passwordSpy = spyOn(prompts, "password").mockResolvedValue("should-not-prompt")
+    const assertSpy = spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+      ok: true,
+      async json() {
+        return {
+          auth: {
+            command: ["auth-cli", 42],
+            env: "MY_AUTH_TOKEN",
+          },
+        }
+      },
+    } as any)
+
+    try {
+      await ProvidersLoginCommand.handler({ url: "HTTPS://example.com" } as any)
+
+      expect(passwordSpy).not.toHaveBeenCalled()
+      expect(assertSpy).toHaveBeenCalledWith("HTTPS://example.com/.well-known/ax-code", "providers-add")
+      expect(fetchSpy).toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Well-known config has missing or invalid auth.command (expected non-empty string array)",
+      )
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      passwordSpy.mockRestore()
+      assertSpy.mockRestore()
+      fetchSpy.mockRestore()
+    }
+  })
+
   test("well-known login rejects malformed auth command before prompting or spawning", async () => {
     const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
