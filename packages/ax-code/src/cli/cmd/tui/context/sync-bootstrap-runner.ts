@@ -1,4 +1,4 @@
-import { settleBootstrapPhase, type BootstrapPhaseSummary } from "./sync-bootstrap-phase"
+import { formatBootstrapError, settleBootstrapPhase, type BootstrapPhaseSummary } from "./sync-bootstrap-phase"
 import type { BootstrapTask } from "./sync-bootstrap-task"
 
 export type BootstrapSpan = ((data?: Record<string, unknown>) => void) | undefined
@@ -77,7 +77,7 @@ export async function runBootstrapPhaseSequence(
           return Promise.resolve(emptyBootstrapPhaseSummary())
         }
         return runBootstrapPhaseStep(step, options.signal).catch((error) => {
-          const message = String(error)
+          const message = formatBootstrapError(error)
           step.onRejected?.(message)
           return { rejected: [message] }
         })
@@ -168,7 +168,7 @@ export function createBootstrapLifecycle(input: {
 }
 
 export function failBootstrapSpans(error: unknown, ...spans: BootstrapSpan[]) {
-  const message = String(error)
+  const message = formatBootstrapError(error)
   for (const span of spans) {
     span?.({ ok: false, error: message })
   }

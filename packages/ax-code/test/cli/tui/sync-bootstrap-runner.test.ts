@@ -170,6 +170,53 @@ describe("tui sync bootstrap runner", () => {
     expect(events).toEqual(["core-task", "background-start", "background-finish", "background-after"])
   })
 
+  test("reports non-printable background phase failures without rejecting the sequence", async () => {
+    const rejected: string[] = []
+    const broken = function brokenThrowable() {
+      return undefined
+    }
+    Object.defineProperty(broken, Symbol.toPrimitive, {
+      value() {
+        throw new Error("cannot stringify")
+      },
+    })
+
+    const summaries = await runBootstrapPhaseSequence([
+      {
+        background: true,
+        tasks: [],
+        after() {
+          throw broken
+        },
+        onRejected(error) {
+          rejected.push(error)
+        },
+      },
+    ])
+
+    expect(summaries).toEqual([{ rejected: [] }])
+    await nextTick()
+    expect(rejected).toEqual(["Unknown bootstrap error"])
+  })
+
+  test("finishes bootstrap spans when failure values cannot be printed", () => {
+    const spans: Array<Record<string, unknown> | undefined> = []
+    const broken = function brokenThrowable() {
+      return undefined
+    }
+    Object.defineProperty(broken, Symbol.toPrimitive, {
+      value() {
+        throw new Error("cannot stringify")
+      },
+    })
+
+    failBootstrapSpans(broken, (data) => {
+      spans.push(data)
+    })
+
+    expect(spans).toEqual([{ ok: false, error: "Unknown bootstrap error" }])
+  })
+
   test("does not run delayed bootstrap tasks after abort", async () => {
     const abort = new AbortController()
     let ran = false

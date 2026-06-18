@@ -50,6 +50,30 @@ describe("tui sync bootstrap phase", () => {
     expect(logged).toEqual(["Error: sync first"])
   })
 
+  test("formats non-printable rejected reasons without failing the phase", async () => {
+    const broken = function brokenThrowable() {
+      return undefined
+    }
+    Object.defineProperty(broken, Symbol.toPrimitive, {
+      value() {
+        throw new Error("cannot stringify")
+      },
+    })
+    const logged: string[] = []
+
+    await expect(
+      settleBootstrapPhase([() => Promise.reject(broken)], {
+        onRejected(error) {
+          logged.push(error)
+        },
+      }),
+    ).resolves.toEqual({
+      rejected: ["Unknown bootstrap error"],
+    })
+
+    expect(logged).toEqual(["Unknown bootstrap error"])
+  })
+
   test("limits non-critical bootstrap task concurrency when requested", async () => {
     const events: string[] = []
     let active = 0
@@ -79,5 +103,28 @@ describe("tui sync bootstrap phase", () => {
       "third:start",
       "third:finish",
     ])
+  })
+
+  test("formats non-printable limited-concurrency rejections without failing the phase", async () => {
+    const broken = function brokenThrowable() {
+      return undefined
+    }
+    Object.defineProperty(broken, Symbol.toPrimitive, {
+      value() {
+        throw new Error("cannot stringify")
+      },
+    })
+
+    await expect(
+      settleBootstrapPhase(
+        [
+          () => Promise.resolve(),
+          () => {
+            throw broken
+          },
+        ],
+        { concurrency: 1 },
+      ),
+    ).resolves.toEqual({ rejected: ["Unknown bootstrap error"] })
   })
 })

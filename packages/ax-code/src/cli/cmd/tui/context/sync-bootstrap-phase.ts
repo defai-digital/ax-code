@@ -33,7 +33,7 @@ async function settleBootstrapPhaseConcurrent(tasks: BootstrapTask[]) {
   const results = await Promise.allSettled(tasks.map((task) => Promise.resolve().then(task)))
   return results
     .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-    .map((result) => String(result.reason))
+    .map((result) => formatBootstrapError(result.reason))
 }
 
 async function settleBootstrapPhaseLimited(tasks: BootstrapTask[], concurrency: number) {
@@ -49,11 +49,19 @@ async function settleBootstrapPhaseLimited(tasks: BootstrapTask[], concurrency: 
         try {
           await Promise.resolve().then(tasks[index]!)
         } catch (error) {
-          rejectedByIndex[index] = String(error)
+          rejectedByIndex[index] = formatBootstrapError(error)
         }
       }
     }),
   )
 
   return rejectedByIndex.filter((error): error is string => typeof error === "string")
+}
+
+export function formatBootstrapError(error: unknown): string {
+  try {
+    return String(error)
+  } catch {
+    return "Unknown bootstrap error"
+  }
 }
