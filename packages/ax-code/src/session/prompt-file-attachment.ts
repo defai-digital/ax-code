@@ -110,7 +110,12 @@ export async function resolveFileAttachmentPart(input: {
         mime: part.mime,
       })
       // Have to normalize; symbol search returns absolute paths.
-      const filepath = fileURLToPath(part.url)
+      let filepath: string
+      try {
+        filepath = fileURLToPath(part.url)
+      } catch {
+        return [input.draftSyntheticTextPart(`Invalid file URL: ${part.url}`)]
+      }
 
       if (!Instance.containsPath(filepath)) {
         log.warn("file attachment outside project", {

@@ -14,10 +14,10 @@ describe("prompt file attachment", () => {
     expect(normalizeDocumentSymbolEnvelopeData(symbols)).toEqual(symbols)
   })
 
-  test("invalid file part URLs become synthetic text instead of throwing", async () => {
+  async function resolveInvalidAttachment(url: string) {
     const sessionID = SessionID.make("session_prompt_file_attachment")
     const messageID = MessageID.ascending()
-    const parts = await resolveFileAttachmentPart({
+    return resolveFileAttachmentPart({
       sessionID,
       messageID,
       agentName: "test",
@@ -25,7 +25,7 @@ describe("prompt file attachment", () => {
         type: "file",
         mime: "text/plain",
         filename: "bad.txt",
-        url: "not a url",
+        url,
       },
       draftSyntheticTextPart: (text) => ({ type: "text", text, sessionID, messageID }),
       attachDraftContext: (part) => ({
@@ -34,7 +34,16 @@ describe("prompt file attachment", () => {
         sessionID,
       }),
     })
+  }
 
-    expect(parts).toEqual([{ type: "text", text: "Invalid file URL: not a url", sessionID, messageID }])
+  test("invalid file part URLs become synthetic text instead of throwing", async () => {
+    const parts = await resolveInvalidAttachment("not a url")
+    expect(parts).toMatchObject([{ type: "text", text: "Invalid file URL: not a url" }])
+  })
+
+  test("file URLs that cannot become local paths become synthetic text", async () => {
+    const url = "file://remote-host/tmp/bad.txt"
+    const parts = await resolveInvalidAttachment(url)
+    expect(parts).toMatchObject([{ type: "text", text: `Invalid file URL: ${url}` }])
   })
 })
