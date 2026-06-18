@@ -72,6 +72,41 @@ describe("ServiceManager", () => {
     ])
   })
 
+  test("captures unprintable task failures without masking the original rejection", async () => {
+    const manager = ServiceManager.create()
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+
+    await expect(
+      manager.track({
+        service: "FileWatcher.init",
+        label: "file watcher init",
+        task: async () => {
+          throw failure
+        },
+      }),
+    ).rejects.toBe(failure)
+
+    const snapshot = manager.snapshot()
+    expect(snapshot.services).toEqual([
+      expect.objectContaining({
+        name: "FileWatcher.init",
+        state: "failed",
+        lastError: "Unknown error",
+      }),
+    ])
+    expect(snapshot.tasks).toEqual([
+      expect.objectContaining({
+        service: "FileWatcher.init",
+        state: "failed",
+        lastError: "Unknown error",
+      }),
+    ])
+  })
+
   test("emits timeout evidence before a slow task finishes", async () => {
     const manager = ServiceManager.create()
     const timeouts = [] as ServiceManager.Snapshot[]

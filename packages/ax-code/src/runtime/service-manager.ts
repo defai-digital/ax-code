@@ -1,4 +1,5 @@
 import z from "zod"
+import { toErrorMessage } from "../util/error-message"
 
 interface ManagerState {
   nextTaskID: number
@@ -150,7 +151,7 @@ function describeError(error: unknown) {
   if (error instanceof Error) {
     return error.message ? `${error.name}: ${error.message}` : error.name
   }
-  return String(error)
+  return toErrorMessage(error)
 }
 
 function createManager(state: ManagerState): ServiceManager.Manager {
