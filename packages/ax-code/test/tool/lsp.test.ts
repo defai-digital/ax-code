@@ -240,7 +240,10 @@ describe("tool.lsp", () => {
         } as any)
 
         const tool = await LspTool.init()
-        const result = await tool.execute({ operation: "findReferences", filePath: file, line: 1, character: 1 }, ctx)
+        const result = await tool.execute(
+          { operation: "findReferences", filePath: file, line: "1", character: "1" } as any,
+          ctx,
+        )
 
         expect(referencesCachedEnvelopeSpy).toHaveBeenCalledWith({
           file,

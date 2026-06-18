@@ -81,8 +81,13 @@ export const LspTool = Tool.define("lsp", {
     operation: z.enum(operations).describe("The LSP operation to perform"),
     query: z.string().optional().describe("Search query for workspaceSymbol"),
     filePath: z.string().optional().describe("The absolute or relative path to the file"),
-    line: z.number().int().min(1).optional().describe("The line number (1-based, as shown in editors)"),
-    character: z.number().int().min(1).optional().describe("The character offset (1-based, as shown in editors)"),
+    line: z.coerce.number().int().min(1).optional().describe("The line number (1-based, as shown in editors)"),
+    character: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe("The character offset (1-based, as shown in editors)"),
   }),
   execute: async (args, ctx) => {
     if (args.filePath !== undefined) resolveToolFilePath(args.filePath, Instance.directory)
