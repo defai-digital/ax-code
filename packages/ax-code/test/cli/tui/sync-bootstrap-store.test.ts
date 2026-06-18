@@ -87,19 +87,30 @@ describe("tui sync bootstrap store", () => {
     expect(normalizeBootstrapList([{ id: "cmd_1" }])).toEqual([{ id: "cmd_1" }])
   })
 
+  test("normalizes invalid bootstrap lists to empty arrays", () => {
+    expect(normalizeBootstrapList(null)).toEqual([])
+    expect(normalizeBootstrapList({ id: "cmd_1" })).toEqual([])
+  })
+
   test("normalizes missing bootstrap records to empty objects", () => {
     expect(normalizeBootstrapRecord(undefined)).toEqual({})
     expect(normalizeBootstrapRecord({ key: "value" })).toEqual({ key: "value" })
   })
 
+  test("normalizes invalid bootstrap records to empty objects", () => {
+    expect(normalizeBootstrapRecord(null)).toEqual({})
+    expect(normalizeBootstrapRecord(["value"])).toEqual({})
+  })
+
   test("preserves bootstrap fallback values when payload data is missing", () => {
     expect(normalizeBootstrapValue(undefined, { current: "keep" })).toEqual({ current: "keep" })
+    expect(normalizeBootstrapValue(null, { current: "keep" })).toEqual({ current: "keep" })
     expect(normalizeBootstrapValue({ current: "next" }, { current: "keep" })).toEqual({ current: "next" })
   })
 
   test("groups bootstrap session-scoped requests by session id", () => {
     expect(
-      normalizeBootstrapSessionBuckets([
+      normalizeBootstrapSessionBuckets<{ id: string; sessionID: string }>([
         { id: "req_1", sessionID: "ses_1" },
         { id: "req_2", sessionID: "ses_2" },
         { id: "req_3", sessionID: "ses_1" },
@@ -110,6 +121,19 @@ describe("tui sync bootstrap store", () => {
         { id: "req_3", sessionID: "ses_1" },
       ],
       ses_2: [{ id: "req_2", sessionID: "ses_2" }],
+    })
+  })
+
+  test("drops bootstrap session-scoped requests without valid session ids", () => {
+    expect(
+      normalizeBootstrapSessionBuckets<{ id: string; sessionID: string }>([
+        { id: "req_1", sessionID: "ses_1" },
+        { id: "req_2" },
+        { id: "req_3", sessionID: "" },
+        null,
+      ] as unknown),
+    ).toEqual({
+      ses_1: [{ id: "req_1", sessionID: "ses_1" }],
     })
   })
 })

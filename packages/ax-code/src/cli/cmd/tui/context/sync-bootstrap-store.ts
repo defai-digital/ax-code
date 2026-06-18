@@ -1,23 +1,29 @@
+import { isRecord } from "@/util/record"
 import { groupBySession, mergeSorted } from "./sync-util"
 
 export function mergeBootstrapSessions<T extends { id: string }>(existing: T[], fetched: T[]) {
   return mergeSorted(existing, fetched)
 }
 
-export function normalizeBootstrapList<T>(data: T[] | undefined) {
-  return data ?? []
+export function normalizeBootstrapList<T>(data: unknown): T[] {
+  return Array.isArray(data) ? (data as T[]) : []
 }
 
-export function normalizeBootstrapRecord<T extends Record<string, unknown>>(data: T | undefined) {
-  return data ?? ({} as T)
+export function normalizeBootstrapRecord<T extends Record<string, unknown>>(data: unknown) {
+  return isRecord(data) ? (data as T) : ({} as T)
 }
 
-export function normalizeBootstrapValue<T>(data: T | undefined, fallback: T) {
+export function normalizeBootstrapValue<T>(data: T | null | undefined, fallback: T) {
   return data ?? fallback
 }
 
-export function normalizeBootstrapSessionBuckets<T extends { sessionID: string }>(data: T[] | undefined) {
-  return groupBySession(data ?? [])
+function isSessionScopedRecord(input: unknown): input is { sessionID: string } {
+  return isRecord(input) && typeof input.sessionID === "string" && input.sessionID.length > 0
+}
+
+export function normalizeBootstrapSessionBuckets<T extends { sessionID: string }>(data: unknown) {
+  const items = Array.isArray(data) ? (data.filter(isSessionScopedRecord) as T[]) : []
+  return groupBySession(items)
 }
 
 export function createProviderBootstrapSuccess<T>(providers: { providers: T[]; default: Record<string, string> }) {
