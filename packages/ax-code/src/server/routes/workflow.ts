@@ -38,6 +38,7 @@ import type { SessionID } from "@/session/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { OptionalQueryNumber, QueryBoolean } from "./query"
+import { JsonNumber } from "@/util/schema"
 
 const WorkflowTemplateIDSchema = z
   .string()
@@ -82,13 +83,13 @@ const WorkflowArtifactListQuery = z.object({
 const WorkflowEvalSummaryBody = z
   .object({
     baseline: WorkflowEvalBaseline.optional(),
-    now: z.coerce.number().int().min(0).optional(),
+    now: JsonNumber(z.number().int().min(0)).optional(),
   })
   .optional()
 
 const WorkflowEvalCaseRunBody = z.object({
   caseID: WorkflowEvalCaseID.default("verified-bug-sweep-seeded"),
-  now: z.coerce.number().int().min(0).optional(),
+  now: JsonNumber(z.number().int().min(0)).optional(),
 })
 
 const WorkflowTemplateSaveBody = z.object({

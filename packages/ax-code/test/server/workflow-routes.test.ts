@@ -367,6 +367,13 @@ describe("workflow routes", () => {
           falsePositiveFindingsDelta: 0,
         },
       })
+
+      const emptyNowResponse = await app.request(`/workflow-runs/${created.id}/eval-summary?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ now: "" }),
+      })
+      expect(emptyNowResponse.status).toBe(400)
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
