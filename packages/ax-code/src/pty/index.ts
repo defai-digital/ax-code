@@ -175,8 +175,8 @@ export namespace Pty {
   // fractional, non-finite, and excessively large values previously reached
   // the native PTY resize path and could cause undefined behavior. See #244.
   const TerminalSize = z.object({
-    rows: z.number().int().min(1).max(1000),
-    cols: z.number().int().min(1).max(1000),
+    rows: z.coerce.number().int().min(1).max(1000),
+    cols: z.coerce.number().int().min(1).max(1000),
   })
 
   export const UpdateInput = z.object({

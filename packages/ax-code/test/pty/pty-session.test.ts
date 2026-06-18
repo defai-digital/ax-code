@@ -22,6 +22,17 @@ const pick = (log: Array<{ type: "created" | "exited" | "deleted"; id: PtyID }>,
 }
 
 describe("pty", () => {
+  test("update input parses terminal size strings from browser clients", () => {
+    const parsed = Pty.UpdateInput.parse({
+      size: {
+        rows: "24",
+        cols: "120",
+      },
+    })
+
+    expect(parsed.size).toEqual({ rows: 24, cols: 120 })
+  })
+
   test("sanitizes user-provided terminal env before spawn", () => {
     const env = Pty.sanitizeUserEnv({
       OPENAI_API_KEY: "api_key_from_user",
