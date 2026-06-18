@@ -619,9 +619,11 @@ describe("server route validation", () => {
     expect(optional.isOptional()).toBe(true)
     expect(optional.parse("")).toBeUndefined()
     expect(optional.parse(undefined)).toBeUndefined()
+    expect(optional.parse("10")).toBe(10)
     expect(defaulted.isOptional()).toBe(true)
     expect(defaulted.parse("")).toBe(25)
     expect(defaulted.parse(undefined)).toBe(25)
+    expect(defaulted.parse("10")).toBe(10)
     expect(optional.safeParse("abc").success).toBe(false)
 
     await Instance.provide({
@@ -629,6 +631,9 @@ describe("server route validation", () => {
       fn: async () => {
         const bare = await Server.Default().request("/find/file?query=package&limit")
         expect(bare.status).toBe(200)
+
+        const numeric = await Server.Default().request("/find/file?query=package&limit=1")
+        expect(numeric.status).toBe(200)
 
         const invalid = await Server.Default().request("/find/file?query=package&limit=abc")
         expect(invalid.status).toBe(400)

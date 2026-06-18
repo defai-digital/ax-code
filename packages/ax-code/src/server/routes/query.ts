@@ -9,15 +9,18 @@ export const QueryBoolean = z.preprocess((value) => {
   return value
 }, z.boolean())
 
-function normalizeEmptyQueryValue(value: unknown) {
+function normalizeQueryNumberValue(value: unknown) {
   if (typeof value !== "string") return value
-  return value.trim() === "" ? undefined : value
+  const trimmed = value.trim()
+  if (trimmed === "") return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : value
 }
 
 export function OptionalQueryNumber(schema: z.ZodNumber) {
-  return z.preprocess(normalizeEmptyQueryValue, schema.optional()).optional()
+  return z.preprocess(normalizeQueryNumberValue, schema.optional()).optional()
 }
 
 export function DefaultQueryNumber(schema: z.ZodNumber, defaultValue: number) {
-  return z.preprocess(normalizeEmptyQueryValue, schema.optional()).default(defaultValue)
+  return z.preprocess(normalizeQueryNumberValue, schema.optional()).default(defaultValue)
 }
