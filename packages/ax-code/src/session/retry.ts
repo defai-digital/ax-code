@@ -43,6 +43,7 @@ export namespace SessionRetry {
     if (value === undefined) return undefined
     const trimmed = value.trim()
     if (trimmed.length === 0) return undefined
+    if (!/^(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) return undefined
 
     const parsed = Number(trimmed)
     if (!Number.isFinite(parsed) || parsed < 0) return undefined

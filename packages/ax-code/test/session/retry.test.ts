@@ -69,6 +69,16 @@ describe("session.retry.delay", () => {
     expect(negativeMs).toBeLessThanOrEqual(2500)
   })
 
+  test("ignores non-decimal numeric retry hints", () => {
+    const exponentialSeconds = SessionRetry.delay(1, apiError({ "retry-after": "1e3" }))
+    expect(exponentialSeconds).toBeGreaterThanOrEqual(1500)
+    expect(exponentialSeconds).toBeLessThanOrEqual(2500)
+
+    const hexMs = SessionRetry.delay(1, apiError({ "retry-after-ms": "0x10" }))
+    expect(hexMs).toBeGreaterThanOrEqual(1500)
+    expect(hexMs).toBeLessThanOrEqual(2500)
+  })
+
   test("accepts zero retry-after values", () => {
     expect(SessionRetry.delay(1, apiError({ "retry-after": "0" }))).toBe(0)
     expect(SessionRetry.delay(1, apiError({ "retry-after-ms": "0" }))).toBe(0)
