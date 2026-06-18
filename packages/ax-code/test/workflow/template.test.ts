@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import fs from "fs/promises"
+import path from "path"
 import { Instance } from "../../src/project/instance"
 import {
   WorkflowTemplate,
@@ -155,6 +157,52 @@ describe("WorkflowTemplate", () => {
         expect(saved.specHash).toBe(WorkflowTemplate.specHash(run.spec))
       },
     })
+  })
+
+  test("does not overwrite malformed project workflow templates when saving", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const spec = {
+      ...getParsedWorkflowFixtureSpec("noopDryRun"),
+      id: "local-noop",
+      name: "Local Noop",
+      description: "Project-local workflow template for malformed file tests.",
+    }
+    const file = path.join(tmp.path, ".ax-code", "workflow-template", "local-noop.json")
+    const malformed = "{not json"
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await Bun.write(file, malformed)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(WorkflowTemplate.save({ scope: "project", spec })).rejects.toThrow("Failed to parse JSON")
+      },
+    })
+
+    expect(await Bun.file(file).text()).toBe(malformed)
+  })
+
+  test("does not overwrite invalid project workflow template schema when saving", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const spec = {
+      ...getParsedWorkflowFixtureSpec("noopDryRun"),
+      id: "local-noop",
+      name: "Local Noop",
+      description: "Project-local workflow template for invalid schema tests.",
+    }
+    const file = path.join(tmp.path, ".ax-code", "workflow-template", "local-noop.json")
+    const invalid = JSON.stringify({ schemaVersion: 1, revision: 1, trust: "candidate" })
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await Bun.write(file, invalid)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(WorkflowTemplate.save({ scope: "project", spec })).rejects.toThrow()
+      },
+    })
+
+    expect(await Bun.file(file).text()).toBe(invalid)
   })
 
   test("rejects unknown templates", async () => {

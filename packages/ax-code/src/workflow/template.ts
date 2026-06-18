@@ -85,6 +85,10 @@ export namespace WorkflowTemplate {
   })
   export type SaveFromRunInput = z.input<typeof SaveFromRunInput>
 
+  function isEnoent(error: unknown): error is { code: "ENOENT" } {
+    return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
+  }
+
   const builtins = Object.fromEntries(
     Object.entries(WorkflowFixtureSpecs).map(([key, value]) => {
       const spec = parseWorkflowSpecV1(value)
@@ -129,16 +133,15 @@ export namespace WorkflowTemplate {
   export async function save(input: SaveInput): Promise<Info> {
     const parsed = SaveInput.parse(input)
     const file = templatePath(parsed.scope, parsed.spec.id)
-    const existing = await Filesystem.readJson<unknown>(file).catch(() => undefined)
+    const current = await readStoredTemplateForUpdate(file)
     const now = Date.now()
-    const current = existing ? Stored.safeParse(existing) : undefined
     const stored = Stored.parse({
       schemaVersion: 1,
-      revision: current?.success ? current.data.revision + 1 : 1,
+      revision: current ? current.revision + 1 : 1,
       trust: parsed.trust,
       spec: parsed.spec,
       time: {
-        created: current?.success ? current.data.time.created : now,
+        created: current ? current.time.created : now,
         updated: now,
       },
     })
@@ -220,6 +223,15 @@ export namespace WorkflowTemplate {
     return Filesystem.readJson<unknown>(file)
       .then((value) => Stored.parse(value))
       .catch(() => undefined)
+  }
+
+  async function readStoredTemplateForUpdate(file: string): Promise<Stored | undefined> {
+    const value = await Filesystem.readJson<unknown>(file).catch((error) => {
+      if (isEnoent(error)) return undefined
+      throw error
+    })
+    if (value === undefined) return undefined
+    return Stored.parse(value)
   }
 
   function toInfo(source: Exclude<Source, "builtin">, stored: Stored, file: string): Info {
