@@ -612,15 +612,19 @@ export namespace File {
       throw new AccessDeniedError({ message: "Access denied: path escapes project directory" })
     }
 
-    const realResolved = await fs.promises.realpath(resolved).catch(() => null)
+    const realResolved = await fs.promises.realpath(resolved).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null
+      throw error
+    })
     if (realResolved && !Filesystem.contains(Instance.directory, realResolved)) {
       throw new AccessDeniedError({ message: "Access denied: symlink target escapes project directory" })
     }
 
     const nodes: File.Node[] = []
-    for (const entry of await fs.promises.readdir(resolved, { withFileTypes: true }).catch((error) => {
+    for (const entry of await fs.promises.readdir(resolved, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return []
       log.warn("failed to list directory", { directory: resolved, error })
-      return []
+      throw error
     })) {
       if (exclude.includes(entry.name)) continue
       const absolute = path.join(resolved, entry.name)

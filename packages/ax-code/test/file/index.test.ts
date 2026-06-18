@@ -2,6 +2,7 @@ import { afterEach, describe, test, expect, spyOn } from "bun:test"
 import { $ } from "bun"
 import path from "path"
 import fs from "fs/promises"
+import nodeFs from "fs"
 import { File } from "../../src/file"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
@@ -734,6 +735,27 @@ describe("file/index Filesystem patterns", () => {
           await expect(File.list("../outside")).rejects.toMatchObject({ name: "FileAccessDenied" })
         },
       })
+    })
+
+    test("does not mask directory listing failures as empty directories", async () => {
+      await using tmp = await tmpdir()
+      const failure = Object.assign(new Error("permission denied"), { code: "EACCES" })
+      const originalReaddir = nodeFs.promises.readdir.bind(nodeFs.promises)
+      const readdir = spyOn(nodeFs.promises, "readdir").mockImplementation((target, options) => {
+        if (target === tmp.path) throw failure
+        return originalReaddir(target, options as never) as never
+      })
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await expect(File.list()).rejects.toBe(failure)
+          },
+        })
+      } finally {
+        readdir.mockRestore()
+      }
     })
 
     test("works without git", async () => {
