@@ -12,9 +12,10 @@ const MS_PER_SECOND = 1000
 const SECONDS_PER_HOUR = 3600
 const TENTH_SECOND_UNIT_MS = 100
 
-function formatTimestamp(ms: number): string {
+export function formatAuditReportTimestamp(ms: number): string {
   const d = new Date(ms)
-  return d
+  const safe = Number.isFinite(d.getTime()) ? d : new Date(0)
+  return safe
     .toISOString()
     .replace("T", " ")
     .replace(/\.\d+Z$/, "")
@@ -283,9 +284,11 @@ export namespace AuditReport {
     lines.push("")
     lines.push(`- **Session ID:** \`${sessionID}\``)
     lines.push(`- **Directory:** ${info.directory}`)
-    lines.push(`- **Started:** ${startTime ? formatTimestamp(startTime) : formatTimestamp(info.time.created)}`)
+    lines.push(
+      `- **Started:** ${startTime ? formatAuditReportTimestamp(startTime) : formatAuditReportTimestamp(info.time.created)}`,
+    )
     if (endTime) {
-      lines.push(`- **Ended:** ${formatTimestamp(endTime)}`)
+      lines.push(`- **Ended:** ${formatAuditReportTimestamp(endTime)}`)
       lines.push(`- **Duration:** ${formatDuration(endTime - (startTime ?? info.time.created))}`)
     } else {
       lines.push(`- **Ended:** *(session still in progress)*`)
@@ -300,7 +303,7 @@ export namespace AuditReport {
       lines.push("## Routing")
       lines.push("")
       for (const route of routes) {
-        const time = formatTimestamp(route.time).split(" ")[1] ?? ""
+        const time = formatAuditReportTimestamp(route.time).split(" ")[1] ?? ""
         const matched = route.matched.length > 0 ? ` [${route.matched.join(", ")}]` : ""
         lines.push(`- ${time} ${route.mode} \`${route.from}\` -> \`${route.to}\` (${route.conf.toFixed(2)})${matched}`)
       }
@@ -316,7 +319,7 @@ export namespace AuditReport {
       lines.push("| # | Time | Tool | Target | Result | Duration |")
       lines.push("|---|------|------|--------|--------|----------|")
       for (const a of actions) {
-        const time = formatTimestamp(a.time).split(" ")[1] ?? ""
+        const time = formatAuditReportTimestamp(a.time).split(" ")[1] ?? ""
         lines.push(
           `| ${a.seq} | ${time} | ${escapeCell(a.tool)} | ${escapeCell(a.target)} | ${escapeCell(a.result)} | ${a.duration} |`,
         )

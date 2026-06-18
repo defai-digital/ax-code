@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { AuditReport } from "../../src/audit/report"
+import { AuditReport, formatAuditReportTimestamp } from "../../src/audit/report"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Instance } from "../../src/project/instance"
 import { EventQuery } from "../../src/replay/query"
@@ -34,6 +34,13 @@ function envelope(input: {
 }
 
 describe("AuditReport.generate", () => {
+  test("formats malformed report timestamps without throwing", () => {
+    expect(formatAuditReportTimestamp(Date.parse("2026-04-01T00:00:00Z"))).toBe("2026-04-01 00:00:00")
+    expect(formatAuditReportTimestamp(Number.NaN)).toBe("1970-01-01 00:00:00")
+    expect(formatAuditReportTimestamp(Number.POSITIVE_INFINITY)).toBe("1970-01-01 00:00:00")
+    expect(formatAuditReportTimestamp(8_640_000_000_000_001)).toBe("1970-01-01 00:00:00")
+  })
+
   test("shows delegate and switch route entries distinctly", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
