@@ -5,6 +5,7 @@ import {
   formatMessage,
   formatPart,
   formatTranscript,
+  formatTranscriptJson,
   userRoute,
 } from "../../../src/cli/cmd/tui/util/transcript"
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
@@ -220,6 +221,41 @@ describe("transcript", () => {
       // The formatter should widen the fence when the payload already contains triple backticks.
       expect(result).toContain("**Input:**\n````json")
       expect(result).toContain("**Output:**\n````\n```hello```\n````")
+    })
+
+    test("formats non-json-safe tool input without throwing", () => {
+      const input: Record<string, unknown> = { count: 1n }
+      input.self = input
+      const part: Part = {
+        id: "part_1",
+        sessionID: "ses_123",
+        messageID: "msg_123",
+        type: "tool",
+        callID: "call_1",
+        tool: "debug",
+        state: {
+          status: "completed",
+          input,
+          output: "ok",
+          title: "Debug",
+          metadata: {},
+          time: { start: 1000, end: 1100 },
+        },
+      }
+
+      const result = formatPart(part, options)
+      expect(result).toContain('"count": "1"')
+      expect(result).toContain('"self": "[Circular]"')
+    })
+
+    test("formats throwing toJSON values as unserializable", () => {
+      expect(
+        formatTranscriptJson({
+          toJSON: () => {
+            throw new Error("boom")
+          },
+        }),
+      ).toBe("[Unserializable]")
     })
 
     test("formats tool part without details when disabled", () => {

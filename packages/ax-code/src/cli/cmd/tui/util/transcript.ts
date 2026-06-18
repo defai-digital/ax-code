@@ -29,6 +29,28 @@ function fence(content: string, language?: string) {
   return `${marker}${language ?? ""}\n${content}\n${marker}\n`
 }
 
+export function formatTranscriptJson(value: unknown): string {
+  const seen = new WeakSet<object>()
+  try {
+    return (
+      JSON.stringify(
+        value,
+        (_key, next) => {
+          if (typeof next === "bigint") return next.toString()
+          if (next && typeof next === "object") {
+            if (seen.has(next)) return "[Circular]"
+            seen.add(next)
+          }
+          return next
+        },
+        2,
+      ) ?? "[Unserializable]"
+    )
+  } catch {
+    return "[Unserializable]"
+  }
+}
+
 export function formatUserHeader(msg: UserMessage, parts: Part[], agents?: AgentInfo[]) {
   const route = userRoute(msg, parts, agents)
   if (msg.agent === "build" && route.delegated.length === 0) return `## User\n\n`
@@ -103,7 +125,7 @@ export function formatPart(part: Part, options: TranscriptOptions): string {
   if (part.type === "tool") {
     let result = `**Tool: ${part.tool}**\n`
     if (options.toolDetails && part.state.input) {
-      result += `\n**Input:**\n${fence(JSON.stringify(part.state.input, null, 2), "json")}`
+      result += `\n**Input:**\n${fence(formatTranscriptJson(part.state.input), "json")}`
     }
     if (options.toolDetails && part.state.status === "completed" && part.state.output) {
       result += `\n**Output:**\n${fence(part.state.output)}`
