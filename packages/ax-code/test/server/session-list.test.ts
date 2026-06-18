@@ -93,6 +93,33 @@ describe("Session.list", () => {
 })
 
 describe("GET /session", () => {
+  test("session patch coerces archived timestamp from string values", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "archive-route-session" })
+        const archivedAt = 50_000
+        const app = Server.Default()
+
+        try {
+          const response = await app.request(`/session/${session.id}?directory=${encodeURIComponent(tmp.path)}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ time: { archived: String(archivedAt) } }),
+          })
+
+          expect(response.status).toBe(200)
+          const body = (await response.json()) as { time: { archived?: number } }
+          expect(body.time.archived).toBe(archivedAt)
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("uses canonical request directory when filtering sessions", async () => {
     await using tmp = await tmpdir({ git: true })
     const link = path.join(tmp.path, "..", `${path.basename(tmp.path)}-session-list-link`)

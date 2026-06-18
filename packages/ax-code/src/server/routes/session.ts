@@ -653,7 +653,7 @@ export const SessionRoutes = lazy(() =>
           title: z.string().optional(),
           time: z
             .object({
-              archived: z.number().optional(),
+              archived: z.coerce.number().optional(),
             })
             .optional(),
           metadata: Session.Metadata.optional(),
