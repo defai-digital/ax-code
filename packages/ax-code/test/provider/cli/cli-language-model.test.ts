@@ -334,6 +334,58 @@ describe("CliLanguageModel", () => {
     expect(String(error.error)).toContain("CLI exited with code 9: partial output")
   })
 
+  test("doStream includes stdout and stderr that drain after process exit", async () => {
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const spawn = spyOn(Process, "spawn").mockReturnValue({
+      stdout,
+      stderr,
+      exited: Promise.resolve(9),
+      exitCode: 9,
+      signalCode: null,
+      kill: () => true,
+      pid: 999,
+      stdin: null,
+    } as any)
+
+    try {
+      const model = makeModel({
+        binary: "late-failure",
+        parser: {
+          parseComplete: () => ({ text: "" }),
+          parseStreamLine: (line: string) => line,
+        },
+        promptMode: "arg",
+      })
+
+      const { stream } = await model.doStream({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      })
+
+      setTimeout(() => {
+        stdout.end("late stdout")
+        stderr.end("late stderr")
+      }, 5)
+
+      const parts: any[] = []
+      const reader = stream.getReader()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+      }
+
+      expect(parts.find((part) => part.type === "finish")).toBeUndefined()
+      const error = parts.find((part) => part.type === "error")
+      expect(error).toBeDefined()
+      expect(String(error.error)).toContain("CLI exited with code 9")
+      expect(String(error.error)).toContain("late stdout")
+      expect(String(error.error)).toContain("late stderr")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
   test("doStream preserves UTF-8 characters split across stdout chunks", async () => {
     const model = makeModel({
       binary: process.execPath,

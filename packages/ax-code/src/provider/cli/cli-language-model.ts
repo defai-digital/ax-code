@@ -303,6 +303,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         let onStdoutEnd: (() => void) | undefined
         let onStderrData: ((chunk: Buffer) => void) | undefined
         let onStderrError: ((err: Error) => void) | undefined
+        let onStderrEnd: (() => void) | undefined
 
         const cleanupListeners = () => {
           if (cleanedUp) return
@@ -315,6 +316,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           if (proc.stderr) {
             if (onStderrData) proc.stderr.off("data", onStderrData)
             if (onStderrError) proc.stderr.off("error", onStderrError)
+            if (onStderrEnd) proc.stderr.off("end", onStderrEnd)
           }
         }
         const safeClose = () => {
@@ -349,6 +351,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         let emitted = false
         let textOpen = true
         let stdoutEnded = false
+        let stderrEnded = false
         let exitCode: number | undefined
         const raw: string[] = []
         const output: string[] = []
@@ -431,6 +434,14 @@ export class CliLanguageModel implements LanguageModelV3 {
           })
           safeClose()
         }
+        const finishFailure = () => {
+          if (!stdoutEnded || !stderrEnded || exitCode === undefined || exitCode === 0 || closed()) return
+          fail(
+            abort.isAborted
+              ? abort.abortError
+              : new Error(formatCliFailure(exitCode, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))),
+          )
+        }
         if (!proc.stdout || !proc.stderr) {
           controller.enqueue({ type: "error", error: new Error("CLI process output not available") })
           safeClose()
@@ -447,6 +458,11 @@ export class CliLanguageModel implements LanguageModelV3 {
           if (closed()) return
           fail(abort.isAborted ? abort.abortError : err)
         }
+        onStderrEnd = () => {
+          if (closed()) return
+          stderrEnded = true
+          finishFailure()
+        }
         onStdoutData = (chunk: Buffer) => {
           if (closed()) return
           processStdoutText(stdoutDecoder.write(chunk))
@@ -457,6 +473,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           stdoutEnded = true
           flushOutput()
           finishSuccess()
+          finishFailure()
         }
         onStdoutError = (err: Error) => {
           clearTimeout(timer)
@@ -467,6 +484,7 @@ export class CliLanguageModel implements LanguageModelV3 {
 
         stderr.on("data", onStderrData)
         stderr.on("error", onStderrError)
+        stderr.on("end", onStderrEnd)
         stdout.on("data", onStdoutData)
         stdout.on("end", onStdoutEnd)
         stdout.on("error", onStdoutError)
@@ -474,15 +492,10 @@ export class CliLanguageModel implements LanguageModelV3 {
         cancelStreaming = safeAbort
         proc.exited
           .then((code) => {
-            clearTimeout(timer)
             if (closed()) return
             exitCode = code
             if (code !== 0) {
-              fail(
-                abort.isAborted
-                  ? abort.abortError
-                  : new Error(formatCliFailure(code, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))),
-              )
+              finishFailure()
               return
             }
             finishSuccess()
