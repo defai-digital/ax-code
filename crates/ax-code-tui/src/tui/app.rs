@@ -485,7 +485,7 @@ impl App {
 
     fn event_targets_current_session(&self, event_session_id: &str) -> bool {
         if event_session_id.is_empty() {
-            return true;
+            return self.session_id.is_none();
         }
         match self.session_id.as_deref() {
             Some(current) => current == event_session_id,
@@ -496,7 +496,7 @@ impl App {
     fn event_targets_current_session_option(&self, event_session_id: Option<&str>) -> bool {
         event_session_id
             .map(|session_id| self.event_targets_current_session(session_id))
-            .unwrap_or(true)
+            .unwrap_or_else(|| self.session_id.is_none())
     }
 
     fn message_targets_current_session(&self, message_id: &str) -> bool {
@@ -1827,6 +1827,76 @@ mod tests {
         assert!(app.tool_calls.is_empty());
         assert_eq!(app.mode, AppMode::Input);
         assert_eq!(app.session_status, SessionStatus::Idle);
+    }
+
+    #[test]
+    fn test_active_session_ignores_unscoped_events() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+        app.session_status = SessionStatus::Running;
+        app.tool_calls.push(ToolCall {
+            call_id: "call_current".to_string(),
+            tool_name: "bash".to_string(),
+            status: ToolCallStatus::Running,
+            result: None,
+            error: None,
+        });
+
+        app.handle_event(RuntimeEvent::SessionStatus {
+            properties: SessionStatusProps {
+                session_id: String::new(),
+                status: Some(serde_json::json!({ "type": "idle" })),
+            },
+        });
+        app.handle_event(RuntimeEvent::SessionError {
+            properties: SessionErrorProps {
+                session_id: None,
+                error: Some(serde_json::json!("unscoped failure")),
+            },
+        });
+        app.handle_event(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: "msg_unscoped".to_string(),
+                    session_id: String::new(),
+                    role: Some(crate::events::MessageRole::Assistant),
+                }),
+            },
+        });
+        app.handle_event(RuntimeEvent::PermissionAsked {
+            properties: crate::events::PermissionRequestProps {
+                session_id: String::new(),
+                id: "perm_unscoped".to_string(),
+                description: "unscoped".to_string(),
+                permission_type: Some("bash".to_string()),
+            },
+        });
+        app.handle_event(RuntimeEvent::QuestionAsked {
+            properties: crate::events::QuestionRequestProps {
+                session_id: String::new(),
+                id: "q_unscoped".to_string(),
+                question: "unscoped?".to_string(),
+                options: vec!["yes".to_string()],
+                items: vec![],
+            },
+        });
+        app.handle_event(RuntimeEvent::ToolCallStart {
+            properties: crate::events::ToolCallStartProps {
+                session_id: String::new(),
+                call_id: "call_unscoped".to_string(),
+                tool_name: "bash".to_string(),
+            },
+        });
+
+        assert_eq!(app.session_id.as_deref(), Some("s1"));
+        assert_eq!(app.session_status, SessionStatus::Running);
+        assert!(app.messages.is_empty());
+        assert!(app.pending_permissions.is_empty());
+        assert!(app.pending_questions.is_empty());
+        assert_eq!(app.tool_calls.len(), 1);
+        assert_eq!(app.tool_calls[0].status, ToolCallStatus::Running);
+        assert!(app.status_message.is_none());
+        assert_eq!(app.mode, AppMode::Input);
     }
 
     #[test]
