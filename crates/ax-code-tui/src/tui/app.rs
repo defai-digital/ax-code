@@ -221,10 +221,11 @@ impl App {
             }
             RuntimeEvent::SessionStatus { properties } => {
                 if let Some(status) = properties.status {
-                    if self.event_targets_current_session(&properties.session_id) {
-                        if let Some(mapped) = session_status_from_value(&status) {
-                            self.session_status = mapped;
-                        }
+                    if !self.event_targets_current_session(&properties.session_id) {
+                        return;
+                    }
+                    if let Some(mapped) = session_status_from_value(&status) {
+                        self.session_status = mapped;
                     }
                     self.status_message = Some(format!("Status: {}", status));
                 }
@@ -1446,6 +1447,7 @@ mod tests {
         let mut app = App::new();
         app.session_id = Some("s1".to_string());
         app.session_status = SessionStatus::Idle;
+        app.status_message = Some("Current status".to_string());
 
         app.handle_event(RuntimeEvent::SessionStatus {
             properties: SessionStatusProps {
@@ -1455,6 +1457,7 @@ mod tests {
         });
 
         assert_eq!(app.session_status, SessionStatus::Idle);
+        assert_eq!(app.status_message.as_deref(), Some("Current status"));
     }
 
     #[test]
