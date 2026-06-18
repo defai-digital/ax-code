@@ -314,9 +314,9 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   console.log("┌────────────────────────────────────────────────────────┐")
   console.log("│                       OVERVIEW                         │")
   console.log("├────────────────────────────────────────────────────────┤")
-  console.log(renderRow("Sessions", stats.totalSessions.toLocaleString()))
-  console.log(renderRow("Messages", stats.totalMessages.toLocaleString()))
-  console.log(renderRow("Days", stats.days.toString()))
+  console.log(renderRow("Sessions", formatCount(stats.totalSessions)))
+  console.log(renderRow("Messages", formatCount(stats.totalMessages)))
+  console.log(renderRow("Days", formatCount(stats.days)))
   console.log("└────────────────────────────────────────────────────────┘")
   console.log()
 
@@ -324,9 +324,9 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   console.log("┌────────────────────────────────────────────────────────┐")
   console.log("│                      TOKEN USAGE                       │")
   console.log("├────────────────────────────────────────────────────────┤")
-  const tokensPerSession = isNaN(stats.tokensPerSession) ? 0 : stats.tokensPerSession
+  const tokensPerSession = finiteNumber(stats.tokensPerSession)
   console.log(renderRow("Avg Tokens/Session", formatNumber(Math.round(tokensPerSession))))
-  const medianTokensPerSession = isNaN(stats.medianTokensPerSession) ? 0 : stats.medianTokensPerSession
+  const medianTokensPerSession = finiteNumber(stats.medianTokensPerSession)
   console.log(renderRow("Median Tokens/Session", formatNumber(Math.round(medianTokensPerSession))))
   console.log(renderRow("Input", formatNumber(stats.totalTokens.input)))
   console.log(renderRow("Output", formatNumber(stats.totalTokens.output)))
@@ -346,7 +346,7 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
 
     for (const [model, usage] of modelsToDisplay) {
       console.log(`│ ${model.padEnd(54)} │`)
-      console.log(renderRow("  Messages", usage.messages.toLocaleString()))
+      console.log(renderRow("  Messages", formatCount(usage.messages)))
       console.log(renderRow("  Input Tokens", formatNumber(usage.tokens.input)))
       console.log(renderRow("  Output Tokens", formatNumber(usage.tokens.output)))
       console.log(renderRow("  Cache Read", formatNumber(usage.tokens.cache.read)))
@@ -368,19 +368,20 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
     console.log("│                      TOOL USAGE                        │")
     console.log("├────────────────────────────────────────────────────────┤")
 
-    const maxCount = Math.max(...toolsToDisplay.map(([, count]) => count))
-    const totalToolUsage = Object.values(stats.toolUsage).reduce((a, b) => a + b, 0)
+    const maxCount = Math.max(0, ...toolsToDisplay.map(([, count]) => finiteNumber(count)))
+    const totalToolUsage = Object.values(stats.toolUsage).reduce((a, b) => a + finiteNumber(b), 0)
 
     for (const [tool, count] of toolsToDisplay) {
-      const barLength = Math.max(1, Math.floor((count / maxCount) * 20))
+      const safeCount = finiteNumber(count)
+      const barLength = maxCount > 0 ? Math.max(1, Math.floor((safeCount / maxCount) * 20)) : 1
       const bar = "█".repeat(barLength)
-      const percentage = ((count / totalToolUsage) * 100).toFixed(1)
+      const percentage = totalToolUsage > 0 ? ((safeCount / totalToolUsage) * 100).toFixed(1) : "0.0"
 
       const maxToolLength = 18
       const truncatedTool = tool.length > maxToolLength ? tool.substring(0, maxToolLength - 2) + ".." : tool
       const toolName = truncatedTool.padEnd(maxToolLength)
 
-      const content = ` ${toolName} ${bar.padEnd(20)} ${count.toString().padStart(3)} (${percentage.padStart(4)}%)`
+      const content = ` ${toolName} ${bar.padEnd(20)} ${formatCount(safeCount).padStart(3)} (${percentage.padStart(4)}%)`
       const padding = Math.max(0, width - content.length - 1)
       console.log(`│${content}${" ".repeat(padding)} │`)
     }
@@ -389,7 +390,16 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   console.log()
 }
 
+function finiteNumber(num: number): number {
+  return Number.isFinite(num) ? num : 0
+}
+
+function formatCount(num: number): string {
+  return Math.round(finiteNumber(num)).toLocaleString()
+}
+
 function formatNumber(num: number): string {
+  num = finiteNumber(num)
   if (num >= 1000000) {
     return (num / 1000000).toFixed(1) + "M"
   } else if (num >= 1000) {
