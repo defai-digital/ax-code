@@ -37,6 +37,12 @@ export const GlobTool = Tool.define("glob", {
   async execute(params, ctx) {
     if (params.path !== undefined) resolveToolFilePath(params.path, Instance.directory)
     if (params.pattern.includes("\x00")) throw new Error("Glob pattern contains null byte")
+
+    let search = params.path ?? Instance.directory
+    search = resolveToolFilePath(search, Instance.directory)
+    await assertExternalDirectory(ctx, search, { kind: "directory" })
+    await assertSymlinkInsideProject(search)
+
     await ctx.ask({
       permission: "glob",
       patterns: [params.pattern],
@@ -47,10 +53,6 @@ export const GlobTool = Tool.define("glob", {
       },
     })
 
-    let search = params.path ?? Instance.directory
-    search = resolveToolFilePath(search, Instance.directory)
-    await assertExternalDirectory(ctx, search, { kind: "directory" })
-    await assertSymlinkInsideProject(search)
     const title = normalizeToWorkspacePath(search, Instance.worktree)
 
     // Native fast-path: in-process glob via Rust addon

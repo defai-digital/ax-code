@@ -18,6 +18,8 @@ const ctx = {
 
 const projectRoot = path.join(__dirname, "../..")
 
+class StopAfterAsk extends Error {}
+
 describe("tool.grep", () => {
   test("parseNativeSearchMatches decodes valid native output", () => {
     expect(
@@ -99,6 +101,33 @@ describe("tool.grep", () => {
         expect(result.metadata.matches).toBeGreaterThan(0)
       },
     })
+  })
+
+  test("external search paths request external directory permission before grep permission", async () => {
+    await using project = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    const requests: string[] = []
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const grep = await GrepTool.init()
+        await expect(
+          grep.execute(
+            { pattern: "needle", path: outside.path },
+            {
+              ...ctx,
+              ask: async (req?: { permission?: string }) => {
+                if (req?.permission) requests.push(req.permission)
+                throw new StopAfterAsk()
+              },
+            },
+          ),
+        ).rejects.toThrow(StopAfterAsk)
+      },
+    })
+
+    expect(requests).toEqual(["external_directory"])
   })
 })
 

@@ -11,6 +11,8 @@ const ctx = {
   ask: async () => {},
 } as any
 
+class StopAfterAsk extends Error {}
+
 afterEach(async () => {
   await Instance.disposeAll()
 })
@@ -62,5 +64,32 @@ describe("tool.glob", () => {
       nativeFs.mockRestore()
       stat.mockRestore()
     }
+  })
+
+  test("external search paths request external directory permission before glob permission", async () => {
+    await using project = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    const requests: string[] = []
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const glob = await GlobTool.init()
+        await expect(
+          glob.execute(
+            { pattern: "*.ts", path: outside.path },
+            {
+              ...ctx,
+              ask: async (req?: { permission?: string }) => {
+                if (req?.permission) requests.push(req.permission)
+                throw new StopAfterAsk()
+              },
+            },
+          ),
+        ).rejects.toThrow(StopAfterAsk)
+      },
+    })
+
+    expect(requests).toEqual(["external_directory"])
   })
 })

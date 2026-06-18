@@ -43,6 +43,11 @@ export const GrepTool = Tool.define("grep", {
     if (params.pattern.includes("\x00")) throw new Error("Pattern contains null byte")
     if (params.include?.includes("\x00")) throw new Error("Include pattern contains null byte")
 
+    let searchPath = params.path ?? Instance.directory
+    searchPath = resolveToolFilePath(searchPath, Instance.directory)
+    await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
+    await assertSymlinkInsideProject(searchPath)
+
     await ctx.ask({
       permission: "grep",
       patterns: [params.pattern],
@@ -53,11 +58,6 @@ export const GrepTool = Tool.define("grep", {
         include: params.include,
       },
     })
-
-    let searchPath = params.path ?? Instance.directory
-    searchPath = resolveToolFilePath(searchPath, Instance.directory)
-    await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
-    await assertSymlinkInsideProject(searchPath)
 
     // Native fast-path: in-process search via Rust addon
     const native = NativeAddon.fs()
