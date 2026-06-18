@@ -82,15 +82,63 @@ describe("tui sync runtime store", () => {
     })
   })
 
+  test("normalizes invalid debug-engine payload fields to safe defaults", () => {
+    expect(
+      normalizeDebugEngineState({
+        count: "2",
+        plans: [{ planId: "bad" }],
+        toolCount: "4",
+        graph: {
+          nodeCount: "10",
+          edgeCount: {},
+          lastIndexedAt: "456",
+          state: "unknown",
+          completed: "3",
+          total: null,
+          error: 123,
+        },
+      }),
+    ).toEqual({
+      pendingPlans: 0,
+      plans: [],
+      toolCount: 0,
+      graph: {
+        nodeCount: 0,
+        edgeCount: 0,
+        lastIndexedAt: null,
+        state: "idle",
+        completed: 0,
+        total: 0,
+        error: null,
+      },
+    })
+  })
+
   test("normalizes runtime boolean flag payloads", () => {
     expect(normalizeRuntimeFlagState({ enabled: true })).toBe(true)
     expect(normalizeRuntimeFlagState({ enabled: false })).toBe(false)
+  })
+
+  test("normalizes invalid runtime boolean flag payloads to false", () => {
+    expect(normalizeRuntimeFlagState({ enabled: "true" })).toBe(false)
+    expect(normalizeRuntimeFlagState(null)).toBe(false)
   })
 
   test("normalizes isolation payloads without changing allowed fields", () => {
     expect(normalizeIsolationState({ mode: "workspace-write", network: true })).toEqual({
       mode: "workspace-write",
       network: true,
+    })
+  })
+
+  test("normalizes invalid isolation payloads to safe defaults", () => {
+    expect(normalizeIsolationState({ mode: "sudo", network: "true" })).toEqual({
+      mode: "workspace-write",
+      network: false,
+    })
+    expect(normalizeIsolationState(null)).toEqual({
+      mode: "workspace-write",
+      network: false,
     })
   })
 
@@ -115,6 +163,19 @@ describe("tui sync runtime store", () => {
       verificationEnvelopeCount: 1,
       evidenceRefCount: 2,
       exposedArtifactCount: 2,
+    })
+  })
+
+  test("normalizes invalid workflow dashboard payloads to an empty dashboard", () => {
+    expect(normalizeWorkflowDashboardState("invalid")).toMatchObject({
+      runs: [],
+      activeCount: 0,
+      blockedCount: 0,
+      terminalCount: 0,
+    })
+    expect(normalizeWorkflowDashboardState({ runs: [{ runID: "bad", status: "running" }] })).toMatchObject({
+      runs: [],
+      activeCount: 0,
     })
   })
 })

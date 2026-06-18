@@ -16711,7 +16711,11 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
           }
         ],
         "tool_call": true,
@@ -16732,7 +16736,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 200000,
+          "context": 1000000,
           "output": 131072
         }
       },
