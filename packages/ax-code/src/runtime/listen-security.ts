@@ -1,7 +1,8 @@
 import { Flag } from "@/flag/flag"
 
 export function isLoopbackHostname(hostname: string): boolean {
-  const host = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname
+  const normalized = hostname.toLowerCase()
+  const host = normalized.startsWith("[") && normalized.endsWith("]") ? normalized.slice(1, -1) : normalized
   if (host === "localhost" || host === "::1") return true
   return isIPv4Loopback(host)
 }

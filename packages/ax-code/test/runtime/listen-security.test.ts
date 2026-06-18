@@ -4,7 +4,7 @@ import { isLoopbackHostname } from "../../src/runtime/listen-security"
 
 describe("isLoopbackHostname", () => {
   test("accepts loopback hostnames and literals", () => {
-    for (const hostname of ["localhost", "127.0.0.1", "127.12.0.1", "::1", "[::1]"]) {
+    for (const hostname of ["localhost", "LOCALHOST", "127.0.0.1", "127.12.0.1", "::1", "[::1]"]) {
       expect(isLoopbackHostname(hostname)).toBe(true)
     }
   })
