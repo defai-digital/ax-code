@@ -21,6 +21,7 @@ export namespace LSPServer {
   export interface Info {
     id: string
     extensions: string[]
+    languageId?: string
     semantic?: boolean
     priority?: number
     concurrency?: number
@@ -53,6 +54,8 @@ export namespace LSPServer {
   export const JDTLS = _Defs.JDTLS
   export const KotlinLS = _Defs.KotlinLS
   export const YamlLS = _Defs.YamlLS
+  export const SQLLanguageServer = _Defs.SQLLanguageServer
+  export const AnsibleLanguageServer = _Defs.AnsibleLanguageServer
   export const LuaLS = _Defs.LuaLS
   export const PHPIntelephense = _Defs.PHPIntelephense
   export const Prisma = _Defs.Prisma

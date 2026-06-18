@@ -289,6 +289,7 @@ export namespace LSP {
         serverID: server.id,
         server: handle,
         root,
+        languageId: server.languageId,
         semantic: server.semantic,
         priority: server.priority,
         capabilityHints: server.capabilityHints,

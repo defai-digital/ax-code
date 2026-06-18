@@ -292,6 +292,7 @@ export type RootFunction = (file: string) => Promise<string | undefined>
 export interface ServerInfo {
   id: string
   extensions: string[]
+  languageId?: string
   semantic?: boolean
   priority?: number
   concurrency?: number

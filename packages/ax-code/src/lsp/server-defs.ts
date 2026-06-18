@@ -66,6 +66,8 @@ const JS_RUNTIME_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs"]
 const JS_PROJECT_EXTENSIONS = [...JS_RUNTIME_EXTENSIONS, ".cjs", ".mts", ".cts"]
 const JS_FRAMEWORK_EXTENSIONS = [...JS_PROJECT_EXTENSIONS, ".vue", ".astro", ".svelte"]
 const PYTHON_EXTENSIONS = [".py", ".pyi"]
+const SQL_EXTENSIONS = [".sql"]
+const ANSIBLE_EXTENSIONS = [".yaml", ".yml"]
 const PYTHON_ROOT_MARKERS = [
   "pyproject.toml",
   "setup.py",
@@ -83,6 +85,41 @@ const TY_ROOT_MARKERS = [
   "Pipfile",
   "pyrightconfig.json",
 ]
+const ANSIBLE_ROOT_MARKERS = [
+  "ansible.cfg",
+  "galaxy.yml",
+  "galaxy.yaml",
+  "playbook.yml",
+  "playbook.yaml",
+  "site.yml",
+  "site.yaml",
+  "roles",
+  "playbooks",
+  "group_vars",
+  "host_vars",
+  "inventory",
+  "inventories",
+  path.join("collections", "requirements.yml"),
+  path.join("collections", "requirements.yaml"),
+  path.join("roles", "requirements.yml"),
+  path.join("roles", "requirements.yaml"),
+]
+
+const NearestRootWithMarker = (markers: string[]) => {
+  return async (file: string) => {
+    let current = path.dirname(file)
+    while (true) {
+      for (const marker of markers) {
+        if (await Filesystem.exists(path.join(current, marker))) return current
+      }
+      if (current === Instance.directory) break
+      const parent = path.dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+    return undefined
+  }
+}
 
 export const Deno: Info = {
   id: "deno",
@@ -958,6 +995,36 @@ export const YamlLS: Info = {
       script: nodeModuleScript("yaml-language-server", "out", "server", "src", "server.js"),
       pkg: "yaml-language-server",
       args: ["--stdio"],
+    })
+  },
+}
+
+export const SQLLanguageServer: Info = {
+  id: "sql-language-server",
+  extensions: SQL_EXTENSIONS,
+  root: async () => Instance.directory,
+  async spawn(root) {
+    return bunServerHandle({
+      root,
+      binary: "sql-language-server",
+      script: nodeModuleScript("sql-language-server", "npm_bin", "cli.js"),
+      pkg: "sql-language-server",
+      args: ["up", "--method", "stdio"],
+    })
+  },
+}
+
+export const AnsibleLanguageServer: Info = {
+  id: "ansible-language-server",
+  extensions: ANSIBLE_EXTENSIONS,
+  languageId: "ansible",
+  root: NearestRootWithMarker(ANSIBLE_ROOT_MARKERS),
+  async spawn(root) {
+    return bunServerHandle({
+      root,
+      binary: "ansible-language-server",
+      script: nodeModuleScript("@ansible", "ansible-language-server", "dist", "cli.cjs"),
+      pkg: "@ansible/ansible-language-server",
     })
   },
 }

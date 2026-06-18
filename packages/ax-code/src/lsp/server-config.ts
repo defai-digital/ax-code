@@ -45,6 +45,7 @@ export namespace LSPServerConfig {
         semantic: server.semantic ?? profile?.semantic ?? true,
         priority: server.priority ?? profile?.priority ?? 0,
         concurrency: server.concurrency ?? profile?.concurrency,
+        languageId: server.languageId,
         capabilityHints: mergeCapabilityHints(profile?.capabilityHints, server.capabilityHints),
       }
     }
@@ -65,6 +66,7 @@ export namespace LSPServerConfig {
         semantic: item.semantic ?? existing?.semantic ?? true,
         priority: item.priority ?? existing?.priority ?? 0,
         concurrency: item.concurrency ?? existing?.concurrency,
+        languageId: item.languageId ?? existing?.languageId,
         capabilityHints: mergeCapabilityHints(existing?.capabilityHints, item.capabilities),
         root: existing?.root ?? (async () => Instance.directory),
         extensions: item.extensions ?? existing?.extensions ?? [],

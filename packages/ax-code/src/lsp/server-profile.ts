@@ -88,6 +88,8 @@ export const BuiltinServerProfiles: Record<string, BuiltinServerProfile> = {
   jdtls: HEAVY_SEMANTIC_PROFILE,
   "kotlin-ls": HEAVY_SEMANTIC_PROFILE,
   "yaml-ls": SECONDARY_SEMANTIC_PROFILE,
+  "sql-language-server": SECONDARY_SEMANTIC_PROFILE,
+  "ansible-language-server": SECONDARY_SEMANTIC_PROFILE,
   "lua-ls": SECONDARY_SEMANTIC_PROFILE,
   "php intelephense": SECONDARY_SEMANTIC_PROFILE,
   prisma: SECONDARY_SEMANTIC_PROFILE,

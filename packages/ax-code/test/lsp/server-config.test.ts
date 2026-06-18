@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
 import { LSPServerConfig } from "../../src/lsp/server-config"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -15,6 +16,10 @@ describe("LSPServerConfig", () => {
     expect(servers.typescript?.semantic).toBe(true)
     expect(servers.typescript?.priority).toBeGreaterThan(0)
     expect(servers.typescript?.concurrency).toBeGreaterThan(0)
+
+    expect(servers["sql-language-server"]?.extensions).toEqual([".sql"])
+    expect(servers["ansible-language-server"]?.extensions).toEqual([".yaml", ".yml"])
+    expect(servers["ansible-language-server"]?.languageId).toBe("ansible")
   })
 
   test("removes disabled servers from the enabled set", () => {
@@ -61,6 +66,7 @@ describe("LSPServerConfig", () => {
             custom: {
               command: ["custom-lsp", "--stdio"],
               extensions: [".custom"],
+              languageId: "custom-language",
               initialization: { custom: true },
             },
           },
@@ -70,8 +76,28 @@ describe("LSPServerConfig", () => {
         expect(servers.custom?.semantic).toBe(true)
         expect(servers.custom?.priority).toBe(0)
         expect(servers.custom?.extensions).toEqual([".custom"])
+        expect(servers.custom?.languageId).toBe("custom-language")
         expect(await servers.custom?.root("/tmp/file.custom")).toBe(tmp.path)
         expect(typeof servers.custom?.spawn).toBe("function")
+      },
+    })
+  })
+
+  test("ansible server only resolves roots with ansible project markers", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const servers = LSPServerConfig.buildEnabledServers({})
+        const server = servers["ansible-language-server"]
+        expect(server).toBeDefined()
+
+        const playbook = path.join(tmp.path, "playbook.yml")
+        expect(await server?.root(playbook)).toBeUndefined()
+
+        await Bun.write(path.join(tmp.path, "ansible.cfg"), "[defaults]\n")
+        expect(await server?.root(playbook)).toBe(tmp.path)
       },
     })
   })

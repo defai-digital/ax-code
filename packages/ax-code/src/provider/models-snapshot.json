@@ -27121,9 +27121,8 @@
             "type": "effort",
             "values": [
               "none",
-              "low",
-              "medium",
-              "high"
+              "high",
+              "max"
             ]
           }
         ],
@@ -27944,41 +27943,6 @@
         "limit": {
           "context": 128000,
           "output": 4096
-        }
-      },
-      "tencent-hy3-preview": {
-        "id": "tencent-hy3-preview",
-        "name": "Hy3 Preview",
-        "family": "hy3",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-08",
-        "last_updated": "2026-06-11",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 256000,
-          "output": 32768
         }
       }
     }
@@ -79859,9 +79823,9 @@
       "LUCIDQUERY_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible",
-    "api": "https://lucidquery.com/api/v1",
-    "name": "LucidQuery AI",
-    "doc": "https://lucidquery.com/api/docs",
+    "api": "https://api.lucidquery.com/v1",
+    "name": "LucidQuery",
+    "doc": "https://lucidquery.com/docs",
     "models": {
       "lucidnova-rf1-100b": {
         "id": "lucidnova-rf1-100b",
@@ -79913,6 +79877,60 @@
         "limit": {
           "context": 250000,
           "output": 60000
+        }
+      },
+      "lucidquery-agi-01-swift": {
+        "id": "lucidquery-agi-01-swift",
+        "name": "AGI-01 Swift",
+        "family": "agi",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2026-06-05",
+        "release_date": "2026-06-16",
+        "last_updated": "2026-06-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 300000,
+          "output": 120000
+        }
+      },
+      "lucidquery-agi-01-frontier": {
+        "id": "lucidquery-agi-01-frontier",
+        "name": "AGI-01 Frontier",
+        "family": "agi",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2026-06-05",
+        "release_date": "2026-06-16",
+        "last_updated": "2026-06-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 300000,
+          "output": 120000
         }
       }
     }
@@ -87264,15 +87282,15 @@
           "npm": "@ai-sdk/openai-compatible"
         }
       },
-      "greg-1-super": {
-        "id": "greg-1-super",
-        "name": "Greg 1 Super",
+      "greg-2-ultra": {
+        "id": "greg-2-ultra",
+        "name": "Greg 2 Ultra",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
         "temperature": true,
-        "release_date": "2026-01-27",
-        "last_updated": "2026-01-27",
+        "release_date": "2026-06-14",
+        "last_updated": "2026-06-14",
         "modalities": {
           "input": [
             "text"
@@ -87393,29 +87411,6 @@
           "npm": "@ai-sdk/openai-compatible"
         }
       },
-      "greg-1": {
-        "id": "greg-1",
-        "name": "Greg 1 Normal",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-01-27",
-        "last_updated": "2026-01-27",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 229376,
-          "output": 229376
-        }
-      },
       "glm-5.1": {
         "id": "glm-5.1",
         "name": "GLM-5.1",
@@ -87499,6 +87494,71 @@
         },
         "provider": {
           "npm": "@ai-sdk/openai-compatible"
+        }
+      },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai-compatible"
+        }
+      },
+      "greg-2-super": {
+        "id": "greg-2-super",
+        "name": "Greg 2 Super",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-14",
+        "last_updated": "2026-06-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 229376,
+          "output": 229376
         }
       },
       "kimi-k2.6": {

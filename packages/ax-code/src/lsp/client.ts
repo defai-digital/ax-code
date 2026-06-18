@@ -199,6 +199,7 @@ export namespace LSPClient {
     serverID: string
     server: LSPServer.Handle
     root: string
+    languageId?: string
     semantic?: boolean
     priority?: number
     capabilityHints?: LSPServer.CapabilityHints
@@ -213,6 +214,7 @@ export namespace LSPClient {
     )
 
     const diagnostics = new Map<string, Diagnostic[]>()
+    const serverLanguageId = input.languageId
     let closing = false
     let closeNotified = false
 
@@ -526,7 +528,8 @@ export namespace LSPClient {
             const text = await Filesystem.readText(normalized)
             const extension = path.extname(normalized).toLowerCase()
             const base = path.basename(normalized).toLowerCase()
-            const languageId = LANGUAGE_EXTENSIONS[extension] ?? LANGUAGE_EXTENSIONS[base] ?? "plaintext"
+            const languageId =
+              serverLanguageId ?? LANGUAGE_EXTENSIONS[extension] ?? LANGUAGE_EXTENSIONS[base] ?? "plaintext"
 
             const version = files[normalized]
             if (version !== undefined) {

@@ -441,6 +441,42 @@ describe("LSPClient interop", () => {
     })
   })
 
+  test("notify.open allows a server-specific languageId override", async () => {
+    await using tmp = await tmpdir()
+    const playbookPath = path.join(tmp.path, "playbook.yml")
+    await Bun.write(playbookPath, "- hosts: all\n  tasks: []\n")
+
+    const handle = spawnFakeServer() as any
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "ansible-language-server",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+          languageId: "ansible",
+        })
+
+        const sent: { method: string; params: any }[] = []
+        const conn = client.connection as typeof client.connection & {
+          sendNotification: (method: string, params: any) => Promise<void>
+        }
+        const originalSendNotification = conn.sendNotification.bind(conn)
+        conn.sendNotification = ((method: string, params: any) => {
+          sent.push({ method, params })
+          return originalSendNotification(method, params)
+        }) as typeof conn.sendNotification
+
+        await client.notify.open({ path: "playbook.yml" })
+
+        const openEntry = sent.find((entry) => entry.method === "textDocument/didOpen")
+        expect(openEntry?.params?.textDocument?.languageId).toBe("ansible")
+
+        await client.shutdown()
+      },
+    })
+  })
+
   test("ping returns true for live process, false after process dies", async () => {
     await using tmp = await tmpdir()
     const handle = spawnFakeServer() as any

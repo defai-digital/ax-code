@@ -654,6 +654,7 @@ export const Info = z
             z.object({
               command: z.array(z.string()).optional(),
               extensions: z.array(z.string()).optional(),
+              languageId: z.string().optional(),
               disabled: z.boolean().optional(),
               semantic: z.boolean().optional(),
               priority: z.number().int().optional(),
