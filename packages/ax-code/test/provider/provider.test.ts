@@ -703,6 +703,18 @@ test("parseModel rejects object input without a model id", () => {
   expect(() => Provider.parseModel({ providerID: "openai" })).toThrow('expected "provider/model"')
 })
 
+test("parseModel rejects object input with non-string fields", () => {
+  expect(() => Provider.parseModel({ providerID: 123, modelID: "gpt-5" })).toThrow('expected "provider/model"')
+  expect(() => Provider.parseModel({ providerID: "openai", modelID: 123 })).toThrow('expected "provider/model"')
+  expect(() => Provider.parseModel(null as unknown as string)).toThrow('expected "provider/model"')
+})
+
+test("parseModel accepts object input with id alias", () => {
+  const result = Provider.parseModel({ providerID: "openai", id: "gpt-5" })
+  expect(String(result.providerID)).toBe("openai")
+  expect(String(result.modelID)).toBe("gpt-5")
+})
+
 test("defaultModel returns first available model when no config set", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

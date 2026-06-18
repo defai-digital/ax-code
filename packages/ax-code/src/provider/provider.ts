@@ -1194,7 +1194,7 @@ export namespace Provider {
     }
   }
 
-  export function parseModel(model: string | { providerID: string; modelID?: string; id?: string }) {
+  export function parseModel(model: string | { providerID?: unknown; modelID?: unknown; id?: unknown }) {
     const validate = (providerID: string | undefined, modelID: string | undefined, source: string) => {
       const provider = providerID?.trim() ?? ""
       const id = modelID?.trim() ?? ""
@@ -1208,7 +1208,15 @@ export namespace Provider {
     }
 
     if (typeof model !== "string") {
-      return validate(model.providerID, model.modelID ?? model.id, model.providerID)
+      const source = model && typeof model === "object" ? String(model.providerID ?? "") : String(model)
+      const providerID = model && typeof model === "object" && typeof model.providerID === "string" ? model.providerID : undefined
+      const modelID =
+        model && typeof model === "object" && typeof model.modelID === "string"
+          ? model.modelID
+          : model && typeof model === "object" && typeof model.id === "string"
+            ? model.id
+            : undefined
+      return validate(providerID, modelID, source)
     }
     // Auto-correct "provider:model" → "provider/model"
     if (!model.includes("/") && model.includes(":")) {
