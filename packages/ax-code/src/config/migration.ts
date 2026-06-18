@@ -115,7 +115,7 @@ export function migrateLegacyConfig(config: LegacyConfig): MigrationResult {
     warnings.push(
       "The 'super_long' configuration is deprecated and will be removed in 6 months (2026-12-15). " +
         "Please migrate to 'autonomous.long_run' instead. " +
-        "See documentation for migration guide."
+        "See documentation for migration guide.",
     )
 
     // Initialize autonomous config if not present
@@ -163,7 +163,7 @@ export function logDeprecationNotice(): void {
     "Configuration format change notice: " +
       "The 'super_long' configuration key is deprecated. " +
       "Please migrate to 'autonomous.long_run' by 2026-12-15. " +
-      "Run 'ax-code config migrate' for automatic migration."
+      "Run 'ax-code config migrate' for automatic migration.",
   )
 }
 

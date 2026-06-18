@@ -51,9 +51,7 @@ export namespace MCP {
     // server that advertises registration_endpoint but rejects unknown
     // clients (e.g. Figma).
     return (
-      message.includes("registration") ||
-      message.includes("client_id") ||
-      DYNAMIC_REGISTRATION_REJECTED.test(message)
+      message.includes("registration") || message.includes("client_id") || DYNAMIC_REGISTRATION_REJECTED.test(message)
     )
   }
 

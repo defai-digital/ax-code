@@ -139,12 +139,7 @@ const MODEL_REGISTRY: ModelRegistration[] = [
   // Qwen 3.7 Max - Alibaba Cloud (official routes)
   {
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
-    providerIds: [
-      "alibaba-coding-plan",
-      "alibaba-coding-plan-cn",
-      "alibaba-token-plan",
-      "alibaba-token-plan-cn",
-    ],
+    providerIds: ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"],
     capabilities: {
       contextWindow: 131_072,
       thinking: "supported",

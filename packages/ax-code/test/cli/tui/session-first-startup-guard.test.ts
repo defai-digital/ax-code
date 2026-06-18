@@ -15,9 +15,7 @@ import { resolveSessionFirstRoute, type TuiLaunchDecision } from "@/cli/cmd/tui/
  * - route.data.type === "home"
  * - sync.data.session_loaded is true
  */
-function simulateSessionFirstEffect(
-  recentSessionIDs: string[],
-): { navigated: boolean; decision: TuiLaunchDecision } {
+function simulateSessionFirstEffect(recentSessionIDs: string[]): { navigated: boolean; decision: TuiLaunchDecision } {
   const decision = resolveSessionFirstRoute({
     recentSessionIDs,
     hasProjectContext: true,
@@ -51,11 +49,7 @@ describe("session-first startup guard (ADR-035)", () => {
   })
 
   test("never produces a home/dashboard decision across all valid inputs", () => {
-    const scenarios = [
-      { recentSessionIDs: ["a", "b"] },
-      { recentSessionIDs: ["single"] },
-      { recentSessionIDs: [] },
-    ]
+    const scenarios = [{ recentSessionIDs: ["a", "b"] }, { recentSessionIDs: ["single"] }, { recentSessionIDs: [] }]
     for (const s of scenarios) {
       const result = simulateSessionFirstEffect(s.recentSessionIDs)
       expect(result.decision.type).not.toBe("home")

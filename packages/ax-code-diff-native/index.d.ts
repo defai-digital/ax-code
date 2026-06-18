@@ -32,7 +32,12 @@ export declare function levenshtein(a: string, b: string): number
  * 4-pass fuzzy line matching.
  * Returns the index of the first match, or -1.
  */
-export declare function seekSequence(lines: Array<string>, pattern: Array<string>, startIndex: number, eof: boolean): number
+export declare function seekSequence(
+  lines: Array<string>,
+  pattern: Array<string>,
+  startIndex: number,
+  eof: boolean,
+): number
 
 /** Normalized string similarity (0.0 - 1.0). */
 export declare function similarity(a: string, b: string): number

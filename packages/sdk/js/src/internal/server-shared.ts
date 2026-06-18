@@ -71,10 +71,7 @@ export function buildAuthHeaders(username: string, password: string) {
  * then resolve with the parsed URL. Rejects on timeout, process exit, or
  * process error.
  */
-export function waitForServerReady(
-  proc: Proc,
-  options: { timeout: number; signal?: AbortSignal },
-): Promise<string> {
+export function waitForServerReady(proc: Proc, options: { timeout: number; signal?: AbortSignal }): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => {
       fail(new Error(`Timeout waiting for server to start after ${options.timeout}ms`))

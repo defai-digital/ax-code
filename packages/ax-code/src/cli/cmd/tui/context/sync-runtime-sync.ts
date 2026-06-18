@@ -69,12 +69,7 @@ export function createRuntimeSyncActions(input: {
     if (!Array.isArray(input)) return []
     return input.flatMap((item: RuntimeSyncWorktree | null) => {
       if (typeof item === "string" && item.trim().length > 0) return [item]
-      if (
-        item &&
-        typeof item === "object" &&
-        typeof item.directory === "string" &&
-        item.directory.trim().length > 0
-      ) {
+      if (item && typeof item === "object" && typeof item.directory === "string" && item.directory.trim().length > 0) {
         return [item.directory]
       }
       return []

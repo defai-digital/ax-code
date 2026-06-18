@@ -162,7 +162,9 @@ const TASK_MATRIX: EvalTaskSpec[] = [
     prompt: "ADR-013 still says Proposed. Update status to Accepted and note shipped phases.",
     expectedRouteClass: "cheap",
     fixture: {
-      touchedFiles: [{ path: "ax-internal/adr/ADR-013-qwen37-max-cloud-agent-backend.md", summary: "ADR status field" }],
+      touchedFiles: [
+        { path: "ax-internal/adr/ADR-013-qwen37-max-cloud-agent-backend.md", summary: "ADR status field" },
+      ],
     },
   },
 ]

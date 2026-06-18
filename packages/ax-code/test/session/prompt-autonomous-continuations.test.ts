@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { AutonomousContinuationPrompt } from "../../src/session/prompt-autonomous-continuations"
 
-const pendingTodos = [{ content: "Report confirmed bugs to ax-internal/bugs/", status: "in_progress", priority: "high" }]
+const pendingTodos = [
+  { content: "Report confirmed bugs to ax-internal/bugs/", status: "in_progress", priority: "high" },
+]
 
 describe("autonomous continuation prompt builders", () => {
   test("builds goal continuation guidance", () => {

@@ -1209,7 +1209,8 @@ export namespace Provider {
 
     if (typeof model !== "string") {
       const source = model && typeof model === "object" ? String(model.providerID ?? "") : String(model)
-      const providerID = model && typeof model === "object" && typeof model.providerID === "string" ? model.providerID : undefined
+      const providerID =
+        model && typeof model === "object" && typeof model.providerID === "string" ? model.providerID : undefined
       const modelID =
         model && typeof model === "object" && typeof model.modelID === "string"
           ? model.modelID

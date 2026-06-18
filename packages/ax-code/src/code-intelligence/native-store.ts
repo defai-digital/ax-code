@@ -227,7 +227,13 @@ export namespace NativeStore {
 
   // ─── Atomic ingest ────���─────────────────────────────────��─────────
 
-  export function ingestFile(projectID: ProjectID, filePath: string, nodes: unknown[], edges: unknown[], fileMeta: unknown): void {
+  export function ingestFile(
+    projectID: ProjectID,
+    filePath: string,
+    nodes: unknown[],
+    edges: unknown[],
+    fileMeta: unknown,
+  ): void {
     op("ingestFile", { projectID, filePath, nodes: nodes.length, edges: edges.length }, (store) =>
       store.ingestFile(projectID, filePath, JSON.stringify(nodes), JSON.stringify(edges), JSON.stringify(fileMeta)),
     )

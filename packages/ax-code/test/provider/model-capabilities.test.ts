@@ -57,7 +57,7 @@ describe("Model Capability Registry", () => {
       const caps1 = getModelCapabilities("qwen3.7-max")
       const caps2 = getModelCapabilities("qwen3_7_max")
       const caps3 = getModelCapabilities("Qwen3-7-Max")
-      
+
       expect(caps1.contextWindow).toBe(131_072)
       expect(caps2.contextWindow).toBe(131_072)
       expect(caps3.contextWindow).toBe(131_072)
@@ -150,10 +150,8 @@ describe("Model Capability Registry", () => {
 
     it("should include Qwen 3.7 Max registrations", () => {
       const models = listRegisteredModels()
-      const qwenModels = models.filter((m) => 
-        typeof m.pattern === "string" 
-          ? m.pattern.includes("qwen") 
-          : m.pattern.source.includes("qwen")
+      const qwenModels = models.filter((m) =>
+        typeof m.pattern === "string" ? m.pattern.includes("qwen") : m.pattern.source.includes("qwen"),
       )
       expect(qwenModels.length).toBeGreaterThan(0)
     })

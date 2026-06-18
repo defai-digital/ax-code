@@ -21,7 +21,9 @@ function normalizeStringRecord(data: unknown): Record<string, string> {
   )
 }
 
-export function normalizeConfiguredProvidersPayload<T extends ProviderDialogProvider>(data: unknown): {
+export function normalizeConfiguredProvidersPayload<T extends ProviderDialogProvider>(
+  data: unknown,
+): {
   providers: T[]
   default: Record<string, string>
 } {
@@ -37,9 +39,7 @@ export function normalizeProviderListPayload(data: unknown): ProviderListRespons
   if (!isRecord(data)) return fallback
   return {
     all: Array.isArray(data.all) ? data.all.filter(isProviderLike) : [],
-    connected: Array.isArray(data.connected)
-      ? data.connected.filter((id): id is string => typeof id === "string")
-      : [],
+    connected: Array.isArray(data.connected) ? data.connected.filter((id): id is string => typeof id === "string") : [],
     default: normalizeStringRecord(data.default),
   } as ProviderListResponse
 }

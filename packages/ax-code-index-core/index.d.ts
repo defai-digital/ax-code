@@ -78,7 +78,15 @@ export declare class IndexStore {
  */
 export declare class IntervalTree {
   constructor()
-  insert(startLine: number, startChar: number, endLine: number, endChar: number, nodeId: string, kind: string, name: string): void
+  insert(
+    startLine: number,
+    startChar: number,
+    endLine: number,
+    endChar: number,
+    nodeId: string,
+    kind: string,
+    name: string,
+  ): void
   /**
    * Find the innermost named container node at the given position.
    * Returns the node_id of the smallest container, or None.

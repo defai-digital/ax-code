@@ -9,9 +9,7 @@ export type TuiLaunchInput = {
   hasProjectContext: boolean
 }
 
-export type TuiLaunchDecision =
-  | { type: "session"; sessionID: string }
-  | { type: "new-session"; prompt?: string }
+export type TuiLaunchDecision = { type: "session"; sessionID: string } | { type: "new-session"; prompt?: string }
 
 /**
  * Resolve the session-first launch route.

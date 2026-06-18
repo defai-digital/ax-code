@@ -26,7 +26,10 @@ export function normalizeBootstrapSessionBuckets<T extends { sessionID: string }
   return groupBySession(items)
 }
 
-export function normalizeProviderBootstrapPayload<T>(data: unknown): { providers: T[]; default: Record<string, string> } {
+export function normalizeProviderBootstrapPayload<T>(data: unknown): {
+  providers: T[]
+  default: Record<string, string>
+} {
   if (!isRecord(data)) return { providers: [], default: {} }
   const providers = normalizeBootstrapList<T>(data.providers)
   const defaults = normalizeBootstrapRecord<Record<string, unknown>>(data.default)

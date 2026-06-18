@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { normalizeDocumentSymbolEnvelopeData, resolveFileAttachmentPart } from "../../src/session/prompt-file-attachment"
+import {
+  normalizeDocumentSymbolEnvelopeData,
+  resolveFileAttachmentPart,
+} from "../../src/session/prompt-file-attachment"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 describe("prompt file attachment", () => {

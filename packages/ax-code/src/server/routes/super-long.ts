@@ -4,11 +4,7 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import {
-  BooleanFeatureState,
-  persistProjectConfigBooleanFeatureResponse,
-  readProjectConfig,
-} from "./project-config"
+import { BooleanFeatureState, persistProjectConfigBooleanFeatureResponse, readProjectConfig } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 import { Env } from "../../util/env"
 import { SuperLongPolicy } from "../../session/super-long-policy"

@@ -131,7 +131,12 @@ describe("tui renderer replacement contract", () => {
       { explicitSessionID: undefined, explicitPrompt: undefined, recentSessionIDs: [], hasProjectContext: true },
       { explicitSessionID: "sess-1", explicitPrompt: undefined, recentSessionIDs: [], hasProjectContext: false },
       { explicitSessionID: undefined, explicitPrompt: "hi", recentSessionIDs: [], hasProjectContext: false },
-      { explicitSessionID: undefined, explicitPrompt: undefined, recentSessionIDs: ["recent-1"], hasProjectContext: true },
+      {
+        explicitSessionID: undefined,
+        explicitPrompt: undefined,
+        recentSessionIDs: ["recent-1"],
+        hasProjectContext: true,
+      },
     ]
     for (const input of inputs) {
       const result = resolveSessionFirstRoute(input)

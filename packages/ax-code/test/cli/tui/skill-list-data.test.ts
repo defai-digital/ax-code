@@ -18,9 +18,6 @@ describe("skill list data", () => {
         { name: "bad-description", description: 42 },
         { name: "minimal" },
       ]),
-    ).toEqual([
-      { name: "review", description: "Review code" },
-      { name: "minimal" },
-    ])
+    ).toEqual([{ name: "review", description: "Review code" }, { name: "minimal" }])
   })
 })

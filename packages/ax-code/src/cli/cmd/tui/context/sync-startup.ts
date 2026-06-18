@@ -48,8 +48,7 @@ export function createSyncStartupCoordinator(input: {
       stopped = false
       ensureReconnectGate()
       input.runBootstrapInBackground()
-      const pollWorkflow =
-        !!input.workflowRuntimeEnabled && !input.disableWorkflowDashboardPoll
+      const pollWorkflow = !!input.workflowRuntimeEnabled && !input.disableWorkflowDashboardPoll
       if (!input.debugEngineEnabled && !pollWorkflow) return
       runtimePoll = setIntervalFn(() => {
         if (input.debugEngineEnabled) input.pollDebugEngine()
