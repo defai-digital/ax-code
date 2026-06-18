@@ -88,6 +88,26 @@ export namespace Rpc {
     }
   }
 
+  function stringifyEventMessage(message: unknown): string {
+    const seen = new WeakSet<object>()
+    try {
+      return JSON.stringify(message, (_key, value) => {
+        if (typeof value === "bigint") return value.toString()
+        if (typeof value === "object" && value !== null) {
+          if (seen.has(value)) return "[Circular]"
+          seen.add(value)
+        }
+        return value
+      })
+    } catch (error) {
+      return JSON.stringify({
+        type: "rpc.event",
+        event: "rpc.serialization_error",
+        data: { error: toErrorMessage(error) },
+      })
+    }
+  }
+
   function hydrateError(error: SerializedError | undefined) {
     const result = new Error(error?.message ?? "RPC request failed")
     if (error?.name) result.name = error.name
@@ -123,7 +143,7 @@ export namespace Rpc {
   }
 
   export function emit(event: string, data: unknown) {
-    emitMessage?.(JSON.stringify({ type: "rpc.event", event, data }))
+    emitMessage?.(stringifyEventMessage({ type: "rpc.event", event, data }))
   }
 
   export async function listenStdio(

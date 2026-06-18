@@ -149,4 +149,47 @@ describe("Rpc", () => {
     expect(parsed).toContainEqual({ type: "rpc.event", event: "seen", data: 1 })
     expect(parsed).toContainEqual({ type: "rpc.result", result: 2, id: 7 })
   })
+
+  test("stdio event serialization does not fail the active request", async () => {
+    const stdin = new EventEmitter() as EventEmitter & { setEncoding: (encoding: BufferEncoding) => typeof stdin }
+    stdin.setEncoding = () => stdin
+    const writes: string[] = []
+    const stdout = {
+      write(line: string) {
+        writes.push(line)
+        return true
+      },
+      on() {
+        return stdout
+      },
+    }
+
+    const done = Rpc.listenStdio(
+      {
+        async emitNonJson() {
+          const data: Record<string, unknown> = { count: 1n }
+          data.self = data
+          Rpc.emit("non-json", data)
+          return "ok"
+        },
+      },
+      {
+        stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">,
+        stdout: stdout as unknown as Pick<NodeJS.WriteStream, "write" | "on">,
+      },
+    )
+
+    stdin.emit("data", JSON.stringify({ type: "rpc.request", method: "emitNonJson", id: 8 }) + "\n")
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    stdin.emit("close")
+    await done
+
+    const parsed = writes.map((line) => JSON.parse(line))
+    expect(parsed).toContainEqual({
+      type: "rpc.event",
+      event: "non-json",
+      data: { count: "1", self: "[Circular]" },
+    })
+    expect(parsed).toContainEqual({ type: "rpc.result", result: "ok", id: 8 })
+  })
 })
