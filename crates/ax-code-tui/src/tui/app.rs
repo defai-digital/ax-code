@@ -236,10 +236,19 @@ impl App {
                     if !self.event_targets_current_session(&properties.session_id) {
                         return;
                     }
+                    // Extract the status type string from the JSON value
+                    // (either a plain string or an object with a "type" key).
+                    let status_text = status
+                        .get("type")
+                        .and_then(serde_json::Value::as_str)
+                        .or_else(|| status.as_str());
                     if let Some(mapped) = session_status_from_value(&status) {
                         self.session_status = mapped;
                     }
-                    self.status_message = Some(format!("Status: {}", status));
+                    self.status_message = Some(format!(
+                        "Status: {}",
+                        status_text.unwrap_or("unknown")
+                    ));
                 }
             }
             RuntimeEvent::SessionError { properties } => {
@@ -1632,6 +1641,39 @@ mod tests {
             },
         });
         assert_eq!(app.session_status, SessionStatus::Idle);
+    }
+
+    #[test]
+    fn test_session_status_event_formats_readable_status_message() {
+        // Status messages must show the human-readable type string (e.g. "busy"),
+        // not the raw JSON value (e.g. {"type":"busy"} or "busy" with quotes).
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+
+        app.handle_event(RuntimeEvent::SessionStatus {
+            properties: SessionStatusProps {
+                session_id: "s1".to_string(),
+                status: Some(serde_json::json!({ "type": "busy" })),
+            },
+        });
+        assert_eq!(app.status_message.as_deref(), Some("Status: busy"));
+
+        app.handle_event(RuntimeEvent::SessionStatus {
+            properties: SessionStatusProps {
+                session_id: "s1".to_string(),
+                status: Some(serde_json::json!("idle")),
+            },
+        });
+        assert_eq!(app.status_message.as_deref(), Some("Status: idle"));
+
+        // Unknown status type falls back to "unknown" rather than dumping raw JSON.
+        app.handle_event(RuntimeEvent::SessionStatus {
+            properties: SessionStatusProps {
+                session_id: "s1".to_string(),
+                status: Some(serde_json::json!({ "unexpected": true })),
+            },
+        });
+        assert_eq!(app.status_message.as_deref(), Some("Status: unknown"));
     }
 
     #[test]
