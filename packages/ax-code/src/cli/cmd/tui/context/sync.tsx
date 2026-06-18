@@ -35,7 +35,11 @@ import { createBootstrapController } from "./sync-bootstrap-controller"
 import { createStoreBackedRuntimeSyncActions } from "./sync-runtime-adapter"
 import { createStoreBackedSessionSyncController } from "./sync-session-sync"
 import { createStoreBackedBootstrapTasks } from "./sync-bootstrap-assembly"
-import { applyProviderBootstrapState, createProviderBootstrapSuccess } from "./sync-bootstrap-store"
+import {
+  applyProviderBootstrapState,
+  createProviderBootstrapSuccess,
+  normalizeProviderBootstrapPayload,
+} from "./sync-bootstrap-store"
 import { createInitialSyncState, type SyncStoreState } from "./sync-state"
 import { createSyncStartupCoordinator } from "./sync-startup"
 import { createSyncBootstrapFlow } from "./sync-bootstrap-flow"
@@ -229,8 +233,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       // the full bootstrap.
       async refreshProviders() {
         const response = await sdk.client.config.providers({}, { throwOnError: true })
-        const data = response.data
-        if (!data) return
+        const data = normalizeProviderBootstrapPayload<Provider>(response.data)
         setStore(
           produce((draft) => {
             applyProviderBootstrapState(draft, createProviderBootstrapSuccess(data))
