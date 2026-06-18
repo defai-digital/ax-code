@@ -20,6 +20,7 @@ import { cmd } from "../cmd"
 import { asRecordOrUndefined } from "../../../util/record"
 import { parseJsonRecord } from "../../../util/json-record"
 import { Flag } from "../../../flag/flag"
+import { toErrorMessage } from "../../../util/error-message"
 
 interface DiagnosticEntry {
   service: string
@@ -125,12 +126,12 @@ function explainErrorText(error: unknown) {
         try {
           return JSON.stringify(error)
         } catch {
-          return String(error)
+          return toErrorMessage(error)
         }
       })()
     )
   }
-  return String(error)
+  return toErrorMessage(error)
 }
 
 function summarizeCounts(entries: Array<{ label: string; count: number }>, limit = 3) {

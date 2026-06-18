@@ -120,6 +120,30 @@ describe("debug explain replay hang analysis", () => {
     expect(issues[0]?.rootCause).toContain("Unable to load session bootstrap")
   })
 
+  test("classifies TUI startup failures with unprintable error payloads", () => {
+    const failure = {
+      self: undefined as unknown,
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+    failure.self = failure
+
+    const issues = classifyProcessIssues(
+      [
+        {
+          time: "2026-04-18T12:00:01.000Z",
+          eventType: "tui.native.startupFailed",
+          data: { error: failure as unknown as Record<string, unknown> },
+        },
+      ],
+      Date.parse("2026-04-18T12:00:05.000Z"),
+    )
+
+    expect(issues.some((issue) => issue.title.includes("TUI startup failed"))).toBeTrue()
+    expect(issues[0]?.rootCause).toBe("Unknown error")
+  })
+
   test("uses structured tool error messages in standard log diagnostics", () => {
     const scan = scanStandardLogLines(
       [
