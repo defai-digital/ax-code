@@ -3,6 +3,7 @@ import { Auth } from "../../src/auth"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { redactProviderInfo } from "../../src/server/routes/config"
+import { AxEnginePrepareBody, AxEngineStartBody } from "../../src/server/routes/provider"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -131,6 +132,20 @@ describe("provider routes", () => {
         expect(response.status).toBe(400)
       },
     })
+  })
+
+  test("ax-engine request schemas parse string boolean flags from JSON clients", () => {
+    const prepare = AxEnginePrepareBody.parse({
+      download: "false",
+      start: "true",
+    })
+    expect(prepare.download).toBe(false)
+    expect(prepare.start).toBe(true)
+
+    const start = AxEngineStartBody.parse({
+      download: "0",
+    })
+    expect(start.download).toBe(false)
   })
 
   test("redactProviderInfo drops the key and masks secret-bearing options", () => {

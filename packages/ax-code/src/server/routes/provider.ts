@@ -15,6 +15,7 @@ import { Log } from "../../util/log"
 import { AX_ENGINE_MODEL_IDS, getAxEngineStatus, prepareAxEngine, stopServer } from "@/provider/ax-engine"
 import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
+import { JsonBoolean } from "@/util/schema"
 
 const log = Log.create({ service: "server" })
 
@@ -51,6 +52,29 @@ export function shouldShowProviderInList(input: {
   if (alwaysShow) return true
   return input.enabled ? input.enabled.has(input.key) : NATIVE_PROVIDERS.has(input.key)
 }
+
+export const AxEnginePrepareBody = z
+  .object({
+    modelPath: z.string().optional(),
+    binaryPath: z.string().optional(),
+    modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
+    quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
+    download: JsonBoolean.optional(),
+    start: JsonBoolean.optional(),
+  })
+  .optional()
+  .default({})
+
+export const AxEngineStartBody = z
+  .object({
+    modelPath: z.string().optional(),
+    binaryPath: z.string().optional(),
+    modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
+    quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
+    download: JsonBoolean.optional(),
+  })
+  .optional()
+  .default({})
 
 export const ProviderRoutes = lazy(() =>
   new Hono()
@@ -148,20 +172,7 @@ export const ProviderRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator(
-        "json",
-        z
-          .object({
-            modelPath: z.string().optional(),
-            binaryPath: z.string().optional(),
-            modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
-            quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
-            download: z.boolean().optional(),
-            start: z.boolean().optional(),
-          })
-          .optional()
-          .default({}),
-      ),
+      validator("json", AxEnginePrepareBody),
       async (c) => {
         const body = c.req.valid("json")
         const modelID = normalizeModelID(body.modelID)
@@ -199,19 +210,7 @@ export const ProviderRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator(
-        "json",
-        z
-          .object({
-            modelPath: z.string().optional(),
-            binaryPath: z.string().optional(),
-            modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
-            quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
-            download: z.boolean().optional(),
-          })
-          .optional()
-          .default({}),
-      ),
+      validator("json", AxEngineStartBody),
       async (c) => {
         const body = c.req.valid("json")
         const modelID = normalizeModelID(body.modelID)
