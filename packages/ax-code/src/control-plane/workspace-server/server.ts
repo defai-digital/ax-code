@@ -8,7 +8,7 @@ import { Flag } from "@/flag/flag"
 import { WorkspaceID } from "../schema"
 import { Log } from "@/util/log"
 import { assertAuthenticatedNetworkBind } from "@/runtime/listen-security"
-import { pushSseFrame } from "@/server/sse-queue"
+import { pushSseFrame } from "@/util/sse-queue"
 
 const log = Log.create({ service: "workspace-server" })
 
