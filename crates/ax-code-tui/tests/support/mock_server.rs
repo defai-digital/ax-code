@@ -158,6 +158,8 @@ async fn handle_connection(
         }
 
         response
+    } else if request.starts_with("POST /session ") {
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 21\r\n\r\n{\"id\":\"mock-session\"}".to_string()
     } else if request.starts_with("POST /session/") {
         "HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n".to_string()
     } else if is_permission_reply_request(&request)

@@ -85,6 +85,24 @@ async fn test_server_attach_with_auth() {
 }
 
 #[tokio::test]
+async fn test_create_session_uses_headless_route() {
+    let server = MockServer::start().await;
+    let config = ClientConfig {
+        base_url: server.url(),
+        auth_token: None,
+        directory: None,
+        session: None,
+        prompt: None,
+    };
+    let client = HeadlessClient::new(config).expect("Failed to create client");
+
+    let session_id = client.create_session().await.expect("create session");
+    assert_eq!(session_id, "mock-session");
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn test_permission_reply_uses_headless_route() {
     let server = MockServer::start().await;
     let config = ClientConfig {
