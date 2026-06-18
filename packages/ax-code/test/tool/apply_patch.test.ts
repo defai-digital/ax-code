@@ -740,6 +740,24 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("preserves leading spaces in @@ change context", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const target = path.join(fixture.path, "indented_ctx.txt")
+        await writeAndTrack(target, "fn b\nx=20\n  fn b\nx=20\n")
+
+        const patchText = "*** Begin Patch\n*** Update File: indented_ctx.txt\n@@   fn b\n-x=20\n+x=21\n*** End Patch"
+
+        await execute({ patchText }, ctx)
+        expect(await fs.readFile(target, "utf-8")).toBe("fn b\nx=20\n  fn b\nx=21\n")
+      },
+    })
+  })
+
   test("EOF anchor matches from end of file first", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

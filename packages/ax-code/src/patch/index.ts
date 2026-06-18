@@ -129,7 +129,7 @@ export namespace Patch {
     while (i < lines.length && !lines[i].startsWith("***")) {
       if (lines[i].startsWith("@@")) {
         // Parse context line
-        const contextLine = lines[i].substring(2).trim()
+        const contextLine = lines[i] === "@@" ? "" : lines[i].startsWith("@@ ") ? lines[i].slice(3) : lines[i].slice(2)
         i++
 
         const oldLines: string[] = []
