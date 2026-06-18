@@ -77,6 +77,11 @@ export function formatGitHubAgentToolTitle(input: { title?: unknown; input?: unk
   }
 }
 
+export function formatGitHubAgentFailureMessage(error: unknown): string {
+  if (error instanceof Process.RunFailedError) return error.stderr.toString()
+  return toErrorMessage(error)
+}
+
 export const GithubCommand = cmd({
   command: "github",
   describe: "manage GitHub agent",
@@ -570,14 +575,7 @@ export const GithubRunCommand = cmd({
       } catch (e: unknown) {
         exitCode = 1
         console.error(toErrorMessage(e))
-        let msg: string
-        if (e instanceof Process.RunFailedError) {
-          msg = e.stderr.toString()
-        } else if (e instanceof Error) {
-          msg = e.message
-        } else {
-          msg = String(e)
-        }
+        const msg = formatGitHubAgentFailureMessage(e)
         if (isUserEvent) {
           await createComment(`${msg}${footer()}`)
           await removeReaction(commentType)
