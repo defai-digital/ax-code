@@ -148,6 +148,40 @@ describe("DiagnosticLog", () => {
     expect(replayEvents[0].event.error.bytes).toBeGreaterThan(0)
   })
 
+  test("does not throw on malformed replay event timestamps", async () => {
+    await using tmp = await tmpdir()
+
+    await DiagnosticLog.configure({
+      enabled: true,
+      dir: tmp.path,
+      includeContent: false,
+      manifest: { component: "test", pid: 987 },
+    })
+
+    expect(() =>
+      DiagnosticLog.record(
+        {
+          type: "session.start",
+          sessionID: "ses_bad_time",
+          directory: "/repo/project",
+          agent: "build",
+          model: "test-model",
+        },
+        { id: "evt_bad_time", sequence: 2, time: Number.NaN },
+      ),
+    ).not.toThrow()
+    await DiagnosticLog.flush()
+
+    const replayEvents = await readJsonLines(path.join(tmp.path, "events.jsonl"))
+    expect(replayEvents[0]).toMatchObject({
+      kind: "replay.event",
+      id: "evt_bad_time",
+      sequence: 2,
+      eventType: "session.start",
+    })
+    expect(Number.isFinite(Date.parse(replayEvents[0].time))).toBe(true)
+  })
+
   test("redacts provider errors for normal logs", () => {
     const error = Object.assign(new Error("provider failed"), {
       body: { apiKey: "secret" },

@@ -56,6 +56,11 @@ let processDiagnosticsInstalled = false
 let writeFailureReported = false
 const log = Log.create({ service: "diagnostic-log" })
 
+function replayEventTimestamp(time: number | undefined) {
+  const value = typeof time === "number" && Number.isFinite(time) ? time : Date.now()
+  return new Date(value).toISOString()
+}
+
 export namespace DiagnosticLog {
   export function enabled() {
     return state?.enabled ?? false
@@ -122,11 +127,10 @@ export namespace DiagnosticLog {
     const current = state
     if (!current?.enabled) return
 
-    const time = meta.time ?? Date.now()
     const record = {
       schemaVersion: 1,
       kind: "replay.event",
-      time: new Date(time).toISOString(),
+      time: replayEventTimestamp(meta.time),
       pid: process.pid,
       id: meta.id,
       sequence: meta.sequence,
