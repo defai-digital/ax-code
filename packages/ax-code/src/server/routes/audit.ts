@@ -141,7 +141,7 @@ export const AuditRoutes = lazy(() =>
         },
       }),
       validator("param", SESSION_ID_PARAM),
-      validator("query", z.object({ fromStep: z.coerce.number().optional() })),
+      validator("query", z.object({ fromStep: z.coerce.number().int().min(0).optional() })),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
         const fromStep = c.req.valid("query").fromStep

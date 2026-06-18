@@ -479,6 +479,24 @@ describe("server route validation", () => {
     })
   })
 
+  test("audit replay rejects non-integer fromStep values", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        try {
+          const fractional = await Server.Default().request(`/audit/replay/${session.id}?fromStep=0.5`)
+          expect(fractional.status).toBe(400)
+
+          const negative = await Server.Default().request(`/audit/replay/${session.id}?fromStep=-1`)
+          expect(negative.status).toBe(400)
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("pty websocket route closes failed connects instead of leaving an unhandled async open", async () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/pty.ts")).text()
     expect(src).toContain("try {")
