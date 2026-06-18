@@ -20,6 +20,12 @@ export namespace File {
   // a symlink). Surfaced as a 403 by the server error mapper instead of a 500.
   export const AccessDeniedError = NamedError.create("FileAccessDenied", z.object({ message: z.string() }))
 
+  function assertSafePathInput(file: string) {
+    if (file.includes("\0")) {
+      throw new AccessDeniedError({ message: "Access denied: path contains null byte" })
+    }
+  }
+
   export const Info = z
     .object({
       path: z.string(),
@@ -497,6 +503,7 @@ export namespace File {
 
   export async function read(file: string): Promise<Content> {
     using _ = log.time("read", { file })
+    assertSafePathInput(file)
     const full = path.join(Instance.directory, file)
 
     if (!Filesystem.contains(Instance.directory, full)) {
@@ -581,6 +588,7 @@ export namespace File {
   }
 
   export async function list(dir?: string) {
+    if (dir) assertSafePathInput(dir)
     const exclude = [".git", ".DS_Store"]
     let ignored = (_: string) => false
     if (Instance.project.vcs === "git") {

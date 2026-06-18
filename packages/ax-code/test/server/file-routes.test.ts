@@ -81,6 +81,38 @@ describe("file routes", () => {
     })
   })
 
+  test("null byte read path returns 403 instead of 500", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const dir = `directory=${encodeURIComponent(tmp.path)}`
+        const response = await Server.Default().request(`/file/content?path=${encodeURIComponent("\0bad")}&${dir}`)
+        expect(response.status).toBe(403)
+        const body = (await response.json()) as { name: string; details?: { resource?: string } }
+        expect(body.name).toBe("ForbiddenError")
+        expect(body.details?.resource).toBe("file")
+      },
+    })
+  })
+
+  test("null byte list path returns 403 instead of 500", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const dir = `directory=${encodeURIComponent(tmp.path)}`
+        const response = await Server.Default().request(`/file?path=${encodeURIComponent("\0bad")}&${dir}`)
+        expect(response.status).toBe(403)
+        const body = (await response.json()) as { name: string; details?: { resource?: string } }
+        expect(body.name).toBe("ForbiddenError")
+        expect(body.details?.resource).toBe("file")
+      },
+    })
+  })
+
   test("symlink escape read returns 403 instead of 500", async () => {
     await using tmp = await tmpdir({ git: true })
     await using outside = await tmpdir()
