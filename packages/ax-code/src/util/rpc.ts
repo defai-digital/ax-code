@@ -84,7 +84,7 @@ export namespace Rpc {
       }
     }
     return {
-      message: typeof error === "string" ? error : String(error),
+      message: toErrorMessage(error),
     }
   }
 

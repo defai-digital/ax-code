@@ -94,6 +94,44 @@ describe("Rpc", () => {
     }
   })
 
+  test("serializes unprintable worker handler failures", async () => {
+    const pair = createRpcPair()
+    try {
+      const responses: string[] = []
+      pair.target.onmessage = (event) => {
+        responses.push(event.data)
+      }
+      Rpc.listen({
+        explode() {
+          throw {
+            toString() {
+              throw new Error("cannot print")
+            },
+          }
+        },
+      })
+
+      const handler = globalThis.onmessage as ((event: MessageEvent<string>) => void | Promise<void>) | null
+      expect(handler).toBeFunction()
+      await expect(
+        Promise.resolve(
+          handler?.({
+            data: JSON.stringify({ type: "rpc.request", method: "explode", id: 11 }),
+          } as MessageEvent<string>),
+        ),
+      ).resolves.toBeUndefined()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(responses.map((line) => JSON.parse(line))).toContainEqual({
+        type: "rpc.error",
+        id: 11,
+        error: { message: "Unknown error" },
+      })
+    } finally {
+      pair.restore()
+    }
+  })
+
   test("drops malformed and non-object worker messages without crashing", async () => {
     const pair = createRpcPair()
     try {
