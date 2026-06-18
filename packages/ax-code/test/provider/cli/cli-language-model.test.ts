@@ -386,6 +386,78 @@ describe("CliLanguageModel", () => {
     }
   })
 
+  test("doStream still times out when stdout ends but the process keeps running", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const setTimeoutSpy = (
+      handler: (...args: any[]) => void,
+      timeout?: number,
+      ...args: any[]
+    ): ReturnType<typeof setTimeout> => {
+      if (timeout === 300_000) {
+        return originalSetTimeout(handler, 1, ...args)
+      }
+      return originalSetTimeout(handler, timeout, ...args)
+    }
+    globalThis.setTimeout = setTimeoutSpy as typeof globalThis.setTimeout
+
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const spawn = spyOn(Process, "spawn").mockReturnValue({
+      stdout,
+      stderr,
+      exited: new Promise<number>(() => {}),
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 1001,
+      stdin: null,
+    } as any)
+    const shellKill = spyOn(Shell, "killTree").mockResolvedValue()
+
+    try {
+      const model = makeModel({
+        binary: "hung-after-stdout",
+        parser: {
+          parseComplete: () => ({ text: "" }),
+          parseStreamLine: (line: string) => line,
+        },
+        promptMode: "arg",
+      })
+
+      const { stream } = await model.doStream({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+      })
+
+      stdout.end("partial output")
+      stderr.end()
+
+      const parts: any[] = []
+      const reader = stream.getReader()
+      const outcome = await Promise.race([
+        (async () => {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            parts.push(value)
+          }
+          return "closed"
+        })(),
+        new Promise<"stalled">((resolve) => originalSetTimeout(() => resolve("stalled"), 50)),
+      ])
+
+      expect(outcome).toBe("closed")
+      const error = parts.find((part) => part.type === "error")
+      expect(error).toBeDefined()
+      expect(String(error.error)).toContain("CLI process timed out after 300s")
+      expect(String(error.error)).toContain("partial output")
+      expect(shellKill).toHaveBeenCalled()
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      spawn.mockRestore()
+      shellKill.mockRestore()
+    }
+  })
+
   test("doStream preserves UTF-8 characters split across stdout chunks", async () => {
     const model = makeModel({
       binary: process.execPath,

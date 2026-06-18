@@ -468,7 +468,6 @@ export class CliLanguageModel implements LanguageModelV3 {
           processStdoutText(stdoutDecoder.write(chunk))
         }
         onStdoutEnd = () => {
-          clearTimeout(timer)
           if (closed()) return
           stdoutEnded = true
           flushOutput()
