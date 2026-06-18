@@ -237,6 +237,12 @@ impl App {
                     }
                 }
             }
+            RuntimeEvent::MessageRemoved { properties } => {
+                self.messages.retain(|m| m.id != properties.message_id);
+                self.message_text_parts
+                    .retain(|part| part.message_id != properties.message_id);
+                self.scroll_offset = self.scroll_offset.min(self.messages.len());
+            }
             RuntimeEvent::MessagePartDelta { properties } => {
                 if properties.field == "text" || properties.field == "content" {
                     self.append_message_text_delta(
@@ -256,6 +262,13 @@ impl App {
                         );
                     }
                 }
+            }
+            RuntimeEvent::MessagePartRemoved { properties } => {
+                self.message_text_parts.retain(|part| {
+                    !(part.message_id == properties.message_id
+                        && part.part_id == properties.part_id)
+                });
+                self.rebuild_message_content(&properties.message_id);
             }
             RuntimeEvent::PermissionAsked { properties } => {
                 let permission_type = properties.permission_type.unwrap_or_default();
@@ -839,7 +852,7 @@ mod tests {
     use super::*;
     use crate::events::{
         MessageData, MessageInfo, MessagePartData, MessagePartDeltaProps, MessagePartInfo,
-        RequestReplyProps, RuntimeEvent,
+        MessagePartRemovedProps, MessageRemovedProps, RequestReplyProps, RuntimeEvent,
     };
 
     // === HIGH 1: multi-byte prompt editing must not panic ===
@@ -1161,6 +1174,56 @@ mod tests {
         });
 
         assert_eq!(app.messages[0].content, "partial final");
+    }
+
+    #[test]
+    fn test_message_removed_clears_message_and_parts() {
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::MessagePartDelta {
+            properties: MessagePartDeltaProps {
+                message_id: "m1".to_string(),
+                part_id: "p1".to_string(),
+                field: "text".to_string(),
+                delta: "visible".to_string(),
+            },
+        });
+        app.scroll_offset = 10;
+
+        app.handle_event(RuntimeEvent::MessageRemoved {
+            properties: MessageRemovedProps {
+                session_id: "s".to_string(),
+                message_id: "m1".to_string(),
+            },
+        });
+
+        assert!(app.messages.is_empty());
+        assert!(app.message_text_parts.is_empty());
+        assert_eq!(app.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_message_part_removed_rebuilds_content() {
+        let mut app = App::new();
+        for (part_id, delta) in [("p1", "hello "), ("p2", "world")] {
+            app.handle_event(RuntimeEvent::MessagePartDelta {
+                properties: MessagePartDeltaProps {
+                    message_id: "m1".to_string(),
+                    part_id: part_id.to_string(),
+                    field: "text".to_string(),
+                    delta: delta.to_string(),
+                },
+            });
+        }
+        assert_eq!(app.messages[0].content, "hello world");
+
+        app.handle_event(RuntimeEvent::MessagePartRemoved {
+            properties: MessagePartRemovedProps {
+                message_id: "m1".to_string(),
+                part_id: "p1".to_string(),
+            },
+        });
+
+        assert_eq!(app.messages[0].content, "world");
     }
 
     // === LOW 2: request_abort does not optimistically flip status ===

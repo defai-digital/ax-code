@@ -179,6 +179,35 @@ async fn test_parse_message_part_updated() {
 }
 
 #[tokio::test]
+async fn test_parse_message_removed() {
+    let json =
+        r#"{"type":"message.removed","properties":{"sessionID":"sess_123","messageID":"msg_123"}}"#;
+    let event: RuntimeEvent = serde_json::from_str(json).unwrap();
+
+    match event {
+        RuntimeEvent::MessageRemoved { properties } => {
+            assert_eq!(properties.session_id, "sess_123");
+            assert_eq!(properties.message_id, "msg_123");
+        }
+        _ => panic!("Expected MessageRemoved event"),
+    }
+}
+
+#[tokio::test]
+async fn test_parse_message_part_removed() {
+    let json = r#"{"type":"message.part.removed","properties":{"messageID":"msg_123","partID":"part_456"}}"#;
+    let event: RuntimeEvent = serde_json::from_str(json).unwrap();
+
+    match event {
+        RuntimeEvent::MessagePartRemoved { properties } => {
+            assert_eq!(properties.message_id, "msg_123");
+            assert_eq!(properties.part_id, "part_456");
+        }
+        _ => panic!("Expected MessagePartRemoved event"),
+    }
+}
+
+#[tokio::test]
 async fn test_parse_todo_event() {
     let json = r#"{"type":"todo.updated","properties":{"sessionID":"sess_123","todos":[{"id":"todo_1","content":"Do something","status":"pending"}]}}"#;
     let event: RuntimeEvent = serde_json::from_str(json).unwrap();

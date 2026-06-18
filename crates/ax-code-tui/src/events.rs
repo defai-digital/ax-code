@@ -55,6 +55,13 @@ pub enum RuntimeEvent {
         properties: MessageInfo,
     },
 
+    /// Message removed.
+    #[serde(rename = "message.removed")]
+    MessageRemoved {
+        #[serde(default)]
+        properties: MessageRemovedProps,
+    },
+
     /// Message part updated.
     #[serde(rename = "message.part.updated")]
     MessagePartUpdated {
@@ -67,6 +74,13 @@ pub enum RuntimeEvent {
     MessagePartDelta {
         #[serde(default)]
         properties: MessagePartDeltaProps,
+    },
+
+    /// Message part removed.
+    #[serde(rename = "message.part.removed")]
+    MessagePartRemoved {
+        #[serde(default)]
+        properties: MessagePartRemovedProps,
     },
 
     // === Permission/Question events ===
@@ -201,6 +215,14 @@ pub struct MessageData {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessageRemovedProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(rename = "messageID", default)]
+    pub message_id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MessagePartInfo {
     #[serde(default)]
     pub part: Option<MessagePartData>,
@@ -229,6 +251,14 @@ pub struct MessagePartDeltaProps {
     pub field: String,
     #[serde(default)]
     pub delta: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessagePartRemovedProps {
+    #[serde(rename = "messageID", default)]
+    pub message_id: String,
+    #[serde(rename = "partID", default)]
+    pub part_id: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
