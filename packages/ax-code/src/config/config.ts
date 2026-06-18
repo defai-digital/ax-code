@@ -807,6 +807,7 @@ export namespace Config {
 
   async function loadPlugin(dir: string) {
     const plugins: string[] = []
+    const root = await fs.realpath(path.resolve(dir)).catch(() => path.resolve(dir))
 
     for (const item of await Glob.scan("{plugin,plugins}/*.{ts,js}", {
       cwd: dir,
@@ -814,15 +815,23 @@ export namespace Config {
       dot: true,
       symlink: true,
     })) {
+      const resolved = await fs.realpath(path.resolve(item)).catch(() => undefined)
+      if (!resolved || !Filesystem.contains(root, resolved)) {
+        log.warn("ignoring plugin symlink outside config directory", { plugin: item, dir })
+        continue
+      }
       plugins.push(pathToFileURL(item).href)
     }
     return plugins
   }
 
-  function isLocalFilePlugin(plugin: string, dir: string) {
+  async function isLocalFilePlugin(plugin: string, dir: string) {
     if (!plugin.startsWith("file://")) return false
     try {
-      return Filesystem.contains(dir, fileURLToPath(plugin))
+      const pluginPath = fileURLToPath(plugin)
+      const resolved = await fs.realpath(path.resolve(pluginPath))
+      const root = await fs.realpath(path.resolve(dir)).catch(() => path.resolve(dir))
+      return Filesystem.contains(root, resolved)
     } catch {
       return false
     }
@@ -841,11 +850,19 @@ export namespace Config {
     }
   }
 
-  function isAllowedUntrustedPlugin(plugin: string, source: string, isFile: boolean) {
+  async function isAllowedUntrustedPlugin(plugin: string, source: string, isFile: boolean) {
     if (!isFile) return false
-    if (isLocalFilePlugin(plugin, Instance.worktree)) return true
+    if (await isLocalFilePlugin(plugin, Instance.worktree)) return true
     log.warn("ignoring plugin from untrusted config", { plugin, source })
     return false
+  }
+
+  async function filterAllowedUntrustedPlugins(plugins: string[], source: string, isFile: boolean) {
+    const allowed: string[] = []
+    for (const plugin of plugins) {
+      if (await isAllowedUntrustedPlugin(plugin, source, isFile)) allowed.push(plugin)
+    }
+    return allowed
   }
 
   /**
@@ -1035,7 +1052,7 @@ export namespace Config {
         }
       }
       if (data.plugin && options.trusted === false) {
-        data.plugin = data.plugin.filter((plugin) => isAllowedUntrustedPlugin(plugin, source, isFile))
+        data.plugin = await filterAllowedUntrustedPlugins(data.plugin, source, isFile)
       }
       return data
     }

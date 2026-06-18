@@ -1072,6 +1072,40 @@ test("drops unresolved package plugins from untrusted project config", async () 
   })
 })
 
+test.skipIf(process.platform === "win32")("drops untrusted file plugins that resolve outside the worktree", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const outside = path.join(dir, "..", `${path.basename(dir)}-outside-plugin.js`)
+      await Filesystem.write(outside, "export default {}\n")
+
+      const pluginDir = path.join(dir, ".ax-code", "plugin")
+      await fs.mkdir(pluginDir, { recursive: true })
+      const link = path.join(pluginDir, "escape.js")
+      await fs.symlink(outside, link)
+
+      await Filesystem.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify(
+          {
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            plugin: [pathToFileURL(link).href],
+          },
+          null,
+          2,
+        ),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.plugin ?? []).toEqual([])
+    },
+  })
+})
+
 test("drops unresolved package plugins from untrusted config directories", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
