@@ -64,3 +64,19 @@ describe("ACP replay data URL decoding", () => {
     })
   })
 })
+
+describe("ACP session list cursor parsing", () => {
+  test("parses finite non-negative integer cursors", () => {
+    expect(ACP.parseListSessionsCursor(undefined)).toBeUndefined()
+    expect(ACP.parseListSessionsCursor(null)).toBeUndefined()
+    expect(ACP.parseListSessionsCursor("")).toBeUndefined()
+    expect(ACP.parseListSessionsCursor(" 0 ")).toBe(0)
+    expect(ACP.parseListSessionsCursor("1710000000000")).toBe(1710000000000)
+  })
+
+  test("rejects invalid cursors instead of treating them as the first page", () => {
+    expect(() => ACP.parseListSessionsCursor("abc")).toThrow()
+    expect(() => ACP.parseListSessionsCursor("1.5")).toThrow()
+    expect(() => ACP.parseListSessionsCursor("-1")).toThrow()
+  })
+})

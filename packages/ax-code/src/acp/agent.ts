@@ -147,6 +147,17 @@ export namespace ACP {
     }
   }
 
+  export function parseListSessionsCursor(cursor: string | null | undefined): number | undefined {
+    if (cursor === undefined || cursor === null) return undefined
+    const trimmed = cursor.trim()
+    if (!trimmed) return undefined
+    const parsed = Number(trimmed)
+    if (!Number.isSafeInteger(parsed) || parsed < 0) {
+      throw RequestError.invalidParams(JSON.stringify({ error: "Invalid session list cursor" }))
+    }
+    return parsed
+  }
+
   async function getContextLimit(
     sdk: OpencodeClient,
     providerID: ProviderID,
@@ -600,7 +611,7 @@ export namespace ACP {
 
     async unstable_listSessions(params: ListSessionsRequest): Promise<ListSessionsResponse> {
       try {
-        const cursor = params.cursor ? Number(params.cursor) : undefined
+        const cursor = parseListSessionsCursor(params.cursor)
         const limit = 100
 
         const sessions = await this.sdk.session
@@ -614,7 +625,7 @@ export namespace ACP {
           .then((x) => x.data ?? [])
 
         const sorted = sessions.toSorted((a, b) => b.time.updated - a.time.updated)
-        const filtered = cursor ? sorted.filter((s) => s.time.updated < cursor) : sorted
+        const filtered = cursor !== undefined ? sorted.filter((s) => s.time.updated < cursor) : sorted
         const page = filtered.slice(0, limit)
 
         const entries: SessionInfo[] = page.map((session) => ({
