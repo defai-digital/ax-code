@@ -264,6 +264,26 @@ describe("Project.fromDirectory with worktrees", () => {
         .catch(() => {})
     }
   })
+
+  test("normalizes sandbox paths before dedupe and removal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { project } = await Project.fromDirectory(tmp.path)
+    const target = path.join(tmp.path, "sandbox")
+    await fs.mkdir(target)
+    const nonCanonical = `${target}${path.sep}..${path.sep}${path.basename(target)}`
+    const expected = Filesystem.resolve(target)
+
+    expect(nonCanonical).not.toBe(expected)
+
+    await Project.addSandbox(project.id, nonCanonical)
+    expect(await Project.sandboxes(project.id)).toEqual([expected])
+
+    await Project.addSandbox(project.id, expected)
+    expect(await Project.sandboxes(project.id)).toEqual([expected])
+
+    await Project.removeSandbox(project.id, expected)
+    expect(await Project.sandboxes(project.id)).toEqual([])
+  })
 })
 
 describe("Project.discover", () => {

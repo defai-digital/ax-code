@@ -113,6 +113,14 @@ export namespace Project {
   })
   export type UpdateInput = z.infer<typeof UpdateInput>
 
+  function normalizeSandboxDirectory(directory: string) {
+    try {
+      return Filesystem.resolve(directory)
+    } catch {
+      return path.resolve(Filesystem.windowsPath(directory))
+    }
+  }
+
   function directoryProjectID(directory: string) {
     const normalized = path.resolve(directory)
     const hash = createHash("sha1").update(normalized).digest("hex")
@@ -378,19 +386,25 @@ export namespace Project {
     if (!row) return []
     const data = safe(row)
     if (!data) return []
-    return (
-      await Promise.all(
-        data.sandboxes.map(async (directory) => ((await Filesystem.isDir(directory)) ? directory : undefined)),
-      )
-    ).filter((directory): directory is string => directory !== undefined)
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const raw of data.sandboxes) {
+      const directory = normalizeSandboxDirectory(raw)
+      if (seen.has(directory)) continue
+      if (!(await Filesystem.isDir(directory))) continue
+      seen.add(directory)
+      result.push(directory)
+    }
+    return result
   }
 
   async function addSandboxPromise(id: ProjectID, directory: string) {
+    const normalized = normalizeSandboxDirectory(directory)
     const result = Database.transaction((d) => {
       const row = d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get()
       if (!row) throw new Error(`Project not found: ${id}`)
-      const sandboxes = [...(safe(row)?.sandboxes ?? [])]
-      if (!sandboxes.includes(directory)) sandboxes.push(directory)
+      const sandboxes = [...new Set((safe(row)?.sandboxes ?? []).map(normalizeSandboxDirectory))]
+      if (!sandboxes.includes(normalized)) sandboxes.push(normalized)
       return d
         .update(ProjectTable)
         .set({ sandboxes, time_updated: Date.now() })
@@ -403,10 +417,13 @@ export namespace Project {
   }
 
   async function removeSandboxPromise(id: ProjectID, directory: string) {
+    const normalized = normalizeSandboxDirectory(directory)
     const result = Database.transaction((d) => {
       const row = d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get()
       if (!row) throw new Error(`Project not found: ${id}`)
-      const sandboxes = (safe(row)?.sandboxes ?? []).filter((sandbox) => sandbox !== directory)
+      const sandboxes = (safe(row)?.sandboxes ?? [])
+        .map(normalizeSandboxDirectory)
+        .filter((sandbox) => sandbox !== normalized)
       return d
         .update(ProjectTable)
         .set({ sandboxes, time_updated: Date.now() })
