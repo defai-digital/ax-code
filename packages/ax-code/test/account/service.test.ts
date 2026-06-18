@@ -82,6 +82,51 @@ test("orgsByAccount groups orgs per account", async () => {
   expect(seen).toEqual(["GET https://one.example.com/api/orgs", "GET https://two.example.com/api/orgs"])
 })
 
+test("orgsByAccount skips accounts whose org fetch fails with an unprintable reason", async () => {
+  await AccountRepo.persistAccount({
+    id: AccountID.make("user-1"),
+    email: "one@example.com",
+    url: "https://one.example.com",
+    accessToken: AccessToken.make("at_1"),
+    refreshToken: RefreshToken.make("rt_1"),
+    expiry: Date.now() + 60_000,
+    orgID: undefined,
+  })
+
+  await AccountRepo.persistAccount({
+    id: AccountID.make("user-2"),
+    email: "two@example.com",
+    url: "https://two.example.com",
+    accessToken: AccessToken.make("at_2"),
+    refreshToken: RefreshToken.make("rt_2"),
+    expiry: Date.now() + 60_000,
+    orgID: undefined,
+  })
+
+  const failure = {
+    toString() {
+      throw new Error("cannot print")
+    },
+  }
+  const client = fetchClient((req) => {
+    if (req.url === "https://one.example.com/api/orgs") {
+      return json([org("org-1", "One")])
+    }
+
+    if (req.url === "https://two.example.com/api/orgs") {
+      throw failure
+    }
+
+    return json([], 404)
+  })
+
+  const rows = await Account.create({ fetch: client }).orgsByAccount()
+
+  expect(rows.map((row) => [row.account.id, row.orgs.map((org) => org.id)]).map(([id, orgs]) => [id, orgs])).toEqual([
+    [AccountID.make("user-1"), [OrgID.make("org-1")]],
+  ])
+})
+
 test("token refresh persists the new token", async () => {
   const id = AccountID.make("user-1")
 

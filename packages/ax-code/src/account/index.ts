@@ -1,6 +1,7 @@
 import z from "zod"
 
 import { Log } from "@/util/log"
+import { toErrorMessage } from "@/util/error-message"
 import { AccountRepo, type AccountRow } from "./repo"
 import {
   type AccountError,
@@ -309,7 +310,7 @@ export namespace Account {
         )
         return results.flatMap((result) => {
           if (result.status === "fulfilled") return [result.value]
-          log.warn("failed to fetch orgs for account", { error: String(result.reason) })
+          log.warn("failed to fetch orgs for account", { error: toErrorMessage(result.reason) })
           return []
         })
       },
