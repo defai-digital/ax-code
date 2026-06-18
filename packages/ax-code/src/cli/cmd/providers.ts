@@ -40,6 +40,10 @@ async function removeProviderAuth(provider: string) {
   await Provider.invalidate().catch(() => {})
 }
 
+function isWellKnownAuthCommand(input: unknown): input is string[] {
+  return Array.isArray(input) && input.length > 0 && input.every((item) => typeof item === "string" && item.trim())
+}
+
 async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, methodName?: string): Promise<boolean> {
   let index = 0
   if (methodName) {
@@ -506,8 +510,8 @@ export const ProvidersLoginCommand = cmd({
             prompts.outro("Done")
             return
           }
-          if (!wellknown?.auth?.command || !Array.isArray(wellknown.auth.command)) {
-            prompts.log.error("Well-known config missing auth.command")
+          if (!isWellKnownAuthCommand(wellknown?.auth?.command)) {
+            prompts.log.error("Well-known config has missing or invalid auth.command (expected non-empty string array)")
             prompts.outro("Done")
             return
           }

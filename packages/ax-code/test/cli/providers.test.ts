@@ -205,4 +205,42 @@ describe("providers command", () => {
       globalThis.setTimeout = originalSetTimeout
     }
   })
+
+  test("well-known login rejects malformed auth command before prompting or spawning", async () => {
+    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
+    const confirmSpy = spyOn(prompts, "confirm")
+    const spawnSpy = spyOn(Process, "spawn")
+
+    spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+      ok: true,
+      async json() {
+        return {
+          auth: {
+            command: ["auth-cli", 42],
+            env: "MY_AUTH_TOKEN",
+          },
+        }
+      },
+    } as any)
+
+    try {
+      await ProvidersLoginCommand.handler({ url: "https://example.com" } as any)
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Well-known config has missing or invalid auth.command (expected non-empty string array)",
+      )
+      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(spawnSpy).not.toHaveBeenCalled()
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      confirmSpy.mockRestore()
+      spawnSpy.mockRestore()
+    }
+  })
 })
