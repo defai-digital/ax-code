@@ -76,6 +76,15 @@ export function parseTraceTextLogLine(line: string): LogEntry | undefined {
   return entry
 }
 
+export function formatTraceLogTime(entry: Pick<LogEntry, "time">): string {
+  if (typeof entry.time === "number") {
+    const date = new Date(entry.time)
+    if (!Number.isFinite(date.getTime())) return ""
+    return date.toISOString().split("T")[1].split(".")[0] ?? ""
+  }
+  return entry.time?.split("T")[1]?.split(".")[0] ?? ""
+}
+
 export const TraceCommand: CommandModule = {
   command: "trace [sessionID]",
   describe: "analyze execution trace from structured logs",
@@ -333,10 +342,7 @@ export const TraceCommand: CommandModule = {
               ? "\x1b[32m✓\x1b[0m"
               : "\x1b[90m·\x1b[0m"
 
-      const time =
-        typeof entry.time === "number"
-          ? new Date(entry.time).toISOString().split("T")[1].split(".")[0]
-          : (entry.time?.split("T")[1]?.split(".")[0] ?? "")
+      const time = formatTraceLogTime(entry)
 
       const service = entry.service ? `\x1b[36m${entry.service}\x1b[0m` : ""
       const command = entry.command || entry.toolName || ""
