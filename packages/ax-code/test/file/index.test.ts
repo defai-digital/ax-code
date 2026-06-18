@@ -108,6 +108,29 @@ describe("file/index Filesystem patterns", () => {
         readText.mockRestore()
       }
     })
+
+    test("does not mask text read failures as empty files", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "locked.txt")
+      await fs.writeFile(filepath, "secret", "utf-8")
+
+      const failure = Object.assign(new Error("permission denied"), { code: "EACCES" })
+      const readText = spyOn(Filesystem, "readText").mockImplementation(async (target) => {
+        if (target === filepath) throw failure
+        return fs.readFile(target, "utf-8")
+      })
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await expect(File.read("locked.txt")).rejects.toBe(failure)
+          },
+        })
+      } finally {
+        readText.mockRestore()
+      }
+    })
   })
 
   describe("File.read() - binary content", () => {

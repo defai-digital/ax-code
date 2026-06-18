@@ -558,7 +558,10 @@ export namespace File {
       }
     }
 
-    const content = await Filesystem.readText(readTarget).catch(() => "")
+    const content = await Filesystem.readText(readTarget).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return ""
+      throw error
+    })
 
     if (Instance.project.vcs === "git") {
       let diff = (await git(["-c", "core.fsmonitor=false", "diff", "--", file], { cwd: Instance.directory })).text()
