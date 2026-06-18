@@ -82,7 +82,7 @@ export namespace Tool {
               throw new Error(toolInfo.formatValidationError(error), { cause: error })
             }
             throw new Error(
-              `The ${id} tool was called with invalid arguments: ${error}.\nPlease rewrite the input so it satisfies the expected schema.`,
+              `The ${id} tool was called with invalid arguments: ${toErrorMessage(error)}.\nPlease rewrite the input so it satisfies the expected schema.`,
               { cause: error },
             )
           }
