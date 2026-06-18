@@ -33,6 +33,7 @@ import { lazy } from "../../util/lazy"
 import { parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
 import { parseCurrentProjectSessionID, requireCurrentProjectSession } from "./session-lookup"
 import { QueryBoolean } from "./query"
+import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "server" })
 
@@ -202,7 +203,7 @@ export const SessionRoutes = lazy(() =>
         const query = c.req.valid("query")
         const sessions = [
           ...Session.list({
-            directory: query.directory,
+            directory: Instance.directory,
             roots: query.roots,
             start: query.start,
             search: query.search,

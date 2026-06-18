@@ -63,5 +63,5 @@ export function requestDirectory(c: Context): string | Response {
   if (DANGEROUS_ROOTS.has(realDirectory) || isSensitiveHomeDirectory) {
     return invalidRequest(c, { message: "Directory is not allowed", details: { resource: "directory" } })
   }
-  return directory
+  return realDirectory
 }
