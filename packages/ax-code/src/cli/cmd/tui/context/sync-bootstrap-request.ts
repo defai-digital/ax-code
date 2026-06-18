@@ -1,4 +1,5 @@
 import type { OpencodeClient } from "@ax-code/sdk/v2"
+import { isRecord } from "@/util/record"
 
 export interface TimedBootstrapRequest<T> {
   label: string
@@ -8,6 +9,14 @@ export interface TimedBootstrapRequest<T> {
 }
 
 export type BootstrapRequestWrap = <T>(label: string, promise: Promise<T>, timeoutMs?: number) => Promise<T>
+
+function hasStringID(input: unknown): input is { id: string } {
+  return isRecord(input) && typeof input.id === "string"
+}
+
+export function normalizeSessionListResponse<T extends { id: string }>(data: unknown): T[] {
+  return Array.isArray(data) ? (data.filter(hasStringID) as T[]).toSorted((a, b) => a.id.localeCompare(b.id)) : []
+}
 
 export function createTimedBootstrapRequest<T>(wrap: BootstrapRequestWrap, input: TimedBootstrapRequest<T>) {
   return () => {
@@ -67,7 +76,7 @@ export function createSyncBootstrapRequests<TClient extends SyncBootstrapRequest
       request: () =>
         input.client.session
           .list({ start: input.sessionListStart })
-          .then((response) => (response.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id))),
+          .then((response) => normalizeSessionListResponse(response.data)),
       onSettled: input.onSessionListSettled,
     },
     providersPromise: {

@@ -3,6 +3,7 @@ import {
   createSyncBootstrapRequests,
   createTimedBootstrapRequest,
   createTimedBootstrapRequests,
+  normalizeSessionListResponse,
   type SyncBootstrapRequestClient,
 } from "../../../src/cli/cmd/tui/context/sync-bootstrap-request"
 
@@ -88,6 +89,50 @@ describe("tui sync bootstrap request", () => {
     await expect(requests.alpha()).resolves.toBe(1)
     await expect(requests.beta()).resolves.toBe("x")
     expect(wrapped).toEqual(["tui bootstrap alpha", "tui bootstrap beta"])
+  })
+
+  test("normalizes malformed session list responses before sorting", () => {
+    expect(normalizeSessionListResponse(null)).toEqual([])
+    expect(normalizeSessionListResponse({ id: "ses_a" })).toEqual([])
+    expect(
+      normalizeSessionListResponse<{ id: string; title: string }>([
+        { id: "ses_b", title: "b" },
+        null,
+        { id: 42 },
+        { title: "missing" },
+        { id: "ses_a", title: "a" },
+      ]),
+    ).toEqual([
+      { id: "ses_a", title: "a" },
+      { id: "ses_b", title: "b" },
+    ])
+  })
+
+  test("sanitizes malformed session list response data in the request bundle", async () => {
+    const client = {
+      session: {
+        list() {
+          return Promise.resolve({ data: [{ id: "ses_b" }, { id: null }, { id: "ses_a" }] })
+        },
+      },
+    } as unknown as SyncBootstrapRequestClient
+
+    const requests = createSyncBootstrapRequests({
+      wrap(_label, request) {
+        return request
+      },
+      client,
+      sessionListStart: 0,
+      syncIsolation: () => Promise.resolve(),
+      syncAutonomous: () => Promise.resolve(),
+      syncWorkspaces: () => Promise.resolve(),
+      syncDebugEngine: () => Promise.resolve(),
+      syncWorkflowDashboard: () => Promise.resolve(),
+      syncSmartLlm: () => Promise.resolve(),
+      syncSuperLong: () => Promise.resolve(),
+    })
+
+    await expect(requests.sessionListPromise()).resolves.toEqual([{ id: "ses_a" }, { id: "ses_b" }])
   })
 
   test("builds the full sync bootstrap request bundle lazily with consistent labels and options", async () => {
