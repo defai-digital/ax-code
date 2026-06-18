@@ -96,16 +96,29 @@ function getFinalAssistantText(message: AssistantMessageRecord | undefined) {
 
 export function formatToolArgumentsForPrompt(input: Record<string, unknown>): string {
   const seen = new WeakSet<object>()
-  return (
-    JSON.stringify(input, (_key, value) => {
-      if (typeof value === "bigint") return value.toString()
-      if (value && typeof value === "object") {
-        if (seen.has(value)) return "[Circular]"
-        seen.add(value)
-      }
-      return value
-    }) ?? "{}"
-  )
+  try {
+    return (
+      JSON.stringify(input, (_key, value) => {
+        if (typeof value === "bigint") return value.toString()
+        if (value && typeof value === "object") {
+          if (seen.has(value)) return "[Circular]"
+          seen.add(value)
+        }
+        return value
+      }) ?? "{}"
+    )
+  } catch (error) {
+    return JSON.stringify({ serialization_error: formatSerializationError(error) })
+  }
+}
+
+function formatSerializationError(error: unknown) {
+  if (error instanceof Error) return error.message
+  try {
+    return String(error)
+  } catch {
+    return "Unknown serialization error"
+  }
 }
 
 function getToolOutput(state: Extract<ApiPart, { type: "tool" }>["state"]) {

@@ -9,6 +9,24 @@ test("programmatic tool argument formatting handles bigint and circular input", 
   expect(formatToolArgumentsForPrompt(input)).toBe('{"count":"1","self":"[Circular]"}')
 })
 
+test("programmatic tool argument formatting falls back when serialization throws", () => {
+  const broken = function brokenThrowable() {
+    return undefined
+  }
+  Object.defineProperty(broken, Symbol.toPrimitive, {
+    value() {
+      throw new Error("cannot stringify")
+    },
+  })
+  const input = {
+    toJSON() {
+      throw broken
+    },
+  }
+
+  expect(formatToolArgumentsForPrompt(input)).toBe('{"serialization_error":"Unknown serialization error"}')
+})
+
 test("programmatic stream removes abort listeners when prompt fails", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/sdk/programmatic.ts")).text()
   const start = src.indexOf("stream(message: string, options?: RunOptions): StreamHandle")
