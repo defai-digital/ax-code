@@ -404,10 +404,7 @@ export namespace Config {
       // plugins across directories / reloads.
       result.plugin = [...result.plugin, ...pluginFiles]
 
-      if (
-        dependencyManaged &&
-        [...configuredPlugins, ...pluginFiles].some((plugin) => isLocalFilePlugin(plugin, dir))
-      ) {
+      if (dependencyManaged && (await hasLocalFilePlugin([...configuredPlugins, ...pluginFiles], dir))) {
         deps.push(
           iife(async () => {
             const shouldInstall = await needsInstall(dir)
@@ -835,6 +832,13 @@ export namespace Config {
     } catch {
       return false
     }
+  }
+
+  async function hasLocalFilePlugin(plugins: string[], dir: string) {
+    for (const plugin of plugins) {
+      if (await isLocalFilePlugin(plugin, dir)) return true
+    }
+    return false
   }
 
   function resolvePluginSpecifier(plugin: string, configPath: string) {

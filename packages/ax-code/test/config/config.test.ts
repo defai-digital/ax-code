@@ -849,6 +849,49 @@ test("does not install dependencies in writable AX_CODE_CONFIG_DIR without local
   }
 })
 
+test("does not install dependencies in writable AX_CODE_CONFIG_DIR for package-only plugins", async () => {
+  await using tmp = await tmpdir<string>({
+    init: async (dir) => {
+      const cfg = path.join(dir, "configdir")
+      await fs.mkdir(cfg, { recursive: true })
+      await Filesystem.write(
+        path.join(cfg, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          plugin: ["@scope/package-plugin"],
+        }),
+      )
+      return cfg
+    },
+  })
+
+  const prev = process.env.AX_CODE_CONFIG_DIR
+  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+    code: 0,
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+  }))
+  process.env.AX_CODE_CONFIG_DIR = tmp.extra
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Config.get()
+        await Config.waitForDependencies()
+      },
+    })
+
+    expect(run).not.toHaveBeenCalled()
+    expect(await Filesystem.exists(path.join(tmp.extra, "package.json"))).toBe(false)
+    expect(await Filesystem.exists(path.join(tmp.extra, ".gitignore"))).toBe(false)
+  } finally {
+    run.mockRestore()
+    if (prev === undefined) delete process.env.AX_CODE_CONFIG_DIR
+    else process.env.AX_CODE_CONFIG_DIR = prev
+  }
+})
+
 test("installs dependencies in writable AX_CODE_CONFIG_DIR when local plugins exist", async () => {
   await using tmp = await tmpdir<string>({
     init: async (dir) => {
