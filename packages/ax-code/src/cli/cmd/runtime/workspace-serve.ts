@@ -10,7 +10,7 @@ export const WorkspaceServeCommand = cmd({
   handler: async (args) => {
     const opts = await resolveNetworkOptions(args)
     requireAuthForNetwork(opts.hostname)
-    const server = WorkspaceServer.Listen(opts)
+    const server = await WorkspaceServer.Listen(opts)
     console.log(`workspace event server listening on http://${server.hostname}:${server.port}/event`)
 
     const shutdown = async () => {

@@ -21,7 +21,7 @@ import { ProviderRoutes } from "./routes/provider"
 import { EventRoutes } from "./routes/event"
 import { InstanceBootstrap } from "../project/bootstrap"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
-import { websocket } from "hono/bun"
+import { serve as runtimeServe, type ServerHandle } from "./runtime-adapter"
 import { appErrorEnvelope, errors, forbidden } from "./error"
 import { validator } from "./validation"
 import { QuestionRoutes } from "./routes/question"
@@ -295,7 +295,7 @@ export namespace Server {
   /** @deprecated do not use this dumb shit */
   export let url: URL
 
-  export function listen(opts: {
+  export async function listen(opts: {
     port: number
     hostname: string
     mdns?: boolean
@@ -318,22 +318,17 @@ export namespace Server {
       )
     }
     const app = createApp(opts)
-    const args = {
-      hostname: opts.hostname,
-      idleTimeout: 0,
-      fetch: app.fetch,
-      websocket: websocket,
-    } as const
     let lastServeError: unknown
-    const tryServe = (port: number) => {
+    const tryServe = async (port: number): Promise<ServerHandle | undefined> => {
       try {
-        return Bun.serve({ ...args, port })
+        return await runtimeServe({ app, hostname: opts.hostname, port, idleTimeout: 0 })
       } catch (e) {
         lastServeError = e
         return undefined
       }
     }
-    const server = opts.port === 0 ? (tryServe(DEFAULT_SERVER_PORT) ?? tryServe(0)) : tryServe(opts.port)
+    const server =
+      opts.port === 0 ? ((await tryServe(DEFAULT_SERVER_PORT)) ?? (await tryServe(0))) : await tryServe(opts.port)
     if (!server) {
       const reason = toErrorMessage(lastServeError)
       throw new Error(`Failed to start server on port ${opts.port}: ${reason}`)

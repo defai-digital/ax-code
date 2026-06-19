@@ -28,7 +28,7 @@ export const ServeCommand = cmd({
     if (!isLocalhostOnly(opts.hostname)) {
       console.log("Server is network-accessible — protected by AX_CODE_SERVER_PASSWORD")
     }
-    const server = Server.listen(opts)
+    const server = await Server.listen(opts)
     console.log(`ax-code server listening on http://${server.hostname}:${server.port}`)
     prewarmServeInstance()
 

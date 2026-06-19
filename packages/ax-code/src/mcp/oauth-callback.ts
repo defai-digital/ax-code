@@ -1,5 +1,6 @@
 import { Log } from "../util/log"
 import { OAUTH_CALLBACK_PORT, OAUTH_CALLBACK_PATH, setCallbackPort } from "./oauth-provider"
+import { serve, type ServerHandle } from "../server/runtime-adapter"
 
 const log = Log.create({ service: "mcp.oauth-callback" })
 
@@ -60,7 +61,7 @@ interface PendingAuth {
 }
 
 export namespace McpOAuthCallback {
-  let server: ReturnType<typeof Bun.serve> | undefined
+  let server: ServerHandle | undefined
   // In-flight init promise. Serializes concurrent ensureRunning() calls so
   // two callers never race past the `if (server)` guard and both attempt
   // `Bun.serve()` on the same port (EADDRINUSE). Cleared on completion so
@@ -104,10 +105,10 @@ export namespace McpOAuthCallback {
     if (initPromise) return initPromise
     const generation = initGeneration
     const nextInit = (async () => {
-      server = Bun.serve({
+      server = await serve({
         hostname: "127.0.0.1",
         port: 0,
-        fetch(req) {
+        fetch: (req) => {
           const url = new URL(req.url)
 
           if (url.pathname !== OAUTH_CALLBACK_PATH) {

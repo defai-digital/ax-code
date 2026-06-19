@@ -9,6 +9,7 @@ import { WorkspaceID } from "../schema"
 import { Log } from "@/util/log"
 import { assertAuthenticatedNetworkBind } from "@/runtime/listen-security"
 import { pushSseFrame } from "@/util/sse-queue"
+import { serve, type ServerHandle } from "@/server/runtime-adapter"
 
 const log = Log.create({ service: "workspace-server" })
 
@@ -88,18 +89,13 @@ export namespace WorkspaceServer {
       })
   }
 
-  export function Listen(input: { hostname: string; port: number }) {
+  // Intentionally not `async`: the bind-security check must throw
+  // synchronously (a test asserts `expect(() => Listen(...)).toThrow()`).
+  // The actual bind is async (Node), so we return the serve() promise.
+  export function Listen(input: { hostname: string; port: number }): Promise<ServerHandle> {
     assertAuthenticatedNetworkBind(input.hostname)
     const app = App()
-    const server = Bun.serve({
-      hostname: input.hostname,
-      port: input.port,
-      fetch: app.fetch,
-    })
-    return {
-      hostname: server.hostname,
-      port: server.port,
-      stop: async () => server.stop(),
-    }
+    // SSE-only (no websockets): pass `fetch` so the adapter skips ws wiring.
+    return serve({ fetch: app.fetch, hostname: input.hostname, port: input.port })
   }
 }
