@@ -126,5 +126,8 @@ export const WorkspaceRouterMiddleware: MiddlewareHandler = async (c, next) => {
     method: c.req.method,
     headers: sanitizeForwardedHeaders(c.req.raw.headers),
     body: c.req.raw.body,
-  })
+    // Node's fetch requires `duplex: "half"` when the body is a stream (Bun did
+    // not); forwarding c.req.raw.body without it throws RequestInit TypeError.
+    duplex: "half",
+  } as RequestInit)
 }
