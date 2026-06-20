@@ -97,10 +97,10 @@ describe("gRPC SDK facade", () => {
 
     while ((match = rpcPattern.exec(proto))) {
       const [, name, requestStream, requestType, responseStream, responseType] = match
-      rpcTypes.set(name, {
+      rpcTypes.set(name!, {
         kind: requestStream && responseStream ? "bidiStream" : responseStream ? "serverStream" : "unary",
-        requestType,
-        responseType,
+        requestType: requestType!,
+        responseType: responseType!,
       })
     }
 
@@ -117,7 +117,7 @@ describe("gRPC SDK facade", () => {
   test("high-level client unwraps unary value envelopes", async () => {
     const calls: Array<{ method: string; request: unknown }> = []
     const transport: AxCodeGrpcTransport = {
-      async unary(method, request) {
+      unary: (async (method: any, request: any) => {
         calls.push({ method, request })
         if (method === AX_CODE_GRPC_METHOD.Health) return { status: "SERVING", transport: "grpc" }
         if (method === AX_CODE_GRPC_METHOD.CreateSession) return { value: { id: "sess-1" } }
@@ -172,7 +172,7 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunEvalCase) return { value: { caseID: "case-1" } }
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunCommand) return { value: { id: "run-1", status: "running" } }
         throw new Error(`unexpected method ${method}`)
-      },
+      }) as any,
       async *serverStream() {},
     }
     const client = createAxCodeGrpcClient({ transport })
@@ -310,7 +310,7 @@ describe("gRPC SDK facade", () => {
       async *bidiStream(method, request, input) {
         seen.push({ method, request })
         for await (const frame of input) seen.push(frame)
-        yield { type: "output", data: "ready" }
+        yield { type: "output", data: "ready" } as never
       },
     }
     const client = createAxCodeGrpcClient({ transport })
@@ -338,7 +338,7 @@ describe("gRPC SDK facade", () => {
       },
       async *serverStream(method, request, options) {
         calls.push({ method, request, options })
-        yield { type: "server.connected", properties: {} }
+        yield { type: "server.connected", properties: {} } as never
       },
     }
     const client = createAxCodeGrpcClient({ transport })
@@ -372,16 +372,16 @@ describe("gRPC SDK facade", () => {
     const client = createAxCodeGrpcClientFromNativeBridge({
       async unary(call) {
         calls.push(call)
-        return { value: { id: "sess-1" } }
+        return { value: { id: "sess-1" } } as never
       },
       async *serverStream(call) {
         calls.push(call)
-        yield { type: "server.connected", properties: {} }
+        yield { type: "server.connected", properties: {} } as never
       },
       async *bidiStream(call) {
         calls.push({ ...call, input: "captured" })
         for await (const frame of call.input) calls.push(frame)
-        yield { type: "output", data: "ready" }
+        yield { type: "output", data: "ready" } as never
       },
     })
     const abort = new AbortController()
@@ -434,11 +434,11 @@ describe("gRPC SDK facade", () => {
     const client = createAxCodeGrpcClientFromNativeIpc({
       async unary(call) {
         calls.push(call)
-        return { value: { id: "sess-1" } }
+        return { value: { id: "sess-1" } } as never
       },
       async *serverStream(call) {
         calls.push(call)
-        yield { type: "server.connected", properties: {} }
+        yield { type: "server.connected", properties: {} } as never
       },
       async *bidiStream(call, input) {
         calls.push(call)
@@ -509,18 +509,18 @@ describe("gRPC SDK facade", () => {
       createAxCodeGrpcNativeIpcBridgeFromChannels({
         async unary(call) {
           calls.push(call)
-          return { value: { id: "sess-1" } }
+          return { value: { id: "sess-1" } } as never
         },
         serverStream(call, controller) {
           calls.push(call)
-          controller.push({ type: "server.connected", properties: {} })
+          controller.push({ type: "server.connected", properties: {} } as never)
           controller.close()
         },
         bidiStream(call, input, controller) {
           calls.push(call)
           void (async () => {
             for await (const frame of input) calls.push(frame)
-            controller.push({ type: "output", data: "ready" })
+            controller.push({ type: "output", data: "ready" } as never)
             controller.close()
           })()
         },
@@ -559,7 +559,9 @@ describe("gRPC SDK facade", () => {
     const stream = createAxCodeGrpcNativeIpcStream<string>((controller) => {
       events.push("subscribed")
       controller.push("ready")
-      return () => events.push("unsubscribed")
+      return () => {
+        events.push("unsubscribed")
+      }
     })
 
     for await (const value of stream) {
@@ -576,7 +578,9 @@ describe("gRPC SDK facade", () => {
       events.push("subscribed")
       controller.push("ready")
       controller.close()
-      return () => events.push("unsubscribed")
+      return () => {
+        events.push("unsubscribed")
+      }
     })
 
     for await (const value of stream) events.push(value)
@@ -737,9 +741,9 @@ describe("gRPC SDK facade", () => {
     await client.sendPrompt("sess-1", { parts: [{ type: "text", text: "hello" }] })
 
     expect(calls.map((call) => new URL(call.url).pathname)).toEqual(["/session", "/session/sess-1/prompt_async"])
-    expect(headerValue(calls[0].init.headers, "authorization")).toBe("Basic base")
-    expect(headerValue(calls[0].init.headers, "x-ax-code-gui")).toBe("desktop")
-    expect(await new Response(calls[1].init.body).text()).toBe(
+    expect(headerValue(calls[0]?.init.headers, "authorization")).toBe("Basic base")
+    expect(headerValue(calls[0]?.init.headers, "x-ax-code-gui")).toBe("desktop")
+    expect(await new Response(calls[1]?.init.body).text()).toBe(
       JSON.stringify({ parts: [{ type: "text", text: "hello" }] }),
     )
   })
@@ -1245,7 +1249,7 @@ describe("gRPC SDK facade", () => {
   test("HTTP bridge adapts PTY streams to the WebSocket route", async () => {
     class FakeSocket {
       readyState = 1
-      binaryType?: BinaryType
+      binaryType?: string
       sent: Array<string | Uint8Array | ArrayBuffer> = []
       onopen?: (event: unknown) => void
       onmessage?: (event: { data: unknown }) => void
