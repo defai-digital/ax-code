@@ -9,6 +9,7 @@ import { Log } from "../../util/log"
 import { Env } from "../../util/env"
 import { toErrorMessage } from "../../util/error-message"
 import { Process } from "../../util/process"
+import { resolveCommands, runCommand } from "./runner"
 
 const log = Log.create({ service: "planner.verify" })
 
@@ -54,14 +55,22 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
   const name = "typecheck"
 
   try {
-    const { code, stdout, stderr } = await Process.run(["bun", "typecheck"], {
-      cwd,
-      env: Env.sanitize(),
-      timeout,
-      nothrow: true,
-    })
+    const command = (await resolveCommands(cwd)).typecheck
+    if (!command) {
+      return {
+        name,
+        type: "typecheck",
+        passed: true,
+        status: "skipped",
+        issues: [],
+        duration: Date.now() - start,
+        output: "typecheck command not configured",
+      }
+    }
 
-    if (code === 124) {
+    const result = await runCommand(command, cwd, timeout)
+
+    if (result.timedOut) {
       return {
         name,
         type: "typecheck",
@@ -73,10 +82,10 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       }
     }
 
-    const output = (stdout.toString() + stderr.toString()).trim()
+    const output = (result.stdout + result.stderr).trim()
     const issues = parseTypeScriptErrors(output)
 
-    const passed = code === 0
+    const passed = result.ok
     log.info("typecheck", { passed, issues: issues.length, duration: Date.now() - start })
 
     return {

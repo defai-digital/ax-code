@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { chmod, mkdtemp, writeFile, mkdir } from "node:fs/promises"
+import { chmod, mkdtemp, writeFile, mkdir, readFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { Process } from "../../src/util/process"
@@ -338,11 +338,44 @@ describe("release check (full checks)", () => {
 
   test("typecheck is skipped by id from the runner", async () => {
     // Full typecheck requires a real ax-code tree; exercise the skip path so
-    // the runner wiring is covered without spawning bun.
+    // the runner wiring is covered without spawning the package command.
     const repo = await makeRepo("2.21.5", "v2.21.4")
     const ctx = mkCtx(repo, "2.21.5")
     const results = await runChecks(ctx)
     expect(find(results, "typecheck").status).toBe("skip")
+  })
+
+  test("typecheck check runs the ax-code package through pnpm", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const binDir = path.join(repo, "bin")
+    const capture = path.join(repo, "pnpm-args.txt")
+    await mkdir(binDir)
+    const pnpm = path.join(binDir, "pnpm")
+    await writeFile(pnpm, ['#!/bin/sh', 'printf "%s\\n" "$@" > "$PNPM_CAPTURE"', "exit 0", ""].join("\n"))
+    await chmod(pnpm, 0o755)
+
+    const originalPath = process.env.PATH
+    const originalCapture = process.env.PNPM_CAPTURE
+    process.env.PATH = `${binDir}${path.delimiter}${originalPath ?? ""}`
+    process.env.PNPM_CAPTURE = capture
+    try {
+      const ctx = mkCtx(repo, "2.21.5", {
+        skip: new Set(["tests", "remote-tag", "branch-sync", "workflow-changes"]),
+      })
+      const results = await runChecks(ctx)
+
+      expect(find(results, "typecheck").status).toBe("ok")
+      expect((await readFile(capture, "utf8")).trim().split("\n")).toEqual([
+        "--dir",
+        "packages/ax-code",
+        "run",
+        "typecheck",
+      ])
+    } finally {
+      process.env.PATH = originalPath
+      if (originalCapture === undefined) delete process.env.PNPM_CAPTURE
+      else process.env.PNPM_CAPTURE = originalCapture
+    }
   })
 
   test("tests check defaults to skip without --with-tests", async () => {
@@ -359,6 +392,42 @@ describe("release check (full checks)", () => {
     const tests = find(results, "tests")
     expect(tests.status).toBe("skip")
     expect(tests.detail).toContain("pass --with-tests to run")
+  })
+
+  test("tests check runs the deterministic group through pnpm", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const binDir = path.join(repo, "bin")
+    const capture = path.join(repo, "pnpm-test-args.txt")
+    await mkdir(binDir)
+    const pnpm = path.join(binDir, "pnpm")
+    await writeFile(pnpm, ['#!/bin/sh', 'printf "%s\\n" "$@" > "$PNPM_CAPTURE"', "exit 0", ""].join("\n"))
+    await chmod(pnpm, 0o755)
+
+    const originalPath = process.env.PATH
+    const originalCapture = process.env.PNPM_CAPTURE
+    process.env.PATH = `${binDir}${path.delimiter}${originalPath ?? ""}`
+    process.env.PNPM_CAPTURE = capture
+    try {
+      const ctx = mkCtx(repo, "2.21.5", {
+        withTests: true,
+        skip: new Set(["typecheck", "remote-tag", "branch-sync", "workflow-changes"]),
+      })
+      const results = await runChecks(ctx)
+
+      expect(find(results, "tests").status).toBe("ok")
+      expect((await readFile(capture, "utf8")).trim().split("\n")).toEqual([
+        "--dir",
+        "packages/ax-code",
+        "run",
+        "test:ci",
+        "--",
+        "deterministic",
+      ])
+    } finally {
+      process.env.PATH = originalPath
+      if (originalCapture === undefined) delete process.env.PNPM_CAPTURE
+      else process.env.PNPM_CAPTURE = originalCapture
+    }
   })
 
   test("workflow-changes reports changes in .github/workflows/", async () => {

@@ -37,7 +37,7 @@ export type ReleaseCheckResult = {
 /**
  * Back-compat shim: the original 2-check API. Still used by external tests.
  * Validates only the parts that can be checked from a bare package.json and
- * does not spawn git or bun. For the full release check, use the yargs
+ * does not spawn git or package commands. For the full release check, use the yargs
  * `ax-code release check` command which runs `runChecks`.
  */
 export async function releaseReadinessChecks(cwd: string): Promise<ReleaseCheckResult[]> {
@@ -511,8 +511,8 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
 
 async function checkTypecheck(ctx: CheckContext): Promise<CheckResult> {
   const [r, durationMs] = await timed(async () => {
-    const res = await Process.run(["bun", "run", "typecheck"], {
-      cwd: path.join(ctx.repoRoot, AX_CODE_PKG),
+    const res = await Process.run(["pnpm", "--dir", AX_CODE_PKG, "run", "typecheck"], {
+      cwd: ctx.repoRoot,
       stdin: "ignore",
       nothrow: true,
     }).catch((err: unknown) => ({
@@ -542,8 +542,8 @@ async function checkTests(ctx: CheckContext): Promise<CheckResult> {
     return mkResult("Tests", "tests", "skip", "skipped (pass --with-tests to run)", 0)
   }
   const [r, durationMs] = await timed(async () => {
-    const res = await Process.run(["bun", "run", "test:ci", "--", "deterministic"], {
-      cwd: path.join(ctx.repoRoot, AX_CODE_PKG),
+    const res = await Process.run(["pnpm", "--dir", AX_CODE_PKG, "run", "test:ci", "--", "deterministic"], {
+      cwd: ctx.repoRoot,
       stdin: "ignore",
       nothrow: true,
     }).catch((err: unknown) => ({
