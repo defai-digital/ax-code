@@ -37,10 +37,6 @@ process.env["XDG_CACHE_HOME"] = path.join(dir, "cache")
 process.env["XDG_CONFIG_HOME"] = path.join(dir, "config")
 process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 process.env["AX_CODE_MODELS_PATH"] = path.join(import.meta.dirname, "tool", "fixtures", "models-api.json")
-// Don't let tests cold-install LSP servers: on Node that goes through `npx`
-// (no warm bun-x cache), which hangs the 30s test timeout when a .ts/.tsx touch
-// activates the typescript LSP. Tests that need a server inject/mock it.
-process.env["AX_CODE_DISABLE_LSP_DOWNLOAD"] = "1"
 
 // Set test home directory to isolate tests from user's actual home directory
 // This prevents tests from picking up real user configs/skills from ~/.claude/skills
