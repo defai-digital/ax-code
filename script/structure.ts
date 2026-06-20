@@ -30,6 +30,10 @@ const runtimeBoundaryAllowedFiles = new Set([
   "packages/ax-code/src/node.ts",
   "packages/ax-code/src/sdk/programmatic.ts",
   "packages/ax-code/src/runtime/local-client.ts",
+  // Intentionally use the shared runtime HTTP/WS adapter (ADR-036 S1): these
+  // are second servers, not domain code reaching into the CLI/server interface.
+  "packages/ax-code/src/mcp/oauth-callback.ts",
+  "packages/ax-code/src/control-plane/workspace-server/server.ts",
 ])
 
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
