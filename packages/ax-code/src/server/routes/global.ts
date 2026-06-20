@@ -330,7 +330,16 @@ export const GlobalRoutes = lazy(() =>
             if (pushSseFrame(q, event) === "overflow") stop()
           }
 
-          push({
+          // Control frames (server.connected, server.heartbeat) bypass the
+          // data-frame overflow limit so a near-cap burst of real events
+          // can't tear down the connection on an otherwise-fine heartbeat.
+          const CONTROL_FRAME_QUEUE_LIMIT = 256
+          const pushControl = (payload: unknown) => {
+            if (q.size >= CONTROL_FRAME_QUEUE_LIMIT) return
+            q.push(JSON.stringify(payload))
+          }
+
+          pushControl({
             payload: {
               type: Event.Connected.type,
               properties: {},
@@ -339,7 +348,7 @@ export const GlobalRoutes = lazy(() =>
 
           // Send heartbeat every 10s to prevent stalled proxy streams.
           heartbeat = setInterval(() => {
-            push({
+            pushControl({
               payload: {
                 type: "server.heartbeat",
                 properties: {},
