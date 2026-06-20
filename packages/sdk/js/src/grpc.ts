@@ -777,6 +777,7 @@ export type AxCodeGrpcWebSocketLike = {
 }
 
 export type AxCodeGrpcHttpBridgeOptions = HeadlessClientOptions & {
+  baseUrl: string
   webSocketFactory?: (url: string) => AxCodeGrpcWebSocketLike
   /**
    * The HTTP bridge is a desktop compatibility fallback, not the preferred privileged GUI boundary.

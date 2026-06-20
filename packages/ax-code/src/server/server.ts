@@ -301,6 +301,7 @@ export namespace Server {
     mdns?: boolean
     mdnsDomain?: string
     cors?: string[]
+    app?: Hono
   }) {
     assertAuthenticatedNetworkBind(opts.hostname)
     // Warn loudly when Basic Auth is sent over plaintext to a non-loopback
@@ -317,7 +318,7 @@ export namespace Server {
           "Credentials can be intercepted on the network. Use TLS / a reverse proxy, or set AX_CODE_ALLOW_INSECURE_NETWORK_AUTH=1 to acknowledge and suppress this warning.",
       )
     }
-    const app = createApp(opts)
+    const app = opts.app ?? createApp(opts)
     let lastServeError: unknown
     const tryServe = async (port: number): Promise<ServerHandle | undefined> => {
       try {

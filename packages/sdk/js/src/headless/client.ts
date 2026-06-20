@@ -43,7 +43,11 @@ import type { HeadlessTransport } from "./transport.js"
 import { errorMessage, parseHeadlessRuntimeJsonBody, parseHeadlessRuntimeResponseBody } from "./util.js"
 
 export type HeadlessClientOptions = {
-  baseUrl: string
+  /**
+   * Base URL of the headless runtime HTTP server. Required when no custom
+   * `transport` is provided; ignored when `transport` is supplied.
+   */
+  baseUrl?: string
   directory?: string
   fetch?: typeof fetch
   headers?: RequestInit["headers"]
@@ -346,7 +350,10 @@ export type HeadlessSessionEvidenceInput = {
 }
 
 export function createHeadlessClient(input: HeadlessClientOptions) {
-  const transport = input.transport ?? createHttpSseTransport(input)
+  if (!input.transport && !input.baseUrl) {
+    throw new Error("HeadlessClientOptions requires either baseUrl or transport")
+  }
+  const transport = input.transport ?? createHttpSseTransport(input as { baseUrl: string } & typeof input)
   const client = createAxCodeClient({
     baseUrl: input.baseUrl,
     directory: input.directory,

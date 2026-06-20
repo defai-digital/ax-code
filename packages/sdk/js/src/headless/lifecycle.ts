@@ -1,13 +1,20 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
+import { access } from "node:fs/promises"
 import { createServer } from "node:net"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { assertSdkHttpLoopbackBind, resolveSpawnCommand } from "../internal/server-shared.js"
 import { withDirectoryHeaders } from "../protocol.js"
+import { createIpcTransport } from "./ipc-transport.js"
 
 const SIGKILL_GRACE_MS = 300
 const EXIT_WAIT_MS = 2_000
 const STARTUP_TIMEOUT_MS = 10_000
 const READY_LINE_PREFIX = "ax-code server listening on "
+const IPC_READY_LINE_PREFIX = "ax-code server ipc listening on "
+
+export type HeadlessBackendTransport = "http-sse" | "ipc"
 
 export type HeadlessBackendOptions = {
   directory?: string
@@ -24,6 +31,16 @@ export type HeadlessBackendOptions = {
    * launches `ax-code serve --hostname=<host> --port=<port>`.
    */
   args?: string[]
+  /**
+   * Transport used to talk to the backend. `"http-sse"` keeps the legacy
+   * loopback HTTP behavior; `"ipc"` uses a local Unix domain socket.
+   */
+  transport?: HeadlessBackendTransport
+  /**
+   * Explicit path for the Unix domain socket when `transport` is `"ipc"`.
+   * When omitted, a unique path under the system temp directory is generated.
+   */
+  ipcSocketPath?: string
   /**
    * HTTP headless backend helpers are desktop compatibility fallbacks.
    * Network binds must be explicit so GUI apps do not accidentally expose the full HTTP API.
@@ -51,6 +68,7 @@ export type HeadlessBackendDiagnostics = {
   cwd?: string
   hostname: string
   port: number
+  socketPath?: string
   authUsername: string
   envKeys: string[]
   readyUrl?: string
@@ -70,6 +88,7 @@ export type HeadlessBackendDiagnostics = {
 
 export type HeadlessBackendHandle = {
   url: string
+  socketPath?: string
   headers: Record<string, string>
   diagnostics: HeadlessBackendDiagnostics
   closed: Promise<void>
@@ -87,20 +106,9 @@ export class HeadlessBackendStartupError extends Error {
 }
 
 export async function startHeadlessBackend(options: HeadlessBackendOptions = {}): Promise<HeadlessBackendHandle> {
+  const transport = options.transport ?? "http-sse"
   const hostname = options.hostname ?? "127.0.0.1"
   assertSdkHttpLoopbackBind(hostname, options.allowNetworkBind, "startHeadlessBackend")
-  const reservePort = options.reservePort ?? reserveLoopbackPort
-  const port =
-    options.port && options.port > 0
-      ? options.port
-      : await reservePort(hostname).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
-          throw new Error(`Failed to reserve loopback port for ax-code backend on ${hostname}: ${message}`, {
-            cause: error,
-          })
-        })
-  const timeout = options.timeout ?? STARTUP_TIMEOUT_MS
-  const fetchFn = options.fetch ?? fetch
 
   const username = options.auth?.username ?? "ax-code"
   const password = options.auth?.password ?? randomBytes(24).toString("base64url")
@@ -109,8 +117,34 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     ? withDirectoryHeaders({ Authorization: authHeader }, options.directory)
     : { Authorization: authHeader }
 
+  let socketPath: string | undefined
+  let port = options.port ?? 0
+  if (transport === "ipc") {
+    socketPath = options.ipcSocketPath ?? generateIpcSocketPath()
+    // The runtime still starts an HTTP listener for readiness probes and
+    // backward compatibility; binding to port 0 lets the OS allocate one.
+    port = 0
+  }
+
+  const reservePort = options.reservePort ?? reserveLoopbackPort
+  if (transport === "http-sse" && port === 0) {
+    port = await reservePort(hostname).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to reserve loopback port for ax-code backend on ${hostname}: ${message}`, {
+        cause: error,
+      })
+    })
+  }
+
+  const timeout = options.timeout ?? STARTUP_TIMEOUT_MS
+  const fetchFn = options.fetch ?? fetch
+
   const binary = options.binary?.trim() || "ax-code"
-  const args = options.args ?? ["serve", `--hostname=${hostname}`, `--port=${port}`]
+  const args =
+    options.args ??
+    (transport === "ipc"
+      ? ["serve", `--ipc-socket=${socketPath}`, `--port=${port}`]
+      : ["serve", `--hostname=${hostname}`, `--port=${port}`])
   const diagnostics: HeadlessBackendDiagnostics = {
     launchedAt: new Date().toISOString(),
     binary,
@@ -118,6 +152,7 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     cwd: options.directory,
     hostname,
     port,
+    socketPath,
     authUsername: username,
     envKeys: Object.keys(options.env ?? {}).sort(),
   }
@@ -141,7 +176,7 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     proc.once("error", () => resolve())
   })
 
-  const url = await new Promise<string>((resolve, reject) => {
+  const ready = await new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => {
       failStartup(
         new Error(`ax-code backend did not become ready within ${timeout}ms\nCaptured output:\n${capturedOutput}`),
@@ -174,6 +209,25 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
           failStartup(error instanceof Error ? error : new Error(message))
         },
       )
+    }
+
+    const onReadySocket = async (socketPathStr: string) => {
+      diagnostics.readyUrl = `ipc://${socketPathStr}`
+      const health = await waitForBackendIpcHealth({
+        socketPath: socketPathStr,
+        directory: options.directory,
+        experimental_workspaceID: undefined,
+        headers,
+      }).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        return { ok: false as const, status: 0, error: message }
+      })
+      diagnostics.health = health
+      if (!health.ok) {
+        failStartup(new Error(health.error ?? "IPC backend health check failed"))
+        return
+      }
+      succeed(`ipc://${socketPathStr}`)
     }
 
     const succeed = (url: string) => {
@@ -219,8 +273,12 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
         capturedOutput += line + "\n"
         options.onStdout?.(line)
         if (line.startsWith(READY_LINE_PREFIX)) {
+          if (transport === "ipc") continue
           const urlStr = line.slice(READY_LINE_PREFIX.length).trim()
           onReadyUrl(urlStr)
+        } else if (line.startsWith(IPC_READY_LINE_PREFIX)) {
+          const socketPathStr = line.slice(IPC_READY_LINE_PREFIX.length).trim()
+          void onReadySocket(socketPathStr)
         }
       }
     }
@@ -261,7 +319,8 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
   })
 
   return {
-    url,
+    url: ready,
+    socketPath,
     headers,
     diagnostics,
     closed,
@@ -326,6 +385,34 @@ async function waitForBackendHealth(input: {
     status: response.status,
     body,
   }
+}
+
+async function waitForBackendIpcHealth(input: {
+  socketPath: string
+  directory?: string
+  experimental_workspaceID?: string
+  headers?: Record<string, string>
+}): Promise<Exclude<HeadlessBackendDiagnostics["health"], undefined>> {
+  await access(input.socketPath).catch(() => {
+    throw new Error(`IPC socket file does not exist: ${input.socketPath}`)
+  })
+  const transport = createIpcTransport({
+    socketPath: input.socketPath,
+    directory: input.directory,
+    experimental_workspaceID: input.experimental_workspaceID,
+    headers: input.headers,
+  })
+  try {
+    const body = await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
+    return { ok: true, status: 200, body }
+  } finally {
+    await transport.close?.()
+  }
+}
+
+function generateIpcSocketPath(): string {
+  const random = randomBytes(8).toString("hex")
+  return join(tmpdir(), `ax-code-ipc-${random}.sock`)
 }
 
 async function killProc(proc: ReturnType<typeof spawn>): Promise<void> {

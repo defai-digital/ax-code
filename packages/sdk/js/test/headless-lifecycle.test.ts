@@ -11,6 +11,7 @@ import {
   startHeadlessBackend,
 } from "../src/headless.js"
 import { startAxCodeGrpcHeadlessBackend } from "../src/grpc"
+import { createIpcTransport } from "../src/headless-ipc.js"
 
 const originalPath = process.env.PATH
 const originalPidFile = process.env.AX_CODE_FAKE_PID_FILE
@@ -379,6 +380,38 @@ describe("headless backend lifecycle", () => {
 
     await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
   })
+
+  test("starts backend over IPC transport", async () => {
+    await using fake = await createIpcFakeAxCode()
+    const socketPath = path.join(fake.dir, "ipc.sock")
+
+    const backend = await startHeadlessBackend({
+      transport: "ipc",
+      ipcSocketPath: socketPath,
+      binary: fake.bin,
+    })
+
+    try {
+      expect(backend.socketPath).toBe(socketPath)
+      expect(backend.url).toBe(`ipc://${socketPath}`)
+      expect(backend.diagnostics.args).toEqual(["serve", `--ipc-socket=${socketPath}`, "--port=0"])
+
+      const transport = createIpcTransport({ socketPath })
+      try {
+        const health = await transport.requestJson<{ healthy: boolean }>({
+          path: "/global/health",
+          method: "GET",
+        })
+        expect(health).toEqual({ healthy: true })
+      } finally {
+        await transport.close?.()
+      }
+    } finally {
+      await backend.close()
+    }
+
+    await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
+  })
 })
 
 function jsonResponse(value: unknown) {
@@ -448,6 +481,98 @@ async function createReadyFakeAxCode() {
     authFile,
     argsFile,
     extraEnvFile,
+    async [Symbol.asyncDispose]() {
+      await rm(dir, { recursive: true, force: true })
+    },
+  }
+}
+
+async function createIpcFakeAxCode() {
+  const dir = await mkdtemp(path.join(tmpdir(), "ax-code-headless-ipc-lifecycle-"))
+  const bin = path.join(dir, "ax-code")
+  const pidFile = path.join(dir, "pid")
+  const argsFile = path.join(dir, "args")
+  const termFile = path.join(dir, "terminated")
+  const nodeScript = path.join(dir, "ipc-fake.js")
+  const msgpackPath = require.resolve("@msgpack/msgpack")
+  await writeFile(
+    nodeScript,
+    [
+      "const net = require('node:net')",
+      "const fs = require('node:fs')",
+      `const { encode: msgpackEncode, decode: msgpackDecode } = require(${JSON.stringify(msgpackPath)})`,
+      "",
+      "const socketArg = process.argv.find((a) => a.startsWith('--ipc-socket='))",
+      "const socketPath = socketArg ? socketArg.slice('--ipc-socket='.length) : undefined",
+      "if (!socketPath) { console.error('missing --ipc-socket'); process.exit(1) }",
+      "",
+      "const pidFile = process.env.AX_CODE_FAKE_PID_FILE",
+      "const argsFile = process.env.AX_CODE_FAKE_ARGS_FILE",
+      "if (pidFile) fs.writeFileSync(pidFile, String(process.pid))",
+      "if (argsFile) fs.writeFileSync(argsFile, process.argv.slice(2).join(' '))",
+      "",
+      "try { fs.unlinkSync(socketPath) } catch (e) { if (e.code !== 'ENOENT') throw e }",
+      "",
+      "function encode(msg) {",
+      "  const bytes = msgpackEncode(msg)",
+      "  const frame = Buffer.allocUnsafe(4 + bytes.length)",
+      "  frame.writeUInt32BE(bytes.length, 0)",
+      "  frame.set(bytes, 4)",
+      "  return frame",
+      "}",
+      "",
+      "const server = net.createServer((socket) => {",
+      "  let buffer = Buffer.alloc(0)",
+      "  socket.on('data', (chunk) => {",
+      "    buffer = Buffer.concat([buffer, chunk])",
+      "    while (buffer.length >= 4) {",
+      "      const length = buffer.readUInt32BE(0)",
+      "      if (buffer.length < 4 + length) break",
+      "      const msg = msgpackDecode(buffer.subarray(4, 4 + length))",
+      "      buffer = buffer.subarray(4 + length)",
+      "      if (msg.type === 'request') {",
+      "        let body = true",
+      "        if (msg.path === '/global/health') body = { healthy: true }",
+      "        socket.write(encode({ type: 'response', id: msg.id, status: 200, body }))",
+      "      }",
+      "    }",
+      "  })",
+      "})",
+      "",
+      "server.listen(socketPath, () => {",
+      "  console.log(`ax-code server ipc listening on ${socketPath}`)",
+      "})",
+      "",
+      "function shutdown() {",
+      "  try { fs.writeFileSync(process.env.AX_CODE_FAKE_TERM_FILE, 'terminated') } catch {}",
+      "  server.close(() => process.exit(0))",
+      "}",
+      "process.on('SIGTERM', shutdown)",
+      "process.on('SIGINT', shutdown)",
+      "",
+    ].join("\n"),
+  )
+  await writeFile(
+    bin,
+    [
+      "#!/bin/sh",
+      `exec "${process.execPath}" "${nodeScript}" "$@"`,
+      "",
+    ].join("\n"),
+  )
+  await chmod(bin, 0o755)
+
+  process.env.PATH = `${dir}${path.delimiter}${originalPath ?? ""}`
+  process.env.AX_CODE_FAKE_PID_FILE = pidFile
+  process.env.AX_CODE_FAKE_ARGS_FILE = argsFile
+  process.env.AX_CODE_FAKE_TERM_FILE = termFile
+
+  return {
+    dir,
+    bin,
+    pidFile,
+    argsFile,
+    termFile,
     async [Symbol.asyncDispose]() {
       await rm(dir, { recursive: true, force: true })
     },
