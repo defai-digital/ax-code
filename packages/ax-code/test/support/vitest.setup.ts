@@ -40,6 +40,8 @@ B.spawn = (input: { cmd: string[]; cwd?: string; env?: Record<string, string> } 
 
 expect.extend({
   toBeFunction: (r) => ({ pass: typeof r === "function", message: () => `expected ${r} to be a function` }),
+  toBeNumber: (r) => ({ pass: typeof r === "number" && !Number.isNaN(r), message: () => `expected ${r} to be a number` }),
+  toBeString: (r) => ({ pass: typeof r === "string", message: () => `expected ${r} to be a string` }),
   toBeNil: (r) => ({ pass: r == null, message: () => `expected ${r} to be nil` }),
   toBeArray: (r) => ({ pass: Array.isArray(r), message: () => `expected ${r} to be an array` }),
   toBeTrue: (r) => ({ pass: r === true, message: () => `expected ${r} to be true` }),

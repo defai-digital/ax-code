@@ -107,6 +107,10 @@ export default defineConfig({
     // then sets per-process (pid) XDG/home isolation so parallel forks don't
     // collide on the shared global SQLite db, and clears provider env vars.
     setupFiles: [path.join(dir, "test/support/vitest.setup.ts"), path.join(dir, "test/preload.ts")],
+    // Inline these deps so vitest transforms them and their ESM exports become
+    // spyable (vi.spyOn). Bun allowed spying on frozen ESM namespaces; Node does
+    // not, so tests that spy on a library's exports need the module inlined.
+    server: { deps: { inline: ["@clack/prompts"] } },
     testTimeout: 30000,
     hookTimeout: 30000,
     pool: "forks",
