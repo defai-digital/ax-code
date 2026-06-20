@@ -177,7 +177,13 @@ describe("Truncate", () => {
     })
 
     test("loads truncate module in a fresh process", async () => {
-      const out = await Process.run([process.execPath, "run", path.join(ROOT, "src", "tool", "truncate.ts")], {
+      // Run a TS file in a fresh process: `bun run <file>` under Bun, but Node
+      // has no `run` subcommand and can't strip namespaces natively, so use tsx.
+      const truncateFile = path.join(ROOT, "src", "tool", "truncate.ts")
+      const cmd = process.versions.bun
+        ? [process.execPath, "run", truncateFile]
+        : [process.execPath, "--import", "tsx", truncateFile]
+      const out = await Process.run(cmd, {
         cwd: ROOT,
       })
 
