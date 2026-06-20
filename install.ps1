@@ -14,9 +14,12 @@ $ErrorActionPreference = "Stop"
 $App = "ax-code"
 $Repo = "defai-digital/ax-code"
 $InstallDir = Join-Path $HOME ".ax-code\bin"
+$InstallRoot = Split-Path -Parent $InstallDir
 $InstallPath = Join-Path $InstallDir "ax-code.exe"
 $InstallCmdPath = Join-Path $InstallDir "ax-code.cmd"
-$InstallLibDir = Join-Path $InstallDir "lib"
+$InstallLibDir = Join-Path $InstallRoot "lib"
+$InstallNodeModulesDir = Join-Path $InstallRoot "node_modules"
+$InstallPackageJson = Join-Path $InstallRoot "package.json"
 
 function Show-Usage {
   @"
@@ -33,7 +36,7 @@ Options:
 Examples:
   irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex
   .\install.ps1 -Version 5.8.0
-  .\install.ps1 -Binary C:\path\to\ax-code.exe
+  .\install.ps1 -Binary C:\path\to\ax-code.cmd
 "@
 }
 
@@ -108,12 +111,52 @@ function Resolve-ReleaseDownload {
   }
 }
 
+function Install-NodeBundleTree([string]$Root) {
+  $launcher = Join-Path $Root "bin\ax-code.cmd"
+  $lib = Join-Path $Root "lib"
+  $entry = Join-Path $lib "index-node-tui.js"
+  $nodeModules = Join-Path $Root "node_modules"
+  $packageJson = Join-Path $Root "package.json"
+
+  if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+    throw "Node-bundled distribution did not contain bin\ax-code.cmd"
+  }
+  if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) {
+    throw "Node-bundled distribution did not contain lib\index-node-tui.js"
+  }
+  if (-not (Test-Path -LiteralPath $nodeModules -PathType Container)) {
+    throw "Node-bundled distribution did not contain node_modules"
+  }
+
+  New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+  Remove-Item -LiteralPath $InstallPath -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $InstallCmdPath -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $InstallLibDir -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $InstallNodeModulesDir -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $InstallPackageJson -Force -ErrorAction SilentlyContinue
+  Copy-Item -LiteralPath $launcher -Destination $InstallCmdPath -Force
+  Copy-Item -LiteralPath $lib -Destination $InstallLibDir -Recurse -Force
+  Copy-Item -LiteralPath $nodeModules -Destination $InstallNodeModulesDir -Recurse -Force
+  if (Test-Path -LiteralPath $packageJson -PathType Leaf) {
+    Copy-Item -LiteralPath $packageJson -Destination $InstallPackageJson -Force
+  }
+}
+
 function Install-FromBinary([string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
     throw "Binary not found at $Path"
   }
 
+  $bundleRoot = Split-Path -Parent (Split-Path -Parent $Path)
+  $bundleEntry = Join-Path $bundleRoot "lib\index-node-tui.js"
+  if (Test-Path -LiteralPath $bundleEntry -PathType Leaf) {
+    Install-NodeBundleTree $bundleRoot
+    Write-Info "Installed ax-code node-bundled distribution from: $bundleRoot"
+    return "local"
+  }
+
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+  Remove-Item -LiteralPath $InstallCmdPath -Force -ErrorAction SilentlyContinue
   Copy-Item -LiteralPath $Path -Destination $InstallPath -Force
   Write-Info "Installed ax-code from: $Path"
   return "local"
@@ -134,17 +177,17 @@ function Install-FromRelease {
     if (-not $launcher) {
       throw "Downloaded archive did not contain ax-code.cmd"
     }
-    $lib = Get-ChildItem -Path $tmpDir -Directory -Filter "lib" -Recurse | Select-Object -First 1
-    if (-not $lib) {
+    $root = Split-Path -Parent $launcher.DirectoryName
+    $lib = Join-Path $root "lib"
+    if (-not (Test-Path -LiteralPath $lib -PathType Container)) {
       throw "Downloaded archive did not contain the Node runtime lib directory"
     }
+    $nodeModules = Join-Path $root "node_modules"
+    if (-not (Test-Path -LiteralPath $nodeModules -PathType Container)) {
+      throw "Downloaded archive did not contain the Node runtime node_modules directory"
+    }
 
-    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    Remove-Item -LiteralPath $InstallPath -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $InstallCmdPath -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $InstallLibDir -Recurse -Force -ErrorAction SilentlyContinue
-    Copy-Item -LiteralPath $launcher.FullName -Destination $InstallCmdPath -Force
-    Copy-Item -LiteralPath $lib.FullName -Destination $InstallLibDir -Recurse -Force
+    Install-NodeBundleTree $root
     return $release.Version
   } finally {
     Remove-Item -LiteralPath $tmpDir -Recurse -Force -ErrorAction SilentlyContinue

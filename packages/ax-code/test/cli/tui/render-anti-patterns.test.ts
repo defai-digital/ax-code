@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 
-const TUI_ROOT = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
+const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
+const REPO_ROOT = path.resolve(PACKAGE_ROOT, "../..")
+const TUI_ROOT = path.join(PACKAGE_ROOT, "src/cli/cmd/tui")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const EVENT_SRC = path.join(TUI_ROOT, "event.ts")
 const HELPER_SRC = path.join(TUI_ROOT, "context/helper.tsx")
@@ -67,6 +69,8 @@ const DEFERRED_STARTUP_SRCS = [
 ]
 const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/doctor-preload.ts")
 const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/debug/explain.ts")
+const BUILD_NODE_TUI_SRC = path.join(PACKAGE_ROOT, "script/build-node-tui.ts")
+const SOURCE_SOLID_LOADER_SRC = path.join(REPO_ROOT, "script/solid-loader.mjs")
 
 describe("tui OpenTUI stability guardrails", () => {
   test("keeps OpenTUI wired as the default renderer path", async () => {
@@ -78,6 +82,23 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).not.toMatch(/runNativeTuiSlice|AX_CODE_TUI_NATIVE/i)
     expect(renderer).toContain('from "@opentui/solid"')
     expect(renderer).toContain("render(root, createTuiRenderOptions(options))")
+  })
+
+  test("keeps the Node TUI runtime on Solid client modules", async () => {
+    const build = await fs.readFile(BUILD_NODE_TUI_SRC, "utf8")
+    const loader = await fs.readFile(SOURCE_SOLID_LOADER_SRC, "utf8")
+
+    for (const text of [build, loader]) {
+      expect(text).toContain("solid-js/dist/solid.js")
+      expect(text).toContain("solid-js/store/dist/store.js")
+      expect(text).toContain("solid-js/web/dist/web.js")
+    }
+    expect(build).toContain('build.onResolve({ filter: /^solid-js$/ }, () => ({ path: "solid-js/dist/solid.js", external: true }))')
+    expect(build).toContain("build.onResolve({ filter: /^solid-js\\/store$/ }")
+    expect(build).toContain("build.onResolve({ filter: /^solid-js\\/web$/ }")
+    expect(loader).toContain('["solid-js",')
+    expect(loader).toContain('["solid-js/store",')
+    expect(loader).toContain('["solid-js/web",')
   })
 
   test("keeps renderer startup configured for terminal stability", async () => {
@@ -902,6 +923,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)")
     expect(prompt).toContain("input.cursorOffset === Bun.stringWidth(input.plainText)")
     expect(prompt).toContain("input.cursorOffset = Bun.stringWidth(input.plainText)")
+    expect(prompt).toContain("if (!input || input.isDestroyed) return")
+    expect(prompt).toContain("syncInputCursorColor()")
+    expect(prompt).not.toContain("if (inputBlocked()) input.cursorColor")
     expect(autocomplete).toContain("const rawPath = selected.path ?? selected.value ?? selected.display")
     expect(question).toContain("if (val.isDestroyed) return")
   })

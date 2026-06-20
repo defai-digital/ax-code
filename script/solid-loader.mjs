@@ -23,6 +23,13 @@ const tsPreset = osRequire("@babel/preset-typescript")
 const aliases = new Map([
   ["#db", pathToFileURL(path.join(pkgRoot, "src/storage/db.node.ts")).href],
   ["bun-pty", pathToFileURL(path.join(pkgRoot, "src/pty/bun-pty-node-stub.ts")).href],
+  // The TUI is a terminal renderer, not Solid SSR. Node's default "node"
+  // condition resolves bare solid-js imports to the server runtime, while
+  // @opentui/solid uses the client runtime directly. Keep all TUI Solid imports
+  // on the same client modules to avoid mixed runtime state.
+  ["solid-js", pathToFileURL(pkgRequire.resolve("solid-js/dist/solid.js")).href],
+  ["solid-js/store", pathToFileURL(pkgRequire.resolve("solid-js/store/dist/store.js")).href],
+  ["solid-js/web", pathToFileURL(pkgRequire.resolve("solid-js/web/dist/web.js")).href],
 ])
 // tsconfig paths aliases (Bun resolved these natively; tsx does not).
 // Keep in sync with packages/ax-code/tsconfig.json → compilerOptions.paths.

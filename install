@@ -67,6 +67,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 INSTALL_DIR=$HOME/.ax-code/bin
+INSTALL_ROOT=$(dirname "$INSTALL_DIR")
+INSTALL_LIB_DIR="$INSTALL_ROOT/lib"
+INSTALL_NODE_MODULES_DIR="$INSTALL_ROOT/node_modules"
+INSTALL_PACKAGE_JSON="$INSTALL_ROOT/package.json"
 mkdir -p "$INSTALL_DIR"
 
 # If --binary is provided, skip all download/detection logic
@@ -235,15 +239,27 @@ list_ax_code_paths() {
 
 source_launcher_cwd() {
     local path=$1
+    local is_node_source=false
+    local is_bun_source=false
     if [ ! -f "$path" ]; then
         return 1
     fi
-    if ! grep -Fq 'bun run --cwd ' "$path" 2>/dev/null; then
+
+    if grep -Fq 'AX_CODE_SOURCE_ENTRY=' "$path" 2>/dev/null && \
+       grep -Fq '/packages/ax-code/src/index-node-tui.ts' "$path" 2>/dev/null && \
+       grep -Fq 'node --experimental-ffi' "$path" 2>/dev/null; then
+        is_node_source=true
+    fi
+
+    if grep -Fq 'bun run --cwd ' "$path" 2>/dev/null && \
+       grep -Fq '/packages/ax-code/src/index.ts' "$path" 2>/dev/null; then
+        is_bun_source=true
+    fi
+
+    if [ "$is_node_source" != "true" ] && [ "$is_bun_source" != "true" ]; then
         return 1
     fi
-    if ! grep -Fq '/packages/ax-code/src/index.ts' "$path" 2>/dev/null; then
-        return 1
-    fi
+
     sed -n \
         -e 's/^AX_CODE_SOURCE_CWD="\([^"]*\/packages\/ax-code\)".*/\1/p' \
         -e 's/.*--cwd "\([^"]*\/packages\/ax-code\)".*/\1/p' \
@@ -441,8 +457,7 @@ download_and_install() {
         unzip -q "$tmp_dir/$filename" -d "$tmp_dir"
     fi
 
-    mv "$tmp_dir/ax-code" "$INSTALL_DIR"
-    chmod 755 "${INSTALL_DIR}/ax-code"
+    install_node_bundle_tree "$tmp_dir"
     rm -rf "$tmp_dir"
 }
 
@@ -462,9 +477,52 @@ verify_downloaded_archive() {
 }
 
 install_from_binary() {
+    local bundle_root=""
+    local binary_dir=""
+
     print_message info "\n${MUTED}Installing ${NC}ax-code ${MUTED}from: ${NC}$binary_path"
+    binary_dir=$(dirname "$binary_path")
+    bundle_root=$(cd "$binary_dir/.." 2>/dev/null && pwd -P || true)
+    if [ -n "$bundle_root" ] && [ -f "$bundle_root/lib/index-node-tui.js" ]; then
+        install_node_bundle_tree "$bundle_root"
+        return
+    fi
+
     cp "$binary_path" "${INSTALL_DIR}/ax-code"
     chmod 755 "${INSTALL_DIR}/ax-code"
+}
+
+install_node_bundle_tree() {
+    local bundle_root=$1
+    local launcher="$bundle_root/bin/ax-code"
+    local lib_dir="$bundle_root/lib"
+    local node_modules_dir="$bundle_root/node_modules"
+    local package_json="$bundle_root/package.json"
+
+    if [ ! -f "$launcher" ]; then
+        echo -e "${RED}Error: node-bundled distribution did not contain bin/ax-code${NC}"
+        exit 1
+    fi
+    if [ ! -f "$lib_dir/index-node-tui.js" ]; then
+        echo -e "${RED}Error: node-bundled distribution did not contain lib/index-node-tui.js${NC}"
+        exit 1
+    fi
+    if [ ! -d "$node_modules_dir" ]; then
+        echo -e "${RED}Error: node-bundled distribution did not contain node_modules${NC}"
+        exit 1
+    fi
+
+    rm -f "${INSTALL_DIR}/ax-code"
+    rm -rf "$INSTALL_LIB_DIR" "$INSTALL_NODE_MODULES_DIR"
+    rm -f "$INSTALL_PACKAGE_JSON"
+
+    cp "$launcher" "${INSTALL_DIR}/ax-code"
+    chmod 755 "${INSTALL_DIR}/ax-code"
+    cp -R "$lib_dir" "$INSTALL_LIB_DIR"
+    cp -R "$node_modules_dir" "$INSTALL_NODE_MODULES_DIR"
+    if [ -f "$package_json" ]; then
+        cp "$package_json" "$INSTALL_PACKAGE_JSON"
+    fi
 }
 
 verify_installed_binary() {

@@ -11,6 +11,11 @@ describe("install script", () => {
     expect(text).toContain("cleanup_stale_source_launchers")
     expect(text).toContain("source_launcher_cwd")
     expect(text).toContain('AX_CODE_SOURCE_CWD="')
+    expect(text).toContain("AX_CODE_SOURCE_ENTRY=")
+    expect(text).toContain("/packages/ax-code/src/index-node-tui.ts")
+    expect(text).toContain("node --experimental-ffi")
+    // Legacy source launcher detection is retained so the Node installer can
+    // quarantine stale Bun-era checkout launchers that still shadow releases.
     expect(text).toContain("bun run --cwd ")
     expect(text).toContain("/packages/ax-code/src/index.ts")
     expect(text).toContain(".stale-source-")
@@ -22,6 +27,19 @@ describe("install script", () => {
     expect(text).toContain("bundled_launcher_target")
     expect(text).toContain(".stale-bundled-")
     expect(text).toContain("/dist/")
+  })
+
+  test("installs the complete Unix node-bundled runtime tree", async () => {
+    const text = await Bun.file(installScript).text()
+    expect(text).toContain('INSTALL_ROOT=$(dirname "$INSTALL_DIR")')
+    expect(text).toContain('INSTALL_LIB_DIR="$INSTALL_ROOT/lib"')
+    expect(text).toContain('INSTALL_NODE_MODULES_DIR="$INSTALL_ROOT/node_modules"')
+    expect(text).toContain("install_node_bundle_tree")
+    expect(text).toContain('lib/index-node-tui.js')
+    expect(text).toContain('node_modules')
+    expect(text).toContain('cp -R "$lib_dir" "$INSTALL_LIB_DIR"')
+    expect(text).toContain('cp -R "$node_modules_dir" "$INSTALL_NODE_MODULES_DIR"')
+    expect(text).toContain('install_node_bundle_tree "$bundle_root"')
   })
 
   test("warns when the installed binary is not first on PATH", async () => {
@@ -46,6 +64,10 @@ describe("install script", () => {
     expect(text).toContain("Expand-Archive")
     expect(text).toContain("ax-code.cmd")
     expect(text).toContain("InstallLibDir")
+    expect(text).toContain('$InstallRoot = Split-Path -Parent $InstallDir')
+    expect(text).toContain('$InstallLibDir = Join-Path $InstallRoot "lib"')
+    expect(text).toContain('$InstallNodeModulesDir = Join-Path $InstallRoot "node_modules"')
+    expect(text).toContain("Install-NodeBundleTree")
     expect(text).toContain('[Environment]::SetEnvironmentVariable("Path", $newPath, "User")')
     expect(text).toContain("Warn-PathPrecedence")
   })
@@ -55,6 +77,8 @@ describe("install script", () => {
     expect(text).toContain('$filename = "$App-windows-$arch.zip"')
     expect(text).toContain("Downloaded archive did not contain ax-code.cmd")
     expect(text).toContain("Downloaded archive did not contain the Node runtime lib directory")
+    expect(text).toContain("Downloaded archive did not contain the Node runtime node_modules directory")
+    expect(text).toContain("Installed ax-code node-bundled distribution from")
     expect(text).not.toContain("System.Runtime.Intrinsics.X86.Avx2")
     expect(text).not.toContain("-baseline")
   })

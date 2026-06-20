@@ -5,6 +5,7 @@ import {
   bundledBinaryPath,
   bundledBuildMarkerPath,
   bundledLauncherScript,
+  getInstallBinDir,
   preferredBundledTarget,
   setupCli,
   sourceLauncherScript,
@@ -20,6 +21,10 @@ describe("setup-cli helpers", () => {
       binary: "ax-code",
       legacyName: "ax-code-linux-x64-baseline-musl",
     })
+    expect(preferredBundledTarget({ platform: "win32", arch: "x64" })).toEqual({
+      binary: "ax-code.cmd",
+      legacyName: "ax-code-windows-x64",
+    })
   })
 
   test("builds bundled binary paths", () => {
@@ -27,8 +32,16 @@ describe("setup-cli helpers", () => {
       "/repo/packages/ax-code/dist/ax-code-darwin-arm64/bin/ax-code",
     )
     expect(bundledBinaryPath({ root: "/repo", platform: "win32", arch: "x64" })).toBe(
-      path.join("/repo", "packages", "ax-code", "dist", "ax-code-windows-x64", "bin", "ax-code.exe"),
+      path.join("/repo", "packages", "ax-code", "dist", "ax-code-windows-x64", "bin", "ax-code.cmd"),
     )
+  })
+
+  test("chooses a Node-era install bin directory without depending on Bun", () => {
+    expect(getInstallBinDir({}, (command) => (command === "ax-code" ? "/usr/local/bin/ax-code" : undefined))).toBe(
+      "/usr/local/bin",
+    )
+    expect(getInstallBinDir({ AX_CODE_BIN_DIR: "/custom/bin" }, () => undefined)).toBe("/custom/bin")
+    expect(getInstallBinDir({ PNPM_HOME: "/pnpm/home" }, () => undefined)).toBe("/pnpm/home")
   })
 
   test("derives release channels from versions", () => {
@@ -40,8 +53,8 @@ describe("setup-cli helpers", () => {
     expect(bundledLauncherScript({ binaryPath: "/repo/dist/ax-code", windows: false })).toBe(
       '#!/bin/sh\nAX_CODE_ORIGINAL_CWD="$(pwd)" exec "/repo/dist/ax-code" "$@"\n',
     )
-    expect(bundledLauncherScript({ binaryPath: "C:\\\\ax-code.exe", windows: true })).toBe(
-      '@echo off\nset AX_CODE_ORIGINAL_CWD=%CD%\n"C:\\\\ax-code.exe" %*\n',
+    expect(bundledLauncherScript({ binaryPath: "C:\\\\ax-code.cmd", windows: true })).toBe(
+      '@echo off\nset AX_CODE_ORIGINAL_CWD=%CD%\n"C:\\\\ax-code.cmd" %*\n',
     )
   })
 
@@ -65,7 +78,7 @@ describe("setup-cli helpers", () => {
     const spawns: Array<{ cmd: string; args: string[] }> = []
     setupCli({
       root: "/repo",
-      env: { BUN_INSTALL: "/tmp/ax-code-test-bundled-default" },
+      env: { AX_CODE_BIN_DIR: "/tmp/ax-code-test-bundled-default/bin" },
       platform: "darwin",
       arch: "arm64",
       exists: (target) => target === "/tmp/ax-code-test-bundled-default/bin" || target === binary || target === marker,
@@ -96,7 +109,7 @@ describe("setup-cli helpers", () => {
     const spawns: Array<{ cmd: string; args: string[] }> = []
     setupCli({
       root: "/repo",
-      env: { BUN_INSTALL: "/tmp/ax-code-test-bundled-no-marker" },
+      env: { AX_CODE_BIN_DIR: "/tmp/ax-code-test-bundled-no-marker/bin" },
       platform: "darwin",
       arch: "arm64",
       version: "4.0.12",
@@ -126,7 +139,7 @@ describe("setup-cli helpers", () => {
     const spawns: Array<{ cmd: string; args: string[] }> = []
     setupCli({
       root: "/repo",
-      env: { BUN_INSTALL: "/tmp/ax-code-test-bundled-stale" },
+      env: { AX_CODE_BIN_DIR: "/tmp/ax-code-test-bundled-stale/bin" },
       platform: "darwin",
       arch: "arm64",
       version: "4.0.12",
@@ -154,7 +167,7 @@ describe("setup-cli helpers", () => {
     setupCli({
       args: ["--source"],
       root: "/repo",
-      env: { BUN_INSTALL: "/tmp/ax-code-test-source" },
+      env: { AX_CODE_BIN_DIR: "/tmp/ax-code-test-source/bin" },
       platform: "darwin",
       arch: "arm64",
       exists: (target) => target === "/tmp/ax-code-test-source/bin",
@@ -180,7 +193,7 @@ describe("setup-cli helpers", () => {
     setupCli({
       args: ["--bundled"],
       root: "/repo",
-      env: { BUN_INSTALL: "/tmp/ax-code-test-bundled" },
+      env: { AX_CODE_BIN_DIR: "/tmp/ax-code-test-bundled/bin" },
       platform: "darwin",
       arch: "arm64",
       version: "4.0.12",
@@ -217,7 +230,7 @@ describe("setup-cli helpers", () => {
     setupCli({
       args: ["--bundled"],
       root: "/repo",
-      env: { BUN_INSTALL: "/tmp/ax-code-test-linux" },
+      env: { AX_CODE_BIN_DIR: "/tmp/ax-code-test-linux/bin" },
       platform: "linux",
       arch: "x64",
       avx2: false,

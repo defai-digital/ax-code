@@ -332,9 +332,10 @@ export function Prompt(props: PromptProps) {
   }
 
   function syncInputCursorColor() {
+    const color = inputBlocked() ? theme.backgroundElement : theme.text
     scheduleMicrotaskTask(() => {
       if (!input || input.isDestroyed) return
-      input.cursorColor = inputBlocked() ? theme.backgroundElement : theme.text
+      input.cursorColor = color
     })
   }
 
@@ -480,8 +481,7 @@ export function Prompt(props: PromptProps) {
   })
 
   createEffect(() => {
-    if (inputBlocked()) input.cursorColor = theme.backgroundElement
-    if (!inputBlocked()) input.cursorColor = theme.text
+    syncInputCursorColor()
   })
 
   onMount(() => {

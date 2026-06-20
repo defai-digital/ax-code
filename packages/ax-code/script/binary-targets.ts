@@ -101,7 +101,7 @@ export function candidateBinaryTargets(
   const platform = normalizeBinaryTargetPlatform(options.platform)
   const arch = normalizeBinaryTargetArch(options.arch)
   const base = "ax-code-" + platform + "-" + arch
-  const binary = platform === "windows" ? "ax-code.exe" : "ax-code"
+  const binary = platform === "windows" ? "ax-code.cmd" : "ax-code"
 
   if (platform === "darwin" && arch !== "arm64") {
     return {

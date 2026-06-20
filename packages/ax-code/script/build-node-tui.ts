@@ -22,6 +22,8 @@ process.chdir(dir)
 
 const buildVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
 const buildChannel = process.env.AX_CODE_CHANNEL ?? "latest"
+const solidStoreClientEntry = require.resolve("solid-js/store/dist/store.js")
+const solidWebClientEntry = require.resolve("solid-js/web/dist/web.js")
 
 // Distribution name mirrors the legacy compiled artifacts (ax-code-<os>-<arch>)
 // so the release upload, Homebrew formula, and install scripts keep the same
@@ -89,6 +91,12 @@ const result = await esbuild.build({
       name: "ax-node-overrides",
       setup(build) {
         build.onResolve({ filter: /^#db$/ }, () => ({ path: path.join(dir, "src/storage/db.node.ts") }))
+        // OpenTUI imports solid-js/dist/solid.js directly. Keep the app's bare
+        // solid-js imports on that exact external module instance; inlining a
+        // second Solid runtime breaks OpenTUI context propagation.
+        build.onResolve({ filter: /^solid-js$/ }, () => ({ path: "solid-js/dist/solid.js", external: true }))
+        build.onResolve({ filter: /^solid-js\/store$/ }, () => ({ path: solidStoreClientEntry }))
+        build.onResolve({ filter: /^solid-js\/web$/ }, () => ({ path: solidWebClientEntry }))
         build.onResolve({ filter: /^drizzle-orm\/bun-sqlite$/ }, () => ({
           path: require.resolve("drizzle-orm/node-sqlite"),
         }))

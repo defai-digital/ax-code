@@ -158,7 +158,31 @@ function backendProcessCommand() {
   const resolvedEntry = path.isAbsolute(entry) ? entry : path.resolve(process.cwd(), entry)
   // A source run executes a `.ts` entry, which plain `node` cannot load — forward
   // the tsx loader. A node-bundled run executes a `.js` entry and needs nothing.
-  const loaderArgs = /\.[cm]?tsx?$/.test(resolvedEntry) ? ["--import", "tsx"] : []
+  // Also forward the solid-loader (tsconfig path aliases, .tsx JSX transform,
+  // text-asset imports, Bun→Node module rebinding). Bun resolved tsconfig paths
+  // natively; on Node + tsx the solid-loader's resolve hook is required.
+  let loaderArgs: string[] = []
+  if (/\.[cm]?tsx?$/.test(resolvedEntry)) {
+    loaderArgs = ["--import", "tsx"]
+    // Forward the solid-loader if the parent process uses it. Convert relative
+    // paths to absolute so the child process resolves correctly regardless of
+    // its CWD.
+    for (let i = 0; i < process.execArgv.length; i++) {
+      const arg = process.execArgv[i]
+      if (arg === "--import" && process.execArgv[i + 1]?.includes("solid-loader")) {
+        const loaderPath = process.execArgv[i + 1]
+        const absLoader = path.isAbsolute(loaderPath) ? loaderPath : path.resolve(process.cwd(), loaderPath)
+        loaderArgs.push("--import", absLoader)
+        break
+      }
+      if (arg.startsWith("--import=") && arg.includes("solid-loader")) {
+        const loaderPath = arg.slice("--import=".length)
+        const absLoader = path.isAbsolute(loaderPath) ? loaderPath : path.resolve(process.cwd(), loaderPath)
+        loaderArgs.push("--import", absLoader)
+        break
+      }
+    }
+  }
   const args = [...loaderArgs, "--conditions=browser", resolvedEntry, "tui-backend", "--stdio"]
   return {
     command: process.execPath,

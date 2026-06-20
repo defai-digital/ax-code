@@ -5,7 +5,7 @@
  *
  * By default this installs a launcher that targets the locally built bundled
  * CLI, matching the Homebrew/curl runtime. Pass `--source` to install a
- * contributor-only launcher that forwards to Bun from this checkout.
+ * contributor-only launcher that forwards to Node from this checkout.
  */
 
 import childProcess from "child_process"
@@ -50,11 +50,19 @@ type SetupCliOptions = {
   which?: WhichFn
 }
 
-export function getBunBinDir(env: NodeJS.ProcessEnv = process.env, which: WhichFn = whichSync): string {
-  const bunExe = which("bun")
-  if (bunExe) return path.dirname(bunExe)
-  const bunPath = env.BUN_INSTALL || path.join(os.homedir(), ".bun")
-  return path.join(bunPath, "bin")
+export function getInstallBinDir(
+  env: NodeJS.ProcessEnv = process.env,
+  which: WhichFn = whichSync,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const existing = which("ax-code")
+  if (existing) return path.dirname(existing)
+  if (env.AX_CODE_BIN_DIR) return env.AX_CODE_BIN_DIR
+  if (env.PNPM_HOME) return env.PNPM_HOME
+  if (platform === "win32") {
+    return path.join(env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "ax-code", "bin")
+  }
+  return path.join(os.homedir(), ".local", "bin")
 }
 
 export function preferredBundledTarget(input: {
@@ -228,7 +236,7 @@ export function setupCli(input: SetupCliOptions = {}) {
   const log = input.log ?? console.log
   const which = input.which ?? whichSync
   const windows = platform === "win32"
-  const binDir = getBunBinDir(env, which)
+  const binDir = getInstallBinDir(env, which, platform)
 
   if (!exists(binDir)) {
     mkdirSync(binDir, { recursive: true })
