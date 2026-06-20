@@ -293,7 +293,16 @@ export const StatusRow: React.FC<StatusRowProps> = ({
 
   return (
     <div className={cn("mb-1", !hasLeftAccessory && "chat-column")} style={STATUS_ROW_CONTAINER_STYLE}>
-      <div className={cn("flex items-center justify-between py-0.5 gap-2 h-[1.2rem]", hasLeftAccessory && "px-0.5")}>
+      <div
+        className={cn(
+          "flex items-center justify-between py-0.5 gap-2",
+          // A left accessory (e.g. stacked PendingChangesBar + DoneNotCommittedNudge)
+          // is taller than one line; a fixed h-[1.2rem] clips it and the overflow
+          // is painted over by the composer below. Grow to fit, keeping 1.2rem as
+          // the minimum so the single-line status layout is unchanged.
+          hasLeftAccessory ? "min-h-[1.2rem] px-0.5" : "h-[1.2rem]",
+        )}
+      >
         {/* Left: Abort status | Working placeholder | leftAccessory */}
         <div className={cn("flex-1 flex items-center min-w-0 gap-2", hasLeftAccessory ? "pl-1.5" : "overflow-x-hidden")}>
           {showAssistantStatus && showAbortStatus ? (
