@@ -11,6 +11,7 @@ export const ROOT = path.resolve(import.meta.dirname, "..")
 export const AX_CODE_MINISIGN_PUBLIC_KEY = "RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A"
 export const DEFAULT_MINISIGN_KEYCHAIN_SERVICE = "ax-code-minisign"
 export const DEFAULT_MINISIGN_KEYCHAIN_ACCOUNT = "ax-code-release"
+export const SIGN_RELEASE_ASSETS_SCRIPT = "script/sign-release-assets.ts"
 
 export type SignReleaseOptions = {
   distDir: string
@@ -51,6 +52,13 @@ export function findReleaseAssets(distDir: string) {
 
 export function signaturePath(file: string) {
   return `${file}.minisig`
+}
+
+export function signReleaseAssetsCommand(args: readonly string[]) {
+  return {
+    command: "pnpm",
+    args: ["exec", "tsx", SIGN_RELEASE_ASSETS_SCRIPT, ...args],
+  }
 }
 
 export async function sha256File(file: string) {

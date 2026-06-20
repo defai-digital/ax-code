@@ -13,6 +13,7 @@ import {
   releaseAssetsForOptions,
   secretKeyPermissionIssue,
   sha256File,
+  signReleaseAssetsCommand,
   signaturePath,
   trustedComment,
 } from "./sign-release-assets"
@@ -105,6 +106,13 @@ describe("sign-release-assets helpers", () => {
     const options = parseSignReleaseArgs(["/tmp/asset.tar.gz"], {}, "/repo", "/home/ax")
     expect(releaseAssetsForOptions(options)).toEqual(["/tmp/asset.tar.gz"])
     expect(signaturePath("/tmp/asset.tar.gz")).toBe("/tmp/asset.tar.gz.minisig")
+  })
+
+  test("builds a Node-compatible invocation for delegated signing", () => {
+    expect(signReleaseAssetsCommand(["--key-dir", "/keys", "/tmp/asset.zip"])).toEqual({
+      command: "pnpm",
+      args: ["exec", "tsx", "script/sign-release-assets.ts", "--key-dir", "/keys", "/tmp/asset.zip"],
+    })
   })
 
   test("builds trusted comments with the artifact sha256", async () => {

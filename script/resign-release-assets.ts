@@ -6,7 +6,7 @@ import os from "os"
 import { whichSync } from "./which"
 import path from "path"
 import { parseArgs } from "util"
-import { expandHome, signaturePath } from "./sign-release-assets"
+import { expandHome, signaturePath, signReleaseAssetsCommand } from "./sign-release-assets"
 import {
   ROOT,
   expectedReleaseArchives,
@@ -231,20 +231,15 @@ function downloadArchives(tag: string, options: ResignOptions, assetDir: string)
 
 function signArchives(tag: string, options: ResignOptions, assetDir: string) {
   const archives = archivePaths(assetDir)
-  run(
-    "bun",
-    [
-      "run",
-      "script/sign-release-assets.ts",
-      "--secret-key",
-      options.secretKey,
-      "--public-key",
-      options.publicKey,
-      "--force",
-      ...archives,
-    ],
-    { dryRun: options.dryRun },
-  )
+  const sign = signReleaseAssetsCommand([
+    "--secret-key",
+    options.secretKey,
+    "--public-key",
+    options.publicKey,
+    "--force",
+    ...archives,
+  ])
+  run(sign.command, sign.args, { dryRun: options.dryRun })
 }
 
 function uploadSignatures(tag: string, options: ResignOptions, assetDir: string) {

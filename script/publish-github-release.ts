@@ -5,7 +5,12 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { parseArgs } from "util"
-import { AX_CODE_MINISIGN_PUBLIC_KEY, expandHome, secretKeyPermissionIssue } from "./sign-release-assets"
+import {
+  AX_CODE_MINISIGN_PUBLIC_KEY,
+  expandHome,
+  secretKeyPermissionIssue,
+  signReleaseAssetsCommand,
+} from "./sign-release-assets"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
 
@@ -387,7 +392,8 @@ function signAndUpload(options: PublishGithubReleaseOptions, assetDir: string) {
   }
 
   const archives = archivePaths(assetDir)
-  run("bun", ["run", "script/sign-release-assets.ts", "--key-dir", options.keyDir, ...archives], {
+  const sign = signReleaseAssetsCommand(["--key-dir", options.keyDir, ...archives])
+  run(sign.command, sign.args, {
     dryRun: options.dryRun,
   })
   const signatures = archives.map((asset) => `${asset}.minisig`)
