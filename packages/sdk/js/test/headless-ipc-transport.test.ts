@@ -62,6 +62,26 @@ describe("ipc transport client", () => {
               code: "TEST_ERROR",
               message: "something went wrong",
             })
+          } else if (message.path === "/not-found") {
+            await writeIpcMessage(socket, {
+              type: "response",
+              id: message.id,
+              status: 404,
+              body: { error: "missing" },
+            })
+          } else if (message.path === "/session/sess-1/prompt_async") {
+            await writeIpcMessage(socket, {
+              type: "response",
+              id: message.id,
+              status: 202,
+            })
+          } else if (message.path === "/session/sess-1/abort") {
+            await writeIpcMessage(socket, {
+              type: "response",
+              id: message.id,
+              status: 200,
+              body: true,
+            })
           } else {
             await writeIpcMessage(socket, {
               type: "response",
@@ -118,20 +138,54 @@ describe("ipc transport client", () => {
     }
   })
 
+  test("rejects non-ok route responses", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      await expect(
+        transport.requestJson<unknown>({ path: "/not-found", method: "GET" }),
+      ).rejects.toThrow('Headless runtime request failed (404): {"error":"missing"}')
+    } finally {
+      await transport.close()
+    }
+  })
+
+  test("preserves command response status", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      await expect(
+        transport.sendCommand({
+          type: "session.prompt",
+          mode: "async",
+          sessionID: "sess-1",
+          body: { parts: [] },
+        }),
+      ).resolves.toEqual({ accepted: true, status: 202 })
+
+      await expect(
+        transport.sendCommand({
+          type: "session.abort",
+          sessionID: "sess-1",
+        }),
+      ).resolves.toEqual({ accepted: true, status: 200, body: true })
+    } finally {
+      await transport.close()
+    }
+  })
+
   test("yields events pushed by the server", async () => {
     const transport = createIpcTransport({ socketPath })
     try {
       // Ensure the connection handshake is complete before subscribing.
       await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
-  
+
       const events = [
         { type: "server.connected" },
         { type: "session.created", properties: { info: { id: "sess-1" } } },
       ]
-  
+
       const received: unknown[] = []
       const subscription = transport.subscribe()
-  
+
       // Broadcast events after the subscription is active.
       await new Promise((resolve) => setTimeout(resolve, 50))
       for (const event of events) {
@@ -139,12 +193,12 @@ describe("ipc transport client", () => {
           await writeIpcMessage(socket, { type: "event", event })
         }
       }
-  
+
       for await (const event of subscription) {
         received.push(event)
         if (received.length === events.length) break
       }
-  
+
       expect(received).toEqual(events)
     } finally {
       await transport.close?.()

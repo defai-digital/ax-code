@@ -235,7 +235,7 @@ describe("headless SDK types", () => {
       }) as typeof fetch,
     })
 
-    await client.sendPrompt("sess-1", { parts: [{ type: "text", text: "hello" }] })
+    const result = await client.sendPrompt("sess-1", { parts: [{ type: "text", text: "hello" }] })
 
     expect(calls).toHaveLength(1)
     expect(calls[0].url).toBe("http://127.0.0.1:4096/session/sess-1/prompt_async")
@@ -245,6 +245,7 @@ describe("headless SDK types", () => {
       "Content-Type": "application/json",
     })
     expect(calls[0].init.body).toBe(JSON.stringify({ parts: [{ type: "text", text: "hello" }] }))
+    expect(result).toEqual({ accepted: true, status: 202 })
   })
 
   test("createHeadlessClient sends sync shell and abort commands through explicit routes", async () => {
@@ -257,10 +258,12 @@ describe("headless SDK types", () => {
       }) as typeof fetch,
     })
 
-    await client.sendShell("sess-1", { command: "pwd" }, { mode: "sync" })
-    await client.abort("sess-1")
+    const shellResult = await client.sendShell("sess-1", { command: "pwd" }, { mode: "sync" })
+    const abortResult = await client.abort("sess-1")
 
     expect(calls).toEqual(["http://127.0.0.1:4096/session/sess-1/shell", "http://127.0.0.1:4096/session/sess-1/abort"])
+    expect(shellResult).toEqual({ accepted: true, status: 200, body: { ok: true } })
+    expect(abortResult).toEqual({ accepted: true, status: 200, body: { ok: true } })
   })
 
   test("createHeadlessClient command helpers are safe to destructure", async () => {
@@ -274,9 +277,10 @@ describe("headless SDK types", () => {
     })
     const { sendCommand } = client
 
-    await sendCommand("sess-1", { command: "init" })
+    const result = await sendCommand("sess-1", { command: "init" })
 
     expect(calls).toEqual(["http://127.0.0.1:4096/session/sess-1/command_async"])
+    expect(result).toEqual({ accepted: true, status: 202 })
   })
 
   test("createHeadlessClient loads session evidence through review routes", async () => {

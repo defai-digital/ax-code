@@ -20,6 +20,11 @@ export type HttpSseTransportOptions = {
   experimental_workspaceID?: string
 }
 
+type HttpTransportResponse = {
+  status: number
+  body: unknown
+}
+
 /**
  * HTTP/SSE implementation of the headless transport interface.
  *
@@ -37,7 +42,7 @@ export function createHttpSseTransport(options: HttpSseTransportOptions): Headle
     experimental_workspaceID: options.experimental_workspaceID,
   })
 
-  const requestJson = async <TResult>(request: HeadlessTransportRequest): Promise<TResult> => {
+  const request = async (request: HeadlessTransportRequest): Promise<HttpTransportResponse> => {
     const url = new URL(request.path, options.baseUrl)
     for (const [key, value] of Object.entries(request.query ?? {})) {
       if (value !== undefined) url.searchParams.set(key, String(value))
@@ -55,11 +60,17 @@ export function createHttpSseTransport(options: HttpSseTransportOptions): Headle
       const text = await response.text().catch(() => "")
       throw new Error(`Headless runtime request failed (${response.status}): ${text || response.statusText}`)
     }
-    return parseHeadlessRuntimeResponseBody(await response.text()) as TResult
+    return {
+      status: response.status,
+      body: parseHeadlessRuntimeResponseBody(await response.text()),
+    }
   }
 
+  const requestJson = async <TResult>(requestInput: HeadlessTransportRequest): Promise<TResult> =>
+    (await request(requestInput)).body as TResult
+
   const sendCommand = (command: HeadlessRuntimeCommand): Promise<HeadlessRuntimeCommandResult> =>
-    sendHeadlessRuntimeCommand({ command, requestJson })
+    sendHeadlessRuntimeCommand({ command, request })
 
   return {
     requestJson,
@@ -75,7 +86,7 @@ export function createHttpSseTransport(options: HttpSseTransportOptions): Headle
 
 async function sendHeadlessRuntimeCommand(input: {
   command: HeadlessRuntimeCommand
-  requestJson: <TResult>(request: HeadlessTransportRequest) => Promise<TResult>
+  request: (request: HeadlessTransportRequest) => Promise<HttpTransportResponse>
 }): Promise<HeadlessRuntimeCommandResult> {
   switch (input.command.type) {
     case "session.prompt":
@@ -103,31 +114,27 @@ async function sendHeadlessRuntimeCommand(input: {
       return postJson(input, `/session/${encodeURIComponent(input.command.sessionID)}/abort`, undefined)
 
     case "permission.reply":
-      return {
-        accepted: true,
-        status: 200,
-        body: await input.requestJson({
+      return commandResult(
+        await input.request({
           path: "/permission/reply",
           method: "POST",
           body: input.command.body as Record<string, unknown>,
         }),
-      }
+      )
 
     case "question.reply":
-      return {
-        accepted: true,
-        status: 200,
-        body: await input.requestJson({
+      return commandResult(
+        await input.request({
           path: "/question/reply",
           method: "POST",
           body: input.command.body as Record<string, unknown>,
         }),
-      }
+      )
   }
 }
 
 function postSessionCommand(
-  input: { requestJson: <TResult>(request: HeadlessTransportRequest) => Promise<TResult> },
+  input: { request: (request: HeadlessTransportRequest) => Promise<HttpTransportResponse> },
   command: {
     sessionID: string
     route: "message" | "prompt_async" | "command" | "command_async" | "shell" | "shell_async"
@@ -138,16 +145,21 @@ function postSessionCommand(
 }
 
 async function postJson(
-  input: { requestJson: <TResult>(request: HeadlessTransportRequest) => Promise<TResult> },
+  input: { request: (request: HeadlessTransportRequest) => Promise<HttpTransportResponse> },
   path: string,
   body: Record<string, unknown> | undefined,
 ): Promise<HeadlessRuntimeCommandResult> {
-  const response = await input.requestJson<unknown>({
+  const response = await input.request({
     path,
     method: "POST",
     body,
   })
-  return { accepted: true, status: 200, body: response }
+  return commandResult(response)
+}
+
+function commandResult(response: HttpTransportResponse): HeadlessRuntimeCommandResult {
+  if (response.status === 202) return { accepted: true, status: 202 }
+  return { accepted: true, status: 200, body: response.body }
 }
 
 function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
