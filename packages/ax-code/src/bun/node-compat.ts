@@ -52,7 +52,7 @@ function hash(input: string | Uint8Array | ArrayBuffer) {
   return BigInt(`0x${crypto.createHash("sha256").update(value).digest("hex").slice(0, 16)}`)
 }
 
-class Glob {
+export class Glob {
   constructor(private readonly pattern: string) {}
 
   async *scan(input: { cwd?: string; absolute?: boolean } = {}) {

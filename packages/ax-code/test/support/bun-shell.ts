@@ -4,6 +4,9 @@
 // (returns { exitCode, stdout, stderr }).
 import { spawnSync } from "node:child_process"
 
+// Re-export the Node Glob shim so `import { Glob } from "bun"` works in tests.
+export { Glob } from "../../src/bun/node-compat"
+
 class Sh implements PromiseLike<{ exitCode: number; stdout: string; stderr: string }> {
   private _cwd?: string
   private _nothrow = false
