@@ -3,9 +3,14 @@ import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 
-// Node freezes builtin module namespaces, so vi.spyOn(fs, "readFile") fails;
-// vi.mock(spy:true) lets vitest wrap the real exports so they can be spied.
-vi.mock("fs/promises", { spy: true })
+// Node freezes builtin module namespaces, so vi.spyOn(fs, "readFile") fails.
+// Re-export fs/promises through a vi.mock factory: a fresh, configurable module
+// object with the REAL functions, so spyOn works and the captured original is
+// the real readFile (not the spy) — avoiding infinite recursion.
+vi.mock("fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fs/promises")>()
+  return { ...actual, default: { ...(actual as any).default } }
+})
 import * as store from "../../src/memory/store"
 
 const sampleMemory = (override: Partial<{ contentHash: string; totalTokens: number }> = {}) => ({

@@ -2,9 +2,14 @@ import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import * as fs from "fs/promises"
 
-// Node freezes builtin module namespaces, so vi.spyOn(fs, "readFile") fails;
-// vi.mock(spy:true) lets vitest wrap the real exports so they can be spied.
-vi.mock("fs/promises", { spy: true })
+// Node freezes builtin module namespaces, so vi.spyOn(fs, "readFile") fails.
+// Re-export fs/promises through a vi.mock factory: a fresh, configurable module
+// object with the REAL functions, so spyOn works and the captured original is
+// the real readFile (not the spy) — avoiding infinite recursion.
+vi.mock("fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fs/promises")>()
+  return { ...actual, default: { ...(actual as any).default } }
+})
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
 import { Instance } from "../../src/project/instance"
 import { FileTime } from "../../src/file/time"
