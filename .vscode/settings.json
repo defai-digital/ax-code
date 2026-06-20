@@ -1,0 +1,20 @@
+{
+  // packages/ax-code is large enough that the classic VS Code TypeScript server
+  // can exhaust its default heap and then surface spurious errors such as
+  // "Cannot find module 'hono'" and "Parameter '...' implicitly has an 'any'
+  // type" (e.g. on the route handlers in src/server). The repo's typecheck
+  // (`pnpm typecheck`) runs tsgo (@typescript/native-preview), which resolves
+  // the project without issue; these settings make the in-editor experience
+  // match so the phantom errors stop.
+  //
+  // 1) Give the TS server more heap so it doesn't OOM mid-analysis (the actual
+  //    root cause of the phantom "Cannot find module" errors).
+  "typescript.tsserver.maxTsServerMemory": 8192,
+  // 2) Use the workspace TypeScript (5.9.3) instead of VS Code's bundled copy,
+  //    so module resolution matches the CLI.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  // 3) Opt into the TypeScript Native Preview (tsgo) language server when the
+  //    "TypeScript (Native Preview)" extension is installed — this is the same
+  //    resolver `pnpm typecheck` uses. Ignored if the extension is absent.
+  "typescript.experimental.useTsgo": true
+}
