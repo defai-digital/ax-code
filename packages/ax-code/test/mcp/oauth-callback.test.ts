@@ -62,12 +62,16 @@ test("timeout for superseded OAuth flow does not clear the active MCP name mappi
     const active = McpOAuthCallback.waitForCallback("state-active", "github")
 
     timeouts[oldTimeoutIndex]?.()
-    await Promise.race([
-      expect(old).resolves.toThrow("OAuth callback timeout"),
+    // `old` resolves to the rejection reason (via .catch above), so assert on the
+    // error value's message — vitest's `.resolves.toThrow` expects a throwing
+    // function, not a resolved Error value (bun:test was lenient here).
+    const oldError = (await Promise.race([
+      old,
       new Promise((_, reject) =>
         originalSetTimeout(() => reject(new Error("timed out waiting for superseded OAuth timeout")), 500),
       ),
-    ])
+    ])) as Error
+    expect(oldError?.message).toContain("OAuth callback timeout")
 
     McpOAuthCallback.cancelPending("github")
     await Promise.race([
