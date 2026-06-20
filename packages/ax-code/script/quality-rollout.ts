@@ -76,12 +76,12 @@ function policyScope(defaultScope: "resolved" | QualityPromotionApprovalPolicySt
 }
 
 async function readJson<T>(file: string) {
-  return JSON.parse(await Bun.file(file).text()) as T
+  return JSON.parse(await fs.readFile(file, "utf8")) as T
 }
 
 async function write(file: string, content: string) {
   await fs.mkdir(path.dirname(file), { recursive: true })
-  await Bun.write(file, content.endsWith("\n") ? content : content + "\n")
+  await fs.writeFile(file, content.endsWith("\n") ? content : content + "\n")
 }
 
 async function resolveArchiveSigningInputForCLI() {
