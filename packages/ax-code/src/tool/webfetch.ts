@@ -290,7 +290,11 @@ function decodeHtmlEntities(input: string): string {
   return input.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, body: string) => {
     if (body[0] === "#") {
       const codePoint = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)
-      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match
+      // Guard the full Unicode range — `String.fromCodePoint` throws RangeError
+      // on out-of-range values, which `Number.isFinite` alone does not catch.
+      return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : match
     }
     return named[body.toLowerCase()] ?? match
   })

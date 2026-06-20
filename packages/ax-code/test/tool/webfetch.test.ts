@@ -129,6 +129,28 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("extracts visible text from HTML, dropping scripts/styles and decoding entities", async () => {
+    const html =
+      "<body><style>.x{color:red}</style><!-- note -->" +
+      "<h1>Heading</h1><script>alert('x')</script>" +
+      "<p>Hello &amp; welcome &#9999999999; world</p></body>"
+    await withFetch(
+      async () => new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "https://93.184.216.34/page.html", format: "text" }, ctx)
+            // script/style/comment removed; `&amp;` decoded; the out-of-range
+            // numeric entity is left literal rather than throwing RangeError.
+            expect(result.output).toBe("Heading Hello & welcome &#9999999999; world")
+          },
+        })
+      },
+    )
+  })
+
   test("accepts URL schemes case-insensitively", async () => {
     await withFetch(
       async () =>
