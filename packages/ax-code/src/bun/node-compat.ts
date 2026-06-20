@@ -74,6 +74,31 @@ class Glob {
       }
     }
   }
+
+  *scanSync(input: { cwd?: string; absolute?: boolean } = {}) {
+    const cwd = input.cwd ?? process.cwd()
+    const stack = [cwd]
+    while (stack.length > 0) {
+      const current = stack.pop()
+      if (!current) continue
+      let entries: fs.Dirent[] = []
+      try {
+        entries = fs.readdirSync(current, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const entry of entries) {
+        const full = path.join(current, entry.name)
+        if (entry.isDirectory()) {
+          stack.push(full)
+          continue
+        }
+        const relative = path.relative(cwd, full).split(path.sep).join("/")
+        if (!minimatch(relative, this.pattern, { dot: true })) continue
+        yield input.absolute ? full : relative
+      }
+    }
+  }
 }
 
 async function connect(input: { hostname?: string; port: number }) {
