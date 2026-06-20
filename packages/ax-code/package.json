@@ -20,7 +20,7 @@
     "check:skills": "tsx script/check-skills.ts",
     "check:skills:all": "tsx script/check-skills.ts --all",
     "check:tui-layering": "tsx script/check-tui-layering.ts",
-    "check:tui-snapshot": "bun run script/check-tui-snapshot.ts",
+    "check:tui-snapshot": "node --experimental-ffi --disable-warning=ExperimentalWarning --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-tui-snapshot.ts",
     "check:bun-compat": "tsx script/check-bun-compat.ts",
     "quality:rollout": "bun run script/quality-rollout.ts",
     "perf:index": "bun run script/perf-index.ts",

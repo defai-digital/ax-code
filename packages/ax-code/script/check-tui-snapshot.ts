@@ -11,6 +11,7 @@
 //   bun run script/check-tui-snapshot.ts --update   # regenerate snapshot
 
 import path from "node:path"
+import { exists, readText, writeText } from "./fs-compat"
 import type { RGBA } from "@opentui/core"
 import { logo } from "../src/cli/logo"
 import { gradientLineRuns } from "../src/cli/cmd/tui/ui/primitives/color"
@@ -21,7 +22,7 @@ import { buildGlyphSet } from "../src/cli/cmd/tui/ui/glyphs"
 import { resolveTheme } from "../src/cli/cmd/tui/context/theme"
 import { DEFAULT_THEMES } from "../src/cli/cmd/tui/context/theme-defaults"
 
-const SNAPSHOT_PATH = path.resolve(import.meta.dir, "../test/cli/tui/__snapshots__/visual-design-system.json")
+const SNAPSHOT_PATH = path.resolve(import.meta.dirname, "../test/cli/tui/__snapshots__/visual-design-system.json")
 const LOGO_DIAGONAL_BIAS = 3
 
 function hex(color: RGBA): string {
@@ -83,26 +84,25 @@ const actual = JSON.stringify(buildSnapshot(), null, 2) + "\n"
 const update = process.argv.includes("--update")
 
 if (update) {
-  await Bun.write(SNAPSHOT_PATH, actual)
+  await writeText(SNAPSHOT_PATH, actual)
   console.log(`updated ${path.relative(process.cwd(), SNAPSHOT_PATH)}`)
   process.exit(0)
 }
 
-const file = Bun.file(SNAPSHOT_PATH)
-if (!(await file.exists())) {
+if (!(await exists(SNAPSHOT_PATH))) {
   console.error(`missing snapshot: ${SNAPSHOT_PATH}`)
-  console.error("run: bun run script/check-tui-snapshot.ts --update")
+  console.error("run: pnpm run check:tui-snapshot -- --update")
   process.exit(1)
 }
 
-const expected = await file.text()
+const expected = await readText(SNAPSHOT_PATH)
 if (expected === actual) {
   console.log("ok: tui visual design-system snapshot matches")
   process.exit(0)
 }
 
 const actualPath = SNAPSHOT_PATH.replace(/\.json$/, ".actual.json")
-await Bun.write(actualPath, actual)
+await writeText(actualPath, actual)
 console.error("tui visual design-system snapshot mismatch")
 console.error(`expected: ${SNAPSHOT_PATH}`)
 console.error(`actual:   ${actualPath}`)
