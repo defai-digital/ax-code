@@ -1,5 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
+import { readJson, writeText } from "./fs-compat"
 import type { Bench } from "../src/cli/cmd/debug/perf"
 import type { Verdict } from "./perf-index"
 
@@ -133,13 +134,13 @@ async function main() {
   const cwd = process.cwd()
   const sum = path.resolve(cwd, arg("--summary") ?? ".tmp/perf-index-summary.json")
   const out = path.resolve(cwd, arg("--out") ?? ".tmp/perf-index-report.md")
-  const verdict = JSON.parse(await Bun.file(sum).text()) as Verdict
+  const verdict = (await readJson(sum)) as Verdict
   const file = path.resolve(cwd, arg("--report") ?? verdict.out)
-  const report = JSON.parse(await Bun.file(file).text()) as Bench
+  const report = (await readJson(file)) as Bench
   const text = render(verdict, report)
 
   await fs.mkdir(path.dirname(out), { recursive: true })
-  await Bun.write(out, text + "\n")
+  await writeText(out, text + "\n")
   console.log(text)
 }
 

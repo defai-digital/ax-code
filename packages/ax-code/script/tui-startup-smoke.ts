@@ -1,7 +1,7 @@
-#!/usr/bin/env bun
 import fs from "fs"
 import os from "os"
 import path from "path"
+import { detached } from "./proc-compat"
 
 const TUI_STARTUP_SUCCESS_EVENT = "tui.startup.appMounted"
 const TUI_STARTUP_REQUIRED_EVENTS = [
@@ -82,12 +82,7 @@ function signalProcessTree(pid: number, signal: "SIGINT" | "SIGTERM" | "SIGKILL"
   if (!Number.isInteger(pid) || pid <= 0) return
 
   if (process.platform === "win32") {
-    try {
-      Bun.spawn(["taskkill", "/pid", String(pid), signal === "SIGKILL" ? "/f" : "", "/t"].filter(Boolean), {
-        stdout: "ignore",
-        stderr: "ignore",
-      })
-    } catch {}
+    detached(["taskkill", "/pid", String(pid), signal === "SIGKILL" ? "/f" : "", "/t"].filter(Boolean))
     return
   }
 

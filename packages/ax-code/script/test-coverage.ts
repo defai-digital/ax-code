@@ -1,5 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
+import { readText, writeText } from "./fs-compat"
+import { capture } from "./proc-compat"
 
 export type CoverageMetric = {
   covered: number
@@ -446,16 +448,13 @@ export function renderCoverageReport(summary: CoverageSummary) {
 }
 
 async function git(args: string[]) {
-  const proc = Bun.spawn(["git", ...args], {
-    cwd: process.cwd(),
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "ignore",
-  })
-  const text = await new Response(proc.stdout).text().catch(() => "")
-  const code = await proc.exited
+  const { code, stdout } = await capture(["git", ...args], { cwd: process.cwd() }).catch(() => ({
+    code: 1,
+    stdout: "",
+    stderr: "",
+  }))
   if (code !== 0) return undefined
-  return text.trim() || undefined
+  return stdout.trim() || undefined
 }
 
 export async function createCoverageSummary(input: {
@@ -465,7 +464,7 @@ export async function createCoverageSummary(input: {
   reportFile: string
   baselineFile?: string
 }) {
-  const text = await Bun.file(input.lcovFile).text()
+  const text = await readText(input.lcovFile)
   const repoRoot = path.resolve(
     process.env["GITHUB_WORKSPACE"] ?? (await git(["rev-parse", "--show-toplevel"])) ?? process.cwd(),
   )
@@ -498,7 +497,7 @@ export async function createCoverageSummary(input: {
     meta: {
       createdAt: new Date().toISOString(),
       runtime: {
-        bun: Bun.version,
+        bun: process.versions.bun ?? process.version,
         platform: process.platform,
         arch: process.arch,
       },
@@ -515,8 +514,7 @@ export async function createCoverageSummary(input: {
   }
 
   if (input.baselineFile) {
-    const baselineText = await Bun.file(input.baselineFile)
-      .text()
+    const baselineText = await readText(input.baselineFile)
       .catch(() => "")
     if (baselineText) {
       const baseline = JSON.parse(baselineText) as CoverageSummary
@@ -544,15 +542,14 @@ export async function writeCoverageArtifacts(input: {
   const report = renderCoverageReport(summary)
   await fs.mkdir(path.dirname(input.summaryFile), { recursive: true })
   await fs.mkdir(path.dirname(input.reportFile), { recursive: true })
-  await Bun.write(input.summaryFile, JSON.stringify(summary, null, 2) + "\n")
-  await Bun.write(input.reportFile, report + "\n")
+  await writeText(input.summaryFile, JSON.stringify(summary, null, 2) + "\n")
+  await writeText(input.reportFile, report + "\n")
   console.log(report)
   const stepSummary = process.env["GITHUB_STEP_SUMMARY"]
   if (stepSummary) {
-    const previous = await Bun.file(stepSummary)
-      .text()
+    const previous = await readText(stepSummary)
       .catch(() => "")
-    await Bun.write(stepSummary, `${previous}${report}\n`)
+    await writeText(stepSummary, `${previous}${report}\n`)
   }
   return summary
 }
