@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { readText, scan } from "./fs-compat"
 
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
 
@@ -65,7 +66,7 @@ export namespace V4Guardrails {
     for (const dir of Directories) {
       const base = path.join(root, dir)
       if (!(await exists(base))) continue
-      for await (const file of new Bun.Glob("**/*").scan({ cwd: base, absolute: true })) {
+      for (const file of await scan("**/*", { cwd: base, absolute: true })) {
         if (skip(file)) continue
         if (!ext.has(path.extname(file))) continue
         out.push(path.relative(root, file))
@@ -77,7 +78,7 @@ export namespace V4Guardrails {
   export async function check(root: string): Promise<Violation[]> {
     const out = [] as Violation[]
     for (const file of await listFiles(root)) {
-      const text = await Bun.file(path.join(root, file)).text()
+      const text = await readText(path.join(root, file))
       for (const spec of imports(text)) {
         const hit = v4Rule(spec)
         if (!hit) continue
@@ -125,7 +126,7 @@ export namespace EffectGuard {
     const out = [] as string[]
     const base = path.join(root, "src")
     if (!(await exists(base))) return out
-    for await (const file of new Bun.Glob("**/*").scan({ cwd: base, absolute: true })) {
+    for (const file of await scan("**/*", { cwd: base, absolute: true })) {
       if (skip(file)) continue
       if (!ext.has(path.extname(file))) continue
       out.push(path.relative(root, file))
@@ -138,7 +139,7 @@ export namespace EffectGuard {
     for (const file of await listFiles(root)) {
       if (isAllowed(file)) continue
       if (ExistingViolations.has(file)) continue
-      const text = await Bun.file(path.join(root, file)).text()
+      const text = await readText(path.join(root, file))
       for (const spec of imports(text)) {
         if (!isEffect(spec)) continue
         out.push({ file, spec })
@@ -158,7 +159,7 @@ export namespace EffectGuard {
         stale.push(file)
         continue
       }
-      const text = await Bun.file(fullPath).text()
+      const text = await readText(fullPath)
       const stillImports = imports(text).some(isEffect)
       if (!stillImports) stale.push(file)
     }
@@ -171,7 +172,7 @@ export namespace EffectGuard {
 }
 
 if (import.meta.main) {
-  const root = path.resolve(import.meta.dir, "..")
+  const root = path.resolve(import.meta.dirname, "..")
   const v4Violations = await V4Guardrails.check(root)
   const effectViolations = await EffectGuard.check(root)
   const staleEntries = await EffectGuard.staleAllowlistEntries(root)
