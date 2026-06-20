@@ -9,7 +9,6 @@
     "typecheck": "tsgo --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:bun-legacy": "bun test --timeout 30000",
     "test:unit": "vitest run",
     "test:recovery": "tsx script/test-groups.ts recovery",
     "test:e2e": "tsx script/test-groups.ts e2e",
