@@ -1,4 +1,5 @@
 import path from "node:path"
+import { readText, scan } from "./fs-compat"
 
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
 
@@ -94,7 +95,7 @@ export namespace TuiLayeringGuardrails {
   export async function listFiles(root: string) {
     const out = new Set<string>()
     for (const pattern of Patterns) {
-      for await (const file of new Bun.Glob(pattern).scan({ cwd: root, absolute: true })) {
+      for (const file of await scan(pattern, { cwd: root, absolute: true })) {
         if (skip(file)) continue
         if (!ext.has(path.extname(file))) continue
         out.add(path.relative(root, file))
@@ -106,7 +107,7 @@ export namespace TuiLayeringGuardrails {
   export async function check(root: string): Promise<Violation[]> {
     const out = [] as Violation[]
     for (const file of await listFiles(root)) {
-      const text = await Bun.file(path.join(root, file)).text()
+      const text = await readText(path.join(root, file))
       for (const spec of imports(text)) {
         const hit = rule(spec)
         if (!hit) continue
@@ -122,7 +123,7 @@ export namespace TuiLayeringGuardrails {
 }
 
 if (import.meta.main) {
-  const root = path.resolve(import.meta.dir, "..")
+  const root = path.resolve(import.meta.dirname, "..")
   const violations = await TuiLayeringGuardrails.check(root)
   if (violations.length === 0) {
     console.log("ok: no tui layering guardrail violations found")

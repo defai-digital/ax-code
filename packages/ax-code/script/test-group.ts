@@ -1,6 +1,7 @@
 import path from "path"
+import { scan } from "./fs-compat"
 
-export const root = path.join(import.meta.dir, "..")
+export const root = path.join(import.meta.dirname, "..")
 
 const live = new Set(["test/session/structured-output-integration.test.ts"])
 
@@ -47,10 +48,7 @@ const recovery = new Set([
 ])
 
 export async function list() {
-  const out = [] as string[]
-  for await (const file of new Bun.Glob("test/**/*.test.ts").scan({ cwd: root, absolute: false })) {
-    out.push(file)
-  }
+  const out = await scan("test/**/*.test.ts", { cwd: root, absolute: false })
   out.sort()
   return out
 }

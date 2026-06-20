@@ -1,5 +1,6 @@
 import path from "path"
 import { check, list, pick } from "./test-group"
+import { exists, readText, writeText } from "./fs-compat"
 
 const risk = {
   bootstrap: ["test/cli/boot.test.ts", "test/cli/smoke.test.ts"],
@@ -52,16 +53,12 @@ async function main() {
   console.log(text)
   const file = process.env["GITHUB_STEP_SUMMARY"]
   if (file) {
-    await Bun.write(
-      file,
-      `${await Bun.file(file)
-        .text()
-        .catch(() => "")}${text}\n`,
-    )
+    const previous = (await exists(file)) ? await readText(file) : ""
+    await writeText(file, `${previous}${text}\n`)
   }
 
-  const target = path.join(import.meta.dir, "..", ".tmp", "test-risk.md")
-  await Bun.write(target, text)
+  const target = path.join(import.meta.dirname, "..", ".tmp", "test-risk.md")
+  await writeText(target, text)
 }
 
 await main()
