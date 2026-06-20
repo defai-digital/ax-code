@@ -1,7 +1,7 @@
 // Simple JSON-RPC 2.0 LSP-like fake server over stdio
-// Implements a minimal LSP handshake and triggers a request upon notification
-
-const net = require("net")
+// Implements a minimal LSP handshake and triggers a request upon notification.
+// The package is type:module, so Node loads this as ESM — no require() (Bun
+// allowed it; Node does not). The previous `require("net")` was unused.
 
 let nextId = 1
 const initializeCapabilities = (() => {
