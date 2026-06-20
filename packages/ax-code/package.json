@@ -26,7 +26,8 @@
     "perf:index": "bun run script/perf-index.ts",
     "perf:report": "tsx script/perf-report.ts",
     "build": "bun run script/build.ts",
-    "build:node": "bun run script/build-node.ts",
+    "build:node": "tsx script/build-node.ts",
+    "build:node-tui": "tsx script/build-node-tui.ts",
     "tui:startup-smoke": "tsx script/tui-startup-smoke.ts",
     "dev": "bun run --conditions=browser ./src/index.ts",
     "db": "pnpm exec drizzle-kit"
