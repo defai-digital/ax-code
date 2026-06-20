@@ -45,7 +45,7 @@ jobs:
       # exports resolve to dist/, so the SDK must be built before typecheck/lint/
       # tests can resolve its declarations. Matches ax-code-ci.yml and release.yml.
       - name: Build SDK
-        run: bun tsc
+        run: pnpm exec tsc
         working-directory: packages/sdk/js
 
       - name: Typecheck

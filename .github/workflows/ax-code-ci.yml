@@ -80,7 +80,7 @@ jobs:
             --format=table
 
       - name: Build SDK
-        run: bun tsc
+        run: pnpm exec tsc
         working-directory: packages/sdk/js
 
       - name: Build Plugin
@@ -195,7 +195,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build SDK
-        run: bun tsc
+        run: pnpm exec tsc
         working-directory: packages/sdk/js
 
       - name: Build Plugin
