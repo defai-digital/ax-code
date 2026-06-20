@@ -2,8 +2,12 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { z } from "zod"
-import { ConfigMarkdown } from "../src/config/markdown"
-import { SkillValidate } from "../src/skill/validate"
+import "./register-node"
+import { exists, scan } from "./fs-compat"
+
+// src modules loaded after register-node sets up the shim + source resolve hook.
+const { ConfigMarkdown } = await import("../src/config/markdown")
+const { SkillValidate } = await import("../src/skill/validate")
 
 // Build-time lint for skills. The runtime (`addBuiltinSkill`) only reads
 // `name`/`description` and skips `validateStandardSkill`, so a malformed
@@ -83,7 +87,7 @@ export namespace SkillLint {
     const issues: Issue[] = []
     for (const name of names) {
       const location = path.join(skillsDir, name, "SKILL.md")
-      const problems = (await Bun.file(location).exists()) ? await validateFile(location) : ["missing SKILL.md"]
+      const problems = (await exists(location)) ? await validateFile(location) : ["missing SKILL.md"]
       if (problems.length) issues.push({ skill: name, location, problems })
     }
     return issues
@@ -122,7 +126,7 @@ export namespace SkillLint {
     const externalDirs = [".claude", ".agents", ".opencode"]
 
     const out: ScopeSpec[] = [
-      { scope: "builtin", dir: path.resolve(import.meta.dir, "../skills"), pattern: "*/SKILL.md", gate: "fail" },
+      { scope: "builtin", dir: path.resolve(import.meta.dirname, "../skills"), pattern: "*/SKILL.md", gate: "fail" },
     ]
     for (const d of externalDirs) {
       out.push({ scope: `user:${d}`, dir: path.join(home, d), pattern: "skills/**/SKILL.md", gate: "warn" })
@@ -162,7 +166,7 @@ export namespace SkillLint {
 
       const issues: Issue[] = []
       let count = 0
-      for await (const location of new Bun.Glob(spec.pattern).scan({ cwd: spec.dir, absolute: true })) {
+      for (const location of await scan(spec.pattern, { cwd: spec.dir, absolute: true })) {
         count++
         const problems = await validateFile(location)
         if (problems.length) issues.push({ skill: path.basename(path.dirname(location)), location, problems })
@@ -193,7 +197,7 @@ if (import.meta.main) {
     if (warned && !failed) console.log("\nwarnings only (non-builtin scopes do not fail the build)")
     if (failed) process.exit(1)
   } else {
-    const skillsDir = path.resolve(import.meta.dir, "../skills")
+    const skillsDir = path.resolve(import.meta.dirname, "../skills")
     const issues = await SkillLint.check(skillsDir)
     if (issues.length === 0) {
       console.log("ok: built-in skills conform to the standard-skill contract")

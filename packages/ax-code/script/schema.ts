@@ -1,8 +1,11 @@
-#!/usr/bin/env bun
-
 import { z } from "zod"
-import { Config } from "../src/config/config"
-import { TuiConfig } from "../src/config/tui"
+import "./register-node"
+import { writeText } from "./fs-compat"
+
+// register-node installs the Bun→Node shim and the source resolve hook; load the
+// src config modules via dynamic import() so they evaluate after that setup.
+const { Config } = await import("../src/config/config")
+const { TuiConfig } = await import("../src/config/tui")
 
 function generate(schema: z.ZodType) {
   const result = z.toJSONSchema(schema, {
@@ -55,9 +58,9 @@ const configFile = process.argv[2]
 const tuiFile = process.argv[3]
 
 console.log(configFile)
-await Bun.write(configFile, JSON.stringify(generate(Config.Info), null, 2))
+await writeText(configFile, JSON.stringify(generate(Config.Info), null, 2))
 
 if (tuiFile) {
   console.log(tuiFile)
-  await Bun.write(tuiFile, JSON.stringify(generate(TuiConfig.Info), null, 2))
+  await writeText(tuiFile, JSON.stringify(generate(TuiConfig.Info), null, 2))
 }

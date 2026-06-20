@@ -12,6 +12,7 @@
 
 import path from "path"
 import { fileURLToPath } from "url"
+import { readJson, writeText } from "./fs-compat"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
@@ -21,7 +22,7 @@ const modelsFixturePath = process.env.AX_CODE_MODELS_FIXTURE_PATH
 async function loadFetchedModels(): Promise<Record<string, any>> {
   if (modelsFixturePath) {
     console.log(`Fetching models from ${modelsFixturePath} ...`)
-    return Bun.file(modelsFixturePath).json()
+    return readJson(modelsFixturePath)
   }
 
   console.log(`Fetching models from ${modelsUrl}/api.json ...`)
@@ -38,9 +39,7 @@ async function loadFetchedModels(): Promise<Record<string, any>> {
 
 const fetched = await loadFetchedModels()
 
-const existing = await Bun.file(snapshotPath)
-  .json()
-  .catch(() => ({}))
+const existing = await readJson<Record<string, any>>(snapshotPath).catch((): Record<string, any> => ({}))
 
 // Preserve local-only provider entries that models.dev doesn't include
 const cliImageProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "qoder-cli"] as const
@@ -790,6 +789,6 @@ const next = JSON.stringify(fetched, null, 2) + "\n"
 if (prev === JSON.stringify(fetched)) {
   console.log("models-snapshot.json is already up to date")
 } else {
-  await Bun.write(snapshotPath, next)
+  await writeText(snapshotPath, next)
   console.log("Updated models-snapshot.json")
 }
