@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { eq } from "drizzle-orm"
 import path from "path"
+import { createRequire } from "module"
 import { pathToFileURL } from "url"
 import stripAnsi from "strip-ansi"
 import { Global } from "../../src/global"
@@ -13,9 +14,32 @@ import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
 
 const ROOT = path.join(import.meta.dirname, "../..")
+const SOLID_LOADER = pathToFileURL(path.join(ROOT, "..", "..", "script", "solid-loader.mjs")).href
+// Resolve tsx to an absolute URL: these commands run with cwd set to a tmpdir,
+// where the bare `--import tsx` specifier would fail to resolve (no node_modules).
+const TSX = pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href
+// tsx discovers tsconfig (and its `@/*` path aliases) from cwd; commands that run
+// with cwd set to a tmpdir would not find it. Pin it so child processes inherit.
+process.env.TSX_TSCONFIG_PATH = path.join(ROOT, "tsconfig.json")
 
+// Launch the real CLI from source under Node exactly as `pnpm dev`/`cli` do:
+// the Node entry is src/index-node-tui.ts (src/index.ts imports the Bun-only
+// @opentui/solid/preload). tsx strips TS; the solid loader transforms JSX;
+// --experimental-ffi enables OpenTUI's node:ffi backend. (`bun run src/index.ts`
+// no longer applies — `node run` is not a thing.)
 function cmd(...args: string[]) {
-  return [process.execPath, "run", path.join(ROOT, "src", "index.ts"), ...args]
+  return [
+    process.execPath,
+    "--experimental-ffi",
+    "--disable-warning=ExperimentalWarning",
+    "--import",
+    TSX,
+    "--import",
+    SOLID_LOADER,
+    "--conditions=node",
+    path.join(ROOT, "src", "index-node-tui.ts"),
+    ...args,
+  ]
 }
 
 async function fill(directory: string) {
@@ -150,7 +174,9 @@ describe("cli smoke", () => {
       }))
     `
 
-    const out = await Process.run([process.execPath, "-e", code], {
+    // tsx is required to import the .ts source (node's strip-only mode rejects
+    // the namespaces); --conditions=node selects the node #db variant.
+    const out = await Process.run([process.execPath, "--import", TSX, "--conditions=node", "-e", code], {
       cwd: ROOT,
       env,
     })

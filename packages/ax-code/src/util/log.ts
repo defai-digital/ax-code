@@ -231,7 +231,12 @@ export namespace Log {
     currentStream = stream
     // Pino writes to a separate .json.log file to avoid interleaving with text format
     const jsonLogPath = logpath.replace(/\.log$/, ".json.log")
-    pinoLogger = pino({ level: pinoLevel }, pino.destination({ dest: jsonLogPath, append: true, sync: false }))
+    // sync: true opens the fd synchronously — an async (sync: false) destination
+    // opens lazily, so a fast-exiting CLI command (--help, --version, session list)
+    // can hit process.exit before the fd is ready, and pino's on-exit handler then
+    // throws "sonic boom is not ready yet" and the command exits non-zero. Log
+    // volume here is low, so synchronous writes are cheap.
+    pinoLogger = pino({ level: pinoLevel }, pino.destination({ dest: jsonLogPath, append: true, sync: true }))
     write = (msg: string) => {
       // Fast path: if the stream was already ended (by a concurrent
       // re-init, or by Node during shutdown) don't even attempt the
@@ -341,9 +346,11 @@ export namespace Log {
       const next = new Date()
       const diff = next.getTime() - last
       last = next.getTime()
-      return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, safeLogString(message)]
-        .filter(Boolean)
-        .join(" ") + "\n"
+      return (
+        [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, safeLogString(message)]
+          .filter(Boolean)
+          .join(" ") + "\n"
+      )
     }
     // Pino child is created lazily — only when pinoLogger is active (file mode)
     let child: pino.Logger | undefined
