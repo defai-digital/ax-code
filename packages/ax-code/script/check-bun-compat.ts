@@ -25,6 +25,7 @@ const SHIMMED = new Set([
   "which",
   "resolveSync",
   "stdin",
+  "$",
 ])
 
 // Files allowed to reference Bun.* the shim does not provide, because they are
@@ -56,7 +57,7 @@ for (const file of await walk(srcDir)) {
   lines.forEach((line, i) => {
     // Ignore comments to avoid flagging prose like "// Bun.spawn so ...".
     const code = line.replace(/\/\/.*$/, "")
-    for (const match of code.matchAll(/\bBun\.([a-zA-Z_]\w*)/g)) {
+    for (const match of code.matchAll(/\bBun\.(\$|[a-zA-Z_]\w*)/g)) {
       const api = match[1]!
       if (!SHIMMED.has(api)) {
         violations.push(`${path.relative(dir, file)}:${i + 1}  Bun.${api} is not shimmed in node-compat.ts`)

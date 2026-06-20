@@ -2,6 +2,7 @@ import crypto from "crypto"
 import fs from "fs"
 import net from "net"
 import path from "path"
+import { spawn as cpSpawn } from "child_process"
 import { fileURLToPath } from "url"
 import { createRequire } from "module"
 import { minimatch } from "minimatch"
@@ -40,6 +41,91 @@ async function write(target: string | URL, content: string | Uint8Array | ArrayB
   const resolved = normalizePath(target)
   await fs.promises.mkdir(path.dirname(resolved), { recursive: true })
   await fs.promises.writeFile(resolved, content instanceof ArrayBuffer ? new Uint8Array(content) : content)
+}
+
+// Minimal stand-in for Bun's `$` shell. Supports the surface ax-code uses:
+// tagged-template invocation, `.env()`/`.cwd()` binding, `.quiet()`/`.nothrow()`,
+// `.text()`/`.json()`, and awaiting (→ { exitCode, stdout, stderr }).
+type ShellOpts = { env?: Record<string, string>; cwd?: string }
+type ShellResult = { exitCode: number; stdout: Buffer; stderr: Buffer }
+
+class ShellPromise implements PromiseLike<ShellResult> {
+  private _quiet = false
+  private _nothrow = false
+  constructor(
+    private readonly cmd: string,
+    private opts: ShellOpts,
+  ) {}
+  quiet() {
+    this._quiet = true
+    return this
+  }
+  nothrow() {
+    this._nothrow = true
+    return this
+  }
+  cwd(dir: string) {
+    this.opts = { ...this.opts, cwd: dir }
+    return this
+  }
+  env(env: Record<string, string>) {
+    this.opts = { ...this.opts, env }
+    return this
+  }
+  private run(): Promise<ShellResult> {
+    return new Promise((resolve, reject) => {
+      const child = cpSpawn(this.cmd, {
+        shell: true,
+        cwd: this.opts.cwd,
+        env: this.opts.env ? { ...process.env, ...this.opts.env } : process.env,
+      })
+      const out: Buffer[] = []
+      const err: Buffer[] = []
+      child.stdout?.on("data", (d: Buffer) => {
+        out.push(d)
+        if (!this._quiet) process.stdout.write(d)
+      })
+      child.stderr?.on("data", (d: Buffer) => {
+        err.push(d)
+        if (!this._quiet) process.stderr.write(d)
+      })
+      child.once("error", reject)
+      child.once("close", (code) => {
+        const result: ShellResult = { exitCode: code ?? 1, stdout: Buffer.concat(out), stderr: Buffer.concat(err) }
+        if (result.exitCode !== 0 && !this._nothrow) {
+          reject(new Error(`command failed (exit ${result.exitCode}): ${this.cmd}\n${result.stderr.toString()}`))
+          return
+        }
+        resolve(result)
+      })
+    })
+  }
+  async text() {
+    return (await this.run()).stdout.toString()
+  }
+  async json() {
+    return JSON.parse((await this.run()).stdout.toString())
+  }
+  then<R1 = ShellResult, R2 = never>(
+    onF?: ((v: ShellResult) => R1 | PromiseLike<R1>) | null,
+    onR?: ((reason: unknown) => R2 | PromiseLike<R2>) | null,
+  ): PromiseLike<R1 | R2> {
+    return this.run().then(onF, onR)
+  }
+}
+
+function makeShell(base: ShellOpts = {}) {
+  const tag = (strings: TemplateStringsArray, ...values: unknown[]) => {
+    let cmd = ""
+    strings.forEach((s, i) => {
+      cmd += s
+      if (i < values.length) cmd += `'${String(values[i]).replace(/'/g, "'\\''")}'`
+    })
+    return new ShellPromise(cmd, base)
+  }
+  tag.env = (env: Record<string, string>) => makeShell({ ...base, env })
+  tag.cwd = (cwd: string) => makeShell({ ...base, cwd })
+  return tag
 }
 
 function hash(input: string | Uint8Array | ArrayBuffer) {
@@ -203,5 +289,6 @@ export function installNodeBunCompat() {
     which,
     resolveSync,
     stdin: { text: stdinText },
+    $: makeShell(),
   }
 }
