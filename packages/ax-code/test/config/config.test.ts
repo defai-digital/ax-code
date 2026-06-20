@@ -11,6 +11,7 @@ import { Global } from "../../src/global"
 import { ProjectID } from "../../src/project/schema"
 import { Filesystem } from "../../src/util/filesystem"
 import { BunProc } from "../../src/bun"
+import { Process } from "../../src/util/process"
 import { Ssrf } from "../../src/util/ssrf"
 
 // Get managed config directory from environment (set in preload.ts)
@@ -897,7 +898,9 @@ test("does not install dependencies in writable AX_CODE_CONFIG_DIR for package-o
   })
 
   const prev = process.env.AX_CODE_CONFIG_DIR
-  const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
+  // On the Node runtime installs go through Process.run([npm, ...]); a Bun
+  // runtime would use BunProc.run. Spy on the path the test runtime takes.
+  const run = vi.spyOn(Process, "run").mockImplementation(async () => ({
     code: 0,
     stdout: Buffer.alloc(0),
     stderr: Buffer.alloc(0),
@@ -934,7 +937,9 @@ test("installs dependencies in writable AX_CODE_CONFIG_DIR when local plugins ex
   })
 
   const prev = process.env.AX_CODE_CONFIG_DIR
-  const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
+  // On the Node runtime installs go through Process.run([npm, ...]); a Bun
+  // runtime would use BunProc.run. Spy on the path the test runtime takes.
+  const run = vi.spyOn(Process, "run").mockImplementation(async () => ({
     code: 0,
     stdout: Buffer.alloc(0),
     stderr: Buffer.alloc(0),
@@ -968,7 +973,7 @@ test("serializes concurrent config dependency installs", async () => {
   const seen: string[] = []
   let active = 0
   let max = 0
-  const run = vi.spyOn(BunProc, "run").mockImplementation(async (_cmd, opts) => {
+  const run = vi.spyOn(Process, "run").mockImplementation(async (_cmd, opts) => {
     active++
     max = Math.max(max, active)
     seen.push(opts?.cwd ?? "")

@@ -702,8 +702,14 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-record-status",
@@ -817,8 +823,14 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-record-status",
@@ -1099,8 +1111,14 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-packet-status",
@@ -1206,8 +1224,14 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-packet-status",
@@ -1336,8 +1360,14 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-packet-status",
@@ -1602,8 +1632,14 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-governance-packet-status",
@@ -1739,8 +1775,14 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-governance-packet-status",
@@ -1987,8 +2029,14 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-review-dossier-status",
@@ -2118,8 +2166,14 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
 
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-review-dossier-status",

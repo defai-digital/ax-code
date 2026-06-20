@@ -206,8 +206,14 @@ describe("script.quality-rollout promotion summary", () => {
     try {
       const result = Bun.spawnSync({
         cmd: [
-          "bun",
-          "run",
+          process.execPath,
+          "--experimental-ffi",
+          "--disable-warning=ExperimentalWarning",
+          "--import",
+          "tsx",
+          "--import",
+          "../../script/solid-loader.mjs",
+          "--conditions=node",
           path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-promotion-summary",
@@ -307,8 +313,14 @@ describe("script.quality-rollout replay readiness", () => {
         const summaryOut = path.join(tmp.path, "replay-readiness.json")
         const result = Bun.spawnSync({
           cmd: [
-            "bun",
-            "run",
+            process.execPath,
+            "--experimental-ffi",
+            "--disable-warning=ExperimentalWarning",
+            "--import",
+            "tsx",
+            "--import",
+            "../../script/solid-loader.mjs",
+            "--conditions=node",
             path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
             "--mode",
             "replay-readiness",
@@ -397,8 +409,14 @@ describe("script.quality-rollout replay readiness", () => {
         const summaryOut = path.join(tmp.path, "qa-replay-readiness.json")
         const result = Bun.spawnSync({
           cmd: [
-            "bun",
-            "run",
+            process.execPath,
+            "--experimental-ffi",
+            "--disable-warning=ExperimentalWarning",
+            "--import",
+            "tsx",
+            "--import",
+            "../../script/solid-loader.mjs",
+            "--conditions=node",
             path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
             "--mode",
             "replay-readiness",

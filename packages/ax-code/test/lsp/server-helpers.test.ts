@@ -425,9 +425,11 @@ describe("lsp server helpers", () => {
     ])
   })
 
-  test("builds bun run args for js-backed servers", () => {
-    expect(bunServerArgs("/tmp/server.js", ["--stdio"])).toEqual(["run", "/tmp/server.js", "--stdio"])
-    expect(bunServerArgs("/tmp/cli.js", ["start"])).toEqual(["run", "/tmp/cli.js", "start"])
+  test("builds js-backed server args for the runtime package manager", () => {
+    // The Node runtime runs `node <script>` (no `run` subcommand); a Bun runtime
+    // would prepend `run` (`bun run <script>`).
+    expect(bunServerArgs("/tmp/server.js", ["--stdio"])).toEqual(["/tmp/server.js", "--stdio"])
+    expect(bunServerArgs("/tmp/cli.js", ["start"])).toEqual(["/tmp/cli.js", "start"])
   })
 
   test("does not spawn a bun-backed server after package install fails", async () => {
@@ -529,13 +531,13 @@ describe("lsp server helpers", () => {
   })
 
   test("runs a published LSP tool by name via the runtime tool runner", () => {
-    // Under the test runtime (a Bun runtime mode) this is `bun x <tool>`; on
-    // node-bundled it would be `npx --yes <tool>`. Either way the tool name and
-    // its args follow the runner prefix.
+    // Under the Node test runtime this is `npx --yes <tool>`; a Bun runtime
+    // would use `bun x <tool>`. Either way the tool name and its args follow the
+    // runner prefix.
     const initialization = { tsserver: { path: "/tmp/tsserver.js" } }
     const info = toolSpawnInfo("/tmp/root", "typescript-language-server", ["--stdio"], initialization)
 
-    expect(info.process.spawnargs.slice(1)).toEqual(["x", "typescript-language-server", "--stdio"])
+    expect(info.process.spawnargs.slice(1)).toEqual(["--yes", "typescript-language-server", "--stdio"])
     expect(info.initialization).toEqual(initialization)
   })
 
