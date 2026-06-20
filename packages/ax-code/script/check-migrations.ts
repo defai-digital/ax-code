@@ -1,15 +1,13 @@
-#!/usr/bin/env bun
-
-import { $ } from "bun"
+import { capture } from "./proc-compat"
 
 // drizzle-kit check compares schema to migrations, exits non-zero if drift
-const result = await $`pnpm exec drizzle-kit check`.quiet().nothrow()
+const result = await capture(["pnpm", "exec", "drizzle-kit", "check"])
 
-if (result.exitCode !== 0) {
+if (result.code !== 0) {
   console.error("Schema has changes not captured in migrations!")
   console.error("Run: pnpm exec drizzle-kit generate")
   console.error("")
-  console.error(result.stderr.toString())
+  console.error(result.stderr)
   process.exit(1)
 }
 
