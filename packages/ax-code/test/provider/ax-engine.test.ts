@@ -72,6 +72,20 @@ describe("ax-engine platform gate", () => {
 
     expect(
       evaluatePlatformEligibility({
+        platform: "win32",
+        arch: "x64",
+        memoryBytes: 128 * 1024 ** 3,
+      }),
+    ).toMatchObject({
+      supported: false,
+      blockers: expect.arrayContaining([
+        expect.stringContaining("AX_ENGINE_UNSUPPORTED_PLATFORM"),
+        expect.stringContaining("AX_ENGINE_UNSUPPORTED_ARCH"),
+      ]),
+    })
+
+    expect(
+      evaluatePlatformEligibility({
         platform: "darwin",
         arch: "arm64",
         macosVersion: "14.0",

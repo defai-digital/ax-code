@@ -1,10 +1,16 @@
 import { readdir, readFile } from "node:fs/promises"
 import path from "node:path"
 
-const repoRoot = path.resolve(import.meta.dirname, "..", "..")
-const docsRoot = path.join(repoRoot, "packages", "docs")
+const desktopRoot = path.resolve(import.meta.dirname, "..", "..")
+const workspaceRoot = path.resolve(desktopRoot, "..")
+const docsRoot = path.join(desktopRoot, "packages", "docs")
 const contentRoot = path.join(docsRoot, "content", "docs")
 const sidebarPath = path.join(docsRoot, "sidebar.config.json")
+const policyOnlyPaths = [
+  path.join(workspaceRoot, "README.md"),
+  path.join(desktopRoot, "README.md"),
+  path.join(desktopRoot, "packages", "web", "README.md"),
+]
 
 async function walk(dir) {
   const entries = await readdir(dir, { withFileTypes: true })
@@ -66,7 +72,7 @@ async function run() {
 
   for (const filePath of filePaths) {
     const body = await readFile(filePath, "utf8")
-    const relative = toPosix(path.relative(repoRoot, filePath))
+    const relative = toPosix(path.relative(workspaceRoot, filePath))
     const route = routeFromFile(filePath)
     routeSet.add(route)
 
@@ -76,6 +82,16 @@ async function run() {
     if (!hasFrontmatterKey(body, "description")) {
       errors.push(`${relative}: missing frontmatter key 'description'`)
     }
+    for (const check of policyChecks) {
+      if (check.pattern.test(body)) {
+        errors.push(`${relative}: ${check.message}`)
+      }
+    }
+  }
+
+  for (const filePath of policyOnlyPaths) {
+    const body = await readFile(filePath, "utf8")
+    const relative = toPosix(path.relative(workspaceRoot, filePath))
     for (const check of policyChecks) {
       if (check.pattern.test(body)) {
         errors.push(`${relative}: ${check.message}`)

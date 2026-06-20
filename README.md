@@ -41,7 +41,7 @@ ax-code
 
 No project setup or config file required. On first launch, use `/connect` inside the TUI to add a provider.
 
-Prefer a graphical desktop app? Use AX Code Desktop on macOS or Windows. The Desktop app shares the AX Code runtime and provider setup; AX Engine local inference is available only on eligible Apple Silicon Macs, while Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac.
+Prefer a graphical desktop app? Use AX Code Desktop on macOS or Windows. The Desktop app shares the AX Code runtime and provider setup. AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac.
 
 For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
 
