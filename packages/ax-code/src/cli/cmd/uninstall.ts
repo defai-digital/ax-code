@@ -155,7 +155,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     spinner.start(`Removing ${dir.label}...`)
     const err = await fs.rm(dir.path, { recursive: true, force: true }).catch((e) => e)
     if (err) {
-      spinner.stop(`Failed to remove ${dir.label}`, 1)
+      spinner.error(`Failed to remove ${dir.label}`)
       errors.push(`${dir.label}: ${toErrorMessage(err)}`)
       continue
     }
@@ -166,7 +166,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     spinner.start("Cleaning shell config...")
     const err = await cleanShellConfig(targets.shellConfig).catch((e) => e)
     if (err) {
-      spinner.stop("Failed to clean shell config", 1)
+      spinner.error("Failed to clean shell config")
       errors.push(`Shell config: ${toErrorMessage(err)}`)
     } else {
       spinner.stop("Cleaned shell config")
@@ -183,7 +183,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
       spinner.start(`Running ${cmd.join(" ")}...`)
       const result = await Process.run(cmd, { nothrow: true })
       if (result.code !== 0) {
-        spinner.stop(`Package manager uninstall failed: exit code ${result.code}`, 1)
+        spinner.error(`Package manager uninstall failed: exit code ${result.code}`)
         prompts.log.warn(`You may need to run manually: ${cmd.join(" ")}`)
       } else {
         spinner.stop("Package removed")

@@ -79,17 +79,17 @@ async function loginCommand(url: string) {
       prompts.outro("Done")
       return
     case "PollExpired":
-      s.stop("Device code expired", 1)
+      s.error("Device code expired")
       return
     case "PollDenied":
-      s.stop("Authorization denied", 1)
+      s.error("Authorization denied")
       return
     case "PollError":
-      s.stop("Error: " + String(result.cause), 1)
+      s.error("Error: " + String(result.cause))
       return
     case "PollPending":
     case "PollSlow":
-      s.stop("Unexpected state", 1)
+      s.error("Unexpected state")
       return
   }
 }
