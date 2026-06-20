@@ -24,6 +24,12 @@ const aliases = new Map([
   ["#db", pathToFileURL(path.join(pkgRoot, "src/storage/db.node.ts")).href],
   ["bun-pty", pathToFileURL(path.join(pkgRoot, "src/pty/bun-pty-node-stub.ts")).href],
 ])
+// tsconfig paths aliases (Bun resolved these natively; tsx does not).
+// Keep in sync with packages/ax-code/tsconfig.json → compilerOptions.paths.
+const pathPrefixes = [
+  ["@tui/", pathToFileURL(path.join(pkgRoot, "src/cli/cmd/tui/")).href],
+  ["@/", pathToFileURL(path.join(pkgRoot, "src/")).href],
+]
 const rebind = new Map([
   ["drizzle-orm/bun-sqlite", "drizzle-orm/node-sqlite"],
   ["drizzle-orm/bun-sqlite/migrator", "drizzle-orm/node-sqlite/migrator"],
@@ -33,6 +39,14 @@ registerHooks({
   resolve(specifier, context, nextResolve) {
     const aliased = aliases.get(specifier)
     if (aliased) return { url: aliased, shortCircuit: true }
+    // Resolve tsconfig path aliases (@/*, @tui/*) — Bun handled these
+    // natively; on Node + tsx we must rewrite them to absolute file URLs.
+    for (const [prefix, target] of pathPrefixes) {
+      if (specifier.startsWith(prefix)) {
+        const rest = specifier.slice(prefix.length)
+        return nextResolve(`${target}${rest}`, context)
+      }
+    }
     const rebound = rebind.get(specifier)
     if (rebound) return nextResolve(rebound, context)
     return nextResolve(specifier, context)

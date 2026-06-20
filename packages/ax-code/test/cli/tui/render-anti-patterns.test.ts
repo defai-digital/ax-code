@@ -1090,7 +1090,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain("readOptionalJsonState<TuiStartupUpgradeCheckState>(statePath)")
     expect(thread).toContain('persisted.status === "invalid"')
     expect(thread).toContain("skipping startup upgrade check because state failed to load")
-    expect(thread).toContain('runtimeMode() === "compiled" ? "process" : "worker"')
+    expect(thread).toContain('process.versions.bun && runtimeMode() !== "compiled" ? "worker" : "process"')
     expect(thread).toContain('args: ["tui-backend", "--stdio"]')
     expect(thread).toContain("spawn(command.command, command.args")
     expect(thread).toContain('client.call("health", undefined)')

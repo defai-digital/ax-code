@@ -81,7 +81,10 @@ export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> 
 function tuiBackendTransport(env: Record<string, string | undefined> = process.env): BackendTransport {
   const requested = env.AX_CODE_TUI_BACKEND_TRANSPORT
   if (requested === "worker" || requested === "process") return requested
-  return runtimeMode() === "compiled" ? "process" : "worker"
+  // Worker mode needs Bun's global `Worker` and a loadable worker entry, neither
+  // of which exists under Node (the node-bundled dist ships no worker bundle).
+  // Use the process backend everywhere except the Bun source/dev runtime.
+  return process.versions.bun && runtimeMode() !== "compiled" ? "worker" : "process"
 }
 
 export function tuiUpgradeCheckDelayMs(env: Record<string, string | undefined> = process.env) {
@@ -153,10 +156,14 @@ function backendProcessCommand() {
   const entry = process.argv[1]
   if (!entry) throw new Error("Cannot start TUI backend process: missing CLI entrypoint")
   const resolvedEntry = path.isAbsolute(entry) ? entry : path.resolve(process.cwd(), entry)
+  // A source run executes a `.ts` entry, which plain `node` cannot load — forward
+  // the tsx loader. A node-bundled run executes a `.js` entry and needs nothing.
+  const loaderArgs = /\.[cm]?tsx?$/.test(resolvedEntry) ? ["--import", "tsx"] : []
+  const args = [...loaderArgs, "--conditions=browser", resolvedEntry, "tui-backend", "--stdio"]
   return {
     command: process.execPath,
-    args: ["--conditions=browser", resolvedEntry, "tui-backend", "--stdio"],
-    label: `${process.execPath} --conditions=browser ${resolvedEntry} tui-backend --stdio`,
+    args,
+    label: `${process.execPath} ${args.join(" ")}`,
   }
 }
 
@@ -271,8 +278,9 @@ async function createBackendRuntime(input: {
 }): Promise<BackendRuntime> {
   if (input.mode === "worker") {
     if (!input.workerTarget) throw new Error("Worker backend selected without a worker target")
-    // The runtime `Worker` (node:worker_threads on Node) accepts an `env`
-    // option; the ambient DOM `WorkerOptions` lib type does not, so cast.
+    // Reached only under the Bun source/dev runtime (see tuiBackendTransport):
+    // Bun provides a global `Worker` and can load the worker entry directly. The
+    // ambient DOM `WorkerOptions` lib type lacks `env`, so cast.
     const worker = new Worker(input.workerTarget, { env: input.env } as unknown as WorkerOptions)
     return {
       mode: "worker",
