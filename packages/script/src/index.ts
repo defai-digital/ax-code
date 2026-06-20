@@ -1,30 +1,8 @@
-import { $ } from "bun"
-import semver from "semver"
+import { execFileSync } from "child_process"
+import { readFileSync } from "fs"
 import path from "path"
 
-const rootPkgPath = path.resolve(import.meta.dir, "../../../package.json")
-const rootPkg = await Bun.file(rootPkgPath).json()
-// The build script runs under Bun. Before v2.3.17 this parsed the
-// root `packageManager` field (which holds the pnpm version) and
-// compared it against `process.versions.bun`. Since pnpm is at 9.x
-// and Bun is at 1.x, the check always failed:
-//
-//   error: This script requires bun@^9.15.9, but you are using bun@1.3.5
-//
-// breaking every local `bun run script/build.ts` invocation. CI
-// bypassed the check because `oven-sh/setup-bun` ran Bun in a
-// different harness. Fixed by reading from the root `engines.bun`
-// field (npm/pnpm standard), which was added in the same commit.
-// See issue #19.
-const expectedBunVersionRange = rootPkg.engines?.bun
-
-if (!expectedBunVersionRange) {
-  throw new Error("engines.bun field not found in root package.json — expected a semver range like '^1.3.11'")
-}
-
-if (!semver.satisfies(process.versions.bun, expectedBunVersionRange)) {
-  throw new Error(`This script requires bun@${expectedBunVersionRange}, but you are using bun@${process.versions.bun}`)
-}
+// (The former bun-version guard is gone: these scripts run under Node now.)
 
 const env = {
   AX_CODE_CHANNEL: process.env["AX_CODE_CHANNEL"],
@@ -32,11 +10,11 @@ const env = {
   AX_CODE_VERSION: process.env["AX_CODE_VERSION"],
   AX_CODE_RELEASE: process.env["AX_CODE_RELEASE"],
 }
-const CHANNEL = await (async () => {
+const CHANNEL = (() => {
   if (env.AX_CODE_CHANNEL) return env.AX_CODE_CHANNEL
   if (env.AX_CODE_BUMP) return "latest"
   if (env.AX_CODE_VERSION && !env.AX_CODE_VERSION.startsWith("0.0.0-")) return "latest"
-  return await $`git branch --show-current`.text().then((x) => x.trim())
+  return execFileSync("git", ["branch", "--show-current"]).toString().trim()
 })()
 const IS_PREVIEW = CHANNEL !== "latest"
 
@@ -58,12 +36,12 @@ const VERSION = await (async () => {
 })()
 
 const bot = ["actions-user", "opencode", "opencode-agent[bot]"]
-const teamPath = path.resolve(import.meta.dir, "../../../.github/TEAM_MEMBERS")
+const teamPath = path.resolve(import.meta.dirname, "../../../.github/TEAM_MEMBERS")
 const team = [
-  ...(await Bun.file(teamPath)
-    .text()
-    .then((x) => x.split(/\r?\n/).map((x) => x.trim()))
-    .then((x) => x.filter((x) => x && !x.startsWith("#")))),
+  ...readFileSync(teamPath, "utf8")
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .filter((x) => x && !x.startsWith("#")),
   ...bot,
 ]
 
