@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createBootstrapResponseTask, createBootstrapTask } from "../../../src/cli/cmd/tui/context/sync-bootstrap-task"
 
 describe("tui sync bootstrap task", () => {

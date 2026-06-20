@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 import { AuditReport, formatAuditReportTimestamp } from "../../src/audit/report"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"

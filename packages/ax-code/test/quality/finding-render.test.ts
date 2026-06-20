@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { renderJson, renderTerminal } from "../../src/quality/finding-render"
 import type { Finding } from "../../src/quality/finding"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"

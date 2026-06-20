@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 
-const SRC = path.join(import.meta.dir, "../../src")
-const REPO = path.join(import.meta.dir, "../../../..")
+const SRC = path.join(import.meta.dirname, "../../src")
+const REPO = path.join(import.meta.dirname, "../../../..")
 
 async function source(relativePath: string) {
   return Bun.file(path.join(SRC, relativePath)).text()

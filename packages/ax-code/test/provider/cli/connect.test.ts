@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { checkCliProviderAuth, probeCliLanguageModel } from "../../../src/provider/cli/connect"
 import { Process } from "../../../src/util/process"
 
@@ -36,7 +36,7 @@ describe("probeCliLanguageModel", () => {
   })
 
   test("Claude auth probe includes --verbose for stream-json compatibility", async () => {
-    const runSpy = spyOn(Process, "run").mockResolvedValue({
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
       stdout: Buffer.from(""),
       stderr: Buffer.from(""),
       code: 0,
@@ -65,7 +65,7 @@ describe("probeCliLanguageModel", () => {
   test("Claude auth probe forwards Anthropic API key env", async () => {
     const original = process.env.ANTHROPIC_API_KEY
     process.env.ANTHROPIC_API_KEY = "anthropic-key"
-    const runSpy = spyOn(Process, "run").mockResolvedValue({
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
       stdout: Buffer.from(""),
       stderr: Buffer.from(""),
       code: 0,
@@ -86,7 +86,7 @@ describe("probeCliLanguageModel", () => {
   })
 
   test("Claude auth probe does not reject apiKeySource none without an auth error", async () => {
-    const runSpy = spyOn(Process, "run").mockResolvedValue({
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
       stdout: Buffer.from(
         [
           JSON.stringify({ type: "system", subtype: "init", apiKeySource: "none" }),
@@ -109,7 +109,7 @@ describe("probeCliLanguageModel", () => {
   })
 
   test("Claude auth probe reports explicit authentication failures", async () => {
-    const runSpy = spyOn(Process, "run").mockResolvedValue({
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
       stdout: Buffer.from(
         [
           JSON.stringify({ type: "system", subtype: "init", apiKeySource: "none" }),
@@ -132,7 +132,7 @@ describe("probeCliLanguageModel", () => {
   })
 
   test("Claude auth probe reports authentication failures written to stderr", async () => {
-    const runSpy = spyOn(Process, "run").mockResolvedValue({
+    const runSpy = vi.spyOn(Process, "run").mockResolvedValue({
       stdout: Buffer.from(""),
       stderr: Buffer.from(JSON.stringify({ type: "error", error: { message: "Please login first" } }) + "\n"),
       code: 1,

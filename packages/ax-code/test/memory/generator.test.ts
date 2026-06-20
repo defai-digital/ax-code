@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { decodeMemoryPackageJsonValue, generate, parseMemoryPackageJson } from "../../src/memory/generator"
 import { tmpdir } from "../fixture/fixture"

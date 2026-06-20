@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { runHeadlessSession, type HeadlessAgentRuntime } from "../../../src/runtime/headless"
 
 type Session = { id: string }

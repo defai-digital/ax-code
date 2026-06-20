@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodePrViewJson, decodePrViewValue } from "../../src/quality/pr-diff"
 
 describe("quality pr diff", () => {

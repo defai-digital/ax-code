@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { QualityPromotionApprovalPolicy } from "../../src/quality/promotion-approval-policy"
 import { QualityPromotionApprovalPolicyStore } from "../../src/quality/promotion-approval-policy-store"
 import { Storage } from "../../src/storage/storage"

@@ -1,5 +1,5 @@
 import { $ } from "bun"
-import { expect, spyOn, test } from "bun:test"
+import { expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -173,8 +173,8 @@ test("experimental worktree delete removes sandbox using the canonical path", as
   await fs.mkdir(sandbox, { recursive: true })
   await fs.symlink(sandbox, link, process.platform === "win32" ? "junction" : undefined)
 
-  const removeSpy = spyOn(Worktree, "remove").mockResolvedValue(true as never)
-  const sandboxSpy = spyOn(Project, "removeSandbox").mockResolvedValue(undefined as never)
+  const removeSpy = vi.spyOn(Worktree, "remove").mockResolvedValue(true as never)
+  const sandboxSpy = vi.spyOn(Project, "removeSandbox").mockResolvedValue(undefined as never)
 
   try {
     const response = await Server.Default().request("/experimental/worktree", {

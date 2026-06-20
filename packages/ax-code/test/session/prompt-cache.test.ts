@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { resolvePromptCache } from "../../src/session/prompt-cache"
 
 describe("resolvePromptCache", () => {

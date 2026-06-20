@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { footerSessionStatusView } from "../../../src/cli/cmd/tui/routes/session/footer-view-model"
 
 const DEFAULT_LLM_STALE_AFTER_MS = 60_000

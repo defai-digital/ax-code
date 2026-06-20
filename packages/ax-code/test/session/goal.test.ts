@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
@@ -171,7 +171,7 @@ describe("SessionGoal", () => {
 
         // copyTo runs after the fork is already committed and its events
         // published; a failure there must not reject the whole fork.
-        const copySpy = spyOn(SessionGoal, "copyTo").mockRejectedValue(new Error("database is locked"))
+        const copySpy = vi.spyOn(SessionGoal, "copyTo").mockRejectedValue(new Error("database is locked"))
         try {
           const fork = await Session.fork({ sessionID: session.id })
           expect(fork.id).toBeTruthy()
@@ -435,8 +435,8 @@ describe("SessionGoal", () => {
       fn: async () => {
         const session = await Session.create({})
         await SessionGoal.create({ sessionID: session.id, objective: "ship the goal command" })
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
           fullStream: (async function* () {})(),
         } as any)
 
@@ -473,8 +473,8 @@ describe("SessionGoal", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
           fullStream: (async function* () {})(),
         } as any)
 
@@ -527,8 +527,8 @@ describe("SessionGoal", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
           fullStream: (async function* () {})(),
         } as any)
         const broken = function brokenThrowable() {
@@ -539,7 +539,7 @@ describe("SessionGoal", () => {
             throw new Error("cannot stringify")
           },
         })
-        const createSpy = spyOn(SessionGoal, "create").mockRejectedValue(broken)
+        const createSpy = vi.spyOn(SessionGoal, "create").mockRejectedValue(broken)
 
         try {
           const message = await SessionPrompt.command({
@@ -570,9 +570,9 @@ describe("SessionGoal", () => {
       fn: async () => {
         const session = await Session.create({})
         await SessionGoal.create({ sessionID: session.id, objective: "finish the durable goal" })
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
         let streams = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async () => {
           streams++
           if (streams >= 2) {
             await SessionGoal.setStatus({ sessionID: session.id, status: "complete" })
@@ -621,9 +621,9 @@ describe("SessionGoal", () => {
       fn: async () => {
         const session = await Session.create({})
         await SessionGoal.create({ sessionID: session.id, objective: "resume and continue" })
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
         let streams = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async () => {
           streams++
           // On the first stream after resume, mark the goal complete so the
           // loop terminates instead of auto-continuing forever.
@@ -681,9 +681,9 @@ describe("SessionGoal", () => {
           objective: "summarize budgeted work",
           tokenBudget: 10,
         })
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
         let streams = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async () => {
           streams++
           return {
             fullStream: (async function* () {
@@ -744,9 +744,9 @@ describe("SessionGoal", () => {
           objective: "long goal that exhausts its budget",
           tokenBudget: 25,
         })
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
         let streams = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async () => {
           streams++
           return {
             fullStream: (async function* () {

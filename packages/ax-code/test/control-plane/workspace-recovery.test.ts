@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { eq } from "drizzle-orm"
 import { WorkspaceID } from "../../src/control-plane/schema"
 import { WorkspaceTable } from "../../src/control-plane/workspace.sql"

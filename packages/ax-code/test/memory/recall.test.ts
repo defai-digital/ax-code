@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { recall } from "../../src/memory/recall"
 import { recordEntry } from "../../src/memory/recorder"

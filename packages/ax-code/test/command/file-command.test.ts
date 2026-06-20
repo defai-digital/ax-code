@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Command } from "../../src/command"

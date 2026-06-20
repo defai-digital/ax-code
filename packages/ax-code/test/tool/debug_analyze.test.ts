@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { DebugEngine } from "../../src/debug-engine"
 import { Instance } from "../../src/project/instance"
 import { FindingSchema } from "../../src/quality/finding"
@@ -28,7 +28,7 @@ describe("DebugAnalyzeTool", () => {
         })
 
         spies.push(
-          spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
+          vi.spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
             chain: [
               {
                 frame: 0,
@@ -64,8 +64,8 @@ describe("DebugAnalyzeTool", () => {
             },
           } as any),
         )
-        spies.push(spyOn(Session, "get").mockResolvedValue(session))
-        const shadowSpy = spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined)
+        spies.push(vi.spyOn(Session, "get").mockResolvedValue(session))
+        const shadowSpy = vi.spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined)
         spies.push(shadowSpy)
 
         const tool = await DebugAnalyzeTool.init()
@@ -129,7 +129,7 @@ describe("DebugAnalyzeTool", () => {
         })
 
         spies.push(
-          spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
+          vi.spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
             chain: [
               {
                 frame: 0,
@@ -153,8 +153,8 @@ describe("DebugAnalyzeTool", () => {
             },
           } as any),
         )
-        spies.push(spyOn(Session, "get").mockResolvedValue(session))
-        spies.push(spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined))
+        spies.push(vi.spyOn(Session, "get").mockResolvedValue(session))
+        spies.push(vi.spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined))
 
         const tool = await DebugAnalyzeTool.init()
         const result = await tool.execute(
@@ -192,7 +192,7 @@ describe("DebugAnalyzeTool", () => {
         })
 
         spies.push(
-          spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
+          vi.spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
             chain: [
               {
                 frame: 0,
@@ -225,8 +225,8 @@ describe("DebugAnalyzeTool", () => {
             },
           } as any),
         )
-        spies.push(spyOn(Session, "get").mockResolvedValue(session))
-        spies.push(spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined))
+        spies.push(vi.spyOn(Session, "get").mockResolvedValue(session))
+        spies.push(vi.spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined))
 
         const tool = await DebugAnalyzeTool.init()
         const result = await tool.execute(
@@ -266,7 +266,7 @@ describe("DebugAnalyzeTool", () => {
         })
 
         spies.push(
-          spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
+          vi.spyOn(DebugEngine, "analyzeBug").mockResolvedValue({
             chain: [],
             rootCauseHypothesis: null,
             fixSuggestion: null,
@@ -282,8 +282,8 @@ describe("DebugAnalyzeTool", () => {
             },
           } as any),
         )
-        spies.push(spyOn(Session, "get").mockResolvedValue(session))
-        spies.push(spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined))
+        spies.push(vi.spyOn(Session, "get").mockResolvedValue(session))
+        spies.push(vi.spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined))
 
         const tool = await DebugAnalyzeTool.init()
         const result = await tool.execute({ error: "Error: unknown" }, {

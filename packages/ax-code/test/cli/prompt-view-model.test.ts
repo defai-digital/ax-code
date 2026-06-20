@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { promptSubmissionView } from "../../src/cli/cmd/tui/component/prompt/view-model"
 
 describe("promptSubmissionView", () => {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, spyOn } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { pathToFileURL } from "url"
 import path from "path"
 import { Config } from "../../src/config/config"
@@ -42,7 +42,7 @@ describe("LSP envelope coverage (S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
         const envelope = await LSP.documentSymbolEnvelope(pathToFileURL(file).href)
         assertEmptyEnvelope(envelope)
         expect(envelope.data).toEqual([])
@@ -58,7 +58,7 @@ describe("LSP envelope coverage (S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
         const envelope = await LSP.definitionEnvelope({ file, line: 0, character: 0 })
         assertEmptyEnvelope(envelope)
         expect(envelope.data).toEqual([])
@@ -74,7 +74,7 @@ describe("LSP envelope coverage (S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
         const envelope = await LSP.referencesEnvelope({ file, line: 0, character: 0 })
         assertEmptyEnvelope(envelope)
         expect(envelope.data).toEqual([])
@@ -90,7 +90,7 @@ describe("LSP envelope coverage (S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
         const envelope = await LSP.hoverEnvelope({ file, line: 0, character: 0 })
         assertEmptyEnvelope(envelope)
         expect(envelope.data).toEqual([])
@@ -106,7 +106,7 @@ describe("LSP envelope coverage (S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
         const envelope = await LSP.implementationEnvelope({ file, line: 0, character: 0 })
         assertEmptyEnvelope(envelope)
         expect(envelope.data).toEqual([])
@@ -122,7 +122,7 @@ describe("LSP envelope coverage (S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         const prepare = await LSP.prepareCallHierarchyEnvelope({ file, line: 0, character: 0 })
         const incoming = await LSP.incomingCallsEnvelope({ file, line: 0, character: 0 })
@@ -146,8 +146,8 @@ describe("LSP envelope coverage (S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
-        const hashFileSpy = spyOn(LSPCache, "hashFile")
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        const hashFileSpy = vi.spyOn(LSPCache, "hashFile")
         try {
           await LSP.documentSymbolEnvelope(pathToFileURL(file).href, { cache: true })
           expect(hashFileSpy).toHaveBeenCalledTimes(1)
@@ -170,7 +170,7 @@ describe("LSP envelope coverage (S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         expect(await LSP.documentSymbol(pathToFileURL(file).href)).toEqual([])
         expect(await LSP.definition({ file, line: 0, character: 0 })).toEqual([])

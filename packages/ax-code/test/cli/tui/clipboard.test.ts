@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodePngClipboardBase64 } from "../../../src/cli/cmd/tui/util/clipboard"
 
 describe("TUI clipboard helpers", () => {

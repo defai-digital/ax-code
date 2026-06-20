@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { style } from "../../src/quality/dre-graph-style"
 
 describe("quality.dre-graph-style", () => {

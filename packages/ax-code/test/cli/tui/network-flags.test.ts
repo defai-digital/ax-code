@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { hasExplicitNetworkBindFlag } from "../../../src/cli/cmd/tui/util/network-flags"
 
 describe("hasExplicitNetworkBindFlag", () => {

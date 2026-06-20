@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import {
@@ -21,8 +21,8 @@ import type { VerificationEnvelope } from "../../../src/quality/verification-env
 import type { ReviewResult } from "../../../src/quality/review-result"
 import type { DecisionHints } from "../../../src/session/decision-hints"
 
-const SESSION_ROUTE_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/index.tsx")
-const DIALOG_QUALITY_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/dialog-quality.tsx")
+const SESSION_ROUTE_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui/routes/session/index.tsx")
+const DIALOG_QUALITY_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui/routes/session/dialog-quality.tsx")
 
 describe("tui session quality actions", () => {
   test("builds capture evidence actions when no replay items are exportable yet", () => {

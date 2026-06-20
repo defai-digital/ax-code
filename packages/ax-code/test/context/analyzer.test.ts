@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeAnalyzerPackageJsonValue, parseAnalyzerPackageJsonText } from "../../src/context/analyzer"
 
 describe("context analyzer package JSON decoding", () => {

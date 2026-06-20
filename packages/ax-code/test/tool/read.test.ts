@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { mkdir, symlink } from "fs/promises"
 import path from "path"
 import { setTimeout as sleep } from "node:timers/promises"
@@ -12,8 +12,8 @@ import { Agent } from "../../src/agent/agent"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
 
-const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
-const LSP_FILE = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
+const FIXTURES_DIR = path.join(import.meta.dirname, "fixtures")
+const LSP_FILE = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -372,7 +372,7 @@ describe("tool.read truncation", () => {
   })
 
   test("does not report byte-capped reads as offset-out-of-range", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/tool/read.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/tool/read.ts")).text()
     expect(src).toContain("if (!truncatedByBytes && lines < offset")
   })
 
@@ -620,8 +620,8 @@ describe("tool.read lsp", () => {
     })
 
     let resolveTouch: ((value: number) => void) | undefined
-    const hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-    const touchSpy = spyOn(LSP, "touchFile").mockImplementation(
+    const hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+    const touchSpy = vi.spyOn(LSP, "touchFile").mockImplementation(
       () =>
         new Promise<number>((resolve) => {
           resolveTouch = resolve
@@ -657,8 +657,8 @@ describe("tool.read lsp", () => {
       },
     })
 
-    const hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-    const touchSpy = spyOn(LSP, "touchFile").mockRejectedValue(new Error("warmup failed"))
+    const hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+    const touchSpy = vi.spyOn(LSP, "touchFile").mockRejectedValue(new Error("warmup failed"))
 
     try {
       await Instance.provide({
@@ -683,8 +683,8 @@ describe("tool.read lsp", () => {
       },
     })
 
-    const hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(false)
-    const touchSpy = spyOn(LSP, "touchFile").mockResolvedValue(0 as never)
+    const hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(false)
+    const touchSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(0 as never)
 
     try {
       await Instance.provide({
@@ -711,8 +711,8 @@ describe("tool.read lsp", () => {
       },
     })
 
-    const hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-    const touchSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+    const hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+    const touchSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
 
     try {
       await Instance.provide({

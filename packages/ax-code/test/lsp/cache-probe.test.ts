@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { LSPCache } from "../../src/lsp/cache"
 import * as LSPCacheProbe from "../../src/lsp/cache-probe"
 import * as LSPPerf from "../../src/lsp/perf"
@@ -20,7 +20,7 @@ afterEach(() => {
 describe("LSPCacheProbe", () => {
   test("read looks up enabled cache entries and records metric samples on hit", () => {
     LSPPerf.reset()
-    lookupSpy = spyOn(LSPCache, "lookup").mockReturnValue({
+    lookupSpy = vi.spyOn(LSPCache, "lookup").mockReturnValue({
       data: ["symbol"],
       source: "cache",
       completeness: "full",
@@ -54,8 +54,8 @@ describe("LSPCacheProbe", () => {
   })
 
   test("hashAndRead skips lookup when hashing fails", async () => {
-    hashFileSpy = spyOn(LSPCache, "hashFile").mockResolvedValue(undefined as never)
-    lookupSpy = spyOn(LSPCache, "lookup").mockReturnValue(undefined as never)
+    hashFileSpy = vi.spyOn(LSPCache, "hashFile").mockResolvedValue(undefined as never)
+    lookupSpy = vi.spyOn(LSPCache, "lookup").mockReturnValue(undefined as never)
 
     await expect(
       LSPCacheProbe.hashAndRead<unknown[]>({
@@ -72,9 +72,9 @@ describe("LSPCacheProbe", () => {
   })
 
   test("run builds dedup keys, records live metrics, and writes cacheable envelopes", async () => {
-    hashFileSpy = spyOn(LSPCache, "hashFile").mockResolvedValue("hash" as never)
-    lookupSpy = spyOn(LSPCache, "lookup").mockReturnValue(undefined as never)
-    writeSpy = spyOn(LSPCache, "write").mockImplementation(() => undefined)
+    hashFileSpy = vi.spyOn(LSPCache, "hashFile").mockResolvedValue("hash" as never)
+    lookupSpy = vi.spyOn(LSPCache, "lookup").mockReturnValue(undefined as never)
+    writeSpy = vi.spyOn(LSPCache, "write").mockImplementation(() => undefined)
 
     const envelope = {
       data: ["ref"],
@@ -111,9 +111,9 @@ describe("LSPCacheProbe", () => {
   })
 
   test("run omits position from document-wide dedup keys", async () => {
-    hashFileSpy = spyOn(LSPCache, "hashFile").mockResolvedValue("hash" as never)
-    lookupSpy = spyOn(LSPCache, "lookup").mockReturnValue(undefined as never)
-    writeSpy = spyOn(LSPCache, "write").mockImplementation(() => undefined)
+    hashFileSpy = vi.spyOn(LSPCache, "hashFile").mockResolvedValue("hash" as never)
+    lookupSpy = vi.spyOn(LSPCache, "lookup").mockReturnValue(undefined as never)
+    writeSpy = vi.spyOn(LSPCache, "write").mockImplementation(() => undefined)
 
     await LSPCacheProbe.run<string[]>({
       operation: "documentSymbol",

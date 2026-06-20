@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import z from "zod"
 import { Tool } from "../../src/tool/tool"
 
@@ -27,18 +27,15 @@ describe("Tool.define", () => {
     const info = await tool.init()
 
     await expect(
-      info.execute(
-        {},
-        {
-          sessionID: "ses_test",
-          messageID: "msg_test",
-          agent: "build",
-          abort: new AbortController().signal,
-          messages: [],
-          metadata() {},
-          async ask() {},
-        } as unknown as Parameters<typeof info.execute>[1],
-      ),
+      info.execute({}, {
+        sessionID: "ses_test",
+        messageID: "msg_test",
+        agent: "build",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata() {},
+        async ask() {},
+      } as unknown as Parameters<typeof info.execute>[1]),
     ).rejects.toThrow("The validate tool was called with invalid arguments: Unknown error.")
   })
 
@@ -58,18 +55,15 @@ describe("Tool.define", () => {
     const info = await tool.init()
 
     await expect(
-      info.execute(
-        {},
-        {
-          sessionID: "ses_test",
-          messageID: "msg_test",
-          agent: "build",
-          abort: new AbortController().signal,
-          messages: [],
-          metadata() {},
-          async ask() {},
-        } as unknown as Parameters<typeof info.execute>[1],
-      ),
+      info.execute({}, {
+        sessionID: "ses_test",
+        messageID: "msg_test",
+        agent: "build",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata() {},
+        async ask() {},
+      } as unknown as Parameters<typeof info.execute>[1]),
     ).rejects.toBe(failure)
   })
 })

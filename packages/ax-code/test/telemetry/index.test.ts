@@ -1,9 +1,9 @@
-import { afterEach, expect, mock, test } from "bun:test"
+import { afterEach, expect, test, vi } from "vitest"
 
 let registers = 0
 let shutdowns = 0
 
-mock.module("@opentelemetry/sdk-trace-node", () => ({
+vi.mock("@opentelemetry/sdk-trace-node", () => ({
   NodeTracerProvider: class {
     register() {
       registers++
@@ -18,7 +18,7 @@ mock.module("@opentelemetry/sdk-trace-node", () => ({
   },
 }))
 
-mock.module("@opentelemetry/exporter-trace-otlp-http", () => ({
+vi.mock("@opentelemetry/exporter-trace-otlp-http", () => ({
   OTLPTraceExporter: class {
     constructor(_input: unknown) {}
 
@@ -26,11 +26,11 @@ mock.module("@opentelemetry/exporter-trace-otlp-http", () => ({
   },
 }))
 
-mock.module("@opentelemetry/resources", () => ({
+vi.mock("@opentelemetry/resources", () => ({
   resourceFromAttributes: (input: unknown) => input,
 }))
 
-mock.module("@opentelemetry/semantic-conventions", () => ({
+vi.mock("@opentelemetry/semantic-conventions", () => ({
   ATTR_SERVICE_NAME: "service.name",
   ATTR_SERVICE_VERSION: "service.version",
 }))
@@ -41,7 +41,7 @@ afterEach(async () => {
   delete process.env.AX_CODE_OTLP_ENDPOINT
   registers = 0
   shutdowns = 0
-  mock.restore()
+  vi.restoreAllMocks()
 })
 
 test("Telemetry.init deduplicates concurrent initialization", async () => {

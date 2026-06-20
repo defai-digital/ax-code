@@ -1,4 +1,4 @@
-import { afterEach, test, expect } from "bun:test"
+import { afterEach, test, expect } from "vitest"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
@@ -874,7 +874,7 @@ test("restore function", async () => {
 })
 
 test("restore rolls back the snapshot index when checkout-index fails", async () => {
-  const source = await Bun.file(path.join(import.meta.dir, "../../src/snapshot/index.ts")).text()
+  const source = await Bun.file(path.join(import.meta.dirname, "../../src/snapshot/index.ts")).text()
   const restoreStart = source.indexOf("export async function restore")
   const diffStart = source.indexOf("export async function diffFull")
   const body = source.slice(restoreStart, diffStart)
@@ -999,7 +999,7 @@ test("diffFull sets status based on git change type", async () => {
 })
 
 test("diffFull holds the snapshot operation lock across its two diff phases", async () => {
-  const source = await Bun.file(path.join(import.meta.dir, "../../src/snapshot/index.ts")).text()
+  const source = await Bun.file(path.join(import.meta.dirname, "../../src/snapshot/index.ts")).text()
   const body = source.slice(source.indexOf("export async function diffFull"))
 
   expect(body).toContain("return withOperationLock(current, async () => {")

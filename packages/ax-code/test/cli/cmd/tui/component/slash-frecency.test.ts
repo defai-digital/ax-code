@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { recordSlashUse, slashScore, SLASH_FRECENCY_CAP, topSlashRecents } from "@/cli/cmd/tui/component/slash-frecency"
 
 const HOUR = 3_600_000

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../src/quality/dre-graph-timeline"
 import type { SessionDre } from "../../src/session/dre"
 

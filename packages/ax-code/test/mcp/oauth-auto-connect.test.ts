@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach, afterAll, spyOn } from "bun:test"
+import { test, expect, beforeEach, afterAll, vi } from "vitest"
 
 // Mock UnauthorizedError to match the SDK's class
 class MockUnauthorizedError extends Error {
@@ -47,7 +47,7 @@ function assertMockPublicUrl(url: string) {
 }
 
 // Mock the transport constructors to simulate OAuth auto-auth on 401
-mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTP {
     url: string
     closeCalls = 0
@@ -99,7 +99,7 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   },
 }))
 
-mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
     // `transportInstances` is typed `{ url: string; closeCalls: number }[]`,
     // so MockSSE must surface a `url` field on the instance — mirrors the
@@ -126,7 +126,7 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
 }))
 
 // Mock the MCP SDK Client
-mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
     closeCalls = 0
     setNotificationHandler() {}
@@ -146,7 +146,7 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
 }))
 
 // Mock UnauthorizedError in the auth module so instanceof checks work
-mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
   UnauthorizedError: MockUnauthorizedError,
 }))
 
@@ -177,14 +177,14 @@ const { tmpdir } = await import("../fixture/fixture")
 const { Config } = await import("../../src/config/config")
 const { McpTrust } = await import("../../src/mcp/trust")
 
-const assertPublicUrlSpy = spyOn(Ssrf, "assertPublicUrl")
-const pinnedFetchSpy = spyOn(Ssrf, "pinnedFetch")
-const ensureCallbackRunningSpy = spyOn(McpOAuthCallback, "ensureRunning")
-const waitForCallbackSpy = spyOn(McpOAuthCallback, "waitForCallback")
-const cancelPendingSpy = spyOn(McpOAuthCallback, "cancelPending")
-const stopCallbackSpy = spyOn(McpOAuthCallback, "stop")
-const isCallbackRunningSpy = spyOn(McpOAuthCallback, "isRunning")
-const isCallbackPortInUseSpy = spyOn(McpOAuthCallback, "isPortInUse")
+const assertPublicUrlSpy = vi.spyOn(Ssrf, "assertPublicUrl")
+const pinnedFetchSpy = vi.spyOn(Ssrf, "pinnedFetch")
+const ensureCallbackRunningSpy = vi.spyOn(McpOAuthCallback, "ensureRunning")
+const waitForCallbackSpy = vi.spyOn(McpOAuthCallback, "waitForCallback")
+const cancelPendingSpy = vi.spyOn(McpOAuthCallback, "cancelPending")
+const stopCallbackSpy = vi.spyOn(McpOAuthCallback, "stop")
+const isCallbackRunningSpy = vi.spyOn(McpOAuthCallback, "isRunning")
+const isCallbackPortInUseSpy = vi.spyOn(McpOAuthCallback, "isPortInUse")
 
 beforeEach(() => {
   assertPublicUrlSpy.mockImplementation(async (url: string) => {
@@ -219,7 +219,7 @@ beforeEach(() => {
 
 afterAll(async () => {
   resetMockOAuthCallback()
-  mock.restore()
+  vi.restoreAllMocks()
   await McpOAuthCallback.stop()
 })
 

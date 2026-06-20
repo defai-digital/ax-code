@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -27,7 +27,7 @@ describe("tool.registry", () => {
   test("invalidates cached tool definitions when config-gated tools change", async () => {
     await using tmp = await tmpdir()
     let batchTool = false
-    const configSpy = spyOn(Config, "get").mockImplementation(
+    const configSpy = vi.spyOn(Config, "get").mockImplementation(
       async () =>
         ({
           experimental: { batch_tool: batchTool },

@@ -1,9 +1,9 @@
-import { expect, test } from "bun:test"
+import { expect, test } from "vitest"
 import path from "path"
 import { LSPServer } from "../../src/lsp/server"
 
 test("JDTLS cleanup is attached via process exit promise", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/server-defs.ts")).text()
 
   expect(src).toMatch(/spawnJdtls[\s\S]*?JdtlsDataDir\.cleanupStale\(\)/)
   expect(src).toMatch(/spawnJdtls[\s\S]*?JdtlsDataDir\.create\(\)/)
@@ -14,7 +14,7 @@ test("JDTLS cleanup is attached via process exit promise", async () => {
 })
 
 test("JDTLS startup prunes stale temp data directories", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/jdtls-data-dir.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/jdtls-data-dir.ts")).text()
 
   expect(src).toContain('const DATA_DIR_PREFIX = "ax-code-jdtls-data"')
   expect(src).toContain("const STALE_DATA_DIR_MS = 24 * 60 * 60 * 1000")
@@ -27,15 +27,15 @@ test("JDTLS startup prunes stale temp data directories", async () => {
 })
 
 test("JDTLS stderr logging is attached during process launch", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/server-defs.ts")).text()
 
   expect(src).toMatch(/spawnJdtls[\s\S]*?onStderr: \(chunk: Buffer \| string\) =>/)
   expect(src).not.toMatch(/spawnJdtls[\s\S]*?proc\.stderr\.on\(\"data\"/)
 })
 
 test("Oxlint LSP detection caches --lsp support check", async () => {
-  const defs = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/oxlint.ts")).text()
+  const defs = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/server-defs.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/oxlint.ts")).text()
 
   expect(defs).toContain("OxlintSupport.supportsLsp(lintBin)")
   expect(src).toContain("lspSupportCache")
@@ -48,7 +48,7 @@ test("Oxlint LSP detection caches --lsp support check", async () => {
 })
 
 test("Oxlint LSP detection retries after transient --help failures", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/oxlint.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/oxlint.ts")).text()
 
   expect(src).toContain('log.warn("oxlint --help check failed"')
   expect(src).toContain("lspSupportCache.delete(lintBin)")
@@ -56,7 +56,7 @@ test("Oxlint LSP detection retries after transient --help failures", async () =>
 })
 
 test("ZLS managed install uses the shared verified GitHub release installer", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/server-defs.ts")).text()
 
   expect(src).toMatch(/export const Zls[\s\S]*?installPinnedGitHubReleaseAsset\(\{[\s\S]*?id: "zls"/)
   expect(src).toMatch(/export const Zls[\s\S]*?repo: "zigtools\/zls"/)
@@ -88,7 +88,7 @@ test("JavaScript-family server extensions stay aligned", () => {
 })
 
 test("Python server extensions stay aligned while ty keeps its extra root marker", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/server-defs.ts")).text()
 
   expect(LSPServer.Ty.extensions).toEqual([".py", ".pyi"])
   expect(LSPServer.Pyright.extensions).toEqual([".py", ".pyi"])

@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 
-const TUI_ROOT = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const EVENT_SRC = path.join(TUI_ROOT, "event.ts")
 const HELPER_SRC = path.join(TUI_ROOT, "context/helper.tsx")
@@ -65,8 +65,8 @@ const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "component/prompt/stash.tsx"),
   path.join(TUI_ROOT, "context/theme.tsx"),
 ]
-const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/doctor-preload.ts")
-const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/debug/explain.ts")
+const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/doctor-preload.ts")
+const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/debug/explain.ts")
 
 describe("tui OpenTUI stability guardrails", () => {
   test("keeps OpenTUI wired as the default renderer path", async () => {

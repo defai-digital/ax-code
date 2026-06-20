@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decideTuiRenderer } from "../../../src/cli/cmd/tui/renderer-decision"
 
 describe("tui renderer decision gate", () => {

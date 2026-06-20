@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseShellArgs } from "../../src/util/shell-args"
 
 describe("parseShellArgs", () => {
@@ -7,7 +7,7 @@ describe("parseShellArgs", () => {
   })
 
   test("preserves quoted argument groups", () => {
-    expect(parseShellArgs('node server.js --root "My Project" --name=\'local mcp\'')).toEqual([
+    expect(parseShellArgs("node server.js --root \"My Project\" --name='local mcp'")).toEqual([
       "node",
       "server.js",
       "--root",

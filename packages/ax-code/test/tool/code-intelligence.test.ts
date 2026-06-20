@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { mkdir } from "fs/promises"
 import path from "path"
 import { CodeIntelligenceTool } from "../../src/tool/code-intelligence"

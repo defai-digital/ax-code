@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from "bun:test"
+import { afterEach, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 
 let connectStarted!: Promise<void>
@@ -21,7 +21,7 @@ function resetGate() {
 
 resetGate()
 
-mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
     onclose?: () => void
     transport?: unknown
@@ -43,7 +43,7 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
   },
 }))
 
-mock.module("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
   StdioClientTransport: class MockStdioTransport {
     pid = nextTransportPid++
     stderr = {

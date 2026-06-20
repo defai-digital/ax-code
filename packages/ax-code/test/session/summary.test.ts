@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { SessionSummary } from "../../src/session/summary"
 import { Session } from "../../src/session"
 import { MessageID, SessionID } from "../../src/session/schema"
@@ -35,10 +35,10 @@ describe("session.summary", () => {
       },
     ] as any
 
-    const setSummary = spyOn(Session, "setSummary").mockResolvedValue(undefined as any)
-    const updateMessage = spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
-    const publish = spyOn(Bus, "publish").mockResolvedValue(undefined as any)
-    const storageWrite = spyOn(Storage, "write").mockResolvedValue(undefined as any)
+    const setSummary = vi.spyOn(Session, "setSummary").mockResolvedValue(undefined as any)
+    const updateMessage = vi.spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
+    const publish = vi.spyOn(Bus, "publish").mockResolvedValue(undefined as any)
+    const storageWrite = vi.spyOn(Storage, "write").mockResolvedValue(undefined as any)
 
     try {
       await SessionSummary.summarize({ sessionID, messageID }, messages)
@@ -55,7 +55,7 @@ describe("session.summary", () => {
   test("diff drops corrupt persisted session_diff payloads instead of crashing", async () => {
     const sessionID = SessionID.make("ses_summary_corrupt")
     for (const corrupt of [null, {}, 42, [{ file: 123 }]]) {
-      const storageRead = spyOn(Storage, "read").mockResolvedValue(corrupt as any)
+      const storageRead = vi.spyOn(Storage, "read").mockResolvedValue(corrupt as any)
       try {
         expect(await SessionSummary.diff({ sessionID })).toEqual([])
       } finally {
@@ -74,7 +74,7 @@ describe("session.summary", () => {
       deletions: 1,
       status: "modified" as const,
     }
-    const storageRead = spyOn(Storage, "read").mockResolvedValue([valid, { file: 123 }] as any)
+    const storageRead = vi.spyOn(Storage, "read").mockResolvedValue([valid, { file: 123 }] as any)
     try {
       expect(await SessionSummary.diff({ sessionID })).toEqual([valid])
     } finally {
@@ -99,10 +99,10 @@ describe("session.summary", () => {
       },
     ] as any
 
-    const setSummary = spyOn(Session, "setSummary").mockRejectedValue(new NotFoundError({ message: "missing" }))
-    const updateMessage = spyOn(Session, "updateMessage").mockRejectedValue(new Error("boom"))
-    const publish = spyOn(Bus, "publish").mockResolvedValue(undefined as any)
-    const storageWrite = spyOn(Storage, "write").mockResolvedValue(undefined as any)
+    const setSummary = vi.spyOn(Session, "setSummary").mockRejectedValue(new NotFoundError({ message: "missing" }))
+    const updateMessage = vi.spyOn(Session, "updateMessage").mockRejectedValue(new Error("boom"))
+    const publish = vi.spyOn(Bus, "publish").mockResolvedValue(undefined as any)
+    const storageWrite = vi.spyOn(Storage, "write").mockResolvedValue(undefined as any)
 
     try {
       await expect(SessionSummary.summarize({ sessionID, messageID }, messages)).rejects.toThrow("boom")

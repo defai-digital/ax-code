@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "node:path"
 
-const repoRoot = path.resolve(import.meta.dir, "../../../..")
+const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const structureScript = path.join(repoRoot, "script/structure.ts")
 
 async function runStructureScript() {

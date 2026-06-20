@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { LspScheduler } from "../../src/lsp/scheduler"
 import { Log } from "../../src/util/log"
 

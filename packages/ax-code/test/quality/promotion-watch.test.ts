@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
 import { QualityPromotionReleasePolicy } from "../../src/quality/promotion-release-policy"
 import { QualityPromotionWatch } from "../../src/quality/promotion-watch"

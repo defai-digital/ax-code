@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { buildAgentCreateFrontmatter, buildAgentCreatePermission } from "../../src/cli/cmd/agent"
 
 describe("agent command helpers", () => {

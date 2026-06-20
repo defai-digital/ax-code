@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { ReplayEvent } from "../../src/replay/event"
 import { emitPromptLoopCompletionGateDecision } from "../../src/session/prompt-loop-completion-gate"
 import { MessageID, SessionID } from "../../src/session/schema"

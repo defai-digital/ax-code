@@ -1,8 +1,8 @@
-import { expect, test } from "bun:test"
+import { expect, test } from "vitest"
 import path from "path"
 
 async function readBenchScript(name: string) {
-  return Bun.file(path.join(import.meta.dir, "../..", name)).text()
+  return Bun.file(path.join(import.meta.dirname, "../..", name)).text()
 }
 
 test("bench server processes use sanitized environments", async () => {

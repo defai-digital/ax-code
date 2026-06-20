@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { calculateBreakdown, formatBreakdown, getStatus, estimateTokens } from "../../src/stats/breakdown"
 import type { Provider } from "../../src/provider/provider"
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
@@ -42,7 +42,7 @@ describe("Request collapse (§S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         const [a, b, c] = await Promise.all([
           LSP.referencesEnvelope({ file, line: 0, character: 0 }),
@@ -72,7 +72,7 @@ describe("Request collapse (§S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         // They'll happen to equal structurally (both empty) — the
         // point is the dedup path does NOT fire for different keys,
@@ -96,7 +96,7 @@ describe("Request collapse (§S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         await Promise.all([
           LSP.referencesEnvelope({ file, line: 0, character: 0 }),

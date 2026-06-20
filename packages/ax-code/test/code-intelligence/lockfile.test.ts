@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { IndexLock } from "../../src/code-intelligence/lockfile"
 import { currentLockHost } from "../../src/util/process-lock"
 import type { ProjectID } from "../../src/project/schema"

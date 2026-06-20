@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
@@ -69,10 +69,10 @@ describe("goal continuation respects the autonomous gate", () => {
       fn: async () => {
         const session = await Session.create({})
         await SessionGoal.create({ sessionID: session.id, objective: "keep working without autonomy" })
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
         // The mock never marks the goal complete: if the goal were ungated it
         // would auto-continue forever, so this also guards against the loop hang.
-        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async () => {
           return {
             fullStream: (async function* () {
               yield { type: "start" }

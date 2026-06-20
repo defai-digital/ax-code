@@ -1,4 +1,4 @@
-import { expect, mock, test } from "bun:test"
+import { expect, test, vi } from "vitest"
 
 const nativeEdges = [
   {
@@ -17,10 +17,10 @@ const nativeEdges = [
   },
 ]
 
-const edgesInFile = mock(() => nativeEdges)
-const deleteEdgesInFile = mock(() => undefined)
-const close = mock(() => undefined)
-const parseNativeStoreJson = mock((json: string, fallback: unknown) => {
+const edgesInFile = vi.fn(() => nativeEdges)
+const deleteEdgesInFile = vi.fn(() => undefined)
+const close = vi.fn(() => undefined)
+const parseNativeStoreJson = vi.fn((json: string, fallback: unknown) => {
   try {
     return JSON.parse(json)
   } catch {
@@ -28,7 +28,7 @@ const parseNativeStoreJson = mock((json: string, fallback: unknown) => {
   }
 })
 
-mock.module("../../src/code-intelligence/native-store", () => ({
+vi.mock("../../src/code-intelligence/native-store", () => ({
   NativeStore: {
     available: true,
     close,

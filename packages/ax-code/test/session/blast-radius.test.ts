@@ -1,4 +1,4 @@
-import { describe, expect, test, afterEach, beforeEach } from "bun:test"
+import { describe, expect, test, afterEach, beforeEach } from "vitest"
 import { AUTONOMOUS_MAX_STEPS } from "../../src/constants/session"
 import { BlastRadius } from "../../src/session/blast-radius"
 import type { SessionID } from "../../src/session/schema"

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import z from "zod"
 import { CodeIntelligenceTool } from "../../src/tool/code-intelligence"
 import { DedupScanTool } from "../../src/tool/dedup_scan"

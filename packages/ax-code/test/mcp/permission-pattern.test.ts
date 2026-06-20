@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "node:path"
 import { McpPermissionPattern } from "../../src/mcp/permission-pattern"
 

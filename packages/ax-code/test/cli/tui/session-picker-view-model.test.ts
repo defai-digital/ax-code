@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { recentSessions, recentSessionTitle } from "@/cli/cmd/tui/component/session-picker-view-model"
 import { resolveSessionFirstRoute } from "@/cli/cmd/tui/navigation/launch-policy"
 import { detectNerdFontTerminal, resolveNerdFontEnabled } from "@/cli/cmd/tui/ui/glyphs"

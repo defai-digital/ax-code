@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { classifyQwen37MaxRoute, qwen37MaxReadiness, isQwen37MaxModel } from "../../src/provider/qwen37-readiness"
 
 describe("classifyQwen37MaxRoute", () => {

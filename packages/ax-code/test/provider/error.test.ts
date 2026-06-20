@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { APICallError } from "ai"
 import { ProviderError } from "../../src/provider/error"
 import { ProviderID } from "../../src/provider/schema"

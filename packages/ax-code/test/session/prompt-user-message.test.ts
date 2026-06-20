@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { createAutonomousTextContinuation, createUserMessage } from "../../src/session/prompt-user-message"

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { computeFindingId, FINDING_ID_PATTERN, FindingSchema, RULE_ID_PATTERN } from "../../src/quality/finding"
 import type { Finding, FindingAnchor } from "../../src/quality/finding"
 

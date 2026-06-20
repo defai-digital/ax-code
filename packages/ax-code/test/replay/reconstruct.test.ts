@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Replay } from "../../src/replay/replay"
@@ -283,7 +283,7 @@ describe("replay.reconstructStream", () => {
         Recorder.end(sid)
         await new Promise((r) => setTimeout(r, 50))
 
-        bySessionStrictSpy = spyOn(EventQuery, "bySessionStrict")
+        bySessionStrictSpy = vi.spyOn(EventQuery, "bySessionStrict")
         expect(Replay.compare(sid)).toMatchObject({ stepsCompared: 1, divergences: [] })
         expect(bySessionStrictSpy.mock.calls).toHaveLength(1)
 
@@ -395,7 +395,7 @@ describe("replay.reconstructStream", () => {
         expect(steps).toHaveLength(1)
 
         // Mock LLM.stream to use the reconstructed stream
-        streamSpy = spyOn(LLM, "stream").mockResolvedValue({ fullStream: stream } as any)
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({ fullStream: stream } as any)
 
         // Create processor and run
         const user = await Session.updateMessage({

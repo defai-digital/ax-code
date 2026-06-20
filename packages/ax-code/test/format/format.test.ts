@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { Bus } from "../../src/bus"
 import { File } from "../../src/file"
@@ -247,7 +247,7 @@ describe("Format", () => {
     }
     globalThis.setTimeout = setTimeoutSpy as typeof globalThis.setTimeout
 
-    const whichSpy = spyOn(Which, "which").mockReturnValue("/usr/bin/air")
+    const whichSpy = vi.spyOn(Which, "which").mockReturnValue("/usr/bin/air")
     const proc = {
       exited: new Promise<number>(() => {}),
       stdout: new PassThrough(),
@@ -256,8 +256,8 @@ describe("Format", () => {
 
     let killStarted = false
     let killCompleted = false
-    const spawnSpy = spyOn(Process, "spawn").mockReturnValue(proc as any)
-    const killProcessTreeSpy = spyOn(Process, "killProcessTree").mockImplementation(async () => {
+    const spawnSpy = vi.spyOn(Process, "spawn").mockReturnValue(proc as any)
+    const killProcessTreeSpy = vi.spyOn(Process, "killProcessTree").mockImplementation(async () => {
       killStarted = true
       await new Promise<void>((resolve) => {
         originalSetTimeout(() => {

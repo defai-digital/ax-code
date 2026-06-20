@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { riskSection } from "../../src/quality/dre-graph-risk-section"
 import type { SessionDre } from "../../src/session/dre"
 import type { SessionRisk } from "../../src/session/risk"

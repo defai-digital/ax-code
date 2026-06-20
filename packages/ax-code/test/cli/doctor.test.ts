@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { mkdir } from "fs/promises"
 import path from "path"
 import {
@@ -124,7 +124,7 @@ describe("cli doctor", () => {
   })
 
   test("logs configured TUI port fallback failures", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/doctor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/doctor.ts")).text()
     const start = src.indexOf("async function getConfiguredTuiPort()")
     const end = src.indexOf("export async function getDuplicateProjectIdentityCheck", start)
     expect(start).toBeGreaterThan(-1)

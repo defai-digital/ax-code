@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import {
   DOUBLE_ESCAPE_CLEAR_MS,
   promptEscapeClearIntent,

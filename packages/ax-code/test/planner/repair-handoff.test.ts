@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { briefFromFailure, shouldHandoff } from "../../src/planner/verification/repair-handoff"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 

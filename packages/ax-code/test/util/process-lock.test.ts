@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeProcessLockBody, parseProcessLockBody } from "../../src/util/process-lock"
 
 describe("util.process-lock", () => {

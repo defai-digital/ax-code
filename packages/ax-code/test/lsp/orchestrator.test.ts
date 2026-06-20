@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { LSP } from "../../src/lsp"
 import type { LSPClient } from "../../src/lsp/client"
 import type { LSPServer } from "../../src/lsp/server"

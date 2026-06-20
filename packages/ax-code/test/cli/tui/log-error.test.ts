@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { formatTuiLogError, formatWorkerLoadError } from "../../../src/cli/cmd/tui/util/log-error"
 
 describe("tui log error formatting", () => {
@@ -30,6 +30,8 @@ describe("tui log error formatting", () => {
       },
     })
 
-    expect(formatWorkerLoadError("/tmp/worker.js", broken)).toBe("Worker failed to load (/tmp/worker.js): Unknown TUI error")
+    expect(formatWorkerLoadError("/tmp/worker.js", broken)).toBe(
+      "Worker failed to load (/tmp/worker.js): Unknown TUI error",
+    )
   })
 })

@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "bun:test"
+import { describe, test, expect, afterEach } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { FileTime } from "../../src/file/time"

@@ -1,11 +1,11 @@
-import { expect, mock, test } from "bun:test"
+import { expect, test, vi } from "vitest"
 
 const ssrfModule = "../../src/util/ssrf.ts" + "?ssrf-unit"
 const { Ssrf } = (await import(ssrfModule)) as typeof import("../../src/util/ssrf")
 
 test("pinnedFetch rejects non-http redirect targets before following them", async () => {
   // Use injected DNS and fetch functions so this unit test never opens a socket.
-  const dnsResolveFn = mock(async (_hostname: string) => [{ address: "1.2.3.4", family: 4 }])
+  const dnsResolveFn = vi.fn(async (_hostname: string) => [{ address: "1.2.3.4", family: 4 }])
   let fetchCalls = 0
   const fetchFn: NonNullable<Parameters<typeof Ssrf.pinnedFetch>[2]> = async () => {
     fetchCalls++
@@ -44,7 +44,7 @@ test("assertPublicUrl allows genuine public IPv6 (literal and mapped)", async ()
 })
 
 test("pinnedFetch strips credentials on a cross-origin redirect but keeps them same-origin", async () => {
-  const dnsResolveFn = mock(async (_hostname: string) => [{ address: "1.2.3.4", family: 4 }])
+  const dnsResolveFn = vi.fn(async (_hostname: string) => [{ address: "1.2.3.4", family: 4 }])
 
   const run = async (location: string) => {
     const seen: Array<string | null> = []

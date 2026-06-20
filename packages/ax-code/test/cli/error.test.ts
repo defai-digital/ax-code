@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { FormatUnknownError } from "../../src/cli/error"
 
 describe("cli error formatting", () => {

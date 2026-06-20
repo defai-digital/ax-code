@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 
 const localTransports: Array<{ command: string; args: string[]; closeCalls: number }> = []
 let connectCalls = 0
 
-mock.module("@modelcontextprotocol/sdk/client/stdio.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/stdio.js", () => ({
   StdioClientTransport: class MockStdioClientTransport {
     command: string
     args: string[]
@@ -29,19 +29,19 @@ mock.module("@modelcontextprotocol/sdk/client/stdio.js", () => ({
   },
 }))
 
-mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTPClientTransport {
     async close() {}
   },
 }))
 
-mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSEClientTransport {
     async close() {}
   },
 }))
 
-mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
     transport?: { start?: () => Promise<void> }
 

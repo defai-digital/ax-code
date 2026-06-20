@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { directoryLabel } from "../../../src/cli/cmd/tui/context/directory-view-model"
 
 describe("tui directory view model", () => {

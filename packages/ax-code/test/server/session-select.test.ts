@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"

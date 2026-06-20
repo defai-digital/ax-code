@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { LSPCache } from "../../src/lsp/cache"
 import { Instance } from "../../src/project/instance"
@@ -35,9 +35,9 @@ describe("LSPCache", () => {
 
     const now = 1_700_000_000_000
     let captured: CodeGraphQuery.LspCacheInsert | undefined
-    nowSpy = spyOn(Date, "now").mockReturnValue(now)
-    randomSpy = spyOn(Math, "random").mockReturnValue(1)
-    upsertSpy = spyOn(CodeGraphQuery, "upsertLspCache").mockImplementation((row) => {
+    nowSpy = vi.spyOn(Date, "now").mockReturnValue(now)
+    randomSpy = vi.spyOn(Math, "random").mockReturnValue(1)
+    upsertSpy = vi.spyOn(CodeGraphQuery, "upsertLspCache").mockImplementation((row) => {
       captured = row
       return "code_intel_lsp_cache_test" as never
     })
@@ -68,7 +68,7 @@ describe("LSPCache", () => {
         throw new Error("cannot print")
       },
     }
-    lookupSpy = spyOn(CodeGraphQuery, "getLspCache").mockImplementation(() => {
+    lookupSpy = vi.spyOn(CodeGraphQuery, "getLspCache").mockImplementation(() => {
       throw failure
     })
 

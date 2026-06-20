@@ -1,5 +1,5 @@
 import path from "path"
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 const DEBUG_WORKFLOW_PROMPTS = [
   "src/session/prompt/default.txt",
@@ -19,7 +19,7 @@ const OVERCONFIDENT_FRAME_CLAIMS = [
 ]
 
 function promptPath(relativePath: string) {
-  return path.join(import.meta.dir, "../..", relativePath)
+  return path.join(import.meta.dirname, "../..", relativePath)
 }
 
 describe("runtime debug prompt guidance", () => {

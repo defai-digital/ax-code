@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import * as prompts from "@clack/prompts"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
@@ -16,7 +16,7 @@ const originalCwd = process.cwd()
 afterEach(() => {
   process.chdir(originalCwd)
   process.exitCode = undefined
-  mock.restore()
+  vi.restoreAllMocks()
 })
 
 describe("memory command", () => {
@@ -24,10 +24,10 @@ describe("memory command", () => {
     await using tmp = await tmpdir()
     process.chdir(tmp.path)
 
-    spyOn(prompts, "intro").mockImplementation(() => {})
-    spyOn(prompts, "outro").mockImplementation(() => {})
-    const infoSpy = spyOn(prompts.log, "info").mockImplementation(() => {})
-    spyOn(prompts.log, "success").mockImplementation(() => {})
+    vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+    vi.spyOn(prompts.log, "success").mockImplementation(() => {})
 
     await MemoryRememberCommand.handler({
       kind: "feedback",
@@ -62,10 +62,10 @@ describe("memory command", () => {
     await using tmp = await tmpdir()
     process.chdir(tmp.path)
 
-    spyOn(prompts, "intro").mockImplementation(() => {})
-    spyOn(prompts, "outro").mockImplementation(() => {})
-    const infoSpy = spyOn(prompts.log, "info").mockImplementation(() => {})
-    const successSpy = spyOn(prompts.log, "success").mockImplementation(() => {})
+    vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
 
     await MemoryDoctorCommand.handler({ scope: "project" } as any)
 
@@ -77,10 +77,10 @@ describe("memory command", () => {
     await using tmp = await tmpdir()
     process.chdir(tmp.path)
 
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    spyOn(prompts, "outro").mockImplementation(() => {})
-    spyOn(prompts.log, "success").mockImplementation(() => {})
-    const logSpy = spyOn(console, "log").mockImplementation(() => {})
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
 
     await MemoryRememberCommand.handler({
       kind: "feedback",
@@ -107,8 +107,8 @@ describe("memory command", () => {
     await using tmp = await tmpdir()
     process.chdir(tmp.path)
 
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const logSpy = spyOn(console, "log").mockImplementation(() => {})
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
 
     await MemoryDoctorCommand.handler({ scope: "project", json: true } as any)
 
@@ -137,10 +137,10 @@ describe("memory command", () => {
     await using tmp = await tmpdir()
     process.chdir(tmp.path)
 
-    spyOn(prompts, "intro").mockImplementation(() => {})
-    spyOn(prompts, "outro").mockImplementation(() => {})
-    spyOn(prompts.log, "success").mockImplementation(() => {})
-    const logSpy = spyOn(console, "log").mockImplementation(() => {})
+    vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
 
     await MemoryRememberCommand.handler({
       kind: "feedback",

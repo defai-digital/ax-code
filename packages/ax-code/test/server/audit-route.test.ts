@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { collectAuditExportRecords, parseAuditJsonLine } from "../../src/server/routes/audit"
 
 describe("audit route JSONL decoding", () => {

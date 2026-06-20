@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test"
+import { test, expect, describe } from "vitest"
 import { parseCliSettingsJson, resolveCliModel } from "../../../src/provider/cli/resolve"
 
 describe("resolveCliModel", () => {

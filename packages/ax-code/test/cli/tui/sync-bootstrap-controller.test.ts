@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createBootstrapController } from "../../../src/cli/cmd/tui/context/sync-bootstrap-controller"
 
 describe("tui sync bootstrap controller", () => {

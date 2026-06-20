@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { RegisterFindingTool } from "../../src/tool/register_finding"

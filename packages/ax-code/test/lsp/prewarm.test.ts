@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Config } from "../../src/config/config"
@@ -55,14 +55,14 @@ describe("LSP.prewarmFiles", () => {
     await using tmp = await tmpdir({ git: true })
     const a = path.join(tmp.path, "a.ts")
     const b = path.join(tmp.path, "b.ts")
-    const serverPath = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
+    const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
     await Bun.write(a, "export const a = 1\n")
     await Bun.write(b, "export const b = 2\n")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
             typescript: {
               disabled: true,
@@ -97,14 +97,14 @@ describe("LSP.prewarmFiles", () => {
     await using tmp = await tmpdir({ git: true })
     const ts = path.join(tmp.path, "a.ts")
     const rs = path.join(tmp.path, "lib.rs")
-    const serverPath = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
+    const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
     await Bun.write(ts, "export const a = 1\n")
     await Bun.write(rs, "fn main() {}\n")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
             typescript: {
               disabled: true,
@@ -150,13 +150,13 @@ describe("LSP.prewarmFiles", () => {
   test("skips built-in servers that are deferred from startup prewarm", async () => {
     await using tmp = await tmpdir({ git: true })
     const sh = path.join(tmp.path, "script.sh")
-    const serverPath = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
+    const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
     await Bun.write(sh, "#!/usr/bin/env bash\necho ok\n")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
             bash: {
               command: [process.execPath, serverPath],
@@ -184,7 +184,7 @@ describe("LSP.prewarmFiles", () => {
     const a = path.join(tmp.path, "a.ts")
     const b = path.join(tmp.path, "b.ts")
     const readme = path.join(tmp.path, "README.md")
-    const serverPath = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
+    const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
     await Bun.write(a, "export const a = 1\n")
     await Bun.write(b, "export const b = 2\n")
     await Bun.write(readme, "# demo\n")
@@ -192,7 +192,7 @@ describe("LSP.prewarmFiles", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
             typescript: {
               disabled: true,

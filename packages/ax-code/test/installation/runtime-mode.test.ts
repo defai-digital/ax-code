@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { detectRuntimeMode } from "../../src/installation/runtime-mode"
 
 describe("installation.runtime-mode", () => {
@@ -20,6 +20,16 @@ describe("installation.runtime-mode", () => {
         channel: "latest",
       }),
     ).toBe("compiled")
+  })
+
+  test("Node bundled release runtime", () => {
+    expect(
+      detectRuntimeMode({
+        execPath: "C:\\Program Files\\nodejs\\node.exe",
+        versionDefined: true,
+        channel: "latest",
+      }),
+    ).toBe("node-bundled")
   })
 
   test("source/dev: bun execPath, no version global", () => {

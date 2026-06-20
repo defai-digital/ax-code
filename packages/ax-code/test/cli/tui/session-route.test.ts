@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { Part, UserMessage } from "@ax-code/sdk/v2"
 import { messageRoute, routeEvent, routeNote, userRoute } from "../../../src/cli/cmd/tui/routes/session/route"
 import { activityItems } from "../../../src/cli/cmd/tui/routes/session/activity"

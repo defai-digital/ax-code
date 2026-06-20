@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test, beforeEach } from "bun:test"
+import { describe, expect, test, beforeEach, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
@@ -100,7 +100,7 @@ describe("memory.store cache", () => {
     await store.save(tmp.path, initial)
     const statBefore = await fs.stat(memoryPath)
     const realReadFile = fs.readFile.bind(fs)
-    const readFileSpy = spyOn(fs, "readFile")
+    const readFileSpy = vi.spyOn(fs, "readFile")
     let firstRead = true
 
     // fs.readFile is heavily overloaded; the mock signature widens the return
@@ -139,7 +139,7 @@ describe("memory.store cache", () => {
     store._resetReadCache()
 
     const realReadFile = fs.readFile.bind(fs)
-    const readFileSpy = spyOn(fs, "readFile")
+    const readFileSpy = vi.spyOn(fs, "readFile")
     let readCount = 0
     let firstReadStarted!: () => void
     let releaseFirstRead!: () => void

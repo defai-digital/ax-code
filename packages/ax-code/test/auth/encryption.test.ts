@@ -1,6 +1,6 @@
 import path from "path"
 import os from "os"
-import { expect, test } from "bun:test"
+import { expect, test } from "vitest"
 import { createCipheriv, pbkdf2Sync, randomBytes } from "crypto"
 import { readFileSync } from "fs"
 import { decrypt, decryptField, encrypt, isEncrypted, type EncryptedValue } from "../../src/auth/encryption"

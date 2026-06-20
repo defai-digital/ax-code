@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { parseSSE, parseSSEData, parseSSEJsonData, sseMessageData } from "../../src/control-plane/sse"
 import { resetDatabase } from "../fixture/db"
 

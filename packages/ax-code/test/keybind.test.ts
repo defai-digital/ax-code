@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect } from "vitest"
 import { Keybind } from "../src/util/keybind"
 
 describe("Keybind.toString", () => {

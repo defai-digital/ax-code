@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { collectBuildDependencyPackages, resolveInstalledPackagePath } from "../../script/build-deps"
 
 describe("script.build-deps", () => {

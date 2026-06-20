@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { getDoctorDatabaseCheck } from "../../src/cli/cmd/doctor-storage"
 import { describeDurableStoragePolicy, DurableStoragePolicy } from "../../src/storage/policy"
 

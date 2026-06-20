@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { Session } from "../../src/session"
 import { Bus } from "../../src/bus"
@@ -170,7 +170,7 @@ describe("session.setArchived", () => {
         const session = await Session.create({})
         const archivedAt = 50_000
         const updatedAt = 40_000
-        const nowSpy = spyOn(Date, "now").mockReturnValue(updatedAt)
+        const nowSpy = vi.spyOn(Date, "now").mockReturnValue(updatedAt)
 
         try {
           const before = await Session.get(session.id)

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { mcpSchemaByteLength } from "../../src/mcp/tool-conversion"
 
 describe("mcp tool conversion", () => {

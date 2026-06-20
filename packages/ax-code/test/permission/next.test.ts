@@ -1,4 +1,4 @@
-import { afterEach, test, expect } from "bun:test"
+import { afterEach, test, expect } from "vitest"
 import os from "os"
 import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"

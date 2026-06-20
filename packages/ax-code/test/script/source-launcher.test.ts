@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { sourceLauncherScript } from "../../script/source-launcher"
 
 describe("script.source-launcher", () => {

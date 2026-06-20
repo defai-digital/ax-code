@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { waitForAbortOrTimeout } from "../../src/control-plane/abort"
 
 describe("control-plane/waitForAbortOrTimeout", () => {

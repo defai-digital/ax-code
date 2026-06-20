@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll, spyOn } from "bun:test"
+import { describe, test, expect, beforeAll, afterAll, vi } from "vitest"
 import { Discovery } from "../../src/skill/discovery"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
@@ -14,7 +14,7 @@ const origin = "http://example.com"
 const originalFetch = globalThis.fetch
 let lookupSpy: ReturnType<typeof spyOn>
 
-const fixturePath = path.join(import.meta.dir, "../fixture/skills")
+const fixturePath = path.join(import.meta.dirname, "../fixture/skills")
 const cacheDir = path.join(Global.Path.cache, "skills")
 const safeSkillBody = "# Safe Skill"
 const safeSkillHash = createHash("sha256").update(safeSkillBody).digest("hex")
@@ -106,7 +106,7 @@ beforeAll(async () => {
     { preconnect: originalFetch.preconnect },
   ) as typeof fetch
 
-  lookupSpy = spyOn(dns, "lookup").mockImplementation(async () => [{ address: "93.184.216.34", family: 4 }] as any)
+  lookupSpy = vi.spyOn(dns, "lookup").mockImplementation(async () => [{ address: "93.184.216.34", family: 4 }] as any)
   CLOUDFLARE_SKILLS_URL = `${origin}/.well-known/skills/`
 })
 

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Bus } from "../../src/bus"
 import { Instance } from "../../src/project/instance"
 import { Pty } from "../../src/pty"

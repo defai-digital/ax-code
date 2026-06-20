@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { diffFiles, revertedMessages, revertState } from "../../../src/cli/cmd/tui/routes/session/revert"
 
 describe("tui session revert helpers", () => {

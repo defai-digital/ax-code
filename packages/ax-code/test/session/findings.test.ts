@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { computeFindingId } from "../../src/quality/finding"
 import type { Finding } from "../../src/quality/finding"

@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "bun:test"
+import { describe, test, expect, afterEach } from "vitest"
 import { ToolErrorPatternTracker } from "../../src/session/tool-error-pattern"
 import { SessionID } from "../../src/session/schema"
 

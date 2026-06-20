@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test"
+import { beforeEach, describe, expect, test } from "vitest"
 import { closeAll, openAll } from "../../src/lsp/client-notify"
 import { Log } from "../../src/util/log"
 

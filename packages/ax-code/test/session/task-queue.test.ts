@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
@@ -298,7 +298,7 @@ describe("TaskQueue", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const prompt = spyOn(SessionPrompt, "prompt")
+        const prompt = vi.spyOn(SessionPrompt, "prompt")
         ;(prompt as any).mockImplementation(async (input: any) => {
           const messageID = "msg_queue_replay_error"
           Recorder.begin(input.sessionID)
@@ -764,7 +764,7 @@ describe("TaskQueue", () => {
             },
           },
         })
-        const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue({
           info: {
             id: "msg_workflow_tool_budget",
             role: "assistant",
@@ -898,7 +898,7 @@ describe("TaskQueue", () => {
             },
           },
         })
-        const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue({
           info: {
             id: "msg_workflow_text_only",
             role: "assistant",

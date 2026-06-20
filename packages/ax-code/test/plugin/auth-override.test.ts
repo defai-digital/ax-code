@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -55,7 +55,7 @@ describe("plugin.auth-override", () => {
   }, 60000) // Plugin installation may trigger bun install in CI
 })
 
-const file = path.join(import.meta.dir, "../../src/plugin/index.ts")
+const file = path.join(import.meta.dirname, "../../src/plugin/index.ts")
 
 describe("plugin.config-hook-error-isolation", () => {
   test("config hooks are individually error-isolated in the layer factory", async () => {

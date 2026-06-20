@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "../../src/cli/cmd/doctor-health"
 
 describe("doctor running instances", () => {

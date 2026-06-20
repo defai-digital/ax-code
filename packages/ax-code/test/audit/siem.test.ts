@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { AuditRecord } from "../../src/audit/index"
 import { AuditExport, formatAuditTimestamp } from "../../src/audit/export"
 import { Instance } from "../../src/project/instance"

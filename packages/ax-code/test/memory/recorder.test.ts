@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { recordEntry, removeEntry, listEntries } from "../../src/memory/recorder"
 import { buildContext } from "../../src/memory/injector"

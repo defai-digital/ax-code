@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { handlePromptLoopAgentStepLimit } from "../../src/session/prompt-loop-agent-step-limit"
 
 describe("prompt loop agent step limit", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeGitHubPrViewInfoValue, parseGitHubPrViewInfoText } from "../../src/cli/cmd/github-agent/pr"
 
 describe("cli.github-agent.pr", () => {

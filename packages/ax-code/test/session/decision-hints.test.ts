@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { DecisionHints } from "../../src/session/decision-hints"
 import type { MessageV2 } from "../../src/session/message-v2"
 import type { ReplayEvent } from "../../src/replay/event"

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 import { ReasoningPolicy } from "../../src/control-plane/reasoning-policy"
 

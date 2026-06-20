@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { BunProc } from "../src/bun"
@@ -81,7 +81,7 @@ describe("BunProc registry behavior", () => {
     const malformed = "{not json"
     await fs.writeFile(manifest, malformed)
 
-    const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+    const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
       code: 0,
       stdout: Buffer.alloc(0),
       stderr: Buffer.alloc(0),
@@ -110,8 +110,8 @@ describe("BunProc registry behavior", () => {
     await fs.writeFile(manifest, JSON.stringify({ dependencies: { [pkg]: "1.0.0" } }))
     await fs.writeFile(versionChecks, malformed)
 
-    const outdated = spyOn(PackageRegistry, "isOutdated").mockImplementation(async () => false)
-    const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+    const outdated = vi.spyOn(PackageRegistry, "isOutdated").mockImplementation(async () => false)
+    const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
       code: 0,
       stdout: Buffer.alloc(0),
       stderr: Buffer.alloc(0),

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { RuntimeDebugSnapshot } from "../../src/runtime/debug-snapshot"
 import { ServiceManager } from "../../src/runtime/service-manager"
 

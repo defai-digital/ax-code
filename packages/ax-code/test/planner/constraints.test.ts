@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Planner } from "../../src/planner"
 import { Question } from "../../src/question"
 

@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { SessionGoal } from "../../src/session/goal"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { addPromptGoalUsage } from "../../src/session/prompt-goal-usage"
@@ -37,7 +37,7 @@ describe("addPromptGoalUsage", () => {
       timeUsedSeconds: 1,
       time: { created: 1, updated: 2 },
     }
-    const addUsage = spyOn(SessionGoal, "addUsage").mockResolvedValue(goal)
+    const addUsage = vi.spyOn(SessionGoal, "addUsage").mockResolvedValue(goal)
     try {
       await expect(addPromptGoalUsage({ sessionID, message: assistantMessage() })).resolves.toBe(goal)
     } finally {
@@ -47,7 +47,7 @@ describe("addPromptGoalUsage", () => {
 
   test("swallows goal usage update failures", async () => {
     const sessionID = SessionID.descending()
-    const addUsage = spyOn(SessionGoal, "addUsage").mockRejectedValue(new Error("db busy"))
+    const addUsage = vi.spyOn(SessionGoal, "addUsage").mockRejectedValue(new Error("db busy"))
     try {
       await expect(addPromptGoalUsage({ sessionID, message: assistantMessage() })).resolves.toBeUndefined()
     } finally {

@@ -1,6 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { QualityCalibrationModel } from "../../src/quality/calibration-model"
 import { QualityPromotionAdoptionReview } from "../../src/quality/promotion-adoption-review"
 import { QualityPromotionArchiveManifest } from "../../src/quality/promotion-archive-manifest"
@@ -704,7 +704,7 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-record-status",
           "--promotion-id",
@@ -712,7 +712,7 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
           "--signed-archive-attestation-record",
           wrongRecordFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -819,7 +819,7 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-record-status",
           "--promotion-id",
@@ -827,7 +827,7 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
           "--signed-archive-attestation-record",
           tamperedRecordFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -1101,7 +1101,7 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-packet-status",
           "--promotion-id",
@@ -1109,7 +1109,7 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
           "--signed-archive-attestation-packet",
           wrongPacketFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -1208,7 +1208,7 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-packet-status",
           "--promotion-id",
@@ -1216,7 +1216,7 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
           "--signed-archive-attestation-record",
           recordFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -1338,7 +1338,7 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-attestation-packet-status",
           "--promotion-id",
@@ -1346,7 +1346,7 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
           "--signed-archive-attestation-packet",
           tamperedPacketFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -1604,7 +1604,7 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-governance-packet-status",
           "--promotion-id",
@@ -1614,7 +1614,7 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
           "--signed-archive-attestation-record",
           recordFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -1741,7 +1741,7 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-governance-packet-status",
           "--promotion-id",
@@ -1749,7 +1749,7 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
           "--signed-archive-governance-packet",
           tamperedPacketFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -1989,7 +1989,7 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-review-dossier-status",
           "--promotion-id",
@@ -1997,7 +1997,7 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
           "--signed-archive-review-dossier",
           tamperedDossierFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -2120,7 +2120,7 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-signed-archive-review-dossier-status",
           "--promotion-id",
@@ -2130,7 +2130,7 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
           "--handoff-package",
           handoffPackageFile,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 

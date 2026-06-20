@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { gzipSync } from "zlib"
@@ -431,9 +431,9 @@ describe("lsp server helpers", () => {
 
   test("does not spawn a bun-backed server after package install fails", async () => {
     await using tmp = await tmpdir()
-    const exists = spyOn(Filesystem, "exists").mockResolvedValue(false)
-    const whichBun = spyOn(BunProc, "which").mockReturnValue("/bin/bun")
-    const spawn = spyOn(Process, "spawn").mockReturnValue({
+    const exists = vi.spyOn(Filesystem, "exists").mockResolvedValue(false)
+    const whichBun = vi.spyOn(BunProc, "which").mockReturnValue("/bin/bun")
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       exited: Promise.resolve(1),
       exitCode: 1,
       signalCode: null,

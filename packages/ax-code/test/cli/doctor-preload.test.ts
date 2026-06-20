@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { getTuiPreloadCheck } from "../../src/cli/cmd/doctor-preload"
 
 describe("doctor TUI preload checks", () => {
@@ -28,6 +28,21 @@ describe("doctor TUI preload checks", () => {
       name: "TUI preload",
       status: "ok",
       detail: "@opentui/solid/preload resolved (solid)",
+    })
+  })
+
+  test("reports Node bundled Windows runtime as diagnostic-only", () => {
+    const check = getTuiPreloadCheck({
+      runtimeMode: "node-bundled",
+      resolveSync: () => {
+        throw new Error("node bundled runtime should not resolve preload from disk")
+      },
+    })
+
+    expect(check).toEqual({
+      name: "TUI preload",
+      status: "warn",
+      detail: "Windows Node bundled runtime supports diagnostic/headless startup only; OpenTUI preload is not used",
     })
   })
 

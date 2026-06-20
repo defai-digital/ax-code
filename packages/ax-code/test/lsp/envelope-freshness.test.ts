@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { LSP } from "../../src/lsp"
 import { participantStatus } from "../../src/lsp/envelope"
 import { isMethodNotFound } from "../../src/lsp/envelope-runner"

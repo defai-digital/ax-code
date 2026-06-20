@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { fetchSessionSyncSnapshot } from "../../../src/cli/cmd/tui/context/sync-session-fetch"
 
 describe("tui sync session fetch", () => {

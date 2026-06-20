@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach, afterAll, spyOn } from "bun:test"
+import { test, expect, beforeEach, afterAll, vi } from "vitest"
 
 // Track what options were passed to each transport constructor
 const transportCalls: Array<{
@@ -12,7 +12,7 @@ const transportCalls: Array<{
 }> = []
 
 // Mock the transport constructors to capture their arguments
-mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTP {
     constructor(
       url: URL,
@@ -34,7 +34,7 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   },
 }))
 
-mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
     constructor(
       url: URL,
@@ -69,11 +69,11 @@ const { Ssrf } = await import("../../src/util/ssrf")
 const originalAssertPublicUrl = Ssrf.assertPublicUrl
 const originalPinnedFetch = Ssrf.pinnedFetch
 const pinnedCalls: Array<{ url: string; init?: RequestInit & { label?: string } }> = []
-const ensureCallbackRunningSpy = spyOn(McpOAuthCallback, "ensureRunning")
+const ensureCallbackRunningSpy = vi.spyOn(McpOAuthCallback, "ensureRunning")
 
 beforeEach(() => {
-  Ssrf.assertPublicUrl = mock(async () => {})
-  Ssrf.pinnedFetch = mock(async (url: string | URL, init?: RequestInit & { label?: string }) => {
+  Ssrf.assertPublicUrl = vi.fn(async () => {})
+  Ssrf.pinnedFetch = vi.fn(async (url: string | URL, init?: RequestInit & { label?: string }) => {
     pinnedCalls.push({ url: url.toString(), init })
     return new Response(null, { status: 204 })
   }) as typeof Ssrf.pinnedFetch
@@ -84,7 +84,7 @@ beforeEach(() => {
 afterAll(async () => {
   Ssrf.assertPublicUrl = originalAssertPublicUrl
   Ssrf.pinnedFetch = originalPinnedFetch
-  mock.restore()
+  vi.restoreAllMocks()
   await McpOAuthCallback.stop()
 })
 

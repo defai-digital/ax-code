@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect } from "vitest"
 import fs from "node:fs/promises"
 import { Truncate } from "../../src/tool/truncate"
 import { Identifier } from "../../src/id/id"
@@ -6,8 +6,8 @@ import { Process } from "../../src/util/process"
 import { Filesystem } from "../../src/util/filesystem"
 import path from "path"
 
-const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
-const ROOT = path.resolve(import.meta.dir, "..", "..")
+const FIXTURES_DIR = path.join(import.meta.dirname, "fixtures")
+const ROOT = path.resolve(import.meta.dirname, "..", "..")
 
 describe("Truncate", () => {
   describe("output", () => {

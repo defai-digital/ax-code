@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { handlePromptLoopGoalContinuation } from "../../src/session/prompt-loop-goal"
 import { SessionID } from "../../src/session/schema"
 

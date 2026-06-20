@@ -1,10 +1,10 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import fg from "fast-glob"
 import ts from "typescript"
 
-const SRC_ROOT = path.resolve(import.meta.dir, "../../src")
+const SRC_ROOT = path.resolve(import.meta.dirname, "../../src")
 
 function isBusPublish(node: ts.CallExpression) {
   return (

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createReconnectRecoveryGate, RECONNECT_STABILIZE_MS } from "../../../src/cli/cmd/tui/util/reconnect-recovery"
 
 // Wait long enough for the stabilization timer to fire.

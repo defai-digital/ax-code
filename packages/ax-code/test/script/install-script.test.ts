@@ -1,7 +1,7 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 
-const repoRoot = path.resolve(import.meta.dir, "../../../..")
+const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const installScript = path.join(repoRoot, "install")
 const installPowerShellScript = path.join(repoRoot, "install.ps1")
 
@@ -40,26 +40,22 @@ describe("install script", () => {
     expect(text).toContain("https://api.github.com/repos/$Repo/releases/latest")
     expect(text).toContain("https://github.com/$Repo/releases/latest/download/$filename")
     expect(text).toContain("https://github.com/$Repo/releases/download/v$specificVersion/$filename")
-    expect(text).toContain('$filename = "$App-windows-$arch$variant.zip"')
+    expect(text).toContain('$filename = "$App-windows-$arch.zip"')
     expect(text).toContain('return "x64"')
     expect(text).toContain('return "arm64"')
     expect(text).toContain("Expand-Archive")
-    expect(text).toContain("ax-code.exe")
+    expect(text).toContain("ax-code.cmd")
+    expect(text).toContain("InstallLibDir")
     expect(text).toContain('[Environment]::SetEnvironmentVariable("Path", $newPath, "User")')
     expect(text).toContain("Warn-PathPrecedence")
   })
 
-  test("selects the AVX2-free baseline build for no_avx2 Windows x64 CPUs (#274)", async () => {
+  test("installs the Windows Node distribution without AVX2 binary fallback", async () => {
     const text = await Bun.file(installPowerShellScript).text()
-    // Up-front detection chooses the baseline asset when AVX2 is known-absent.
-    expect(text).toContain("function Get-Avx2Support")
-    expect(text).toContain("System.Runtime.Intrinsics.X86.Avx2")
-    expect(text).toContain('$variant = if ($Baseline -and $arch -eq "x64") { "-baseline" } else { "" }')
-    expect(text).toContain("(Get-Avx2Support) -eq $false")
-    // Crash-safe verification + fallback retry when AVX2 can't be detected ahead
-    // of time (e.g. Windows PowerShell 5.1).
-    expect(text).toContain("function Get-InstalledBinaryVersion")
-    expect(text).toContain("-not (Get-InstalledBinaryVersion)")
-    expect(text).toContain("Install-FromRelease $true")
+    expect(text).toContain('$filename = "$App-windows-$arch.zip"')
+    expect(text).toContain("Downloaded archive did not contain ax-code.cmd")
+    expect(text).toContain("Downloaded archive did not contain the Node runtime lib directory")
+    expect(text).not.toContain("System.Runtime.Intrinsics.X86.Avx2")
+    expect(text).not.toContain("-baseline")
   })
 })

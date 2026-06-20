@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { index } from "../../src/quality/dre-graph-index-page"
 import type { Session } from "../../src/session"
 

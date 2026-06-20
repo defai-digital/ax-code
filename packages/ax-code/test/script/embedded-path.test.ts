@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { compiledBunfsModulePath } from "../../script/embedded-path"
 
 describe("script.embedded-path", () => {

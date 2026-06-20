@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createStore } from "solid-js/store"
 import {
   AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY,

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { LoopInput, PromptInput } from "../../src/session/prompt-input"
 import { SessionID } from "../../src/session/schema"
 

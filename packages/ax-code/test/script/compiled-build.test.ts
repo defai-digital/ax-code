@@ -1,9 +1,9 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 
-const buildPath = path.resolve(import.meta.dir, "../../script/build.ts")
-const compiledEntryPath = path.resolve(import.meta.dir, "../../src/index-compiled.ts")
+const buildPath = path.resolve(import.meta.dirname, "../../script/build.ts")
+const compiledEntryPath = path.resolve(import.meta.dirname, "../../src/index-compiled.ts")
 
 describe("script.build compiled entrypoint", () => {
   test("keeps the source OpenTUI preload out of Bun compile entrypoints", async () => {

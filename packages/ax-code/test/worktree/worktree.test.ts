@@ -1,5 +1,5 @@
 import { $ } from "bun"
-import { afterEach, expect, spyOn, test } from "bun:test"
+import { afterEach, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Global } from "../../src/global"
@@ -33,7 +33,7 @@ test("create rolls back the git worktree when sandbox recording fails", async ()
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const addSandbox = spyOn(Project, "addSandbox").mockRejectedValue(new Error("db unavailable"))
+      const addSandbox = vi.spyOn(Project, "addSandbox").mockRejectedValue(new Error("db unavailable"))
 
       try {
         await expect(Worktree.create({ name: "db-fail" })).rejects.toThrow("WorktreeCreateFailedError")
@@ -54,7 +54,7 @@ test("create rolls back the git worktree when sandbox recording fails", async ()
 
 test("runStartScripts fails when the worktree start command fails", async () => {
   await using tmp = await tmpdir()
-  const get = spyOn(Project, "get").mockReturnValue({
+  const get = vi.spyOn(Project, "get").mockReturnValue({
     id: "project",
     worktree: tmp.path,
     vcs: "git",

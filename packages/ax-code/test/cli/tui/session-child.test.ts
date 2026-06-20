@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { childAction, firstChildID, nextChildID } from "../../../src/cli/cmd/tui/routes/session/child"
 
 describe("tui session child helpers", () => {

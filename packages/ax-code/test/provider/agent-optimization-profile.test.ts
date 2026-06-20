@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { classifyTaskForModelRoute, longAgentProfileForModel } from "../../src/provider/agent-optimization-profile"
 
 describe("classifyTaskForModelRoute", () => {

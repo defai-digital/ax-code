@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"

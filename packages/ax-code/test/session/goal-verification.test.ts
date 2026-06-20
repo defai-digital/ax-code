@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { GoalVerification } from "../../src/session/goal-verification"
 
 function toolPart(tool: string, status: "completed" | "error" = "completed") {

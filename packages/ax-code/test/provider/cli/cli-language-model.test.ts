@@ -1,4 +1,4 @@
-import { test, expect, describe, spyOn } from "bun:test"
+import { test, expect, describe, vi } from "vitest"
 import { buildCliCommand, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import { claudeCodeParser, geminiCliParser, codexCliParser, grokBuildCliParser } from "../../../src/provider/cli/parser"
@@ -154,7 +154,7 @@ describe("CliLanguageModel", () => {
 
     let killStarted = false
     let killCompleted = false
-    const spawn = spyOn(Process, "spawn").mockReturnValue({
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       stdout: new PassThrough(),
       stderr: new PassThrough(),
       exited: new Promise<number>(() => {}),
@@ -164,7 +164,7 @@ describe("CliLanguageModel", () => {
       pid: 999,
       stdin: null,
     } as any)
-    const shellKill = spyOn(Shell, "killTree").mockImplementation(async () => {
+    const shellKill = vi.spyOn(Shell, "killTree").mockImplementation(async () => {
       killStarted = true
       await new Promise<void>((resolve) => {
         originalSetTimeout(() => {
@@ -194,7 +194,7 @@ describe("CliLanguageModel", () => {
   })
 
   test("doGenerate rejects with AbortError when signal is already aborted", async () => {
-    const spawn = spyOn(Process, "spawn")
+    const spawn = vi.spyOn(Process, "spawn")
     const controller = new AbortController()
     controller.abort()
 
@@ -219,7 +219,7 @@ describe("CliLanguageModel", () => {
     let resolveExited: ((code: number) => void) | undefined
     let killCalled = false
 
-    const spawn = spyOn(Process, "spawn").mockReturnValue({
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       stdout: mockStdout,
       stderr: mockStderr,
       exited: new Promise<number>((resolve) => {
@@ -232,7 +232,7 @@ describe("CliLanguageModel", () => {
       stdin: { write() {}, end() {} },
     } as any)
 
-    const shellKill = spyOn(Shell, "killTree").mockImplementation(async () => {
+    const shellKill = vi.spyOn(Shell, "killTree").mockImplementation(async () => {
       killCalled = true
       resolveExited?.(143)
       mockStdout.end()
@@ -262,7 +262,7 @@ describe("CliLanguageModel", () => {
   })
 
   test("doGenerate fails cleanly when stdin stream is unavailable", async () => {
-    const spawn = spyOn(Process, "spawn").mockReturnValue({
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       stdin: null,
       stdout: new ReadableStream() as any,
       stderr: new ReadableStream() as any,
@@ -283,7 +283,7 @@ describe("CliLanguageModel", () => {
   })
 
   test("doStream fails cleanly when output streams are unavailable", async () => {
-    const spawn = spyOn(Process, "spawn").mockReturnValue({
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       stdin: { write() {}, end() {} },
       stdout: null,
       stderr: null,
@@ -337,7 +337,7 @@ describe("CliLanguageModel", () => {
   test("doStream includes stdout and stderr that drain after process exit", async () => {
     const stdout = new PassThrough()
     const stderr = new PassThrough()
-    const spawn = spyOn(Process, "spawn").mockReturnValue({
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       stdout,
       stderr,
       exited: Promise.resolve(9),
@@ -402,7 +402,7 @@ describe("CliLanguageModel", () => {
 
     const stdout = new PassThrough()
     const stderr = new PassThrough()
-    const spawn = spyOn(Process, "spawn").mockReturnValue({
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       stdout,
       stderr,
       exited: new Promise<number>(() => {}),
@@ -412,7 +412,7 @@ describe("CliLanguageModel", () => {
       pid: 1001,
       stdin: null,
     } as any)
-    const shellKill = spyOn(Shell, "killTree").mockResolvedValue()
+    const shellKill = vi.spyOn(Shell, "killTree").mockResolvedValue()
 
     try {
       const model = makeModel({
@@ -591,7 +591,7 @@ describe("CliLanguageModel", () => {
   })
 
   test("doStream rejects with AbortError when signal is already aborted", async () => {
-    const spawn = spyOn(Process, "spawn")
+    const spawn = vi.spyOn(Process, "spawn")
     const controller = new AbortController()
     controller.abort()
 
@@ -608,7 +608,7 @@ describe("CliLanguageModel", () => {
   })
 
   test("doStream handles abort signal without throwing", async () => {
-    const spawn = spyOn(Process, "spawn").mockReturnValue({
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
       stdout: new PassThrough(),
       stderr: new PassThrough(),
       exited: new Promise<number>(() => {}),
@@ -619,7 +619,7 @@ describe("CliLanguageModel", () => {
       stdin: null,
     } as any)
 
-    const shellKill = spyOn(Shell, "killTree").mockResolvedValue()
+    const shellKill = vi.spyOn(Shell, "killTree").mockResolvedValue()
     const controller = new AbortController()
 
     try {

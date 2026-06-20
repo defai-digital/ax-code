@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { Module } from "@ax-code/util/module"
 import { Filesystem } from "../../src/util/filesystem"

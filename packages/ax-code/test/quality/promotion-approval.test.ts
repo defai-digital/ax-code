@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { QualityPromotionApproval } from "../../src/quality/promotion-approval"
 import { QualityPromotionDecisionBundle } from "../../src/quality/promotion-decision-bundle"
 import { QualityPromotionEligibility } from "../../src/quality/promotion-eligibility"

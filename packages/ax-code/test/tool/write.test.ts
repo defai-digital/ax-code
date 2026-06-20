@@ -1,4 +1,4 @@
-import { afterEach, describe, test, expect } from "bun:test"
+import { afterEach, describe, test, expect } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { WriteTool } from "../../src/tool/write"

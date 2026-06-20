@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
 
 async function getCallbackModule() {
-  mock.restore()
+  vi.restoreAllMocks()
   const module = await import("../../src/mcp/oauth-callback")
   return module.McpOAuthCallback
 }

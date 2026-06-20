@@ -1,9 +1,9 @@
-import { expect, test } from "bun:test"
+import { expect, test } from "vitest"
 import path from "path"
 
 test("github-agent configures git identity locally, not globally", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/github-agent/index.ts")).text()
-  const legacySrc = await Bun.file(path.join(import.meta.dir, "../../../integration-github/index.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/github-agent/index.ts")).text()
+  const legacySrc = await Bun.file(path.join(import.meta.dirname, "../../../integration-github/index.ts")).text()
 
   expect(src).toContain('gitRun(["config", "--local", "user.name", AGENT_USERNAME])')
   expect(src).toContain('gitRun(["config", "--local", "user.email", `${AGENT_USERNAME}@users.noreply.github.com`])')

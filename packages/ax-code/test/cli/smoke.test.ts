@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { eq } from "drizzle-orm"
 import path from "path"
 import { pathToFileURL } from "url"
@@ -12,7 +12,7 @@ import { Database } from "../../src/storage/db"
 import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
 
-const ROOT = path.join(import.meta.dir, "../..")
+const ROOT = path.join(import.meta.dirname, "../..")
 
 function cmd(...args: string[]) {
   return [process.execPath, "run", path.join(ROOT, "src", "index.ts"), ...args]

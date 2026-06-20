@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Shell } from "../../src/shell/shell"
@@ -52,7 +52,7 @@ describe("util.process", () => {
     setTimeout(() => abort.abort(), 25)
 
     const originalKillTree = Shell.killTree
-    const killTree = spyOn(Shell, "killTree").mockImplementation(async (proc, opts) => {
+    const killTree = vi.spyOn(Shell, "killTree").mockImplementation(async (proc, opts) => {
       return originalKillTree(proc, opts as any)
     })
 

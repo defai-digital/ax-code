@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 import { formatDebugReplayTimestamp } from "../../src/cli/cmd/debug/replay"
 

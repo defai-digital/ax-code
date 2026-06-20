@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import * as prompts from "@clack/prompts"
 import fs from "fs/promises"
 import path from "path"
@@ -25,7 +25,7 @@ afterEach(async () => {
   await Bun.write(authFile, "{}")
   await fs.unlink(authLockFile).catch(() => undefined)
   await Instance.disposeAll()
-  mock.restore()
+  vi.restoreAllMocks()
 })
 
 describe("providers command", () => {
@@ -38,9 +38,9 @@ describe("providers command", () => {
   })
 
   test("providers list reports saved credentials", async () => {
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
-    const infoSpy = spyOn(prompts.log, "info").mockImplementation(() => {})
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
 
     try {
       await Auth.set("xai", { type: "api", key: "sk-test" })
@@ -57,9 +57,9 @@ describe("providers command", () => {
   })
 
   test("providers list labels CLI credentials as cli", async () => {
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
-    const infoSpy = spyOn(prompts.log, "info").mockImplementation(() => {})
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
 
     try {
       await Auth.set("grok-build-cli", { type: "api", key: "cli" })
@@ -87,10 +87,10 @@ describe("providers command", () => {
   })
 
   test("providers logout accepts a provider argument without opening selector", async () => {
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
-    const selectSpy = spyOn(prompts, "select")
-    const invalidateSpy = spyOn(Provider, "invalidate").mockResolvedValue()
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const selectSpy = vi.spyOn(prompts, "select")
+    const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
 
     try {
       await Auth.set("gemini-cli", { type: "api", key: "cli" })
@@ -109,9 +109,9 @@ describe("providers command", () => {
   })
 
   test("providers logout fails fast in non-interactive mode without provider", async () => {
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
-    const selectSpy = spyOn(prompts, "select")
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const selectSpy = vi.spyOn(prompts, "select")
     const stdin = process.stdin as typeof process.stdin & { isTTY?: boolean }
     const originalIsTTY = stdin.isTTY
 
@@ -133,7 +133,7 @@ describe("providers command", () => {
   })
 
   test("CLI provider login reports probe failures as user-facing errors", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/providers.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/providers.ts")).text()
     expect(src).toContain("const result = await probeCliProvider(provider).catch((error) => {")
     expect(src).toContain("prompts.log.error(toErrorMessage(error))")
   })
@@ -150,10 +150,10 @@ describe("providers command", () => {
 
     globalThis.setTimeout = setTimeoutSpy as typeof globalThis.setTimeout
 
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
-    const confirmSpy = spyOn(prompts, "confirm").mockResolvedValue(true)
-    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const confirmSpy = vi.spyOn(prompts, "confirm").mockResolvedValue(true)
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
 
     const stdout = new PassThrough()
     const stderr = new PassThrough()
@@ -166,8 +166,8 @@ describe("providers command", () => {
 
     let killStarted = false
     let killCompleted = false
-    spyOn(Process, "spawn").mockReturnValue(proc as any)
-    spyOn(Process, "killProcessTree").mockImplementation(async () => {
+    vi.spyOn(Process, "spawn").mockReturnValue(proc as any)
+    vi.spyOn(Process, "killProcessTree").mockImplementation(async () => {
       killStarted = true
       await new Promise<void>((resolve) => {
         originalSetTimeout(() => {
@@ -177,8 +177,8 @@ describe("providers command", () => {
       })
     })
 
-    spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
-    spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+    vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
       ok: true,
       async json() {
         return {
@@ -207,24 +207,24 @@ describe("providers command", () => {
   })
 
   test("well-known login rejects empty auth command tokens", async () => {
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
-    const confirmSpy = spyOn(prompts, "confirm").mockResolvedValue(true)
-    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
-    const successSpy = spyOn(prompts.log, "success").mockImplementation(() => {})
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const confirmSpy = vi.spyOn(prompts, "confirm").mockResolvedValue(true)
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
 
     const stdout = new PassThrough()
     const stderr = new PassThrough()
     stdout.end(" \n")
     stderr.end()
 
-    spyOn(Process, "spawn").mockReturnValue({
+    vi.spyOn(Process, "spawn").mockReturnValue({
       exited: Promise.resolve(0),
       stdout,
       stderr,
     } as any)
-    spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
-    spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+    vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
       ok: true,
       async json() {
         return {
@@ -253,12 +253,12 @@ describe("providers command", () => {
   })
 
   test("well-known login treats URL schemes case-insensitively", async () => {
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
-    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
-    const passwordSpy = spyOn(prompts, "password").mockResolvedValue("should-not-prompt")
-    const assertSpy = spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
-    const fetchSpy = spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const passwordSpy = vi.spyOn(prompts, "password").mockResolvedValue("should-not-prompt")
+    const assertSpy = vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
       ok: true,
       async json() {
         return {
@@ -291,14 +291,14 @@ describe("providers command", () => {
   })
 
   test("well-known login rejects malformed auth command before prompting or spawning", async () => {
-    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
-    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
-    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
-    const confirmSpy = spyOn(prompts, "confirm")
-    const spawnSpy = spyOn(Process, "spawn")
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const confirmSpy = vi.spyOn(prompts, "confirm")
+    const spawnSpy = vi.spyOn(Process, "spawn")
 
-    spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
-    spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+    vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
       ok: true,
       async json() {
         return {

@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 
-const SYNC_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui/context/sync.tsx")
+const SYNC_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui/context/sync.tsx")
 
 describe("tui session risk sync url", () => {
   test("opts into all sidebar risk summaries", async () => {

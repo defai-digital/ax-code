@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { resolveDesktopHandoff, __internal } from "@/cli/cmd/tui/navigation/desktop-handoff"
 
 describe("resolveDesktopHandoff", () => {

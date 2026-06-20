@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { spawnExitsCleanly } from "../../src/mcp/discovery"
 
 describe("mcp.discovery spawnExitsCleanly", () => {

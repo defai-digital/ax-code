@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test"
+import { describe, expect, test, beforeEach } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
@@ -36,13 +36,13 @@ describe("LSPClient interop", () => {
   })
 
   test("registers close and error handlers for dead LSP connections", async () => {
-    const clientSrc = await Bun.file(path.join(import.meta.dir, "../../src/lsp/client.ts")).text()
+    const clientSrc = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/client.ts")).text()
     expect(clientSrc).toContain("connection.onClose")
     expect(clientSrc).toContain("connection.onError")
     expect(clientSrc).toContain("input.onClose?.")
     expect(clientSrc).toContain("get closed()")
 
-    const indexSrc = await Bun.file(path.join(import.meta.dir, "../../src/lsp/index.ts")).text()
+    const indexSrc = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/index.ts")).text()
     expect(indexSrc).toContain("onClose: () => {")
     expect(indexSrc).toContain("LSPBrokenServer.markBroken(s.broken, key)")
     expect(indexSrc).toContain("s.clients.splice(idx, 1)")
@@ -209,7 +209,7 @@ describe("LSPClient interop", () => {
   })
 
   test("starts diagnostics timeout only after didOpen or didChange is sent", async () => {
-    const clientSrc = await Bun.file(path.join(import.meta.dir, "../../src/lsp/client.ts")).text()
+    const clientSrc = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/client.ts")).text()
 
     expect(clientSrc).toContain("wait?.start()")
     expect(clientSrc).toContain("await wait?.promise")

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { PromptInfo } from "../../../../src/cli/cmd/tui/component/prompt/history"
 import { assign, strip } from "../../../../src/cli/cmd/tui/component/prompt/part"
 

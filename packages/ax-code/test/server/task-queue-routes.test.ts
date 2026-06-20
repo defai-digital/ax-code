@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
@@ -210,7 +210,7 @@ describe("task queue routes", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const commandSpy = spyOn(SessionPrompt, "command").mockImplementation(async () => {
+        const commandSpy = vi.spyOn(SessionPrompt, "command").mockImplementation(async () => {
           await new Promise<void>((resolve) => {
             releaseCommand = resolve
           })
@@ -259,7 +259,7 @@ describe("task queue routes", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (
           input: SessionPrompt.PromptInput,
         ) => {
           promptInputs.push(input)
@@ -320,13 +320,13 @@ describe("task queue routes", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const commandSpy = spyOn(SessionPrompt, "command").mockImplementation(async () => {
+        const commandSpy = vi.spyOn(SessionPrompt, "command").mockImplementation(async () => {
           await new Promise<void>((resolve) => {
             releaseCommand = resolve
           })
           return {} as any
         })
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (
           input: SessionPrompt.PromptInput,
         ) => {
           promptInputs.push(input)
@@ -389,7 +389,7 @@ describe("task queue routes", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (
           input: SessionPrompt.PromptInput,
         ) => {
           promptInputs.push(input)
@@ -451,13 +451,13 @@ describe("task queue routes", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const commandSpy = spyOn(SessionPrompt, "command").mockImplementation(async () => {
+        const commandSpy = vi.spyOn(SessionPrompt, "command").mockImplementation(async () => {
           await new Promise<void>((resolve) => {
             releaseCommand = resolve
           })
           return {} as any
         })
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (
           input: SessionPrompt.PromptInput,
         ) => {
           promptInputs.push(input)
@@ -520,7 +520,7 @@ describe("task queue routes", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("model failed"))
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("model failed"))
 
         try {
           const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "vitest"
 import { Patch } from "../../src/patch"
 import * as fs from "fs/promises"
 import * as path from "path"

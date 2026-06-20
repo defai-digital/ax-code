@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { normalizeDialogSessions } from "../../../src/cli/cmd/tui/component/session-list-data"
 
 function session(id: string) {

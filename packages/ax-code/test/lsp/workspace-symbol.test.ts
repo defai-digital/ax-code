@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
@@ -162,7 +162,7 @@ describe("LSP.workspaceSymbol", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
             fake: {
               command: [process.execPath, serverPath],

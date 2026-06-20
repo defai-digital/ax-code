@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { computeSessionMainPaneWidth, computeSidebarWidth } from "../../../src/cli/cmd/tui/routes/session/layout"
 
 describe("session layout", () => {

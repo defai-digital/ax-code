@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { formatCapabilityList } from "../../src/cli/cmd/capability"
 import type { Capability } from "../../src/capability"
 

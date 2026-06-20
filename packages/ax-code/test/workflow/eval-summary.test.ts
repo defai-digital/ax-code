@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { evaluateWorkflowRun } from "../../src/workflow/eval"

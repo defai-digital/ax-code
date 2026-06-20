@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { barChart, chip, donut, flow, gauge, stat, stepSummary } from "../../src/quality/dre-graph-widgets"
 
 describe("quality.dre-graph-widgets", () => {

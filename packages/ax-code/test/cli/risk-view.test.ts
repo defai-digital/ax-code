@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { RiskView } from "../../src/cli/cmd/risk"
 import { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
 

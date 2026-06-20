@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { TUI_RENDERER_CONTRACT, TUI_RENDERER_CONTRACT_REQUIRED_AREAS } from "../../../src/cli/cmd/tui/renderer-contract"
@@ -6,7 +6,7 @@ import { TUI_PERFORMANCE_CRITERIA } from "../../../src/cli/cmd/tui/performance-c
 import { resolveSessionFirstRoute } from "../../../src/cli/cmd/tui/navigation/launch-policy"
 import { resolveDesktopHandoff } from "../../../src/cli/cmd/tui/navigation/desktop-handoff"
 
-const SRC_ROOT = path.resolve(import.meta.dir, "../../../src")
+const SRC_ROOT = path.resolve(import.meta.dirname, "../../../src")
 const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
 const OPENTUI_RE = /(?:from\s+["'](?:@opentui\/|opentui-spinner)|import\s+["'](?:@opentui\/|opentui-spinner))/
 const SPINNER_SOLID_RE = /(?:from\s+["']opentui-spinner\/solid["']|import\s+["']opentui-spinner\/solid["'])/

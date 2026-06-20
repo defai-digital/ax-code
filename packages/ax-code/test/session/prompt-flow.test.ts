@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { APICallError } from "ai"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -84,9 +84,9 @@ describe("session.prompt flow", () => {
   test("persists text reply and survives instance reload", async () => {
     await using tmp = await tmpdir({ git: true })
 
-    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-    streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
       fullStream: (async function* () {
         yield { type: "start" }
         yield { type: "start-step" }
@@ -152,9 +152,9 @@ describe("session.prompt flow", () => {
     }
     const agents: string[] = []
 
-    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(tinyModel)
-    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-    streamSpy = spyOn(LLM, "stream").mockImplementation(async (input) => {
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(tinyModel)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
       agents.push(input.agent.name)
       const text = input.agent.name === "compaction" ? "compact summary" : "after compact"
       return {
@@ -218,9 +218,9 @@ describe("session.prompt flow", () => {
       isRetryable: false,
     })
 
-    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-    streamSpy = spyOn(LLM, "stream").mockImplementation(async (input) => {
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
       agents.push(input.agent.name)
       if (input.agent.name !== "compaction") throw contextOverflow
       return {
@@ -266,23 +266,23 @@ describe("session.prompt flow", () => {
   test("defers automatic indexing until after the prompt completes", async () => {
     await using tmp = await tmpdir({ git: true })
 
-    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-    codeStatusSpy = spyOn(CodeIntelligence, "status").mockReturnValue({
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    codeStatusSpy = vi.spyOn(CodeIntelligence, "status").mockReturnValue({
       projectID: "proj_test" as any,
       lastCommitSha: null,
       nodeCount: 0,
       edgeCount: 0,
       lastUpdated: null,
     })
-    startWatcherSpy = spyOn(CodeIntelligence, "startWatcher").mockImplementation(() => {})
+    startWatcherSpy = vi.spyOn(CodeIntelligence, "startWatcher").mockImplementation(() => {})
 
     let promptResolved = false
-    autoIndexSpy = spyOn(AutoIndex, "maybeStart").mockImplementation(() => {
+    autoIndexSpy = vi.spyOn(AutoIndex, "maybeStart").mockImplementation(() => {
       expect(promptResolved).toBe(true)
     })
 
-    streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+    streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
       fullStream: (async function* () {
         yield { type: "start" }
         yield { type: "start-step" }
@@ -339,9 +339,9 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
         fullStream: (async function* () {
           yield { type: "start" }
           yield { type: "start-step" }
@@ -430,9 +430,9 @@ describe("session.prompt flow", () => {
     try {
       let sessionID: SessionID | undefined
       let call = 0
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
         call++
         if (call === 2 && sessionID) {
           Todo.update({
@@ -521,9 +521,9 @@ describe("session.prompt flow", () => {
     try {
       let sessionID: SessionID | undefined
       let call = 0
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
         call++
         if (call === 4 && sessionID) {
           Todo.update({
@@ -582,15 +582,15 @@ describe("session.prompt flow", () => {
   test("persists tool and patch parts for a tool-using step", async () => {
     await using tmp = await tmpdir({ git: true })
 
-    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-    trackSpy = spyOn(Snapshot, "track").mockResolvedValue("snap-1")
-    patchSpy = spyOn(Snapshot, "patch").mockResolvedValue({
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValue("snap-1")
+    patchSpy = vi.spyOn(Snapshot, "patch").mockResolvedValue({
       hash: "snap-1",
       files: [path.join(tmp.path, "src/file.ts")],
     })
     let call = 0
-    streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
       call++
       if (call === 1) {
         return {
@@ -672,8 +672,8 @@ describe("session.prompt flow", () => {
   test("persists partial assistant text on cancel and allows later recovery", async () => {
     await using tmp = await tmpdir({ git: true })
 
-    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
 
     let call = 0
     let readyResolve!: () => void
@@ -681,7 +681,7 @@ describe("session.prompt flow", () => {
       readyResolve = resolve
     })
 
-    streamSpy = spyOn(LLM, "stream").mockImplementation(async (input) => {
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
       call++
       if (call === 1) {
         return {
@@ -773,11 +773,11 @@ describe("session.prompt flow", () => {
     process.env.AX_CODE_AUTONOMOUS = "false"
     await using tmp = await tmpdir({ git: true })
 
-    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
 
     let call = 0
-    streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
       call++
       if (call === 1) {
         return {
@@ -866,12 +866,12 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
 
       // Gate: blocked first two calls, then allow on third
       let gateCallCount = 0
-      gateSpy = spyOn(AutonomousCompletionGate, "evaluate").mockImplementation(() => {
+      gateSpy = vi.spyOn(AutonomousCompletionGate, "evaluate").mockImplementation(() => {
         gateCallCount++
         if (gateCallCount <= 2) {
           return {
@@ -885,7 +885,7 @@ describe("session.prompt flow", () => {
         return { status: "allow" }
       })
 
-      streamSpy = spyOn(LLM, "stream").mockImplementation(
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(
         async () =>
           ({
             fullStream: (async function* () {
@@ -947,11 +947,11 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
 
       // Gate always blocks with the same signature (no new empty result between retries)
-      gateSpy = spyOn(AutonomousCompletionGate, "evaluate").mockReturnValue({
+      gateSpy = vi.spyOn(AutonomousCompletionGate, "evaluate").mockReturnValue({
         status: "blocked",
         reason: "empty_subagent_result",
         signature: "empty:call_1:ses_stuck:task",
@@ -959,7 +959,7 @@ describe("session.prompt flow", () => {
         emptyResult: { callID: "call_1", taskID: "ses_stuck", description: "task" },
       })
 
-      streamSpy = spyOn(LLM, "stream").mockImplementation(
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(
         async () =>
           ({
             fullStream: (async function* () {
@@ -1016,15 +1016,15 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue({
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue({
         ...model,
         capabilities: {
           ...model.capabilities,
           toolcall: false,
         },
       })
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      streamSpy = spyOn(LLM, "stream").mockImplementation(
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(
         async () =>
           ({
             fullStream: (async function* () {
@@ -1109,16 +1109,16 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      trackSpy = spyOn(Snapshot, "track").mockResolvedValue("snap-1")
-      patchSpy = spyOn(Snapshot, "patch").mockResolvedValue({
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValue("snap-1")
+      patchSpy = vi.spyOn(Snapshot, "patch").mockResolvedValue({
         hash: "snap-1",
         files: [path.join(tmp.path, "src/file.ts")],
       })
 
       let call = 0
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
         call++
         if (call === 1) {
           return {
@@ -1230,16 +1230,16 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      trackSpy = spyOn(Snapshot, "track").mockResolvedValue("snap-1")
-      patchSpy = spyOn(Snapshot, "patch").mockResolvedValue({
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValue("snap-1")
+      patchSpy = vi.spyOn(Snapshot, "patch").mockResolvedValue({
         hash: "snap-1",
         files: [path.join(tmp.path, "src/file.ts")],
       })
 
       let call = 0
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
         call++
         if (call === 1) {
           return {
@@ -1349,16 +1349,16 @@ describe("session.prompt flow", () => {
     try {
       let sessionID: SessionID | undefined
       const agents: string[] = []
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      trackSpy = spyOn(Snapshot, "track").mockResolvedValue("snap-1")
-      patchSpy = spyOn(Snapshot, "patch").mockResolvedValue({
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValue("snap-1")
+      patchSpy = vi.spyOn(Snapshot, "patch").mockResolvedValue({
         hash: "snap-1",
         files: [path.join(tmp.path, "src/file.ts")],
       })
 
       let call = 0
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async (input) => {
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
         agents.push(input.agent.name)
         call++
         if (call === 3 && sessionID) {
@@ -1462,9 +1462,9 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      streamSpy = spyOn(LLM, "stream").mockImplementation(
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(
         async () =>
           ({
             fullStream: (async function* () {
@@ -1542,9 +1542,9 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      streamSpy = spyOn(LLM, "stream").mockImplementation(
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(
         async () =>
           ({
             fullStream: (async function* () {

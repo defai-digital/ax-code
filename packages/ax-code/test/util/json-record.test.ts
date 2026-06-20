@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeJsonRecord, parseJsonRecord } from "../../src/util/json-record"
 
 describe("util.json-record", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { detectCycle, type RingEntry } from "../../src/session/cycle-detection"
 
 const e = (tool: string, input: string = "{}"): RingEntry => ({ tool, input })

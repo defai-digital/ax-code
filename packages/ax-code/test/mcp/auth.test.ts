@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Global } from "../../src/global"

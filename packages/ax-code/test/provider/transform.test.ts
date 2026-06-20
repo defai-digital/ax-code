@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { ProviderTransform } from "../../src/provider/transform"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 

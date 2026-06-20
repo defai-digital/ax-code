@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, spyOn } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -43,7 +43,7 @@ describe("audit bug fixes", () => {
 
         const err = new Error("simulated crash")
         err.name = "LspCrashError"
-        spies.push(spyOn(LSP, "workspaceSymbolEnvelope").mockRejectedValue(err))
+        spies.push(vi.spyOn(LSP, "workspaceSymbolEnvelope").mockRejectedValue(err))
 
         const tool = await LspTool.init()
         await expect(
@@ -78,9 +78,9 @@ describe("audit bug fixes", () => {
 
         const err = new Error("doc symbol crash")
         err.name = "DocSymbolError"
-        spies.push(spyOn(LSP, "documentSymbolEnvelope").mockRejectedValue(err))
-        spies.push(spyOn(LSP, "hasClients").mockResolvedValue(true))
-        spies.push(spyOn(LSP, "touchFile").mockResolvedValue(1 as any))
+        spies.push(vi.spyOn(LSP, "documentSymbolEnvelope").mockRejectedValue(err))
+        spies.push(vi.spyOn(LSP, "hasClients").mockResolvedValue(true))
+        spies.push(vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as any))
 
         const file = `${tmp.path}/demo.ts`
         await Bun.write(file, "export const x = 1\n")

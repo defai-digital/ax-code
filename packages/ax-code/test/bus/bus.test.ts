@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import z from "zod"
 import { Bus } from "../../src/bus"
 import { BusEvent } from "../../src/bus/bus-event"

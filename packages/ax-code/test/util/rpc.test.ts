@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { EventEmitter } from "node:events"
 import { Rpc } from "../../src/util/rpc"
 

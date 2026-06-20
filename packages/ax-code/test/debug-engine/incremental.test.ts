@@ -1,5 +1,5 @@
 import { $ } from "bun"
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { Incremental } from "../../src/debug-engine"
 import { Instance } from "../../src/project/instance"

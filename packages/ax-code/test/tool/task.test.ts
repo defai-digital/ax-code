@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -127,7 +127,7 @@ describe("tool.task", () => {
         const controller = new AbortController()
         controller.abort()
 
-        const promptSpy = spyOn(SessionPrompt, "prompt")
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt")
         const tool = await TaskTool.init()
 
         try {
@@ -202,7 +202,7 @@ describe("tool.task", () => {
         // Session.get is a callable namespace with attached `force` and
         // `schema` properties. spyOn's mockImplementation infers a plain
         // function type, so cast to any.
-        const getSpy = spyOn(Session, "get").mockImplementation((async (...args: Parameters<typeof originalGet>) => {
+        const getSpy = vi.spyOn(Session, "get").mockImplementation((async (...args: Parameters<typeof originalGet>) => {
           const result = await originalGet(...args)
           if (result?.id === root.id) {
             await new Promise((resolve) => setTimeout(resolve, 10))
@@ -211,7 +211,7 @@ describe("tool.task", () => {
           return result
         }) as any)
 
-        const promptSpy = spyOn(SessionPrompt, "prompt")
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt")
         try {
           await expect(
             (await TaskTool.init()).execute(
@@ -280,14 +280,14 @@ describe("tool.task", () => {
 
         const controller = new AbortController()
         const originalGet = MessageV2.get
-        const getSpy = spyOn(MessageV2, "get").mockImplementation((async (...args: Parameters<typeof originalGet>) => {
+        const getSpy = vi.spyOn(MessageV2, "get").mockImplementation((async (...args: Parameters<typeof originalGet>) => {
           setTimeout(() => controller.abort(), 0)
           await new Promise((resolve) => setTimeout(resolve, 10))
           return originalGet(...args)
         }) as any)
 
-        const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
-        const promptSpy = spyOn(SessionPrompt, "prompt")
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt")
         try {
           await expect(
             (await TaskTool.init()).execute(
@@ -358,7 +358,7 @@ describe("tool.task", () => {
         } as MessageV2.Assistant)
 
         let calls = 0
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
           calls++
           return {
             info: {
@@ -445,7 +445,7 @@ describe("tool.task", () => {
         } as MessageV2.Assistant)
 
         let calls = 0
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
           calls++
           if (calls === 1) {
             return {
@@ -460,7 +460,7 @@ describe("tool.task", () => {
           }
           throw new Error("Subagent finalization timed out after 2 minutes")
         }) as any)
-        const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
 
         try {
           const result = await (
@@ -541,11 +541,11 @@ describe("tool.task", () => {
           time: { created: Date.now() },
         } as MessageV2.Assistant)
 
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
           throw new Error("Subagent timed out after 10 minutes — provider may be unresponsive")
         }) as any)
-        const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
-        const removeSpy = spyOn(Session, "remove")
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+        const removeSpy = vi.spyOn(Session, "remove")
 
         try {
           const result = await (
@@ -632,11 +632,11 @@ describe("tool.task", () => {
           time: { created: Date.now() },
         } as MessageV2.Assistant)
 
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
           throw new DOMException("Aborted", "AbortError")
         }) as any)
-        const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
-        const removeSpy = spyOn(Session, "remove").mockResolvedValue(undefined as never)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+        const removeSpy = vi.spyOn(Session, "remove").mockResolvedValue(undefined as never)
 
         try {
           await expect(
@@ -706,7 +706,7 @@ describe("tool.task", () => {
           time: { created: Date.now() },
         } as MessageV2.Assistant)
 
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue({
           info: {
             id: MessageID.ascending(),
             sessionID: parent.id,

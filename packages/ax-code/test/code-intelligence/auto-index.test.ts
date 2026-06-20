@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { AutoIndex } from "../../src/code-intelligence/auto-index"
 import { CodeIntelligence } from "../../src/code-intelligence"
@@ -31,12 +31,12 @@ afterEach(() => {
 describe("AutoIndex.maybeStart", () => {
   test("runs with fallback concurrency when the native index addon is unavailable", async () => {
     await using tmp = await tmpdir()
-    nativeIndexSpy = spyOn(NativeAddon, "index").mockReturnValue(undefined)
-    countNodesSpy = spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
-    filesSpy = spyOn(Ripgrep, "files").mockImplementation(async function* () {
+    nativeIndexSpy = vi.spyOn(NativeAddon, "index").mockReturnValue(undefined)
+    countNodesSpy = vi.spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
+    filesSpy = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
       yield "src/example.ts"
     })
-    indexFilesSpy = spyOn(CodeIntelligence, "indexFiles").mockResolvedValue({
+    indexFilesSpy = vi.spyOn(CodeIntelligence, "indexFiles").mockResolvedValue({
       nodes: 1,
       edges: 0,
       files: 1,
@@ -91,13 +91,13 @@ describe("AutoIndex.maybeStart", () => {
   test("marks the observable index state failed when every candidate file fails", async () => {
     await using tmp = await tmpdir()
     const projectID = ProjectID.make("proj_auto_index_all_failed")
-    nativeIndexSpy = spyOn(NativeAddon, "index").mockReturnValue(undefined)
-    countNodesSpy = spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
-    filesSpy = spyOn(Ripgrep, "files").mockImplementation(async function* () {
+    nativeIndexSpy = vi.spyOn(NativeAddon, "index").mockReturnValue(undefined)
+    countNodesSpy = vi.spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
+    filesSpy = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
       yield "src/first.ts"
       yield "src/second.ts"
     })
-    indexFilesSpy = spyOn(CodeIntelligence, "indexFiles").mockResolvedValue({
+    indexFilesSpy = vi.spyOn(CodeIntelligence, "indexFiles").mockResolvedValue({
       nodes: 0,
       edges: 0,
       files: 0,
@@ -149,12 +149,12 @@ describe("AutoIndex.maybeStart", () => {
   test("keeps a visible status when auto-index skips because another process holds the lock", async () => {
     await using tmp = await tmpdir()
     const projectID = ProjectID.make("proj_auto_index_lock_held")
-    nativeIndexSpy = spyOn(NativeAddon, "index").mockReturnValue(undefined)
-    countNodesSpy = spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
-    filesSpy = spyOn(Ripgrep, "files").mockImplementation(async function* () {
+    nativeIndexSpy = vi.spyOn(NativeAddon, "index").mockReturnValue(undefined)
+    countNodesSpy = vi.spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
+    filesSpy = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
       yield "src/example.ts"
     })
-    indexFilesSpy = spyOn(CodeIntelligence, "indexFiles").mockRejectedValue(
+    indexFilesSpy = vi.spyOn(CodeIntelligence, "indexFiles").mockRejectedValue(
       new CodeIntelligence.LockHeldError(projectID),
     )
 
@@ -191,9 +191,9 @@ describe("AutoIndex.maybeStart", () => {
     await using tmp = await tmpdir()
     const projectID = ProjectID.make("proj_auto_index_completed_empty")
     const indexedAt = Date.now() - 1_000
-    nativeIndexSpy = spyOn(NativeAddon, "index").mockReturnValue(undefined)
-    countNodesSpy = spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
-    getCursorSpy = spyOn(CodeGraphQuery, "getCursor").mockReturnValue({
+    nativeIndexSpy = vi.spyOn(NativeAddon, "index").mockReturnValue(undefined)
+    countNodesSpy = vi.spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
+    getCursorSpy = vi.spyOn(CodeGraphQuery, "getCursor").mockReturnValue({
       project_id: projectID,
       commit_sha: null,
       node_count: 0,
@@ -201,10 +201,10 @@ describe("AutoIndex.maybeStart", () => {
       time_created: indexedAt,
       time_updated: indexedAt,
     })
-    filesSpy = spyOn(Ripgrep, "files").mockImplementation(async function* () {
+    filesSpy = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
       yield "src/example.ts"
     })
-    indexFilesSpy = spyOn(CodeIntelligence, "indexFiles").mockResolvedValue({
+    indexFilesSpy = vi.spyOn(CodeIntelligence, "indexFiles").mockResolvedValue({
       nodes: 1,
       edges: 0,
       files: 1,

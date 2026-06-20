@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { NativeAddon } from "../../src/native/addon"
 
 const nativeStoreModule = "../../src/code-intelligence/native-store.ts" + "?native-store-unit"
@@ -35,15 +35,15 @@ describe("code-intelligence.native-store", () => {
         throw closeFailure
       }
     }
-    nativeIndexSpy = spyOn(NativeAddon, "index")
+    nativeIndexSpy = vi.spyOn(NativeAddon, "index")
     nativeIndexSpy.mockReturnValue({
       IndexStore: TestIndexStore,
     } as unknown as ReturnType<typeof NativeAddon.index>)
 
     const isolatedModule = "../../src/code-intelligence/native-store.ts" + "?native-store-close-unprintable"
-    const { NativeStore: IsolatedNativeStore } = (await import(isolatedModule)) as typeof import(
-      "../../src/code-intelligence/native-store"
-    )
+    const { NativeStore: IsolatedNativeStore } = (await import(
+      isolatedModule
+    )) as typeof import("../../src/code-intelligence/native-store")
 
     IsolatedNativeStore.insertNodes([])
 

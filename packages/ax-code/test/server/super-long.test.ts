@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -179,11 +179,14 @@ describe("super-long route", () => {
           expect(putSuperLong.status).toBe(200)
           expect(await putSuperLong.json()).toEqual({ enabled: false })
 
-          const putAutonomous = await Server.Default().request(`/autonomous?directory=${encodeURIComponent(tmp.path)}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ enabled: "true" }),
-          })
+          const putAutonomous = await Server.Default().request(
+            `/autonomous?directory=${encodeURIComponent(tmp.path)}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ enabled: "true" }),
+            },
+          )
           expect(putAutonomous.status).toBe(200)
           expect(await putAutonomous.json()).toEqual({ enabled: true })
 

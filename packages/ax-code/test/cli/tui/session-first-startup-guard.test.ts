@@ -5,7 +5,7 @@
 // the launch policy must produce a non-home decision whenever recent sessions
 // are available, ensuring the TUI does not remain on the home route.
 
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { resolveSessionFirstRoute, type TuiLaunchDecision } from "@/cli/cmd/tui/navigation/launch-policy"
 
 /**

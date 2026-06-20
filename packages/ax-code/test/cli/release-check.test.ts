@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { chmod, mkdtemp, writeFile, mkdir } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -83,7 +83,7 @@ describe("release check command (legacy surface)", () => {
   })
 
   test("passes for the ax-code package", async () => {
-    const checks = await releaseReadinessChecks(path.resolve(import.meta.dir, "../.."))
+    const checks = await releaseReadinessChecks(path.resolve(import.meta.dirname, "../.."))
 
     expect(checks).toContainEqual({ name: "package name", status: "pass", details: "ax-code" })
     expect(checks.find((check) => check.name === "package version")?.status).toBe("pass")

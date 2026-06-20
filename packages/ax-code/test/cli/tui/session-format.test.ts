@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { detail, diagnostics, filetype, normalize, workdir } from "../../../src/cli/cmd/tui/routes/session/format"
 
 describe("tui session format", () => {

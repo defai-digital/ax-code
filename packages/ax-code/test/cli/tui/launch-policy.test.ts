@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { resolveSessionFirstRoute, type TuiLaunchInput } from "@/cli/cmd/tui/navigation/launch-policy"
 
 describe("resolveSessionFirstRoute", () => {

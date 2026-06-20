@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseSyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
 
 describe("tui synced session risk parser", () => {

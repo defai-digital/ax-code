@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test"
+import { test, expect } from "vitest"
 import { Wildcard } from "../../src/util/wildcard"
 
 test("match handles glob tokens", () => {

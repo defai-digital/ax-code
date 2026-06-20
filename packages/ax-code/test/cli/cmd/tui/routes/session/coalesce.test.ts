@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { coalesceParts } from "@/cli/cmd/tui/routes/session/coalesce"
 import type { Part, ToolPart } from "@ax-code/sdk/v2"
 

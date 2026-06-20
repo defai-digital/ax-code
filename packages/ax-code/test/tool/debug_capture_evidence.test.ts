@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { DebugCaptureEvidenceTool } from "../../src/tool/debug_capture_evidence"
 import { DebugPlanInstrumentationTool } from "../../src/tool/debug_plan_instrumentation"

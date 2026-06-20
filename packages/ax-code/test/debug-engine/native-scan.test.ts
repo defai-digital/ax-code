@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 describe("debug-engine native scan", () => {
   test("decodes native scan output with explicit schemas", async () => {

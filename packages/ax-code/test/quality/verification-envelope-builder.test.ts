@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { DebugEngine } from "../../src/debug-engine"
 import { fromRefactorApplyResult, fromVerificationCommandResult } from "../../src/quality/verification-envelope-builder"
 import { VerificationEnvelopeSchema } from "../../src/quality/verification-envelope"

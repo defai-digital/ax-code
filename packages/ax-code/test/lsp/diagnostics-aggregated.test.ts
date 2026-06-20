@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { LSP } from "../../src/lsp"
 import { Diagnostic, aggregate, aggregateEnvelope, collect } from "../../src/lsp/diagnostics"
 import { Log } from "../../src/util/log"

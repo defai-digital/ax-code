@@ -1,11 +1,11 @@
-import { test, expect, mock, beforeEach, afterAll, spyOn } from "bun:test"
+import { test, expect, beforeEach, afterAll, vi } from "vitest"
 import { EventEmitter } from "events"
 
 // Track open() calls and control failure behavior
 let openShouldFail = false
 let openCalledWith: string | undefined
 
-mock.module("open", () => ({
+vi.mock("open", () => ({
   default: async (url: string) => {
     openCalledWith = url
 
@@ -37,7 +37,7 @@ const transportCalls: Array<{
 }> = []
 
 // Mock the transport constructors
-mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTP {
     url: string
     authProvider: { redirectToAuthorization?: (url: URL) => Promise<void> } | undefined
@@ -63,7 +63,7 @@ mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   },
 }))
 
-mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => ({
   SSEClientTransport: class MockSSE {
     constructor(url: URL) {
       transportCalls.push({
@@ -79,7 +79,7 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
 }))
 
 // Mock the MCP SDK Client to trigger OAuth flow
-mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
     async connect(transport: { start: () => Promise<void> }) {
       await transport.start()
@@ -88,7 +88,7 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
 }))
 
 // Mock UnauthorizedError in the auth module
-mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
+vi.mock("@modelcontextprotocol/sdk/client/auth.js", () => ({
   UnauthorizedError: MockUnauthorizedError,
 }))
 
@@ -112,18 +112,18 @@ const originalAssertPublicUrl = Ssrf.assertPublicUrl
 afterAll(async () => {
   Ssrf.assertPublicUrl = originalAssertPublicUrl
   await McpOAuthCallback.stop()
-  mock.restore()
+  vi.restoreAllMocks()
 })
 
-const ensureSpy = spyOn(McpOAuthCallback, "ensureRunning")
-const waitSpy = spyOn(McpOAuthCallback, "waitForCallback")
-const stopSpy = spyOn(McpOAuthCallback, "stop")
+const ensureSpy = vi.spyOn(McpOAuthCallback, "ensureRunning")
+const waitSpy = vi.spyOn(McpOAuthCallback, "waitForCallback")
+const stopSpy = vi.spyOn(McpOAuthCallback, "stop")
 
 let rejectAuth: ((error: Error) => void) | undefined
 
 beforeEach(() => {
   rejectAuth = undefined
-  Ssrf.assertPublicUrl = mock(async () => {})
+  Ssrf.assertPublicUrl = vi.fn(async () => {})
   ensureSpy.mockResolvedValue(undefined)
   waitSpy.mockImplementation(
     () =>

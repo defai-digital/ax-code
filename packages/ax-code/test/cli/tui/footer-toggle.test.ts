@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { footerToggleLabel } from "../../../src/cli/cmd/tui/component/prompt/footer-toggle"
 
 describe("footerToggleLabel", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { dispatch, type DispatchExecutor, type DispatchSpec, type DispatcherEventSink } from "../../src/dispatch"
 
 const spec = (agent: string, prompt = "do thing", overrides: Partial<DispatchSpec> = {}): DispatchSpec => ({

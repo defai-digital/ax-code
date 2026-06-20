@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -142,7 +142,7 @@ describe("session messages endpoint", () => {
 
 describe("session.prompt_async error handling", () => {
   const extractRoute = async (startMarker: string, endMarker: string) => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/session.ts")).text()
     const start = src.indexOf(startMarker)
     const end = src.indexOf(endMarker, start)
     expect(start).toBeGreaterThan(-1)
@@ -151,7 +151,7 @@ describe("session.prompt_async error handling", () => {
   }
 
   const extractFrom = async (relativePath: string, startMarker: string, endMarker: string) => {
-    const src = await Bun.file(path.join(import.meta.dir, relativePath)).text()
+    const src = await Bun.file(path.join(import.meta.dirname, relativePath)).text()
     const start = src.indexOf(startMarker)
     const end = src.indexOf(endMarker, start)
     expect(start).toBeGreaterThan(-1)
@@ -172,7 +172,7 @@ describe("session.prompt_async error handling", () => {
     expect(handler).toContain("await TaskQueueExecutor.start(queueItem)")
     expect(handler).toContain("return c.body(null, 202)")
     // The deleted inline implementation must not linger.
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/session.ts")).text()
     expect(src).not.toContain("function startDetachedSessionTask")
     expect(src).not.toContain("function startObservedAsyncSessionTask")
   })
@@ -225,7 +225,7 @@ describe("session.prompt_async error handling", () => {
   })
 
   test("destructive session routes require current project ownership", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/session.ts")).text()
     const deleteStart = src.indexOf('.delete(\n      "/:sessionID"')
     const deleteEnd = src.indexOf(".patch(", deleteStart)
     expect(deleteStart).toBeGreaterThan(-1)
@@ -240,7 +240,7 @@ describe("session.prompt_async error handling", () => {
   })
 
   test("session detail routes require current project ownership", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/session.ts")).text()
     expect(src).not.toContain("parseExistingSessionID")
 
     for (const route of [
@@ -286,7 +286,7 @@ describe("session.deleteMessage queue gate", () => {
   })
 
   test("structural: skips busy gate only when the target is missing or an unpicked user", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/session.ts")).text()
     // The relaxed gate must (a) bail when target is undefined, and (b)
     // only allow user messages with no assistant child to bypass busy.
     expect(src).toContain('m.info.role === "assistant" && m.info.parentID === params.messageID')

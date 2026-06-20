@@ -1,5 +1,5 @@
 import { NamedError } from "@ax-code/util/error"
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import os from "os"
 import path from "path"
 import z from "zod"
@@ -337,7 +337,7 @@ describe("cli.boot.fatal", () => {
 
 describe("cli.boot.forced-exit", () => {
   test("uncaught exception flush timer stays referenced", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/boot.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/boot.ts")).text()
     const start = src.indexOf("function onUncaughtException")
     const end = src.indexOf("\n}\n\nexport function clearForcedExitTimer", start)
     expect(start).toBeGreaterThan(-1)
@@ -349,7 +349,7 @@ describe("cli.boot.forced-exit", () => {
   })
 
   test("clears the prior forced-exit timer before scheduling another", () => {
-    const clearSpy = spyOn(globalThis, "clearTimeout")
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout")
     const first = scheduleForcedExit(() => {})
     const second = scheduleForcedExit(() => {})
 

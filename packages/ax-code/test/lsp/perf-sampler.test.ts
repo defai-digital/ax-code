@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
 import { recordSample } from "../../src/lsp/perf"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
-import { spyOn } from "bun:test"
+import { spyOn } from "vitest"
 import path from "path"
 
 Log.init({ print: false })
@@ -28,7 +28,7 @@ describe("LSP.perfSnapshot", () => {
         // No servers configured: workspaceSymbol short-circuits via the
         // `empty` envelope branch but still runs through `metered()`, so
         // the sampler sees one `ok` call for that operation.
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         LSP.perfReset()
         await LSP.workspaceSymbol("anything")
@@ -52,7 +52,7 @@ describe("LSP.perfSnapshot", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         await LSP.workspaceSymbol("seed")
         expect(Object.keys(LSP.perfSnapshot()).length).toBeGreaterThan(0)
@@ -120,13 +120,13 @@ describe("LSP.perfSnapshot", () => {
   test("captures cold-start subphases for touch", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    const serverPath = path.join(import.meta.dir, "..", "fixture", "lsp", "fake-lsp-server.js")
+    const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
     await Bun.write(file, "export const demo = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
             fake: {
               command: [process.execPath, serverPath],

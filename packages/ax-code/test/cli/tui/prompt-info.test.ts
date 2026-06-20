@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parsePromptInfo, parsePromptInfoList } from "../../../src/cli/cmd/tui/component/prompt/prompt-info"
 
 describe("tui prompt info decoding", () => {

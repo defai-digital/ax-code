@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Planner, type PhaseResult } from "../../src/planner"
 
 describe("planner.execute", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 import { buildIndexReport } from "../../src/cli/cmd/index-graph"
 import { diagnoseLsp, stat, summarize } from "../../src/cli/cmd/debug/perf"

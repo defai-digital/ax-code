@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { GlobalBus } from "../../src/bus/global"
 import { Snapshot } from "../../src/snapshot"
@@ -25,7 +25,7 @@ describe("project.initGit endpoint", () => {
       seen.push(evt)
     }
     const reload = Instance.reload
-    const reloadSpy = spyOn(Instance, "reload").mockImplementation((input) => reload(input))
+    const reloadSpy = vi.spyOn(Instance, "reload").mockImplementation((input) => reload(input))
     GlobalBus.on("event", fn)
 
     try {
@@ -82,7 +82,7 @@ describe("project.initGit endpoint", () => {
       seen.push(evt)
     }
     const reload = Instance.reload
-    const reloadSpy = spyOn(Instance, "reload").mockImplementation((input) => reload(input))
+    const reloadSpy = vi.spyOn(Instance, "reload").mockImplementation((input) => reload(input))
     GlobalBus.on("event", fn)
 
     try {
@@ -129,7 +129,7 @@ describe("project.initGit endpoint", () => {
       seen.push(evt)
     }
     const reload = Instance.reload
-    const reloadSpy = spyOn(Instance, "reload").mockImplementation((input) => reload(input))
+    const reloadSpy = vi.spyOn(Instance, "reload").mockImplementation((input) => reload(input))
     GlobalBus.on("event", fn)
 
     try {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { WorkspaceID } from "../../src/control-plane/schema"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
@@ -11,7 +11,7 @@ import * as adaptors from "../../src/control-plane/adaptors"
 import type { Adaptor } from "../../src/control-plane/types"
 
 afterEach(async () => {
-  mock.restore()
+  vi.restoreAllMocks()
   await resetDatabase()
   adaptors.removeAdaptor("testing")
 })

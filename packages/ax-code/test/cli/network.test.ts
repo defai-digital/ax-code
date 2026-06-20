@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Config } from "../../src/config/config"
 import { isLocalhostOnly, resolveNetworkOptions, type NetworkOptions } from "../../src/cli/network"
 
@@ -25,7 +25,7 @@ describe("resolveNetworkOptions explicit-flag detection", () => {
   test("equals form --port=N wins over a configured port", async () => {
     // Regression: process.argv.includes("--port") never matched the equals
     // form, so an explicit --port=4096 was silently overridden by config.
-    configSpy = spyOn(Config, "global").mockResolvedValue({ server: { port: 9999 } } as any)
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({ server: { port: 9999 } } as any)
     process.argv = ["bun", "ax-code", "serve", "--port=4096"]
 
     const result = await resolveNetworkOptions(defaults({ port: 4096 }))
@@ -34,7 +34,7 @@ describe("resolveNetworkOptions explicit-flag detection", () => {
   })
 
   test("space form --port N wins over a configured port", async () => {
-    configSpy = spyOn(Config, "global").mockResolvedValue({ server: { port: 9999 } } as any)
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({ server: { port: 9999 } } as any)
     process.argv = ["bun", "ax-code", "serve", "--port", "4096"]
 
     const result = await resolveNetworkOptions(defaults({ port: 4096 }))
@@ -43,7 +43,7 @@ describe("resolveNetworkOptions explicit-flag detection", () => {
   })
 
   test("no --port flag falls back to the configured port", async () => {
-    configSpy = spyOn(Config, "global").mockResolvedValue({ server: { port: 9999 } } as any)
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({ server: { port: 9999 } } as any)
     process.argv = ["bun", "ax-code", "serve"]
 
     const result = await resolveNetworkOptions(defaults({ port: 0 }))
@@ -52,7 +52,7 @@ describe("resolveNetworkOptions explicit-flag detection", () => {
   })
 
   test("equals form --hostname=X wins over a configured hostname", async () => {
-    configSpy = spyOn(Config, "global").mockResolvedValue({ server: { hostname: "10.0.0.1" } } as any)
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({ server: { hostname: "10.0.0.1" } } as any)
     process.argv = ["bun", "ax-code", "serve", "--hostname=0.0.0.0"]
 
     const result = await resolveNetworkOptions(defaults({ hostname: "0.0.0.0" }))

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { WorkflowFixtureSpecs, WorkflowRun, WorkflowScheduler, parseWorkflowSpecV1 } from "../../src/workflow"
 import { summarizeWorkflowRunDetail } from "../../src/workflow/projection"

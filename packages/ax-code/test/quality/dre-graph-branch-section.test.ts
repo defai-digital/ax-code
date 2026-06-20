@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { branchSection } from "../../src/quality/dre-graph-branch-section"
 import type { SessionBranchRank } from "../../src/session/branch"
 

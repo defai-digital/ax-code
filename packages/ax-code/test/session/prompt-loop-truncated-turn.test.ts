@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { handlePromptLoopTruncatedTurn } from "../../src/session/prompt-loop-truncated-turn"
 import { MessageID, SessionID } from "../../src/session/schema"

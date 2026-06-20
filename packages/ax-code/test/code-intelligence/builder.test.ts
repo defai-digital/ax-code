@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { pathToFileURL } from "url"
 import { tmpdir } from "../fixture/fixture"
@@ -204,8 +204,8 @@ describe("builder.indexFile same-file edge resolution", () => {
         )
 
         const uri = pathToFileURL(filePath).href
-        const touchSpy = spyOn(LSP, "touchFile").mockResolvedValue(1)
-        const documentSymbolSpy = spyOn(LSP, "documentSymbolEnvelope").mockResolvedValue({
+        const touchSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1)
+        const documentSymbolSpy = vi.spyOn(LSP, "documentSymbolEnvelope").mockResolvedValue({
           data: [
             {
               name: "target",
@@ -227,7 +227,7 @@ describe("builder.indexFile same-file edge resolution", () => {
           timestamp: Date.now(),
           serverIDs: ["test-lsp"],
         } as Awaited<ReturnType<typeof LSP.documentSymbolEnvelope>>)
-        const referencesSpy = spyOn(LSP, "referencesEnvelope").mockImplementation(async (input) => {
+        const referencesSpy = vi.spyOn(LSP, "referencesEnvelope").mockImplementation(async (input) => {
           return {
             data:
               input.line === 0 && input.character === 9

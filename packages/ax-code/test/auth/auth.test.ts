@@ -1,5 +1,5 @@
 import path from "path"
-import { afterEach, expect, spyOn, test } from "bun:test"
+import { afterEach, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import { Auth } from "../../src/auth"
 import { Global } from "../../src/global"
@@ -155,7 +155,7 @@ test("set steals an abandoned auth lock owned by a dead process", async () => {
 })
 
 test("stale auth lock stealing claims and revalidates the stale snapshot before unlinking", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/auth/index.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/auth/index.ts")).text()
   const start = src.indexOf("async function removeStaleSnapshot")
   const end = src.indexOf("async function maybeSteal", start)
   expect(start).toBeGreaterThan(-1)
@@ -184,8 +184,8 @@ test("set unreferences lock polling timers while waiting for an active holder", 
     }),
   )
 
-  const killSpy = spyOn(process, "kill").mockImplementation(() => true as any)
-  const nowSpy = spyOn(Date, "now").mockImplementation(() => {
+  const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true as any)
+  const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => {
     nowCalls += 1
     return nowCalls >= 50 ? 6_001 : 1_000
   })

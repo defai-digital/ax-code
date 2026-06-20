@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeCliJsonObject, parseCliJsonObject } from "../../../src/provider/cli/json"
 
 describe("provider CLI JSON decoding", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import {
   decodeMcpDebugServerInfoValue,
   formatMcpDebugEpochSeconds,
@@ -8,9 +8,7 @@ import {
 
 describe("mcp debug response decoding", () => {
   test("formats malformed auth expiry timestamps without throwing", () => {
-    expect(formatMcpDebugEpochSeconds(Date.parse("2026-04-01T00:00:00Z") / 1000)).toBe(
-      "2026-04-01T00:00:00.000Z",
-    )
+    expect(formatMcpDebugEpochSeconds(Date.parse("2026-04-01T00:00:00Z") / 1000)).toBe("2026-04-01T00:00:00.000Z")
     expect(formatMcpDebugEpochSeconds(Number.NaN)).toBe("1970-01-01T00:00:00.000Z")
     expect(formatMcpDebugEpochSeconds(Number.POSITIVE_INFINITY)).toBe("1970-01-01T00:00:00.000Z")
     expect(formatMcpDebugEpochSeconds(8_640_000_000_000_001)).toBe("1970-01-01T00:00:00.000Z")
@@ -61,7 +59,7 @@ describe("mcp debug response decoding", () => {
 
 describe("mcp local command parsing", () => {
   test("preserves quoted arguments when storing custom local commands", () => {
-    expect(parseMcpLocalCommand('node server.js --root "My Project" --label=\'local mcp\'')).toEqual([
+    expect(parseMcpLocalCommand("node server.js --root \"My Project\" --label='local mcp'")).toEqual([
       "node",
       "server.js",
       "--root",

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { compactWorkflowArtifact, defaultWorkflowArtifactRedaction } from "../../src/workflow/artifact"
 import type { WorkflowArtifactRecord } from "../../src/workflow/state"
 

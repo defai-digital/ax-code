@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { QualityPromotionSignedArchiveAttestationPolicy } from "../../src/quality/promotion-signed-archive-attestation-policy"
 import { QualityPromotionSignedArchiveTrust } from "../../src/quality/promotion-signed-archive-trust"
 

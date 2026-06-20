@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { ACP } from "../../src/acp/agent"
 
 describe("ACP todo plan entry decoding", () => {
@@ -70,7 +70,9 @@ describe("ACP replay data URL decoding", () => {
   test("decodes percent-escaped base64 data URL payloads", () => {
     const body = Buffer.from([251, 255])
     const base64 = body.toString("base64")
-    expect(ACP.decodeReplayDataUrl(`data:application/octet-stream;base64,${encodeURIComponent(base64)}`, "text/plain")).toEqual({
+    expect(
+      ACP.decodeReplayDataUrl(`data:application/octet-stream;base64,${encodeURIComponent(base64)}`, "text/plain"),
+    ).toEqual({
       mimeType: "application/octet-stream",
       base64Data: base64,
       text: body.toString("utf-8"),

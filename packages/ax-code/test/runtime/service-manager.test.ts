@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { ServiceManager } from "../../src/runtime/service-manager"
 
 describe("ServiceManager", () => {

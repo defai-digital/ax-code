@@ -1,6 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { Config } from "../../src/config/config"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"

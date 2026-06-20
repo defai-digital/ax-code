@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { registerSyncLifecycle } from "../../../src/cli/cmd/tui/context/sync-lifecycle"
 import { createSyncStartupCoordinator } from "../../../src/cli/cmd/tui/context/sync-startup"
 import { RECONNECT_STABILIZE_MS } from "../../../src/cli/cmd/tui/util/reconnect-recovery"

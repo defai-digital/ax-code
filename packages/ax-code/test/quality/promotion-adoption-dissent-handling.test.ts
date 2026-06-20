@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { QualityCalibrationModel } from "../../src/quality/calibration-model"
 import { QualityPromotionAdoptionDissentHandling } from "../../src/quality/promotion-adoption-dissent-handling"
 import { QualityPromotionAdoptionDissentResolution } from "../../src/quality/promotion-adoption-dissent-resolution"

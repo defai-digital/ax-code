@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 
-const repoRoot = path.resolve(import.meta.dir, "../../../..")
+const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 
 type ExportTarget = string | { types?: string; default?: string; import?: string; require?: string }
 

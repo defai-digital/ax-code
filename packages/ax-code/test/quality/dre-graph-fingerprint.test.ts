@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { indexFingerprint, sessionFingerprint } from "../../src/quality/dre-graph-fingerprint"
 
 describe("quality.dre-graph-fingerprint", () => {

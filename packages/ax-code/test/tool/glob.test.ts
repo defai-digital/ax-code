@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { GlobTool, parseNativeGlobEntries } from "../../src/tool/glob"
 import { NativeAddon } from "../../src/native/addon"
@@ -43,8 +43,8 @@ describe("tool.glob", () => {
 
     const target = path.join(tmp.path, "gone.txt")
     const realStat = Filesystem.stat
-    const nativeFs = spyOn(NativeAddon, "fs").mockReturnValue(undefined)
-    const stat = spyOn(Filesystem, "stat").mockImplementation((file) => {
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    const stat = vi.spyOn(Filesystem, "stat").mockImplementation((file) => {
       if (file === target) return undefined
       return realStat(file)
     })

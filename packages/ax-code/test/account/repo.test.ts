@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "bun:test"
+import { beforeEach, expect, test } from "vitest"
 
 import { AccountRepo } from "../../src/account/repo"
 import { AccessToken, AccountID, OrgID, RefreshToken } from "../../src/account/schema"

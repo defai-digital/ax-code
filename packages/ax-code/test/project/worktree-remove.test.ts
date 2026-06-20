@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
@@ -112,7 +112,7 @@ describe("Worktree.remove", () => {
     )
     await fs.chmod(shim, 0o755)
 
-    const removeSandbox = spyOn(Project, "removeSandbox")
+    const removeSandbox = vi.spyOn(Project, "removeSandbox")
     const prev = process.env.PATH ?? ""
     process.env.PATH = `${bin}${path.delimiter}${prev}`
 
@@ -144,7 +144,7 @@ describe("Worktree.remove", () => {
     await $`git reset --hard`.cwd(dir).quiet()
 
     const realRm = fs.rm.bind(fs)
-    const rm = spyOn(fs, "rm").mockImplementation((target, options) => {
+    const rm = vi.spyOn(fs, "rm").mockImplementation((target, options) => {
       if (path.resolve(String(target)) === path.resolve(dir)) {
         return Promise.reject(new Error("simulated cleanup failure"))
       }

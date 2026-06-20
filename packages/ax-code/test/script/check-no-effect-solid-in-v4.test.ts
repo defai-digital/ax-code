@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "node:path"
 import { mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"

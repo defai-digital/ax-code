@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { Agent } from "../../src/agent/agent"
 import type { Provider } from "../../src/provider/provider"
 import { Instance } from "../../src/project/instance"
 import { Bus } from "../../src/bus"
+import { Permission } from "../../src/permission"
 import { Session } from "../../src/session"
 import { LLM } from "../../src/session/llm"
 import { SessionProcessor } from "../../src/session/processor"
@@ -55,7 +56,7 @@ afterEach(() => {
 
 describe("session.processor", () => {
   test("flushes pending deltas before breaking for compaction", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     const start = src.indexOf("if (needsCompaction) {")
     const end = src.indexOf("\n                break", start)
     expect(start).toBeGreaterThan(-1)
@@ -66,7 +67,7 @@ describe("session.processor", () => {
   })
 
   test("finalizes in-flight parts before processor error handling", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     const catchStart = src.indexOf("} catch (e: unknown) {")
     const retryStart = src.indexOf("const errStack", catchStart)
     expect(catchStart).toBeGreaterThan(-1)
@@ -75,7 +76,7 @@ describe("session.processor", () => {
   })
 
   test("resets short-lived tool loop state across compaction", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     expect(src).toContain("const resetShortLivedToolLoopState = () => {")
     expect(src).toContain("recentToolRing.length = 0")
     expect(src).toContain("toolCallTimestamps.length = 0")
@@ -88,7 +89,7 @@ describe("session.processor", () => {
   })
 
   test("resets short-lived tool loop state across processor errors", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     const catchStart = src.indexOf("} catch (e: unknown) {")
     const retryStart = src.indexOf("const retry = SessionRetry.retryable(error)", catchStart)
     expect(catchStart).toBeGreaterThan(-1)
@@ -97,7 +98,7 @@ describe("session.processor", () => {
   })
 
   test("continue-loop-on-deny config is read per process call", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     expect(src).not.toContain("cachedShouldBreak")
     expect(src).toContain(
       "const shouldBreak = autonomous ? false : (await Config.get()).experimental?.continue_loop_on_deny !== true",
@@ -105,7 +106,7 @@ describe("session.processor", () => {
   })
 
   test("delta batch timer does not keep the process alive", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     const start = src.indexOf("function createDeltaBatcher")
     const end = src.indexOf("export type Info", start)
     expect(start).toBeGreaterThan(-1)
@@ -116,23 +117,23 @@ describe("session.processor", () => {
   })
 
   test("wraps recurring error-pattern guidance in system-reminder tags", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     expect(src).toContain("annotatedError = `${base}\\n\\n<system-reminder>\\n${guidance}\\n</system-reminder>`")
   })
 
   test("sanitizes tool output before appending doom-loop reminders", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     expect(src).toContain("`${sanitizeForXmlTag(value.output.output)}\\n\\n<system-reminder>")
   })
 
   test("stores sanitized rejected permission and question errors", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     expect(src).toContain("const sanitizedError = sanitizeForXmlTag(errorMsg)")
     expect(src).toContain("let annotatedError = sanitizedError")
   })
 
   test("clears per-attempt tool rate-limit timestamps before retrying", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
     const catchStart = src.indexOf("} catch (e: unknown) {")
     const retryStart = src.indexOf("const errStack", catchStart)
     expect(catchStart).toBeGreaterThan(-1)
@@ -197,7 +198,7 @@ describe("session.processor", () => {
   })
 
   test("prompt loop resolves provider errors before processor stop decisions", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/prompt.ts")).text()
     const errorTransitionStart = src.indexOf("const errorTransition = await resolvePromptLoopErrorTransition")
     const processorDecisionStart = src.indexOf("const processorDecision = processorLoopDecision")
 
@@ -244,7 +245,7 @@ describe("session.processor", () => {
           time: { created: Date.now() },
         } as MessageV2.Assistant)
 
-        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
           fullStream: (async function* () {
             yield { type: "start" }
             yield { type: "start-step" }
@@ -338,7 +339,7 @@ describe("session.processor", () => {
           },
         }
 
-        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
           fullStream: (async function* () {
             yield { type: "start" }
             yield { type: "start-step" }
@@ -416,7 +417,7 @@ describe("session.processor", () => {
             time: { created: Date.now() },
           } as MessageV2.Assistant)
 
-          streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+          streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
             fullStream: (async function* () {
               yield { type: "start" }
               yield { type: "start-step" }
@@ -464,13 +465,116 @@ describe("session.processor", () => {
           const repeatedPart = toolParts[2]
           expect(repeatedPart?.state.status).toBe("completed")
           if (repeatedPart?.state.status !== "completed") throw new Error("repeated tool call did not complete")
-          expect(repeatedPart.state.output).toContain("Autonomous doom-loop detection")
+          expect(repeatedPart.state.output).toContain("Doom-loop detection")
         },
       })
     } finally {
       if (previousAutonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
       else process.env.AX_CODE_AUTONOMOUS = previousAutonomous
     }
+  })
+
+  test("interactive doom-loop detection injects a reminder after the user approves", async () => {
+    await using tmp = await tmpdir({ git: true })
+    // Not autonomous: the detector asks for permission. Non-Claude providers
+    // (Qwen, GLM, etc.) have no built-in loop detection, so this injected
+    // reminder is the only signal the model receives to change strategy.
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // Auto-approve every doom_loop ask with "once" so the repeated tool
+        // call proceeds and the reminder lands on the tool result. Subscribe
+        // inside the instance context so the Bus resolves the right store.
+        const unsub = Bus.subscribe(Permission.Event.Asked, (event) => {
+          if (event.properties.permission !== "doom_loop") return
+          void Permission.reply({ requestID: event.properties.id, reply: "once" })
+        })
+        try {
+          const session = await Session.create({})
+          const user = await Session.updateMessage({
+            id: MessageID.ascending(),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: model.providerID, modelID: model.id },
+            tools: {},
+            mode: "build",
+          } as MessageV2.User)
+          const assistant = await Session.updateMessage({
+            id: MessageID.ascending(),
+            parentID: user.id,
+            sessionID: session.id,
+            role: "assistant",
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            modelID: model.id,
+            providerID: model.providerID,
+            time: { created: Date.now() },
+          } as MessageV2.Assistant)
+
+          streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              for (let i = 1; i <= 3; i++) {
+                yield { type: "tool-input-start", id: `call_${i}`, toolName: "glob" }
+                yield { type: "tool-call", toolCallId: `call_${i}`, toolName: "glob", input: { pattern: "**/*" } }
+                yield {
+                  type: "tool-result",
+                  toolCallId: `call_${i}`,
+                  input: { pattern: "**/*" },
+                  output: { output: `match ${i}`, title: "Glob", metadata: {}, attachments: [] },
+                }
+              }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any)
+
+          const processor = SessionProcessor.create({
+            assistantMessage: assistant as MessageV2.Assistant,
+            sessionID: session.id,
+            model,
+            abort: AbortSignal.any([]),
+          })
+
+          const result = await processor.process({
+            user: user as MessageV2.User,
+            agent: await Agent.get("build"),
+            abort: AbortSignal.any([]),
+            sessionID: session.id,
+            system: [],
+            messages: [],
+            tools: {},
+            model,
+          })
+
+          expect(result).toBe("continue")
+          const saved = await MessageV2.get({ sessionID: session.id, messageID: assistant.id })
+          const toolParts = saved.parts.filter((part) => part.type === "tool")
+          expect(toolParts).toHaveLength(3)
+          const repeatedPart = toolParts[2]
+          expect(repeatedPart?.state.status).toBe("completed")
+          if (repeatedPart?.state.status !== "completed") throw new Error("repeated tool call did not complete")
+          expect(repeatedPart.state.output).toContain("Doom-loop detection")
+        } finally {
+          unsub()
+        }
+      },
+    })
   })
 
   test("resets tool tracking for a later non-tool step in the same stream", async () => {
@@ -509,7 +613,7 @@ describe("session.processor", () => {
           time: { created: Date.now() },
         } as MessageV2.Assistant)
 
-        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
           fullStream: (async function* () {
             yield { type: "start" }
             yield { type: "start-step" }
@@ -614,10 +718,10 @@ describe("session.processor", () => {
           isRetryable: true,
         }).toObject()
 
-        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           throw err
         })
-        sleepSpy = spyOn(SessionRetry, "sleep").mockResolvedValue()
+        sleepSpy = vi.spyOn(SessionRetry, "sleep").mockResolvedValue()
 
         const processor = SessionProcessor.create({
           assistantMessage: assistant as MessageV2.Assistant,
@@ -691,10 +795,10 @@ describe("session.processor", () => {
           events.push("error")
         })
 
-        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           throw err
         })
-        sleepSpy = spyOn(SessionRetry, "sleep").mockResolvedValue()
+        sleepSpy = vi.spyOn(SessionRetry, "sleep").mockResolvedValue()
 
         try {
           const processor = SessionProcessor.create({
@@ -769,7 +873,7 @@ describe("session.processor", () => {
         }).toObject()
 
         let calls = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           calls++
           if (calls === 1) throw quota
           return {
@@ -788,7 +892,7 @@ describe("session.processor", () => {
             })(),
           } as any
         })
-        sleepSpy = spyOn(SessionRetry, "sleep").mockResolvedValue()
+        sleepSpy = vi.spyOn(SessionRetry, "sleep").mockResolvedValue()
 
         const processor = SessionProcessor.create({
           assistantMessage: assistant as MessageV2.Assistant,
@@ -856,7 +960,7 @@ describe("session.processor", () => {
         } as MessageV2.Assistant)
 
         let callCount = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           callCount++
           if (callCount === 1) {
             throw new MessageV2.APIError({
@@ -891,7 +995,7 @@ describe("session.processor", () => {
             })(),
           } as any
         })
-        sleepSpy = spyOn(SessionRetry, "sleep").mockResolvedValue()
+        sleepSpy = vi.spyOn(SessionRetry, "sleep").mockResolvedValue()
 
         const processor = SessionProcessor.create({
           assistantMessage: assistant as MessageV2.Assistant,

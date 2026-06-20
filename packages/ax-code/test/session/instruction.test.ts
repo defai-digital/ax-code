@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -229,7 +229,7 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
       },
     })
     const fakeHome = path.join(tmp.path, "home")
-    const homedir = spyOn(os, "homedir").mockReturnValue(fakeHome)
+    const homedir = vi.spyOn(os, "homedir").mockReturnValue(fakeHome)
 
     try {
       await Instance.provide({
@@ -253,7 +253,7 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
     })
     const fakeHome = path.join(tmp.path, "home")
     await Bun.write(path.join(fakeHome, "rules.md"), "# home rules")
-    const homedir = spyOn(os, "homedir").mockReturnValue(fakeHome)
+    const homedir = vi.spyOn(os, "homedir").mockReturnValue(fakeHome)
 
     try {
       await Instance.provide({
@@ -282,7 +282,7 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
     const fakeHome = path.join(tmp.path, "home")
     await fs.mkdir(fakeHome, { recursive: true })
     await fs.symlink(path.join(tmp.path, "outside"), path.join(fakeHome, "escape"))
-    const homedir = spyOn(os, "homedir").mockReturnValue(fakeHome)
+    const homedir = vi.spyOn(os, "homedir").mockReturnValue(fakeHome)
 
     try {
       await Instance.provide({
@@ -306,8 +306,8 @@ describe("InstructionPrompt.system remote instructions", () => {
         instructions: ["HTTPS://example.com/AGENTS.md"],
       },
     })
-    const assertSpy = spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
-    const fetchSpy = spyOn(Ssrf, "pinnedFetch").mockResolvedValue(new Response("# Remote Instructions") as never)
+    const assertSpy = vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue(new Response("# Remote Instructions") as never)
 
     try {
       await Instance.provide({
@@ -335,8 +335,8 @@ describe("InstructionPrompt.system remote instructions", () => {
         instructions: ["https://example.com/AGENTS.md"],
       },
     })
-    const assertSpy = spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
-    const fetchSpy = spyOn(Ssrf, "pinnedFetch").mockResolvedValue(
+    const assertSpy = vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue(
       new Response("# Remote Instructions", {
         headers: { "content-length": "0x100000000" },
       }) as never,

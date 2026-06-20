@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { RGBA } from "@opentui/core"
 import { lerpRgba, gradientLineRuns } from "@/cli/cmd/tui/ui/primitives/color"
 import { resolveVisualCapability } from "@/cli/cmd/tui/ui/primitives/capability"

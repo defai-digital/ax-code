@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { runResilientStream, type StreamConnectionStatus } from "../../../src/cli/cmd/tui/util/resilient-stream"
 
 describe("runResilientStream", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { agentControlActivityItems } from "@/cli/cmd/tui/routes/session/agent-control-activity"
 
 describe("agentControlActivityItems", () => {

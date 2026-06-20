@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, test, mock } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { EventEmitter } from "node:events"
 import { Session } from "../../src/session"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-mock.module("child_process", () => ({
+vi.mock("child_process", () => ({
   spawn() {
     const proc = new EventEmitter() as any
     proc.stdin = undefined

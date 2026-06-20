@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { handlePromptLoopGlobalStepLimit } from "../../src/session/prompt-loop-step-limit"
 import { SessionID } from "../../src/session/schema"
 

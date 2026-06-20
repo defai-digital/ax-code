@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import fs from "fs"
 
-const repoRoot = path.resolve(import.meta.dir, "../../../..")
+const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const homebrewDefaultScript = path.join(repoRoot, ".github/scripts/update-homebrew.sh")
 const releaseWorkflow = path.join(repoRoot, ".github/workflows/release.yml")
 const installMatrixWorkflow = path.join(repoRoot, ".github/workflows/install-matrix-smoke.yml")

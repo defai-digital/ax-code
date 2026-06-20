@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { PassThrough } from "node:stream"
@@ -8,7 +8,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Ripgrep } from "../../src/file/ripgrep"
 
 afterEach(() => {
-  mock.restore()
+  vi.restoreAllMocks()
 })
 
 describe("file.ripgrep", () => {
@@ -118,15 +118,15 @@ describe("file.ripgrep", () => {
       },
     })
 
-    const nativeFs = spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
     const proc = {
       exitCode: null,
       signalCode: null,
       exited: new Promise<number>(() => {}),
       stdout: new PassThrough(),
     }
-    const spawn = spyOn(Process, "spawn").mockReturnValue(proc as never)
-    const killProcessTree = spyOn(Process, "killProcessTree").mockResolvedValue(undefined)
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue(proc as never)
+    const killProcessTree = vi.spyOn(Process, "killProcessTree").mockResolvedValue(undefined)
 
     const iterator = Ripgrep.files({ cwd: tmp.path })[Symbol.asyncIterator]()
     proc.stdout.write("visible.txt\n")

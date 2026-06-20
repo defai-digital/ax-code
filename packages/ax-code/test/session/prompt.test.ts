@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { NamedError } from "@ax-code/util/error"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Instance } from "../../src/project/instance"
@@ -292,8 +292,8 @@ describe("session.prompt missing file", () => {
           expiresAt: Date.now() + 60_000,
         })
 
-        const cachedSpy = spyOn(LSP, "documentSymbolCachedEnvelope")
-        const liveSpy = spyOn(LSP, "documentSymbolEnvelope")
+        const cachedSpy = vi.spyOn(LSP, "documentSymbolCachedEnvelope")
+        const liveSpy = vi.spyOn(LSP, "documentSymbolEnvelope")
 
         try {
           try {
@@ -493,7 +493,7 @@ describe("session.prompt special characters", () => {
     const fakeHome = path.join(tmp.path, "home")
     await fs.mkdir(fakeHome, { recursive: true })
     await Bun.write(path.join(fakeHome, "allowed.txt"), "home content\n")
-    const homedir = spyOn(os, "homedir").mockReturnValue(fakeHome)
+    const homedir = vi.spyOn(os, "homedir").mockReturnValue(fakeHome)
 
     try {
       await Instance.provide({

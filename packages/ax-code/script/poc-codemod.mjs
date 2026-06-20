@@ -4,7 +4,7 @@ import path from "path"
 import { fileURLToPath } from "url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const root = path.resolve(__dirname, "../test-vitest")
+const root = path.resolve(__dirname, "..", process.argv[2] ?? "test-vitest")
 
 const KEEP = new Set([
   "test",

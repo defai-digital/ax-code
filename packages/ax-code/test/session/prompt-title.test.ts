@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 import { AX_ENGINE_PROVIDER_ID } from "../../src/provider/ax-engine"
 import { ProviderID } from "../../src/provider/schema"

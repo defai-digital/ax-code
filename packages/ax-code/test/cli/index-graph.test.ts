@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { buildIndexReport, groupFilesByLanguage, phaseRows, probeLspServers } from "../../src/cli/cmd/index-graph"
 import { LSP } from "../../src/lsp"
@@ -170,12 +170,12 @@ describe("groupFilesByLanguage", () => {
       ["rust", ["/p/lib.rs"]],
     ])
 
-    touchFileSpy = spyOn(LSP, "touchFile").mockImplementation(async (file, _wait, opts) => {
+    touchFileSpy = vi.spyOn(LSP, "touchFile").mockImplementation(async (file, _wait, opts) => {
       expect(opts).toEqual({ mode: "semantic", methods: ["documentSymbol", "references"] })
       if (file === "/p/a.ts") return 1
       return 0
     })
-    statusSpy = spyOn(LSP, "status").mockResolvedValue([])
+    statusSpy = vi.spyOn(LSP, "status").mockResolvedValue([])
 
     const probe = await probeLspServers(groups)
     expect(probe.ready).toEqual(new Set(["typescript"]))
@@ -191,14 +191,14 @@ describe("groupFilesByLanguage", () => {
     let inflight = 0
     let maxInflight = 0
 
-    touchFileSpy = spyOn(LSP, "touchFile").mockImplementation(async () => {
+    touchFileSpy = vi.spyOn(LSP, "touchFile").mockImplementation(async () => {
       inflight++
       maxInflight = Math.max(maxInflight, inflight)
       await sleep(25)
       inflight--
       return 1
     })
-    statusSpy = spyOn(LSP, "status").mockResolvedValue([])
+    statusSpy = vi.spyOn(LSP, "status").mockResolvedValue([])
 
     const probe = await probeLspServers(groups)
 

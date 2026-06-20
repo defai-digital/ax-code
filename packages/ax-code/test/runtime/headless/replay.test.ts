@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { replayHeadlessEventLogLines, replayHeadlessEvents } from "../../../src/runtime/headless"
 
 type Session = { id: string; title?: string }

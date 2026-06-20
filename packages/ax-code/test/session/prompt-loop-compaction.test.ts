@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import z from "zod"
 import { SessionCompaction } from "../../src/session/compaction"
 import {
@@ -67,9 +67,9 @@ afterEach(() => {
 
 describe("session.prompt preflight compaction", () => {
   test("counts registry tool schemas before sending a provider request", async () => {
-    budgetSpy = spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
-    createSpy = spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
-    toolsSpy = spyOn(ToolRegistry, "tools").mockResolvedValue([
+    budgetSpy = vi.spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    toolsSpy = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
       {
         id: "large_tool",
         description: "Tool with a large provider schema",
@@ -101,9 +101,9 @@ describe("session.prompt preflight compaction", () => {
   })
 
   test("does not compact before an unanswered media turn even when over budget (#259)", async () => {
-    budgetSpy = spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
-    createSpy = spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
-    toolsSpy = spyOn(ToolRegistry, "tools").mockResolvedValue([
+    budgetSpy = vi.spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    toolsSpy = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
       {
         id: "large_tool",
         description: "Tool with a large provider schema",
@@ -133,8 +133,8 @@ describe("session.prompt preflight compaction", () => {
 
 describe("session.prompt usage compaction", () => {
   test("schedules when the last turn overflows and the latest turn has no media", async () => {
-    overflowSpy = spyOn(SessionCompaction, "isOverflow").mockResolvedValue(true)
-    createSpy = spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    overflowSpy = vi.spyOn(SessionCompaction, "isOverflow").mockResolvedValue(true)
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
 
     const scheduled = await maybeScheduleUsageCompaction({
       sessionID: "ses_test" as any,
@@ -151,8 +151,8 @@ describe("session.prompt usage compaction", () => {
   })
 
   test("skips usage compaction while the latest user turn carries unresolved media (#259)", async () => {
-    overflowSpy = spyOn(SessionCompaction, "isOverflow").mockResolvedValue(true)
-    createSpy = spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    overflowSpy = vi.spyOn(SessionCompaction, "isOverflow").mockResolvedValue(true)
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
 
     const scheduled = await maybeScheduleUsageCompaction({
       sessionID: "ses_test" as any,

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import {
@@ -25,7 +25,7 @@ test("parseWorkflowCommandArguments supports key=value JSON assignments and raw 
   expect(parseWorkflowCommandArguments("release readiness")).toEqual({
     arguments: "release readiness",
   })
-  expect(parseWorkflowCommandArguments('label="release readiness" owner=\'build agent\' enabled=true')).toEqual({
+  expect(parseWorkflowCommandArguments("label=\"release readiness\" owner='build agent' enabled=true")).toEqual({
     label: "release readiness",
     owner: "build agent",
     enabled: true,

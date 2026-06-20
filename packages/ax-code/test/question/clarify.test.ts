@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { detectAmbiguity, shouldClarify, build } from "../../src/question/clarify"
 import { Question } from "../../src/question"
 

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { resolvePromptLoopAssistantExit } from "../../src/session/prompt-loop-exit"
 import { MessageID, SessionID } from "../../src/session/schema"
 

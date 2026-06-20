@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createStore } from "solid-js/store"
 import type { SyncEventStoreState } from "../../../src/cli/cmd/tui/context/sync-store-event"
 import { subscribeStoreBackedSyncEvents } from "../../../src/cli/cmd/tui/context/sync-subscription"

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, test } from "vitest"
 import { Flag, parsePositiveIntegerFlagValue } from "../../src/flag/flag"
 
 const originalConfigContent = process.env["AX_CODE_CONFIG_CONTENT"]

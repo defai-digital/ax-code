@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { Project } from "../../src/project/project"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
@@ -543,7 +543,7 @@ describe("Project.addSandbox and Project.removeSandbox", () => {
     await using tmp = await tmpdir({ git: true })
     const { project } = await Project.fromDirectory(tmp.path)
     const sandboxDir = path.join(tmp.path, "sandbox-transaction")
-    const txSpy = spyOn(Database, "transaction")
+    const txSpy = vi.spyOn(Database, "transaction")
 
     try {
       await Project.addSandbox(project.id, sandboxDir)

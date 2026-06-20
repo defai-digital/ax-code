@@ -1,9 +1,9 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 
 const publishScripts = [
-  path.resolve(import.meta.dir, "../../../plugin/script/publish.ts"),
-  path.resolve(import.meta.dir, "../../../sdk/js/script/publish.ts"),
+  path.resolve(import.meta.dirname, "../../../plugin/script/publish.ts"),
+  path.resolve(import.meta.dirname, "../../../sdk/js/script/publish.ts"),
 ]
 
 describe("publish scripts", () => {

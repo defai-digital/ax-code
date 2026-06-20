@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { WorkspaceID } from "../../src/control-plane/schema"
 import { Hono } from "hono"
 import { tmpdir } from "../fixture/fixture"
@@ -14,7 +14,7 @@ import { Flag } from "../../src/flag/flag"
 import { eq } from "drizzle-orm"
 
 afterEach(async () => {
-  mock.restore()
+  vi.restoreAllMocks()
   await resetDatabase()
   adaptors.removeAdaptor("testing")
 })

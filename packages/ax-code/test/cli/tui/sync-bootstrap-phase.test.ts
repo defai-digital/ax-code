@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { settleBootstrapPhase } from "../../../src/cli/cmd/tui/context/sync-bootstrap-phase"
 
 describe("tui sync bootstrap phase", () => {

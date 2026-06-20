@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { tool, type ModelMessage } from "ai"
@@ -203,10 +203,10 @@ function createChatStream(text: string) {
 }
 
 async function loadFixture(providerID: string, modelID: string) {
-  const fixturePath = path.join(import.meta.dir, "../tool/fixtures/models-api.json")
+  const fixturePath = path.join(import.meta.dirname, "../tool/fixtures/models-api.json")
   const data = await Filesystem.readJson<Record<string, ModelsDev.Provider>>(fixturePath)
   const fallback = await Filesystem.readJson<Record<string, ModelsDev.Provider>>(
-    path.join(import.meta.dir, "../../src/provider/models-snapshot.json"),
+    path.join(import.meta.dirname, "../../src/provider/models-snapshot.json"),
   )
   const provider = data[providerID]
   const fallbackProvider = fallback[providerID]
@@ -1729,7 +1729,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
   test("super-long pacing treats whitespace-padded durable disable env as process-local", async () => {
     process.env.AX_CODE_SUPER_LONG_DURABLE_PACING = " 0 "
-    const reserveSpy = spyOn(SuperLongRuntime, "reservePacing").mockImplementation(async () => {
+    const reserveSpy = vi.spyOn(SuperLongRuntime, "reservePacing").mockImplementation(async () => {
       throw new Error("durable pacing should not be used")
     })
     try {
@@ -1880,7 +1880,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
   })
 
   test("super-long pacing skips durable release for process-local reservations", async () => {
-    const releaseSpy = spyOn(SuperLongRuntime, "releasePacingReservation").mockImplementation(async () => {})
+    const releaseSpy = vi.spyOn(SuperLongRuntime, "releasePacingReservation").mockImplementation(async () => {})
     try {
       const target = {
         sessionID: "session-pacing-local-release",
@@ -1950,7 +1950,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
   test("super-long pacing waits for durable release when stream ends before first chunk", async () => {
     const releaseGate = deferred<void>()
-    const releaseSpy = spyOn(SuperLongRuntime, "releasePacingReservation").mockImplementation(async () => {
+    const releaseSpy = vi.spyOn(SuperLongRuntime, "releasePacingReservation").mockImplementation(async () => {
       await releaseGate.promise
     })
     try {

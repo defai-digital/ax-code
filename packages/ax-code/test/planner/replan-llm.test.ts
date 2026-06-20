@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Planner } from "../../src/planner"
 import { buildUserPrompt } from "../../src/planner/replan-llm"
 import type { PhaseResult, ReplanContext, ReplanGenerator } from "../../src/planner"

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseJsonPayload, parseJsonResult, parseJsonStrict } from "../../src/util/json-value"
 
 describe("util.json-value", () => {

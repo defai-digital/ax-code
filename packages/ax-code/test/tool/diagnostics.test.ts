@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { collectDiagnostics } from "../../src/tool/diagnostics"
 import { LSP } from "../../src/lsp"
@@ -21,14 +21,14 @@ describe("tool diagnostics", () => {
     let inflight = 0
     let maxInflight = 0
 
-    touchFileSpy = spyOn(LSP, "touchFile").mockImplementation(async () => {
+    touchFileSpy = vi.spyOn(LSP, "touchFile").mockImplementation(async () => {
       inflight++
       maxInflight = Math.max(maxInflight, inflight)
       await sleep(25)
       inflight--
       return 1
     })
-    diagnosticsSpy = spyOn(LSP, "diagnostics").mockResolvedValue({})
+    diagnosticsSpy = vi.spyOn(LSP, "diagnostics").mockResolvedValue({})
 
     await collectDiagnostics(["/repo/a.ts", "/repo/b.ts", "/repo/a.ts"])
 

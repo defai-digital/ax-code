@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { NamedError } from "@ax-code/util/error"
 import { APICallError } from "ai"
 import { SessionRetry } from "../../src/session/retry"

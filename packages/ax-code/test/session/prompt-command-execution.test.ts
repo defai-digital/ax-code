@@ -1,4 +1,4 @@
-import { afterEach, expect, spyOn, test } from "bun:test"
+import { afterEach, expect, test, vi } from "vitest"
 import { NamedError } from "@ax-code/util/error"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
@@ -46,7 +46,7 @@ afterEach(async () => {
 
 test("preserves explicit skill command agent during prompt execution", async () => {
   await using tmp = await tmpdir({ git: true })
-  modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+  modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
   const calls: PromptInput[] = []
 
   await Instance.provide({

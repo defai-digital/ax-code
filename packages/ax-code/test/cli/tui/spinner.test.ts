@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { RGBA } from "@opentui/core"
 import { createColors } from "../../../src/cli/cmd/tui/ui/spinner"
 

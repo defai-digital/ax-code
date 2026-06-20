@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { ACP } from "../../src/acp/agent"
 import type { Agent as ACPAgent } from "@agentclientprotocol/sdk"
 

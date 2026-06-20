@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test"
+import { test, expect, describe } from "vitest"
 import { MCP } from "../../src/mcp"
 import { Permission } from "../../src/permission"
 import type { Config } from "../../src/config/config"

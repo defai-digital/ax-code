@@ -1,5 +1,5 @@
 import path from "path"
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, test } from "vitest"
 import { ModelsDev } from "../../src/provider/models"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"

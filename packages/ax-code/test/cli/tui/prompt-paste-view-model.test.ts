@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { isSummarizedPastePart, summarizedPasteViews } from "../../../src/cli/cmd/tui/component/prompt/paste-view-model"
 
 describe("prompt paste view model", () => {

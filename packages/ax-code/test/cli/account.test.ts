@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import stripAnsi from "strip-ansi"
 
 import { formatAccountLabel, formatOrgLine } from "../../src/cli/cmd/account"

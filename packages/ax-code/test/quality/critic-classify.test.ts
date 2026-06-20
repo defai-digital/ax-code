@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Critic } from "../../src/quality/critic"
 import type { Finding } from "../../src/quality/finding"
 

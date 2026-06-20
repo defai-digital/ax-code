@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test"
+import { test, expect, describe } from "vitest"
 import { existsSync } from "node:fs"
 import type { LanguageModelV3Prompt } from "@ai-sdk/provider"
 import { materializeCliAttachments } from "../../../src/provider/cli/attachments"

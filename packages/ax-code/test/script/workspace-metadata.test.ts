@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { readFile } from "fs/promises"
 import path from "path"
 
@@ -8,7 +8,7 @@ function extractWorkspaceGlobs(pnpmWorkspaceYaml: string) {
 
 describe("script.workspace-metadata", () => {
   test("root package.json workspaces stay aligned with pnpm-workspace.yaml", async () => {
-    const repoRoot = path.resolve(import.meta.dir, "../../../../")
+    const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"))
     const pnpmWorkspaceYaml = await readFile(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8")
 
@@ -16,7 +16,7 @@ describe("script.workspace-metadata", () => {
   })
 
   test("OpenTUI peer exceptions stay scoped to opentui-spinner", async () => {
-    const repoRoot = path.resolve(import.meta.dir, "../../../../")
+    const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"))
     const allowedVersions = packageJson.pnpm?.peerDependencyRules?.allowedVersions ?? {}
     const opentuiRules = Object.fromEntries(
@@ -30,7 +30,7 @@ describe("script.workspace-metadata", () => {
   })
 
   test("OpenTUI dependencies stay on the validated renderer set", async () => {
-    const repoRoot = path.resolve(import.meta.dir, "../../../../")
+    const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
     const dependencies = packageJson.dependencies ?? {}
 

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseFrecencyLine } from "../../../src/cli/cmd/tui/component/prompt/frecency-util"
 
 describe("prompt frecency persistence", () => {

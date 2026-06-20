@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { withTimeout } from "../../src/util/timeout"
 
 describe("util.timeout", () => {

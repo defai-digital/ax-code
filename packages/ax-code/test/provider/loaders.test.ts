@@ -1,4 +1,4 @@
-import { afterEach, test, expect, describe } from "bun:test"
+import { afterEach, test, expect, describe } from "vitest"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -53,7 +53,7 @@ async function expectMissingCliProvider(input: {
 
 describe("CLI provider loaders", () => {
   test("CLI provider discovery publishes resolved external model ids", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/loaders.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/provider/loaders.ts")).text()
     expect(src).toContain("return cliModels(opts.providerID, provider, resolved.model)")
     expect(src).toContain("if (resolved && resolved !== providerID)")
     expect(src).toContain("add(resolved, `${name} (${resolved})`)")

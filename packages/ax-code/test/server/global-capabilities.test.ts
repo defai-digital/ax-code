@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { expect, test } from "vitest"
 import { Installation } from "../../src/installation"
 import { Server } from "../../src/server/server"
 import path from "path"

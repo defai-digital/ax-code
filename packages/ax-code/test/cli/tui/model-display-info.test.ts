@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { modelDisplayInfo, supportsWebSearch } from "../../../src/cli/cmd/tui/component/model-vision-label"
 
 describe("modelDisplayInfo", () => {

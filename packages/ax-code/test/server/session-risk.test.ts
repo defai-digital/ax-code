@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
 import { QualityLabelStore } from "../../src/quality/label-store"

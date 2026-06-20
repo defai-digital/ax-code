@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createStore } from "solid-js/store"
 import { createStoreBackedRuntimeSyncActions } from "../../../src/cli/cmd/tui/context/sync-runtime-adapter"
 import type { RuntimeSyncClient, RuntimeSyncFetchResponse } from "../../../src/cli/cmd/tui/context/sync-runtime-sync"

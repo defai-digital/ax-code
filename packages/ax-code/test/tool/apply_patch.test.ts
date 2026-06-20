@@ -1,4 +1,4 @@
-import { describe, expect, test, spyOn } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import * as fs from "fs/promises"
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
@@ -178,7 +178,7 @@ describe("tool.apply_patch freeform", () => {
         await fs.writeFile(target, "old\n", "utf-8")
 
         const actualReadFile = fs.readFile
-        const readSpy = spyOn(fs, "readFile").mockImplementation(async (input, options) => {
+        const readSpy = vi.spyOn(fs, "readFile").mockImplementation(async (input, options) => {
           if (String(input) === target) throw new Error("read blocked")
           return (await actualReadFile(input as any, options as any)) as any
         })
@@ -206,7 +206,7 @@ describe("tool.apply_patch freeform", () => {
         await fs.writeFile(dest, "existing\n", "utf-8")
 
         const actualReadFile = fs.readFile
-        const readSpy = spyOn(fs, "readFile").mockImplementation(async (input, options) => {
+        const readSpy = vi.spyOn(fs, "readFile").mockImplementation(async (input, options) => {
           if (String(input) === dest) throw new Error("read blocked")
           return (await actualReadFile(input as any, options as any)) as any
         })
@@ -377,7 +377,7 @@ describe("tool.apply_patch freeform", () => {
           await fs.mkdir(outside, { recursive: true })
 
           const originalWithLock = FileTime.withLock.bind(FileTime)
-          const withLockSpy = spyOn(FileTime, "withLock").mockImplementation(async (filePath, fn) => {
+          const withLockSpy = vi.spyOn(FileTime, "withLock").mockImplementation(async (filePath, fn) => {
             if (String(filePath) === target) {
               await fs.rm(parent, { recursive: true, force: true })
               await fs.symlink(outside, parent)
@@ -432,7 +432,7 @@ describe("tool.apply_patch freeform", () => {
     const outside = path.join(fixture.path, "..", `apply-patch-external-${Date.now()}.txt`)
     const readPaths: string[] = []
     const originalReadFile = fs.readFile.bind(fs)
-    const readSpy = spyOn(fs, "readFile").mockImplementation(((...args: any[]) => {
+    const readSpy = vi.spyOn(fs, "readFile").mockImplementation(((...args: any[]) => {
       readPaths.push(String(args[0]))
       return originalReadFile(args[0], args[1])
     }) as any)
@@ -474,7 +474,7 @@ describe("tool.apply_patch freeform", () => {
       fn: async () => {
         const target = path.join(fixture.path, "late.txt")
         const originalWithLock = FileTime.withLock.bind(FileTime)
-        const withLockSpy = spyOn(FileTime, "withLock").mockImplementation(async (filePath, fn) => {
+        const withLockSpy = vi.spyOn(FileTime, "withLock").mockImplementation(async (filePath, fn) => {
           if (String(filePath) === target) {
             await fs.writeFile(target, "appeared late\n", "utf-8")
           }
@@ -659,7 +659,7 @@ describe("tool.apply_patch freeform", () => {
         // final destination would never match. Mock at the
         // Filesystem.write level where apply_patch actually calls.
         const originalWrite = Filesystem.write.bind(Filesystem)
-        const writeSpy = spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
+        const writeSpy = vi.spyOn(Filesystem, "write").mockImplementation(async (p: string, c: any, m?: number) => {
           if (p === second) throw new Error("disk full")
           await originalWrite(p, c, m)
         })

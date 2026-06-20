@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Planner } from "../../src/planner"
 import type { PhaseResult, Replanner, TaskPhase } from "../../src/planner"
 

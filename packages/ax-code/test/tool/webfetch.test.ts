@@ -1,10 +1,10 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { WebFetchTool } from "../../src/tool/webfetch"
 import { SessionID, MessageID } from "../../src/session/schema"
 
-const projectRoot = path.join(import.meta.dir, "../..")
+const projectRoot = path.join(import.meta.dirname, "../..")
 
 const ctx = {
   sessionID: SessionID.make("ses_test"),

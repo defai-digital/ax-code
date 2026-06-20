@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { SessionVerifications } from "../../src/session/verifications"
 import { DebugRepairFromEnvelopeTool } from "../../src/tool/debug_repair_from_envelope"
 import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
@@ -68,7 +68,7 @@ describe("DebugRepairFromEnvelopeTool", () => {
   })
 
   test("creates a bounded repair brief for localized structured failures", async () => {
-    spies.push(spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(mockRun(envelope()) as any))
+    spies.push(vi.spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(mockRun(envelope()) as any))
 
     const tool = await DebugRepairFromEnvelopeTool.init()
     const result = await tool.execute({ envelopeId }, ctx())
@@ -83,7 +83,7 @@ describe("DebugRepairFromEnvelopeTool", () => {
 
   test("rejects envelopes that are not localized repair candidates", async () => {
     spies.push(
-      spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(
+      vi.spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(
         mockRun(
           envelope({
             structuredFailures: [],
@@ -103,7 +103,7 @@ describe("DebugRepairFromEnvelopeTool", () => {
   })
 
   test("rejects fabricated envelope ids", async () => {
-    spies.push(spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(mockRun(envelope()) as any))
+    spies.push(vi.spyOn(SessionVerifications, "loadRunsWithIds").mockReturnValue(mockRun(envelope()) as any))
 
     const tool = await DebugRepairFromEnvelopeTool.init()
 

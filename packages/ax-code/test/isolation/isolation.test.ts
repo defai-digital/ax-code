@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { Isolation } from "../../src/isolation"
@@ -76,7 +76,7 @@ describe("isolation.assertWrite", () => {
   })
 
   test("canWrite checks protected paths with the original input path", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/isolation/index.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/isolation/index.ts")).text()
     const start = src.indexOf("export function canWrite(")
     const end = src.indexOf("export function assertWrite(", start)
     expect(start).toBeGreaterThan(-1)

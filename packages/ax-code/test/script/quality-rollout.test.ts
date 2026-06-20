@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
@@ -208,7 +208,7 @@ describe("script.quality-rollout promotion summary", () => {
         cmd: [
           "bun",
           "run",
-          path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+          path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
           "--mode",
           "model-promotion-summary",
           "--promotion-id",
@@ -218,7 +218,7 @@ describe("script.quality-rollout promotion summary", () => {
           "--report-out",
           reportOut,
         ],
-        cwd: path.join(import.meta.dir, "../.."),
+        cwd: path.join(import.meta.dirname, "../.."),
         env: process.env,
       })
 
@@ -309,7 +309,7 @@ describe("script.quality-rollout replay readiness", () => {
           cmd: [
             "bun",
             "run",
-            path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+            path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
             "--mode",
             "replay-readiness",
             "--workflow",
@@ -319,7 +319,7 @@ describe("script.quality-rollout replay readiness", () => {
             "--out",
             summaryOut,
           ],
-          cwd: path.join(import.meta.dir, "../.."),
+          cwd: path.join(import.meta.dirname, "../.."),
           env: process.env,
         })
 
@@ -399,7 +399,7 @@ describe("script.quality-rollout replay readiness", () => {
           cmd: [
             "bun",
             "run",
-            path.join(import.meta.dir, "../../script/quality-rollout.ts"),
+            path.join(import.meta.dirname, "../../script/quality-rollout.ts"),
             "--mode",
             "replay-readiness",
             "--workflow",
@@ -409,7 +409,7 @@ describe("script.quality-rollout replay readiness", () => {
             "--out",
             summaryOut,
           ],
-          cwd: path.join(import.meta.dir, "../.."),
+          cwd: path.join(import.meta.dirname, "../.."),
           env: process.env,
         })
 

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { commandAutocompleteSuffix } from "../../../src/cli/cmd/tui/component/prompt/autocomplete-command"
 
 describe("tui command autocomplete", () => {

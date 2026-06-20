@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { QualityPromotionReleasePolicy } from "../../src/quality/promotion-release-policy"
 import { QualityReentryContext } from "../../src/quality/reentry-context"
 import { QualityReentryRemediation } from "../../src/quality/reentry-remediation"

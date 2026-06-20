@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test"
+import { test, expect, describe } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { Filesystem } from "../../src/util/filesystem"

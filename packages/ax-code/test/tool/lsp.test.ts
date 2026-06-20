@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { LspTool, normalizeLspToolEnvelopeData } from "../../src/tool/lsp"
@@ -67,7 +67,7 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        envelopeSpy = spyOn(LSP, "workspaceSymbolEnvelope").mockResolvedValue({
+        envelopeSpy = vi.spyOn(LSP, "workspaceSymbolEnvelope").mockResolvedValue({
           symbols: [
             {
               name: "DemoSymbol",
@@ -111,8 +111,8 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(0 as never)
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(0 as never)
 
         const tool = await LspTool.init()
         await expect(tool.execute({ operation: "hover", filePath: file, line: 1, character: 1 }, ctx)).rejects.toThrow(
@@ -132,9 +132,9 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
-        diagnosticsSpy = spyOn(LSP, "diagnosticsAggregated").mockResolvedValue({
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        diagnosticsSpy = vi.spyOn(LSP, "diagnosticsAggregated").mockResolvedValue({
           data: [
             {
               path: file,
@@ -169,7 +169,7 @@ describe("tool.lsp", () => {
   test("diagnosticsAggregated does not ask permission for a missing file", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "missing.ts")
-    const ask = spyOn({ ask: async () => {} }, "ask")
+    const ask = vi.spyOn({ ask: async () => {} }, "ask")
 
     try {
       await Instance.provide({
@@ -191,13 +191,13 @@ describe("tool.lsp", () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
     await Bun.write(file, "export const value = 1\n")
-    const ask = spyOn({ ask: async () => {} }, "ask")
+    const ask = vi.spyOn({ ask: async () => {} }, "ask")
 
     try {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(false)
+          hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(false)
 
           const tool = await LspTool.init()
           await expect(
@@ -219,9 +219,9 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
-        referencesCachedEnvelopeSpy = spyOn(LSP, "referencesCachedEnvelope").mockResolvedValue({
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        referencesCachedEnvelopeSpy = vi.spyOn(LSP, "referencesCachedEnvelope").mockResolvedValue({
           data: [{ uri: "file:///cached.ts" }],
           source: "cache",
           completeness: "full",
@@ -230,7 +230,7 @@ describe("tool.lsp", () => {
           cacheKey: "lsc_cached",
           degraded: false,
         } as any)
-        referencesEnvelopeSpy = spyOn(LSP, "referencesEnvelope").mockResolvedValue({
+        referencesEnvelopeSpy = vi.spyOn(LSP, "referencesEnvelope").mockResolvedValue({
           data: [{ uri: "file:///live.ts" }],
           source: "lsp",
           completeness: "full",
@@ -268,10 +268,10 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        referencesCachedEnvelopeSpy = spyOn(LSP, "referencesCachedEnvelope").mockResolvedValue(undefined)
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
-        referencesEnvelopeSpy = spyOn(LSP, "referencesEnvelope").mockResolvedValue({
+        referencesCachedEnvelopeSpy = vi.spyOn(LSP, "referencesCachedEnvelope").mockResolvedValue(undefined)
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        referencesEnvelopeSpy = vi.spyOn(LSP, "referencesEnvelope").mockResolvedValue({
           data: [{ uri: "file:///live.ts" }],
           source: "lsp",
           completeness: "full",
@@ -303,10 +303,10 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        referencesCachedEnvelopeSpy = spyOn(LSP, "referencesCachedEnvelope").mockRejectedValue(new Error("cache down"))
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
-        referencesEnvelopeSpy = spyOn(LSP, "referencesEnvelope").mockResolvedValue({
+        referencesCachedEnvelopeSpy = vi.spyOn(LSP, "referencesCachedEnvelope").mockRejectedValue(new Error("cache down"))
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        referencesEnvelopeSpy = vi.spyOn(LSP, "referencesEnvelope").mockResolvedValue({
           data: [{ uri: "file:///live.ts" }],
           source: "lsp",
           completeness: "full",
@@ -339,9 +339,9 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
-        implementationEnvelopeSpy = spyOn(LSP, "implementationEnvelope").mockResolvedValue({
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        implementationEnvelopeSpy = vi.spyOn(LSP, "implementationEnvelope").mockResolvedValue({
           data: [{ uri: "file:///impl.ts" }],
           source: "lsp",
           completeness: "full",
@@ -371,9 +371,9 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
-        prepareCallHierarchyEnvelopeSpy = spyOn(LSP, "prepareCallHierarchyEnvelope").mockResolvedValue({
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        prepareCallHierarchyEnvelopeSpy = vi.spyOn(LSP, "prepareCallHierarchyEnvelope").mockResolvedValue({
           data: [{ name: "value" }],
           source: "lsp",
           completeness: "full",
@@ -403,9 +403,9 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
-        incomingCallsEnvelopeSpy = spyOn(LSP, "incomingCallsEnvelope").mockResolvedValue({
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        incomingCallsEnvelopeSpy = vi.spyOn(LSP, "incomingCallsEnvelope").mockResolvedValue({
           data: [{ from: "caller" }],
           source: "lsp",
           completeness: "full",
@@ -432,9 +432,9 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
-        outgoingCallsEnvelopeSpy = spyOn(LSP, "outgoingCallsEnvelope").mockResolvedValue({
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
+        outgoingCallsEnvelopeSpy = vi.spyOn(LSP, "outgoingCallsEnvelope").mockResolvedValue({
           data: [{ to: "callee" }],
           source: "lsp",
           completeness: "full",

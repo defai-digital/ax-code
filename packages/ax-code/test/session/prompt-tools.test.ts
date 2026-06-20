@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import z from "zod"
 import { Agent } from "../../src/agent/agent"
 import { ProviderTransform } from "../../src/provider/transform"
@@ -88,7 +88,7 @@ describe("session.prompt-tools", () => {
     const inputSchema = z.object({ query: z.string() })
     const cacheKey = `mcp:test-tool:${Date.now()}:${Math.random()}`
     const originalSchema = ProviderTransform.schema
-    schemaSpy = spyOn(ProviderTransform, "schema").mockImplementation((modelArg, schemaArg) =>
+    schemaSpy = vi.spyOn(ProviderTransform, "schema").mockImplementation((modelArg, schemaArg) =>
       originalSchema(modelArg, schemaArg),
     )
 

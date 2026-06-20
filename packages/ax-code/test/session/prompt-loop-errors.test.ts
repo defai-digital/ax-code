@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-errors"
 import { SessionID } from "../../src/session/schema"

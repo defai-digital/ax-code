@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeEncryptedTokenValue, parseEncryptedToken } from "../../src/account/repo"
 import { encrypt } from "../../src/auth/encryption"
 

@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { InstructionPrompt } from "../../src/session/instruction"
@@ -31,8 +31,8 @@ describe("createPromptProcessor", () => {
       id: "gpt-5.2" as any,
       providerID: "openai" as any,
     }
-    const update = spyOn(Session, "updateMessage").mockImplementation((async (message: any) => message) as any)
-    const now = spyOn(Date, "now").mockReturnValue(123)
+    const update = vi.spyOn(Session, "updateMessage").mockImplementation((async (message: any) => message) as any)
+    const now = vi.spyOn(Date, "now").mockReturnValue(123)
     try {
       const processor = await Instance.provide({
         directory: tmp.path,
@@ -69,7 +69,7 @@ describe("createPromptProcessor", () => {
   })
 
   test("clears instruction prompt state for the processor message", () => {
-    const clear = spyOn(InstructionPrompt, "clear").mockImplementation(() => {})
+    const clear = vi.spyOn(InstructionPrompt, "clear").mockImplementation(() => {})
     try {
       clearPromptProcessorInstructions({ message: { id: "msg_test" } } as any)
       expect(clear).toHaveBeenCalledWith("msg_test")

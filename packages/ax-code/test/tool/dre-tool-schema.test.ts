@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { DebugRepairFromEnvelopeTool } from "../../src/tool/debug_repair_from_envelope"
 import { DedupScanTool } from "../../src/tool/dedup_scan"
 import { ImpactAnalyzeTool } from "../../src/tool/impact_analyze"

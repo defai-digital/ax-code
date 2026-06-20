@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { pathToFileURL } from "url"
 import { Config } from "../../src/config/config"
@@ -53,7 +53,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(false)
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         const envelope = await LSP.referencesEnvelope({ file, line: 0, character: 0 })
         // No server matches → empty envelope regardless of cache.
@@ -83,7 +83,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(true)
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         const envelope = await LSP.referencesEnvelope({ file, line: 0, character: 0 })
         // No server → empty → must not be written to cache (see cacheWrite guard).
@@ -113,7 +113,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(true)
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         // Pre-seed the cache for a known content hash. We compute it the
         // same way the production path does.
@@ -157,7 +157,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(false)
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         const buf = await Bun.file(file).arrayBuffer()
         const contentHash = Bun.hash(new Uint8Array(buf)).toString()
@@ -206,7 +206,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(true)
-        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
         // Seed with a *different* content hash than the file currently
         // has. The production lookup will compute the real hash and miss.

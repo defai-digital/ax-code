@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createSyncBootstrapPhaseSequence } from "../../../src/cli/cmd/tui/context/sync-bootstrap-phase-plan"
 import { runBootstrapPhaseSequence } from "../../../src/cli/cmd/tui/context/sync-bootstrap-runner"
 

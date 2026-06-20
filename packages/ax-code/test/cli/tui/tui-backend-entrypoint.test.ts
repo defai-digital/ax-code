@@ -1,8 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 
-const PACKAGE_ROOT = path.resolve(import.meta.dir, "../../..")
+const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
 const WORKER_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/worker.ts"), "utf8")
 
 describe("tui backend entrypoint guardrails", () => {

@@ -1,4 +1,4 @@
-import { test, expect, describe, mock, afterEach, spyOn } from "bun:test"
+import { test, expect, describe, afterEach, vi } from "vitest"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { Auth } from "../../src/auth"
@@ -329,14 +329,14 @@ test("resolves env templates in account config with account token", async () => 
   const originalToken = Account.token
   const originalControlToken = process.env["AX_CODE_CONSOLE_TOKEN"]
 
-  Account.active = mock(async () => ({
+  Account.active = vi.fn(async () => ({
     id: AccountID.make("account-1"),
     email: "user@example.com",
     url: "https://control.example.com",
     active_org_id: OrgID.make("org-1"),
   }))
 
-  Account.config = mock(async () => ({
+  Account.config = vi.fn(async () => ({
     provider: {
       opencode: {
         options: {
@@ -346,7 +346,7 @@ test("resolves env templates in account config with account token", async () => 
     },
   }))
 
-  Account.token = mock(async () => AccessToken.make("st_test_token"))
+  Account.token = vi.fn(async () => AccessToken.make("st_test_token"))
 
   try {
     await using tmp = await tmpdir()
@@ -471,33 +471,36 @@ test("handles agent configuration", async () => {
   })
 })
 
-test.skipIf(process.platform === "win32")("drops markdown config files that resolve outside the config directory", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      const outside = path.join(dir, "..", `${path.basename(dir)}-outside-agent.md`)
-      await Filesystem.write(
-        outside,
-        `---
+test.skipIf(process.platform === "win32")(
+  "drops markdown config files that resolve outside the config directory",
+  async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        const outside = path.join(dir, "..", `${path.basename(dir)}-outside-agent.md`)
+        await Filesystem.write(
+          outside,
+          `---
 model: test/model
 ---
 external prompt should not load`,
-      )
+        )
 
-      const agentDir = path.join(dir, ".ax-code", "agent")
-      await fs.mkdir(agentDir, { recursive: true })
-      await fs.symlink(outside, path.join(agentDir, "escape.md"))
-    },
-  })
+        const agentDir = path.join(dir, ".ax-code", "agent")
+        await fs.mkdir(agentDir, { recursive: true })
+        await fs.symlink(outside, path.join(agentDir, "escape.md"))
+      },
+    })
 
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.agent?.["escape"]).toBeUndefined()
-      expect(JSON.stringify(config.agent ?? {})).not.toContain("external prompt should not load")
-    },
-  })
-})
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.agent?.["escape"]).toBeUndefined()
+        expect(JSON.stringify(config.agent ?? {})).not.toContain("external prompt should not load")
+      },
+    })
+  },
+)
 
 test("treats agent variant as model-scoped setting (not provider option)", async () => {
   await using tmp = await tmpdir({
@@ -894,7 +897,7 @@ test("does not install dependencies in writable AX_CODE_CONFIG_DIR for package-o
   })
 
   const prev = process.env.AX_CODE_CONFIG_DIR
-  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+  const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
     code: 0,
     stdout: Buffer.alloc(0),
     stderr: Buffer.alloc(0),
@@ -931,7 +934,7 @@ test("installs dependencies in writable AX_CODE_CONFIG_DIR when local plugins ex
   })
 
   const prev = process.env.AX_CODE_CONFIG_DIR
-  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+  const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
     code: 0,
     stdout: Buffer.alloc(0),
     stderr: Buffer.alloc(0),
@@ -965,7 +968,7 @@ test("serializes concurrent config dependency installs", async () => {
   const seen: string[] = []
   let active = 0
   let max = 0
-  const run = spyOn(BunProc, "run").mockImplementation(async (_cmd, opts) => {
+  const run = vi.spyOn(BunProc, "run").mockImplementation(async (_cmd, opts) => {
     active++
     max = Math.max(max, active)
     seen.push(opts?.cwd ?? "")
@@ -1000,7 +1003,7 @@ test("does not overwrite malformed config package.json during dependency install
   const malformed = "{not json"
   await Filesystem.write(pkg, malformed)
 
-  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+  const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
     code: 0,
     stdout: Buffer.alloc(0),
     stderr: Buffer.alloc(0),
@@ -1021,7 +1024,7 @@ test("does not overwrite non-object config package.json during dependency instal
   const invalid = "[]"
   await Filesystem.write(pkg, invalid)
 
-  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+  const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
     code: 0,
     stdout: Buffer.alloc(0),
     stderr: Buffer.alloc(0),
@@ -1042,7 +1045,7 @@ test("does not overwrite config package.json with non-object dependencies during
   const invalid = JSON.stringify({ dependencies: [] })
   await Filesystem.write(pkg, invalid)
 
-  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+  const run = vi.spyOn(BunProc, "run").mockImplementation(async () => ({
     code: 0,
     stdout: Buffer.alloc(0),
     stderr: Buffer.alloc(0),
@@ -1143,39 +1146,43 @@ test("drops unresolved package plugins from untrusted project config", async () 
   })
 })
 
-test.skipIf(process.platform === "win32")("drops untrusted file plugins that resolve outside the worktree", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      const outside = path.join(dir, "..", `${path.basename(dir)}-outside-plugin.js`)
-      await Filesystem.write(outside, "export default {}\n")
+test.skipIf(process.platform === "win32")(
+  "drops untrusted file plugins that resolve outside the worktree",
+  async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        const outside = path.join(dir, "..", `${path.basename(dir)}-outside-plugin.js`)
+        await Filesystem.write(outside, "export default {}\n")
 
-      const pluginDir = path.join(dir, ".ax-code", "plugin")
-      await fs.mkdir(pluginDir, { recursive: true })
-      const link = path.join(pluginDir, "escape.js")
-      await fs.symlink(outside, link)
+        const pluginDir = path.join(dir, ".ax-code", "plugin")
+        await fs.mkdir(pluginDir, { recursive: true })
+        const link = path.join(pluginDir, "escape.js")
+        await fs.symlink(outside, link)
 
-      await Filesystem.write(
-        path.join(dir, "ax-code.json"),
-        JSON.stringify(
-          {
-            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-            plugin: [pathToFileURL(link).href],
-          },
-          null,
-          2,
-        ),
-      )
-    },
-  })
+        await Filesystem.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify(
+            {
+              $schema:
+                "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+              plugin: [pathToFileURL(link).href],
+            },
+            null,
+            2,
+          ),
+        )
+      },
+    })
 
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.plugin ?? []).toEqual([])
-    },
-  })
-})
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.plugin ?? []).toEqual([])
+      },
+    })
+  },
+)
 
 test("drops unresolved package plugins from untrusted config directories", async () => {
   await using tmp = await tmpdir({
@@ -1915,8 +1922,8 @@ test("project config overrides remote well-known config", async () => {
   let fetchedUrl: string | undefined
   const originalPinnedFetch = Ssrf.pinnedFetch
   const originalAssert = Ssrf.assertPublicUrl
-  Ssrf.assertPublicUrl = mock(() => Promise.resolve())
-  Ssrf.pinnedFetch = mock((url: string) => {
+  Ssrf.assertPublicUrl = vi.fn(() => Promise.resolve())
+  Ssrf.pinnedFetch = vi.fn((url: string) => {
     fetchedUrl = url
     if (url.includes(".well-known/")) {
       return Promise.resolve(
@@ -1940,7 +1947,7 @@ test("project config overrides remote well-known config", async () => {
   }) as typeof Ssrf.pinnedFetch
 
   const originalAuthAll = Auth.all
-  Auth.all = mock(() =>
+  Auth.all = vi.fn(() =>
     Promise.resolve({
       "https://example.com": {
         type: "wellknown" as const,
@@ -1991,8 +1998,8 @@ test("wellknown URL with trailing slash is normalized", async () => {
   let fetchedUrl: string | undefined
   const originalPinnedFetch = Ssrf.pinnedFetch
   const originalAssert = Ssrf.assertPublicUrl
-  Ssrf.assertPublicUrl = mock(() => Promise.resolve())
-  Ssrf.pinnedFetch = mock((url: string) => {
+  Ssrf.assertPublicUrl = vi.fn(() => Promise.resolve())
+  Ssrf.pinnedFetch = vi.fn((url: string) => {
     fetchedUrl = url
     if (url.includes(".well-known/")) {
       return Promise.resolve(
@@ -2016,7 +2023,7 @@ test("wellknown URL with trailing slash is normalized", async () => {
   }) as typeof Ssrf.pinnedFetch
 
   const originalAuthAll = Auth.all
-  Auth.all = mock(() =>
+  Auth.all = vi.fn(() =>
     Promise.resolve({
       "https://example.com/": {
         type: "wellknown" as const,
@@ -2058,11 +2065,11 @@ test("wellknown auth ignores dangerous environment variable names", async () => 
   const originalAssert = Ssrf.assertPublicUrl
   const originalAuthAll = Auth.all
   const originalNodeOptions = process.env["NODE_OPTIONS"]
-  Ssrf.assertPublicUrl = mock(() => Promise.resolve())
-  Ssrf.pinnedFetch = mock(() =>
+  Ssrf.assertPublicUrl = vi.fn(() => Promise.resolve())
+  Ssrf.pinnedFetch = vi.fn(() =>
     Promise.resolve(new Response(JSON.stringify({ config: {} }), { status: 200 })),
   ) as typeof Ssrf.pinnedFetch
-  Auth.all = mock(() =>
+  Auth.all = vi.fn(() =>
     Promise.resolve({
       "https://example.com": {
         type: "wellknown" as const,

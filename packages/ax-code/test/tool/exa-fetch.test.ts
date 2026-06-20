@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeExaMcpContentText, parseExaSseContentText } from "../../src/tool/exa-fetch"
 
 describe("tool.exa-fetch", () => {

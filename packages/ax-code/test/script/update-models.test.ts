@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import path from "path"
 
@@ -8,13 +8,13 @@ describe("update-models script", () => {
     const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
 
     const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
       env: {
         ...process.env,
         AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
         AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
       },
-      cwd: path.join(import.meta.dir, "../.."),
+      cwd: path.join(import.meta.dirname, "../.."),
     })
 
     const stdout = result.stdout.toString()
@@ -26,7 +26,7 @@ describe("update-models script", () => {
   })
 
   test("snapshot file is valid JSON with provider entries", async () => {
-    const snapshotPath = path.join(import.meta.dir, "../../src/provider/models-snapshot.json")
+    const snapshotPath = path.join(import.meta.dirname, "../../src/provider/models-snapshot.json")
     const data = await Bun.file(snapshotPath).json()
 
     expect(typeof data).toBe("object")
@@ -42,7 +42,7 @@ describe("update-models script", () => {
   })
 
   test("preserves CLI provider entries", async () => {
-    const snapshotPath = path.join(import.meta.dir, "../../src/provider/models-snapshot.json")
+    const snapshotPath = path.join(import.meta.dirname, "../../src/provider/models-snapshot.json")
     const data = await Bun.file(snapshotPath).json()
 
     // CLI providers should be preserved from the existing snapshot and keep
@@ -75,13 +75,13 @@ describe("update-models script", () => {
     )
 
     const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
       env: {
         ...process.env,
         AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
         AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
       },
-      cwd: path.join(import.meta.dir, "../.."),
+      cwd: path.join(import.meta.dirname, "../.."),
     })
 
     expect(result.exitCode).toBe(0)
@@ -94,7 +94,7 @@ describe("update-models script", () => {
   })
 
   test("preserves Grok API and CLI plan entries", async () => {
-    const snapshotPath = path.join(import.meta.dir, "../../src/provider/models-snapshot.json")
+    const snapshotPath = path.join(import.meta.dirname, "../../src/provider/models-snapshot.json")
     const data = await Bun.file(snapshotPath).json()
 
     expect(data.xai?.name).toBe("Grok Cloud API")
@@ -120,13 +120,13 @@ describe("update-models script", () => {
     )
 
     const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
       env: {
         ...process.env,
         AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
         AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
       },
-      cwd: path.join(import.meta.dir, "../.."),
+      cwd: path.join(import.meta.dirname, "../.."),
     })
 
     expect(result.exitCode).toBe(0)
@@ -147,16 +147,16 @@ describe("update-models script", () => {
     }
 
     Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
       env,
-      cwd: path.join(import.meta.dir, "../.."),
+      cwd: path.join(import.meta.dirname, "../.."),
     })
     const before = await Bun.file(snapshotPath).text()
 
     const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
       env,
-      cwd: path.join(import.meta.dir, "../.."),
+      cwd: path.join(import.meta.dirname, "../.."),
     })
 
     expect(result.exitCode).toBe(0)
@@ -169,12 +169,12 @@ describe("update-models script", () => {
 
   test("handles network failure gracefully", async () => {
     const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
       env: {
         ...process.env,
         AX_CODE_MODELS_URL: "http://localhost:19999", // unreachable
       },
-      cwd: path.join(import.meta.dir, "../.."),
+      cwd: path.join(import.meta.dirname, "../.."),
     })
 
     // Should exit 0 (not block commits) even on network failure

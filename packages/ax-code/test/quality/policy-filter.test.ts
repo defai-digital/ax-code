@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { applyPolicyFilter } from "../../src/quality/policy-filter"
 import type { Finding } from "../../src/quality/finding"
 import type { PolicyRules } from "../../src/quality/policy"

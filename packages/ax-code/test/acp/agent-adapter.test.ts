@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import { pathToFileURL } from "url"
 import { parseUri } from "../../src/acp/agent-adapter"

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { createInitialSyncState } from "../../../src/cli/cmd/tui/context/sync-state"
 
 afterEach(() => {

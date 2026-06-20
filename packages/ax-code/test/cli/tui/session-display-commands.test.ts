@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { transcriptFilename } from "../../../src/cli/cmd/tui/routes/session/display-command-helpers"
 
 describe("tui session display command helpers", () => {

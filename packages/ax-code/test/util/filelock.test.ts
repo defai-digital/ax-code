@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { FileLock } from "../../src/util/filelock"
 import { currentLockHost } from "../../src/util/process-lock"
@@ -50,8 +50,8 @@ describe("util.filelock", () => {
       }),
     )
 
-    const killSpy = spyOn(process, "kill").mockImplementation(() => true as any)
-    const nowSpy = spyOn(Date, "now").mockImplementation(() => {
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true as any)
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => {
       nowCalls += 1
       return nowCalls >= 5 ? 2_010 : 2_000
     })

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeDataUrl } from "../../src/util/data-url"
 
 describe("decodeDataUrl", () => {

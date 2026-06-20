@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { entryApplies, matchesPath, normalizePathForMatch, normalizeTags } from "../../src/memory/applicability"
 import type { MemoryEntry } from "../../src/memory/types"
 

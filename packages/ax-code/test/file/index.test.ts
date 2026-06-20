@@ -1,4 +1,4 @@
-import { afterEach, describe, test, expect, spyOn } from "bun:test"
+import { afterEach, describe, test, expect, vi } from "vitest"
 import { $ } from "bun"
 import path from "path"
 import fs from "fs/promises"
@@ -94,7 +94,7 @@ describe("file/index Filesystem patterns", () => {
       await fs.symlink(target, link)
 
       const originalReadText = Filesystem.readText.bind(Filesystem)
-      const readText = spyOn(Filesystem, "readText").mockImplementation((filepath) => originalReadText(filepath))
+      const readText = vi.spyOn(Filesystem, "readText").mockImplementation((filepath) => originalReadText(filepath))
 
       try {
         await Instance.provide({
@@ -116,7 +116,7 @@ describe("file/index Filesystem patterns", () => {
       await fs.writeFile(filepath, "secret", "utf-8")
 
       const failure = Object.assign(new Error("permission denied"), { code: "EACCES" })
-      const readText = spyOn(Filesystem, "readText").mockImplementation(async (target) => {
+      const readText = vi.spyOn(Filesystem, "readText").mockImplementation(async (target) => {
         if (target === filepath) throw failure
         return fs.readFile(target, "utf-8")
       })
@@ -741,7 +741,7 @@ describe("file/index Filesystem patterns", () => {
       await using tmp = await tmpdir()
       const failure = Object.assign(new Error("permission denied"), { code: "EACCES" })
       const originalReaddir = nodeFs.promises.readdir.bind(nodeFs.promises)
-      const readdir = spyOn(nodeFs.promises, "readdir").mockImplementation((target, options) => {
+      const readdir = vi.spyOn(nodeFs.promises, "readdir").mockImplementation((target, options) => {
         if (target === tmp.path) throw failure
         return originalReaddir(target, options as never) as never
       })

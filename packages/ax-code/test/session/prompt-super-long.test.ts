@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Session } from "../../src/session"
 import { SuperLongRuntime } from "../../src/session/super-long-runtime"
 import { enforceSuperLongDeadline } from "../../src/session/prompt-super-long"
@@ -43,7 +43,7 @@ afterEach(() => {
 describe("enforceSuperLongDeadline", () => {
   test("skips durable runtime lookup when super-long is disabled", async () => {
     clearSuperLongEnv()
-    const startedAt = spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
+    const startedAt = vi.spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
     try {
       await expect(
         enforceSuperLongDeadline({
@@ -62,7 +62,7 @@ describe("enforceSuperLongDeadline", () => {
 
   test("reports enabled=true while an active super-long run is within its deadline", async () => {
     clearSuperLongEnv()
-    const startedAt = spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
+    const startedAt = vi.spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
     try {
       await expect(
         enforceSuperLongDeadline({
@@ -81,9 +81,9 @@ describe("enforceSuperLongDeadline", () => {
 
   test("honors a configured duration shorter than the 72h ceiling", async () => {
     clearSuperLongEnv()
-    const startedAt = spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
-    const updateMessageWithParts = spyOn(Session, "updateMessageWithParts").mockResolvedValue(undefined as any)
-    const publishError = spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
+    const startedAt = vi.spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
+    const updateMessageWithParts = vi.spyOn(Session, "updateMessageWithParts").mockResolvedValue(undefined as any)
+    const publishError = vi.spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
     try {
       await using tmp = await tmpdir({ git: true })
       const twoHoursMs = 2 * 60 * 60 * 1000
@@ -122,9 +122,9 @@ describe("enforceSuperLongDeadline", () => {
 
   test("stops expired super-long sessions and records a synthetic assistant when needed", async () => {
     clearSuperLongEnv()
-    const startedAt = spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
-    const updateMessageWithParts = spyOn(Session, "updateMessageWithParts").mockResolvedValue(undefined as any)
-    const publishError = spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
+    const startedAt = vi.spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
+    const updateMessageWithParts = vi.spyOn(Session, "updateMessageWithParts").mockResolvedValue(undefined as any)
+    const publishError = vi.spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
     try {
       await using tmp = await tmpdir({ git: true })
       const result = await Instance.provide({

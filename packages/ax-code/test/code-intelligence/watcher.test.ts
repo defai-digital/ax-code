@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
@@ -204,7 +204,7 @@ describe("CodeGraphWatcher.start / stop", () => {
         CodeIntelligence.__clearProject(projectID)
         const file = `${tmp.path}/changed.ts`
         await Bun.write(file, "export const changed = 1\n")
-        const indexFiles = spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({
+        const indexFiles = vi.spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({
           nodes: 0,
           edges: 0,
           files: 0,
@@ -326,7 +326,7 @@ describe("CodeGraphWatcher batching", () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
         const files = Array.from({ length: 5 }, (_, i) => `${tmp.path}/burst-${i}.ts`)
-        const indexFiles = spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({
+        const indexFiles = vi.spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({
           nodes: 0,
           edges: 0,
           files: 0,

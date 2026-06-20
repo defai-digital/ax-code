@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseStashLine } from "../../../src/cli/cmd/tui/component/prompt/stash-util"
 
 describe("prompt stash persistence", () => {

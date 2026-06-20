@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
 
 const BIG_BUDGET = 100_000

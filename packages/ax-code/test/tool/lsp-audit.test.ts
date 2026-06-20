@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
@@ -48,7 +48,7 @@ describe("lsp tool audit trail (S3)", () => {
       fn: async () => {
         const session = await Session.create({ title: "audit-tool-test" })
 
-        workspaceEnvelopeSpy = spyOn(LSP, "workspaceSymbolEnvelope").mockResolvedValue({
+        workspaceEnvelopeSpy = vi.spyOn(LSP, "workspaceSymbolEnvelope").mockResolvedValue({
           symbols: [
             {
               name: "DemoSymbol",
@@ -162,9 +162,9 @@ describe("lsp tool audit trail (S3)", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ title: "audit-diag-test" })
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as any)
-        diagnosticsAggregatedSpy = spyOn(LSP, "diagnosticsAggregated").mockResolvedValue({
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as any)
+        diagnosticsAggregatedSpy = vi.spyOn(LSP, "diagnosticsAggregated").mockResolvedValue({
           data: [
             {
               path: file,
@@ -216,9 +216,9 @@ describe("lsp tool audit trail (S3)", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ title: "audit-incoming-calls-test" })
-        hasClientsSpy = spyOn(LSP, "hasClients").mockResolvedValue(true)
-        touchFileSpy = spyOn(LSP, "touchFile").mockResolvedValue(1 as any)
-        incomingCallsEnvelopeSpy = spyOn(LSP, "incomingCallsEnvelope").mockResolvedValue({
+        hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+        touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as any)
+        incomingCallsEnvelopeSpy = vi.spyOn(LSP, "incomingCallsEnvelope").mockResolvedValue({
           data: [{ from: "caller" }],
           source: "lsp",
           completeness: "full",

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
@@ -37,7 +37,7 @@ describe("storage transfer", () => {
         throw new Error("cannot print")
       },
     }
-    readJsonSpy = spyOn(Filesystem, "readJson").mockImplementation(async () => {
+    readJsonSpy = vi.spyOn(Filesystem, "readJson").mockImplementation(async () => {
       throw failure
     })
 

@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { expect, test } from "vitest"
 import { deletedFileStatus, parseDeletedPaths, parseModifiedNumstat, untrackedFileStatus } from "../../src/file/status"
 
 test("parseModifiedNumstat returns modified entries with decoded paths", () => {

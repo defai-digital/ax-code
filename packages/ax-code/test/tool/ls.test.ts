@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import path from "path"
 import { ListTool } from "../../src/tool/ls"
 import { Instance } from "../../src/project/instance"

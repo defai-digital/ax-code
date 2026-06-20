@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { estimateRequestTokens, estimateToolDefinitionTokens, getLastUserInfo } from "../../src/session/prompt-request"
 
 describe("session.prompt request helpers", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import type { ProjectInfo } from "../../src/context"
 import { generate } from "../../src/context/generator"
 

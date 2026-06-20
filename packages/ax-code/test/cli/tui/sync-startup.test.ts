@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createSyncStartupCoordinator } from "../../../src/cli/cmd/tui/context/sync-startup"
 
 describe("tui sync startup coordinator", () => {

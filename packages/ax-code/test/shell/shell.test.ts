@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Shell } from "../../src/shell/shell"
 
 describe("Shell", () => {

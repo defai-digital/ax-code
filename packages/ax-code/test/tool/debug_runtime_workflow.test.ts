@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"

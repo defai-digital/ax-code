@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { buildGlyphSet, resolveNerdFontEnabled } from "@/cli/cmd/tui/ui/glyphs"
 
 describe("resolveNerdFontEnabled", () => {

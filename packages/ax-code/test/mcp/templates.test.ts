@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { Config } from "../../src/config/config"
 import { TEMPLATES, byCategory, find, names, toConfig } from "../../src/mcp/templates"
 

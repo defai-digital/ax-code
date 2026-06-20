@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { decodeToolParamsValue, parseToolParams } from "../../src/cli/cmd/debug/agent"
 
 describe("debug agent", () => {

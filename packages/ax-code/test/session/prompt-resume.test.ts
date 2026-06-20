@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
@@ -68,8 +68,8 @@ describe("session.prompt resume_existing", () => {
           mode: "build",
         } as MessageV2.User)
 
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
-        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
           fullStream: (async function* () {
             yield { type: "start" }
             yield { type: "start-step" }
@@ -103,7 +103,7 @@ describe("session.prompt resume_existing", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
 
         let firstStreamReady: (() => void) | undefined
         let releaseFirstStream: (() => void) | undefined
@@ -114,7 +114,7 @@ describe("session.prompt resume_existing", () => {
           releaseFirstStream = resolve
         })
         let streams = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async () => {
           streams++
           const streamNumber = streams
           if (streamNumber === 1) {
@@ -138,7 +138,7 @@ describe("session.prompt resume_existing", () => {
           } as any
         }) as any)
 
-        const emitSpy = spyOn(Recorder, "emit")
+        const emitSpy = vi.spyOn(Recorder, "emit")
         try {
           const first = SessionPrompt.prompt({
             sessionID: session.id,

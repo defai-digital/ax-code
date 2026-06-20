@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -25,7 +25,7 @@ describe("file routes", () => {
       directory: tmp.path,
       fn: async () => {
         let searchInput: Parameters<typeof File.search>[0] | undefined
-        const searchSpy = spyOn(File, "search").mockImplementation(async (input) => {
+        const searchSpy = vi.spyOn(File, "search").mockImplementation(async (input) => {
           searchInput = input
           return ["needle-dir"]
         })
@@ -48,7 +48,7 @@ describe("file routes", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        workspaceSymbolSpy = spyOn(LSP, "workspaceSymbol").mockResolvedValue([
+        workspaceSymbolSpy = vi.spyOn(LSP, "workspaceSymbol").mockResolvedValue([
           {
             name: "DemoSymbol",
             kind: 12,

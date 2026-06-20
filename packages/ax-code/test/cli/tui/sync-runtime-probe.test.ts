@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import {
   AX_CODE_TUI_RUNTIME_SYNC_PROBE_DELAY_MS,
   createRuntimeSyncProbeScheduler,

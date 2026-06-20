@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 
 import type { Bench } from "../../src/cli/cmd/debug/perf"
 import type { Verdict } from "../../script/perf-index"

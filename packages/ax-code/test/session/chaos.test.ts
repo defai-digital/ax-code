@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Agent } from "../../src/agent/agent"
 import type { Provider } from "../../src/provider/provider"
 import { Instance } from "../../src/project/instance"
@@ -103,7 +103,7 @@ async function setup(tmp: { path: string }) {
 }
 
 function mockStream(events: AsyncIterable<any>) {
-  streamSpy = spyOn(LLM, "stream").mockResolvedValue({ fullStream: events } as any)
+  streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({ fullStream: events } as any)
 }
 
 function* finishStep(opts?: { tokens?: boolean; reason?: string }) {
@@ -149,7 +149,7 @@ describe("chaos: stream failures", () => {
       directory: tmp.path,
       fn: async () => {
         const { processor, process } = await setup(tmp)
-        streamSpy = spyOn(LLM, "stream").mockRejectedValue(new Error("Connection refused"))
+        streamSpy = vi.spyOn(LLM, "stream").mockRejectedValue(new Error("Connection refused"))
         const result = await process()
         expect(result).toBe("stop")
         expect(processor.message.error).toBeDefined()
@@ -209,7 +209,7 @@ describe("chaos: stream failures", () => {
       fn: async () => {
         const { processor, process } = await setup(tmp)
         let calls = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           calls++
           throw new Error("Invalid API key")
         })
@@ -228,7 +228,7 @@ describe("chaos: stream failures", () => {
       fn: async () => {
         const { processor, process } = await setup(tmp)
         let calls = 0
-        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           calls++
           if (calls <= 2) throw new MessageV2.APIError({ message: "Rate limited", isRetryable: true }).toObject()
           return {
@@ -247,7 +247,7 @@ describe("chaos: stream failures", () => {
             })(),
           } as any
         })
-        sleepSpy = spyOn(SessionRetry, "sleep").mockResolvedValue()
+        sleepSpy = vi.spyOn(SessionRetry, "sleep").mockResolvedValue()
         const result = await process()
         expect(result).toBe("continue")
         expect(calls).toBe(3)
@@ -342,10 +342,10 @@ describe("chaos: abort signal", () => {
         const { processor, process } = await setup(tmp)
         const controller = new AbortController()
         const err = new MessageV2.APIError({ message: "Rate limited", isRetryable: true }).toObject()
-        streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           throw err
         })
-        sleepSpy = spyOn(SessionRetry, "sleep").mockImplementation(async () => {
+        sleepSpy = vi.spyOn(SessionRetry, "sleep").mockImplementation(async () => {
           controller.abort()
         })
         const result = await process(controller.signal)
@@ -496,7 +496,7 @@ describe("chaos: error events", () => {
         const errors: unknown[] = []
         const unsub = Bus.subscribe(Session.Event.Error, (e) => errors.push(e.properties.error))
         try {
-          streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+          streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
             throw new Error("Unexpected provider failure")
           })
           await process()

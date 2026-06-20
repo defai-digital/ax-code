@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseTuiJsonPayload } from "../../../src/cli/cmd/tui/util/json"
 
 describe("tui json util", () => {

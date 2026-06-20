@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { sidebarGraphIndexStatusText } from "../../../src/cli/cmd/tui/routes/session/sidebar-index-view-model"
 
 describe("session sidebar graph index status", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { SuperLongPolicy } from "@/session/super-long-policy"
 
 const SEVENTY_TWO_HOURS_MS = 72 * 60 * 60 * 1000

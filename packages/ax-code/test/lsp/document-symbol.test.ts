@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { expect, test } from "vitest"
 import { documentSymbols, envelope } from "../../src/lsp/document-symbol"
 import type { LSPClient } from "../../src/lsp/client"
 

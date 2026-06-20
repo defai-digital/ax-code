@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "node:path"
 import { mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -41,7 +41,7 @@ describe("script.check-tui-layering", () => {
   })
 
   test("keeps protected TUI logic files free of solid and renderer imports in the current repo", async () => {
-    const root = path.resolve(import.meta.dir, "../..")
+    const root = path.resolve(import.meta.dirname, "../..")
 
     expect(await TuiLayeringGuardrails.check(root)).toEqual([])
   })

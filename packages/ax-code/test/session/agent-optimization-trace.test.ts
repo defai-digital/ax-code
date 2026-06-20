@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
 import { ReplayEvent } from "@/replay/event"
 

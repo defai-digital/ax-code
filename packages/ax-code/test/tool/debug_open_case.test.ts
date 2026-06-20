@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { DebugOpenCaseTool } from "../../src/tool/debug_open_case"
 import { computeDebugCaseId, DebugCaseSchema, DEBUG_ID_PATTERN } from "../../src/debug-engine/runtime-debug"
 import { Installation } from "../../src/installation"

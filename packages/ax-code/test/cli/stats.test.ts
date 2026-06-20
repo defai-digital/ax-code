@@ -1,4 +1,4 @@
-import { afterEach, expect, spyOn, test } from "bun:test"
+import { afterEach, expect, test, vi } from "vitest"
 import { aggregateSessionStats, displayStats } from "../../src/cli/cmd/stats"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -16,7 +16,7 @@ afterEach(() => {
 
 test("displayStats respects toolLimit=0 by hiding tool rows", () => {
   const logs: string[] = []
-  const logSpy = spyOn(console, "log").mockImplementation((...args) => {
+  const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
     logs.push(args.join(" "))
   })
 
@@ -58,10 +58,10 @@ test("displayStats respects toolLimit=0 by hiding tool rows", () => {
 
 test("displayStats sanitizes non-finite numbers", () => {
   const logs: string[] = []
-  const logSpy = spyOn(console, "log").mockImplementation((...args) => {
+  const logSpy = vi.spyOn(console, "log").mockImplementation((...args) => {
     logs.push(args.join(" "))
   })
-  const writeSpy = spyOn(process.stdout, "write").mockImplementation(() => true)
+  const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
 
   try {
     displayStats(
@@ -128,12 +128,12 @@ test("aggregateSessionStats skips sessions whose messages fail with an unprintab
       const sessionMessagesTarget = Session as unknown as {
         messages(input: Parameters<typeof Session.messages>[0]): Promise<Awaited<ReturnType<typeof Session.messages>>>
       }
-      messagesSpy = spyOn(sessionMessagesTarget, "messages").mockImplementation(async (input) => {
+      messagesSpy = vi.spyOn(sessionMessagesTarget, "messages").mockImplementation(async (input) => {
         if (input.sessionID === first.id) throw failure
         return []
       })
       const warnings: string[] = []
-      warnSpy = spyOn(console, "warn").mockImplementation((...args) => {
+      warnSpy = vi.spyOn(console, "warn").mockImplementation((...args) => {
         warnings.push(args.join(" "))
       })
 

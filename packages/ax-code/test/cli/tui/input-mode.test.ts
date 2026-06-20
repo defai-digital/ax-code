@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { installResizeInputGuard, resizeSignature, restoreTuiInputMode } from "../../../src/cli/cmd/tui/input-mode"
 
 function createEmitter() {

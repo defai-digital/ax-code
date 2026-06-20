@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { AutonomousQuestion } from "../../src/question/autonomous"
 
 describe("autonomous question evaluation fixtures", () => {

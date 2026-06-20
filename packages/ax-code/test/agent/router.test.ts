@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import path from "path"
 import { route, classifyComplexity, formatComplexityFailureError } from "../../src/agent/router"
 
 describe("v2-style keyword route", () => {
   test("schema descriptions do not claim specialist auto-routing is removed", async () => {
-    const schema = await Bun.file(path.join(import.meta.dir, "../../src/config/schema.ts")).text()
-    const promptInput = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt-input.ts")).text()
+    const schema = await Bun.file(path.join(import.meta.dirname, "../../src/config/schema.ts")).text()
+    const promptInput = await Bun.file(path.join(import.meta.dirname, "../../src/session/prompt-input.ts")).text()
 
     expect(schema).toContain("Disable automatic specialist agent routing")
     expect(schema).toContain("Specialist agent auto-routing and message-complexity routing settings")
@@ -114,7 +114,7 @@ describe("v2-style keyword route", () => {
   })
 
   test("debug-n-fix skill prompt does not route to architect", async () => {
-    const skill = await Bun.file(path.join(import.meta.dir, "../../skills/debug-n-fix/SKILL.md")).text()
+    const skill = await Bun.file(path.join(import.meta.dirname, "../../skills/debug-n-fix/SKILL.md")).text()
     const body = skill.replace(/^---[\s\S]*?---\n/, "").replaceAll("$ARGUMENTS", "")
 
     expect(route(body, "build")?.agent).toBe("debug")

@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import { MessageV2 } from "../../src/session/message-v2"
 import { createStructuredOutputTool, createStructuredOutputTurn } from "../../src/session/prompt-helpers"
 import { SessionID, MessageID } from "../../src/session/schema"
@@ -416,7 +416,7 @@ describe("structured-output.createStructuredOutputTurn", () => {
   })
 
   test("attaches required tool and saves captured structured output", async () => {
-    const update = spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
+    const update = vi.spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
     try {
       const turn = createStructuredOutputTurn({
         type: "json_schema",
@@ -441,7 +441,7 @@ describe("structured-output.createStructuredOutputTurn", () => {
   })
 
   test("marks missing required structured output as an assistant error", async () => {
-    const update = spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
+    const update = vi.spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
     try {
       const turn = createStructuredOutputTurn({
         type: "json_schema",

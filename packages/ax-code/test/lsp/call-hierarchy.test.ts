@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { LSP } from "../../src/lsp"
 import { Config } from "../../src/config/config"
@@ -18,7 +18,7 @@ afterEach(() => {
 describe("LSP call hierarchy aggregation", () => {
   test("incomingCalls aggregates every prepared hierarchy item", async () => {
     await using tmp = await tmpdir({ git: true })
-    const serverPath = path.join(import.meta.dir, "../fixture/lsp/fake-lsp-server.js")
+    const serverPath = path.join(import.meta.dirname, "../fixture/lsp/fake-lsp-server.js")
     const file = path.join(tmp.path, "demo.ts")
     await Bun.write(file, "export const hello = () => 1\n")
     const input = {
@@ -30,7 +30,7 @@ describe("LSP call hierarchy aggregation", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
             fake: {
               command: [process.execPath, serverPath],
@@ -56,7 +56,7 @@ describe("LSP call hierarchy aggregation", () => {
 
   test("outgoingCalls aggregates every prepared hierarchy item", async () => {
     await using tmp = await tmpdir({ git: true })
-    const serverPath = path.join(import.meta.dir, "../fixture/lsp/fake-lsp-server.js")
+    const serverPath = path.join(import.meta.dirname, "../fixture/lsp/fake-lsp-server.js")
     const file = path.join(tmp.path, "demo.ts")
     await Bun.write(file, "export const hello = () => 1\n")
     const input = {
@@ -68,7 +68,7 @@ describe("LSP call hierarchy aggregation", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = spyOn(Config, "get").mockResolvedValue({
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
           lsp: {
             fake: {
               command: [process.execPath, serverPath],

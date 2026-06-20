@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { dreGraphActivityToolLabels, summarizeDreGraphActivityTools } from "../../src/quality/dre-graph-activity"
 
 describe("quality.dre-graph-activity", () => {

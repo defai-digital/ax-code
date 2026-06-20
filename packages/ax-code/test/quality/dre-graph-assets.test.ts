@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { live, mermaidScript, themeScript, themeToggle } from "../../src/quality/dre-graph-assets"
 
 describe("quality.dre-graph-assets", () => {

@@ -1,7 +1,7 @@
 import path from "path"
 import fs from "fs/promises"
 import os from "os"
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import z from "zod"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -31,7 +31,7 @@ describe("server route validation", () => {
       directory: root,
       fn: async () => {
         const session = await Session.create({})
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockRejectedValue(
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockRejectedValue(
           new Error("prompt failed with sk-test-token"),
         )
 
@@ -194,7 +194,7 @@ describe("server route validation", () => {
       directory: root,
       fn: async () => {
         const session = await Session.create({})
-        const busySpy = spyOn(SessionPrompt, "assertNotBusy").mockImplementation(() => {
+        const busySpy = vi.spyOn(SessionPrompt, "assertNotBusy").mockImplementation(() => {
           throw new Session.BusyError(session.id)
         })
 
@@ -366,7 +366,7 @@ describe("server route validation", () => {
   })
 
   test("revert and unrevert routes assert that the session is not busy", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/session.ts")).text()
     const revertStart = src.indexOf('"/:sessionID/revert"')
     const unrevertStart = src.indexOf('"/:sessionID/unrevert"', revertStart)
     const permissionStart = src.indexOf('"/:sessionID/permissions/:permissionID"', unrevertStart)
@@ -390,7 +390,7 @@ describe("server route validation", () => {
       directory: root,
       fn: async () => {
         let globalListInput: Parameters<typeof Session.listGlobal>[0]
-        const globalListSpy = spyOn(Session, "listGlobal").mockImplementation(function* (input) {
+        const globalListSpy = vi.spyOn(Session, "listGlobal").mockImplementation(function* (input) {
           globalListInput = input
         } as typeof Session.listGlobal)
 
@@ -413,7 +413,7 @@ describe("server route validation", () => {
       directory: root,
       fn: async () => {
         let sessionListInput: Parameters<typeof Session.list>[0]
-        const sessionListSpy = spyOn(Session, "list").mockImplementation(function* (input) {
+        const sessionListSpy = vi.spyOn(Session, "list").mockImplementation(function* (input) {
           sessionListInput = input
         } as typeof Session.list)
 
@@ -436,10 +436,10 @@ describe("server route validation", () => {
       fn: async () => {
         let sessionListInput: Parameters<typeof Session.list>[0]
         let globalListInput: Parameters<typeof Session.listGlobal>[0]
-        const sessionListSpy = spyOn(Session, "list").mockImplementation(function* (input) {
+        const sessionListSpy = vi.spyOn(Session, "list").mockImplementation(function* (input) {
           sessionListInput = input
         } as typeof Session.list)
-        const globalListSpy = spyOn(Session, "listGlobal").mockImplementation(function* (input) {
+        const globalListSpy = vi.spyOn(Session, "listGlobal").mockImplementation(function* (input) {
           globalListInput = input
         } as typeof Session.listGlobal)
 
@@ -598,14 +598,14 @@ describe("server route validation", () => {
   })
 
   test("pty websocket route closes failed connects instead of leaving an unhandled async open", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/pty.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/pty.ts")).text()
     expect(src).toContain("try {")
     expect(src).toContain("handler = await Pty.connect(id, socket, cursor)")
     expect(src).toContain("ws.close()")
   })
 
   test("pty websocket route reports missing sessions as not found", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/pty.ts")).text()
+    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/pty.ts")).text()
     expect(src).toContain('throw new NotFoundError({ message: "Session not found" })')
     expect(src).not.toContain('throw new Error("Session not found")')
   })
@@ -625,8 +625,8 @@ describe("server route validation", () => {
   })
 
   test("sse stop handlers always close their queues even if unsubscribe throws", async () => {
-    const eventSrc = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/event.ts")).text()
-    const globalSrc = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/global.ts")).text()
+    const eventSrc = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/event.ts")).text()
+    const globalSrc = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/global.ts")).text()
     expect(eventSrc).toContain("} finally {")
     expect(eventSrc).toContain("q.push(null)")
     expect(globalSrc).toContain("} finally {")
@@ -634,7 +634,7 @@ describe("server route validation", () => {
   })
 
   test("event stream only forwards bus events from the current project", async () => {
-    const eventSrc = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/event.ts")).text()
+    const eventSrc = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/event.ts")).text()
     expect(eventSrc).toContain("const shouldForward")
     expect(eventSrc).toContain("directory === undefined || directory === Instance.directory")
     expect(eventSrc).toMatch(/Bus\.subscribeAll\(\(event\) => \{\s*if \(!shouldForward\(event\)\) return/)
@@ -671,7 +671,7 @@ describe("server route validation", () => {
   test("directory selection rejects sensitive home directories", async () => {
     const home = path.join(root, ".test-home")
     await fs.mkdir(path.join(home, ".ssh"), { recursive: true })
-    const homedir = spyOn(os, "homedir").mockReturnValue(home)
+    const homedir = vi.spyOn(os, "homedir").mockReturnValue(home)
 
     try {
       const res = await Server.Default().request(
@@ -696,10 +696,10 @@ describe("server route validation", () => {
       fn: async () => {
         let sessionListInput: Parameters<typeof Session.list>[0]
         let globalListInput: Parameters<typeof Session.listGlobal>[0]
-        const sessionListSpy = spyOn(Session, "list").mockImplementation(function* (input) {
+        const sessionListSpy = vi.spyOn(Session, "list").mockImplementation(function* (input) {
           sessionListInput = input
         } as typeof Session.list)
-        const globalListSpy = spyOn(Session, "listGlobal").mockImplementation(function* (input) {
+        const globalListSpy = vi.spyOn(Session, "listGlobal").mockImplementation(function* (input) {
           globalListInput = input
         } as typeof Session.listGlobal)
 

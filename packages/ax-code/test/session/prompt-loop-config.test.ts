@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { GLOBAL_STEP_LIMIT } from "../../src/constants/session"
 import {
   MAX_EMPTY_MODEL_TURN_RETRIES,

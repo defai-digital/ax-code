@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test"
+import { test, expect } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { pathToFileURL } from "url"
@@ -60,7 +60,7 @@ test("provider loaded from env variable", async () => {
 })
 
 test("Provider.invalidate clears SDK cache as well as pending loads", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/provider.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/provider/provider.ts")).text()
   const start = src.indexOf("export async function invalidate()")
   const end = src.indexOf("async function getSDK", start)
   expect(start).toBeGreaterThan(-1)
@@ -92,7 +92,7 @@ test("Auth.set invalidates provider cache after key replacement", async () => {
 })
 
 test("getLanguage registers pending model loads before awaiting them", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/provider.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dirname, "../../src/provider/provider.ts")).text()
   const start = src.indexOf("export async function getLanguage(")
   const end = src.indexOf("export async function closest(", start)
   expect(start).toBeGreaterThan(-1)

@@ -1,4 +1,4 @@
-import { afterEach, describe, test, expect } from "bun:test"
+import { afterEach, describe, test, expect } from "vitest"
 import { Permission } from "../src/permission"
 import { Config } from "../src/config/config"
 import { Instance } from "../src/project/instance"

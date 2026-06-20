@@ -1,4 +1,4 @@
-import { test, expect, describe } from "bun:test"
+import { test, expect, describe } from "vitest"
 import { promptToText } from "../../../src/provider/cli/prompt"
 import type { LanguageModelV3Prompt } from "@ai-sdk/provider"
 
@@ -173,9 +173,7 @@ describe("promptToText", () => {
       },
     ] as unknown as LanguageModelV3Prompt
 
-    expect(promptToText(prompt)).toBe(
-      '[Tool Result: debug]: {"type":"json","value":{"count":"1","self":"[Circular]"}}',
-    )
+    expect(promptToText(prompt)).toBe('[Tool Result: debug]: {"type":"json","value":{"count":"1","self":"[Circular]"}}')
   })
 
   test("skips tool-approval-response parts in tool messages", () => {

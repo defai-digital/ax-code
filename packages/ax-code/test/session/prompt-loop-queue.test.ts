@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { finishPromptLoopQueue } from "../../src/session/prompt-loop-queue"
 import { SessionID } from "../../src/session/schema"
 

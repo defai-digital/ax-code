@@ -1,4 +1,4 @@
-import { afterEach, test, expect } from "bun:test"
+import { afterEach, test, expect } from "vitest"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"

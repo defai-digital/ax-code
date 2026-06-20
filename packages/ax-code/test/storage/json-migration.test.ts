@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, spyOn } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, vi } from "vitest"
 import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
 import { migrate } from "drizzle-orm/bun-sqlite/migrator"
@@ -668,7 +668,7 @@ describe("JSON to SQLite migration", () => {
     await Bun.write(path.join(storageDir, "project", "unprintable.json"), JSON.stringify({ worktree: "/" }))
 
     const originalReadJson = Filesystem.readJson
-    const readJsonSpy = spyOn(Filesystem, "readJson").mockImplementation(async (file: string) => {
+    const readJsonSpy = vi.spyOn(Filesystem, "readJson").mockImplementation(async (file: string) => {
       if (file.endsWith("unprintable.json")) {
         throw {
           toString() {

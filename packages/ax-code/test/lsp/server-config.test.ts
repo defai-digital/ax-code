@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test"
+import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import { LSPServerConfig } from "../../src/lsp/server-config"
 import { Instance } from "../../src/project/instance"
@@ -86,7 +86,7 @@ describe("LSPServerConfig", () => {
 
   test("empty custom command does not spawn an undefined executable", async () => {
     await using tmp = await tmpdir({ git: true })
-    const spawnSpy = spyOn(Process, "spawn")
+    const spawnSpy = vi.spyOn(Process, "spawn")
 
     try {
       await Instance.provide({

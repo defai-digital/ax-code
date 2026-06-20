@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import { Instance } from "../../src/project/instance"
 import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
@@ -878,7 +878,7 @@ describe("WorkflowScheduler", () => {
           const { SessionPrompt } = await import("../../src/session/prompt")
           const [first] = await TaskQueue.list()
           expect(first?.sessionID).toStartWith("ses_")
-          const promptSpy = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+          const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue({
             info: {
               id: "msg_workflow_child",
               role: "assistant",

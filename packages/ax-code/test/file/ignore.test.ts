@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test"
+import { test, expect } from "vitest"
 import { FileIgnore } from "../../src/file/ignore"
 
 test("match nested and non-nested", () => {

@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test"
+import { test, expect } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { CompatibilityImport } from "../../src/import/compatibility"
