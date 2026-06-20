@@ -129,9 +129,9 @@ describe("headless SDK types", () => {
         type: "session.status",
         properties: { sessionID: "ses_1", status: { type: "failed", error: "tool failed" } },
       },
-    ] as const
+    ]
 
-    for (const event of events) applyHeadlessProjectionEvent(state, event)
+    for (const event of events) applyHeadlessProjectionEvent(state, event as any)
 
     expect(state.stream_health).toBe("connected")
     expect(state.session).toEqual([{ id: "ses_1", title: "Fixture", metadata: { app: { pinned: true } } }])
@@ -200,7 +200,7 @@ describe("headless SDK types", () => {
       { autonomous: true },
     )
     expect(result.effects).toHaveLength(1)
-    expect(result.effects[0].type).toBe("permission.auto_reply")
+    expect(result.effects[0]?.type).toBe("permission.auto_reply")
     expect(state.permission["sess-1"] ?? []).toHaveLength(0)
   })
 
@@ -215,13 +215,13 @@ describe("headless SDK types", () => {
     >()
     const event = {
       type: "workflow.artifact.written",
-      properties: { artifact: { id: "wfa-1", runID: "wfr-1" } },
-    } as const
+      properties: { id: "wfa-1", runID: "wfr-1", kind: "summary" },
+    }
 
-    const result = applyHeadlessProjectionEvent(state, event)
+    const result = applyHeadlessProjectionEvent(state, event as any)
 
     expect(result).toEqual({ handled: true, effects: [{ type: "runtime.probe", key: "workflow" }] })
-    expect(runtimeProbeKeysForEvent(event)).toEqual(["workflow"])
+    expect(runtimeProbeKeysForEvent(event as any)).toEqual(["workflow"])
   })
 
   test("createHeadlessClient sends async prompt commands through the headless route", async () => {
@@ -229,7 +229,7 @@ describe("headless SDK types", () => {
     const client = createHeadlessClient({
       baseUrl: "http://127.0.0.1:4096",
       headers: { Authorization: "Basic token" },
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         calls.push({ url: url.toString(), init: init ?? {} })
         return new Response("", { status: 202 })
       }) as typeof fetch,
@@ -238,13 +238,13 @@ describe("headless SDK types", () => {
     const result = await client.sendPrompt("sess-1", { parts: [{ type: "text", text: "hello" }] })
 
     expect(calls).toHaveLength(1)
-    expect(calls[0].url).toBe("http://127.0.0.1:4096/session/sess-1/prompt_async")
-    expect(calls[0].init.method).toBe("POST")
-    expect(calls[0].init.headers).toEqual({
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4096/session/sess-1/prompt_async")
+    expect(calls[0]?.init.method).toBe("POST")
+    expect(calls[0]?.init.headers).toEqual({
       Authorization: "Basic token",
       "Content-Type": "application/json",
     })
-    expect(calls[0].init.body).toBe(JSON.stringify({ parts: [{ type: "text", text: "hello" }] }))
+    expect(calls[0]?.init.body).toBe(JSON.stringify({ parts: [{ type: "text", text: "hello" }] }))
     expect(result).toEqual({ accepted: true, status: 202 })
   })
 
@@ -252,7 +252,7 @@ describe("headless SDK types", () => {
     const calls: string[] = []
     const client = createHeadlessClient({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo) => {
+      fetch: (async (url: string | URL | Request) => {
         calls.push(url.toString())
         return new Response(JSON.stringify({ ok: true }), { status: 200 })
       }) as typeof fetch,
@@ -270,7 +270,7 @@ describe("headless SDK types", () => {
     const calls: string[] = []
     const client = createHeadlessClient({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo) => {
+      fetch: (async (url: string | URL | Request) => {
         calls.push(url.toString())
         return new Response("", { status: 202 })
       }) as typeof fetch,
@@ -287,7 +287,7 @@ describe("headless SDK types", () => {
     const calls: string[] = []
     const client = createHeadlessClient({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo) => {
+      fetch: (async (url: string | URL | Request) => {
         const href = url.toString()
         calls.push(href)
         if (href.includes("/rollback")) return new Response(JSON.stringify([{ step: 2 }]), { status: 200 })
@@ -310,10 +310,10 @@ describe("headless SDK types", () => {
   })
 
   test("createHeadlessClient exposes scheduled task commands", async () => {
-    const calls: Array<{ pathname: string; method?: string; body?: BodyInit | null }> = []
+    const calls: Array<{ pathname: string; method?: string; body?: unknown }> = []
     const client = createHeadlessClient({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const parsed = new URL(url.toString())
         calls.push({ pathname: parsed.pathname, method: init?.method, body: init?.body })
         if (parsed.pathname.endsWith("/run-now")) {
@@ -374,7 +374,7 @@ describe("headless SDK types", () => {
       ["POST", "/scheduled-task"],
       ["POST", "/scheduled-task/sch_live/run-now"],
     ])
-    expect(calls[0].body).toBe(
+    expect(calls[0]?.body).toBe(
       JSON.stringify({
         title: "Daily review",
         prompt: "Review branch",
@@ -386,10 +386,10 @@ describe("headless SDK types", () => {
   })
 
   test("createHeadlessClient exposes workflow commands", async () => {
-    const calls: Array<{ pathname: string; search: string; method?: string; body?: BodyInit | null }> = []
+    const calls: Array<{ pathname: string; search: string; method?: string; body?: unknown }> = []
     const client = createHeadlessClient({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const parsed = new URL(url.toString())
         calls.push({ pathname: parsed.pathname, search: parsed.search, method: init?.method, body: init?.body })
         if (parsed.pathname === "/workflow-templates" && init?.method === "POST") {
@@ -448,12 +448,12 @@ describe("headless SDK types", () => {
     })
 
     const templateSpec = {
-      schemaVersion: 1,
+      schemaVersion: 1 as const,
       id: "route-noop",
       name: "Route Noop",
       description: "Minimal route fixture.",
-      phases: [{ id: "noop", name: "Noop", kind: "noop" }],
-    } as const
+      phases: [{ id: "noop", name: "Noop", kind: "noop" as const }],
+    }
 
     await client.workflowTemplate.list()
     await client.workflowTemplate.get("builtin:noop-dry-run")
@@ -480,7 +480,7 @@ describe("headless SDK types", () => {
     await client.workflowRun.artifacts("wfr_live", {
       artifactID: "wfa_live",
       kind: "summary",
-      includePayload: "false",
+      includePayload: false,
     })
     await client.workflowRun.evalSummary("wfr_live", {
       baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
@@ -516,11 +516,11 @@ describe("headless SDK types", () => {
       ["POST", "/workflow-runs/wfr_live/cancel"],
       ["POST", "/workflow-runs/wfr_live/retry"],
     ])
-    expect(calls[7].search).toBe("?status=running&limit=10")
-    expect(calls[12].search).toBe("?artifactID=wfa_live&kind=summary&includePayload=false")
+    expect(calls[7]?.search).toBe("?status=running&limit=10")
+    expect(calls[12]?.search).toBe("?artifactID=wfa_live&kind=summary&includePayload=false")
     expect(calls.at(-1)?.search).toBe("?phaseID=wfp_live")
-    expect(calls[2].body).toBe(JSON.stringify({ scope: "project", spec: templateSpec }))
-    expect(calls[4].body).toBe(
+    expect(calls[2]?.body).toBe(JSON.stringify({ scope: "project", spec: templateSpec }))
+    expect(calls[4]?.body).toBe(
       JSON.stringify({
         templateID: "builtin:noop-dry-run",
         scope: "project",
@@ -529,24 +529,24 @@ describe("headless SDK types", () => {
         trust: "trusted",
       }),
     )
-    expect(calls[6].body).toBe(
+    expect(calls[6]?.body).toBe(
       JSON.stringify({ route: "workflow/route-noop", inputValues: { target: "src/index.ts" } }),
     )
-    expect(calls[8].body).toBe(
+    expect(calls[8]?.body).toBe(
       JSON.stringify({
         templateID: "builtin:noop-dry-run",
         modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
         inputValues: { target: "src/index.ts" },
       }),
     )
-    expect(calls[13].body).toBe(
+    expect(calls[13]?.body).toBe(
       JSON.stringify({
         baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
       }),
     )
-    expect(calls[14].body).toBe(JSON.stringify({ caseID: "verified-bug-sweep-seeded" }))
-    expect(calls[15].body).toBe(JSON.stringify({ scope: "project" }))
-    expect(calls[16].body).toBe(JSON.stringify({ enqueueChildren: false }))
+    expect(calls[14]?.body).toBe(JSON.stringify({ caseID: "verified-bug-sweep-seeded" }))
+    expect(calls[15]?.body).toBe(JSON.stringify({ scope: "project" }))
+    expect(calls[16]?.body).toBe(JSON.stringify({ enqueueChildren: false }))
   })
 
   test("parseHeadlessRuntimeResponseBody handles empty and invalid bodies", () => {
