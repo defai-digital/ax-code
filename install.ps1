@@ -15,6 +15,8 @@ $App = "ax-code"
 $Repo = "defai-digital/ax-code"
 $InstallDir = Join-Path $HOME ".ax-code\bin"
 $InstallPath = Join-Path $InstallDir "ax-code.exe"
+$InstallCmdPath = Join-Path $InstallDir "ax-code.cmd"
+$InstallLibDir = Join-Path $InstallDir "lib"
 
 function Show-Usage {
   @"
@@ -86,31 +88,10 @@ function Get-LatestVersion {
   return $tag.TrimStart("v")
 }
 
-# Returns $true / $false when AVX2 support can be determined, or $null when it
-# cannot (e.g. Windows PowerShell 5.1, whose .NET Framework lacks the intrinsics
-# type). The default x64 build requires AVX2; a CPU without it needs the
-# `-baseline` asset. See #274.
-function Get-Avx2Support {
-  try {
-    $type = [Type]::GetType("System.Runtime.Intrinsics.X86.Avx2")
-    if ($type) {
-      $prop = $type.GetProperty("IsSupported")
-      if ($prop) {
-        return [bool]$prop.GetValue($null)
-      }
-    }
-  } catch {
-    # Fall through to "unknown".
-  }
-  return $null
-}
-
-function Resolve-ReleaseDownload([bool]$Baseline = $false) {
+function Resolve-ReleaseDownload {
   $requested = Get-RequestedVersion
   $arch = Get-TargetArch
-  # The baseline (AVX2-free) variant is only published for Windows x64.
-  $variant = if ($Baseline -and $arch -eq "x64") { "-baseline" } else { "" }
-  $filename = "$App-windows-$arch$variant.zip"
+  $filename = "$App-windows-$arch.zip"
 
   if ($requested) {
     $specificVersion = $requested.TrimStart("v")
@@ -138,8 +119,8 @@ function Install-FromBinary([string]$Path) {
   return "local"
 }
 
-function Install-FromRelease([bool]$Baseline = $false) {
-  $release = Resolve-ReleaseDownload $Baseline
+function Install-FromRelease {
+  $release = Resolve-ReleaseDownload
   $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("ax_code_install_" + [System.Guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
@@ -149,29 +130,34 @@ function Install-FromRelease([bool]$Baseline = $false) {
     Invoke-WebRequest -Uri $release.Url -OutFile $archive -UseBasicParsing -Headers @{ "User-Agent" = "$App-installer" }
 
     Expand-Archive -Path $archive -DestinationPath $tmpDir -Force
-    $binary = Get-ChildItem -Path $tmpDir -Filter "ax-code.exe" -Recurse | Select-Object -First 1
-    if (-not $binary) {
-      throw "Downloaded archive did not contain ax-code.exe"
+    $launcher = Get-ChildItem -Path $tmpDir -Filter "ax-code.cmd" -Recurse | Select-Object -First 1
+    if (-not $launcher) {
+      throw "Downloaded archive did not contain ax-code.cmd"
+    }
+    $lib = Get-ChildItem -Path $tmpDir -Directory -Filter "lib" -Recurse | Select-Object -First 1
+    if (-not $lib) {
+      throw "Downloaded archive did not contain the Node runtime lib directory"
     }
 
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-    Copy-Item -LiteralPath $binary.FullName -Destination $InstallPath -Force
+    Remove-Item -LiteralPath $InstallPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $InstallCmdPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $InstallLibDir -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item -LiteralPath $launcher.FullName -Destination $InstallCmdPath -Force
+    Copy-Item -LiteralPath $lib.FullName -Destination $InstallLibDir -Recurse -Force
     return $release.Version
   } finally {
     Remove-Item -LiteralPath $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
 
-# Runs the installed binary and returns its --version output, or $null if it
-# fails to run at all. A binary built for an unsupported instruction set (e.g.
-# an AVX2 build on a no_avx2 CPU) crashes here with a native illegal-instruction
-# fault, which surfaces as a thrown NativeCommandError or a non-zero exit. See #274.
-function Get-InstalledBinaryVersion {
-  if (-not (Test-Path -LiteralPath $InstallPath -PathType Leaf)) {
+function Get-InstalledVersion {
+  $target = if (Test-Path -LiteralPath $InstallCmdPath -PathType Leaf) { $InstallCmdPath } else { $InstallPath }
+  if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
     return $null
   }
   try {
-    $output = (& $InstallPath --version 2>$null)
+    $output = (& $target --version 2>$null)
     if ($LASTEXITCODE -ne 0) {
       return $null
     }
@@ -185,19 +171,19 @@ function Get-InstalledBinaryVersion {
   }
 }
 
-function Verify-InstalledBinary([string]$ExpectedVersion) {
-  if (-not (Test-Path -LiteralPath $InstallPath -PathType Leaf)) {
-    throw "Installed binary was not found at $InstallPath"
+function Verify-InstalledRuntime([string]$ExpectedVersion) {
+  if (-not (Test-Path -LiteralPath $InstallCmdPath -PathType Leaf) -and -not (Test-Path -LiteralPath $InstallPath -PathType Leaf)) {
+    throw "Installed ax-code launcher was not found at $InstallDir"
   }
 
-  $directVersion = Get-InstalledBinaryVersion
+  $directVersion = Get-InstalledVersion
   if (-not $directVersion) {
-    Write-Warn "Installed binary at $InstallPath did not run cleanly."
+    Write-Warn "Installed ax-code launcher in $InstallDir did not run cleanly."
     return
   }
   if ($ExpectedVersion -and $ExpectedVersion -ne "local") {
     if ($directVersion -ne $ExpectedVersion -and $directVersion -ne "v$ExpectedVersion") {
-      Write-Warn "Installed binary at $InstallPath reported '$directVersion', expected '$ExpectedVersion'."
+      Write-Warn "Installed ax-code launcher in $InstallDir reported '$directVersion', expected '$ExpectedVersion'."
     }
   }
 }
@@ -239,7 +225,7 @@ function Add-ToUserPath {
 
 function Warn-PathPrecedence {
   $resolved = Get-Command ax-code -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($resolved -and $resolved.Source -and ($resolved.Source -ine $InstallPath)) {
+  if ($resolved -and $resolved.Source -and ($resolved.Source -ine $InstallCmdPath) -and ($resolved.Source -ine $InstallPath)) {
     Write-Warn "Your current shell resolves ax-code to $($resolved.Source)"
     Write-Info "Open a new shell or run: `$env:Path = `"$InstallDir;`$env:Path`""
   }
@@ -253,35 +239,10 @@ if ($Help) {
 if ($Binary) {
   $installedVersion = Install-FromBinary $Binary
 } else {
-  $arch = Get-TargetArch
-
-  # Prefer the AVX2-free baseline build up front when we can positively confirm
-  # the CPU lacks AVX2; this avoids downloading a binary that would crash.
-  $useBaseline = $false
-  if ($arch -eq "x64" -and (Get-Avx2Support) -eq $false) {
-    Write-Info "CPU does not support AVX2; installing the baseline ax-code build."
-    $useBaseline = $true
-  }
-
-  $installedVersion = Install-FromRelease $useBaseline
-
-  # Fallback for environments where AVX2 support could not be detected ahead of
-  # time (e.g. Windows PowerShell 5.1): if the default x64 build won't run, it is
-  # almost certainly an AVX2/no_avx2 mismatch — retry once with the baseline asset.
-  if ($arch -eq "x64" -and -not $useBaseline -and -not (Get-InstalledBinaryVersion)) {
-    Write-Warn "The default ax-code build failed to start (likely a CPU without AVX2 support)."
-    Write-Info "Retrying with the baseline (AVX2-free) build..."
-    try {
-      $installedVersion = Install-FromRelease $true
-      $useBaseline = $true
-    } catch {
-      Write-Warn "Could not install the baseline build: $($_.Exception.Message)"
-      Write-Warn "This ax-code version may not ship a baseline asset for your CPU."
-    }
-  }
+  $installedVersion = Install-FromRelease
 }
 
-Verify-InstalledBinary $installedVersion
+Verify-InstalledRuntime $installedVersion
 
 if ($NoModifyPath) {
   Write-Info "Add this directory to PATH to use ax-code globally: $InstallDir"
@@ -290,4 +251,4 @@ if ($NoModifyPath) {
 }
 
 Warn-PathPrecedence
-Write-Info "ax-code installed at $InstallPath"
+Write-Info "ax-code installed at $InstallDir"

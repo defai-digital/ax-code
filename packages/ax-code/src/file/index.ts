@@ -627,11 +627,13 @@ export namespace File {
     }
 
     const nodes: File.Node[] = []
-    for (const entry of await fs.promises.readdir(resolved, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return []
-      log.warn("failed to list directory", { directory: resolved, error })
-      throw error
-    })) {
+    for (const entry of await fs.promises
+      .readdir(resolved, { withFileTypes: true })
+      .catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return []
+        log.warn("failed to list directory", { directory: resolved, error })
+        throw error
+      })) {
       if (exclude.includes(entry.name)) continue
       const absolute = path.join(resolved, entry.name)
       const file = toRelativePath(absolute)

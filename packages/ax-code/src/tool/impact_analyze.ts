@@ -37,8 +37,8 @@ export const ImpactAnalyzeTool = Tool.define("impact_analyze", {
       .max(MAX_DEPTH)
       .optional()
       .describe(`BFS depth cap (default 3, max ${MAX_DEPTH})`),
-    maxVisited: z
-      .coerce.number()
+    maxVisited: z.coerce
+      .number()
       .int()
       .min(10)
       .max(10000)

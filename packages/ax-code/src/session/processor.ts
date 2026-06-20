@@ -502,7 +502,18 @@ export namespace SessionProcessor {
                     const inputStr = canonicalize(value.input)
                     toolInputCache[value.toolCallId] = inputStr
                     const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
-                    if (detectCycle(allRecent, AUTONOMOUS_MAX_CYCLE_LEN) !== null) {
+                    const cycleLen = detectCycle(allRecent, AUTONOMOUS_MAX_CYCLE_LEN)
+                    if (cycleLen !== null) {
+                      // Always inject a reminder into the tool result so the model
+                      // sees the hint regardless of provider or mode. Non-Claude
+                      // providers (Qwen, GLM, etc.) don't receive Anthropic's
+                      // built-in loop detection, so this is the only signal they get.
+                      // Word the reminder to match the detected shape: k=1 is the
+                      // same call repeated; k>=2 is a multi-step cycle (A->B->A->B).
+                      doomLoopWarnings[value.toolCallId] =
+                        cycleLen === 1
+                          ? "Doom-loop detection saw this tool call repeat with the same input. The tool was still executed so the conversation history stays consistent. On the next step, change strategy instead of repeating the same call."
+                          : `Doom-loop detection saw this tool call form part of a repeating ${cycleLen}-step cycle. The tool was still executed so the conversation history stays consistent. On the next step, break the cycle and change strategy instead of repeating the same sequence of calls.`
                       if (autonomous) {
                         // In autonomous mode, skip Permission.ask() (which
                         // would auto-approve and waste the detection). Clear
@@ -528,8 +539,6 @@ export namespace SessionProcessor {
                           removed: before - recentToolRing.length,
                           remaining: recentToolRing.length,
                         })
-                        doomLoopWarnings[value.toolCallId] =
-                          "Autonomous doom-loop detection saw this tool call repeat with the same input. The tool was still executed so the conversation history stays consistent. On the next step, change strategy instead of repeating the same call."
                       } else {
                         // `Agent.get()` returns undefined if the agent
                         // was removed or renamed mid-session (e.g. via

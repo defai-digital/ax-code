@@ -156,7 +156,7 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   if (debug.enabled) DiagnosticLog.installProcessDiagnostics()
 
   await log({
-    print: opts.printLogs ?? (cliBooleanFlagValue(argv, "--print-logs") === true),
+    print: opts.printLogs ?? cliBooleanFlagValue(argv, "--print-logs") === true,
     dev: local,
     level: level(opts.logLevel, local, debug.enabled),
     ...(debugDir ? { dir: debugDir, name: "main" } : { name: Log.stampedName("main", now) }),

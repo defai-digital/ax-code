@@ -6,7 +6,7 @@ AX Code is an AI coding runtime and execution engine designed for teams that nee
 
 - **Core Purpose**: An AI execution runtime for software development that runs in the terminal (TUI/CLI), VS Code, or as a headless server.
 - **Main Technologies**:
-  - **Runtime**: [Bun](https://bun.sh) (primary orchestration and CLI/TUI).
+  - **Runtime**: [Node.js](https://nodejs.org) (primary orchestration and CLI/TUI; Bun has been removed).
   - **Languages**: TypeScript, Rust (for performance-critical operations).
   - **Frameworks**: SolidJS (via OpenTUI for the TUI), Drizzle ORM (for SQLite persistence).
   - **Native Interop**: [NAPI-RS](https://napi.rs) for TypeScript/Rust integration.
@@ -27,16 +27,16 @@ The project is a **pnpm workspace** monorepo:
 
 ### Prerequisites
 
-- **Bun**: ^1.3.14
+- **Node.js**: >=22 (>=26 for the TUI / `--experimental-ffi`)
 - **pnpm**: v10.33.4+
 - **Rust/Cargo**: For native component builds.
 
 ### Key Commands
 
 - **Install Dependencies**: `pnpm install`
-- **Setup Local CLI**: `pnpm run setup:cli` (Installs the local bundled `ax-code` launcher; use `-- --source` for a checkout-bound Bun source launcher).
+- **Setup Local CLI**: `pnpm run setup:cli` (Installs the local bundled `ax-code` launcher; use `-- --source` for a checkout-bound source launcher).
 - **Build Native Components**: `pnpm run build:native`
-- **Run in Development**: `pnpm dev` or `bun packages/ax-code/src/index.ts`
+- **Run in Development**: `pnpm dev` or `pnpm cli`
 - **Typecheck**: `pnpm run typecheck`
 - **Run Tests**:
   - Root: do not run `pnpm test`; the root script intentionally fails.

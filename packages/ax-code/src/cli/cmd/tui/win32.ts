@@ -1,23 +1,49 @@
-import { dlopen, ptr } from "bun:ffi"
+import { createRequire } from "module"
 
 const STD_INPUT_HANDLE = -10
 const ENABLE_PROCESSED_INPUT = 0x0001
+const require = createRequire(import.meta.url)
 
-const kernel = () =>
-  dlopen("kernel32.dll", {
+type Kernel = {
+  symbols: {
+    GetStdHandle: (input: number) => unknown
+    GetConsoleMode: (handle: unknown, buffer: unknown) => number
+    SetConsoleMode: (handle: unknown, mode: number) => number
+    FlushConsoleInputBuffer: (handle: unknown) => number
+  }
+}
+
+let ffi: { dlopen: (name: string, symbols: unknown) => Kernel; ptr: (input: unknown) => unknown } | undefined
+
+function loadFfi() {
+  if (ffi) return ffi
+  if (!(process.versions as Record<string, string | undefined>).bun) return undefined
+  try {
+    ffi = require("bun:ffi")
+    return ffi
+  } catch {
+    return undefined
+  }
+}
+
+const kernel = () => {
+  const loaded = loadFfi()
+  if (!loaded) return undefined
+  return loaded.dlopen("kernel32.dll", {
     GetStdHandle: { args: ["i32"], returns: "ptr" },
     GetConsoleMode: { args: ["ptr", "ptr"], returns: "i32" },
     SetConsoleMode: { args: ["ptr", "u32"], returns: "i32" },
     FlushConsoleInputBuffer: { args: ["ptr"], returns: "i32" },
   })
+}
 
-let k32: ReturnType<typeof kernel> | undefined
+let k32: Kernel | undefined
 
 function load() {
   if (process.platform !== "win32") return false
   try {
     k32 ??= kernel()
-    return true
+    return !!k32
   } catch {
     return false
   }
@@ -31,6 +57,8 @@ export function win32DisableProcessedInput() {
   if (!process.stdin.isTTY) return
   if (!load()) return
   const api = k32
+  const ptr = ffi?.ptr
+  if (!ptr) return
   if (!api) return
 
   const handle = api.symbols.GetStdHandle(STD_INPUT_HANDLE)
@@ -80,6 +108,8 @@ export function win32InstallCtrlCGuard() {
   if (!process.stdin.isTTY) return
   if (!load()) return
   const api = k32
+  const ptr = ffi?.ptr
+  if (!ptr) return
   if (!api) return
   if (unhook) return unhook
 

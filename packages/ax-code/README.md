@@ -10,7 +10,7 @@ Install dependencies from the repo root:
 pnpm install
 ```
 
-Run the CLI from this package with Bun:
+Run the CLI from this package on Node:
 
 ```bash
 pnpm dev
@@ -28,7 +28,7 @@ Run commands from `packages/ax-code`:
 
 ```bash
 pnpm test
-bun typecheck
+pnpm typecheck
 pnpm test:unit
 pnpm test:recovery
 pnpm test:e2e
@@ -89,7 +89,7 @@ GitHub Actions runs the `ax-code` workflow on `packages/ax-code/**` changes.
 
 - PRs and pushes to `dev` run the deterministic lane: typecheck, grouped deterministic tests, risk summary artifact upload, and coverage artifact upload.
 - The deterministic lane writes `packages/ax-code/.tmp/coverage/lcov.info`, `packages/ax-code/.tmp/coverage-summary.json`, and `packages/ax-code/.tmp/coverage-report.md`.
-- PR workflows try to download the latest successful `dev` coverage summary and include line/function trend deltas in the step summary. Branch trend is reported as unavailable until the Bun LCOV reporter emits branch counters.
+- PR workflows try to download the latest successful `dev` coverage summary and include line/function trend deltas in the step summary. Branch trend is reported as unavailable until the vitest LCOV reporter emits branch counters.
 - `workflow_dispatch` can optionally run the live lane.
 - `ax-code-perf` is a separate manual workflow for perf sampling, optional regression gating, machine-readable summary upload, markdown report upload, and optional baseline promotion. It uploads the raw report, the verdict JSON, the markdown report, and optionally a promoted baseline artifact plus baseline summary artifact.
 

@@ -351,14 +351,14 @@ function safeStringify(input: unknown) {
 
 function safeJsonLine(input: unknown) {
   return (
-    safeStringify(input) ??
-    JSON.stringify({
-      schemaVersion: 1,
-      kind: "diagnostic.serialization_error",
-      time: new Date().toISOString(),
-      pid: process.pid,
-    })
-  ) + "\n"
+    (safeStringify(input) ??
+      JSON.stringify({
+        schemaVersion: 1,
+        kind: "diagnostic.serialization_error",
+        time: new Date().toISOString(),
+        pid: process.pid,
+      })) + "\n"
+  )
 }
 
 function createJsonReplacer() {

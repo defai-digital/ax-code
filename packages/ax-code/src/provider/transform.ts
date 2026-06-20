@@ -139,7 +139,10 @@ export namespace ProviderTransform {
             // Empty `data:<mime>;base64,` — payload is empty.
             if (semiIdx !== -1) {
               const commaIdx = imageStr.indexOf(",", semiIdx + 1)
-              if (commaIdx === imageStr.length - 1 && imageStr.slice(semiIdx + 1, commaIdx).toLowerCase() === "base64") {
+              if (
+                commaIdx === imageStr.length - 1 &&
+                imageStr.slice(semiIdx + 1, commaIdx).toLowerCase() === "base64"
+              ) {
                 return {
                   type: "text" as const,
                   text: "ERROR: Image file is empty or corrupted. Please provide a valid image.",

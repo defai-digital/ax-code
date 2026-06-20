@@ -119,7 +119,12 @@ export namespace FileWatcher {
     return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
   }
 
-  export async function snapshotPollTree(dir: string, ignore: string[], root = dir, result = new Map<string, string>()) {
+  export async function snapshotPollTree(
+    dir: string,
+    ignore: string[],
+    root = dir,
+    result = new Map<string, string>(),
+  ) {
     const entries = await readdir(dir, { withFileTypes: true }).catch((error) => {
       if (isMissingPathError(error)) return []
       throw error
@@ -259,7 +264,9 @@ export namespace FileWatcher {
             if (busy) return
             busy = true
             try {
-              const next = await NativePerf.runAsync("fs.watcher.pollSnapshot", dir, () => snapshotPollTree(dir, ignore))
+              const next = await NativePerf.runAsync("fs.watcher.pollSnapshot", dir, () =>
+                snapshotPollTree(dir, ignore),
+              )
               for (const [file, hash] of next) {
                 const last = prev.get(file)
                 if (!last) await Bus.publish(Event.Updated, { file, event: "add" })

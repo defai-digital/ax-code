@@ -30,8 +30,8 @@ import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import type { Isolation as IsolationConfig } from "../../config/schema"
 import { Isolation } from "../../isolation"
 import { toErrorMessage } from "@/util/error-message"
-import { getAxEngineStatus } from "@/provider/ax-engine"
 import { isPlausiblySupportedHost } from "@/provider/ax-engine/platform"
+import { getAxEngineStatus } from "@/provider/ax-engine/status"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
@@ -217,7 +217,10 @@ export const DoctorCommand: CommandModule = {
     checks.push({
       name: "Runtime",
       status: "ok",
-      detail: `Bun ${Bun.version} (${runtimeMode()})`,
+      detail:
+        runtimeMode() === "node-bundled"
+          ? `Node ${process.version} (${runtimeMode()})`
+          : `Bun ${Bun.version} (${runtimeMode()})`,
     })
 
     // 3. Platform

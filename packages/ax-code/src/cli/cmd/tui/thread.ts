@@ -667,10 +667,7 @@ export const TuiThreadCommand = cmd({
 
       const network = await resolveNetworkOptions(args)
       const external =
-        hasExplicitNetworkBindFlag() ||
-        network.mdns ||
-        network.port !== 0 ||
-        network.hostname !== "127.0.0.1"
+        hasExplicitNetworkBindFlag() || network.mdns || network.port !== 0 || network.hostname !== "127.0.0.1"
 
       const transport = external
         ? {

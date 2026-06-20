@@ -29,9 +29,14 @@ export const DedupScanTool = Tool.define("dedup_scan", {
   description: DESCRIPTION,
   parameters: z.object({
     kinds: z.array(z.enum(NODE_KINDS)).optional().describe("Node kinds to scan (default: function, method)"),
-    minSignatureLength: z.coerce.number().int().min(1).optional().describe("Skip signatures shorter than this (default 20)"),
-    similarityThreshold: z
-      .coerce.number()
+    minSignatureLength: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe("Skip signatures shorter than this (default 20)"),
+    similarityThreshold: z.coerce
+      .number()
       .min(0)
       .max(1)
       .optional()

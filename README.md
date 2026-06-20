@@ -72,7 +72,7 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v10.33.4+ and [Bun](https://bun.sh) matching the root `package.json` engine (`^1.3.14` today). `setup:cli` installs a launcher for the same bundled runtime used by Homebrew and the GitHub release installer. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
+Requires [pnpm](https://pnpm.io) v10.33.4+ and [Node.js](https://nodejs.org) matching the root `package.json` engine (`>=22`, `>=26` for the TUI). `setup:cli` builds and installs a node-bundled launcher. `ax-code doctor` should report `Runtime: Node vX.Y.Z (node-bundled)`. (macOS Homebrew packaged installs still ship the legacy Bun-compiled runtime and report `Runtime: Bun X.Y.Z (compiled)`.)
 
 Refresh the local bundled runtime after code changes:
 
@@ -88,7 +88,7 @@ For contributor-only source debugging, install the checkout-bound launcher expli
 pnpm run setup:cli -- --source
 ```
 
-That source launcher should report `Runtime: Bun X.Y.Z (source)` and is intentionally separate from the default compiled/bundled launcher.
+That source launcher should report `Runtime: Node vX.Y.Z (source)` and is intentionally separate from the default node-bundled launcher.
 
 ---
 

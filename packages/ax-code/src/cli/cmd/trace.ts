@@ -274,9 +274,7 @@ export const TraceCommand: CommandModule = {
       entries = lines.map(parseTraceLogEntryJsonLine).filter((e): e is LogEntry => e !== undefined)
     } else {
       // Parse text format: "LEVEL YYYY-MM-DDTHH:MM:SS +Nms key=value key=value message"
-      entries = lines
-        .map(parseTraceTextLogLine)
-        .filter((e): e is LogEntry => e !== undefined)
+      entries = lines.map(parseTraceTextLogLine).filter((e): e is LogEntry => e !== undefined)
     }
 
     // Apply filters

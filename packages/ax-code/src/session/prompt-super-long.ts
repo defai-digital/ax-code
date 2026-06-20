@@ -58,7 +58,13 @@ export async function enforceSuperLongDeadline(input: {
   })
 
   let invalidatedMessages = false
-  if (!assistantRespondedAfterUser({ lastUserID: input.lastUser.id, lastUserCreatedAt: input.lastUser.time.created, lastAssistant: input.lastAssistant })) {
+  if (
+    !assistantRespondedAfterUser({
+      lastUserID: input.lastUser.id,
+      lastUserCreatedAt: input.lastUser.time.created,
+      lastAssistant: input.lastAssistant,
+    })
+  ) {
     await createSyntheticFailureAssistant({
       sessionID: input.sessionID,
       lastUser: input.lastUser,

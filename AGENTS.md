@@ -12,10 +12,10 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 ## Toolchain
 
 - Package manager: pnpm `10.33.4` (`preinstall` enforces `only-allow pnpm`).
-- Runtime: Bun `^1.3.14`.
+- Runtime: Node.js `>=22` (`>=26` for the TUI / `--experimental-ffi`). Bun has been removed; scripts run via `tsx`.
 - Rust toolchain: stable channel from `rust-toolchain.toml`, edition 2024, used for napi-rs crates under `crates/`.
 - Type checker: `tsgo` (TypeScript native preview) for `--noEmit` checks.
-- Formatting: Prettier with `semi: false` and `printWidth: 120`; run `bun run script/format.ts` when formatting is needed.
+- Formatting: Prettier with `semi: false` and `printWidth: 120`; run `tsx script/format.ts` when formatting is needed.
 - SQL migrations: Drizzle Kit; migrations live under `packages/ax-code/migration/<timestamp>_<name>/migration.sql`.
 - Catalog dependencies: shared dependency versions are declared in `pnpm-workspace.yaml` under `catalog:` and referenced with `catalog:` in package `package.json` files.
 
@@ -24,12 +24,12 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 Run these from the repository root unless noted:
 
 - `pnpm install` - install workspace dependencies.
-- `pnpm dev` / `pnpm cli` - run the CLI from source via Bun (`--conditions=browser`).
+- `pnpm dev` / `pnpm cli` - run the CLI from source on Node (`node --experimental-ffi --import tsx --conditions=node`).
 - `pnpm typecheck` - run typecheck across workspace packages that define it.
 - `pnpm run build:native` - build all Rust napi-rs addons (append names like `fs diff` for a subset).
 - `pnpm run build:native:debug` - build native addons in debug mode.
 - `pnpm run check:structure` - enforce repository structure guardrails.
-- `pnpm run setup:cli` - install the local `ax-code` launcher for this checkout. Use `pnpm run setup:cli -- --source` for a checkout-bound Bun source launcher.
+- `pnpm run setup:cli` - install the local `ax-code` launcher for this checkout. Use `pnpm run setup:cli -- --source` for a checkout-bound source launcher.
 - `ax-code doctor` - diagnose install, runtime, storage, and auth issues. Useful when debugging setup or environment problems.
 
 Do not run tests from the repository root:
@@ -39,31 +39,38 @@ Do not run tests from the repository root:
 
 Inside `packages/ax-code`:
 
-- `bun run test` - full Bun test suite (`bun test --timeout 30000`).
-- `bun run test:unit` - unit group (excludes e2e, recovery, live).
-- `bun run test:recovery` - recovery group (session resume, diff recovery, message recovery, auth, isolation).
-- `bun run test:e2e` - e2e group (smoke tests, workspace sync, bash tool, LSP client, OAuth, server endpoints).
-- `bun run test:deterministic` - deterministic group (excludes e2e and live).
-- `bun run test:live` - live group (structured output integration tests).
+- `pnpm test` - full test suite on vitest (`vitest run`; the 30s per-test timeout lives in `vitest.config.ts`).
+- `pnpm test:unit` - unit group (excludes e2e, recovery, live).
+- `pnpm test:recovery` - recovery group (session resume, diff recovery, message recovery, auth, isolation).
+- `pnpm test:e2e` - e2e group (smoke tests, workspace sync, bash tool, LSP client, OAuth, server endpoints).
+- `pnpm test:deterministic` - deterministic group (excludes e2e and live).
+- `pnpm test:live` - live group (structured output integration tests).
 
 Test groups are defined in `script/test-group.ts`. The `unit` group is the fastest and most isolated; `e2e` tests spawn real processes and may be flaky on CI; `recovery` tests cover session resume and error recovery paths.
 
-- `bun run test:ci` - CI-oriented test runner.
-- `bun run test:risk` - risk-oriented test runner.
-- `bun test test/path/to/file.test.ts` - single test file.
-- `bun run typecheck` - package typecheck (`tsgo --noEmit`).
-- `bun run build` - package build (bundled single-file output via esbuild).
-- `bun run db` - Drizzle Kit for schema migrations.
-- `bun run check:tui-layering` - TUI renderer-adapter layering guard.
-- `bun run check:tui-snapshot` - TUI snapshot consistency check.
-- `bun run check:skills` - validate discovered Agent Skills.
-- `bun run check:skills:all` - validate all skill definitions.
-- `bun run perf:index` - indexing/LSP perf harness.
-- `bun run perf:report` - perf report generation.
-- `bun run quality:rollout` - quality rollout runner.
-- `bun run tui:startup-smoke` - TUI startup smoke test.
+- `pnpm test:ci` - CI-oriented test runner.
+- `pnpm test:risk` - risk-oriented test runner.
+- `vitest run test/path/to/file.test.ts` - single test file.
+- `pnpm typecheck` - package typecheck (`tsgo --noEmit`).
+- `pnpm build` - package build (node-bundled TUI via `build-node-tui.ts`).
+- `pnpm db` - Drizzle Kit for schema migrations.
+- `pnpm run check:tui-layering` - TUI renderer-adapter layering guard.
+- `pnpm run check:tui-snapshot` - TUI snapshot consistency check.
+- `pnpm run check:skills` - validate discovered Agent Skills.
+- `pnpm run check:skills:all` - validate all skill definitions.
+- `pnpm run perf:index` - indexing/LSP perf harness.
+- `pnpm run perf:report` - perf report generation.
+- `pnpm run quality:rollout` - quality rollout runner.
+- `pnpm run tui:startup-smoke` - TUI startup smoke test.
 
-Rust validation for the Cargo workspace should run from `crates/`, not the repository root.
+Rust validation for the Cargo workspace should run from `crates/`, not the repository root:
+
+- `cargo test` — run all Rust tests across workspace crates.
+- `cargo test -p ax-code-tui` — run tests for a single crate (substitute any crate name).
+- `cargo clippy --all-targets -p ax-code-tui -- -D warnings` — lint a single crate with warnings-as-errors (CI enforces this).
+- `cargo clippy --all-targets --workspace -- -D warnings` — lint the entire workspace.
+- `cargo build` — build all crates.
+- `cargo fmt --check` — verify Rust formatting (gofmt-style check; `cargo fmt` to auto-fix).
 
 ### Rebuilding After Source Changes
 
@@ -75,7 +82,7 @@ pnpm run setup:cli -- --rebuild
 ax-code doctor
 ```
 
-The default `setup:cli` installs a compiled/bundled launcher (`Runtime: Bun X.Y.Z (compiled)`). The `--source` flag installs a checkout-bound source launcher (`Runtime: Bun X.Y.Z (source)`) for debugging only.
+The default `setup:cli` installs a node-bundled launcher (`Runtime: Node vX.Y.Z (node-bundled)`). The `--source` flag installs a checkout-bound source launcher (`Runtime: Node vX.Y.Z (source)`) for debugging only.
 
 ## Pre-commit Hook
 
@@ -101,6 +108,47 @@ This is a pnpm workspace monorepo plus a Cargo workspace:
 - `script/` - repository automation.
 
 Keep development-stage planning out of `docs/`; use `ax-internal/` for internal PRDs, ADRs, bug reports, and temporary reports.
+
+## Rust Workspace (`crates/`)
+
+The Cargo workspace (`crates/Cargo.toml`, edition 2024, `rust-version = "1.85"`) contains native addons and the standalone TUI binary:
+
+| Crate | Type | Purpose |
+| --- | --- | --- |
+| `ax-code-index` | napi-rs addon | SQLite graph and interval tree for code intelligence. |
+| `ax-code-fs` | napi-rs addon | File walker, glob, grep, and watcher (uses `ignore`, `grep-searcher`, `notify`). |
+| `ax-code-diff` | napi-rs addon | Diff engine with edit replacer and fuzzy matching (`similar`, `strsim`). |
+| `ax-code-parser` | napi-rs addon | Tree-sitter symbol extraction across languages. |
+| `ax-code-daemon` | napi-rs addon | Unix daemon process management for background indexing. |
+| `ax-code-terminal` | napi-rs addon | PTY terminal emulation. |
+| `ax-code-tui` | **binary + lib** | Standalone Ratatui TUI client (ADR-035). Not a napi-rs addon. |
+| `ax-code-bench` | bench | Performance benchmarking suite. |
+
+The napi-rs addon crates expose Rust to TypeScript via `#[napi_derive]` macros. Each has a corresponding JS shim package under `packages/ax-code-*-native` that uses `createRequire(import.meta.url)` with try/catch fallback to a pure-JS path.
+
+### `ax-code-tui` Architecture (ADR-035)
+
+A session-first terminal UI that connects to a headless ax-code server via HTTP/SSE. It does NOT own session execution, storage, or provider logic — those remain in the headless runtime. The TUI is a thin client.
+
+**Module layout** under `crates/ax-code-tui/src/`:
+
+| Module | Purpose |
+| --- | --- |
+| `main.rs` | Binary entry point. Installs a panic hook that restores the terminal before printing the panic message (raw-mode recovery). |
+| `runner.rs` | Main event loop: resolves launch route → subscribes SSE → creates/attaches session → runs render/poll loop → dispatches `InputAction` to the headless client. |
+| `client.rs` | `HeadlessClient` — HTTP methods (`create_session`, `send_prompt`, `reply_permission`, `reply_question`, `reject_question`, `abort_session`) and SSE subscription with cross-chunk buffer parsing. |
+| `events.rs` | `RuntimeEvent` enum — typed SSE events with serde tagged deserialization. Handles payload envelope unwrapping (`payload`, `details` keys). |
+| `launch_policy.rs` | `LaunchRoute` resolution: explicit session → explicit prompt → recent session → new session. Never returns a dashboard/home route. |
+| `diagnostics.rs` | Structured diagnostic events for observability (logged via `tracing`). |
+| `tui/app.rs` | `App` state: messages, tool calls, pending permission/question FIFO queues, multi-question answer collection, cursor management with UTF-8 char-indexed positioning. |
+| `tui/render.rs` | Ratatui rendering: header, transcript, prompt input, status bar, permission/question modals, session list sidebar, tool results panel. |
+| `tui/input.rs` | Keyboard/mouse handling per `AppMode` (Input, Permission, Question). Number keys 1-9 for direct question option selection. |
+
+**Key patterns in `ax-code-tui`**:
+- **FIFO queues**: Permission and question requests are queued front-to-back; the front of the queue is the active modal. Out-of-band `*Replied`/`*Rejected` SSE events clear stale entries by `request_id`.
+- **SSE cross-chunk buffering**: `drain_complete_sse_lines()` keeps a carry-over buffer because TCP chunk boundaries are NOT aligned to SSE line boundaries. Handles CRLF, `data:` with/without space, and envelope unwrapping.
+- **Multi-question support**: A single `question.asked` event can contain multiple sub-questions. `QuestionAnswerProgress` collects answers across sub-questions before sending the reply.
+- **UTF-8 safe cursor**: `cursor_position` is a char index (not byte index). `byte_index_at_char()` converts for `String::insert`/`String::remove` which require byte indices on code-point boundaries.
 
 ## `packages/ax-code` Architecture
 
@@ -138,7 +186,7 @@ Keep development-stage planning out of `docs/`; use `ax-internal/` for internal 
 
 **Storage**:
 
-- SQLite via Drizzle ORM. Import map: `#db` resolves to `src/storage/db.bun.ts` under Bun and `src/storage/db.node.ts` under Node.
+- SQLite via Drizzle ORM. Import map: `#db` resolves to `src/storage/db.node.ts` under Node (the runtime); a legacy `bun` condition mapping to `src/storage/db.bun.ts` is retained in the import map.
 - Domain `.sql.ts` files define Drizzle table schemas (e.g., `session/session.sql.ts`, `workflow/workflow.sql.ts`).
 - `src/storage/schema.ts` aggregates all domain `.sql.ts` exports.
 - Migrations under `packages/ax-code/migration/` are loaded by `script/build.ts` during the build process.
@@ -151,7 +199,7 @@ Keep development-stage planning out of `docs/`; use `ax-internal/` for internal 
 
 **Feature flags** (`src/flag/flag.ts`): Environment-variable-driven feature flags exposed as `Flag.AX_CODE_*` getters. Boolean flags use `truthy()`/`falsy()` helpers that parse env vars at access time (not module load). Feature flags gate tool availability (e.g., `AX_CODE_EXPERIMENTAL_LSP_TOOL`, `AX_CODE_EXPERIMENTAL_DEBUG_ENGINE`), provider behavior, and UI features.
 
-**Prompt template pairs**: Tools and agents both use `.ts` + `.txt` pairs. The `.ts` file imports the `.txt` file as a string (Bun text import) and interpolates it at runtime. Agent prompt templates live under `src/agent/prompt/` and session prompt assembly under `src/session/prompt/`.
+**Prompt template pairs**: Tools and agents both use `.ts` + `.txt` pairs. The `.ts` file imports the `.txt` file as a string (text import) and interpolates it at runtime. Agent prompt templates live under `src/agent/prompt/` and session prompt assembly under `src/session/prompt/`.
 
 **Native addon fallback**: `createRequire(import.meta.url)` with try/catch — JS path always works. Preserve this pattern when adding new native-accelerated paths.
 
@@ -167,6 +215,14 @@ Keep development-stage planning out of `docs/`; use `ax-internal/` for internal 
 - Enforced in CI via `.github/workflows/repo-structure.yml` and `pnpm run check:structure`.
 
 **Improvement skill guidance**: when running the `improve-overall` skill in this repo, follow `ax-internal/arch/improve-overall-guidance.md` (scope to the maintainability surface, tier actions by risk, treat `ax-internal` as bidirectional, prioritize by ADR alignment). The builtin skill's "follow local guidance" clause makes that doc authoritative here.
+
+## CI Repo Guards
+
+Beyond import guards, the `repo-structure.yml` CI workflow runs three additional repo-wide checks:
+
+1. **`pnpm run check:structure`** — enforces file-size limits, domain-folder boundaries, and interface-layer thinness (`script/structure.ts`).
+2. **`pnpm run check:no-cost`** — blocks reintroduction of cost/pricing tracking. ax-code intentionally does NOT track or display monetary cost for LLM calls. Forbidden: schema fields named `cost`, identifiers like `pricePerToken`/`totalCost`/`costUsd`, and `/cost` slash commands (`script/check-no-cost.ts`).
+3. **`pnpm run check:openapi`** — validates the OpenAPI snapshot is in sync with server routes (`packages/sdk/js`).
 
 ## Isolation / Sandbox Model
 
