@@ -21,7 +21,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
@@ -90,7 +90,7 @@ jobs:
       AX_CODE_DISABLE_MODELS_FETCH: "1"
       AX_CODE_DISABLE_PROJECT_CONFIG: "1"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set isolated home paths
         shell: bash
@@ -166,7 +166,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -296,7 +296,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Update Homebrew tap
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}

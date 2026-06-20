@@ -45,7 +45,7 @@ jobs:
     env:
       AX_CODE_DISABLE_SHARE: "true"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
