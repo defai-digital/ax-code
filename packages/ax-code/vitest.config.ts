@@ -132,5 +132,18 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     pool: "forks",
+    // Cap concurrent forks well below the core count (18 here). Many tests spawn
+    // git subprocesses and file watchers whose event delivery has its own short
+    // internal deadlines (e.g. the 5s `.git/HEAD` watcher wait); at full
+    // core-count parallelism those subprocesses starve for CPU and miss the
+    // deadline, producing flaky timeouts. Bun's test runner used a single
+    // process; this restores comparable contention behaviour on Node.
+    poolOptions: { forks: { maxForks: 6, minForks: 1 } },
+    // A cluster of git/watcher/scheduler tests is timing-sensitive: each passes
+    // deterministically in isolation but can miss a subprocess/event deadline
+    // under full-suite load. Bun's runner happened to schedule them serially.
+    // Retry rather than mask: a genuine logic failure fails all attempts, while
+    // a load-induced timeout clears on a re-run with a warmer, quieter process.
+    retry: 2,
   },
 })

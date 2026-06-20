@@ -469,6 +469,9 @@ describe("CliLanguageModel", () => {
           "process.stdout.write(payload.subarray(0, split))",
           "setTimeout(() => process.stdout.write(payload.subarray(split)), 5)",
         ].join(";"),
+        // The provider appends `--model <id>`; without this separator node parses
+        // it as an unknown flag ("bad option: --model") and exits before writing.
+        "--",
       ],
       parser: geminiCliParser,
       promptMode: "stdin",

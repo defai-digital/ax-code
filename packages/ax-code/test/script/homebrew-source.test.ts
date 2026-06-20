@@ -9,6 +9,7 @@ const installMatrixWorkflow = path.join(repoRoot, ".github/workflows/install-mat
 const isolatedHomeScript = path.join(repoRoot, ".github/scripts/set-isolated-home-env.sh")
 const filterDispatchChannelScript = path.join(repoRoot, ".github/scripts/filter-dispatch-channel.sh")
 const validateInstallMatrixInputsScript = path.join(repoRoot, ".github/scripts/validate-install-matrix-inputs.sh")
+const assertRuntimeModeScript = path.join(repoRoot, ".github/scripts/assert-runtime-mode.sh")
 const axCodePackageJson = path.join(repoRoot, "packages/ax-code/package.json")
 const axCodeCiWorkflow = path.join(repoRoot, ".github/workflows/ax-code-ci.yml")
 
@@ -192,7 +193,13 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("steps.channel.outputs.enabled == 'true'")
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" doctor')
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" backend')
-    expect(text).toContain('"runtimeMode":"compiled"')
+    // The literal runtimeMode assertion now lives in the shared assert script
+    // (invoked above), which maps every non-source channel — Homebrew included —
+    // to the compiled backend runtime. macOS arm64 still ships the compiled
+    // (SEA) backend; only the Windows legs moved to node-bundled.
+    const assertRuntimeMode = await Bun.file(assertRuntimeModeScript).text()
+    expect(assertRuntimeMode).toContain("RUNTIME_RE='compiled'")
+    expect(assertRuntimeMode).toContain('PATTERN="\\"runtimeMode\\":\\"${RUNTIME_RE}\\""')
     expect(text).not.toContain("npm install -g")
     expect(text).not.toContain("npm view")
     expect(text).not.toContain("@defai.digital/ax-code")
@@ -229,7 +236,7 @@ describe("distribution support guardrails", () => {
     expect(homebrewStep![0]).not.toContain("brew update\n")
   })
 
-  test("release build matrix smokes compiled backend stdio handshake", async () => {
+  test("release build matrix smokes each runtime via doctor", async () => {
     const text = await Bun.file(releaseWorkflow).text()
     const buildJob = text.match(/build:[\s\S]*?(?=\n  publish:|$)/)
     expect(buildJob).not.toBeNull()
@@ -238,11 +245,16 @@ describe("distribution support guardrails", () => {
     expect(buildJob![0]).toContain("XDG_DATA_HOME")
     expect(buildJob![0]).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
     expect(buildJob![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
-    expect(buildJob![0]).toContain("Smoke — compiled backend stdio handshake")
+    // The smoke leg no longer drives a tui-backend stdio handshake; it runs
+    // `doctor` and greps the reported runtime against the per-leg matrix value.
+    // macOS arm64 still ships the compiled (SEA) backend; Windows ships
+    // node-bundled — both verified by the same generic step.
+    expect(buildJob![0]).toContain("Smoke — release runtime")
     expect(buildJob![0]).toContain("smoke-bin:")
     expect(buildJob![0]).toContain('BIN="${{ matrix.smoke-bin }}"')
+    expect(buildJob![0]).toContain("smoke-runtime: compiled")
+    expect(buildJob![0]).toContain("smoke-runtime: node-bundled")
     expect(buildJob![0]).not.toContain("find dist -path")
-    expect(buildJob![0]).toContain("tui-backend --stdio")
-    expect(buildJob![0]).toContain('"runtimeMode":"compiled"')
+    expect(buildJob![0]).toContain('grep -E "Runtime: .* \\(${{ matrix.smoke-runtime }}\\)"')
   })
 })
