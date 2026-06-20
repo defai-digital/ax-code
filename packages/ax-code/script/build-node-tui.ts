@@ -128,14 +128,16 @@ if (result.errors.length > 0) {
 }
 
 // Unix launcher: node --experimental-ffi so OpenTUI's node:ffi backend loads.
+// --disable-warning=ExperimentalWarning silences Node's "FFI is experimental"
+// notice so the shipped binary doesn't print it to stderr on every run.
 await writeText(
   path.join(outBin, "ax-code"),
-  `#!/bin/sh\nexec node --experimental-ffi "$(dirname "$0")/../lib/index-node-tui.js" "$@"\n`,
+  `#!/bin/sh\nexec node --experimental-ffi --disable-warning=ExperimentalWarning "$(dirname "$0")/../lib/index-node-tui.js" "$@"\n`,
 )
 await fs.promises.chmod(path.join(outBin, "ax-code"), 0o755)
 await writeText(
   path.join(outBin, "ax-code.cmd"),
-  `@echo off\r\nset AX_CODE_ORIGINAL_CWD=%CD%\r\nnode --experimental-ffi "%~dp0..\\lib\\index-node-tui.js" %*\r\n`,
+  `@echo off\r\nset AX_CODE_ORIGINAL_CWD=%CD%\r\nnode --experimental-ffi --disable-warning=ExperimentalWarning "%~dp0..\\lib\\index-node-tui.js" %*\r\n`,
 )
 
 // --- Make the distribution self-contained (Bun-free) -----------------------
