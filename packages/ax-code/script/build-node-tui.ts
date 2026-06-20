@@ -147,6 +147,11 @@ const distDeps = {
   "@opentui/core": deps["@opentui/core"],
   "@opentui/solid": deps["@opentui/solid"],
   "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
+  // .wasm files are kept external (esbuild) and resolved at runtime via
+  // createRequire — ship the tree-sitter packages beside the bundle so the bash
+  // tool's parser finds them.
+  "web-tree-sitter": deps["web-tree-sitter"],
+  "tree-sitter-bash": deps["tree-sitter-bash"],
 }
 await writeText(
   path.join(outRoot, "package.json"),

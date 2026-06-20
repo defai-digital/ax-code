@@ -13,7 +13,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Env } from "@/util/env"
 import { toErrorMessage } from "@/util/error-message"
 import { TOAST_DURATION_LONG_MS } from "@/constants/server"
-import { fileURLToPath } from "url"
+import { createRequire } from "module"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
 
@@ -158,28 +158,23 @@ process.once("exit", () => {
   cleanupTimers.clear()
 })
 
-const resolveWasm = (asset: string) => {
-  if (asset.startsWith("file://")) return fileURLToPath(asset)
-  if (asset.startsWith("/") || /^[a-z]:/i.test(asset)) return asset
-  const url = new URL(asset, import.meta.url)
-  return fileURLToPath(url)
-}
+// Resolve the tree-sitter .wasm FILE PATHS rather than `import(...wasm)`. Bun's
+// wasm import returned the path, but Node instantiates the module (its `env`
+// import then fails: "Cannot find package 'env'"). createRequire.resolve gives
+// the path under both runtimes and both layouts: from source (web-tree-sitter /
+// tree-sitter-bash in node_modules) and the built bundle (shipped beside it via
+// build-node-tui's distDeps). web-tree-sitter loads the bytes itself.
+const requireWasm = createRequire(import.meta.url)
 
 const parser = lazy(async () => {
   const { Parser } = await import("web-tree-sitter")
-  const { default: treeWasm } = await import("web-tree-sitter/tree-sitter.wasm" as string, {
-    with: { type: "wasm" },
-  })
-  const treePath = resolveWasm(treeWasm)
+  const treePath = requireWasm.resolve("web-tree-sitter/tree-sitter.wasm")
   await Parser.init({
     locateFile() {
       return treePath
     },
   })
-  const { default: bashWasm } = await import("tree-sitter-bash/tree-sitter-bash.wasm" as string, {
-    with: { type: "wasm" },
-  })
-  const bashPath = resolveWasm(bashWasm)
+  const bashPath = requireWasm.resolve("tree-sitter-bash/tree-sitter-bash.wasm")
   const bashLanguage = await Language.load(bashPath)
   const p = new Parser()
   p.setLanguage(bashLanguage)
