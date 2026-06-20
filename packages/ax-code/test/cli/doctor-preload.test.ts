@@ -31,9 +31,26 @@ describe("doctor TUI preload checks", () => {
     })
   })
 
-  test("reports Node bundled Windows runtime as diagnostic-only", () => {
+  test("reports Node bundled runtime with node:ffi as TUI-ready", () => {
     const check = getTuiPreloadCheck({
       runtimeMode: "node-bundled",
+      ffiAvailable: true,
+      resolveSync: () => {
+        throw new Error("node bundled runtime should not resolve preload from disk")
+      },
+    })
+
+    expect(check).toEqual({
+      name: "TUI preload",
+      status: "ok",
+      detail: "Node runtime — OpenTUI renders via node:ffi; JSX transformed at build time",
+    })
+  })
+
+  test("warns Node bundled runtime without node:ffi (no --experimental-ffi)", () => {
+    const check = getTuiPreloadCheck({
+      runtimeMode: "node-bundled",
+      ffiAvailable: false,
       resolveSync: () => {
         throw new Error("node bundled runtime should not resolve preload from disk")
       },
@@ -42,7 +59,8 @@ describe("doctor TUI preload checks", () => {
     expect(check).toEqual({
       name: "TUI preload",
       status: "warn",
-      detail: "Windows Node bundled runtime supports diagnostic/headless startup only; OpenTUI preload is not used",
+      detail:
+        "Node runtime without node:ffi — run node with --experimental-ffi for the interactive TUI (diagnostic/headless otherwise)",
     })
   })
 
