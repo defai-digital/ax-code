@@ -271,7 +271,9 @@ async function createBackendRuntime(input: {
 }): Promise<BackendRuntime> {
   if (input.mode === "worker") {
     if (!input.workerTarget) throw new Error("Worker backend selected without a worker target")
-    const worker = new Worker(input.workerTarget, { env: input.env })
+    // The runtime `Worker` (node:worker_threads on Node) accepts an `env`
+    // option; the ambient DOM `WorkerOptions` lib type does not, so cast.
+    const worker = new Worker(input.workerTarget, { env: input.env } as unknown as WorkerOptions)
     return {
       mode: "worker",
       target: String(input.workerTarget),

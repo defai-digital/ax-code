@@ -5,7 +5,6 @@ import { LSP } from "../../src/lsp"
 import { recordSample } from "../../src/lsp/perf"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
-import { spyOn } from "vitest"
 import path from "path"
 
 Log.init({ print: false })

@@ -34,26 +34,25 @@ Verify the installed runtime:
 ax-code doctor
 ```
 
-Supported user installs should report `Runtime: Bun X.Y.Z (compiled)` on macOS Homebrew or `Runtime: Node vX.Y.Z (node-bundled)` on Windows.
+Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on both macOS Homebrew and Windows.
 
 ## Channel Matrix
 
 | Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
-| Homebrew                             | `brew install defai-digital/ax-code/ax-code`                                                                                                   | `compiled`             | Supported            | Normal macOS package-manager install path                          |
+| Homebrew                             | `brew install defai-digital/ax-code/ax-code`                                                                                                   | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `node-bundled`         | Manual               | Manual validation or troubleshooting                               |
-| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `compiled`             | Contributor          | Contributor parity with the packaged startup path                  |
+| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
 | Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                               | `source`               | Contributor          | Contributor-only source debugging                                  |
 | Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                                       | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
 
-`compiled`, `node-bundled`, and `source` are runtime modes, not package-manager names. They describe which executable loads the app code:
+`node-bundled` and `source` are runtime modes, not package-manager names. They describe which executable loads the app code:
 
-- `compiled`: a Bun single-file binary loads the runtime.
-- `node-bundled`: Node.js loads the bundled release runtime.
+- `node-bundled`: Node.js loads the bundled release runtime (all supported user install channels).
 - `source`: Node loads files directly from a checkout.
 
-`bun-bundled` is retained only for legacy source-bundle diagnostics. It is not a supported user install channel.
+`compiled` and `bun-bundled` are retired Bun-era runtime modes, retained only for legacy diagnostics. They are not supported user install channels.
 
 ## Platform Policy
 

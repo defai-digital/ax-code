@@ -3,7 +3,6 @@
 // The canonical implementation is in packages/ax-code/src/cli/cmd/github-agent/.
 // See action.yml for the production code path.
 
-import { $ } from "bun"
 import path from "node:path"
 import { Octokit } from "@octokit/rest"
 import { graphql } from "@octokit/graphql"
@@ -14,6 +13,34 @@ import type { IssueCommentEvent, PullRequestReviewCommentEvent } from "@octokit/
 import { createAxCodeClient } from "@ax-code/sdk/v2/client"
 import { spawn } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
+
+// Minimal stand-in for Bun's `$` shell (this legacy entry point used it for git
+// commands). Single-quotes each interpolation so values with spaces stay one
+// argument, runs via the shell, and throws on a non-zero exit like Bun's `$`.
+type ShellResult = { stdout: Buffer; stderr: Buffer; exitCode: number }
+function $(strings: TemplateStringsArray, ...values: unknown[]): Promise<ShellResult> {
+  let cmd = ""
+  strings.forEach((s, i) => {
+    cmd += s
+    if (i < values.length) cmd += `'${String(values[i]).replace(/'/g, "'\\''")}'`
+  })
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, { shell: true })
+    const out: Buffer[] = []
+    const err: Buffer[] = []
+    child.stdout?.on("data", (d: Buffer) => out.push(d))
+    child.stderr?.on("data", (d: Buffer) => err.push(d))
+    child.once("error", reject)
+    child.once("close", (code) => {
+      const result: ShellResult = { stdout: Buffer.concat(out), stderr: Buffer.concat(err), exitCode: code ?? 1 }
+      if (result.exitCode !== 0) {
+        reject(new Error(`command failed (exit ${result.exitCode}): ${cmd}\n${result.stderr.toString()}`))
+        return
+      }
+      resolve(result)
+    })
+  })
+}
 
 type GitHubAuthor = {
   login: string
@@ -205,9 +232,8 @@ try {
   exitCode = 1
   console.error(e)
   let msg = e
-  if (e instanceof $.ShellError) {
-    msg = e.stderr.toString()
-  } else if (e instanceof Error) {
+  if (e instanceof Error) {
+    // The `$` shell helper embeds stderr in the thrown Error's message.
     msg = e.message
   }
   await updateComment(`${msg}${footer()}`)
@@ -665,7 +691,7 @@ async function configureGit(appToken: string) {
   const newCredentials = Buffer.from(`x-access-token:${appToken}`, "utf8").toString("base64")
 
   await $`git config --local --unset-all ${config}`
-  await $`git config --local ${config} "AUTHORIZATION: basic ${newCredentials}"`
+  await $`git config --local ${config} ${`AUTHORIZATION: basic ${newCredentials}`}`
   await $`git config --local user.name "ax-code-agent[bot]"`
   await $`git config --local user.email "ax-code-agent[bot]@users.noreply.github.com"`
 }
@@ -674,7 +700,7 @@ async function restoreGitConfig() {
   if (gitConfig === undefined) return
   console.log("Restoring git config...")
   const config = "http.https://github.com/.extraheader"
-  await $`git config --local ${config} "${gitConfig}"`
+  await $`git config --local ${config} ${gitConfig}`
 }
 
 async function checkoutNewBranch() {

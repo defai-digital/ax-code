@@ -1,6 +1,7 @@
-import { type SQLiteBunDatabase } from "drizzle-orm/bun-sqlite"
+import { type NodeSQLiteDatabase } from "drizzle-orm/node-sqlite"
 import { migrate } from "./migrate-journal"
 import { type SQLiteTransaction } from "drizzle-orm/sqlite-core"
+import type { StatementResultingChanges } from "node:sqlite"
 import type { DrizzleTypeError } from "drizzle-orm"
 export * from "drizzle-orm"
 import { Context } from "../util/context"
@@ -44,9 +45,9 @@ export namespace Database {
     return path.join(Global.Path.data, `ax-code-${safe}.db`)
   })
 
-  export type Transaction = SQLiteTransaction<"sync", void>
+  export type Transaction = SQLiteTransaction<"sync", StatementResultingChanges>
 
-  type Client = SQLiteBunDatabase
+  type Client = NodeSQLiteDatabase
 
   type Journal = { sql: string; timestamp: number; name: string }[]
 

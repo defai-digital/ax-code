@@ -160,7 +160,7 @@ beforeAll(() => {
       next.resolve({ url, headers: req.headers, body })
       return next.response
     },
-    { preconnect: originalFetch.preconnect },
+    { preconnect: (originalFetch as { preconnect?: unknown }).preconnect },
   ) as typeof fetch
 })
 

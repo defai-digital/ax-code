@@ -27,7 +27,7 @@ function file(input: string | URL): BunFileLike {
     json: async () => JSON.parse(await fs.promises.readFile(target, "utf8")),
     arrayBuffer: async () => {
       const buffer = await fs.promises.readFile(target)
-      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+      return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
     },
     exists: () =>
       fs.promises

@@ -1,6 +1,6 @@
-// `bun:sqlite` is bun-only. Use a type-only import so this module loads under
-// the node runtime without ERR_UNKNOWN_BUILTIN_MODULE; the actual migration
-// is a bun-launched CLI command (see cli/cmd/storage/db.ts).
+// The migration runs against the bun-sqlite-typed drizzle driver (aliased to
+// node:sqlite at runtime by the build/test config). A type-only import keeps
+// this module loadable under Node without pulling in the `bun:sqlite` builtin.
 import type { Database } from "bun:sqlite"
 import { Global } from "../global"
 import { Log } from "../util/log"

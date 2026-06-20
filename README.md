@@ -47,7 +47,7 @@ For headless use, CI jobs, or preconfigured shells, AX Code also respects provid
 
 ### Update
 
-`ax-code upgrade` and package-manager update commands apply to the compiled runtime shipped by supported installers.
+`ax-code upgrade` and package-manager update commands apply to the node-bundled runtime shipped by supported installers.
 
 ```bash
 ax-code upgrade
@@ -72,7 +72,7 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v10.33.4+ and [Node.js](https://nodejs.org) matching the root `package.json` engine (`>=22`, `>=26` for the TUI). `setup:cli` builds and installs a node-bundled launcher. `ax-code doctor` should report `Runtime: Node vX.Y.Z (node-bundled)`. (macOS Homebrew packaged installs still ship the legacy Bun-compiled runtime and report `Runtime: Bun X.Y.Z (compiled)`.)
+Requires [pnpm](https://pnpm.io) v10.33.4+ and [Node.js](https://nodejs.org) matching the root `package.json` engine (`>=22`, `>=26` for the TUI). `setup:cli` builds and installs a node-bundled launcher. `ax-code doctor` should report `Runtime: Node vX.Y.Z (node-bundled)` — the same node-bundled runtime shipped by every supported install channel (Homebrew, Windows installer).
 
 Refresh the local bundled runtime after code changes:
 

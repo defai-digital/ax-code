@@ -20,7 +20,10 @@ export type MigrateDep = {
 export async function migrate(dep: MigrateDep = {}) {
   const path = dep.path ?? Database.Path
   const exists = dep.exists ?? Filesystem.exists
-  const db = dep.db ?? (() => Database.Client().$client)
+  // `$client` is node:sqlite's DatabaseSync at runtime; JsonMigration.run is
+  // typed against the bun-sqlite driver's handle (the two are the same aliased
+  // object). Bridge the type duality at this single boundary.
+  const db = dep.db ?? (() => Database.Client().$client as unknown as Parameters<typeof JsonMigration.run>[0])
   const run = dep.run ?? JsonMigration.run
   const err = dep.err ?? process.stderr
 

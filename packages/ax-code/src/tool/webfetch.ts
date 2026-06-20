@@ -264,30 +264,36 @@ export const WebFetchTool = Tool.define("webfetch", {
   },
 })
 
-async function extractTextFromHTML(html: string) {
-  let text = ""
-  let skipDepth = 0
+function extractTextFromHTML(html: string): string {
+  // Best-effort plain-text extraction: drop non-content elements (and their
+  // contents) entirely, strip the remaining tags, then decode entities and
+  // collapse whitespace. Ports the previous Bun-only HTMLRewriter pass to plain
+  // Node so webfetch works under the Node runtime.
+  const withoutSkipped = html.replace(/<(script|style|noscript|iframe|object)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+  const withoutComments = withoutSkipped.replace(/<!--[\s\S]*?-->/g, " ")
+  const withoutTags = withoutComments.replace(/<[^>]+>/g, " ")
+  return decodeHtmlEntities(withoutTags)
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim()
+}
 
-  const rewriter = new HTMLRewriter()
-    .on("script, style, noscript, iframe, object", {
-      element(element) {
-        skipDepth++
-        element.onEndTag(() => {
-          skipDepth = Math.max(0, skipDepth - 1)
-        })
-      },
-    })
-    .on("*", {
-      text(input) {
-        if (skipDepth === 0) {
-          text += input.text
-        }
-      },
-    })
-    .transform(new Response(html))
-
-  await rewriter.text()
-  return text.trim()
+function decodeHtmlEntities(input: string): string {
+  const named: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: " ",
+  }
+  return input.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, body: string) => {
+    if (body[0] === "#") {
+      const codePoint = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match
+    }
+    return named[body.toLowerCase()] ?? match
+  })
 }
 
 function convertHTMLToMarkdown(html: string): string {

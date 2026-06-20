@@ -223,7 +223,7 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
   await fs.promises.mkdir(input.cwd, { recursive: true })
 
   console.log(`${label}: running installed TUI startup smoke (timeout ${timeoutMs}ms)`)
-  const { spawn } = await import("bun-pty")
+  const { spawn } = await import("node-pty-prebuilt-multiarch")
   const env = stringEnv({
     ...process.env,
     HOME: input.homeDir,

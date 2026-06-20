@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config"
-import type { Plugin } from "vite"
+import type { Plugin } from "vitest/config"
 import tsconfigPaths from "vite-tsconfig-paths"
 import { transform as esbuildTransform } from "esbuild"
 import path from "node:path"
@@ -153,7 +153,7 @@ export default defineConfig({
     // core-count parallelism those subprocesses starve for CPU and miss the
     // deadline, producing flaky timeouts. Bun's test runner used a single
     // process; this restores comparable contention behaviour on Node.
-    poolOptions: { forks: { maxForks: 6, minForks: 1 } },
+    maxWorkers: 6,
     // A cluster of git/watcher/scheduler tests is timing-sensitive: each passes
     // deterministically in isolation but can miss a subprocess/event deadline
     // under full-suite load. Bun's runner happened to schedule them serially.

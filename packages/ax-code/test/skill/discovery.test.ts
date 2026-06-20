@@ -97,13 +97,13 @@ beforeAll(async () => {
           if (!fullPath.endsWith("index.json")) {
             downloadCount++
           }
-          return new Response(await readFile(fullPath))
+          return new Response(new Uint8Array(await readFile(fullPath)))
         }
       }
 
       return new Response("Not Found", { status: 404 })
     },
-    { preconnect: originalFetch.preconnect },
+    { preconnect: (originalFetch as { preconnect?: unknown }).preconnect },
   ) as typeof fetch
 
   lookupSpy = vi.spyOn(dns, "lookup").mockImplementation(async () => [{ address: "93.184.216.34", family: 4 }] as any)

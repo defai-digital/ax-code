@@ -31,8 +31,8 @@
   },
   "devDependencies": {
     "@actions/artifact": "5.0.1",
-    "@tsconfig/bun": "catalog:",
     "@types/mime-types": "catalog:",
+    "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "fast-glob": "catalog:",
     "husky": "9.1.7",

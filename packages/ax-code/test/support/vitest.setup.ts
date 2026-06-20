@@ -8,12 +8,12 @@ import { spawnSync as nodeSpawnSync, spawn as nodeSpawn } from "node:child_proce
 
 installNodeBunCompat()
 
-const B = (globalThis as { Bun: Record<string, unknown> }).Bun
+const B = (globalThis as unknown as { Bun: Record<string, unknown> }).Bun
 B.sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 B.gc = () => (globalThis as { gc?: () => void }).gc?.()
 B.spawnSync = (input: { cmd: string[]; cwd?: string; env?: Record<string, string> } | string[]) => {
   const cmd = Array.isArray(input) ? input : input.cmd
-  const opts = Array.isArray(input) ? {} : input
+  const opts: { cwd?: string; env?: Record<string, string> } = Array.isArray(input) ? {} : input
   const r = nodeSpawnSync(cmd[0]!, cmd.slice(1), { cwd: opts.cwd, env: opts.env ?? process.env })
   return {
     exitCode: r.status ?? (r.signal ? 1 : 0),
@@ -26,7 +26,7 @@ B.spawnSync = (input: { cmd: string[]; cwd?: string; env?: Record<string, string
 }
 B.spawn = (input: { cmd: string[]; cwd?: string; env?: Record<string, string> } | string[]) => {
   const cmd = Array.isArray(input) ? input : input.cmd
-  const opts = Array.isArray(input) ? {} : input
+  const opts: { cwd?: string; env?: Record<string, string> } = Array.isArray(input) ? {} : input
   const child = nodeSpawn(cmd[0]!, cmd.slice(1), { cwd: opts.cwd, env: opts.env ?? process.env })
   return {
     pid: child.pid,
@@ -40,7 +40,10 @@ B.spawn = (input: { cmd: string[]; cwd?: string; env?: Record<string, string> } 
 
 expect.extend({
   toBeFunction: (r) => ({ pass: typeof r === "function", message: () => `expected ${r} to be a function` }),
-  toBeNumber: (r) => ({ pass: typeof r === "number" && !Number.isNaN(r), message: () => `expected ${r} to be a number` }),
+  toBeNumber: (r) => ({
+    pass: typeof r === "number" && !Number.isNaN(r),
+    message: () => `expected ${r} to be a number`,
+  }),
   toBeString: (r) => ({ pass: typeof r === "string", message: () => `expected ${r} to be a string` }),
   toBeNil: (r) => ({ pass: r == null, message: () => `expected ${r} to be nil` }),
   toBeArray: (r) => ({ pass: Array.isArray(r), message: () => `expected ${r} to be an array` }),

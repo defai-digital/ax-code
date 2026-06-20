@@ -56,7 +56,7 @@ export namespace Plugin {
         get serverUrl(): URL {
           return RuntimeLocalClient.url()
         },
-        $: Bun.$.env(Env.sanitize(process.env)),
+        $: Bun.$.env(Env.sanitize(process.env)) as unknown as PluginInput["$"],
       }
 
       for (const plugin of INTERNAL_PLUGINS) {

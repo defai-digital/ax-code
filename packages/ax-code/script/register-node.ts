@@ -17,16 +17,29 @@ installNodeBunCompat()
 // Under the real Bun runtime #db resolves natively and registerHooks may be
 // absent — the source resolve hook is a Node-only concern. (installNodeBunCompat
 // sets globalThis.Bun even on Node, so detect the runtime via process.versions.bun.)
-if (!process.versions.bun && typeof nodeModule.registerHooks === "function") {
+// `Module.registerHooks` is newer than the pinned @types/node; type it locally.
+type ResolveContext = { conditions?: string[]; importAttributes?: Record<string, string>; parentURL?: string }
+type ResolveResult = { url: string; shortCircuit?: boolean; format?: string | null }
+const registerHooks = (
+  nodeModule as typeof nodeModule & {
+    registerHooks?: (hooks: {
+      resolve?: (
+        specifier: string,
+        context: ResolveContext,
+        nextResolve: (specifier: string, context?: ResolveContext) => ResolveResult,
+      ) => ResolveResult
+    }) => void
+  }
+).registerHooks
+
+if (!process.versions.bun && typeof registerHooks === "function") {
   const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
-  const exact = new Map<string, string>([
-    ["#db", pathToFileURL(path.join(pkgRoot, "src/storage/db.node.ts")).href],
-  ])
+  const exact = new Map<string, string>([["#db", pathToFileURL(path.join(pkgRoot, "src/storage/db.node.ts")).href]])
   // Remap to another bare specifier (let the rest of the chain resolve it).
   const rebind = new Map<string, string>([["drizzle-orm/bun-sqlite", "drizzle-orm/node-sqlite"]])
 
-  nodeModule.registerHooks({
+  registerHooks({
     resolve(specifier, context, nextResolve) {
       const aliased = exact.get(specifier)
       if (aliased) return { url: aliased, shortCircuit: true }

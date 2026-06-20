@@ -59,7 +59,7 @@ export function getTuiPreloadCheck(input: TuiPreloadCheckInput = {}): DoctorChec
   try {
     const preloadPath = (input.resolveSync ?? Bun.resolveSync)(
       "@opentui/solid/preload",
-      input.importMetaDir ?? import.meta.dir,
+      input.importMetaDir ?? import.meta.dirname,
     )
     return {
       name: "TUI preload",
