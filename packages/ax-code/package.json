@@ -39,7 +39,7 @@
     "#db": {
       "bun": "./src/storage/db.bun.ts",
       "node": "./src/storage/db.node.ts",
-      "default": "./src/storage/db.bun.ts"
+      "default": "./src/storage/db.node.ts"
     }
   },
   "devDependencies": {
