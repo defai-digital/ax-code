@@ -167,11 +167,15 @@ class IpcConnection {
         }
         if (this.abortController.signal.aborted) return
         await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, delay)
-          this.abortController.signal.addEventListener("abort", () => {
+          const onAbort = () => {
             clearTimeout(timer)
             resolve()
-          }, { once: true })
+          }
+          const timer = setTimeout(() => {
+            this.abortController.signal.removeEventListener("abort", onAbort)
+            resolve()
+          }, delay)
+          this.abortController.signal.addEventListener("abort", onAbort, { once: true })
         })
         delay = Math.min(delay * 2, IpcConnection.EVENT_RETRY_MAX_MS)
       }
@@ -223,6 +227,9 @@ async function* parseSseStream(response: Response): AsyncGenerator<unknown> {
       }
     }
   } finally {
+    // Cancel the reader so the upstream SSE connection is torn down,
+    // not just detached — otherwise the server keeps buffering events.
+    try { await reader.cancel() } catch {}
     reader.releaseLock()
   }
 }

@@ -27639,6 +27639,7 @@
         ],
         "tool_call": true,
         "structured_output": true,
+        "temperature": true,
         "release_date": "2026-03-05",
         "last_updated": "2026-06-11",
         "modalities": {
@@ -112237,6 +112238,32 @@
         "knowledge": "2026-05",
         "release_date": "2026-05-12",
         "last_updated": "2026-06-02",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "output": 64000
+        }
+      },
+      "claudius": {
+        "id": "claudius",
+        "name": "Claudius",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "knowledge": "2026-05",
+        "release_date": "2026-05-12",
+        "last_updated": "2026-05-12",
         "modalities": {
           "input": [
             "text",

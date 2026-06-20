@@ -123,12 +123,18 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
   async function ensureConnection(): Promise<IpcTransportConnectResult> {
     if (connection) return connection
     if (pendingConnection) return pendingConnection
-    pendingConnection = connectIpcTransport(options).then((conn) => {
-      connection = conn
-      pendingConnection = undefined
-      startReader(conn)
-      return conn
-    })
+    pendingConnection = connectIpcTransport(options)
+      .then((conn) => {
+        connection = conn
+        pendingConnection = undefined
+        startReader(conn)
+        return conn
+      })
+      .catch((error) => {
+        // Reset so the next call retries instead of returning a stale rejection.
+        pendingConnection = undefined
+        throw error
+      })
     return pendingConnection
   }
 

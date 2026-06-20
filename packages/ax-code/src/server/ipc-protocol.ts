@@ -61,11 +61,22 @@ export function decodeIpcFrames(buffer: Buffer): {
 }
 
 export async function* readIpcMessages(socket: Socket): AsyncGenerator<IpcMessage> {
-  let buffer: Buffer = Buffer.alloc(0)
+  const chunks: Buffer[] = []
+  let totalLength = 0
   for await (const chunk of socket) {
-    buffer = Buffer.concat([buffer, chunk as Buffer]) as Buffer
+    const buf = chunk as Buffer
+    chunks.push(buf)
+    totalLength += buf.length
+    // Only concatenate when we have at least a 4-byte length header.
+    if (totalLength < 4) continue
+    const buffer = Buffer.concat(chunks, totalLength)
+    chunks.length = 0
+    totalLength = 0
     const { messages, remaining } = decodeIpcFrames(buffer)
-    buffer = remaining
+    if (remaining.length > 0) {
+      chunks.push(remaining)
+      totalLength = remaining.length
+    }
     for (const message of messages) {
       yield message
     }
