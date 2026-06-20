@@ -6,8 +6,11 @@ import fs from "fs/promises"
 import { setTimeout as sleep } from "node:timers/promises"
 import { afterAll } from "vitest"
 
-// Set XDG env vars FIRST, before any src/ imports
-const dir = path.join(os.tmpdir(), "opencode-test-data-" + process.pid)
+// Set XDG env vars FIRST, before any src/ imports. Unique per test FILE (not
+// just per pid): vitest forks are reused across files, so a pid-only dir let
+// files share global SQLite/home state and flake when run together. preload
+// re-runs per file under isolate, so a random suffix gives each its own dir.
+const dir = path.join(os.tmpdir(), "opencode-test-data-" + process.pid + "-" + Math.random().toString(36).slice(2, 9))
 await fs.mkdir(dir, { recursive: true })
 afterAll(async () => {
   const { Database } = await import("../src/storage/db")
