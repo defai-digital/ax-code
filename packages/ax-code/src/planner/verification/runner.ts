@@ -78,24 +78,48 @@ export function parsePackageScripts(raw: string): Record<string, string> {
   return decodePackageScripts(parsePackageJsonObject(raw))
 }
 
-// Resolve the typecheck/lint/test commands for a project. Defaults pick up
-// `bun run <script>` when package.json defines the matching script, then fall
-// back to Cargo checks when the directory belongs to a Rust workspace;
-// `override` lets callers force a specific command (or null to skip).
+// Detect the project's package manager from its lockfile / packageManager field
+// so the suggested verification commands match how the project is actually run
+// (rather than assuming a single runtime). Defaults to npm — the universal
+// fallback — when nothing else is detected.
+async function detectPackageManager(cwd: string, pkg: Record<string, unknown>): Promise<string> {
+  const declared = typeof pkg.packageManager === "string" ? pkg.packageManager.split("@")[0] : undefined
+  if (declared === "pnpm" || declared === "yarn" || declared === "bun" || declared === "npm") return declared
+  const exists = async (file: string) =>
+    await fs
+      .access(path.join(cwd, file))
+      .then(() => true)
+      .catch(() => false)
+  if (await exists("pnpm-lock.yaml")) return "pnpm"
+  if ((await exists("bun.lock")) || (await exists("bun.lockb"))) return "bun"
+  if (await exists("yarn.lock")) return "yarn"
+  return "npm"
+}
+
+// Resolve the typecheck/lint/test commands for a project. Defaults pick up the
+// detected package manager's `run <script>` when package.json defines the
+// matching script, then fall back to Cargo checks when the directory belongs to
+// a Rust workspace; `override` lets callers force a specific command (or null to
+// skip).
 export async function resolveCommands(cwd: string, override?: CommandOverride): Promise<CommandSet> {
   const pkgPath = path.join(cwd, "package.json")
   let scripts: Record<string, string> = {}
+  let pkg: Record<string, unknown> = {}
   try {
     const raw = await fs.readFile(pkgPath, "utf8")
     scripts = parsePackageScripts(raw)
+    pkg = parsePackageJsonObject(raw) ?? {}
   } catch {
     scripts = {}
   }
+  const pm = await detectPackageManager(cwd, pkg)
 
   const typecheck =
-    override?.typecheck !== undefined ? override.typecheck : scripts.typecheck ? "bun run typecheck" : null
-  const lint = override?.lint !== undefined ? override.lint : scripts.lint ? "bun run lint" : null
-  const test = override?.test !== undefined ? override.test : scripts.test ? "bun test" : null
+    override?.typecheck !== undefined ? override.typecheck : scripts.typecheck ? `${pm} run typecheck` : null
+  const lint = override?.lint !== undefined ? override.lint : scripts.lint ? `${pm} run lint` : null
+  // `<pm> test` runs the package's test script for npm/pnpm/yarn; for bun it is
+  // the conventional test invocation.
+  const test = override?.test !== undefined ? override.test : scripts.test ? `${pm} test` : null
 
   const cargo = await cargoCommands(cwd)
   return {

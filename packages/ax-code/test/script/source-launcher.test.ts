@@ -2,11 +2,13 @@ import { describe, expect, test } from "vitest"
 import { sourceLauncherScript } from "../../script/source-launcher"
 
 describe("script.source-launcher", () => {
-  test("unix launcher captures original cwd and execs bun run against the source tree", () => {
+  test("unix launcher captures original cwd and execs node against the source tree", () => {
     const out = sourceLauncherScript({ root: "/repo", windows: false })
     expect(out).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
-    expect(out).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index.ts"')
-    expect(out).toContain('AX_CODE_ORIGINAL_CWD="$(pwd)" exec bun run --cwd "$AX_CODE_SOURCE_CWD"')
+    expect(out).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index-node-tui.ts"')
+    expect(out).toContain('export AX_CODE_ORIGINAL_CWD="$(pwd)"')
+    expect(out).toContain("exec node --experimental-ffi")
+    expect(out).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')
   })
 
   test("windows launcher uses the .cmd shape and captures CD", () => {
@@ -14,8 +16,8 @@ describe("script.source-launcher", () => {
     expect(out).toContain("@echo off")
     expect(out).toContain("set AX_CODE_ORIGINAL_CWD=%CD%")
     expect(out).toContain('set "AX_CODE_SOURCE_CWD=C:\\repo\\packages\\ax-code"')
-    expect(out).toContain('set "AX_CODE_SOURCE_ENTRY=C:\\repo\\packages\\ax-code\\src\\index.ts"')
-    expect(out).toContain('bun run --cwd "%AX_CODE_SOURCE_CWD%"')
+    expect(out).toContain('set "AX_CODE_SOURCE_ENTRY=C:\\repo\\packages\\ax-code\\src\\index-node-tui.ts"')
+    expect(out).toContain("node --experimental-ffi")
   })
 
   test("unix launcher normalizes Windows-style separators in the root path", () => {
@@ -26,7 +28,7 @@ describe("script.source-launcher", () => {
     expect(out).not.toContain("\\")
   })
 
-  test("guards stale source launchers before bun sees --cwd", () => {
+  test("guards stale source launchers before exec", () => {
     const unix = sourceLauncherScript({ root: "/missing/repo", windows: false })
     const windows = sourceLauncherScript({ root: "C:\\missing\\repo", windows: true })
     expect(unix).toContain('if [ ! -d "$AX_CODE_SOURCE_CWD" ]; then')

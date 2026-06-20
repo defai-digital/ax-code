@@ -63,27 +63,36 @@ describe("resolveCommands", () => {
     expect(cmds).toEqual({ typecheck: null, lint: null, test: null })
   })
 
-  test("picks `bun run typecheck` when package.json has a typecheck script", async () => {
+  test("picks `npm run typecheck` (default PM) when package.json has a typecheck script", async () => {
     await using tmp = await tmpdir({ git: true })
     await writePackageJson(tmp.path, { typecheck: "tsc --noEmit" })
     const cmds = await resolveCommands(tmp.path)
-    expect(cmds.typecheck).toBe("bun run typecheck")
+    expect(cmds.typecheck).toBe("npm run typecheck")
     expect(cmds.lint).toBeNull()
     expect(cmds.test).toBeNull()
   })
 
-  test("picks `bun run lint` when package.json has a lint script", async () => {
+  test("picks `npm run lint` when package.json has a lint script", async () => {
     await using tmp = await tmpdir({ git: true })
     await writePackageJson(tmp.path, { lint: "eslint ." })
     const cmds = await resolveCommands(tmp.path)
-    expect(cmds.lint).toBe("bun run lint")
+    expect(cmds.lint).toBe("npm run lint")
   })
 
-  test("picks `bun test` when package.json has a test script", async () => {
+  test("picks `npm test` when package.json has a test script", async () => {
     await using tmp = await tmpdir({ git: true })
     await writePackageJson(tmp.path, { test: "vitest" })
     const cmds = await resolveCommands(tmp.path)
-    expect(cmds.test).toBe("bun test")
+    expect(cmds.test).toBe("npm test")
+  })
+
+  test("detects the project package manager (pnpm lockfile)", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writePackageJson(tmp.path, { typecheck: "tsc --noEmit", test: "vitest" })
+    await fs.writeFile(path.join(tmp.path, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n", "utf8")
+    const cmds = await resolveCommands(tmp.path)
+    expect(cmds.typecheck).toBe("pnpm run typecheck")
+    expect(cmds.test).toBe("pnpm test")
   })
 
   test("override.typecheck=null forces typecheck off even when script exists", async () => {
@@ -92,7 +101,7 @@ describe("resolveCommands", () => {
     const cmds = await resolveCommands(tmp.path, { typecheck: null })
     expect(cmds.typecheck).toBeNull()
     // lint default still applies
-    expect(cmds.lint).toBe("bun run lint")
+    expect(cmds.lint).toBe("npm run lint")
   })
 
   test("override with a custom command string is used verbatim", async () => {
@@ -124,7 +133,7 @@ describe("resolveCommands", () => {
     )
     const cmds = await resolveCommands(tmp.path)
     expect(cmds.typecheck).toBeNull()
-    expect(cmds.lint).toBe("bun run lint")
+    expect(cmds.lint).toBe("npm run lint")
   })
 
   test("falls back to cargo commands in a Rust workspace", async () => {
@@ -143,7 +152,7 @@ describe("resolveCommands", () => {
     await writePackageJson(tmp.path, { typecheck: "tsc --noEmit" })
     await fs.writeFile(path.join(tmp.path, "Cargo.toml"), '[package]\nname = "demo"\nversion = "0.1.0"\n')
     const cmds = await resolveCommands(tmp.path)
-    expect(cmds.typecheck).toBe("bun run typecheck")
+    expect(cmds.typecheck).toBe("npm run typecheck")
     expect(cmds.lint).toBe("cargo clippy --all-targets --all-features -- -D warnings")
     expect(cmds.test).toBe("cargo test")
   })
@@ -162,7 +171,7 @@ describe("resolveCommands", () => {
     const previous = process.env.OPENAI_API_KEY
     process.env.OPENAI_API_KEY = "secret-from-parent"
     try {
-      const result = await runCommand(`bun -e "console.log(process.env.OPENAI_API_KEY ?? 'missing')"`, tmp.path)
+      const result = await runCommand(`node -e "console.log(process.env.OPENAI_API_KEY ?? 'missing')"`, tmp.path)
       expect(result.ok).toBe(true)
       expect(result.stdout.trim()).toBe("missing")
     } finally {
