@@ -135,7 +135,7 @@ This implementation follows the ACP specification v1 for the features listed bel
 
 ```bash
 # Run ACP tests
-bun test test/acp.test.ts
+vitest run test/acp.test.ts
 
 # Test manually with stdio
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}' | ax-code acp

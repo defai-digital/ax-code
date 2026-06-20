@@ -40,7 +40,7 @@ The project is a **pnpm workspace** monorepo:
 - **Typecheck**: `pnpm run typecheck`
 - **Run Tests**:
   - Root: do not run `pnpm test`; the root script intentionally fails.
-  - Core: `cd packages/ax-code && bun test`
+  - Core: `cd packages/ax-code && pnpm test`
   - Grouped tests: `pnpm test:unit`, `pnpm test:e2e`, `pnpm test:deterministic`.
 
 ## Development Conventions

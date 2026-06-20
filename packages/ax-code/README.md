@@ -27,7 +27,7 @@ pnpm dev
 Run commands from `packages/ax-code`:
 
 ```bash
-bun test
+pnpm test
 bun typecheck
 pnpm test:unit
 pnpm test:recovery
