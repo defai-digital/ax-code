@@ -1,5 +1,4 @@
 import { createAxCodeClient } from "../v2/client.js"
-import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../protocol.js"
 import type {
   Event,
   WorkflowRoutineCreateData,
@@ -37,10 +36,11 @@ import type {
   HeadlessPermissionReplyBody,
   HeadlessPromptBody,
   HeadlessQuestionReplyBody,
-  HeadlessRuntimeCommand,
-  HeadlessRuntimeCommandResult,
   HeadlessShellBody,
 } from "./command.js"
+import { createHttpSseTransport } from "./http-transport.js"
+import type { HeadlessTransport } from "./transport.js"
+import { errorMessage, parseHeadlessRuntimeJsonBody, parseHeadlessRuntimeResponseBody } from "./util.js"
 
 export type HeadlessClientOptions = {
   baseUrl: string
@@ -48,6 +48,12 @@ export type HeadlessClientOptions = {
   fetch?: typeof fetch
   headers?: RequestInit["headers"]
   experimental_workspaceID?: string
+  /**
+   * Optional transport implementation. When omitted, an HTTP/SSE transport
+   * is created from the other options. This is the integration point for
+   * the local IPC transport used by Desktop.
+   */
+  transport?: HeadlessTransport
 }
 
 export type HeadlessSubscribeOptions = {
@@ -340,7 +346,7 @@ export type HeadlessSessionEvidenceInput = {
 }
 
 export function createHeadlessClient(input: HeadlessClientOptions) {
-  const fetchFn = input.fetch ?? fetch
+  const transport = input.transport ?? createHttpSseTransport(input)
   const client = createAxCodeClient({
     baseUrl: input.baseUrl,
     directory: input.directory,
@@ -351,46 +357,30 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
     headers: input.headers,
     experimental_workspaceID: input.experimental_workspaceID,
   })
-  const send = (command: HeadlessRuntimeCommand) =>
-    sendHeadlessRuntimeCommand({
-      command,
-      baseUrl: input.baseUrl,
-      fetch: fetchFn,
-      headers: input.headers,
-      directory: input.directory,
-      experimental_workspaceID: input.experimental_workspaceID,
-      client,
-    })
+  const send = transport.sendCommand
 
   return {
     client,
     health() {
-      return requestJson<HeadlessGlobalHealth>({
-        baseUrl: input.baseUrl,
-        fetch: fetchFn,
-        headers: input.headers,
-        directory: input.directory,
-        experimental_workspaceID: input.experimental_workspaceID,
+      return transport.requestJson<HeadlessGlobalHealth>({
         path: "/global/health",
         method: "GET",
       })
     },
     capabilities() {
-      return requestJson<HeadlessRuntimeCapabilities>({
-        baseUrl: input.baseUrl,
-        fetch: fetchFn,
-        headers: input.headers,
-        directory: input.directory,
-        experimental_workspaceID: input.experimental_workspaceID,
+      return transport.requestJson<HeadlessRuntimeCapabilities>({
         path: "/global/capabilities",
         method: "GET",
       })
     },
     async createSession(session?: HeadlessCreateSessionInput) {
-      const result = await client.session.create(session ?? {})
-      const created = result.data
-      if (!created?.id) throw new Error("Failed to create headless session: response did not include id")
-      return created
+      const result = await transport.requestJson<{ id?: string }>({
+        path: "/session",
+        method: "POST",
+        body: session ?? {},
+      })
+      if (!result.id) throw new Error("Failed to create headless session: response did not include id")
+      return { id: result.id }
     },
     send,
     sendPrompt(sessionID: string, body: HeadlessPromptBody, options?: { mode?: "sync" | "async" }) {
@@ -421,51 +411,31 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
     },
     sessionEvidence: {
       load(sessionID: string, parameters?: HeadlessSessionEvidenceInput) {
-        return loadSessionEvidence(input, fetchFn, sessionID, parameters)
+        return loadSessionEvidence(transport.requestJson, sessionID, parameters)
       },
     },
     workflowTemplate: {
       list() {
-        return requestJson<WorkflowTemplateListResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowTemplateListResponse>({
           path: "/workflow-templates",
           method: "GET",
         })
       },
       get(templateID: string) {
-        return requestJson<WorkflowTemplateGetResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowTemplateGetResponse>({
           path: `/workflow-templates/${encodeURIComponent(templateID)}`,
           method: "GET",
         })
       },
       save(body: HeadlessWorkflowTemplateSaveInput) {
-        return requestJson<WorkflowTemplateSaveResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowTemplateSaveResponse>({
           path: "/workflow-templates",
           method: "POST",
           body: body as Record<string, unknown>,
         })
       },
       promote(templateID: string) {
-        return requestJson<WorkflowTemplatePromoteResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowTemplatePromoteResponse>({
           path: `/workflow-templates/${encodeURIComponent(templateID)}/promote`,
           method: "POST",
         })
@@ -473,122 +443,77 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
     },
     workflowRun: {
       list(parameters?: HeadlessWorkflowRunListInput) {
-        return requestJson<WorkflowRunListResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRunListResponse>({
           path: "/workflow-runs",
           method: "GET",
           query: parameters,
         })
       },
       dashboard(parameters?: HeadlessWorkflowRunDashboardInput) {
-        return requestJson<WorkflowRunDashboardResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRunDashboardResponse>({
           path: "/workflow-runs/dashboard",
           method: "GET",
           query: parameters,
         })
       },
       evalCases() {
-        return requestJson<HeadlessWorkflowEvalCase[]>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessWorkflowEvalCase[]>({
           path: "/workflow-runs/eval-cases",
           method: "GET",
         })
       },
       create(body: HeadlessWorkflowRunCreateInput) {
-        return requestJson<WorkflowRunCreateResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRunCreateResponse>({
           path: "/workflow-runs",
           method: "POST",
           body: body as Record<string, unknown>,
         })
       },
       get(runID: string) {
-        return workflowRunCommand<WorkflowRunGetResponse>(input, fetchFn, runID, "GET")
+        return workflowRunCommand<WorkflowRunGetResponse>(transport.requestJson, runID, "GET")
       },
       artifacts(runID: string, parameters?: HeadlessWorkflowArtifactListInput) {
-        return requestJson<WorkflowRunArtifactsResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRunArtifactsResponse>({
           path: `/workflow-runs/${encodeURIComponent(runID)}/artifacts`,
           method: "GET",
           query: parameters,
         })
       },
       evalSummary(runID: string, body: HeadlessWorkflowRunEvalSummaryInput = {}) {
-        return requestJson<WorkflowRunEvalSummaryResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRunEvalSummaryResponse>({
           path: `/workflow-runs/${encodeURIComponent(runID)}/eval-summary`,
           method: "POST",
           body: body as Record<string, unknown>,
         })
       },
       evalCase(runID: string, body: HeadlessWorkflowEvalCaseRunInput = {}) {
-        return requestJson<HeadlessWorkflowEvalCaseRunSummary>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessWorkflowEvalCaseRunSummary>({
           path: `/workflow-runs/${encodeURIComponent(runID)}/eval-case`,
           method: "POST",
           body,
         })
       },
       saveTemplate(runID: string, body: HeadlessWorkflowRunSaveTemplateInput) {
-        return requestJson<WorkflowRunSaveTemplateResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRunSaveTemplateResponse>({
           path: `/workflow-runs/${encodeURIComponent(runID)}/save-template`,
           method: "POST",
           body: body as Record<string, unknown>,
         })
       },
       start(runID: string, body: HeadlessWorkflowRunStartInput = {}) {
-        return workflowRunCommand<WorkflowRunStartResponse>(input, fetchFn, runID, "POST", "start", body)
+        return workflowRunCommand<WorkflowRunStartResponse>(transport.requestJson, runID, "POST", "start", body)
       },
       pause(runID: string) {
-        return workflowRunCommand<WorkflowRunPauseResponse>(input, fetchFn, runID, "POST", "pause")
+        return workflowRunCommand<WorkflowRunPauseResponse>(transport.requestJson, runID, "POST", "pause")
       },
       resume(runID: string) {
-        return workflowRunCommand<WorkflowRunResumeResponse>(input, fetchFn, runID, "POST", "resume")
+        return workflowRunCommand<WorkflowRunResumeResponse>(transport.requestJson, runID, "POST", "resume")
       },
       cancel(runID: string) {
-        return workflowRunCommand<WorkflowRunCancelResponse>(input, fetchFn, runID, "POST", "cancel")
+        return workflowRunCommand<WorkflowRunCancelResponse>(transport.requestJson, runID, "POST", "cancel")
       },
       retry(runID: string, parameters?: HeadlessWorkflowRunRetryInput) {
-        return requestJson<WorkflowRunRetryResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRunRetryResponse>({
           path: `/workflow-runs/${encodeURIComponent(runID)}/retry`,
           method: "POST",
           query: parameters,
@@ -597,35 +522,20 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
     },
     workflowRoutine: {
       create(body: HeadlessWorkflowRoutineCreateInput) {
-        return requestJson<WorkflowRoutineCreateResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRoutineCreateResponse>({
           path: "/workflow-routines",
           method: "POST",
           body: body as Record<string, unknown>,
         })
       },
       list() {
-        return requestJson<WorkflowRoutineListResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRoutineListResponse>({
           path: "/workflow-routines",
           method: "GET",
         })
       },
       run(body: HeadlessWorkflowRoutineRunInput) {
-        return requestJson<WorkflowRoutineRunResponse>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<WorkflowRoutineRunResponse>({
           path: "/workflow-routines/run",
           method: "POST",
           body: body as Record<string, unknown>,
@@ -634,75 +544,50 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
     },
     taskQueue: {
       list(parameters?: HeadlessTaskQueueListInput) {
-        return requestJson<HeadlessTaskQueueItem[]>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessTaskQueueItem[]>({
           path: "/task-queue",
           method: "GET",
           query: parameters,
         })
       },
       enqueue(body: HeadlessTaskQueueEnqueueInput) {
-        return requestJson<HeadlessTaskQueueItem>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessTaskQueueItem>({
           path: "/task-queue",
           method: "POST",
           body,
         })
       },
       edit(id: string, body: HeadlessTaskQueueEditInput) {
-        return requestJson<HeadlessTaskQueueItem>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessTaskQueueItem>({
           path: `/task-queue/${encodeURIComponent(id)}/edit`,
           method: "POST",
           body,
         })
       },
       pause(id: string) {
-        return taskQueueCommand(input, fetchFn, id, "pause")
+        return taskQueueCommand(transport.requestJson, id, "pause")
       },
       resume(id: string) {
-        return taskQueueCommand(input, fetchFn, id, "resume")
+        return taskQueueCommand(transport.requestJson, id, "resume")
       },
       cancel(id: string) {
-        return taskQueueCommand(input, fetchFn, id, "cancel")
+        return taskQueueCommand(transport.requestJson, id, "cancel")
       },
       retry(id: string) {
-        return taskQueueCommand(input, fetchFn, id, "retry")
+        return taskQueueCommand(transport.requestJson, id, "retry")
       },
       sendNow(id: string) {
-        return taskQueueCommand(input, fetchFn, id, "send-now")
+        return taskQueueCommand(transport.requestJson, id, "send-now")
       },
       reorder(id: string, position: number) {
-        return requestJson<HeadlessTaskQueueItem>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessTaskQueueItem>({
           path: `/task-queue/${encodeURIComponent(id)}/reorder`,
           method: "POST",
           body: { position },
         })
       },
       remove(id: string) {
-        return requestJson<boolean>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<boolean>({
           path: `/task-queue/${encodeURIComponent(id)}`,
           method: "DELETE",
         })
@@ -710,163 +595,70 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
     },
     scheduledTask: {
       list(parameters?: HeadlessScheduledTaskListInput) {
-        return requestJson<HeadlessScheduledTask[]>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessScheduledTask[]>({
           path: "/scheduled-task",
           method: "GET",
           query: parameters,
         })
       },
       create(body: HeadlessScheduledTaskCreateInput) {
-        return requestJson<HeadlessScheduledTask>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessScheduledTask>({
           path: "/scheduled-task",
           method: "POST",
           body,
         })
       },
       update(id: string, body: HeadlessScheduledTaskUpdateInput) {
-        return requestJson<HeadlessScheduledTask>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessScheduledTask>({
           path: `/scheduled-task/${encodeURIComponent(id)}/update`,
           method: "POST",
           body,
         })
       },
       pause(id: string) {
-        return scheduledTaskCommand(input, fetchFn, id, "pause")
+        return scheduledTaskCommand(transport.requestJson, id, "pause")
       },
       resume(id: string) {
-        return scheduledTaskCommand(input, fetchFn, id, "resume")
+        return scheduledTaskCommand(transport.requestJson, id, "resume")
       },
       runNow(id: string) {
-        return requestJson<HeadlessScheduledTaskRunNowResult>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<HeadlessScheduledTaskRunNowResult>({
           path: `/scheduled-task/${encodeURIComponent(id)}/run-now`,
           method: "POST",
         })
       },
       remove(id: string) {
-        return requestJson<boolean>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
+        return transport.requestJson<boolean>({
           path: `/scheduled-task/${encodeURIComponent(id)}`,
           method: "DELETE",
         })
       },
     },
     async *subscribe(options: HeadlessSubscribeOptions = {}): AsyncGenerator<Event> {
-      const subscription = await client.event.subscribe({}, { signal: options.signal })
-      for await (const event of subscription.stream) {
-        yield event
-      }
+      yield* transport.subscribe(options)
     },
   }
 }
 
-async function sendHeadlessRuntimeCommand(input: {
-  command: HeadlessRuntimeCommand
-  baseUrl: string
-  fetch: typeof fetch
-  headers?: RequestInit["headers"]
-  directory?: string
-  experimental_workspaceID?: string
-  client: ReturnType<typeof createAxCodeClient>
-}): Promise<HeadlessRuntimeCommandResult> {
-  switch (input.command.type) {
-    case "session.prompt":
-      return postSessionCommand(input, {
-        sessionID: input.command.sessionID,
-        route: input.command.mode === "sync" ? "message" : "prompt_async",
-        body: input.command.body,
-      })
-
-    case "session.command":
-      return postSessionCommand(input, {
-        sessionID: input.command.sessionID,
-        route: input.command.mode === "sync" ? "command" : "command_async",
-        body: input.command.body,
-      })
-
-    case "session.shell":
-      return postSessionCommand(input, {
-        sessionID: input.command.sessionID,
-        route: input.command.mode === "sync" ? "shell" : "shell_async",
-        body: input.command.body,
-      })
-
-    case "session.abort":
-      return postJson(input, `/session/${encodeURIComponent(input.command.sessionID)}/abort`, undefined)
-
-    case "permission.reply":
-      return { accepted: true, status: 200, body: await input.client.permission.reply(input.command.body as any) }
-
-    case "question.reply":
-      return { accepted: true, status: 200, body: await input.client.question.reply(input.command.body as any) }
-  }
-}
-
-function postSessionCommand(
-  input: Parameters<typeof sendHeadlessRuntimeCommand>[0],
-  command: {
-    sessionID: string
-    route: "message" | "prompt_async" | "command" | "command_async" | "shell" | "shell_async"
-    body: Record<string, unknown>
-  },
-) {
-  return postJson(input, `/session/${encodeURIComponent(command.sessionID)}/${command.route}`, command.body)
-}
-
 function taskQueueCommand(
-  input: HeadlessClientOptions,
-  fetchFn: typeof fetch,
+  requestJson: <TResult>(request: import("./transport.js").HeadlessTransportRequest) => Promise<TResult>,
   id: string,
   command: "pause" | "resume" | "cancel" | "retry" | "send-now",
 ) {
   return requestJson<HeadlessTaskQueueItem>({
-    baseUrl: input.baseUrl,
-    fetch: fetchFn,
-    headers: input.headers,
-    directory: input.directory,
-    experimental_workspaceID: input.experimental_workspaceID,
     path: `/task-queue/${encodeURIComponent(id)}/${command}`,
     method: "POST",
   })
 }
 
 function workflowRunCommand<TResult>(
-  input: HeadlessClientOptions,
-  fetchFn: typeof fetch,
+  requestJson: <TResult>(request: import("./transport.js").HeadlessTransportRequest) => Promise<TResult>,
   runID: string,
   method: "GET" | "POST",
   command?: "start" | "pause" | "resume" | "cancel" | "retry",
   body?: HeadlessWorkflowRunStartInput,
 ) {
   return requestJson<TResult>({
-    baseUrl: input.baseUrl,
-    fetch: fetchFn,
-    headers: input.headers,
-    directory: input.directory,
-    experimental_workspaceID: input.experimental_workspaceID,
     path: `/workflow-runs/${encodeURIComponent(runID)}${command ? `/${command}` : ""}`,
     method,
     body: body as Record<string, unknown> | undefined,
@@ -874,36 +666,24 @@ function workflowRunCommand<TResult>(
 }
 
 function scheduledTaskCommand(
-  input: HeadlessClientOptions,
-  fetchFn: typeof fetch,
+  requestJson: <TResult>(request: import("./transport.js").HeadlessTransportRequest) => Promise<TResult>,
   id: string,
   command: "pause" | "resume",
 ) {
   return requestJson<HeadlessScheduledTask>({
-    baseUrl: input.baseUrl,
-    fetch: fetchFn,
-    headers: input.headers,
-    directory: input.directory,
-    experimental_workspaceID: input.experimental_workspaceID,
     path: `/scheduled-task/${encodeURIComponent(id)}/${command}`,
     method: "POST",
   })
 }
 
 async function loadSessionEvidence(
-  input: HeadlessClientOptions,
-  fetchFn: typeof fetch,
+  requestJson: <TResult>(request: import("./transport.js").HeadlessTransportRequest) => Promise<TResult>,
   sessionID: string,
   parameters: HeadlessSessionEvidenceInput = {},
 ): Promise<HeadlessSessionEvidence> {
   const encodedSessionID = encodeURIComponent(sessionID)
   const requests = {
     risk: requestJson<unknown>({
-      baseUrl: input.baseUrl,
-      fetch: fetchFn,
-      headers: input.headers,
-      directory: input.directory,
-      experimental_workspaceID: input.experimental_workspaceID,
       path: `/session/${encodedSessionID}/risk`,
       method: "GET",
       query: {
@@ -916,39 +696,19 @@ async function loadSessionEvidence(
       },
     }),
     dre: requestJson<unknown>({
-      baseUrl: input.baseUrl,
-      fetch: fetchFn,
-      headers: input.headers,
-      directory: input.directory,
-      experimental_workspaceID: input.experimental_workspaceID,
       path: `/session/${encodedSessionID}/dre`,
       method: "GET",
     }),
     semantic: requestJson<unknown>({
-      baseUrl: input.baseUrl,
-      fetch: fetchFn,
-      headers: input.headers,
-      directory: input.directory,
-      experimental_workspaceID: input.experimental_workspaceID,
       path: `/session/${encodedSessionID}/diff/semantic`,
       method: "GET",
     }),
     rollback: requestJson<unknown[]>({
-      baseUrl: input.baseUrl,
-      fetch: fetchFn,
-      headers: input.headers,
-      directory: input.directory,
-      experimental_workspaceID: input.experimental_workspaceID,
       path: `/session/${encodedSessionID}/rollback`,
       method: "GET",
     }),
     branch_rank: parameters.includeBranchRank
       ? requestJson<unknown>({
-          baseUrl: input.baseUrl,
-          fetch: fetchFn,
-          headers: input.headers,
-          directory: input.directory,
-          experimental_workspaceID: input.experimental_workspaceID,
           path: `/session/${encodedSessionID}/branch/rank`,
           method: "GET",
           query: { deep: parameters.deepBranchRank },
@@ -998,104 +758,4 @@ async function loadSessionEvidence(
   return evidence
 }
 
-async function postJson(
-  input: Parameters<typeof sendHeadlessRuntimeCommand>[0],
-  path: string,
-  body: Record<string, unknown> | undefined,
-): Promise<HeadlessRuntimeCommandResult> {
-  const response = await input.fetch(new URL(path, input.baseUrl), {
-    method: "POST",
-    headers: {
-      ...headlessHeaders(input),
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  })
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`Headless runtime command failed (${response.status}): ${text || response.statusText}`)
-  }
-  if (response.status === 202) return { accepted: true, status: 202 }
-  const text = await response.text()
-  return {
-    accepted: true,
-    status: 200,
-    body: parseHeadlessRuntimeResponseBody(text),
-  }
-}
-
-async function requestJson<TResult>(input: {
-  baseUrl: string
-  fetch: typeof fetch
-  headers?: RequestInit["headers"]
-  directory?: string
-  experimental_workspaceID?: string
-  path: string
-  method: "GET" | "POST" | "DELETE"
-  query?: Record<string, string | number | boolean | undefined>
-  body?: Record<string, unknown>
-}): Promise<TResult> {
-  const url = new URL(input.path, input.baseUrl)
-  for (const [key, value] of Object.entries(input.query ?? {})) {
-    if (value !== undefined) url.searchParams.set(key, String(value))
-  }
-
-  const response = await input.fetch(url, {
-    method: input.method,
-    headers: {
-      ...headlessHeaders(input),
-      ...(input.body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: input.body ? JSON.stringify(input.body) : undefined,
-  })
-  if (!response.ok) {
-    const text = await response.text().catch(() => "")
-    throw new Error(`Headless runtime request failed (${response.status}): ${text || response.statusText}`)
-  }
-  return parseHeadlessRuntimeResponseBody(await response.text()) as TResult
-}
-
-export function parseHeadlessRuntimeResponseBody(text: string): unknown {
-  if (!text) return true
-  return parseHeadlessRuntimeJsonBody(text)
-}
-
-export function parseHeadlessRuntimeJsonBody(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch (cause) {
-    throw new Error(`Headless runtime returned invalid JSON: ${text.slice(0, 200)}`, { cause })
-  }
-}
-
-function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
-  if (!headers) return {}
-  if (headers instanceof Headers) return Object.fromEntries(headers.entries())
-  if (Array.isArray(headers)) return Object.fromEntries(headers)
-  // Spread to avoid mutating the caller's original object.
-  return { ...headers }
-}
-
-function headlessHeaders(input: {
-  headers?: RequestInit["headers"]
-  directory?: string
-  experimental_workspaceID?: string
-}): Record<string, string> {
-  const headers = headersToRecord(input.headers)
-  if (input.directory) {
-    const encodedDirectory = /[^\x00-\x7F]/.test(input.directory)
-      ? encodeURIComponent(input.directory)
-      : input.directory
-    headers["x-ax-code-directory"] = encodedDirectory
-    headers["x-opencode-directory"] = encodedDirectory
-  }
-  if (input.experimental_workspaceID) {
-    headers[AX_CODE_WORKSPACE_HEADER] = input.experimental_workspaceID
-    headers[LEGACY_OPENCODE_WORKSPACE_HEADER] = input.experimental_workspaceID
-  }
-  return headers
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
+export { parseHeadlessRuntimeResponseBody, parseHeadlessRuntimeJsonBody }
