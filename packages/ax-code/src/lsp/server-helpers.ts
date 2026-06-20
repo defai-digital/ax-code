@@ -6,6 +6,7 @@ import { Instance } from "../project/instance"
 import { Process } from "../util/process"
 import { Log } from "../util/log"
 import { BunProc } from "../bun"
+import { NpmManager, packageManagerKind, toolRunner } from "../bun/package-manager"
 import { Env } from "../util/env"
 import { Global } from "../global"
 import { Flag } from "../flag/flag"
@@ -165,6 +166,31 @@ export const bunSpawnInfo = (
   }
 }
 
+// Spawn a registry-published LSP server *by name* via the runtime's tool runner
+// (`bun x <tool>` / `npx --yes <tool>`), auto-installing it if absent. Distinct
+// from bunSpawnInfo, which runs an already-resolved local script path with the
+// JS runtime. Using bunSpawnInfo with a literal "x" only worked on Bun.
+export const toolSpawnInfo = (
+  root: string,
+  toolName: string,
+  args: string[] = [],
+  initialization?: Record<string, any>,
+): Handle => {
+  const runner = toolRunner({ bunExecutable: BunProc.which() })
+  const [runnerBin, ...runnerArgs] = runner.command
+  const handle = {
+    process: spawn(runnerBin, [...runnerArgs, toolName, ...args], {
+      cwd: root,
+      env: { ...Env.sanitize(), ...runner.environment },
+    }),
+  }
+  if (!initialization) return handle
+  return {
+    ...handle,
+    initialization,
+  }
+}
+
 export const resolveManagedToolBin = async (input: {
   toolName: string
   managedBin: string
@@ -198,7 +224,12 @@ export const toolServer = async (
   return spawnInfo(bin, root, input.args, input.initialization)
 }
 
-export const bunServerArgs = (script: string, args: string[] = []) => ["run", script, ...args]
+// Run a local JS server entry with the JS runtime. Bun takes `bun run <script>`;
+// Node takes `node <script>` (it has no `run` subcommand — `node run <script>`
+// would try to execute a file named "run"). The bin is BunProc.which(), which
+// resolves to the active runtime executable.
+export const bunServerArgs = (script: string, args: string[] = []) =>
+  packageManagerKind() === "npm" ? [script, ...args] : ["run", script, ...args]
 
 export const nodeModuleScript = (...segments: string[]) => path.join(Global.Path.bin, "node_modules", ...segments)
 
@@ -220,10 +251,16 @@ export const bunServer = async (input: {
   if (!bin) {
     if (!(await Filesystem.exists(input.script))) {
       if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
+      // On the Node runtime BunProc.which() is `node`, so `node install` is
+      // meaningless — install with npm (bundled with Node) instead.
+      const installCmd =
+        packageManagerKind() === "npm"
+          ? [NpmManager.executable, "install", "--prefix", Global.Path.bin, input.pkg]
+          : [BunProc.which(), "install", input.pkg]
       // Same deadlock hazard as ensureTool above: "pipe" without a
       // reader will block the child once the OS pipe buffer fills.
       // Nothing in this path reads the streams, so discard them.
-      const proc = Process.spawn([BunProc.which(), "install", input.pkg], {
+      const proc = Process.spawn(installCmd, {
         cwd: Global.Path.bin,
         env: bunEnv(),
         timeout: 120_000,
@@ -236,11 +273,11 @@ export const bunServer = async (input: {
         exit = await proc.exited
       } catch (error) {
         if (proc.exitCode === null && proc.signalCode === null) await Process.killProcessTree(proc).catch(() => {})
-        log.error("bun install failed for LSP server", { pkg: input.pkg, error })
+        log.error("package install failed for LSP server", { pkg: input.pkg, error })
         return
       }
       if (exit !== 0) {
-        log.error("bun install failed for LSP server", { pkg: input.pkg, exitCode: exit })
+        log.error("package install failed for LSP server", { pkg: input.pkg, exitCode: exit })
         return
       }
     }

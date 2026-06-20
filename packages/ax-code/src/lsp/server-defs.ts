@@ -16,6 +16,7 @@ import { JS_LOCKFILES } from "@/constants/lsp"
 import {
   bunServerHandle,
   bunSpawnInfo,
+  toolSpawnInfo,
   globalBin,
   log,
   NearestRoot,
@@ -154,7 +155,7 @@ export const Typescript: Info = {
     const tsserver = resolveTypescriptServer()
     log.info("typescript server", { tsserver })
     if (!tsserver) return
-    return bunSpawnInfo(root, "x", ["typescript-language-server", "--stdio"], {
+    return toolSpawnInfo(root, "typescript-language-server", ["--stdio"], {
       tsserver: {
         path: tsserver,
       },

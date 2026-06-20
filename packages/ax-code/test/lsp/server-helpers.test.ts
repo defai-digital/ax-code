@@ -10,6 +10,7 @@ import {
   bunServer,
   bunServerArgs,
   bunSpawnInfo,
+  toolSpawnInfo,
   globalBin,
   globalPath,
   nodeModuleScript,
@@ -524,6 +525,17 @@ describe("lsp server helpers", () => {
     const info = bunSpawnInfo("/tmp/root", "/tmp/server.js", ["--stdio"], initialization)
 
     expect(info.process.spawnargs.slice(1)).toEqual(["/tmp/server.js", "--stdio"])
+    expect(info.initialization).toEqual(initialization)
+  })
+
+  test("runs a published LSP tool by name via the runtime tool runner", () => {
+    // Under the test runtime (a Bun runtime mode) this is `bun x <tool>`; on
+    // node-bundled it would be `npx --yes <tool>`. Either way the tool name and
+    // its args follow the runner prefix.
+    const initialization = { tsserver: { path: "/tmp/tsserver.js" } }
+    const info = toolSpawnInfo("/tmp/root", "typescript-language-server", ["--stdio"], initialization)
+
+    expect(info.process.spawnargs.slice(1)).toEqual(["x", "typescript-language-server", "--stdio"])
     expect(info.initialization).toEqual(initialization)
   })
 
