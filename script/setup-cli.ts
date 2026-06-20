@@ -12,10 +12,25 @@ import childProcess from "child_process"
 import fs from "fs"
 import os from "os"
 import path from "path"
+
+// Locate an executable on PATH (replaces Bun.which so this runs under Node/tsx).
+type WhichFn = (command: string) => string | null | undefined
+const whichSync: WhichFn = (command) => {
+  const exts = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""]
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!dir) continue
+    for (const ext of exts) {
+      const candidate = path.join(dir, command + ext)
+      if (fs.existsSync(candidate)) return candidate
+    }
+  }
+  return null
+}
+
 import { candidateBinaryTargets } from "../packages/ax-code/script/binary-targets"
 import { sourceLauncherScript as generateSourceLauncherScript } from "../packages/ax-code/script/source-launcher"
 
-export const ROOT = path.resolve(import.meta.dir, "..")
+export const ROOT = path.resolve(import.meta.dirname, "..")
 
 type SetupCliOptions = {
   args?: string[]
@@ -32,10 +47,10 @@ type SetupCliOptions = {
   writeFileSync?: typeof fs.writeFileSync
   spawnSync?: typeof childProcess.spawnSync
   log?: (msg: string) => void
-  which?: typeof Bun.which
+  which?: WhichFn
 }
 
-export function getBunBinDir(env: NodeJS.ProcessEnv = process.env, which: typeof Bun.which = Bun.which): string {
+export function getBunBinDir(env: NodeJS.ProcessEnv = process.env, which: WhichFn = whichSync): string {
   const bunExe = which("bun")
   if (bunExe) return path.dirname(bunExe)
   const bunPath = env.BUN_INSTALL || path.join(os.homedir(), ".bun")
@@ -211,7 +226,7 @@ export function setupCli(input: SetupCliOptions = {}) {
   const writeFileSync = input.writeFileSync ?? fs.writeFileSync
   const spawnSync = input.spawnSync ?? childProcess.spawnSync
   const log = input.log ?? console.log
-  const which = input.which ?? Bun.which
+  const which = input.which ?? whichSync
   const windows = platform === "win32"
   const binDir = getBunBinDir(env, which)
 
