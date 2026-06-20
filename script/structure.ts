@@ -1,10 +1,10 @@
-#!/usr/bin/env bun
-
 import fs from "fs"
 import path from "path"
+import { spawnSync } from "node:child_process"
 import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-in-v4"
+import { exists, readText, scan, writeText } from "../packages/ax-code/script/fs-compat"
 
-const root = path.resolve(import.meta.dir, "..")
+const root = path.resolve(import.meta.dirname, "..")
 
 const note = [
   "packages/integration-github/ARCHITECTURE.md",
@@ -24,6 +24,9 @@ const axCodeSrcRoot = path.join(root, "packages/ax-code/src")
 const runtimeBoundaryAllowedFiles = new Set([
   "packages/ax-code/src/index.ts",
   "packages/ax-code/src/index-compiled.ts",
+  // Node runtime entry points — boot the CLI exactly like index.ts does.
+  "packages/ax-code/src/index-node.ts",
+  "packages/ax-code/src/index-node-tui.ts",
   "packages/ax-code/src/node.ts",
   "packages/ax-code/src/sdk/programmatic.ts",
   "packages/ax-code/src/runtime/local-client.ts",
@@ -72,7 +75,7 @@ function skip(file: string) {
 async function list(dir: string) {
   const out = [] as string[]
   const base = path.join(root, dir)
-  for await (const file of new Bun.Glob("**/*").scan({ cwd: base, absolute: true })) {
+  for (const file of await scan("**/*", { cwd: base, absolute: true })) {
     if (skip(file)) continue
     if (!ext.has(path.extname(file))) continue
     out.push(file)
@@ -95,7 +98,7 @@ function readJSON(file: string) {
 async function docs() {
   const miss = [] as string[]
   for (const file of note) {
-    const ok = await Bun.file(path.join(root, file)).exists()
+    const ok = await exists(path.join(root, file))
     if (!ok) miss.push(file)
   }
   return miss
@@ -106,7 +109,7 @@ async function deps() {
 
   for (const item of rule) {
     for (const file of await list(item.dir)) {
-      const text = await Bun.file(file).text()
+      const text = await readText(file)
       for (const name of spec(text)) {
         for (const bad of item.bad) {
           if (!name.includes(bad)) continue
@@ -135,7 +138,7 @@ async function deep() {
     "packages/util/src",
   ]) {
     for (const file of await list(dir)) {
-      const text = await Bun.file(file).text()
+      const text = await readText(file)
       for (const name of spec(text)) {
         if (name.includes("@ax-code/") && name.includes("/src/")) {
           out.push({ file: rel(file), spec: name })
@@ -158,7 +161,7 @@ async function sdkSourceImports() {
   const out = [] as { file: string; spec: string }[]
   const seen = new Set<string>()
   for (const file of await list("packages/ax-code/src")) {
-    const text = await Bun.file(file).text()
+    const text = await readText(file)
     for (const name of spec(text)) {
       if (name.includes("sdk/js/src/") || name.includes("@ax-code/sdk/src/")) {
         const item = { file: rel(file), spec: name }
@@ -201,7 +204,7 @@ async function runtimeInternalBoundaries() {
     if (isAxCodeInterfaceFile(file)) continue
     if (runtimeBoundaryAllowedFiles.has(relative)) continue
 
-    const text = await Bun.file(file).text()
+    const text = await readText(file)
     for (const name of spec(text)) {
       const target = resolveAxCodeImport(file, name)
       if (!target || !isAxCodeInterfaceTarget(target)) continue
@@ -217,7 +220,7 @@ async function runtimeInternalBoundaries() {
 async function lines(dir: string) {
   const out = [] as { file: string; lines: number }[]
   for (const file of await list(dir)) {
-    const text = await Bun.file(file).text()
+    const text = await readText(file)
     out.push({
       file: rel(file),
       lines: text.split(/\r?\n/).length,
@@ -233,7 +236,7 @@ async function size() {
 
 async function count(dir: string) {
   let sum = 0
-  for await (const file of new Bun.Glob("**/*").scan({ cwd: path.join(root, dir), absolute: true })) {
+  for (const file of await scan("**/*", { cwd: path.join(root, dir), absolute: true })) {
     if (skip(file)) continue
     if (!ext.has(path.extname(file))) continue
     sum++
@@ -357,13 +360,11 @@ function roots() {
 }
 
 function trackedInternalFiles() {
-  const result = Bun.spawnSync(["git", "ls-files", "ax-internal"], {
+  const result = spawnSync("git", ["ls-files", "ax-internal"], {
     cwd: root,
-    stdout: "pipe",
-    stderr: "pipe",
   })
-  if (result.exitCode !== 0) {
-    const message = result.stderr.toString().trim()
+  if (result.status !== 0) {
+    const message = (result.stderr?.toString() ?? "").trim()
     throw new Error(message || "failed to inspect tracked ax-internal files")
   }
   return result.stdout
@@ -482,10 +483,8 @@ async function main() {
 
   const file = process.env["GITHUB_STEP_SUMMARY"]
   if (file) {
-    const prev = await Bun.file(file)
-      .text()
-      .catch(() => "")
-    await Bun.write(file, `${prev}${text}\n`)
+    const prev = await readText(file).catch(() => "")
+    await writeText(file, `${prev}${text}\n`)
   }
 
   if (

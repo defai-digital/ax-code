@@ -180,6 +180,9 @@ importers:
       semver:
         specifier: 'catalog:'
         version: 7.6.3
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
       turbo:
         specifier: 2.9.14
         version: 2.9.14

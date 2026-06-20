@@ -17,8 +17,8 @@
     "dev": "bun run --env-file=../../.env --cwd packages/ax-code --conditions=browser src/index.ts",
     "cli": "bun run --cwd packages/ax-code --conditions=browser src/index.ts",
     "setup:cli": "bun run script/setup-cli.ts",
-    "check:structure": "bun run script/structure.ts",
-    "check:no-cost": "bun run script/check-no-cost.ts",
+    "check:structure": "tsx script/structure.ts",
+    "check:no-cost": "tsx script/check-no-cost.ts",
     "check:openapi": "pnpm --dir packages/sdk/js run validate:openapi",
     "typecheck": "pnpm -r --if-present run typecheck",
     "build:native": "bun run script/build-native.ts",
@@ -37,6 +37,7 @@
     "husky": "9.1.7",
     "prettier": "3.6.2",
     "semver": "catalog:",
+    "tsx": "^4.22.4",
     "turbo": "2.9.14"
   },
   "dependencies": {
