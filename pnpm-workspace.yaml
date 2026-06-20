@@ -11,8 +11,6 @@ catalog:
   "@octokit/graphql": "9.0.2"
   "@octokit/rest": "22.0.0"
   "@octokit/webhooks-types": "7.6.1"
-  "@openauthjs/openauth": "0.0.0-20250322224806"
-  "@pierre/diffs": "1.1.0-beta.18"
   "@playwright/test": "1.51.0"
   "@standard-schema/spec": "1.0.0"
   "@tsconfig/node22": "22.0.2"
