@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from "vitest"
 import path from "path"
 import * as fs from "fs/promises"
+
+// Node freezes builtin module namespaces, so vi.spyOn(fs, "readFile") fails;
+// vi.mock(spy:true) lets vitest wrap the real exports so they can be spied.
+vi.mock("fs/promises", { spy: true })
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
 import { Instance } from "../../src/project/instance"
 import { FileTime } from "../../src/file/time"

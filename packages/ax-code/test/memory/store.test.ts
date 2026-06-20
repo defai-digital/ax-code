@@ -2,6 +2,10 @@ import { describe, expect, test, beforeEach, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
+
+// Node freezes builtin module namespaces, so vi.spyOn(fs, "readFile") fails;
+// vi.mock(spy:true) lets vitest wrap the real exports so they can be spied.
+vi.mock("fs/promises", { spy: true })
 import * as store from "../../src/memory/store"
 
 const sampleMemory = (override: Partial<{ contentHash: string; totalTokens: number }> = {}) => ({
