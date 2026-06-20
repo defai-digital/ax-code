@@ -79,6 +79,9 @@ const EXCLUDE_GROUPS = [
   "test/lsp/workspace-symbol.test.ts",
   "test/code-intelligence/builder.test.ts",
   "test/control-plane/sse.test.ts",
+  // OpenTUI live-render test: needs node:ffi + a real terminal (createCliRenderer),
+  // which a headless vitest fork can't provide. Exclude like the e2e group.
+  "test/cli/tui/prompt-submit-key.test.ts",
 ]
 
 export default defineConfig({
