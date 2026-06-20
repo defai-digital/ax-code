@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest"
 import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
-import { migrate } from "drizzle-orm/bun-sqlite/migrator"
+import { migrate } from "../../src/storage/migrate-journal"
 import path from "path"
 import fs from "fs/promises"
 import { readFileSync, readdirSync } from "fs"

@@ -8,7 +8,7 @@ import { ProjectTable } from "../../src/project/project.sql"
 import { ProjectID } from "../../src/project/schema"
 import { SessionTable } from "../../src/session/session.sql"
 import { SessionID } from "../../src/session/schema"
-import { migrate } from "drizzle-orm/bun-sqlite/migrator"
+import { migrate } from "../../src/storage/migrate-journal"
 
 function db() {
   const sqlite = new Database(":memory:")

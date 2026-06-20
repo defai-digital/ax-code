@@ -40,10 +40,6 @@ const EXCLUDE_GROUPS = [
   "test/session/prompt-flow.test.ts",
   "test/session/prompt-resume.test.ts",
   "test/session/session-recovery.test.ts",
-  // Directly construct a bun:sqlite Database + drizzle bun-sqlite dialect; need
-  // a node:sqlite port (follow-up) rather than the shared #db node path.
-  "test/storage/json-migration.test.ts",
-  "test/storage/session-parent-fk.test.ts",
   // LSP / heavy-I/O integration tests: spawn real language-server subprocesses
   // whose stdio handshake times out under the Node runner (a node-vs-bun
   // subprocess timing difference). Run as a dedicated integration group.
@@ -66,8 +62,12 @@ export default defineConfig({
       // to the node-sqlite backend explicitly (otherwise it falls to db.bun.ts).
       "#db": path.join(dir, "src/storage/db.node.ts"),
       // json-migration.ts imports drizzle's bun-sqlite driver (→ bun:sqlite);
-      // use the node-sqlite driver, matching the Node build.
+      // use the node-sqlite driver, matching the Node build. (Tests apply
+      // migrations via src/storage/migrate-journal, the runtime-agnostic array
+      // migrator, not the dialect-specific bun-sqlite/migrator.)
       "drizzle-orm/bun-sqlite": require.resolve("drizzle-orm/node-sqlite"),
+      // Tests that import bun:sqlite's Database directly → node:sqlite shim.
+      "bun:sqlite": path.join(dir, "test/support/bun-sqlite.ts"),
       bun: path.join(dir, "test/support/bun-shell.ts"),
       "bun-pty": path.join(dir, "src/pty/bun-pty-node-stub.ts"),
     },
@@ -76,7 +76,10 @@ export default defineConfig({
     globals: false,
     include: ["test/**/*.test.{ts,tsx}"],
     exclude: ["**/node_modules/**", "test-vitest/**", ...EXCLUDE_GROUPS],
-    setupFiles: [path.join(dir, "test/support/vitest.setup.ts")],
+    // Order matters: vitest.setup installs the Bun compat shim first; preload
+    // then sets per-process (pid) XDG/home isolation so parallel forks don't
+    // collide on the shared global SQLite db, and clears provider env vars.
+    setupFiles: [path.join(dir, "test/support/vitest.setup.ts"), path.join(dir, "test/preload.ts")],
     testTimeout: 30000,
     hookTimeout: 30000,
     pool: "forks",
