@@ -22,7 +22,19 @@ process.chdir(dir)
 
 const buildVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
 const buildChannel = process.env.AX_CODE_CHANNEL ?? "latest"
-const outRoot = path.join(dir, "dist", "ax-code-node-tui")
+
+// Distribution name mirrors the legacy compiled artifacts (ax-code-<os>-<arch>)
+// so the release upload, Homebrew formula, and install scripts keep the same
+// asset names after the move from Bun-SEA to node-bundled. `--release` zips the
+// whole tree (bin + lib + node_modules) for upload; without it the build is a
+// convenient local dist under the same arch-named directory.
+const archFlagIndex = process.argv.indexOf("--arch")
+const arch = (archFlagIndex >= 0 ? process.argv[archFlagIndex + 1] : process.arch) as "x64" | "arm64"
+if (arch !== "x64" && arch !== "arm64") throw new Error(`Unsupported Node TUI distribution architecture: ${arch}`)
+const platform = process.platform === "win32" ? "windows" : process.platform
+const release = process.argv.includes("--release")
+const legacyName = `${pkg.name}-${platform}-${arch}`
+const outRoot = path.join(dir, "dist", legacyName)
 const outBin = path.join(outRoot, "bin")
 const outLib = path.join(outRoot, "lib")
 
@@ -173,6 +185,50 @@ for (const [name, src] of nativePkgs) {
   }
   fs.cpSync(src, path.join(axScope, name), { recursive: true, dereference: true })
   shippedNative++
+}
+
+// macOS Gatekeeper rejects unsigned native code. Unlike the single Bun-SEA
+// binary, a node-bundled dist carries many native libraries (.node addons and
+// OpenTUI's .dylib); ad-hoc sign each so the bundle runs after download. Real
+// (notarized) signing happens in CI with a Developer ID; ad-hoc keeps local and
+// unsigned-CI builds runnable.
+if (process.platform === "darwin") {
+  const nativeLibs: string[] = []
+  const walk = (root: string) => {
+    if (!fs.existsSync(root)) return
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      const full = path.join(root, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (entry.name.endsWith(".node") || entry.name.endsWith(".dylib")) nativeLibs.push(full)
+    }
+  }
+  walk(path.join(outRoot, "node_modules"))
+  for (const lib of nativeLibs) {
+    const signed = spawnSync("codesign", ["--force", "--sign", "-", lib], { stdio: "inherit" })
+    if (signed.status !== 0) console.warn(`codesign failed for ${path.relative(outRoot, lib)}`)
+  }
+  console.log(`Ad-hoc signed ${nativeLibs.length} native libraries`)
+}
+
+if (release) {
+  // Archive the WHOLE tree (bin + lib + node_modules), not just bin/ — the
+  // node-bundled runtime needs all three beside each other. Zip from the dist
+  // root so the archive expands to the same `ax-code-<os>-<arch>/` layout.
+  const archive = path.join(dir, "dist", `${legacyName}.zip`)
+  fs.rmSync(archive, { force: true })
+  const zipper =
+    process.platform === "win32"
+      ? spawnSync(
+          "powershell",
+          ["-Command", `Compress-Archive -Path '${outRoot}/*' -DestinationPath '${archive}' -Force`],
+          { stdio: "inherit" },
+        )
+      : spawnSync("zip", ["-r", "-y", archive, "."], { cwd: outRoot, stdio: "inherit" })
+  if (zipper.status !== 0) {
+    console.error(`failed to archive ${legacyName}`)
+    process.exit(1)
+  }
+  console.log(`Release archive: ${path.relative(dir, archive)}`)
 }
 
 console.log(`Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/4 native addons)`)
