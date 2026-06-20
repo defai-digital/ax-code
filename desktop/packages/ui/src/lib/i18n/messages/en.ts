@@ -2279,7 +2279,7 @@ export const dict = {
   'updateDialog.actions.updateNow': 'Update Now',
   'updateDialog.status.updating': 'Updating...',
   'updateDialog.error.updateFailed': 'Update failed',
-  'updateDialog.error.takingLonger': 'Update is taking longer than expected. Wait a bit and refresh, or run: ax-code-desktop update',
+  'updateDialog.error.takingLonger': 'Update is taking longer than expected. Wait a bit and refresh, or install the latest build from the official release channel.',
   'axCodeUpdate.toast.available.title': 'AX Code update',
   'axCodeUpdate.toast.available.description': 'Version {version} available.',
   'axCodeUpdate.toast.actions.update': 'Update',

@@ -216,7 +216,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
     : 0;
 
   const isWebRuntime = runtimeType === 'web';
-  const updateCommand = info?.updateCommand || 'ax-code-desktop update';
+  const updateCommand = info?.updateCommand;
 
   // Reset state when dialog closes; clear any pending copied timer on unmount.
   useEffect(() => {
@@ -233,6 +233,9 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   }, [open]);
 
   const handleCopyCommand = async () => {
+    if (!updateCommand) {
+      return;
+    }
     if (copiedTimerRef.current) {
       clearTimeout(copiedTimerRef.current);
     }
@@ -421,7 +424,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           )}
 
           {/* Web runtime fallback command */}
-          {isWebRuntime && webUpdateState === 'error' && (
+          {isWebRuntime && webUpdateState === 'error' && updateCommand && (
             <div className="space-y-2 mt-4">
               <div className="flex items-center gap-2 typography-meta text-muted-foreground">
                 <Icon name="terminal" className="h-4 w-4" />

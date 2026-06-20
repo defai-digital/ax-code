@@ -41,7 +41,7 @@ ax-code
 
 No project setup or config file required. On first launch, use `/connect` inside the TUI to add a provider.
 
-Prefer a graphical desktop app? Use AX Code Desktop from the same [GitHub releases](https://github.com/defai-digital/ax-code/releases) namespace or the Homebrew cask.
+Prefer a graphical desktop app? Use AX Code Desktop on macOS or Windows. The Desktop app shares the AX Code runtime and provider setup; AX Engine local inference is available only on eligible Apple Silicon Macs, while Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac.
 
 For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
 
@@ -98,7 +98,7 @@ AX Code is designed for agent work that touches real files, shells, sessions, an
 
 | Need                         | Use                                                                                            |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| Desktop app                  | AX Code Desktop provides the graphical app as a separate Electron installable                  |
+| Desktop app                  | AX Code Desktop provides the graphical app as a separate Electron installable for macOS/Windows |
 | Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows     |
 | One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                              |
 | Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                 |

@@ -21,8 +21,8 @@ brew upgrade --cask ax-code-desktop
 If you prefer not to use Homebrew, download the latest DMG from the [Releases page](https://github.com/defai-digital/ax-code/releases):
 
 1. Open the `.dmg` file.
-2. Drag **AX Code Desktop** into **Applications**.
-3. Launch **AX Code Desktop** from Applications.
+2. Drag **AX Code** into **Applications**.
+3. Launch **AX Code** from Applications.
 
 If macOS says the app is damaged, run this in Terminal after installing:
 
@@ -36,13 +36,13 @@ xattr -cr "/Applications/AX Code.app"
 
 1. Download the latest `.exe` installer from the [Releases page](https://github.com/defai-digital/ax-code/releases).
 2. Run the installer.
-3. Start **AX Code Desktop** from the Start Menu or Desktop shortcut.
+3. Start **AX Code** from the Start Menu or Desktop shortcut.
 
 ### Portable ZIP
 
 1. Download the latest Windows `.zip` from Releases.
 2. Extract the entire ZIP folder.
-3. Run `AX Code Desktop.exe` from the extracted folder.
+3. Run `AX Code.exe` from the extracted folder.
 
 Do not run the executable directly from inside the ZIP viewer — extract first so the app can find its bundled resources.
 
@@ -57,6 +57,19 @@ ax-code --version
 ```
 
 If `ax-code` is not found, install AX Code before launching AX Code Desktop. The desktop app manages the local UI runtime but needs the AX Code CLI available for coding sessions.
+
+## Platform Capabilities
+
+AX Code Desktop targets macOS and Windows first, but local model acceleration is intentionally platform-specific:
+
+| Capability | macOS Apple Silicon | Windows x64 |
+| --- | --- | --- |
+| Desktop app | Supported | Supported |
+| AX Code CLI/server integration | Supported | Supported |
+| Hosted providers | Supported | Supported |
+| AX Engine local provider | Supported on eligible Apple Silicon Macs | Not supported |
+
+AX Engine uses the local MLX/Apple Silicon path. It can be enabled on supported macOS hosts through AX Code provider setup. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac when AX Engine is required.
 
 ## First Run
 
@@ -117,7 +130,7 @@ brew upgrade --cask ax-code-desktop
 | --- | --- | --- |
 | macOS Apple Silicon | Supported | Homebrew (recommended) or DMG |
 | macOS Intel/x64 | Not supported | No artifact is built |
-| Windows x64 | Supported | Installer or portable ZIP |
+| Windows x64 | Supported | Installer or portable ZIP; AX Engine local provider is unavailable |
 | Linux | Not supported | No artifact is built |
 | Mobile/tablet browsers | Not supported | Blocked to reduce data-leakage risk |
 
@@ -143,8 +156,8 @@ From a development checkout:
 
 ```bash
 pnpm install
-pnpm run build
-pnpm --filter ./packages/web run start -- --ui-password your-password
+pnpm run desktop:build
+pnpm --filter ax-code-desktop run start -- --ui-password your-password
 ```
 
 The web UI is available at `http://localhost:3000` by default.
@@ -154,18 +167,18 @@ The web UI is available at `http://localhost:3000` by default.
 Requirements:
 
 - Node.js 24 or newer (`>=24`)
-- pnpm 9.x (`corepack enable`)
+- pnpm 10.33.4 (`corepack enable`)
 - AX Code CLI
 
 Useful commands:
 
 ```bash
 pnpm install
-pnpm run type-check
-pnpm run lint
-pnpm run test
-pnpm run electron:dev
-pnpm run electron:build
+pnpm run desktop:typecheck
+pnpm run desktop:lint
+pnpm run desktop:test
+pnpm run desktop:build
+node desktop/packages/electron/scripts/package.mjs --mac zip --publish=never
 ```
 
 Package layout:

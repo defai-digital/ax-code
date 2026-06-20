@@ -1,36 +1,49 @@
 ---
 title: Install
-description: Install AX Code Desktop for desktop or local web development.
+description: Install AX Code Desktop on macOS or Windows.
 ---
 
 # Install
 
-There are two supported ways to run AX Code Desktop:
+There are two supported Desktop install paths:
 
-- desktop app for macOS
-- local web UI hosted by the CLI for development and controlled workstation access
+- macOS Apple Silicon app through Homebrew or DMG
+- Windows x64 app through installer or portable ZIP
 
 ## Prerequisite
 
 Install [AX Code](https://ax-code.ai) first — AX Code Desktop runs on top of it.
 
-## Local web UI
+## macOS
 
-Install from a development checkout:
+Homebrew is the recommended macOS path:
+
+```bash
+brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
+```
+
+You can also download the latest macOS DMG from the GitHub releases page. Open it, drag **AX Code** into **Applications**, and launch it from Applications.
+
+## Windows
+
+Download the latest Windows installer from the GitHub releases page and run it. For portable use, download the Windows ZIP, extract the full folder, and run `AX Code.exe` from the extracted folder.
+
+## Platform capabilities
+
+| Capability | macOS Apple Silicon | Windows x64 |
+| --- | --- | --- |
+| Desktop app | Supported | Supported |
+| Hosted providers | Supported | Supported |
+| AX Engine local provider | Supported on eligible Apple Silicon Macs | Not supported |
+
+AX Engine is a local MLX/Apple Silicon provider. On Windows, use hosted providers, OpenAI-compatible gateways, or connect Desktop to a remote AX Code server running on a supported Mac when AX Engine is required.
+
+## Development checkout
+
+Contributor builds run from the monorepo:
 
 ```bash
 pnpm install
-pnpm --filter ax-code-desktop run start -- --ui-password be-creative-here
+pnpm run desktop:build
+node desktop/packages/electron/scripts/package.mjs --mac zip --publish=never
 ```
-
-If you have the web CLI installed, start it with:
-
-```bash
-ax-code-desktop --ui-password be-creative-here
-```
-
-Open the URL the CLI prints (usually `http://localhost:3000`). You should see the AX Code Desktop session list.
-
-## Desktop
-
-Download the latest desktop build from the GitHub releases page or the AX Code Desktop download page. Open it and sign into your usual AX Code workflow.

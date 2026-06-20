@@ -24,9 +24,12 @@ pnpm --filter ax-code-desktop run start -- --ui-password your-password
 
 The runtime listens on `http://localhost:3000` by default.
 
-## CLI Usage
+## Operator CLI Usage
 
-The public CLI name is `ax-code-desktop`:
+The web runtime CLI name is `ax-code-desktop`. Use it for development,
+diagnostics, or operator-managed web deployments only. Normal macOS and Windows
+users should install and update the desktop app through the release assets,
+Homebrew cask on macOS, or the in-app desktop updater.
 
 ```bash
 ax-code-desktop
@@ -34,7 +37,6 @@ ax-code-desktop --port 8080
 ax-code-desktop --ui-password secret
 ax-code-desktop logs
 ax-code-desktop stop
-ax-code-desktop update
 ```
 
 Some internal environment variables and data paths still use the

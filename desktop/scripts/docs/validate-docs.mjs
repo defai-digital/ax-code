@@ -40,6 +40,25 @@ function hasFrontmatterKey(content, key) {
   return new RegExp(`^${key}:\\s*.+$`, "m").test(hit[1])
 }
 
+const policyChecks = [
+  {
+    pattern: /Windows[^.\n]*(?:supports|can use|enables|includes)[^.\n]*AX Engine/i,
+    message: "do not claim Windows Desktop supports the local AX Engine provider",
+  },
+  {
+    pattern: /AX Engine[^.\n]*(?:is|remains)?\s*(?:supported|available|enabled)[^.\n]*Windows/i,
+    message: "do not claim AX Engine local provider is available on Windows Desktop",
+  },
+  {
+    pattern: /AX Code Desktop detects how it was installed \(npm, pnpm, yarn, or bun\)/i,
+    message: "do not document npm/pnpm/yarn/bun as the Desktop user update channel",
+  },
+  {
+    pattern: /ax-code-desktop update/i,
+    message: "do not document ax-code-desktop update as a supported Desktop user update command",
+  },
+]
+
 async function run() {
   const filePaths = (await walk(contentRoot)).filter((p) => p.endsWith(".mdx"))
   const routeSet = new Set()
@@ -56,6 +75,11 @@ async function run() {
     }
     if (!hasFrontmatterKey(body, "description")) {
       errors.push(`${relative}: missing frontmatter key 'description'`)
+    }
+    for (const check of policyChecks) {
+      if (check.pattern.test(body)) {
+        errors.push(`${relative}: ${check.message}`)
+      }
     }
   }
 

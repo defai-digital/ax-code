@@ -11,15 +11,13 @@ How you update AX Code Desktop depends on how you installed it. In every case yo
 
 The desktop app checks for updates against GitHub releases. When one is available, AX Code Desktop tells you, downloads it when you choose, and installs it on the next restart. You're always in control — nothing installs without your say-so.
 
-## Web / CLI
-
-If you installed the CLI, update it from **About** with the check and update buttons, or from the terminal:
+For Homebrew installs on macOS:
 
 ```bash
-ax-code-desktop update
+brew upgrade --cask ax-code-desktop
 ```
 
-AX Code Desktop detects how it was installed (npm, pnpm, yarn, or bun) and runs the right update for you.
+For Windows or manual installs, download the latest installer, ZIP, or DMG from the GitHub releases page.
 
 ## The AX Code server
 
