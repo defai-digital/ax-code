@@ -1,8 +1,26 @@
 import { type ChildProcess } from "child_process"
+import { type Readable } from "node:stream"
 import launch from "cross-spawn"
-import { buffer } from "node:stream/consumers"
 import { Shell } from "../shell/shell"
 import { toErrorMessage } from "./error-message"
+
+// Drain a child stream tolerantly. The strict `node:stream/consumers` buffer()
+// rejects with ERR_STREAM_PREMATURE_CLOSE when the stream is destroy()ed (which
+// `spawn` does on exit to unblock pipes held open by background children) before
+// it reaches a natural EOF — a race that surfaces under concurrent spawns. Node
+// still emits all buffered `data` events before `close`, so collecting via raw
+// events and resolving on end/close/error returns the full output without the
+// spurious rejection.
+function drain(stream: Readable): Promise<Buffer> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = []
+    stream.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
+    const finish = () => resolve(Buffer.concat(chunks))
+    stream.once("end", finish)
+    stream.once("close", finish)
+    stream.once("error", finish)
+  })
+}
 
 const TIMEOUT_FORCE_KILL_GRACE_MS = 250
 
@@ -187,7 +205,7 @@ export namespace Process {
 
     if (!proc.stdout || !proc.stderr) throw new Error("Process output not available")
 
-    const out = await Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
+    const out = await Promise.all([proc.exited, drain(proc.stdout), drain(proc.stderr)])
       .then(([code, stdout, stderr]) => ({
         code,
         stdout,
