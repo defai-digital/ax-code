@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { connect, type Socket } from "node:net"
 import type { Event } from "../v2/index.js"
 import type {
@@ -75,12 +76,23 @@ export async function connectIpcTransport(options: IpcTransportOptions): Promise
 }
 
 async function* readMessages(socket: Socket): AsyncGenerator<IpcMessage> {
-  let buffer: Buffer = Buffer.alloc(0)
+  const chunks: Buffer[] = []
+  let totalLength = 0
   try {
     for await (const chunk of socket) {
-      buffer = Buffer.concat([buffer, chunk as Buffer]) as Buffer
+      const buf = chunk as Buffer
+      chunks.push(buf)
+      totalLength += buf.length
+      // Only concatenate when we have at least a 4-byte length header.
+      if (totalLength < 4) continue
+      const buffer = Buffer.concat(chunks, totalLength)
+      chunks.length = 0
+      totalLength = 0
       const { messages, remaining } = decodeIpcFrames(buffer)
-      buffer = remaining
+      if (remaining.length > 0) {
+        chunks.push(remaining)
+        totalLength = remaining.length
+      }
       for (const message of messages) {
         yield message
       }
@@ -248,14 +260,26 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
           continue
         }
         const next = await new Promise<IteratorResult<Event, undefined>>((resolve, reject) => {
-          eventWaiters.push({ resolve, reject })
-          signal?.addEventListener(
-            "abort",
-            () => {
+          const waiter = { resolve, reject }
+          eventWaiters.push(waiter)
+          if (signal) {
+            const onAbort = () => {
+              // Remove the waiter from the queue so it is not resolved twice.
+              const idx = eventWaiters.indexOf(waiter)
+              if (idx !== -1) eventWaiters.splice(idx, 1)
               reject(new Error("IPC subscription aborted"))
-            },
-            { once: true },
-          )
+            }
+            signal.addEventListener("abort", onAbort, { once: true })
+            // Wrap resolve/reject so the abort listener is always cleaned up.
+            waiter.resolve = (value) => {
+              signal.removeEventListener("abort", onAbort)
+              resolve(value)
+            }
+            waiter.reject = (error) => {
+              signal.removeEventListener("abort", onAbort)
+              reject(error)
+            }
+          }
         })
         if (next.done) break
         yield next.value
@@ -290,7 +314,7 @@ export class IpcTransportError extends Error {
 }
 
 function generateRequestId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return randomUUID()
 }
 
 function buildBaseHeaders(options: IpcTransportOptions): Record<string, string> {

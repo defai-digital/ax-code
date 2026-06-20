@@ -62,6 +62,8 @@ export async function listenIpc(opts: IpcServerOptions): Promise<IpcServerHandle
 class IpcConnection {
   private eventReader: Promise<void> | undefined
   private abortController = new AbortController()
+  private static readonly EVENT_RETRY_BASE_MS = 250
+  private static readonly EVENT_RETRY_MAX_MS = 5_000
 
   constructor(
     private fetch: IpcServerOptions["fetch"],
@@ -137,25 +139,41 @@ class IpcConnection {
 
   private startEventSubscription() {
     this.eventReader = (async () => {
-      try {
-        const response = await this.fetch(
-          new Request("http://localhost/global/event", {
-            method: "GET",
-            headers: { accept: "text/event-stream" },
-          }),
-        )
-        if (!response.ok || !response.body) {
-          log.warn("ipc event subscription rejected", { status: response.status })
-          return
+      let delay = IpcConnection.EVENT_RETRY_BASE_MS
+      while (!this.abortController.signal.aborted) {
+        try {
+          const response = await this.fetch(
+            new Request("http://localhost/global/event", {
+              method: "GET",
+              headers: { accept: "text/event-stream" },
+            }),
+          )
+          if (!response.ok || !response.body) {
+            log.warn("ipc event subscription rejected", { status: response.status })
+            // Non-retryable: the route doesn't exist or isn't SSE.
+            return
+          }
+          // Reset backoff on successful connection.
+          delay = IpcConnection.EVENT_RETRY_BASE_MS
+          for await (const event of parseSseStream(response)) {
+            if (this.abortController.signal.aborted) return
+            await writeIpcMessage(this.socket, { type: "event", event }).catch(() => {
+              this.abortController.abort()
+            })
+          }
+        } catch (error) {
+          if (this.abortController.signal.aborted) return
+          log.debug("ipc event subscription ended, retrying", { error, delayMs: delay })
         }
-        for await (const event of parseSseStream(response)) {
-          if (this.abortController.signal.aborted) break
-          await writeIpcMessage(this.socket, { type: "event", event }).catch(() => {
-            this.abortController.abort()
-          })
-        }
-      } catch (error) {
-        log.debug("ipc event subscription ended", { error })
+        if (this.abortController.signal.aborted) return
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, delay)
+          this.abortController.signal.addEventListener("abort", () => {
+            clearTimeout(timer)
+            resolve()
+          }, { once: true })
+        })
+        delay = Math.min(delay * 2, IpcConnection.EVENT_RETRY_MAX_MS)
       }
     })()
   }
