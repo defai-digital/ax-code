@@ -53,6 +53,8 @@ for (const file of walk(root)) {
   src = src.replace(/(?<![.\w])mock\.module\(/g, "vi.mock(")
   src = src.replace(/(?<![.\w])mock\.restore\(/g, "vi.restoreAllMocks(")
   src = src.replace(/(?<![.\w])mock\(/g, "vi.fn(")
+  // Bun's `import.meta.dir` → the Node-standard `import.meta.dirname`.
+  src = src.replace(/\bimport\.meta\.dir\b(?!name)/g, "import.meta.dirname")
 
   const needVi = usesViHelpers || /\bvi\./.test(src)
   const finalNamed = [...kept]
