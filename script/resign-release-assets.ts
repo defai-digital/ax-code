@@ -1,8 +1,9 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 
 import childProcess from "child_process"
 import fs from "fs"
 import os from "os"
+import { whichSync } from "./which"
 import path from "path"
 import { parseArgs } from "util"
 import { expandHome, signaturePath } from "./sign-release-assets"
@@ -89,7 +90,7 @@ export function resignPlan(options: ResignOptions, tags: string[]): string[] {
 }
 
 export function parseResignArgs(
-  args = Bun.argv.slice(2),
+  args = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd(),
   home = os.homedir(),
@@ -184,7 +185,7 @@ function run(command: string, args: string[], options: RunOptions = {}) {
 }
 
 function requireCommand(command: string) {
-  if (!Bun.which(command)) throw new Error(`${command} not found on PATH`)
+  if (!whichSync(command)) throw new Error(`${command} not found on PATH`)
 }
 
 function requireKeyFiles(options: ResignOptions) {

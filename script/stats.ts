@@ -1,4 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
+
+import fs from "fs/promises"
+import { spawnSync } from "child_process"
 
 async function sendToPostHog(event: string, properties: Record<string, any>) {
   const key = process.env["POSTHOG_KEY"]
@@ -101,7 +104,7 @@ async function save(githubTotal: number) {
   let content = ""
 
   try {
-    content = await Bun.file(file).text()
+    content = await fs.readFile(file, "utf8")
     const lines = content.trim().split("\n")
 
     for (let i = lines.length - 1; i >= 0; i--) {
@@ -131,8 +134,8 @@ async function save(githubTotal: number) {
     content = "# Download Stats\n\n| Date | GitHub Downloads |\n|------|------------------|\n"
   }
 
-  await Bun.write(file, content + line)
-  await Bun.spawn(["bunx", "prettier", "--write", file]).exited
+  await fs.writeFile(file, content + line)
+  spawnSync("npx", ["prettier", "--write", file], { stdio: "inherit" })
 
   console.log(`\nAppended stats to ${file}: GitHub ${githubTotal.toLocaleString()}${githubChangeStr}`)
 }

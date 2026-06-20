@@ -1,13 +1,14 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 
 import path from "path"
-import { pathToFileURL } from "bun"
+import { pathToFileURL } from "url"
+import { existsSync } from "fs"
 import { createAxCode } from "@ax-code/sdk"
 import { parseArgs } from "util"
 
 async function main() {
   const { values, positionals } = parseArgs({
-    args: Bun.argv.slice(2),
+    args: process.argv.slice(2),
     options: {
       file: { type: "string", short: "f" },
       help: { type: "boolean", short: "h", default: false },
@@ -43,8 +44,7 @@ Examples:
 
     if (values.file) {
       const resolved = path.resolve(process.cwd(), values.file)
-      const file = Bun.file(resolved)
-      if (!(await file.exists())) {
+      if (!existsSync(resolved)) {
         console.error(`Error: file not found: ${values.file}`)
         process.exit(1)
       }
