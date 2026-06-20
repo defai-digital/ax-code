@@ -26,7 +26,8 @@
     "publish:github": "tsx script/publish-github-release.ts",
     "sign:release": "tsx script/sign-release-assets.ts",
     "prepare": "husky",
-    "test": "echo 'do not run tests from root' && exit 1"
+    "test:scripts": "vitest run",
+    "test": "echo 'do not run tests from root (use test:scripts for root script suites)' && exit 1"
   },
   "devDependencies": {
     "@actions/artifact": "5.0.1",
@@ -38,7 +39,8 @@
     "prettier": "3.6.2",
     "semver": "catalog:",
     "tsx": "^4.22.4",
-    "turbo": "2.9.14"
+    "turbo": "2.9.14",
+    "vitest": "4.1.9"
   },
   "dependencies": {
     "@ax-code/plugin": "workspace:*",

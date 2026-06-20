@@ -1,6 +1,24 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 
-import { $ } from "bun"
+import { execFileSync } from "child_process"
+
+// Run a command, throwing on non-zero (replaces Bun `$`). Args are passed as an
+// array so interpolated values are not shell-evaluated.
+function sh(cmd: string, args: string[]) {
+  execFileSync(cmd, args, { stdio: "inherit" })
+}
+// Capture stdout; throws on non-zero.
+function shOut(cmd: string, args: string[]) {
+  return execFileSync(cmd, args, { encoding: "utf8" })
+}
+// Capture stdout; returns "" on failure.
+function shTry(cmd: string, args: string[]) {
+  try {
+    return execFileSync(cmd, args, { encoding: "utf8" })
+  } catch {
+    return ""
+  }
+}
 
 interface PR {
   number: number
@@ -23,7 +41,7 @@ This PR cannot be merged into the beta branch due to: **${reason}**
 Please resolve this issue to include this PR in the next beta release.`
 
   try {
-    await $`gh pr comment ${prNumber} --body ${body}`
+    sh("gh", ["pr", "comment", String(prNumber), "--body", body])
     console.log(`  Posted comment on PR #${prNumber}`)
   } catch (err) {
     console.log(`  Failed to post comment on PR #${prNumber}: ${err}`)
@@ -31,23 +49,16 @@ Please resolve this issue to include this PR in the next beta release.`
 }
 
 async function conflicts() {
-  const out = await $`git diff --name-only --diff-filter=U`.text().catch(() => "")
-  return out
+  return shTry("git", ["diff", "--name-only", "--diff-filter=U"])
     .split("\n")
     .map((x) => x.trim())
     .filter(Boolean)
 }
 
 async function cleanup() {
-  try {
-    await $`git merge --abort`
-  } catch {}
-  try {
-    await $`git checkout -- .`
-  } catch {}
-  try {
-    await $`git clean -fd`
-  } catch {}
+  shTry("git", ["merge", "--abort"])
+  shTry("git", ["checkout", "--", "."])
+  shTry("git", ["clean", "-fd"])
 }
 
 async function fix(pr: PR, files: string[]) {
@@ -60,7 +71,7 @@ async function fix(pr: PR, files: string[]) {
   ].join("\n")
 
   try {
-    await $`opencode run -m opencode/gpt-5.3-codex ${prompt}`
+    sh("opencode", ["run", "-m", "opencode/gpt-5.3-codex", prompt])
   } catch (err) {
     console.log(`  opencode failed: ${err}`)
     return false
@@ -79,8 +90,19 @@ async function fix(pr: PR, files: string[]) {
 async function main() {
   console.log("Fetching open PRs with beta label...")
 
-  const stdout =
-    await $`gh pr list --state open --draft=false --label beta --json number,title,author,labels --limit 100`.text()
+  const stdout = shOut("gh", [
+    "pr",
+    "list",
+    "--state",
+    "open",
+    "--draft=false",
+    "--label",
+    "beta",
+    "--json",
+    "number,title,author,labels",
+    "--limit",
+    "100",
+  ])
   const prs: PR[] = JSON.parse(stdout).sort((a: PR, b: PR) => a.number - b.number)
 
   console.log(`Found ${prs.length} open PRs with beta label`)
@@ -91,10 +113,10 @@ async function main() {
   }
 
   console.log("Fetching latest dev branch...")
-  await $`git fetch origin dev`
+  sh("git", ["fetch", "origin", "dev"])
 
   console.log("Checking out beta branch...")
-  await $`git checkout -B beta origin/dev`
+  sh("git", ["checkout", "-B", "beta", "origin/dev"])
 
   const applied: number[] = []
   const failed: FailedPR[] = []
@@ -104,7 +126,7 @@ async function main() {
 
     console.log("  Fetching PR head...")
     try {
-      await $`git fetch origin pull/${pr.number}/head:pr/${pr.number}`
+      sh("git", ["fetch", "origin", `pull/${pr.number}/head:pr/${pr.number}`])
     } catch (err) {
       console.log(`  Failed to fetch: ${err}`)
       failed.push({ number: pr.number, title: pr.title, reason: "Fetch failed" })
@@ -114,7 +136,7 @@ async function main() {
 
     console.log("  Merging...")
     try {
-      await $`git merge --no-commit --no-ff pr/${pr.number}`
+      sh("git", ["merge", "--no-commit", "--no-ff", `pr/${pr.number}`])
     } catch {
       const files = await conflicts()
       if (files.length > 0) {
@@ -134,15 +156,13 @@ async function main() {
       }
     }
 
-    try {
-      await $`git rev-parse -q --verify MERGE_HEAD`.text()
-    } catch {
+    if (!shTry("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"]).trim()) {
       console.log("  No changes, skipping")
       continue
     }
 
     try {
-      await $`git add -A`
+      sh("git", ["add", "-A"])
     } catch {
       console.log("  Failed to stage changes")
       failed.push({ number: pr.number, title: pr.title, reason: "Staging failed" })
@@ -152,7 +172,7 @@ async function main() {
 
     const commitMsg = `Apply PR #${pr.number}: ${pr.title}`
     try {
-      await $`git commit -m ${commitMsg}`
+      sh("git", ["commit", "-m", commitMsg])
     } catch (err) {
       console.log(`  Failed to commit: ${err}`)
       failed.push({ number: pr.number, title: pr.title, reason: "Commit failed" })
@@ -175,10 +195,10 @@ async function main() {
   }
 
   console.log("\nChecking if beta branch has changes...")
-  await $`git fetch origin beta`
+  sh("git", ["fetch", "origin", "beta"])
 
-  const localTree = await $`git rev-parse beta^{tree}`.text()
-  const remoteTrees = (await $`git log origin/dev..origin/beta --format=%T`.text()).split("\n")
+  const localTree = shOut("git", ["rev-parse", "beta^{tree}"])
+  const remoteTrees = shOut("git", ["log", "origin/dev..origin/beta", "--format=%T"]).split("\n")
 
   const matchIdx = remoteTrees.indexOf(localTree.trim())
   if (matchIdx !== -1) {
@@ -191,7 +211,7 @@ async function main() {
   }
 
   console.log("Force pushing beta branch...")
-  await $`git push origin beta --force --no-verify`
+  sh("git", ["push", "origin", "beta", "--force", "--no-verify"])
 
   console.log("Successfully synced beta branch")
 }

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import path from "path"
 import {
   buildChannelForVersion,
@@ -49,11 +49,12 @@ describe("setup-cli helpers", () => {
     const unix = sourceLauncherScript({ root: "/repo", windows: false })
     const windows = sourceLauncherScript({ root: "/repo", windows: true })
     expect(unix).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
-    expect(unix).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index.ts"')
-    expect(unix).toContain('exec bun run --cwd "$AX_CODE_SOURCE_CWD"')
+    expect(unix).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index-node-tui.ts"')
+    expect(unix).toContain("exec node --experimental-ffi")
+    expect(unix).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')
     expect(windows).toContain('set "AX_CODE_SOURCE_CWD=\\repo\\packages\\ax-code"')
-    expect(windows).toContain('set "AX_CODE_SOURCE_ENTRY=\\repo\\packages\\ax-code\\src\\index.ts"')
-    expect(windows).toContain('bun run --cwd "%AX_CODE_SOURCE_CWD%"')
+    expect(windows).toContain('set "AX_CODE_SOURCE_ENTRY=\\repo\\packages\\ax-code\\src\\index-node-tui.ts"')
+    expect(windows).toContain("node --experimental-ffi")
     expect(windows).toContain("%*")
   })
 
@@ -85,7 +86,7 @@ describe("setup-cli helpers", () => {
     expect(writes).toHaveLength(1)
     expect(writes[0][0]).toBe("/tmp/ax-code-test-bundled-default/bin/ax-code")
     expect(writes[0][1]).toContain(`exec "${binary}" "$@"`)
-    expect(writes[0][1]).not.toContain("bun run --cwd")
+    expect(writes[0][1]).not.toContain("node --experimental-ffi")
   })
 
   test("setupCli rebuilds the bundled binary when the build marker is missing", () => {
@@ -168,7 +169,7 @@ describe("setup-cli helpers", () => {
     expect(writes).toHaveLength(1)
     expect(writes[0][0]).toBe("/tmp/ax-code-test-source/bin/ax-code")
     expect(writes[0][1]).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
-    expect(writes[0][1]).toContain('exec bun run --cwd "$AX_CODE_SOURCE_CWD"')
+    expect(writes[0][1]).toContain("exec node --experimental-ffi")
   })
 
   test("setupCli installs the bundled launcher when --bundled is explicit and reuses an existing binary", () => {
@@ -205,7 +206,7 @@ describe("setup-cli helpers", () => {
     expect(writes).toHaveLength(1)
     expect(writes[0][0]).toBe("/tmp/ax-code-test-bundled/bin/ax-code")
     expect(writes[0][1]).toContain(`exec "${binary}" "$@"`)
-    expect(writes[0][1]).not.toContain("bun run --cwd")
+    expect(writes[0][1]).not.toContain("node --experimental-ffi")
   })
 
   test("setupCli builds the preferred local release binary variant", () => {

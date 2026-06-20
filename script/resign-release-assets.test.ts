@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import os from "os"
 import path from "path"
 import { archivePaths, parseResignArgs, resignPlan, signaturePaths } from "./resign-release-assets"
