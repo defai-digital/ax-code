@@ -142,9 +142,16 @@ export namespace Pty {
     return out
   }
 
+  // PTY backend is runtime-specific: bun-pty under Bun, node-pty under Node
+  // (their spawn/IPty surface — pid, onData/onExit returning a disposable,
+  // write, resize, kill — is identical, so the rest of this module is agnostic).
   const pty = lazy(async () => {
-    const { spawn } = await import("bun-pty")
-    return spawn
+    if (process.versions.bun) {
+      const { spawn } = await import("bun-pty")
+      return spawn
+    }
+    const { spawn } = await import("node-pty-prebuilt-multiarch")
+    return spawn as unknown as typeof import("bun-pty").spawn
   })
 
   export const Info = z

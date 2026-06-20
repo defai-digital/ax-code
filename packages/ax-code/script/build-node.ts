@@ -104,7 +104,10 @@ const result = await esbuild.build({
   format: "esm",
   outfile: path.join(outLib, "index-node.js"),
   conditions: ["node"],
-  external: ["bun:ffi"],
+  // node-pty ships a native .node addon esbuild can't bundle; keep it external,
+  // loaded at runtime from node_modules shipped beside the bundle (same as the
+  // napi addons and tree-sitter wasm).
+  external: ["bun:ffi", "node-pty-prebuilt-multiarch"],
   plugins: [
     {
       name: "ax-node-overrides",
