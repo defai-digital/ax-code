@@ -134,7 +134,7 @@ export function parseResignArgs(
 
 function usage() {
   return `Usage:
-  bun run script/resign-release-assets.ts [options] [tag ...]
+  tsx script/resign-release-assets.ts [options] [tag ...]
 
 Re-sign already-published release archives with the current minisign key and
 re-upload the .minisig assets. Use after a release signing key rotation so

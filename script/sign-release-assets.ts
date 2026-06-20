@@ -114,7 +114,7 @@ export function parseSignReleaseArgs(
 
 function usage() {
   return `Usage:
-  bun run script/sign-release-assets.ts [options] [file ...]
+  tsx script/sign-release-assets.ts [options] [file ...]
 
 Options:
   --dist-dir <dir>      Directory to scan when no files are provided

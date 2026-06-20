@@ -41,7 +41,7 @@ The project is a **pnpm workspace** monorepo:
 - **Run Tests**:
   - Root: do not run `pnpm test`; the root script intentionally fails.
   - Core: `cd packages/ax-code && bun test`
-  - Grouped tests: `bun run test:unit`, `bun run test:e2e`, `bun run test:deterministic`.
+  - Grouped tests: `pnpm test:unit`, `pnpm test:e2e`, `pnpm test:deterministic`.
 
 ## Development Conventions
 

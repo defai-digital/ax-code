@@ -13,7 +13,7 @@ pnpm install
 Run the CLI from this package with Bun:
 
 ```bash
-bun run ./src/index.ts
+pnpm dev
 ```
 
 Or use the root workspace wrapper:
@@ -29,14 +29,14 @@ Run commands from `packages/ax-code`:
 ```bash
 bun test
 bun typecheck
-bun run test:unit
-bun run test:recovery
-bun run test:e2e
-bun run test:deterministic
-bun run test:live
-bun run test:risk
-bun run test:ci -- deterministic --coverage --coverage-summary-out .tmp/coverage-summary.json --coverage-report-out .tmp/coverage-report.md
-bun run perf:index --config perf-index.jsonc
+pnpm test:unit
+pnpm test:recovery
+pnpm test:e2e
+pnpm test:deterministic
+pnpm test:live
+pnpm test:risk
+pnpm test:ci -- deterministic --coverage --coverage-summary-out .tmp/coverage-summary.json --coverage-report-out .tmp/coverage-report.md
+pnpm perf:index --config perf-index.jsonc
 ```
 
 ### Test Groups
@@ -54,19 +54,19 @@ bun run perf:index --config perf-index.jsonc
 Run the repeatable index benchmark from `packages/ax-code`:
 
 ```bash
-bun run perf:index --config perf-index.jsonc
+pnpm perf:index --config perf-index.jsonc
 ```
 
 Common overrides:
 
 ```bash
-bun run perf:index --config perf-index.jsonc --limit 25 --repeat 5 --warmup 1
-bun run perf:index --config perf-index.jsonc --max-elapsed-median-ms 2000 --max-phase-median-ms lsp.touch=800
-bun run perf:index --config perf-index.jsonc --baseline .tmp/perf-index-baseline.json --max-elapsed-regression-pct 20
-bun run perf:index --config perf-index.jsonc --baseline .tmp/perf-index-baseline.json --baseline-summary .tmp/perf-index-baseline-summary.json --max-elapsed-regression-pct 20
-bun run perf:index --config perf-index.jsonc --summary-out .tmp/perf-index-summary.json --write-baseline .tmp/perf-index-baseline.json
-bun run perf:index --config perf-index.jsonc --write-baseline .tmp/perf-index-baseline.json --write-baseline-summary .tmp/perf-index-baseline-summary.json
-bun run perf:report --summary .tmp/perf-index-summary.json --out .tmp/perf-index-report.md
+pnpm perf:index --config perf-index.jsonc --limit 25 --repeat 5 --warmup 1
+pnpm perf:index --config perf-index.jsonc --max-elapsed-median-ms 2000 --max-phase-median-ms lsp.touch=800
+pnpm perf:index --config perf-index.jsonc --baseline .tmp/perf-index-baseline.json --max-elapsed-regression-pct 20
+pnpm perf:index --config perf-index.jsonc --baseline .tmp/perf-index-baseline.json --baseline-summary .tmp/perf-index-baseline-summary.json --max-elapsed-regression-pct 20
+pnpm perf:index --config perf-index.jsonc --summary-out .tmp/perf-index-summary.json --write-baseline .tmp/perf-index-baseline.json
+pnpm perf:index --config perf-index.jsonc --write-baseline .tmp/perf-index-baseline.json --write-baseline-summary .tmp/perf-index-baseline-summary.json
+pnpm perf:report --summary .tmp/perf-index-summary.json --out .tmp/perf-index-report.md
 ```
 
 `perf-index.jsonc` is the checked-in policy file for benchmark defaults, absolute gates, optional baseline comparison, and the default machine-readable summary path.

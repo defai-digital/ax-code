@@ -3,9 +3,9 @@
  * Build native Rust addons (napi-rs) and wire them into the workspace.
  *
  * Usage:
- *   bun run script/build-native.ts          # release build (default)
- *   bun run script/build-native.ts --debug  # debug build
- *   bun run script/build-native.ts fs diff  # build only selected packages
+ *   tsx script/build-native.ts          # release build (default)
+ *   tsx script/build-native.ts --debug  # debug build
+ *   tsx script/build-native.ts fs diff  # build only selected packages
  *
  * Each package in `packages/ax-code-*-native/` already has a `napi build`
  * script. This driver runs them in sequence and reports a summary. After

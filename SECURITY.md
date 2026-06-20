@@ -116,7 +116,7 @@ To re-sign and re-upload an existing release's `.minisig` assets with the
 current key:
 
 ```bash
-bun run script/resign-release-assets.ts --tag v5.5.0 --key-dir ~/.minisign
+tsx script/resign-release-assets.ts --tag v5.5.0 --key-dir ~/.minisign
 ```
 
 ---

@@ -15,7 +15,7 @@
  *   - `model.cost`, `models[*].cost`, `Cost.compute`, `Cost.format`
  *   - `/cost` slash command registrations
  *
- * Run:  bun run script/check-no-cost.ts
+ * Run:  tsx script/check-no-cost.ts
  * Wire: .github/workflows/repo-structure.yml runs this as part of audit.
  */
 
