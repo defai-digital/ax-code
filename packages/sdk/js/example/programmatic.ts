@@ -1,7 +1,7 @@
 /**
  * Example: Using the ax-code Programmatic SDK
  *
- * Run with: bun run packages/sdk/js/example/programmatic.ts
+ * Run with: tsx packages/sdk/js/example/programmatic.ts
  */
 
 import { createAgent } from "@ax-code/sdk/programmatic"
@@ -114,5 +114,5 @@ switch (example) {
     await example4_securityScan()
     break
   default:
-    console.log("Usage: bun run programmatic.ts [1|2|3|4]")
+    console.log("Usage: tsx programmatic.ts [1|2|3|4]")
 }

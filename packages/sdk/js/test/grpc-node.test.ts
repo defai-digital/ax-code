@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "vitest"
 import { connect } from "node:http2"
 import { AX_CODE_GRPC_METHOD } from "../src/grpc"
 import {

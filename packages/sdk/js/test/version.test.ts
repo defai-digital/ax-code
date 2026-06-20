@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { SDK_VERSION, isSDKVersionCompatible } from "../src/version"
 
 describe("SDK_VERSION", () => {

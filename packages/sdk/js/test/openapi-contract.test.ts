@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { readFileSync } from "fs"
 import { fileURLToPath } from "url"
 import { REQUIRED_OPENAPI_PATHS, parseOpenApiSnapshot, validateOpenApiSnapshot } from "../src/openapi/contract"

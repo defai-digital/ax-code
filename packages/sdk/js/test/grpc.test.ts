@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import {
@@ -27,7 +27,7 @@ import {
 
 describe("gRPC SDK facade", () => {
   test("exposes a stable headless service and proto path", () => {
-    const packageJson = JSON.parse(readFileSync(resolve(import.meta.dir, "../package.json"), "utf8")) as {
+    const packageJson = JSON.parse(readFileSync(resolve(import.meta.dirname, "../package.json"), "utf8")) as {
       exports: Record<string, string>
     }
 
@@ -90,7 +90,7 @@ describe("gRPC SDK facade", () => {
   })
 
   test("method descriptors match the proto service message contract", () => {
-    const proto = readFileSync(resolve(import.meta.dir, "../../proto/ax_code/v1/headless.proto"), "utf8")
+    const proto = readFileSync(resolve(import.meta.dirname, "../../proto/ax_code/v1/headless.proto"), "utf8")
     const rpcPattern = /rpc\s+(\w+)\((stream\s+)?(\w+)\)\s+returns\s+\((stream\s+)?(\w+)\)/g
     const rpcTypes = new Map<string, { kind: string; requestType: string; responseType: string }>()
     let match: RegExpExecArray | null
@@ -1382,7 +1382,7 @@ describe("gRPC SDK facade", () => {
   })
 
   test("proto declares the headless service used by the SDK facade", () => {
-    const proto = readFileSync(resolve(import.meta.dir, "../../proto/ax_code/v1/headless.proto"), "utf8")
+    const proto = readFileSync(resolve(import.meta.dirname, "../../proto/ax_code/v1/headless.proto"), "utf8")
 
     expect(proto).toContain("service AxCodeHeadless")
     expect(proto).toContain("rpc SendRuntimeCommand")

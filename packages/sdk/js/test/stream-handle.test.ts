@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createMockAgent } from "../src/testing"
 
 describe("StreamHandle.on() callbacks", () => {

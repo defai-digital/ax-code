@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 import fs from "fs/promises"
 import { parseOpenApiSnapshot, validateOpenApiSnapshot } from "../src/openapi/contract.js"
 

@@ -1,11 +1,17 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 
 import { Script } from "@ax-code/script"
-import { $ } from "bun"
+import { spawnSync } from "child_process"
+import fs from "fs/promises"
 import { fileURLToPath } from "url"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
+
+function sh(cmd: string, args: string[]) {
+  const result = spawnSync(cmd, args, { cwd: dir, stdio: "inherit", shell: process.platform === "win32" })
+  if (result.status !== 0) throw new Error(`${cmd} ${args.join(" ")} exited ${result.status}`)
+}
 
 const pkg = (await import("../package.json").then((m) => m.default)) as {
   exports: Record<string, string | object>
@@ -25,7 +31,10 @@ function transformExports(exports: Record<string, string | object>) {
   }
 }
 transformExports(pkg.exports)
-await Bun.write("package.json", JSON.stringify(pkg, null, 2))
-await $`npm pack --workspaces=false`
-await $`npm publish *.tgz --workspaces=false --tag ${Script.channel} --access public`
-await Bun.write("package.json", JSON.stringify(original, null, 2))
+await fs.writeFile("package.json", JSON.stringify(pkg, null, 2))
+sh("npm", ["pack", "--workspaces=false"])
+// Resolve the packed tarball explicitly — spawnSync without a shell does not
+// expand the `*.tgz` glob the Bun `$` template used to.
+const tarballs = (await fs.readdir(dir)).filter((file) => file.endsWith(".tgz"))
+sh("npm", ["publish", ...tarballs, "--workspaces=false", "--tag", Script.channel, "--access", "public"])
+await fs.writeFile("package.json", JSON.stringify(original, null, 2))

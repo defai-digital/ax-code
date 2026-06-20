@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { createAxCodeClient } from "../src/client"
 import { createAxCodeClient as createAxCodeClientV2 } from "../src/v2/client"
 import type { AppErrorEnvelope } from "../src/gen/types.gen"

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { parseDesktopDiagnosticExport, redactDiagnosticValue } from "../src/headless.js"
 
 describe("headless diagnostics contract", () => {

@@ -1,6 +1,6 @@
 import { createOpencodeClient } from "@ax-code/sdk/v2/client"
 import { createOpencodeServer } from "@ax-code/sdk/v2/server"
-import { pathToFileURL } from "bun"
+import { pathToFileURL } from "url"
 
 const server = await createOpencodeServer()
 const client = createOpencodeClient({ baseUrl: server.url })

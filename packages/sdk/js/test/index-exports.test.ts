@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import * as sdk from "../src/index"
@@ -6,7 +6,7 @@ import type { Project } from "../src/index"
 
 describe("@ax-code/sdk top-level exports", () => {
   test("package manifest exposes supported SDK surfaces from published dist files", () => {
-    const packageJson = JSON.parse(readFileSync(resolve(import.meta.dir, "../package.json"), "utf8")) as {
+    const packageJson = JSON.parse(readFileSync(resolve(import.meta.dirname, "../package.json"), "utf8")) as {
       exports: Record<string, string>
     }
     const publicSubpaths = Object.keys(packageJson.exports)
