@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { NpmManager, packageManagerKind } from "../../src/bun/package-manager"
+import { NpmManager, packageManagerKind, toolRunner } from "../../src/bun/package-manager"
 import type { RuntimeMode } from "../../src/installation/runtime-mode"
 
 describe("packageManagerKind", () => {
@@ -41,5 +41,30 @@ describe("NpmManager command shapes", () => {
       ...NpmManager.infoArgs("p", "version"),
     ]
     expect(all.some((a) => a.startsWith("--registry"))).toBe(false)
+  })
+})
+
+describe("toolRunner", () => {
+  test("uses `bun x` with BUN_BE_BUN on a Bun runtime", () => {
+    const runner = toolRunner({ bunExecutable: "/opt/homebrew/bin/bun", kind: "bun" })
+    expect(runner.command).toEqual(["/opt/homebrew/bin/bun", "x"])
+    expect(runner.environment).toEqual({ BUN_BE_BUN: "1" })
+  })
+
+  test("uses `npx --yes` with no special env on the Node runtime", () => {
+    const runner = toolRunner({ bunExecutable: "/usr/local/bin/node", kind: "npm" })
+    expect(runner.command).toEqual(["npx", "--yes"])
+    expect(runner.environment).toBeUndefined()
+  })
+
+  test("composes into a full tool invocation", () => {
+    const runner = toolRunner({ bunExecutable: "node", kind: "npm" })
+    expect([...runner.command, "prettier", "--write", "$FILE"]).toEqual([
+      "npx",
+      "--yes",
+      "prettier",
+      "--write",
+      "$FILE",
+    ])
   })
 })

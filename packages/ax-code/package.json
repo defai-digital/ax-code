@@ -29,7 +29,7 @@
     "build:node": "bun run script/build-node.ts",
     "tui:startup-smoke": "bun run script/tui-startup-smoke.ts",
     "dev": "bun run --conditions=browser ./src/index.ts",
-    "db": "bun drizzle-kit"
+    "db": "pnpm exec drizzle-kit"
   },
   "exports": {
     "./*": "./src/*.ts"

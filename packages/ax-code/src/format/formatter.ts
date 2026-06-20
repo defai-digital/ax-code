@@ -1,5 +1,6 @@
 import { text } from "node:stream/consumers"
 import { BunProc } from "../bun"
+import { toolRunner } from "../bun/package-manager"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { Process } from "../util/process"
@@ -7,6 +8,11 @@ import { which } from "../util/which"
 import { Flag } from "@/flag/flag"
 
 const HELP_CHECK_TIMEOUT_MS = 5_000
+
+// Run a registry-published formatter by name: `bun x <tool>` on a Bun runtime,
+// `npx --yes <tool>` on the Node runtime (where BunProc.which() would resolve
+// to `node`, making `node x <tool>` meaningless).
+const tool = toolRunner({ bunExecutable: BunProc.which() })
 
 export interface Info {
   name: string
@@ -75,10 +81,8 @@ export const mix: Info = {
 
 export const prettier: Info = {
   name: "prettier",
-  command: [BunProc.which(), "x", "prettier", "--write", "$FILE"],
-  environment: {
-    BUN_BE_BUN: "1",
-  },
+  command: [...tool.command, "prettier", "--write", "$FILE"],
+  environment: tool.environment,
   extensions: [
     ".js",
     ".jsx",
@@ -123,10 +127,8 @@ export const prettier: Info = {
 
 export const oxfmt: Info = {
   name: "oxfmt",
-  command: [BunProc.which(), "x", "oxfmt", "$FILE"],
-  environment: {
-    BUN_BE_BUN: "1",
-  },
+  command: [...tool.command, "oxfmt", "$FILE"],
+  environment: tool.environment,
   extensions: [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"],
   async enabled() {
     if (!Flag.AX_CODE_EXPERIMENTAL_OXFMT) return false
@@ -145,10 +147,8 @@ export const oxfmt: Info = {
 
 export const biome: Info = {
   name: "biome",
-  command: [BunProc.which(), "x", "@biomejs/biome", "check", "--write", "$FILE"],
-  environment: {
-    BUN_BE_BUN: "1",
-  },
+  command: [...tool.command, "@biomejs/biome", "check", "--write", "$FILE"],
+  environment: tool.environment,
   extensions: [
     ".js",
     ".jsx",

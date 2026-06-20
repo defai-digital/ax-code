@@ -1,6 +1,7 @@
 import path from "path"
 import { Global } from "../global"
 import { BunProc } from "../bun"
+import { toolRunner } from "../bun/package-manager"
 import { Env } from "../util/env"
 import fs from "fs/promises"
 import { Filesystem } from "../util/filesystem"
@@ -331,19 +332,26 @@ export const Biome: Info = {
     }
 
     let args = ["lsp-proxy", "--stdio"]
+    let runnerEnv: Record<string, string> | undefined
 
     if (!bin) {
       const resolved = Module.resolve("biome", root)
       if (!resolved) return
-      bin = BunProc.which()
-      args = ["x", "biome", "lsp-proxy", "--stdio"]
+      // No local/global biome: run it via the runtime's tool runner
+      // (`bun x biome` / `npx --yes biome`). On Node, BunProc.which() resolves
+      // to `node`, so `node x biome` would be meaningless.
+      const tool = toolRunner({ bunExecutable: BunProc.which() })
+      const [runner, ...runnerArgs] = tool.command
+      bin = runner
+      args = [...runnerArgs, "biome", "lsp-proxy", "--stdio"]
+      runnerEnv = tool.environment
     }
 
     const proc = spawn(bin, args, {
       cwd: root,
       env: {
         ...Env.sanitize(),
-        BUN_BE_BUN: "1",
+        ...runnerEnv,
       },
     })
 

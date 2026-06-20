@@ -29,6 +29,25 @@ export function packageManagerKind(mode: RuntimeMode = runtimeMode()): PackageMa
  * (it reads/writes `<cwd>/package.json` and installs into `<cwd>/node_modules`)
  * independently of the spawn cwd, mirroring bun's `--cwd <cwd>`.
  */
+/**
+ * How to invoke a registry-published CLI tool *by name*, auto-installing it if
+ * absent — bun's `bun x <tool>` vs npm's `npx --yes <tool>`. Used for the
+ * optional formatters (prettier/oxfmt/biome) and LSP fallbacks that ax-code
+ * does not vendor.
+ *
+ * `bunExecutable` is the resolved bun path (`BunProc.which()`); on the Node
+ * runtime it is ignored in favour of `npx` (which ships with npm). The bun
+ * branch keeps `BUN_BE_BUN=1` so a compiled ax-code binary acts as bun.
+ */
+export function toolRunner(opts: { bunExecutable: string; kind?: PackageManagerKind }): {
+  command: string[]
+  environment?: Record<string, string>
+} {
+  const kind = opts.kind ?? packageManagerKind()
+  if (kind === "npm") return { command: ["npx", "--yes"] }
+  return { command: [opts.bunExecutable, "x"], environment: { BUN_BE_BUN: "1" } }
+}
+
 export const NpmManager = {
   executable: "npm",
   /** install one exact-pinned package into `cwd` */
