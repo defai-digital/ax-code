@@ -1,11 +1,38 @@
 import { defineConfig } from "vitest/config"
+import type { Plugin } from "vite"
 import tsconfigPaths from "vite-tsconfig-paths"
+import { transform as esbuildTransform } from "esbuild"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
 
 const dir = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
+
+// vitest 4 bundles vite 8, whose default Oxc transformer only partially supports
+// TS namespaces — namespace-internal references (`const Y = Status` inside a
+// namespace) aren't rewritten, so heavily-namespaced modules fail to load with
+// `ReferenceError: <member> is not defined`. esbuild has full namespace support,
+// so transform our SRC TS with it (enforce:"pre") before Oxc sees it. Scoped to
+// src/ only: test files must keep vitest's own transform so vi.mock() hoisting
+// (which esbuild would bypass) keeps working.
+const srcDir = path.join(dir, "src") + path.sep
+const forceEsbuildTs: Plugin = {
+  name: "force-esbuild-ts",
+  enforce: "pre",
+  async transform(code, id) {
+    const file = id.split("?")[0]
+    if (!file.startsWith(srcDir) || !/\.tsx?$/.test(file)) return null
+    const result = await esbuildTransform(code, {
+      loader: file.endsWith(".tsx") ? "tsx" : "ts",
+      format: "esm",
+      target: "node22",
+      sourcemap: true,
+      sourcefile: file,
+    })
+    return { code: result.code, map: result.map }
+  },
+}
 
 // Tests that don't run in the default (unit) group: integration/flaky/isolation
 // tests, mirroring script/test-group.ts (e2e ∪ live ∪ recovery). They spawn real
@@ -55,7 +82,7 @@ const EXCLUDE_GROUPS = [
 ]
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  plugins: [forceEsbuildTs, tsconfigPaths()],
   resolve: {
     alias: {
       // Vite doesn't apply the "node" import condition by default, so pin #db
