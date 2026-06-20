@@ -1,18 +1,20 @@
 import type { Argv } from "yargs"
 import { spawn } from "child_process"
+import { DatabaseSync } from "node:sqlite"
 import { Database } from "../../../storage/db"
 import { UI } from "../../ui"
 import { cmd } from "../cmd"
 import { JsonMigration } from "../../../storage/json-migration"
 import { EOL } from "os"
 import { toErrorMessage } from "../../../util/error-message"
+import { mkdirSync, closeSync, openSync } from "node:fs"
+import { dirname } from "node:path"
 
-// `bun:sqlite` is bun-only; dynamic-import inside handlers so this command
-// file loads under both bun and node entrypoints. The handlers themselves
-// remain bun-only at runtime.
-async function loadBunDatabase() {
-  const mod = await import("bun:sqlite")
-  return mod.Database
+function openDatabase(dbPath: string, options: { readonly: boolean }): DatabaseSync {
+  // Ensure the file exists before opening (node:sqlite has no 'create' flag).
+  mkdirSync(dirname(dbPath), { recursive: true })
+  closeSync(openSync(dbPath, "a"))
+  return new DatabaseSync(dbPath, { open: true, readOnly: options.readonly })
 }
 
 function formatOrphanSummary(orphans: JsonMigration.OrphanStats) {
@@ -41,15 +43,12 @@ const QueryCommand = cmd({
   handler: async (args: { query?: string; format: string }) => {
     const query = args.query as string | undefined
     if (query) {
-      const BunDatabase = await loadBunDatabase()
-      const db = new BunDatabase(Database.Path, { readonly: true })
+      const db = openDatabase(Database.Path, { readonly: true })
       // Guarantee db.close() on every exit path (success AND error) so
-      // the WAL checkpoint and file lock are released. The previous code
-      // called process.exit(1) from inside catch, which skipped close()
-      // entirely on failure.
+      // the WAL checkpoint and file lock are released.
       let ok = false
       try {
-        const result = db.query(query).all() as Record<string, unknown>[]
+        const result = db.prepare(query).all() as Record<string, unknown>[]
         if (args.format === "json") {
           console.log(JSON.stringify(result, null, 2))
         } else if (result.length > 0) {
@@ -86,8 +85,7 @@ const MigrateCommand = cmd({
   command: "migrate",
   describe: "migrate JSON data to SQLite (merges with existing data)",
   handler: async () => {
-    const BunDatabase = await loadBunDatabase()
-    const sqlite = new BunDatabase(Database.Path)
+    const sqlite = openDatabase(Database.Path, { readonly: false })
     const tty = process.stderr.isTTY
     const width = 36
     const orange = "\x1b[38;5;214m"
@@ -96,7 +94,7 @@ const MigrateCommand = cmd({
     let last = -1
     if (tty) process.stderr.write("\x1b[?25l")
     try {
-      const stats = await JsonMigration.run(sqlite, {
+      const stats = await JsonMigration.run(sqlite as unknown as Parameters<typeof JsonMigration.run>[0], {
         progress: (event) => {
           const percent = Math.floor((event.current / event.total) * 100)
           if (percent === last) return

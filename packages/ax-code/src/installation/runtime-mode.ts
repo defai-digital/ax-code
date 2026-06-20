@@ -1,6 +1,6 @@
 /**
  * Detects whether ax-code is running as a compiled Bun binary, from source
- * via `bun run`, or as a packaged source-plus-bun distribution.
+ * via `bun run`, as a packaged source-plus-bun distribution, or on Node.js.
  *
  * This is distinct from `Installation.method()` which detects the package
  * manager used to install (brew, curl, etc.). Runtime mode is about
@@ -11,7 +11,7 @@
 // declared in `./index.ts`. They are referenced here without a local
 // `declare global` block to avoid duplicate-declaration errors.
 
-export type RuntimeMode = "compiled" | "source" | "bun-bundled" | "node-bundled" | "unknown"
+export type RuntimeMode = "compiled" | "source" | "bun-bundled" | "node-bundled" | "node-source" | "unknown"
 
 export type DetectInput = {
   execPath?: string
@@ -39,7 +39,7 @@ export function detectRuntimeMode(input: DetectInput = {}): RuntimeMode {
   const channel = input.channel ?? (typeof AX_CODE_CHANNEL === "string" ? AX_CODE_CHANNEL : undefined)
   const versionDefined = input.versionDefined ?? typeof AX_CODE_VERSION === "string"
 
-  if (isNodeRuntime && versionDefined) return "node-bundled"
+  if (isNodeRuntime) return versionDefined ? "node-bundled" : "node-source"
   if (!isBunRuntime) {
     return versionDefined ? "compiled" : "unknown"
   }

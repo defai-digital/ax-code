@@ -1,7 +1,12 @@
-// The migration runs against the bun-sqlite-typed drizzle driver (aliased to
-// node:sqlite at runtime by the build/test config). A type-only import keeps
-// this module loadable under Node without pulling in the `bun:sqlite` builtin.
-import type { Database } from "bun:sqlite"
+// The migration runs against the drizzle node-sqlite driver. A structural
+// interface covers the sqlite handle surface used here (exec, prepare) so
+// this module remains portable between the node:sqlite DatabaseSync (used by
+// db.node.ts) and any future driver without pulling in runtime-specific types.
+type SqliteHandle = {
+  exec(sql: string): void
+  prepare(sql: string): { all(...params: unknown[]): unknown[] }
+  run?(sql: string, ...params: unknown[]): unknown
+}
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { ProjectTable } from "../project/project.sql"
@@ -72,7 +77,7 @@ export namespace JsonMigration {
     return toErrorMessage(error)
   }
 
-  export async function run(sqlite: Database, options?: Options) {
+  export async function run(sqlite: SqliteHandle, options?: Options) {
     const storageDir = path.join(Global.Path.data, "storage")
 
     if (!existsSync(storageDir)) {
@@ -93,11 +98,11 @@ export namespace JsonMigration {
     log.info("starting json to sqlite migration", { storageDir })
     const start = performance.now()
 
-    // Lazy-load drizzle's bun-sqlite adapter so this file's module-load does
-    // not pull bun-only code under node entrypoints. The migration command
-    // itself is bun-only at runtime.
-    const { drizzle } = await import("drizzle-orm/bun-sqlite")
-    const db = drizzle({ client: sqlite })
+    // Lazy-load drizzle's node-sqlite adapter. The migration command is the
+    // only caller; importing lazily avoids pulling in the drizzle node adapter
+    // at module-load time for callers that never run a migration.
+    const { drizzle } = await import("drizzle-orm/node-sqlite")
+    const db = drizzle({ client: sqlite as unknown as import("node:sqlite").DatabaseSync })
 
     // Optimize SQLite for bulk inserts
     sqlite.exec("PRAGMA journal_mode = WAL")

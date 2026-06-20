@@ -4,9 +4,10 @@ import { runtimeMode, type RuntimeMode } from "../installation/runtime-mode"
  * Which package manager drives ax-code's *dynamic* installs (provider SDKs,
  * plugins, config dependencies, LSP servers) at runtime.
  *
- * A Node runtime (`node-bundled`) ships a `node` executable, which is not a
- * package manager — `node add pkg` is meaningless and fails. On that runtime
- * we drive npm (which ships with Node); every Bun runtime keeps using bun.
+ * A Node runtime (`node-bundled` or `node-source`) ships or uses a `node`
+ * executable, which is not a package manager — `node add pkg` is meaningless
+ * and fails. On those runtimes we drive npm (which ships with Node); every
+ * Bun runtime keeps using bun.
  *
  * Keeping the decision in one pure, testable function — rather than scattering
  * `process.execPath`/`runtimeMode()` checks across the install call sites —
@@ -16,7 +17,7 @@ import { runtimeMode, type RuntimeMode } from "../installation/runtime-mode"
 export type PackageManagerKind = "bun" | "npm"
 
 export function packageManagerKind(mode: RuntimeMode = runtimeMode()): PackageManagerKind {
-  return mode === "node-bundled" ? "npm" : "bun"
+  return mode === "node-bundled" || mode === "node-source" ? "npm" : "bun"
 }
 
 /**
