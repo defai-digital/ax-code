@@ -36,13 +36,22 @@ class Sh implements PromiseLike<{ exitCode: number; stdout: string; stderr: stri
   async json() {
     return JSON.parse(this.exec().stdout)
   }
+  private settled() {
+    return Promise.resolve().then(() => this.exec())
+  }
   then<R1 = { exitCode: number; stdout: string; stderr: string }, R2 = never>(
     onF?: ((v: { exitCode: number; stdout: string; stderr: string }) => R1 | PromiseLike<R1>) | null,
     onR?: ((reason: unknown) => R2 | PromiseLike<R2>) | null,
-  ): PromiseLike<R1 | R2> {
-    return Promise.resolve()
-      .then(() => this.exec())
-      .then(onF, onR)
+  ): Promise<R1 | R2> {
+    return this.settled().then(onF, onR)
+  }
+  // Bun's ShellPromise exposes the full Promise surface; tests chain `.catch()`
+  // and `.finally()` directly off `$\`...\`.cwd().quiet()`.
+  catch<R = never>(onR?: ((reason: unknown) => R | PromiseLike<R>) | null) {
+    return this.settled().catch(onR)
+  }
+  finally(onFinally?: (() => void) | null) {
+    return this.settled().finally(onFinally)
   }
 }
 

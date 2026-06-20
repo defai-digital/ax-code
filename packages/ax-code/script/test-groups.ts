@@ -26,9 +26,12 @@ async function main() {
   }
 
   console.log(`Running ${name} tests (${next.length})`)
-  const proc = spawn(process.execPath, [vitestCli(), "run", ...next], {
+  // Pass the exact file list through the config's `include` via AX_TEST_FILES;
+  // vitest positional filters can't reliably target an exact set (see config).
+  const proc = spawn(process.execPath, [vitestCli(), "run"], {
     cwd: root,
     stdio: "inherit",
+    env: { ...process.env, AX_TEST_FILES: next.join(",") },
   })
   const code: number = await new Promise((resolve) => {
     proc.on("exit", (value) => resolve(value ?? 1))

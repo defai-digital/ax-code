@@ -99,6 +99,13 @@ const EXCLUDE_GROUPS = [
   "test/cli/tui/prompt-submit-key.test.ts",
 ]
 
+// Exact file list from the group runners (test-groups.ts / test-ci.ts), if any.
+const includeFiles = process.env.AX_TEST_FILES
+  ? process.env.AX_TEST_FILES.split(",")
+      .map((file) => file.trim())
+      .filter(Boolean)
+  : undefined
+
 export default defineConfig({
   plugins: [txtAsText, forceEsbuildTs, tsconfigPaths()],
   resolve: {
@@ -119,8 +126,17 @@ export default defineConfig({
   },
   test: {
     globals: false,
-    include: ["test/**/*.test.{ts,tsx}"],
-    exclude: ["**/node_modules/**", "test-vitest/**", ...EXCLUDE_GROUPS],
+    // The group runners (test-groups.ts / test-ci.ts) pass an exact file list via
+    // AX_TEST_FILES instead of vitest positional filters — vitest 4's positional
+    // filter matches path segments opaquely and can't reliably target an exact
+    // set. An explicit `include` list is unambiguous. EXCLUDE_GROUPS contains the
+    // non-default groups (e2e/recovery/live) as well as quarantined files, so when
+    // a group explicitly requests files we drop those exact paths from the exclude
+    // — otherwise the recovery/e2e/live groups would self-exclude and run nothing.
+    include: includeFiles ?? ["test/**/*.test.{ts,tsx}"],
+    exclude: includeFiles
+      ? ["**/node_modules/**", "test-vitest/**", ...EXCLUDE_GROUPS.filter((file) => !includeFiles.includes(file))]
+      : ["**/node_modules/**", "test-vitest/**", ...EXCLUDE_GROUPS],
     // Order matters: vitest.setup installs the Bun compat shim first; preload
     // then sets per-process (pid) XDG/home isolation so parallel forks don't
     // collide on the shared global SQLite db, and clears provider env vars.

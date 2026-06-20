@@ -109,8 +109,16 @@ class ShellPromise implements PromiseLike<ShellResult> {
   then<R1 = ShellResult, R2 = never>(
     onF?: ((v: ShellResult) => R1 | PromiseLike<R1>) | null,
     onR?: ((reason: unknown) => R2 | PromiseLike<R2>) | null,
-  ): PromiseLike<R1 | R2> {
+  ): Promise<R1 | R2> {
     return this.run().then(onF, onR)
+  }
+  // Bun's ShellPromise supports the full Promise surface, including `.catch()`
+  // and `.finally()`; callers chain these directly off `$\`...\`.cwd().quiet()`.
+  catch<R = never>(onR?: ((reason: unknown) => R | PromiseLike<R>) | null): Promise<ShellResult | R> {
+    return this.run().catch(onR)
+  }
+  finally(onFinally?: (() => void) | null): Promise<ShellResult> {
+    return this.run().finally(onFinally)
   }
 }
 

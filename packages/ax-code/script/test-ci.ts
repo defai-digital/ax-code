@@ -1,5 +1,9 @@
+import { spawn } from "child_process"
+import { createRequire } from "module"
 import path from "path"
 import fs from "fs/promises"
+import { existsSync } from "fs"
+import type { Readable } from "node:stream"
 import { check, list, pick, root } from "./test-group"
 import { writeCoverageArtifacts } from "./test-coverage"
 
@@ -17,6 +21,13 @@ type Result = {
 }
 
 const harmlessEffectInterrupt = "All fibers interrupted without error"
+
+// Resolve the vitest CLI from the installed package (its ./vitest.mjs bin is not
+// exposed via "exports"). Spawned with the current node so CI runs Bun-free.
+function vitestCli() {
+  const require = createRequire(import.meta.url)
+  return path.join(path.dirname(require.resolve("vitest/package.json")), "vitest.mjs")
+}
 
 function arg(name: string) {
   const idx = process.argv.indexOf(name)
@@ -47,10 +58,10 @@ function attrs(text: string) {
 }
 
 export async function parseJUnit(file: string, output = "") {
-  if (!(await Bun.file(file).exists())) {
+  if (!existsSync(file)) {
     return { tests: 0, failures: 0, skipped: 0, time: 0, ignored: 0 }
   }
-  const text = await Bun.file(file).text()
+  const text = await fs.readFile(file, "utf8")
   const combinedText = `${text}\n${output}`
   const rootTag = text.match(/<(testsuites|testsuite)\s+([^>]+)>/)
   const data = rootTag ? attrs(rootTag[2] ?? "") : {}
@@ -71,55 +82,50 @@ export async function parseJUnit(file: string, output = "") {
   return { tests, failures: Math.max(0, failures - ignored), skipped, time, ignored }
 }
 
-async function tee(stream: ReadableStream<Uint8Array> | null, writer: NodeJS.WriteStream) {
-  if (!stream) return ""
-
-  const reader = stream.getReader()
-  const decoder = new TextDecoder()
-  let text = ""
-
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    if (!value) continue
-    writer.write(value)
-    text += decoder.decode(value, { stream: true })
-  }
-
-  text += decoder.decode()
-  return text
+// Mirror a child stream to a writer while capturing its text.
+function tee(stream: Readable | null, writer: NodeJS.WriteStream): Promise<string> {
+  if (!stream) return Promise.resolve("")
+  return new Promise((resolve) => {
+    let text = ""
+    stream.on("data", (chunk: Buffer) => {
+      writer.write(chunk)
+      text += chunk.toString()
+    })
+    const finish = () => resolve(text)
+    stream.once("end", finish)
+    stream.once("close", finish)
+    stream.once("error", finish)
+  })
 }
 
 async function run(group: string, files: string[], dir: string, run: number) {
   const file = path.join(dir, `${group}-${run}.xml`)
-  const setup = path.join(root, "test/setup/harmless-interrupt.ts")
   const coverageDir = flag("--coverage") ? path.join(root, arg("--coverage-dir") ?? ".tmp/coverage") : undefined
-  const command = [
-    process.execPath,
-    "test",
-    "--timeout",
-    "30000",
-    "--preload",
-    setup,
-    "--reporter",
-    "junit",
-    "--reporter-outfile",
-    file,
-    ...files,
-  ]
+  // The 30s per-test timeout and setup/preload files come from vitest.config.ts.
+  // The exact file set is passed through the config's `include` via AX_TEST_FILES
+  // (vitest positional filters can't reliably target an exact set).
+  const command = [vitestCli(), "run", "--reporter=junit", `--outputFile=${file}`]
   if (coverageDir) {
-    command.push("--coverage", "--coverage-reporter=text", "--coverage-reporter=lcov", "--coverage-dir", coverageDir)
+    command.push(
+      "--coverage.enabled",
+      "--coverage.provider=v8",
+      "--coverage.reporter=text",
+      "--coverage.reporter=lcov",
+      `--coverage.reportsDirectory=${coverageDir}`,
+    )
   }
-  const proc = Bun.spawn(command, {
+  const proc = spawn(process.execPath, command, {
     cwd: root,
-    stdin: "inherit",
-    stdout: "pipe",
-    stderr: "pipe",
+    stdio: ["inherit", "pipe", "pipe"],
+    env: { ...process.env, AX_TEST_FILES: files.join(",") },
   })
   const [stdout, stderr, code] = await Promise.all([
     tee(proc.stdout, process.stdout),
     tee(proc.stderr, process.stderr),
-    proc.exited,
+    new Promise<number>((resolve) => {
+      proc.on("exit", (value) => resolve(value ?? 1))
+      proc.on("error", () => resolve(1))
+    }),
   ])
   const stats = await parseJUnit(file, `${stdout}\n${stderr}`)
   return {
@@ -172,12 +178,8 @@ async function summary(group: string, runs: Result[]) {
   console.log(text)
   const file = process.env["GITHUB_STEP_SUMMARY"]
   if (file) {
-    await Bun.write(
-      file,
-      `${await Bun.file(file)
-        .text()
-        .catch(() => "")}${text}\n`,
-    )
+    const existing = await fs.readFile(file, "utf8").catch(() => "")
+    await fs.writeFile(file, `${existing}${text}\n`)
   }
 }
 
@@ -194,7 +196,7 @@ async function main() {
 
   const dir = path.join(root, arg("--dir") ?? ".tmp/test-report")
   await fs.mkdir(dir, { recursive: true })
-  await Bun.write(path.join(dir, ".keep"), "")
+  await fs.writeFile(path.join(dir, ".keep"), "")
 
   const reruns = num("--rerun-on-fail")
   const runs = [] as Result[]
@@ -208,7 +210,7 @@ async function main() {
   if (flag("--coverage")) {
     const coverageDir = runs[runs.length - 1]?.coverageDir
     const lcovFile = coverageDir ? path.join(coverageDir, "lcov.info") : undefined
-    if (lcovFile && (await Bun.file(lcovFile).exists())) {
+    if (lcovFile && existsSync(lcovFile)) {
       await writeCoverageArtifacts({
         group,
         lcovFile,
@@ -221,6 +223,6 @@ async function main() {
   if (runs.some((run) => run.code !== 0)) process.exit(1)
 }
 
-if (import.meta.main) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.main) {
   await main()
 }
