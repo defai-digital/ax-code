@@ -22,8 +22,8 @@ describe("ipc server transport", () => {
 
   function createTestApp(): Hono {
     const app = new Hono()
-    app.get("/global/health", (c) => c.json({ healthy: true, version: "test" }))
-    app.get("/global/capabilities", (c) =>
+    app.get("/global/health", (c: any) => c.json({ healthy: true, version: "test" }))
+    app.get("/global/capabilities", (c: any) =>
       c.json({
         schemaVersion: 1,
         product: "ax-code",
@@ -73,12 +73,12 @@ describe("ipc server transport", () => {
         },
       }),
     )
-    app.post("/session", async (c) => {
+    app.post("/session", async (c: any) => {
       const body = await c.req.json()
       return c.json({ id: "sess-1", title: body.title })
     })
-    app.post("/session/:id/prompt_async", async (c) => c.json(true))
-    app.get("/global/event", (c) => {
+    app.post("/session/:id/prompt_async", async (c: any) => c.json(true))
+    app.get("/global/event", (c: any) => {
       const encoder = new TextEncoder()
       const events = [
         { type: "server.connected", properties: {} },

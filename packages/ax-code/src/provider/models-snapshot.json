@@ -21251,17 +21251,6 @@
       }
     }
   },
-  "firepass": {
-    "id": "firepass",
-    "env": [
-      "FIREPASS_API_KEY"
-    ],
-    "npm": "@ai-sdk/openai-compatible",
-    "api": "https://api.fireworks.ai/inference/v1/",
-    "name": "Fireworks (Firepass)",
-    "doc": "https://docs.fireworks.ai/firepass",
-    "models": {}
-  },
   "anyapi": {
     "id": "anyapi",
     "env": [
