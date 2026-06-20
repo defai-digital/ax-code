@@ -17,6 +17,21 @@ const require = createRequire(import.meta.url)
 // src/ only: test files must keep vitest's own transform so vi.mock() hoisting
 // (which esbuild would bypass) keeps working.
 const srcDir = path.join(dir, "src") + path.sep
+// Tools import their descriptions as `import D from "./x.txt"`. Bun returns the
+// file contents; vite treats .txt as an asset (returns its path). Load .txt as
+// raw text so descriptions are correct (matches Bun + the build's text loader).
+const txtAsText: Plugin = {
+  name: "txt-as-text",
+  enforce: "pre",
+  async load(id) {
+    const file = id.split("?")[0]
+    if (!file.endsWith(".txt")) return null
+    const { readFile } = await import("node:fs/promises")
+    const content = await readFile(file, "utf8")
+    return { code: `export default ${JSON.stringify(content)}`, map: null }
+  },
+}
+
 const forceEsbuildTs: Plugin = {
   name: "force-esbuild-ts",
   enforce: "pre",
@@ -85,7 +100,7 @@ const EXCLUDE_GROUPS = [
 ]
 
 export default defineConfig({
-  plugins: [forceEsbuildTs, tsconfigPaths()],
+  plugins: [txtAsText, forceEsbuildTs, tsconfigPaths()],
   resolve: {
     alias: {
       // Vite doesn't apply the "node" import condition by default, so pin #db
