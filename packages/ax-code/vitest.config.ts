@@ -111,7 +111,7 @@ export default defineConfig({
   resolve: {
     alias: {
       // Vite doesn't apply the "node" import condition by default, so pin #db
-      // to the node-sqlite backend explicitly (otherwise it falls to db.bun.ts).
+      // to the node-sqlite backend explicitly.
       "#db": path.join(dir, "src/storage/db.node.ts"),
       bun: path.join(dir, "test/support/bun-shell.ts"),
     },

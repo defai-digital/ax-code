@@ -4,9 +4,8 @@
 // place before any src module evaluates.
 //
 // The resolve hook mirrors the alias set in vitest.config.ts and the esbuild
-// build overrides so the Bun-only module ids resolve to their Node equivalents
-// — otherwise importing src (e.g. config → #db → db.bun.ts) pulls in
-// `bun:sqlite` and crashes with ERR_UNSUPPORTED_ESM_URL_SCHEME.
+// build overrides so Node-only module ids resolve correctly — in particular #db
+// must resolve to db.node.ts (not the default export-conditions lookup).
 import * as nodeModule from "node:module"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -36,15 +35,11 @@ if (!process.versions.bun && typeof registerHooks === "function") {
   const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
   const exact = new Map<string, string>([["#db", pathToFileURL(path.join(pkgRoot, "src/storage/db.node.ts")).href]])
-  // Remap to another bare specifier (let the rest of the chain resolve it).
-  const rebind = new Map<string, string>([["drizzle-orm/bun-sqlite", "drizzle-orm/node-sqlite"]])
 
   registerHooks({
     resolve(specifier, context, nextResolve) {
       const aliased = exact.get(specifier)
       if (aliased) return { url: aliased, shortCircuit: true }
-      const rebound = rebind.get(specifier)
-      if (rebound) return nextResolve(rebound, context)
       return nextResolve(specifier, context)
     },
   })

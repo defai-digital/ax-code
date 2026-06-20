@@ -126,22 +126,6 @@ declare module "bun" {
   }
 }
 
-// Minimal `bun:sqlite` surface used by the Bun storage backend (db.bun.ts) and
-// the storage tests. Under Node these imports are aliased to a node:sqlite shim.
-declare module "bun:sqlite" {
-  export class Database {
-    constructor(filename?: string, options?: { create?: boolean; readonly?: boolean; readwrite?: boolean })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query(sql: string): any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    run(sql: string, ...params: any[]): any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    prepare(sql: string): any
-    exec(sql: string): void
-    close(): void
-  }
-}
-
 // Tools import their prompt/description text as `import D from "./x.txt"`. Bun
 // loads `.txt` as a string; the Node build and vitest both apply a text loader.
 declare module "*.txt" {
@@ -150,6 +134,7 @@ declare module "*.txt" {
 }
 
 // Windows console FFI; loaded via createRequire only when running under Bun.
+// Kept so win32.ts (which guards the require behind process.versions.bun) type-checks.
 declare module "bun:ffi" {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export function dlopen(path: string, symbols: any): any
