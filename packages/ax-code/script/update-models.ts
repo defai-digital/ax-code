@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 
 /**
  * Fetches the latest model data from models.dev and updates the local snapshot.

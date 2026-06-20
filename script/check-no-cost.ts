@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 /**
  * Repo guard: ax-code intentionally does NOT track or display monetary cost
  * for LLM calls. Any reintroduction of pricing schemas, cost computation, or

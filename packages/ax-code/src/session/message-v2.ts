@@ -16,7 +16,8 @@ import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
 import { isRecord } from "@/util/record"
 import { parseJsonStrict } from "@/util/json-value"
-import type { SystemError } from "bun"
+// Node's errno-bearing error type (code/syscall/errno), replacing Bun's SystemError.
+type SystemError = NodeJS.ErrnoException
 import type { Provider } from "@/provider/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { providerModelKey } from "@/provider/model-key"

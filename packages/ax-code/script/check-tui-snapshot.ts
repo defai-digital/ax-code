@@ -7,8 +7,8 @@
 // unintended visual drift without booting a terminal.
 //
 // Usage:
-//   bun run script/check-tui-snapshot.ts            # compare against snapshot
-//   bun run script/check-tui-snapshot.ts --update   # regenerate snapshot
+//   tsx script/check-tui-snapshot.ts            # compare against snapshot
+//   tsx script/check-tui-snapshot.ts --update   # regenerate snapshot
 
 import path from "node:path"
 import { exists, readText, writeText } from "./fs-compat"
@@ -106,5 +106,5 @@ await writeText(actualPath, actual)
 console.error("tui visual design-system snapshot mismatch")
 console.error(`expected: ${SNAPSHOT_PATH}`)
 console.error(`actual:   ${actualPath}`)
-console.error("if the change is intentional, run: bun run script/check-tui-snapshot.ts --update")
+console.error("if the change is intentional, run: tsx script/check-tui-snapshot.ts --update")
 process.exit(1)

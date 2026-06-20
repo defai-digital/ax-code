@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 /**
  * Build native Rust addons (napi-rs) and wire them into the workspace.
  *

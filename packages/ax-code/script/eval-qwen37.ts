@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 // Local evaluation harness for Qwen3.7-Max (and other premium cloud backends).
 //
 // Usage:

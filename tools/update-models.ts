@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 
 import { main } from "../packages/ax-code/script/update-models"
 
