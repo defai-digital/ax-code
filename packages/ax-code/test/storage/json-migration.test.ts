@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest"
-import { Database } from "bun:sqlite"
-import { drizzle } from "drizzle-orm/bun-sqlite"
+import { DatabaseSync as Database } from "node:sqlite"
+import { drizzle } from "drizzle-orm/node-sqlite"
 import { migrate } from "../../src/storage/migrate-journal"
 import path from "path"
 import fs from "fs/promises"
@@ -62,16 +62,16 @@ async function setupStorageDir() {
   await fs.mkdir(path.join(storageDir, "permission"), { recursive: true })
   await fs.mkdir(path.join(storageDir, "session_share"), { recursive: true })
   // Create legacy marker to indicate JSON storage exists
-  await Bun.write(path.join(storageDir, "migration"), "1")
+  await fs.writeFile(path.join(storageDir, "migration"), "1")
   return storageDir
 }
 
 async function writeProject(storageDir: string, project: Record<string, unknown>) {
-  await Bun.write(path.join(storageDir, "project", `${project.id}.json`), JSON.stringify(project))
+  await fs.writeFile(path.join(storageDir, "project", `${project.id}.json`), JSON.stringify(project))
 }
 
 async function writeSession(storageDir: string, projectID: string, session: Record<string, unknown>) {
-  await Bun.write(path.join(storageDir, "session", projectID, `${session.id}.json`), JSON.stringify(session))
+  await fs.writeFile(path.join(storageDir, "session", projectID, `${session.id}.json`), JSON.stringify(session))
 }
 
 // Helper to create in-memory test database with schema
@@ -133,7 +133,7 @@ describe("JSON to SQLite migration", () => {
   })
 
   test("uses filename for project id when JSON has different value", async () => {
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "project", "proj_filename.json"),
       JSON.stringify({
         id: "proj_different_in_json", // Stale! Should be ignored
@@ -239,11 +239,11 @@ describe("JSON to SQLite migration", () => {
       sandboxes: [],
     })
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "message", "ses_test456def", "msg_test789ghi.json"),
       JSON.stringify({ ...fixtures.message }),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "part", "msg_test789ghi", "prt_testabc123.json"),
       JSON.stringify({ ...fixtures.part }),
     )
@@ -271,7 +271,7 @@ describe("JSON to SQLite migration", () => {
       sandboxes: [],
     })
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "message", "ses_test456def", "msg_test789ghi.json"),
       JSON.stringify({
         role: "user",
@@ -280,7 +280,7 @@ describe("JSON to SQLite migration", () => {
         time: { created: 1700000000000 },
       }),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "part", "msg_test789ghi", "prt_testabc123.json"),
       JSON.stringify({
         type: "text",
@@ -319,7 +319,7 @@ describe("JSON to SQLite migration", () => {
       sandboxes: [],
     })
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "message", "ses_test456def", "msg_from_filename.json"),
       JSON.stringify({
         id: "msg_different_in_json", // Stale! Should be ignored
@@ -349,7 +349,7 @@ describe("JSON to SQLite migration", () => {
       sandboxes: [],
     })
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "message", "ses_test456def", "msg_realmsgid.json"),
       JSON.stringify({
         role: "user",
@@ -357,7 +357,7 @@ describe("JSON to SQLite migration", () => {
         time: { created: 1700000000000 },
       }),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "part", "msg_realmsgid", "prt_from_filename.json"),
       JSON.stringify({
         id: "prt_different_in_json", // Stale! Should be ignored
@@ -380,7 +380,7 @@ describe("JSON to SQLite migration", () => {
   })
 
   test("skips orphaned sessions (no parent project)", async () => {
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session", "proj_test123abc", "ses_orphan.json"),
       JSON.stringify({
         id: "ses_orphan",
@@ -441,7 +441,7 @@ describe("JSON to SQLite migration", () => {
       sandboxes: [],
     })
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session", "proj_test123abc", "ses_from_filename.json"),
       JSON.stringify({
         id: "ses_different_in_json", // Stale! Should be ignored
@@ -491,7 +491,7 @@ describe("JSON to SQLite migration", () => {
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
 
     // Create todo file (named by sessionID, contains array of todos)
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "todo", "ses_test456def.json"),
       JSON.stringify([
         {
@@ -533,7 +533,7 @@ describe("JSON to SQLite migration", () => {
     })
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "todo", "ses_test456def.json"),
       JSON.stringify([
         { content: "Third", status: "pending", priority: "low" },
@@ -570,7 +570,7 @@ describe("JSON to SQLite migration", () => {
       { permission: "file.write", pattern: "/test/file2.ts", action: "ask" as const },
       { permission: "command.run", pattern: "npm install", action: "deny" as const },
     ]
-    await Bun.write(path.join(storageDir, "permission", "proj_test123abc.json"), JSON.stringify(permissionData))
+    await fs.writeFile(path.join(storageDir, "permission", "proj_test123abc.json"), JSON.stringify(permissionData))
 
     const stats = await JsonMigration.run(sqlite)
 
@@ -593,7 +593,7 @@ describe("JSON to SQLite migration", () => {
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
 
     // Create session share file (named by sessionID)
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session_share", "ses_test456def.json"),
       JSON.stringify({
         id: "share_123",
@@ -645,7 +645,7 @@ describe("JSON to SQLite migration", () => {
       time: { created: Date.now(), updated: Date.now() },
       sandboxes: [],
     })
-    await Bun.write(path.join(storageDir, "project", "broken.json"), "{ invalid json")
+    await fs.writeFile(path.join(storageDir, "project", "broken.json"), "{ invalid json")
 
     const stats = await JsonMigration.run(sqlite)
 
@@ -665,7 +665,7 @@ describe("JSON to SQLite migration", () => {
       time: { created: Date.now(), updated: Date.now() },
       sandboxes: [],
     })
-    await Bun.write(path.join(storageDir, "project", "unprintable.json"), JSON.stringify({ worktree: "/" }))
+    await fs.writeFile(path.join(storageDir, "project", "unprintable.json"), JSON.stringify({ worktree: "/" }))
 
     const originalReadJson = Filesystem.readJson
     const readJsonSpy = vi.spyOn(Filesystem, "readJson").mockImplementation(async (file: string) => {
@@ -708,7 +708,7 @@ describe("JSON to SQLite migration", () => {
     })
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "todo", "ses_test456def.json"),
       JSON.stringify([
         { content: "keep-0", status: "pending", priority: "high" },
@@ -738,29 +738,29 @@ describe("JSON to SQLite migration", () => {
     })
     await writeSession(storageDir, "proj_test123abc", { ...fixtures.session })
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "todo", "ses_test456def.json"),
       JSON.stringify([{ content: "valid", status: "pending", priority: "high" }]),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "todo", "ses_missing.json"),
       JSON.stringify([{ content: "orphan", status: "pending", priority: "high" }]),
     )
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "permission", "proj_test123abc.json"),
       JSON.stringify([{ permission: "file.read" }]),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "permission", "proj_missing.json"),
       JSON.stringify([{ permission: "file.write" }]),
     )
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session_share", "ses_test456def.json"),
       JSON.stringify({ id: "share_ok", secret: "secret", url: "https://ok.example.com" }),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session_share", "ses_missing.json"),
       JSON.stringify({ id: "share_missing", secret: "secret", url: "https://missing.example.com" }),
     )
@@ -787,11 +787,11 @@ describe("JSON to SQLite migration", () => {
       time: { created: 1700000000000, updated: 1700000001000 },
       sandboxes: [],
     })
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "project", "proj_missing_id.json"),
       JSON.stringify({ worktree: "/bad", sandboxes: [] }),
     )
-    await Bun.write(path.join(storageDir, "project", "proj_broken.json"), "{ nope")
+    await fs.writeFile(path.join(storageDir, "project", "proj_broken.json"), "{ nope")
 
     await writeSession(storageDir, "proj_test123abc", {
       id: "ses_test456def",
@@ -802,7 +802,7 @@ describe("JSON to SQLite migration", () => {
       version: "1",
       time: { created: 1700000000000, updated: 1700000001000 },
     })
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session", "proj_test123abc", "ses_missing_project.json"),
       JSON.stringify({
         id: "ses_missing_project",
@@ -812,7 +812,7 @@ describe("JSON to SQLite migration", () => {
         version: "1",
       }),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session", "proj_test123abc", "ses_orphan.json"),
       JSON.stringify({
         id: "ses_orphan",
@@ -824,58 +824,58 @@ describe("JSON to SQLite migration", () => {
       }),
     )
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "message", "ses_test456def", "msg_ok.json"),
       JSON.stringify({ role: "user", time: { created: 1700000000000 } }),
     )
-    await Bun.write(path.join(storageDir, "message", "ses_test456def", "msg_broken.json"), "{ nope")
-    await Bun.write(
+    await fs.writeFile(path.join(storageDir, "message", "ses_test456def", "msg_broken.json"), "{ nope")
+    await fs.writeFile(
       path.join(storageDir, "message", "ses_missing", "msg_orphan.json"),
       JSON.stringify({ role: "user", time: { created: 1700000000000 } }),
     )
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "part", "msg_ok", "part_ok.json"),
       JSON.stringify({ type: "text", text: "ok" }),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "part", "msg_missing", "part_missing_message.json"),
       JSON.stringify({ type: "text", text: "bad" }),
     )
-    await Bun.write(path.join(storageDir, "part", "msg_ok", "part_broken.json"), "{ nope")
+    await fs.writeFile(path.join(storageDir, "part", "msg_ok", "part_broken.json"), "{ nope")
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "todo", "ses_test456def.json"),
       JSON.stringify([
         { content: "ok", status: "pending", priority: "high" },
         { content: "skip", status: "pending" },
       ]),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "todo", "ses_missing.json"),
       JSON.stringify([{ content: "orphan", status: "pending", priority: "high" }]),
     )
-    await Bun.write(path.join(storageDir, "todo", "ses_broken.json"), "{ nope")
+    await fs.writeFile(path.join(storageDir, "todo", "ses_broken.json"), "{ nope")
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "permission", "proj_test123abc.json"),
       JSON.stringify([{ permission: "file.read" }]),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "permission", "proj_missing.json"),
       JSON.stringify([{ permission: "file.write" }]),
     )
-    await Bun.write(path.join(storageDir, "permission", "proj_broken.json"), "{ nope")
+    await fs.writeFile(path.join(storageDir, "permission", "proj_broken.json"), "{ nope")
 
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session_share", "ses_test456def.json"),
       JSON.stringify({ id: "share_ok", secret: "secret", url: "https://ok.example.com" }),
     )
-    await Bun.write(
+    await fs.writeFile(
       path.join(storageDir, "session_share", "ses_missing.json"),
       JSON.stringify({ id: "share_orphan", secret: "secret", url: "https://missing.example.com" }),
     )
-    await Bun.write(path.join(storageDir, "session_share", "ses_broken.json"), "{ nope")
+    await fs.writeFile(path.join(storageDir, "session_share", "ses_broken.json"), "{ nope")
 
     const stats = await JsonMigration.run(sqlite)
 

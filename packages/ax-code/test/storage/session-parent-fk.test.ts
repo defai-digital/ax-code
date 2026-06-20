@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { Database } from "bun:sqlite"
-import { drizzle } from "drizzle-orm/bun-sqlite"
+import { DatabaseSync as Database } from "node:sqlite"
+import { drizzle } from "drizzle-orm/node-sqlite"
 import { readdirSync, readFileSync } from "fs"
 import path from "path"
 import { eq } from "drizzle-orm"

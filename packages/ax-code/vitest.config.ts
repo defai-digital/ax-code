@@ -113,13 +113,6 @@ export default defineConfig({
       // Vite doesn't apply the "node" import condition by default, so pin #db
       // to the node-sqlite backend explicitly (otherwise it falls to db.bun.ts).
       "#db": path.join(dir, "src/storage/db.node.ts"),
-      // json-migration.ts imports drizzle's bun-sqlite driver (→ bun:sqlite);
-      // use the node-sqlite driver, matching the Node build. (Tests apply
-      // migrations via src/storage/migrate-journal, the runtime-agnostic array
-      // migrator, not the dialect-specific bun-sqlite/migrator.)
-      "drizzle-orm/bun-sqlite": require.resolve("drizzle-orm/node-sqlite"),
-      // Tests that import bun:sqlite's Database directly → node:sqlite shim.
-      "bun:sqlite": path.join(dir, "test/support/bun-sqlite.ts"),
       bun: path.join(dir, "test/support/bun-shell.ts"),
     },
   },
