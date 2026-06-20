@@ -14,8 +14,8 @@ if git diff --cached --diff-filter=d -U0 |
   exit 1
 fi
 
-# Update models snapshot before each commit
-bun run packages/ax-code/script/update-models.ts
+# Update models snapshot before each commit (Node via tsx — no Bun)
+pnpm --dir packages/ax-code exec tsx script/update-models.ts
 
 # Stage the snapshot if it changed
 git diff --quiet packages/ax-code/src/provider/models-snapshot.json || git add packages/ax-code/src/provider/models-snapshot.json
