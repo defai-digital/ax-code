@@ -198,12 +198,23 @@ async function* parseSseStream(response: Response): AsyncGenerator<unknown> {
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
-      const frames = buffer.split("\n\n")
+      // SSE spec (RFC): events are separated by a blank line (\n\n or \r\n\r\n).
+      // Normalise CRLF to LF so a single split works for both wire formats.
+      const normalised = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+      const frames = normalised.split("\n\n")
       buffer = frames.pop() ?? ""
       for (const frame of frames) {
-        const dataLines = frame.split("\n").filter((line) => line.startsWith("data: "))
+        if (!frame.trim()) continue
+        // Collect data lines; skip comment (:) and field-only (retry:, id:, event:) lines.
+        const dataLines: string[] = []
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("data:")) {
+            // Value starts after "data:" with an optional single space.
+            dataLines.push(line.length > 5 && line[5] === " " ? line.slice(6) : line.slice(5))
+          }
+        }
         if (dataLines.length === 0) continue
-        const data = dataLines.map((line) => line.slice(6)).join("\n")
+        const data = dataLines.join("\n")
         try {
           yield JSON.parse(data)
         } catch {

@@ -177,14 +177,16 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
   }
 
   function failAllPending(error: Error) {
-    for (const pending of pendingRequests.values()) {
+    // Capture and clear before rejecting so re-entrant calls are safe.
+    const requests = [...pendingRequests.values()]
+    pendingRequests.clear()
+    const waiters = eventWaiters.splice(0)
+    for (const pending of requests) {
       pending.reject(error)
     }
-    pendingRequests.clear()
-    for (const waiter of eventWaiters) {
+    for (const waiter of waiters) {
       waiter.reject(error)
     }
-    eventWaiters = []
   }
 
   async function writeRequest(request: HeadlessTransportRequest): Promise<IpcTransportResponse> {
@@ -289,8 +291,10 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
     async close() {
       if (closed) return
       closed = true
-      connection?.socket.destroy()
+      // Fail all pending callers before destroying the socket so they receive
+      // a clean error rather than a raw socket destruction error from the reader.
       failAllPending(new Error("IPC transport closed"))
+      connection?.socket.destroy()
       if (readerPromise) {
         // Swallow reader termination errors; the socket is already destroyed.
         await readerPromise.catch(() => undefined)
