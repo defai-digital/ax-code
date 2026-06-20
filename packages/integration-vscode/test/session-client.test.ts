@@ -1,15 +1,15 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
+import { beforeEach, describe, expect, vi, test } from "vitest"
 
 const workspaceState = new Map<string, unknown>()
 let clientFactory: (config: any) => any
 
-mock.module("vscode", () => ({
+vi.doMock("vscode", () => ({
   workspace: {
     workspaceFolders: [{ uri: { fsPath: "/workspace/project" } }],
   },
 }))
 
-mock.module("@ax-code/sdk/v2/client", () => ({
+vi.doMock("@ax-code/sdk/v2/client", () => ({
   createAxCodeClient: (config: any) => clientFactory(config),
 }))
 

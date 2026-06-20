@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
+import { beforeEach, describe, expect, vi, test } from "vitest"
 
 const backendStarts: any[] = []
 let closeBackend: (() => void) | undefined
 
-mock.module("vscode", () => ({
+vi.doMock("vscode", () => ({
   workspace: {
     workspaceFolders: [{ uri: { fsPath: "/workspace/project" } }],
     getConfiguration: () => ({
@@ -16,7 +16,7 @@ mock.module("vscode", () => ({
   },
 }))
 
-mock.module("@ax-code/sdk/headless", () => ({
+vi.doMock("@ax-code/sdk/headless", () => ({
   startHeadlessBackend: async (options: any) => {
     backendStarts.push(options)
     const closed = new Promise<void>((resolve) => {

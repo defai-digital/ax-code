@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { buildChatHtml, generateNonce } from "../src/webview-html"
 
 const html = buildChatHtml(generateNonce(), "vscode-resource:")

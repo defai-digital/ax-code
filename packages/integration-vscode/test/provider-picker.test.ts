@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vitest"
 import { providerModelPickItems } from "../src/provider-picker"
 
 describe("providerModelPickItems", () => {

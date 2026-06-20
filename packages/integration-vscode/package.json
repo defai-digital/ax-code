@@ -7,14 +7,15 @@
   },
   "main": "./dist/extension.js",
   "devDependencies": {
-    "@types/vscode": "^1.94.0",
     "@types/node": "20.x",
+    "@types/vscode": "^1.94.0",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
-    "eslint": "^9.25.1",
+    "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.28.1",
+    "eslint": "^9.25.1",
     "typescript": "^5.8.3",
-    "@vscode/vsce": "^3.2.1"
+    "vitest": "4.1.9"
   },
   "activationEvents": [
     "onStartupFinished",
@@ -169,17 +170,17 @@
   "license": "MIT",
   "publisher": "defai-digital",
   "scripts": {
-    "vscode:prepublish": "bun run package",
-    "compile": "bun run check-types && bun run lint && node esbuild.js",
+    "vscode:prepublish": "pnpm run package",
+    "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "bun run check-types && bun run lint && node esbuild.js --production",
-    "package:vsix": "bun run package && vsce package --no-git-tag-version --no-update-package-json --no-dependencies --skip-license -o dist/ax-code-$npm_package_version.vsix",
+    "package": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
+    "package:vsix": "pnpm run package && vsce package --no-git-tag-version --no-update-package-json --no-dependencies --skip-license -o dist/ax-code-$npm_package_version.vsix",
     "check-types": "tsc --noEmit",
-    "typecheck": "bun run check-types",
+    "typecheck": "pnpm run check-types",
     "lint": "eslint src",
-    "test:unit": "bun test test/",
-    "test": "bun run check-types && bun run lint && bun run test:unit"
+    "test:unit": "vitest run",
+    "test": "pnpm run check-types && pnpm run lint && pnpm run test:unit"
   },
   "dependencies": {
     "@ax-code/sdk": "workspace:*",
