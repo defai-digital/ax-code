@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll, vi } from "vitest"
 import { Discovery } from "../../src/skill/discovery"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
-import { rm } from "fs/promises"
+import { rm, readFile } from "fs/promises"
 import path from "path"
 import dns from "dns/promises"
 import { createHash } from "crypto"
@@ -97,7 +97,7 @@ beforeAll(async () => {
           if (!fullPath.endsWith("index.json")) {
             downloadCount++
           }
-          return new Response(Bun.file(fullPath))
+          return new Response(await readFile(fullPath))
         }
       }
 
