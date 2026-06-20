@@ -50,7 +50,7 @@ export const DEFAULT_TUI_UPGRADE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1_000
 export const DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS = 5_000
 export const DEFAULT_TUI_BACKEND_TERMINATE_GRACE_MS = 1_000
 
-type BackendTransport = "worker" | "process"
+export type BackendTransport = "worker" | "process"
 type RpcWireTarget = {
   postMessage: (data: string) => void | null
   onmessage: ((ev: MessageEvent<any>) => any) | null
@@ -78,13 +78,22 @@ export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> 
   })
 }
 
-function tuiBackendTransport(env: Record<string, string | undefined> = process.env): BackendTransport {
+export function tuiBackendTransport(
+  env: Record<string, string | undefined> = process.env,
+  runtime: { hasBun?: boolean; mode?: string } = {
+    hasBun: Boolean(process.versions.bun),
+    mode: process.versions.bun ? runtimeMode() : "node-source",
+  },
+): BackendTransport {
   const requested = env.AX_CODE_TUI_BACKEND_TRANSPORT
-  if (requested === "worker" || requested === "process") return requested
-  // Worker mode needs Bun's global `Worker` and a loadable worker entry, neither
-  // of which exists under Node (the node-bundled dist ships no worker bundle).
-  // Use the process backend everywhere except the Bun source/dev runtime.
-  return process.versions.bun && runtimeMode() !== "compiled" ? "worker" : "process"
+  // The process backend works on every runtime, so an explicit request is always
+  // honored. Worker mode needs Bun's global `Worker` and a loadable worker entry,
+  // neither of which exists under Node (the node-bundled dist ships no worker
+  // bundle), so a requested (or default) "worker" transport is only honored on
+  // the Bun source/dev runtime; everything else (Node, Bun-compiled) falls back
+  // to the process backend rather than ReferenceError on `new Worker`.
+  if (requested === "process") return "process"
+  return runtime.hasBun && runtime.mode !== "compiled" ? "worker" : "process"
 }
 
 export function tuiUpgradeCheckDelayMs(env: Record<string, string | undefined> = process.env) {

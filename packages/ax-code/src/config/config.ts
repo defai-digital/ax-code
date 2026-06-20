@@ -872,15 +872,16 @@ export namespace Config {
   }
 
   function resolvePluginSpecifier(plugin: string, configPath: string) {
+    // Resolve relative to the config file's directory. Node's `import.meta.resolve`
+    // ignores its second (parent) argument and returns a wrong path without
+    // throwing; it would resolve against this module instead of the user's
+    // config. `createRequire(configPath)` honors the config directory for both
+    // relative paths and package names on Node and Bun.
     try {
-      return { value: import.meta.resolve!(plugin, configPath) }
-    } catch {
-      try {
-        const require = createRequire(configPath)
-        return { value: pathToFileURL(require.resolve(plugin)).href }
-      } catch (err) {
-        return { value: plugin, err }
-      }
+      const require = createRequire(configPath)
+      return { value: pathToFileURL(require.resolve(plugin)).href }
+    } catch (err) {
+      return { value: plugin, err }
     }
   }
 

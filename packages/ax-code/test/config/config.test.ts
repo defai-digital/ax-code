@@ -1125,6 +1125,36 @@ test("resolves scoped npm plugins in config", async () => {
   })
 })
 
+test("resolves relative plugin specifiers from config file directory", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const pluginDir = path.join(dir, "plugins")
+      await fs.mkdir(pluginDir, { recursive: true })
+      await Filesystem.write(path.join(pluginDir, "local.js"), "export default {}\n")
+
+      await Filesystem.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify(
+          {
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            plugin: ["./plugins/local.js"],
+          },
+          null,
+          2,
+        ),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.plugin ?? []).toContain(pathToFileURL(path.join(tmp.path, "plugins", "local.js")).href)
+    },
+  })
+})
+
 test("drops unresolved package plugins from untrusted project config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

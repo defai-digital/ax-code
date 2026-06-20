@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { tuiBackendTransport } from "../../../src/cli/cmd/tui/thread"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
 const WORKER_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/worker.ts"), "utf8")
@@ -10,5 +11,19 @@ describe("tui backend entrypoint guardrails", () => {
     expect(WORKER_SRC).toContain('await startTuiBackend("worker")')
     expect(WORKER_SRC).toContain("if (isWorkerEntrypoint())")
     expect(WORKER_SRC).not.toContain("import.meta.main || isWorkerEntrypoint()")
+  })
+
+  test("uses worker transport only on Bun source runtime", () => {
+    expect(tuiBackendTransport({}, { hasBun: false, mode: "node-bundled" })).toBe("process")
+    expect(
+      tuiBackendTransport({ AX_CODE_TUI_BACKEND_TRANSPORT: "worker" }, { hasBun: false, mode: "node-bundled" }),
+    ).toBe("process")
+    expect(tuiBackendTransport({ AX_CODE_TUI_BACKEND_TRANSPORT: "worker" }, { hasBun: true, mode: "compiled" })).toBe(
+      "process",
+    )
+    expect(tuiBackendTransport({}, { hasBun: true, mode: "source" })).toBe("worker")
+    expect(tuiBackendTransport({ AX_CODE_TUI_BACKEND_TRANSPORT: "process" }, { hasBun: true, mode: "source" })).toBe(
+      "process",
+    )
   })
 })

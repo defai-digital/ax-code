@@ -93,7 +93,9 @@ describe("tui OpenTUI stability guardrails", () => {
       expect(text).toContain("solid-js/store/dist/store.js")
       expect(text).toContain("solid-js/web/dist/web.js")
     }
-    expect(build).toContain('build.onResolve({ filter: /^solid-js$/ }, () => ({ path: "solid-js/dist/solid.js", external: true }))')
+    expect(build).toContain(
+      'build.onResolve({ filter: /^solid-js$/ }, () => ({ path: "solid-js/dist/solid.js", external: true }))',
+    )
     expect(build).toContain("build.onResolve({ filter: /^solid-js\\/store$/ }")
     expect(build).toContain("build.onResolve({ filter: /^solid-js\\/web$/ }")
     expect(loader).toContain('["solid-js",')
@@ -1114,7 +1116,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain("readOptionalJsonState<TuiStartupUpgradeCheckState>(statePath)")
     expect(thread).toContain('persisted.status === "invalid"')
     expect(thread).toContain("skipping startup upgrade check because state failed to load")
-    expect(thread).toContain('process.versions.bun && runtimeMode() !== "compiled" ? "worker" : "process"')
+    expect(thread).toContain('runtime.hasBun && runtime.mode !== "compiled" ? "worker" : "process"')
     expect(thread).toContain('args: ["tui-backend", "--stdio"]')
     expect(thread).toContain("spawn(command.command, command.args")
     expect(thread).toContain('client.call("health", undefined)')
