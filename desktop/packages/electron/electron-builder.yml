@@ -1,0 +1,100 @@
+appId: ai.defai.ax-code-app
+productName: AX Code
+copyright: Copyright © 2025-2026 DEFAI Private Limited
+
+# We rebuild native modules manually via rebuild:native before packaging.
+npmRebuild: false
+
+directories:
+  buildResources: build
+  output: dist
+
+# Include ${os} so mac arm64 zip and win arm64 zip don't collide on the same
+# release (both would be AX-Code-1.3.0-arm64.zip without the os token).
+artifactName: AX-Code-${version}-${os}-${arch}.${ext}
+
+# Files packaged into app.asar
+files:
+  - package.json
+  - dist/main.js
+  - dist/preload.js
+  # Forked by main.js via utilityProcess; must be packaged or the server cannot
+  # start in a production build.
+  - dist/server-process.js
+  - dist/server.js
+
+# Web assets sit outside the asar so the Express server can serve them as
+# plain files at runtime (asar cannot exec native code and express.static
+# does not support asar paths).
+extraResources:
+  - from: resources/web-dist
+    to: web-dist
+
+# Unpack native .node files — they cannot be required() from inside an asar.
+asarUnpack:
+  - "node_modules/better-sqlite3/**"
+  - "node_modules/node-pty/**"
+
+# ── macOS ──────────────────────────────────────────────────────────────────
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  icon: build/icon.icns
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  extendInfo:
+    CFBundleDocumentTypes:
+      - CFBundleTypeName: Folder
+        CFBundleTypeRole: Viewer
+        LSHandlerRank: Alternate
+        LSItemContentTypes:
+          - public.folder
+  notarize:
+    teamId: ${APPLE_TEAM_ID}
+
+dmg:
+  sign: false
+
+# ── Windows ────────────────────────────────────────────────────────────────
+win:
+  target:
+    - target: nsis
+    # Portable exe-in-zip alongside the installer. The zip holds the runnable
+    # AX Code.exe + resources (extract and run, no install). The NSIS
+    # installer above remains the auto-update channel (latest.yml).
+    - target: zip
+  # IMPORTANT: do NOT list `arch:` here. x64 and arm64 build in SEPARATE CI jobs
+  # on separate runners (native modules must compile for the target arch), and
+  # the arch is selected per job by the electron-builder CLI flag (--x64 /
+  # --arm64) passed through package.mjs. Listing both arches here makes every job
+  # build BOTH — producing an arm64 installer with x64-compiled native modules
+  # (and vice versa) plus a combined non-arch installer that collides between
+  # jobs. With no arch here, the CLI flag is the sole source and each job emits
+  # exactly its own arch. The ${arch} token keeps the per-arch installer/zip/
+  # blockmap names distinct on the shared release.
+  icon: build/icon.ico
+  # No certificateFile here: with no cert this would force signing against a
+  # missing file and fail the build. Windows signing, when desired, is picked
+  # up natively by electron-builder from WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD
+  # (set by CI only when a certificate secret is present). Otherwise the
+  # installer and portable zip are produced unsigned.
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  menuCategory: DeFAI Digital
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+
+# ── Auto-update ────────────────────────────────────────────────────────────
+publish:
+  provider: github
+  owner: defai-digital
+  repo: ax-code

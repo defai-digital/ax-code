@@ -1,0 +1,228 @@
+import React from 'react';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
+import { AxCodeIcon } from '@/components/ui/AxCodeIcon';
+import { debugUtils } from '@/lib/debug';
+import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui';
+import { Icon } from "@/components/icon/Icon";
+import { API_ENDPOINTS } from '@/lib/http';
+import { useI18n } from '@/lib/i18n';
+import { getDesktopAppVersion } from '@/lib/desktopNative';
+
+interface AboutDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export const OPENCHAMBER_UPSTREAM_URL = 'https://github.com/btriapitsyn/openchamber';
+
+export const AboutDialog: React.FC<AboutDialogProps> = ({
+  open,
+  onOpenChange,
+}) => {
+  const { t } = useI18n();
+  const showDiagnostics = import.meta.env.DEV;
+  const [version, setVersion] = React.useState<string | null>(null);
+  const [axCodeVersion, setAxCodeVersion] = React.useState<string | null>(null);
+  const [isCopyingDiagnostics, setIsCopyingDiagnostics] = React.useState(false);
+  const [copiedDiagnostics, setCopiedDiagnostics] = React.useState(false);
+  const [diagnosticsReport, setDiagnosticsReport] = React.useState<string | null>(null);
+  const [isPreparingDiagnostics, setIsPreparingDiagnostics] = React.useState(false);
+
+  const handleCopyDiagnostics = React.useCallback(async () => {
+    if (!showDiagnostics) return;
+    if (isCopyingDiagnostics) return;
+    setIsCopyingDiagnostics(true);
+    setCopiedDiagnostics(false);
+    try {
+      if (!diagnosticsReport) {
+        toast.error(t('aboutDialog.toast.copyFailed'), {
+          description: t('aboutDialog.toast.diagnosticsNotReady'),
+        });
+        return;
+      }
+
+      const result = await debugUtils.copyTextToClipboard(diagnosticsReport);
+      if (result.ok) {
+        setCopiedDiagnostics(true);
+        toast.success(t('aboutDialog.toast.diagnosticsCopied'));
+      } else {
+        toast.error(t('aboutDialog.toast.copyFailed'), {
+          description: result.error,
+        });
+      }
+    } catch (error) {
+      toast.error(t('aboutDialog.toast.copyFailed'));
+      console.error('Failed to copy diagnostics:', error);
+    } finally {
+      setIsCopyingDiagnostics(false);
+    }
+  }, [diagnosticsReport, isCopyingDiagnostics, showDiagnostics, t]);
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    const fetchVersion = async () => {
+      try {
+        const response = await fetch(API_ENDPOINTS.system.info);
+        if (response.ok) {
+          const data = await response.json();
+          const reported = typeof data.openchamberVersion === 'string' ? data.openchamberVersion.trim() : '';
+          // Ignore the server's 'unknown' sentinel so we fall through to the
+          // native shell version instead of rendering "unknown".
+          if (reported && reported !== 'unknown') {
+            setVersion(reported);
+            return;
+          }
+        }
+      } catch {
+        // Fall back to the native shell version when the web server is unavailable.
+      }
+
+      setVersion(await getDesktopAppVersion());
+    };
+
+    void fetchVersion();
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    const fetchAxCodeVersion = async () => {
+      try {
+        const response = await fetch(API_ENDPOINTS.axCode.upgradeStatus, {
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) return;
+        const data = await response.json().catch(() => null) as null | { currentVersion?: unknown };
+        const currentVersion = typeof data?.currentVersion === 'string' ? data.currentVersion.trim() : '';
+        if (!cancelled && currentVersion) {
+          setAxCodeVersion(currentVersion);
+        }
+      } catch {
+        // ax-code version is best-effort in About.
+      }
+    };
+
+    void fetchAxCodeVersion();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open || !showDiagnostics) {
+      setDiagnosticsReport(null);
+      setIsPreparingDiagnostics(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsPreparingDiagnostics(true);
+    void debugUtils.buildDiagnosticsReport()
+      .then((report) => {
+        if (cancelled) return;
+        setDiagnosticsReport(report);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Failed to prepare diagnostics:', error);
+        setDiagnosticsReport(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsPreparingDiagnostics(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, showDiagnostics]);
+
+  const displayVersion = version;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xs p-6">
+        <div className="flex flex-col items-center text-center space-y-4">
+          <AxCodeIcon width={64} height={64} />
+
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold">AX Code Desktop</h2>
+            <div className="space-y-0.5 typography-meta text-muted-foreground">
+              {displayVersion && (
+                <p>{t('aboutDialog.openChamberVersionLabel', { version: displayVersion })}</p>
+              )}
+              {axCodeVersion && (
+                <p>{t('aboutDialog.axCodeVersionLabel', { version: axCodeVersion })}</p>
+              )}
+            </div>
+            <p className="typography-meta text-muted-foreground/70">
+              Forked from{' '}
+              <a
+                href={OPENCHAMBER_UPSTREAM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-foreground transition-colors"
+              >
+                OpenChamber
+              </a>{' '}
+              by AX Engine.
+            </p>
+          </div>
+
+          {showDiagnostics && (
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <button
+                onClick={handleCopyDiagnostics}
+                disabled={isCopyingDiagnostics || isPreparingDiagnostics || !diagnosticsReport}
+                className={cn(
+                  'typography-meta text-muted-foreground hover:text-foreground',
+                  'underline-offset-2 hover:underline',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+              >
+                {copiedDiagnostics
+                  ? t('aboutDialog.actions.diagnosticsCopied')
+                  : isPreparingDiagnostics
+                    ? t('aboutDialog.actions.preparingDiagnostics')
+                    : t('aboutDialog.actions.copyDiagnostics')}
+              </button>
+              <p className="typography-micro text-muted-foreground">
+                {t('aboutDialog.diagnosticsDescription')}
+              </p>
+            </div>
+          )}
+
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <div className="flex items-center justify-center gap-4">
+              <a
+                href="https://github.com/defai-digital/ax-code"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Icon name="github-fill" className="h-4 w-4" />
+                <span>ax-code</span>
+              </a>
+              <a
+                href="https://discord.com/invite/cTavsMgu"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 typography-meta text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Icon name="discord-fill" className="h-4 w-4" />
+                <span>Discord</span>
+              </a>
+            </div>
+          </div>
+
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};

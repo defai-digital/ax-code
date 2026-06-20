@@ -1,0 +1,179 @@
+{
+  "sections": [
+    {
+      "label": "Start here",
+      "items": [
+        {
+          "label": "Overview",
+          "link": "/"
+        },
+        {
+          "label": "Install",
+          "link": "/install/"
+        },
+        {
+          "label": "Quickstart",
+          "link": "/quickstart/"
+        },
+        {
+          "label": "AX Code Server",
+          "link": "/ax-code-server/"
+        },
+        {
+          "label": "Environment Variables",
+          "link": "/environment/"
+        }
+      ]
+    },
+    {
+      "label": "Workflows",
+      "items": [
+        {
+          "label": "Projects",
+          "link": "/projects/"
+        },
+        {
+          "label": "Context",
+          "link": "/context/"
+        },
+        {
+          "label": "Notes, Todos & Plans",
+          "link": "/notes-todos-plans/"
+        },
+        {
+          "label": "Scheduled Tasks",
+          "link": "/scheduled-tasks/"
+        },
+        {
+          "label": "Project Actions",
+          "link": "/project-actions/"
+        },
+        {
+          "label": "Preview & Dev Servers",
+          "link": "/preview/"
+        },
+        {
+          "label": "Worktree Sessions",
+          "link": "/worktrees/"
+        },
+        {
+          "label": "Multi-run",
+          "link": "/multi-run/"
+        },
+        {
+          "label": "Git & GitHub",
+          "link": "/git/"
+        },
+        {
+          "label": "GitHub Issues & PRs",
+          "link": "/github/"
+        },
+        {
+          "label": "Magic Prompts",
+          "link": "/magic-prompts/"
+        },
+        {
+          "label": "Git Identities",
+          "link": "/git-identities/"
+        }
+      ]
+    },
+    {
+      "label": "AX Code setup",
+      "items": [
+        {
+          "label": "Providers, Models & Agents",
+          "link": "/providers/"
+        },
+        {
+          "label": "MCP Servers",
+          "link": "/mcp/"
+        },
+        {
+          "label": "Skills",
+          "link": "/skills/"
+        },
+        {
+          "label": "Skills Catalog",
+          "link": "/skills-catalog/"
+        },
+        {
+          "label": "Commands & Snippets",
+          "link": "/commands-snippets/"
+        },
+        {
+          "label": "Usage & Quotas",
+          "link": "/usage/"
+        }
+      ]
+    },
+    {
+      "label": "Remote access",
+      "items": [
+        {
+          "label": "Reverse Proxy",
+          "link": "/reverse-proxy/"
+        },
+        {
+          "label": "Security",
+          "link": "/security/"
+        }
+      ]
+    },
+    {
+      "label": "Customize",
+      "items": [
+        {
+          "label": "Themes",
+          "link": "/themes/"
+        },
+        {
+          "label": "Notifications",
+          "link": "/notifications/"
+        },
+        {
+          "label": "Project Icons",
+          "link": "/project-icons/"
+        }
+      ]
+    },
+    {
+      "label": "Desktop",
+      "items": [
+        {
+          "label": "Remote Instances",
+          "link": "/remote-instances/"
+        },
+        {
+          "label": "Desktop Browser",
+          "link": "/desktop-browser/"
+        },
+        {
+          "label": "Updates",
+          "link": "/updates/"
+        }
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {
+          "label": "Troubleshooting",
+          "link": "/troubleshooting/"
+        },
+        {
+          "label": "AX Code Connection",
+          "link": "/troubleshooting/ax-code-connection/"
+        },
+        {
+          "label": "Worktrees & Git",
+          "link": "/troubleshooting/worktrees-git/"
+        },
+        {
+          "label": "Remote Access",
+          "link": "/troubleshooting/remote-access/"
+        }
+      ]
+    }
+  ]
+}

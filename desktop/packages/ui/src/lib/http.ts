@@ -1,0 +1,235 @@
+export const API_PATHS = {
+  base: '/api',
+  auth: '/api/auth',
+  config: '/api/config',
+  fs: '/api/fs',
+  git: '/api/git',
+  openchamber: '/api/openchamber',
+  passkeys: '/api/passkeys',
+  preview: '/api/preview',
+  projects: '/api/projects',
+  terminal: '/api/terminal',
+} as const;
+
+export const API_ENDPOINTS = {
+  config: {
+    settings: `${API_PATHS.config}/settings`,
+    reload: `${API_PATHS.config}/reload`,
+    themes: `${API_PATHS.config}/themes`,
+    axCodeResolution: `${API_PATHS.config}/ax-code-resolution`,
+    agents: `${API_PATHS.config}/agents`,
+    agent: `${API_PATHS.config}/agents/:name`,
+    commands: `${API_PATHS.config}/commands`,
+    command: `${API_PATHS.config}/commands/:name`,
+    mcp: `${API_PATHS.config}/mcp`,
+    mcpItem: `${API_PATHS.config}/mcp/:name`,
+    skills: `${API_PATHS.config}/skills`,
+    skill: `${API_PATHS.config}/skills/:name`,
+    skillsCatalog: `${API_PATHS.config}/skills/catalog`,
+    skillsCatalogSource: `${API_PATHS.config}/skills/catalog/source`,
+    skillsCatalogScan: `${API_PATHS.config}/skills/scan`,
+    skillsCatalogInstall: `${API_PATHS.config}/skills/install`,
+    plugin: `${API_PATHS.config}/plugins`,
+    pluginEntry: `${API_PATHS.config}/plugins/entry`,
+    pluginEntryById: `${API_PATHS.config}/plugins/entry/:id`,
+    pluginFile: `${API_PATHS.config}/plugins/file`,
+    pluginFileById: `${API_PATHS.config}/plugins/file/:id`,
+    pluginRegistry: `${API_PATHS.config}/plugins/registry`,
+    snippets: `${API_PATHS.config}/snippets`,
+    snippet: `${API_PATHS.config}/snippets/:name`,
+    snippetExpand: `${API_PATHS.config}/snippets/expand`,
+    sessions: `${API_PATHS.base}/sessions`,
+    sessionsMessageSent: `${API_PATHS.base}/sessions/:sessionId/message-sent`,
+    base: API_PATHS.config,
+  },
+  debug: {
+    globalHealth: '/global/health',
+    health: `${API_PATHS.base}/health`,
+    rootHealth: '/health',
+    path: `${API_PATHS.base}/path`,
+    projectCurrent: `${API_PATHS.base}/project/current`,
+    config: `${API_PATHS.base}/config`,
+    configProviders: `${API_PATHS.base}/config/providers`,
+    agent: `${API_PATHS.base}/agent`,
+    command: `${API_PATHS.base}/command`,
+    session: `${API_PATHS.base}/session`,
+    sessionStatus: `${API_PATHS.base}/session/status`,
+    project: `${API_PATHS.base}/project/current`,
+  },
+  find: {
+    file: `${API_PATHS.base}/find/file`,
+  },
+  fs: {
+    base: `${API_PATHS.base}/fs`,
+    read: `${API_PATHS.fs}/read`,
+    list: `${API_PATHS.fs}/list`,
+    mkdir: `${API_PATHS.fs}/mkdir`,
+    clone: `${API_PATHS.fs}/clone`,
+    write: `${API_PATHS.fs}/write`,
+    raw: `${API_PATHS.fs}/raw`,
+    home: `${API_PATHS.fs}/home`,
+    exec: `${API_PATHS.fs}/exec`,
+    delete: `${API_PATHS.fs}/delete`,
+    rename: `${API_PATHS.fs}/rename`,
+    reveal: `${API_PATHS.fs}/reveal`,
+    stat: `${API_PATHS.fs}/stat`,
+  },
+  git: {
+    base: API_PATHS.git,
+  },
+  magicPrompts: `${API_PATHS.base}/magic-prompts`,
+  openchamber: {
+    events: `${API_PATHS.openchamber}/events`,
+    updateInstall: `${API_PATHS.openchamber}/update-install`,
+    updateCheck: `${API_PATHS.openchamber}/update-check`,
+    modelsMetadata: `${API_PATHS.openchamber}/models-metadata`,
+  },
+  passkeys: `${API_PATHS.passkeys}`,
+  provider: {
+    base: `${API_PATHS.base}/provider`,
+    auth: `${API_PATHS.base}/provider/auth`,
+    source: `${API_PATHS.base}/provider/:providerId/source`,
+    authByProvider: `${API_PATHS.base}/auth/:providerId`,
+    oauthAuthorize: `${API_PATHS.base}/provider/:providerId/oauth/authorize`,
+    oauthCallback: `${API_PATHS.base}/provider/:providerId/oauth/callback`,
+    authAll: `${API_PATHS.base}/provider/:providerId/auth`,
+  },
+  behavior: {
+    agentsMd: `${API_PATHS.base}/behavior/agents-md`,
+  },
+  mcp: {
+    authPending: `${API_PATHS.base}/mcp/auth/pending`,
+  },
+  auth: {
+    reset: `${API_PATHS.auth}/reset`,
+    session: `${API_PATHS.auth}/session`,
+    passkeys: {
+      authenticate: {
+        options: `${API_PATHS.auth}/passkey/authenticate/options`,
+        verify: `${API_PATHS.auth}/passkey/authenticate/verify`,
+      },
+      register: {
+        options: `${API_PATHS.auth}/passkey/register/options`,
+        verify: `${API_PATHS.auth}/passkey/register/verify`,
+      },
+      status: `${API_PATHS.auth}/passkey/status`,
+    },
+  },
+  github: {
+    authStatus: `${API_PATHS.base}/github/auth/status`,
+    authStart: `${API_PATHS.base}/github/auth/start`,
+    authComplete: `${API_PATHS.base}/github/auth/complete`,
+    auth: `${API_PATHS.base}/github/auth`,
+    authActivate: `${API_PATHS.base}/github/auth/activate`,
+    me: `${API_PATHS.base}/github/me`,
+    prStatus: `${API_PATHS.base}/github/pr/status`,
+    prCreate: `${API_PATHS.base}/github/pr/create`,
+    prUpdate: `${API_PATHS.base}/github/pr/update`,
+    prMerge: `${API_PATHS.base}/github/pr/merge`,
+    prReady: `${API_PATHS.base}/github/pr/ready`,
+    repoUpstream: `${API_PATHS.base}/github/repo/upstream`,
+    repoBranches: `${API_PATHS.base}/github/repo/branches`,
+    pullsList: `${API_PATHS.base}/github/pulls/list`,
+    pullsContext: `${API_PATHS.base}/github/pulls/context`,
+    issuesList: `${API_PATHS.base}/github/issues/list`,
+    issuesGet: `${API_PATHS.base}/github/issues/get`,
+    issuesComments: `${API_PATHS.base}/github/issues/comments`,
+  },
+  notifications: {
+    autoAccept: `${API_PATHS.base}/notifications/auto-accept`,
+    stream: `${API_PATHS.base}/notifications/stream`,
+  },
+  quota: {
+    byProvider: `${API_PATHS.base}/quota/:providerId`,
+  },
+  preview: {
+    targets: `${API_PATHS.preview}/targets`,
+  },
+  projects: {
+    scheduledTasksBase: `${API_PATHS.projects}/:projectId/scheduled-tasks`,
+    scheduledTaskById: `${API_PATHS.projects}/:projectId/scheduled-tasks/:taskId`,
+    scheduledTaskRun: `${API_PATHS.projects}/:projectId/scheduled-tasks/:taskId/run`,
+    icon: `${API_PATHS.projects}/:projectId/icon`,
+    iconDiscover: `${API_PATHS.projects}/:projectId/icon/discover`,
+    base: API_PATHS.projects,
+  },
+  session: {
+    todo: `${API_PATHS.base}/session/:sessionId/todo`,
+    status: `${API_PATHS.base}/session/status`,
+    activity: `${API_PATHS.base}/session-activity`,
+    promptForSession: `${API_PATHS.base}/session/:sessionId/prompt`,
+    promptAsyncForSession: `${API_PATHS.base}/session/:sessionId/prompt_async`,
+    commandForSession: `${API_PATHS.base}/session/:sessionId/command`,
+    directory: `${API_PATHS.base}/ax-code/directory`,
+  },
+  terminal: {
+    base: API_PATHS.terminal,
+    list: `${API_PATHS.terminal}/list`,
+    preview: `${API_PATHS.terminal}/preview`,
+  },
+  tools: {
+    ids: `${API_PATHS.base}/experimental/tool/ids`,
+  },
+  system: {
+    probeUrl: `${API_PATHS.base}/system/probe-url`,
+    freePort: `${API_PATHS.base}/system/free-port`,
+    info: `${API_PATHS.base}/system/info`,
+    shutdown: `${API_PATHS.base}/system/shutdown`,
+    devShutdown: `${API_PATHS.base}/system/dev-shutdown`,
+  },
+  sessionFolders: `${API_PATHS.base}/session-folders`,
+  axCode: {
+    upgrade: `${API_PATHS.base}/ax-code/upgrade`,
+    upgradeStatus: `${API_PATHS.base}/ax-code/upgrade-status`,
+  },
+} as const;
+
+export const replacePathParams = (template: string, params: Record<string, string>): string => {
+  return Object.entries(params).reduce((next, [key, value]) => {
+    return next.replace(`:${key}`, encodeURIComponent(value));
+  }, template);
+};
+
+export const HTTP_DEFAULTS = {
+  method: {
+    get: 'GET',
+    post: 'POST',
+    put: 'PUT',
+    delete: 'DELETE',
+    patch: 'PATCH',
+  },
+  headers: {
+    acceptJson: {
+      Accept: 'application/json',
+    },
+    contentTypeJson: {
+      'Content-Type': 'application/json',
+    },
+    acceptAndContentTypeJson: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    textPlain: {
+      'Content-Type': 'text/plain',
+    },
+    cacheControlNoCache: {
+      'Cache-Control': 'no-cache',
+    },
+  },
+  cache: {
+    noStore: 'no-store',
+    noCache: 'no-cache',
+    default: 'default',
+  },
+  query: {
+    true: 'true',
+    false: 'false',
+    one: '1',
+  },
+  apiPath: {
+    base: API_PATHS.base,
+    fs: API_PATHS.fs,
+    terminal: API_PATHS.terminal,
+    git: API_PATHS.git,
+  },
+} as const;

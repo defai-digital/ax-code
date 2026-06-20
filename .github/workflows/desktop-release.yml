@@ -1,0 +1,433 @@
+name: desktop-release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Desktop version to release, for example 1.3.0"
+        required: true
+        type: string
+      dry_run:
+        description: "Run release build without publishing assets"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  AX_CODE_DISABLE_SHARE: "true"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Desktop boundaries
+        run: pnpm run check:desktop-boundaries
+
+      - name: Validate Desktop docs
+        run: node desktop/scripts/docs/validate-docs.mjs
+
+      - name: Typecheck Desktop
+        run: pnpm run desktop:typecheck
+
+      - name: Lint Desktop
+        run: pnpm run desktop:lint
+
+      - name: Test Desktop
+        run: pnpm run desktop:test
+
+      - name: Build Desktop
+        run: pnpm run desktop:build
+
+  create-release:
+    needs: preflight
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_VERSION:-}" ]; then
+            version="$INPUT_VERSION"
+          elif [[ "$GITHUB_REF" == refs/tags/desktop-v* ]]; then
+            version="${GITHUB_REF#refs/tags/desktop-v}"
+          else
+            echo "::error::Desktop release version is required"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=desktop-v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Extract changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          const changelog = fs.readFileSync('desktop/CHANGELOG.md', 'utf8');
+          const section = changelog.split(/^## /m).find((part) => part.startsWith(`[${version}]`));
+          if (!section) throw new Error(`desktop/CHANGELOG.md is missing [${version}]`);
+          fs.mkdirSync('artifacts', { recursive: true });
+          fs.writeFileSync('artifacts/desktop-release-notes.md', `## ${section}`.trim() + '\n');
+          NODE
+
+      - name: Create draft GitHub release
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          draft: true
+          generate_release_notes: false
+          body_path: artifacts/desktop-release-notes.md
+          name: AX Code Desktop ${{ steps.version.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  package-web:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web package
+        run: pnpm run desktop:build
+
+      - name: Pack web runtime
+        working-directory: desktop/packages/web
+        run: |
+          set -euo pipefail
+          npm pack
+          tarball="$(find . -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          test -n "$tarball"
+          mv "$tarball" "ax-code-web-${{ needs.create-release.outputs.version }}.tgz"
+
+      - name: Upload web tarball
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          files: desktop/packages/web/*.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    needs: create-release
+    runs-on: macos-latest
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Apple certificate
+        if: ${{ env.HAS_APPLE_CERT == 'true' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/electron-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERTIFICATE_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Build macOS Electron app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ELECTRON_BUILDER_ARCH: arm64
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_APPLE_CERT }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_APPLE_CERT" != "true" ]; then
+            echo "::warning::No Apple signing certificate configured; building unsigned macOS artifacts."
+          fi
+          pnpm --filter @ax-code/electron run build
+          node desktop/packages/electron/scripts/package.mjs --mac --arm64 --publish=never
+
+      - name: Packaged app smoke
+        run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs --artifacts "$RUNNER_TEMP/desktop-smoke"
+
+      - name: Upload macOS smoke logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-release-smoke-logs-macos-arm64
+          path: ${{ runner.temp }}/desktop-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload macOS assets
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          files: |
+            desktop/packages/electron/dist/*.dmg
+            desktop/packages/electron/dist/*.zip
+            desktop/packages/electron/dist/*.blockmap
+            desktop/packages/electron/dist/latest-mac.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    needs: create-release
+    runs-on: windows-2022
+    env:
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Decode Windows signing certificate
+        if: ${{ env.HAS_WINDOWS_CERT == 'true' }}
+        shell: bash
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$WINDOWS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          echo "WIN_CSC_LINK=$RUNNER_TEMP/certificate.p12" >> "$GITHUB_ENV"
+          echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build Windows Electron app
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @ax-code/electron run build
+          node desktop/packages/electron/scripts/package.mjs --win --x64 --publish=never
+
+      - name: Upload Windows assets
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          files: |
+            desktop/packages/electron/dist/*.exe
+            desktop/packages/electron/dist/*.zip
+            desktop/packages/electron/dist/*.blockmap
+            desktop/packages/electron/dist/latest.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sign-release-assets:
+    needs: [create-release, package-web, build-macos, build-windows]
+    if: >-
+      always() &&
+      github.event.inputs.dry_run != 'true' &&
+      needs.create-release.result == 'success' &&
+      needs.package-web.result == 'success' &&
+      needs.build-macos.result == 'success' &&
+      needs.build-windows.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install minisign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
+      - name: Download release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          mkdir -p release-assets
+          gh release download "$TAG" --repo "$REPOSITORY" --dir release-assets --clobber
+
+      - name: Sign release assets
+        env:
+          AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64 }}
+          AX_CODE_DESKTOP_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_DESKTOP_MINISIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          SECRET_KEY="$RUNNER_TEMP/ax-code-desktop.minisign.key"
+          PUBLIC_KEY="$RUNNER_TEMP/ax-code-desktop.minisign.pub"
+          cat > "$PUBLIC_KEY" <<'EOF'
+          untrusted comment: minisign public key 5B7AB63CD6D674BE
+          RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
+          EOF
+          if [ -z "$AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64" ] || [ -z "$AX_CODE_DESKTOP_MINISIGN_PASSWORD" ]; then
+            echo "::error::Desktop minisign secrets are required to publish signed release assets."
+            exit 1
+          fi
+          printf '%s' "$AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64" | base64 -d > "$SECRET_KEY"
+          chmod 600 "$SECRET_KEY"
+          assets=()
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              *.minisig|*.sig) ;;
+              *) assets+=("$file") ;;
+            esac
+          done < <(find release-assets -type f -print0)
+          ./desktop/scripts/minisign-artifacts.sh --secret-key "$SECRET_KEY" --public-key "$PUBLIC_KEY" --force "${assets[@]}"
+
+      - name: Upload minisign signatures
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          signatures=()
+          while IFS= read -r -d '' file; do signatures+=("$file"); done < <(find release-assets -type f -name '*.minisig' -print0)
+          test "${#signatures[@]}" -gt 0
+          gh release upload "$TAG" --repo "$REPOSITORY" --clobber "${signatures[@]}"
+
+  finalize-release:
+    needs: [create-release, package-web, build-macos, build-windows, sign-release-assets]
+    if: >-
+      always() &&
+      github.event.inputs.dry_run != 'true' &&
+      needs.create-release.result == 'success' &&
+      needs.package-web.result == 'success' &&
+      needs.build-macos.result == 'success' &&
+      needs.build-windows.result == 'success' &&
+      needs.sign-release-assets.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew-tap:
+    needs: [create-release, finalize-release]
+    if: >-
+      always() &&
+      needs.finalize-release.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+    steps:
+      - name: Skip Homebrew update when token is absent
+        if: ${{ env.HAS_TAP_TOKEN != 'true' }}
+        run: echo "::notice::HOMEBREW_TAP_TOKEN not configured; skipping Desktop Homebrew cask update."
+
+      - name: Download release DMG
+        if: ${{ env.HAS_TAP_TOKEN == 'true' }}
+        env:
+          TAG: ${{ needs.create-release.outputs.tag }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+        run: |
+          curl -fsSL -o release.dmg \
+            "https://github.com/defai-digital/ax-code/releases/download/${TAG}/AX-Code-${VERSION}-mac-arm64.dmg"
+          echo "DMG_SHA256=$(sha256sum release.dmg | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Push updated Desktop cask
+        if: ${{ env.HAS_TAP_TOKEN == 'true' }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+        run: |
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/defai-digital/homebrew-ax-code-desktop.git" homebrew-tap
+          cd homebrew-tap
+          node - <<'NODE'
+          const fs = require('fs');
+          const version = process.env.VERSION;
+          const tag = process.env.TAG;
+          const sha256 = process.env.DMG_SHA256;
+          const cask = [
+            'cask "ax-code-desktop" do',
+            `  version "${version}"`,
+            `  sha256 "${sha256}"`,
+            '',
+            `  url "https://github.com/defai-digital/ax-code/releases/download/${tag}/AX-Code-#{version}-mac-arm64.dmg"`,
+            '  name "AX Code Desktop"',
+            '  desc "AI coding assistant desktop app powered by AX Code"',
+            '  homepage "https://github.com/defai-digital/ax-code"',
+            '',
+            '  app "AX Code.app"',
+            '',
+            '  postflight do',
+            '    system_command "/usr/bin/xattr",',
+            '      args: ["-cr", "#{appdir}/AX Code.app"]',
+            '  end',
+            '',
+            '  zap trash: [',
+            '    "~/Library/Application Support/AX Code Desktop",',
+            '    "~/Library/Preferences/ai.defai.ax-code-app.plist",',
+            '    "~/Library/Caches/AX Code Desktop",',
+            '    "~/Library/Logs/AX Code Desktop",',
+            '  ]',
+            'end',
+            '',
+          ].join('\n');
+          fs.mkdirSync('Casks', { recursive: true });
+          fs.writeFileSync('Casks/ax-code-desktop.rb', cask);
+          NODE
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/ax-code-desktop.rb
+          git diff --cached --quiet && echo "No cask changes to commit." && exit 0
+          git commit -m "Update ax-code-desktop cask to ${VERSION}"
+          git push

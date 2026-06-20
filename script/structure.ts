@@ -18,7 +18,7 @@ const note = [
 const rule = [] as { name: string; dir: string; bad: string[] }[]
 
 const hot = ["packages/ax-code/src/cli/cmd"]
-const workspacePackageRoots = ["packages", "packages/sdk/js"]
+const workspacePackageRoots = ["packages", "packages/sdk/js", "desktop/packages"]
 const dependencyFields = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const
 const axCodeSrcRoot = path.join(root, "packages/ax-code/src")
 const runtimeBoundaryAllowedFiles = new Set([
@@ -55,6 +55,7 @@ const keep = [
   ".turbo",
   "crates",
   "debug-log",
+  "desktop",
   "docs",
   "logo",
   "planning",
@@ -140,6 +141,9 @@ async function deep() {
     "packages/integration-github",
     "packages/integration-vscode/src",
     "packages/util/src",
+    "desktop/packages/ui/src",
+    "desktop/packages/web/src",
+    "desktop/packages/electron/src",
   ]) {
     for (const file of await list(dir)) {
       const text = await readText(file)
@@ -256,7 +260,10 @@ function workspacePackages() {
     const abs = path.join(root, rootDir)
     if (!fs.existsSync(abs)) continue
 
-    const candidates = rootDir === "packages" ? fs.readdirSync(abs).map((name) => path.join(abs, name)) : [abs]
+    const candidates =
+      rootDir === "packages" || rootDir === "desktop/packages"
+        ? fs.readdirSync(abs).map((name) => path.join(abs, name))
+        : [abs]
     for (const candidate of candidates) {
       const manifest = path.join(candidate, "package.json")
       if (seen.has(manifest) || !fs.existsSync(manifest)) continue

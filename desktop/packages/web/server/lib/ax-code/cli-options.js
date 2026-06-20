@@ -1,0 +1,63 @@
+export const parseServeCliOptions = ({
+  argv = [],
+  env = {},
+  defaultPort,
+}) => {
+  const args = Array.isArray(argv) ? [...argv] : [];
+  const envPassword =
+    env.AX_CODE_DESKTOP_UI_PASSWORD ||
+    env.AX_CODE_UI_PASSWORD ||
+    null;
+  const options = {
+    port: defaultPort,
+    host: undefined,
+    uiPassword: envPassword,
+  };
+
+  const consumeValue = (currentIndex, inlineValue) => {
+    if (typeof inlineValue === 'string') {
+      return { value: inlineValue, nextIndex: currentIndex };
+    }
+    const nextArg = args[currentIndex + 1];
+    if (typeof nextArg === 'string' && !nextArg.startsWith('--')) {
+      return { value: nextArg, nextIndex: currentIndex + 1 };
+    }
+    return { value: undefined, nextIndex: currentIndex };
+  };
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (!arg.startsWith('--')) {
+      continue;
+    }
+
+    const eqIndex = arg.indexOf('=');
+    const optionName = eqIndex >= 0 ? arg.slice(2, eqIndex) : arg.slice(2);
+    const inlineValue = eqIndex >= 0 ? arg.slice(eqIndex + 1) : undefined;
+
+    if (optionName === 'port' || optionName === 'p') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      const parsedPort = parseInt(value ?? '', 10);
+      options.port = Number.isFinite(parsedPort) ? parsedPort : defaultPort;
+      continue;
+    }
+
+    if (optionName === 'host') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.host = typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+      continue;
+    }
+
+    if (optionName === 'ui-password') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.uiPassword = typeof value === 'string' ? value : '';
+      continue;
+    }
+
+  }
+
+  return options;
+};

@@ -2,6 +2,7 @@ import { NamedError } from "@ax-code/util/error"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { DoctorCommand } from "./cmd/doctor"
+import { GenerateCommand } from "./cmd/generate"
 import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
 import { migrate } from "./bootstrap/migrate"
@@ -12,7 +13,7 @@ import { Log } from "../util/log"
 import { DiagnosticLog } from "../debug/diagnostic-log"
 import { isHarmlessInterrupt } from "../util/harmless-interrupt"
 
-const cmds = [DoctorCommand]
+const cmds = [DoctorCommand, GenerateCommand]
 
 let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
 let hooksInstalled = false

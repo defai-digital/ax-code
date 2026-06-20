@@ -1,0 +1,34 @@
+---
+title: AX Code Connection
+description: Fix AX Code Desktop not connecting to its AX Code server.
+---
+
+# AX Code Connection
+
+If AX Code Desktop loads but never gets past "AX Code is restarting," or chat won't respond, the server it talks to isn't reachable. Work through these.
+
+## It's stuck on "AX Code is restarting"
+
+- give it a moment right after launch — this state is normal while the server starts
+- check whether the server is alive with `ax-code-desktop status`
+- restart it with `ax-code-desktop restart`
+- view startup details with `ax-code-desktop logs`
+
+## You're connecting to your own server
+
+If you set AX Code Desktop to use an existing server, double-check the setup from [AX Code Server](/ax-code-server/):
+
+- `AX_CODE_HOST` must include the port, with no path — for example `http://localhost:4096`
+- set `AX_CODE_SKIP_START=true` so AX Code Desktop doesn't also start its own
+- if the address is invalid, AX Code Desktop ignores it and starts its own server instead — look for a `[config]` warning in the logs
+
+## Still failing
+
+- confirm Node.js is version `20` or newer
+- reinstall the latest CLI
+- open `http://localhost:3000` directly before testing any remote link
+
+## Related
+
+- [AX Code Server](/ax-code-server/) — how AX Code Desktop finds and manages the server
+- [Troubleshooting](/troubleshooting/) — other common issues

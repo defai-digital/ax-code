@@ -1,6 +1,6 @@
 **A local-first agent runtime for serious software work.**
 
-AX Code runs coding agents against your actual repositories through [AX Code Desktop](https://github.com/defai-digital/ax-code-desktop), a terminal TUI, one-shot CLI, VS Code, a TypeScript SDK, and a local HTTP server. It is built around durable sessions, explicit tools, sandboxed execution, provider routing, code intelligence, and MCP/plugin extensibility so teams can let agents act without losing control of the work.
+AX Code runs coding agents against your actual repositories through AX Code Desktop, a terminal TUI, one-shot CLI, VS Code, a TypeScript SDK, and a local HTTP server. It is built around durable sessions, explicit tools, sandboxed execution, provider routing, code intelligence, and MCP/plugin extensibility so teams can let agents act without losing control of the work.
 
 - Work interactively in the terminal with model, provider, agent, session, MCP, and skill controls
 - Run headless tasks for scripts, CI, bots, and internal automation with the same runtime
@@ -41,7 +41,7 @@ ax-code
 
 No project setup or config file required. On first launch, use `/connect` inside the TUI to add a provider.
 
-Prefer a graphical desktop app? Use [AX Code Desktop](https://github.com/defai-digital/ax-code-desktop).
+Prefer a graphical desktop app? Use AX Code Desktop from the same [GitHub releases](https://github.com/defai-digital/ax-code/releases) namespace or the Homebrew cask.
 
 For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
 
@@ -72,7 +72,7 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v10.33.4+ and [Node.js](https://nodejs.org) matching the root `package.json` engine (`>=22`, `>=26` for the TUI). `setup:cli` builds and installs a node-bundled launcher. `ax-code doctor` should report `Runtime: Node vX.Y.Z (node-bundled)` — the same node-bundled runtime shipped by every supported install channel (Homebrew, Windows installer).
+Requires [pnpm](https://pnpm.io) v10.33.4+ and [Node.js](https://nodejs.org) matching the root `package.json` engine (`>=24`, `>=26` for source-mode TUI commands that use `--experimental-ffi`). `setup:cli` builds and installs a node-bundled launcher. `ax-code doctor` should report `Runtime: Node vX.Y.Z (node-bundled)` — the same node-bundled runtime shipped by every supported install channel (Homebrew, Windows installer).
 
 Refresh the local bundled runtime after code changes:
 
@@ -98,7 +98,7 @@ AX Code is designed for agent work that touches real files, shells, sessions, an
 
 | Need                         | Use                                                                                            |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| Desktop app                  | [AX Code Desktop](https://github.com/defai-digital/ax-code-desktop) provides the graphical app |
+| Desktop app                  | AX Code Desktop provides the graphical app as a separate Electron installable                  |
 | Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows     |
 | One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                              |
 | Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                 |

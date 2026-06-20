@@ -1,0 +1,36 @@
+---
+title: Install
+description: Install AX Code Desktop for desktop or local web development.
+---
+
+# Install
+
+There are two supported ways to run AX Code Desktop:
+
+- desktop app for macOS
+- local web UI hosted by the CLI for development and controlled workstation access
+
+## Prerequisite
+
+Install [AX Code](https://ax-code.ai) first — AX Code Desktop runs on top of it.
+
+## Local web UI
+
+Install from a development checkout:
+
+```bash
+pnpm install
+pnpm --filter ax-code-desktop run start -- --ui-password be-creative-here
+```
+
+If you have the web CLI installed, start it with:
+
+```bash
+ax-code-desktop --ui-password be-creative-here
+```
+
+Open the URL the CLI prints (usually `http://localhost:3000`). You should see the AX Code Desktop session list.
+
+## Desktop
+
+Download the latest desktop build from the GitHub releases page or the AX Code Desktop download page. Open it and sign into your usual AX Code workflow.

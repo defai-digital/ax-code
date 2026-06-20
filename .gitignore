@@ -14,6 +14,7 @@ tmp
 dist
 dist-source
 ts-dist
+desktop/packages/electron/resources/web-dist/
 .turbo
 .ruff_cache
 **/.serena

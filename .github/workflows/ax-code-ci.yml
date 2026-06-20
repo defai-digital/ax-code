@@ -67,6 +67,7 @@ jobs:
         uses: ./.github/actions/setup-ax-code-toolchain
         with:
           checkout: "false"
+          node-version: "24"
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
@@ -190,6 +191,7 @@ jobs:
         uses: ./.github/actions/setup-ax-code-toolchain
         with:
           checkout: "false"
+          node-version: "24"
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
@@ -211,3 +213,23 @@ jobs:
           name: ax-code-live-report
           path: packages/ax-code/.tmp/test-report/*.xml
           if-no-files-found: ignore
+
+  tui-node26-smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "26"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: TUI startup smoke
+        run: pnpm --dir packages/ax-code run tui:startup-smoke

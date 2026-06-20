@@ -7,10 +7,11 @@
   "packageManager": "pnpm@10.33.4",
   "workspaces": [
     "packages/*",
-    "packages/sdk/js"
+    "packages/sdk/js",
+    "desktop/packages/*"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
@@ -20,6 +21,16 @@
     "check:structure": "tsx script/structure.ts",
     "check:no-cost": "tsx script/check-no-cost.ts",
     "check:openapi": "pnpm --dir packages/sdk/js run validate:openapi",
+    "check:desktop-boundaries": "tsx script/check-desktop-boundaries.ts",
+    "check:desktop-boundaries:strict": "tsx script/check-desktop-boundaries.ts --fail-on-violation",
+    "desktop:dev": "turbo run dev --filter=@ax-code/electron",
+    "desktop:build": "turbo run build --filter=@ax-code/electron",
+    "desktop:typecheck": "pnpm --dir packages/sdk/js run build && pnpm --filter \"./desktop/packages/*\" --if-present run type-check",
+    "desktop:test": "pnpm --dir packages/sdk/js run build && pnpm --filter \"./desktop/packages/*\" --if-present run test",
+    "desktop:lint": "pnpm --filter \"./desktop/packages/*\" --if-present run lint",
+    "release:cli": "pnpm run sign:release && pnpm run publish:github",
+    "release:desktop": "./desktop/scripts/publish-github-release.sh",
+    "release:all": "pnpm run release:cli && pnpm run release:desktop",
     "typecheck": "pnpm -r --if-present run typecheck",
     "build:native": "tsx script/build-native.ts",
     "build:native:debug": "tsx script/build-native.ts --debug",
@@ -31,15 +42,21 @@
   },
   "devDependencies": {
     "@actions/artifact": "5.0.1",
+    "@eslint/js": "^9.33.0",
     "@types/mime-types": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
+    "eslint": "^9.33.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
     "fast-glob": "catalog:",
+    "globals": "^16.3.0",
     "husky": "9.1.7",
     "prettier": "3.6.2",
     "semver": "catalog:",
     "tsx": "^4.22.4",
     "turbo": "2.9.14",
+    "typescript-eslint": "^8.39.1",
     "vitest": "4.1.9"
   },
   "dependencies": {
@@ -67,6 +84,7 @@
     "protobufjs",
     "tree-sitter",
     "tree-sitter-bash",
+    "electron",
     "web-tree-sitter"
   ],
   "pnpm": {

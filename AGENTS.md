@@ -24,7 +24,7 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 Run these from the repository root unless noted:
 
 - `pnpm install` - install workspace dependencies.
-- `pnpm dev` / `pnpm cli` - run the CLI from source on Node (`node --experimental-ffi --import tsx --conditions=node`).
+- `pnpm dev` / `pnpm cli` - run the CLI from source on Node (`node --experimental-ffi --env-file-if-exists=../../.env --import tsx --import script/solid-loader.mjs --conditions=node packages/ax-code/src/index-node-tui.ts`).
 - `pnpm typecheck` - run typecheck across workspace packages that define it.
 - `pnpm run build:native` - build all Rust napi-rs addons (append names like `fs diff` for a subset).
 - `pnpm run build:native:debug` - build native addons in debug mode.
@@ -37,6 +37,10 @@ Do not run tests from the repository root:
 - Root `pnpm test` intentionally fails with `do not run tests from root`.
 - For `packages/ax-code`, run tests from `packages/ax-code/`.
 
+Root-level script tests:
+
+- `pnpm test:scripts` — run root `script/*.test.ts` suites (setup-cli, release signing, publish) via vitest.
+
 Inside `packages/ax-code`:
 
 - `pnpm test` - full test suite on vitest (`vitest run`; the 30s per-test timeout lives in `vitest.config.ts`).
@@ -46,7 +50,7 @@ Inside `packages/ax-code`:
 - `pnpm test:deterministic` - deterministic group (excludes e2e and live).
 - `pnpm test:live` - live group (structured output integration tests).
 
-Test groups are defined in `script/test-group.ts`. The `unit` group is the fastest and most isolated; `e2e` tests spawn real processes and may be flaky on CI; `recovery` tests cover session resume and error recovery paths.
+Test groups are defined in `script/test-group.ts`. The `unit` group is the fastest and most isolated; `e2e` tests spawn real processes and may be flaky on CI; `recovery` tests cover session resume and error recovery paths. Grouped runners (`tsx script/test-groups.ts <group>`) resolve the file list and pass it to vitest via the `AX_TEST_FILES` environment variable.
 
 - `pnpm test:ci` - CI-oriented test runner.
 - `pnpm test:risk` - risk-oriented test runner.
@@ -152,7 +156,7 @@ A session-first terminal UI that connects to a headless ax-code server via HTTP/
 
 ## `packages/ax-code` Architecture
 
-**Entry point**: `src/index.ts` loads the OpenTUI SolidJS preload, then calls `cli/boot.ts` which sets up yargs, registers all commands (from `src/cli/cmd/`), and runs middleware (env init → DB migration → command dispatch). A separate `src/index-compiled.ts` is used for standalone binary builds to avoid bundling Babel transforms.
+**Entry point**: `src/index.ts` loads the OpenTUI SolidJS preload, then calls `cli/boot.ts` which sets up yargs, registers all commands (from `src/cli/cmd/`), and runs middleware (env init → DB migration → command dispatch). For the Node+TUI development path, `src/index-node-tui.ts` is the entry used by `pnpm dev` (it pre-imports the SolidJS loader and TUI conditions). A separate `src/index-compiled.ts` is used for standalone binary builds to avoid bundling Babel transforms.
 
 **Domain-first layout** under `src/` — each top-level folder is a domain:
 
@@ -186,7 +190,7 @@ A session-first terminal UI that connects to a headless ax-code server via HTTP/
 
 **Storage**:
 
-- SQLite via Drizzle ORM. Import map: `#db` resolves to `src/storage/db.node.ts` under Node (the runtime); a legacy `bun` condition mapping to `src/storage/db.bun.ts` is retained in the import map.
+- SQLite via Drizzle ORM. Import map: `#db` resolves to `src/storage/db.node.ts` under Node (uses `node:sqlite` `DatabaseSync`). The legacy `bun` condition and `db.bun.ts` have been removed.
 - Domain `.sql.ts` files define Drizzle table schemas (e.g., `session/session.sql.ts`, `workflow/workflow.sql.ts`).
 - `src/storage/schema.ts` aggregates all domain `.sql.ts` exports.
 - Migrations under `packages/ax-code/migration/` are loaded by `script/build.ts` during the build process.

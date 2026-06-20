@@ -1,0 +1,124 @@
+---
+title: Environment Variables
+description: Configure AX Code Desktop and AX Code integration with environment variables.
+---
+
+# Environment Variables
+
+AX Code Desktop reads these environment variables at startup. For startup services, `ax-code-desktop startup enable` snapshots the current environment by default, so rerun it after changing variables you want the service to use.
+
+Some variables still use the `AX_CODE_DESKTOP_` prefix for compatibility with
+existing installs and storage paths. Use the names shown here; the prefix is a
+legacy implementation detail, not the product name.
+
+## AX Code Desktop server
+
+### `AX_CODE_DESKTOP_HOST`
+
+Bind address for the AX Code Desktop web server. Use `0.0.0.0` to allow access from other machines.
+
+### `AX_CODE_DESKTOP_UI_PASSWORD`
+
+Password for the browser UI. Use this when binding outside localhost or running behind a reverse proxy.
+
+### `AX_CODE_DESKTOP_DATA_DIR`
+
+Overrides the AX Code Desktop data directory. The default is `~/.config/openchamber`.
+
+### `AX_CODE_DESKTOP_COMPRESS_API`
+
+Controls API response compression. Use `true` or `1` to force it on, `false` or `0` to force it off.
+
+### `AX_CODE_DESKTOP_SKIP_API_COMPRESSION`
+
+Disables API response compression when set to `true` or `1`. This takes precedence over `AX_CODE_DESKTOP_COMPRESS_API`.
+
+### `AX_CODE_DESKTOP_VERBOSE_REQUEST_LOGS`
+
+Enables verbose HTTP request logs when set to `true` or `1`.
+
+### `AX_CODE_DESKTOP_UPDATE_API_URL`
+
+Overrides the update-check API endpoint. Most users should leave this unset.
+
+### `AX_CODE_DESKTOP_PACKAGE_MANAGER`
+
+Forces the package manager used by update operations when auto-detection is wrong.
+
+## AX Code server
+
+### `AX_CODE_HOST`
+
+Connects AX Code Desktop to an existing AX Code server. The value must be an `http` or `https` origin with an explicit port and no path, query, or hash. `AX_CODE_HOST` takes precedence over `AX_CODE_PORT`.
+
+### `AX_CODE_PORT`
+
+Sets the AX Code server port. With managed AX Code this requests the managed port; with `AX_CODE_SKIP_START=true` it connects to an external server on that port.
+
+### `AX_CODE_SKIP_START`
+
+Prevents AX Code Desktop from starting its own AX Code server when set to `true`.
+
+### `AX_CODE_DESKTOP_AX_CODE_HOSTNAME`
+
+Bind hostname for the AX Code server managed by AX Code Desktop. The default is `127.0.0.1`.
+
+### `AX_CODE_BINARY`
+
+Path to the `ax-code` executable AX Code Desktop should run.
+
+### `AX_CODE_CONFIG`
+
+Path to a specific AX Code config file.
+
+### `AX_CODE_CONFIG_DIR`
+
+Path to a specific AX Code config directory for agents, skills, snippets, and config discovery.
+
+### `AX_CODE_DATA_DIR`
+
+Custom data directory for the managed AX Code server.
+
+### `AX_CODE_WSL_DISTRO`
+
+Selects the WSL distro used for AX Code integration on Windows.
+
+### `AX_CODE_DESKTOP_AX_CODE_WSL_DISTRO`
+
+AX Code Desktop-specific alias for selecting the WSL distro. `AX_CODE_WSL_DISTRO` takes precedence when both are set.
+
+### `AX_CODE_JWT_SECRET`
+
+Secret used to sign UI authentication tokens. Use a long random value for persistent service deployments.
+
+## Terminal and Git
+
+### `AX_CODE_DESKTOP_TERMINAL_SHELL`
+
+Shell executable used for AX Code Desktop terminal sessions.
+
+### `AX_CODE_DESKTOP_GIT_BINARY`
+
+Git executable used by AX Code Desktop Git features.
+
+### `GIT_BINARY`
+
+Alternative Git executable override. Prefer `AX_CODE_DESKTOP_GIT_BINARY` for AX Code Desktop-specific configuration.
+
+### `AX_CODE_DESKTOP_GIT_READ_CACHE_TTL_MS`
+
+Time-to-live, in milliseconds, for cached Git-backed file reads. Set `0` to disable this cache while debugging.
+
+## Runtime helpers
+
+### `BUN_BINARY`
+
+Bun executable AX Code Desktop should use when spawning daemon processes.
+
+### `BUN_INSTALL`
+
+Bun installation root. AX Code Desktop uses it to find `bin/bun` for daemon startup and updates.
+
+### `VITE_AX_CODE_URL`
+
+Build-time API base URL for the Vite-built web app. Most users should not set it for normal CLI or desktop usage.

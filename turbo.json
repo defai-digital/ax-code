@@ -8,6 +8,19 @@
       "dependsOn": [],
       "outputs": ["dist/**"]
     },
+    "ax-code-desktop#build": {
+      "dependsOn": ["@ax-code/sdk#build", "@openchamber/ui#build"],
+      "outputs": ["dist/**"]
+    },
+    "@ax-code/electron#build": {
+      "dependsOn": ["ax-code-desktop#build"],
+      "outputs": ["dist/**", "out/**"]
+    },
+    "@ax-code/electron#dev": {
+      "dependsOn": ["ax-code-desktop#build"],
+      "cache": false,
+      "persistent": true
+    },
     "ax-code#test": {
       "dependsOn": ["^build"],
       "outputs": []

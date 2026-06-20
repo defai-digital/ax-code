@@ -1,0 +1,23 @@
+AX Code Desktop
+Copyright (c) 2025 DEFAI Private Limited
+
+This product includes software derived from OpenChamber
+(https://github.com/btriapitsyn/openchamber),
+Copyright (c) 2025 Bohdan Triapitsyn, licensed under the MIT License.
+
+The original OpenChamber source code is used as the foundation for this project
+and has been modified by DEFAI Private Limited. All modifications are the work
+of DEFAI Private Limited and are copyright DEFAI Private Limited.
+
+The Electron desktop shell (packages/electron: the SSH instance manager, menu-bar
+tray controller, and the native desktop command handlers) is derived from the
+OpenChamber Electron runtime at tag v1.12.4, adapted to the AX Code Desktop
+branding, settings paths, and single-utilityProcess server model.
+
+GitHub may display upstream OpenChamber contributors in repository contributor
+widgets because this project includes derived code. Those accounts are credited
+for upstream work and are not necessarily maintainers of, or direct contributors
+to, AX Code Desktop.
+
+See the LICENSE file for the full text of the MIT License as it applies to both
+this project and the original OpenChamber project.

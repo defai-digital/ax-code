@@ -1,0 +1,76 @@
+name: desktop
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-ci.yml"
+      - ".github/actions/setup-ax-code-toolchain/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "script/check-desktop-boundaries.ts"
+      - "desktop/**"
+      - "packages/sdk/**"
+      - "packages/ax-code/src/server/**"
+      - "packages/ax-code/src/cli/cmd/generate.ts"
+      - "packages/ax-code/src/cli/boot-node.ts"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/desktop-ci.yml"
+      - ".github/actions/setup-ax-code-toolchain/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "script/check-desktop-boundaries.ts"
+      - "desktop/**"
+      - "packages/sdk/**"
+      - "packages/ax-code/src/server/**"
+      - "packages/ax-code/src/cli/cmd/generate.ts"
+      - "packages/ax-code/src/cli/boot-node.ts"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    runs-on: macos-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Desktop boundaries
+        run: pnpm run check:desktop-boundaries
+
+      - name: Typecheck Desktop
+        run: pnpm run desktop:typecheck
+
+      - name: Lint Desktop
+        run: pnpm run desktop:lint
+
+      - name: Test Desktop
+        run: pnpm run desktop:test
+
+      - name: Build Desktop
+        run: pnpm run desktop:build
+
+      - name: Smoke packaged Desktop app
+        if: runner.os == 'macOS'
+        run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs

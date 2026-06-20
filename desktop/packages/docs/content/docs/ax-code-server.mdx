@@ -1,0 +1,72 @@
+---
+title: AX Code Server
+description: Connect AX Code Desktop to a local or remote AX Code server.
+---
+
+# AX Code Server
+
+AX Code Desktop runs on top of an AX Code server. By default it starts one for you, so you don't have to do anything. You only need this page if you want to point AX Code Desktop at a server you already run, or manage the one it starts.
+
+## How AX Code Desktop finds a server
+
+When AX Code Desktop starts, it looks for a server in this order:
+
+1. reuse a server it already started
+2. connect to an external one if you told it to (see below)
+3. auto-detect a server on the default port (`4096`)
+4. otherwise, start and manage its own
+
+If nothing is configured, step 4 happens automatically and you're up and running.
+
+## Connect to a server you already run
+
+Set these before starting AX Code Desktop:
+
+```bash
+AX_CODE_HOST=http://localhost:4096 AX_CODE_SKIP_START=true ax-code-desktop
+```
+
+- `AX_CODE_HOST` — the full address of your AX Code server, including the port (a value like `http://localhost:4096`). It must not have a path at the end.
+- `AX_CODE_SKIP_START=true` — tells AX Code Desktop not to start its own AX Code server.
+
+If you only need to change the port, set `AX_CODE_PORT` instead of `AX_CODE_HOST`.
+
+If `AX_CODE_HOST` is missing its port or has a path, AX Code Desktop ignores it and falls back to starting its own server. Watch the startup logs for a `[config]` warning if a connection you expected didn't happen.
+
+## Manage the server from the CLI
+
+```bash
+ax-code-desktop status
+ax-code-desktop logs
+ax-code-desktop restart
+ax-code-desktop stop
+```
+
+`ax-code-desktop` on its own starts the server in the background. Add `--foreground` to keep it attached to your terminal.
+
+## Start AX Code Desktop at login
+
+Use `startup enable` to install a native user service. AX Code Desktop uses `launchd` on macOS, `systemd --user` on Linux, and Task Scheduler on Windows.
+
+```bash
+ax-code-desktop startup enable
+ax-code-desktop startup status
+ax-code-desktop startup disable
+```
+
+To protect the UI, set the password when enabling the service:
+
+```bash
+AX_CODE_DESKTOP_UI_PASSWORD='secret' ax-code-desktop startup enable
+```
+
+`startup enable` snapshots your current environment into the service so it behaves more like starting `ax-code-desktop` from the same shell. This keeps provider tokens, `PATH`, SSH agent settings, and other CLI auth/config variables available. Use `--no-env-snapshot` if you want a minimal service environment.
+
+## "AX Code is restarting"
+
+While the server is starting or restarting, AX Code Desktop shows an "AX Code is restarting" state and pauses requests until it's ready. This is normal right after launch or a restart. If it never clears, see [AX Code connection](/troubleshooting/ax-code-connection/).
+
+## Related
+
+- [Providers, Models & Agents](/providers/) — set up what the server talks to
+- [AX Code connection](/troubleshooting/ax-code-connection/) — if it won't connect

@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - packages/sdk/js
+  - desktop/packages/*
 
 catalog:
   "@actions/core": "1.11.1"
@@ -13,10 +14,10 @@ catalog:
   "@octokit/webhooks-types": "7.6.1"
   "@playwright/test": "1.51.0"
   "@standard-schema/spec": "1.0.0"
-  "@tsconfig/node22": "22.0.2"
+  "@tsconfig/node24": "24.0.4"
   "@types/luxon": "3.7.1"
   "@types/mime-types": "3.0.1"
-  "@types/node": "22.13.9"
+  "@types/node": "24.13.2"
   "@types/semver": "7.7.1"
   "@typescript/native-preview": "7.0.0-dev.20251207.1"
   "ai": "6.0.146"
@@ -32,7 +33,7 @@ catalog:
   "semver": "7.6.3"
   "strip-ansi": "7.1.2"
   "solid-js": "1.9.12"
-  "typescript": "5.8.2"
+  "typescript": "5.9.3"
   "ulid": "3.0.1"
   "zod": "4.3.6"
   "zod-to-json-schema": "3.24.5"

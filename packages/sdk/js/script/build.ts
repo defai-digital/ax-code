@@ -18,7 +18,9 @@ const tsxLoader = pathToFileURL(require.resolve("tsx")).href
 // Resolve a local CLI (tsc/prettier) from node_modules/.bin so this runs under
 // plain node (no Bun, no global tooling).
 function bin(name: string) {
-  return path.join(dir, "node_modules", ".bin", name)
+  const local = path.join(dir, "node_modules", ".bin", name)
+  const root = path.join(repoRoot, "node_modules", ".bin", name)
+  return require("fs").existsSync(local) ? local : root
 }
 
 function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv; toFile?: string } = {}) {
@@ -45,21 +47,19 @@ try {
 
   await run(bin("tsc"), ["--build", "--force"])
 
-  // Generate the OpenAPI document by running ax-code's CLI under Node. The Node
-  // entry is src/index-node-tui.ts (src/index.ts imports the Bun-only
-  // @opentui/solid/preload); tsx strips TS, the solid loader transforms JSX, and
-  // TSX_TSCONFIG_PATH lets tsx resolve ax-code's @/* aliases.
+  // Generate the OpenAPI document through the non-TUI Node entrypoint. The TUI
+  // entrypoint requires Node's FFI tier, but SDK generation must run on the
+  // repository's baseline Node version.
   await run(
     process.execPath,
     [
-      "--experimental-ffi",
       "--disable-warning=ExperimentalWarning",
       "--import",
       tsxLoader,
       "--import",
       solidLoader,
       "--conditions=node",
-      path.join(axCodeDir, "src", "index-node-tui.ts"),
+      path.join(axCodeDir, "src", "index-node.ts"),
       "generate",
     ],
     {
