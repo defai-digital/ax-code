@@ -1840,7 +1840,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     await expect(async () => {
       for await (const _ of wrapped.fullStream) {
       }
-    }).toThrow("network failed")
+    }).rejects.toThrow("network failed")
     expect(LLM.getPacingStateForTest(target)).toBeUndefined()
   })
 
