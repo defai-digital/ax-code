@@ -35,6 +35,20 @@ import { getAxEngineStatus } from "@/provider/ax-engine/status"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
+export function getRuntimeCheck(): DoctorCheck {
+  return {
+    name: "Runtime",
+    status: "ok",
+    // Name the engine by the actual runtime, not the packaging mode: only real
+    // Bun sets `process.versions.bun` (the Node compat shim deliberately does
+    // not), so node-source/source runs report Node, not a shimmed `Bun.version`
+    // that is really the Node version.
+    detail: process.versions.bun
+      ? `Bun ${Bun.version} (${runtimeMode()})`
+      : `Node ${process.version} (${runtimeMode()})`,
+  }
+}
+
 export function getServerExposureCheck(input: { hostname?: string; mdns?: boolean; password?: string }): DoctorCheck {
   const hostname = input.hostname ?? (input.mdns ? "0.0.0.0" : "127.0.0.1")
   const loopbackOnly = isLoopbackHostname(hostname)
@@ -214,14 +228,7 @@ export const DoctorCommand: CommandModule = {
     })
 
     // 2. Runtime
-    checks.push({
-      name: "Runtime",
-      status: "ok",
-      detail:
-        runtimeMode() === "node-bundled"
-          ? `Node ${process.version} (${runtimeMode()})`
-          : `Bun ${Bun.version} (${runtimeMode()})`,
-    })
+    checks.push(getRuntimeCheck())
 
     // 3. Platform
     checks.push({

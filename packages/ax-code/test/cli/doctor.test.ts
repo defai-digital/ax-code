@@ -5,6 +5,7 @@ import {
   doctorProjectContext,
   getDuplicateProjectIdentityCheck,
   getIsolationPolicyCheck,
+  getRuntimeCheck,
   getServerExposureCheck,
 } from "../../src/cli/cmd/doctor"
 import { ProjectIdentity } from "../../src/project/project-identity"
@@ -15,6 +16,19 @@ import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
   await resetDatabase()
+})
+
+describe("cli doctor runtime check", () => {
+  test("names the engine by the actual runtime, not the packaging mode", () => {
+    const check = getRuntimeCheck()
+    expect(check.name).toBe("Runtime")
+    // The suite runs on Node, so `process.versions.bun` is undefined and the
+    // check must report Node — regression guard for node-source/source runs
+    // being mislabelled "Bun <node-version>" by the Node compat shim.
+    expect(process.versions.bun).toBeUndefined()
+    expect(check.detail).toMatch(/^Node v\d+/)
+    expect(check.detail).not.toContain("Bun")
+  })
 })
 
 describe("cli doctor", () => {
