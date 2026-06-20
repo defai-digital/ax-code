@@ -137,7 +137,7 @@ describe("step-finish token propagation via Bus event", () => {
         },
       })
     },
-    { timeout: 30000 },
+    30000,
   )
 })
 
