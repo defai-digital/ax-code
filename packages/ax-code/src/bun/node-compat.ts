@@ -77,7 +77,13 @@ class ShellPromise implements PromiseLike<ShellResult> {
       const child = cpSpawn(this.cmd, {
         shell: true,
         cwd: this.opts.cwd,
-        env: this.opts.env ? { ...process.env, ...this.opts.env } : process.env,
+        // Bun's `$.env(obj)` REPLACES the environment with `obj` (the shell
+        // inherits process.env only when .env() is never called). Do not merge
+        // process.env in as a base: callers pass an already-prepared env (e.g.
+        // `Env.sanitize(process.env)` for plugin shells, which strips secret
+        // keys by omitting them). Merging would reintroduce every stripped
+        // secret from process.env, letting a plugin exfiltrate provider tokens.
+        env: this.opts.env ?? process.env,
       })
       const out: Buffer[] = []
       const err: Buffer[] = []
@@ -122,12 +128,23 @@ class ShellPromise implements PromiseLike<ShellResult> {
   }
 }
 
+// Single-quote one interpolated value so the shell treats it as one literal arg.
+function shellQuote(value: unknown): string {
+  return `'${String(value).replace(/'/g, "'\\''")}'`
+}
+
 function makeShell(base: ShellOpts = {}) {
   const tag = (strings: TemplateStringsArray, ...values: unknown[]) => {
     let cmd = ""
     strings.forEach((s, i) => {
       cmd += s
-      if (i < values.length) cmd += `'${String(values[i]).replace(/'/g, "'\\''")}'`
+      if (i < values.length) {
+        const value = values[i]
+        // Bun's `$` flattens an interpolated array into separate, individually
+        // escaped, space-separated arguments (e.g. ${["a", "b"]} → 'a' 'b').
+        // Plain `String([...])` would instead produce the comma-joined "a,b".
+        cmd += Array.isArray(value) ? value.map(shellQuote).join(" ") : shellQuote(value)
+      }
     })
     return new ShellPromise(cmd, base)
   }
