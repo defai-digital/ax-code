@@ -7,6 +7,7 @@ import { Filesystem } from "../util/filesystem"
 import { NamedError } from "@ax-code/util/error"
 import { Lock } from "../util/lock"
 import { PackageRegistry } from "./registry"
+import { NpmManager, packageManagerKind } from "./package-manager"
 import { proxied } from "@/util/proxied"
 import { Process } from "../util/process"
 import { runtimeMode, type RuntimeMode } from "../installation/runtime-mode"
@@ -184,29 +185,41 @@ export namespace BunProc {
       log.info("Cached version is outdated, proceeding with install", { pkg, cachedVersion })
     }
 
-    // Build command arguments
-    const args = installArgs(pkg, version)
-
-    // Let Bun handle registry resolution:
-    // - If .npmrc files exist, Bun will use them automatically
-    // - If no .npmrc files exist, Bun will default to https://registry.npmjs.org
-    // - No need to pass --registry flag
-    log.info("installing package using Bun's default registry resolution", {
-      pkg,
-      version,
-    })
-
-    await BunProc.run(args, {
-      cwd: Global.Path.cache,
-      abort: AbortSignal.timeout(60_000),
-    }).catch((e) => {
+    const onInstallFailed = (e: unknown) => {
       throw new InstallFailedError(
         { pkg, version },
         {
           cause: e,
         },
       )
-    })
+    }
+
+    if (packageManagerKind() === "npm") {
+      // node-bundled runtime: drive npm (bundled with Node). npm resolves the
+      // registry from .npmrc / its default just like bun does — no --registry.
+      await Process.run([NpmManager.executable, ...NpmManager.addArgs(pkg, version, Global.Path.cache)], {
+        cwd: Global.Path.cache,
+        abort: AbortSignal.timeout(60_000),
+        env: Env.sanitize(),
+      }).catch(onInstallFailed)
+    } else {
+      // Build command arguments
+      const args = installArgs(pkg, version)
+
+      // Let Bun handle registry resolution:
+      // - If .npmrc files exist, Bun will use them automatically
+      // - If no .npmrc files exist, Bun will default to https://registry.npmjs.org
+      // - No need to pass --registry flag
+      log.info("installing package using Bun's default registry resolution", {
+        pkg,
+        version,
+      })
+
+      await BunProc.run(args, {
+        cwd: Global.Path.cache,
+        abort: AbortSignal.timeout(60_000),
+      }).catch(onInstallFailed)
+    }
 
     // Resolve actual version from installed package when using "latest"
     // This ensures subsequent starts use the cached version until explicitly updated

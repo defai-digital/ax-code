@@ -24,6 +24,7 @@ import {
 import { Instance } from "../project/instance"
 import { LSPServer } from "../lsp/server"
 import { BunProc } from "@/bun"
+import { NpmManager, packageManagerKind } from "@/bun/package-manager"
 import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
@@ -594,8 +595,15 @@ export namespace Config {
     const gitignore = path.join(dir, ".gitignore")
     const hasGitIgnore = await Filesystem.exists(gitignore)
     if (!hasGitIgnore)
-      await Filesystem.write(gitignore, ["node_modules", "package.json", "bun.lock", ".gitignore"].join("\n"))
-    await BunProc.run(["install", ...BunProc.installCacheWorkaroundArgs()], { cwd: dir }).catch((err) => {
+      await Filesystem.write(
+        gitignore,
+        ["node_modules", "package.json", "bun.lock", "package-lock.json", ".gitignore"].join("\n"),
+      )
+    const install =
+      packageManagerKind() === "npm"
+        ? Process.run([NpmManager.executable, ...NpmManager.installArgs(dir)], { cwd: dir })
+        : BunProc.run(["install", ...BunProc.installCacheWorkaroundArgs()], { cwd: dir })
+    await install.catch((err) => {
       if (err instanceof Process.RunFailedError) {
         const detail = {
           dir,
