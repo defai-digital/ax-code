@@ -2,6 +2,7 @@ import fs from "fs"
 import path from "path"
 import { createRequire } from "module"
 import { fileURLToPath } from "url"
+import { spawnSync } from "node:child_process"
 import esbuild from "esbuild"
 import { SkillLint } from "./check-skills"
 import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
@@ -126,4 +127,53 @@ await writeText(
   `@echo off\r\nset AX_CODE_ORIGINAL_CWD=%CD%\r\nnode --experimental-ffi "%~dp0..\\lib\\index-node-tui.js" %*\r\n`,
 )
 
-console.log(`Full Node TUI build complete: ${path.relative(dir, path.join(outLib, "index-node-tui.js"))}`)
+// --- Make the distribution self-contained (Bun-free) -----------------------
+// The bundle externalizes the native FFI/.node packages and OpenTUI; ship them
+// in node_modules beside the bundle so the dist runs anywhere `node` is present.
+const deps = pkg.dependencies as Record<string, string>
+const distDeps = {
+  "@opentui/core": deps["@opentui/core"],
+  "@opentui/solid": deps["@opentui/solid"],
+  "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
+}
+await writeText(
+  path.join(outRoot, "package.json"),
+  JSON.stringify({ name: "ax-code-dist", private: true, type: "module", dependencies: distDeps }, null, 2) + "\n",
+)
+console.log("Installing runtime dependencies (@opentui, node-pty) into the distribution...")
+const npm = process.platform === "win32" ? "npm.cmd" : "npm"
+const install = spawnSync(npm, ["install", "--omit=dev", "--no-audit", "--no-fund"], { cwd: outRoot, stdio: "inherit" })
+if (install.status !== 0) {
+  console.error("npm install for the distribution failed")
+  process.exit(1)
+}
+// node-pty ships a node-gyp addon; build it for this platform (no abi prebuild
+// for newer Node yet). Cross-platform builds run this on each target in CI.
+const ptyDir = path.join(outRoot, "node_modules", "node-pty-prebuilt-multiarch")
+if (fs.existsSync(ptyDir) && !fs.existsSync(path.join(ptyDir, "build", "Release", "pty.node"))) {
+  console.log("Building node-pty native addon...")
+  const gyp = spawnSync(npm, ["rebuild", "node-pty-prebuilt-multiarch"], { cwd: outRoot, stdio: "inherit" })
+  if (gyp.status !== 0) console.warn("node-pty build failed — terminal feature will be unavailable")
+}
+
+// Ship the @ax-code napi addons (workspace packages, not on npm) + their .node.
+const nativePkgs: Array<[string, string]> = [
+  ["fs", path.join(dir, "..", "ax-code-fs-native")],
+  ["diff", path.join(dir, "..", "ax-code-diff-native")],
+  ["parser", path.join(dir, "..", "ax-code-parser-native")],
+  ["index-core", path.join(dir, "..", "ax-code-index-core")],
+]
+const axScope = path.join(outRoot, "node_modules", "@ax-code")
+fs.mkdirSync(axScope, { recursive: true })
+let shippedNative = 0
+for (const [name, src] of nativePkgs) {
+  if (!fs.existsSync(src)) {
+    console.warn(`native addon source missing: ${src} (run pnpm build:native) — ${name} will fall back to JS`)
+    continue
+  }
+  fs.cpSync(src, path.join(axScope, name), { recursive: true, dereference: true })
+  shippedNative++
+}
+
+console.log(`Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/4 native addons)`)
+console.log(`Run: node --experimental-ffi ${path.relative(dir, path.join(outLib, "index-node-tui.js"))}`)
