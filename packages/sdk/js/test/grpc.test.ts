@@ -173,9 +173,7 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunCommand) return { value: { id: "run-1", status: "running" } }
         throw new Error(`unexpected method ${method}`)
       },
-      async *serverStream() {
-        yield { type: "server.connected", properties: {} }
-      },
+      async *serverStream() {},
     }
     const client = createAxCodeGrpcClient({ transport })
     const { pause } = client.taskQueue
@@ -445,7 +443,7 @@ describe("gRPC SDK facade", () => {
       async *bidiStream(call, input) {
         calls.push(call)
         for await (const frame of input) calls.push(frame)
-        yield { type: "output", data: "ready" }
+        yield { type: "output", data: "ready" } as never
       },
     })
     const abort = new AbortController()
@@ -493,7 +491,7 @@ describe("gRPC SDK facade", () => {
   test("native IPC bridge reports missing stream support clearly", () => {
     const transport = createAxCodeGrpcNativeIpcTransport({
       async unary() {
-        return {}
+        return {} as never
       },
     })
 
@@ -725,7 +723,7 @@ describe("gRPC SDK facade", () => {
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
       headers: { Authorization: "Basic base" },
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         calls.push({ url: request.url, init: request })
         const pathname = new URL(request.url).pathname
@@ -750,7 +748,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push({
@@ -797,7 +795,7 @@ describe("gRPC SDK facade", () => {
     const calls: string[] = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push(`${request.method} ${parsed.pathname}${parsed.search}`)
@@ -865,7 +863,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push({
@@ -895,7 +893,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push({
@@ -931,7 +929,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push({
@@ -975,7 +973,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push({
@@ -1018,7 +1016,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push({
@@ -1080,7 +1078,7 @@ describe("gRPC SDK facade", () => {
     const calls: string[] = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push(`${request.method} ${parsed.pathname}`)
@@ -1116,7 +1114,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push({
@@ -1171,7 +1169,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push({
@@ -1215,7 +1213,7 @@ describe("gRPC SDK facade", () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         calls.push({
           path: new URL(request.url).pathname,
@@ -1275,7 +1273,7 @@ describe("gRPC SDK facade", () => {
         queueMicrotask(() => socket?.onopen?.({}))
         return socket
       },
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         calls.push({
           path: new URL(request.url).pathname,
@@ -1316,7 +1314,7 @@ describe("gRPC SDK facade", () => {
     const paths: string[] = []
     const client = createAxCodeGrpcClientFromHttp({
       baseUrl: "http://127.0.0.1:4096",
-      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         paths.push(`${parsed.pathname}${parsed.search}`)

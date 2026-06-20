@@ -9,6 +9,7 @@ import {
   HEADLESS_RUNTIME_SCHEMA_VERSION,
   HeadlessBackendStartupError,
   startHeadlessBackend,
+  type HeadlessRuntimeEvent,
 } from "../src/headless.js"
 import { startAxCodeGrpcHeadlessBackend } from "../src/grpc"
 import { createIpcTransport } from "../src/headless-ipc.js"
@@ -40,7 +41,7 @@ describe("headless backend lifecycle", () => {
       directory: workspace,
       auth: { username: "app", password: "secret" },
       reservePort: async () => 18456,
-      fetch: (async (input: URL | RequestInfo, init?: RequestInit) => {
+      fetch: (async (input: string | URL | Request, init?: RequestInit) => {
         const request = input instanceof Request ? input : new Request(input, init)
         healthRequests.push(request)
         return new Response(JSON.stringify({ healthy: true }), {
@@ -64,9 +65,9 @@ describe("headless backend lifecycle", () => {
       health: { ok: true, status: 200, body: { healthy: true } },
     })
     expect(healthRequests.map((request) => new URL(request.url).pathname)).toEqual(["/global/health"])
-    expect(healthRequests[0].headers.get("authorization")).toBe(backend.headers.Authorization)
-    expect(healthRequests[0].headers.get("x-ax-code-directory")).toBe(encodeURIComponent(workspace))
-    expect(healthRequests[0].headers.get("x-opencode-directory")).toBe(encodeURIComponent(workspace))
+    expect(healthRequests[0]?.headers.get("authorization")).toBe(backend.headers.Authorization)
+    expect(healthRequests[0]?.headers.get("x-ax-code-directory")).toBe(encodeURIComponent(workspace))
+    expect(healthRequests[0]?.headers.get("x-opencode-directory")).toBe(encodeURIComponent(workspace))
     expect(await waitForFile(fake.authFile)).toBe("app:secret\n")
     const args = await waitForFile(fake.argsFile)
     expect(args).toContain("serve --hostname=127.0.0.1 --port=")
@@ -229,7 +230,7 @@ describe("headless backend lifecycle", () => {
   test("external app smoke uses only public headless exports", async () => {
     await using fake = await createReadyFakeAxCode()
     const calls: string[] = []
-    const fetchFn = (async (input: URL | RequestInfo, init?: RequestInit) => {
+    const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
       const request = input instanceof Request ? input : new Request(input, init)
       const url = new URL(request.url)
       calls.push(`${request.method} ${url.pathname}`)
@@ -315,6 +316,17 @@ describe("headless backend lifecycle", () => {
     const backend = await startHeadlessBackend({ reservePort: async () => 18456, fetch: fetchFn })
     try {
       const client = createHeadlessClient({ baseUrl: backend.url, headers: backend.headers, fetch: fetchFn })
+      type TestHeadlessEvent = HeadlessRuntimeEvent<
+        { id: string; title?: string },
+        unknown,
+        unknown,
+        { type: string },
+        { id: string; sessionID: string },
+        { id: string; messageID: string },
+        unknown,
+        { id: string }
+      >
+
       const state = createHeadlessProjectionState<
         { id: string; title?: string },
         unknown,
@@ -339,7 +351,7 @@ describe("headless backend lifecycle", () => {
       await client.sendPrompt(session.id, { parts: [{ type: "text", text: "hello" }] })
 
       for await (const event of client.subscribe()) {
-        applyHeadlessProjectionEvent(state, event)
+        applyHeadlessProjectionEvent(state, event as TestHeadlessEvent)
       }
 
       expect(HEADLESS_RUNTIME_SCHEMA_VERSION).toBe(1)
