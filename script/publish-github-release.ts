@@ -1,13 +1,13 @@
-#!/usr/bin/env bun
 
 import childProcess from "child_process"
+import { whichSync } from "./which"
 import fs from "fs"
 import os from "os"
 import path from "path"
 import { parseArgs } from "util"
 import { AX_CODE_MINISIGN_PUBLIC_KEY, expandHome, secretKeyPermissionIssue } from "./sign-release-assets"
 
-export const ROOT = path.resolve(import.meta.dir, "..")
+export const ROOT = path.resolve(import.meta.dirname, "..")
 
 export type PublishGithubReleaseOptions = {
   version: string
@@ -102,7 +102,7 @@ export function assertNoTrackedInternalFiles(root = ROOT) {
 }
 
 export function parsePublishGithubReleaseArgs(
-  args = Bun.argv.slice(2),
+  args = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd(),
   home = os.homedir(),
@@ -203,7 +203,7 @@ function sleep(ms: number) {
 }
 
 function commandExists(command: string) {
-  return Boolean(Bun.which(command))
+  return Boolean(whichSync(command))
 }
 
 function requireCommand(command: string) {

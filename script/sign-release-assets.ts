@@ -1,13 +1,13 @@
-#!/usr/bin/env bun
 
 import childProcess from "child_process"
+import { whichSync } from "./which"
 import crypto from "crypto"
 import fs from "fs"
 import os from "os"
 import path from "path"
 import { parseArgs } from "util"
 
-export const ROOT = path.resolve(import.meta.dir, "..")
+export const ROOT = path.resolve(import.meta.dirname, "..")
 export const AX_CODE_MINISIGN_PUBLIC_KEY = "RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A"
 export const DEFAULT_MINISIGN_KEYCHAIN_SERVICE = "ax-code-minisign"
 export const DEFAULT_MINISIGN_KEYCHAIN_ACCOUNT = "ax-code-release"
@@ -69,7 +69,7 @@ export function trustedComment(file: string, digest: string) {
 }
 
 export function parseSignReleaseArgs(
-  args = Bun.argv.slice(2),
+  args = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd(),
   home = os.homedir(),
@@ -253,7 +253,7 @@ async function main() {
     return
   }
 
-  if (!Bun.which("minisign")) {
+  if (!whichSync("minisign")) {
     throw new Error("minisign not found on PATH. Install it with `brew install minisign`.")
   }
 
