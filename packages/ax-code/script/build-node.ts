@@ -113,7 +113,6 @@ const result = await esbuild.build({
       name: "ax-node-overrides",
       setup(build) {
         build.onResolve({ filter: /^#db$/ }, () => ({ path: path.join(dir, "src/storage/db.node.ts") }))
-        build.onResolve({ filter: /^bun-pty$/ }, () => ({ path: path.join(dir, "src/pty/bun-pty-node-stub.ts") }))
         build.onResolve({ filter: /^drizzle-orm\/bun-sqlite$/ }, () => ({
           path: require.resolve("drizzle-orm/node-sqlite"),
         }))

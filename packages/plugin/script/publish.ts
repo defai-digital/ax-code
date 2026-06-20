@@ -1,22 +1,33 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 import { Script } from "@ax-code/script"
-import { $ } from "bun"
+import { spawnSync } from "child_process"
+import fs from "fs/promises"
+import { readdirSync } from "fs"
 import { fileURLToPath } from "url"
+import path from "path"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
 
-await $`bun tsc`
+function sh(cmd: string, args: string[]) {
+  const result = spawnSync(cmd, args, { cwd: dir, stdio: "inherit", shell: process.platform === "win32" })
+  if (result.status !== 0) throw new Error(`${cmd} ${args.join(" ")} exited ${result.status}`)
+}
+
+sh(path.join(dir, "node_modules", ".bin", "tsc"), [])
 const pkg = await import("../package.json").then((m) => m.default)
 const original = JSON.parse(JSON.stringify(pkg))
 for (const [key, value] of Object.entries(pkg.exports)) {
-  const file = value.replace("./src/", "./dist/").replace(".ts", "")
+  const file = (value as string).replace("./src/", "./dist/").replace(".ts", "")
   // @ts-ignore
   pkg.exports[key] = {
     import: file + ".js",
     types: file + ".d.ts",
   }
 }
-await Bun.write("package.json", JSON.stringify(pkg, null, 2))
-await $`npm pack --workspaces=false && npm publish *.tgz --workspaces=false --tag ${Script.channel} --access public`
-await Bun.write("package.json", JSON.stringify(original, null, 2))
+await fs.writeFile("package.json", JSON.stringify(pkg, null, 2))
+sh("npm", ["pack", "--workspaces=false"])
+// Resolve the packed tarball explicitly (spawnSync has no shell glob expansion).
+const tarballs = readdirSync(dir).filter((file) => file.endsWith(".tgz"))
+sh("npm", ["publish", ...tarballs, "--workspaces=false", "--tag", Script.channel, "--access", "public"])
+await fs.writeFile("package.json", JSON.stringify(original, null, 2))

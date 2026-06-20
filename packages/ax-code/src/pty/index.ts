@@ -2,7 +2,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
-import { type IPty } from "bun-pty"
+import { type IPty } from "node-pty-prebuilt-multiarch"
 import z from "zod"
 import { Log } from "../util/log"
 import { lazy } from "@ax-code/util/lazy"
@@ -142,16 +142,12 @@ export namespace Pty {
     return out
   }
 
-  // PTY backend is runtime-specific: bun-pty under Bun, node-pty under Node
-  // (their spawn/IPty surface — pid, onData/onExit returning a disposable,
-  // write, resize, kill — is identical, so the rest of this module is agnostic).
+  // PTY backend is node-pty (a prebuilt napi addon loaded lazily so the rest of
+  // the module stays import-light and the addon is only required when a terminal
+  // is actually opened).
   const pty = lazy(async () => {
-    if (process.versions.bun) {
-      const { spawn } = await import("bun-pty")
-      return spawn
-    }
     const { spawn } = await import("node-pty-prebuilt-multiarch")
-    return spawn as unknown as typeof import("bun-pty").spawn
+    return spawn
   })
 
   export const Info = z

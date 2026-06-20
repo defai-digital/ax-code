@@ -121,7 +121,6 @@ export default defineConfig({
       // Tests that import bun:sqlite's Database directly → node:sqlite shim.
       "bun:sqlite": path.join(dir, "test/support/bun-sqlite.ts"),
       bun: path.join(dir, "test/support/bun-shell.ts"),
-      "bun-pty": path.join(dir, "src/pty/bun-pty-node-stub.ts"),
     },
   },
   test: {
