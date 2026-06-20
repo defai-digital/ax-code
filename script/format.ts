@@ -1,5 +1,6 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S npx tsx
 
-import { $ } from "bun"
+import { spawnSync } from "child_process"
 
-await $`bun run prettier --ignore-unknown --write .`
+const result = spawnSync("pnpm", ["exec", "prettier", "--ignore-unknown", "--write", "."], { stdio: "inherit" })
+process.exit(result.status ?? 1)
