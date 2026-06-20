@@ -58,11 +58,11 @@ catalogs:
       specifier: 8.0.3
       version: 8.0.3
     drizzle-kit:
-      specifier: 1.0.0-beta.19-d95b7a4
-      version: 1.0.0-beta.19-d95b7a4
+      specifier: 1.0.0-rc.3
+      version: 1.0.0-rc.3
     drizzle-orm:
-      specifier: 1.0.0-beta.20
-      version: 1.0.0-beta.20
+      specifier: 1.0.0-rc.3
+      version: 1.0.0-rc.3
     fast-glob:
       specifier: 3.3.3
       version: 3.3.3
@@ -335,7 +335,7 @@ importers:
         version: 8.0.3
       drizzle-orm:
         specifier: 'catalog:'
-        version: 1.0.0-beta.20(@opentelemetry/api@1.9.1)(@types/mssql@9.1.11(@azure/core-client@1.10.1))(better-sqlite3@11.10.0)(bun-types@1.3.11)(mssql@11.0.1(@azure/core-client@1.10.1))(zod@4.3.6)
+        version: 1.0.0-rc.3(@opentelemetry/api@1.9.1)(@types/mssql@9.1.11(@azure/core-client@1.10.1))(better-sqlite3@11.10.0)(bun-types@1.3.11)(mssql@11.0.1(@azure/core-client@1.10.1))(zod@4.3.6)
       fast-glob:
         specifier: 'catalog:'
         version: 3.3.3
@@ -489,7 +489,7 @@ importers:
         version: 4.1.9(vitest@4.1.9)
       drizzle-kit:
         specifier: 'catalog:'
-        version: 1.0.0-beta.19-d95b7a4
+        version: 1.0.0-rc.3
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
@@ -3631,17 +3631,16 @@ packages:
     resolution: {integrity: sha512-kCKF62fwtzwYm0IGBNjRUjtJgMfGapII+FslMHIjMR5KTnwEmBmWLDRSnc3XSNP8bNy34tekgQyDT0hr7pERRQ==}
     engines: {node: '>=12'}
 
-  drizzle-kit@1.0.0-beta.19-d95b7a4:
-    resolution: {integrity: sha512-M0sqc+42TYBod6kEZ3AsW6+JWe3+76gR1aDFbHH5DmuLKEwewmbzlhBG6qnvV6YA1cIIbkuam3dC7r6PREOCXw==}
+  drizzle-kit@1.0.0-rc.3:
+    resolution: {integrity: sha512-lwGIi6GTlEYzrtac1Szecns+zrAxjaOoNysfBCKRQOXQE7nMJ8IU2I2S6ek3FHEm1N30dQb5YrTdqV7zNH6n7A==}
     hasBin: true
 
-  drizzle-orm@1.0.0-beta.20:
-    resolution: {integrity: sha512-7qiuw+Z6yGr+ywt3PS5dP6UCfdymIuFT/ni6GnPGzLhkBIolNBTo4ByMBWTxJ7dW/Ya6d73GtkeuKfcVcriVHA==}
+  drizzle-orm@1.0.0-rc.3:
+    resolution: {integrity: sha512-akZOa5UxapFbdBG8IDkfBRpSZJpMHaOJtGgp7oi1oHaiU8S3KN92waHo2l5aRuv1D9tMGYpv3BQFOsiGcNjLTQ==}
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
       '@cloudflare/workers-types': '>=4'
-      '@effect/sql': ^0.48.5
-      '@effect/sql-pg': ^0.49.7
+      '@effect/sql-pg': '>=4.0.0-beta.58 || >=4.0.0'
       '@electric-sql/pglite': '>=0.2.0'
       '@libsql/client': '>=0.10.0'
       '@libsql/client-wasm': '>=0.10.0'
@@ -3665,8 +3664,8 @@ packages:
       arktype: '>=2.0.0'
       better-sqlite3: '>=9.3.0'
       bun-types: '*'
+      effect: '>=4.0.0-beta.58 || >=4.0.0'
       expo-sqlite: '>=14.0.0'
-      gel: '>=2'
       mssql: ^11.0.1
       mysql2: '>=2'
       pg: '>=8'
@@ -3680,8 +3679,6 @@ packages:
       '@aws-sdk/client-rds-data':
         optional: true
       '@cloudflare/workers-types':
-        optional: true
-      '@effect/sql':
         optional: true
       '@effect/sql-pg':
         optional: true
@@ -3713,6 +3710,8 @@ packages:
         optional: true
       '@types/better-sqlite3':
         optional: true
+      '@types/mssql':
+        optional: true
       '@types/pg':
         optional: true
       '@types/sql.js':
@@ -3729,9 +3728,11 @@ packages:
         optional: true
       bun-types:
         optional: true
+      effect:
+        optional: true
       expo-sqlite:
         optional: true
-      gel:
+      mssql:
         optional: true
       mysql2:
         optional: true
@@ -6358,6 +6359,7 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/abort-controller@2.1.2':
     dependencies:
@@ -6459,6 +6461,7 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   '@azure/keyvault-keys@4.10.0(@azure/core-client@1.10.1)':
     dependencies:
@@ -6477,6 +6480,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   '@azure/logger@1.3.0':
     dependencies:
@@ -7144,7 +7148,8 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@js-joda/core@5.7.0': {}
+  '@js-joda/core@5.7.0':
+    optional: true
 
   '@js-temporal/polyfill@0.5.1':
     dependencies:
@@ -8176,7 +8181,8 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@tediousjs/connection-string@0.5.0': {}
+  '@tediousjs/connection-string@0.5.0':
+    optional: true
 
   '@textlint/ast-node-types@15.5.4': {}
 
@@ -8291,6 +8297,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   '@types/node@20.19.37':
     dependencies:
@@ -8310,6 +8317,7 @@ snapshots:
   '@types/readable-stream@4.0.23':
     dependencies:
       '@types/node': 20.19.37
+    optional: true
 
   '@types/sarif@2.1.7': {}
 
@@ -8869,6 +8877,7 @@ snapshots:
       buffer: 6.0.3
       inherits: 2.0.4
       readable-stream: 4.7.0
+    optional: true
 
   body-parser@2.2.2:
     dependencies:
@@ -9084,7 +9093,8 @@ snapshots:
 
   comma-separated-tokens@2.0.3: {}
 
-  commander@11.1.0: {}
+  commander@11.1.0:
+    optional: true
 
   commander@12.1.0: {}
 
@@ -9228,7 +9238,7 @@ snapshots:
 
   dotenv@17.4.0: {}
 
-  drizzle-kit@1.0.0-beta.19-d95b7a4:
+  drizzle-kit@1.0.0-rc.3:
     dependencies:
       '@drizzle-team/brocli': 0.11.0
       '@js-temporal/polyfill': 0.5.1
@@ -9236,14 +9246,13 @@ snapshots:
       get-tsconfig: 4.13.7
       jiti: 2.6.1
 
-  drizzle-orm@1.0.0-beta.20(@opentelemetry/api@1.9.1)(@types/mssql@9.1.11(@azure/core-client@1.10.1))(better-sqlite3@11.10.0)(bun-types@1.3.11)(mssql@11.0.1(@azure/core-client@1.10.1))(zod@4.3.6):
-    dependencies:
-      '@types/mssql': 9.1.11(@azure/core-client@1.10.1)
-      mssql: 11.0.1(@azure/core-client@1.10.1)
+  drizzle-orm@1.0.0-rc.3(@opentelemetry/api@1.9.1)(@types/mssql@9.1.11(@azure/core-client@1.10.1))(better-sqlite3@11.10.0)(bun-types@1.3.11)(mssql@11.0.1(@azure/core-client@1.10.1))(zod@4.3.6):
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
+      '@types/mssql': 9.1.11(@azure/core-client@1.10.1)
       better-sqlite3: 11.10.0
       bun-types: 1.3.11
+      mssql: 11.0.1(@azure/core-client@1.10.1)
       zod: 4.3.6
 
   dunder-proto@1.0.1:
@@ -9991,7 +10000,8 @@ snapshots:
 
   jose@6.2.2: {}
 
-  js-md4@0.3.2: {}
+  js-md4@0.3.2:
+    optional: true
 
   js-tokens@10.0.0: {}
 
@@ -10325,6 +10335,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   multicast-dns@7.2.5:
     dependencies:
@@ -10344,7 +10355,8 @@ snapshots:
   napi-build-utils@2.0.0:
     optional: true
 
-  native-duplexpair@1.0.0: {}
+  native-duplexpair@1.0.0:
+    optional: true
 
   natural-compare@1.4.0: {}
 
@@ -10827,7 +10839,8 @@ snapshots:
 
   reusify@1.1.0: {}
 
-  rfdc@1.4.1: {}
+  rfdc@1.4.1:
+    optional: true
 
   rolldown@1.0.3:
     dependencies:
@@ -11048,7 +11061,8 @@ snapshots:
 
   split2@4.2.0: {}
 
-  sprintf-js@1.1.3: {}
+  sprintf-js@1.1.3:
+    optional: true
 
   stackback@0.0.2: {}
 
@@ -11175,7 +11189,8 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  tarn@3.0.2: {}
+  tarn@3.0.2:
+    optional: true
 
   tedious@18.6.2(@azure/core-client@1.10.1):
     dependencies:
@@ -11192,6 +11207,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   tedious@19.2.1(@azure/core-client@1.10.1):
     dependencies:
@@ -11208,6 +11224,7 @@ snapshots:
     transitivePeerDependencies:
       - '@azure/core-client'
       - supports-color
+    optional: true
 
   teex@1.0.1:
     dependencies:
