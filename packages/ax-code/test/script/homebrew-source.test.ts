@@ -50,7 +50,7 @@ describe("distribution support guardrails", () => {
     expect(ci).not.toContain("source-install-smoke")
   })
 
-  test("default formula points at compiled GitHub release assets", async () => {
+  test("default formula installs the node-bundled distribution", async () => {
     const text = await Bun.file(homebrewDefaultScript).text()
     expect(text).toContain("github.com/defai-digital/ax-code/releases/download")
     expect(text).toContain('gh release download "${TAG}"')
@@ -64,7 +64,12 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("LINUX_")
     expect(text).not.toContain("on_linux")
     expect(text).toContain("depends_on arch: :arm64")
-    expect(text).toContain('bin.install "ax-code"')
+    // node-bundled: install the whole tree into libexec and depend on node, not
+    // a single compiled binary. Bun is gone entirely.
+    expect(text).toContain('libexec.install Dir["*"]')
+    expect(text).toContain('depends_on "node"')
+    expect(text).toContain("--experimental-ffi")
+    expect(text).not.toContain('bin.install "ax-code"')
     expect(text).not.toContain('depends_on "bun"')
     expect(text).not.toContain("bundle/index.js")
   })
@@ -126,7 +131,7 @@ describe("distribution support guardrails", () => {
     expect(job).toContain("security delete-generic-password")
     expect(job).toContain("Sign release assets")
     expect(job).toContain("minisignPasswordFromKeychain")
-    expect(job).toContain("bun run script/sign-release-assets.ts --dist-dir packages/ax-code/dist")
+    expect(job).toContain("pnpm exec tsx script/sign-release-assets.ts --dist-dir packages/ax-code/dist")
     expect(job).toContain("missing minisign signature for ${archive}")
     expect(job).toContain("shopt -s nullglob")
     expect(job).toContain("no release assets found to upload")
@@ -195,10 +200,10 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" backend')
     // The literal runtimeMode assertion now lives in the shared assert script
     // (invoked above), which maps every non-source channel — Homebrew included —
-    // to the compiled backend runtime. macOS arm64 still ships the compiled
-    // (SEA) backend; only the Windows legs moved to node-bundled.
+    // to the node-bundled runtime. With Bun fully removed, macOS arm64 now ships
+    // the same node-bundled distribution as the Windows legs.
     const assertRuntimeMode = await Bun.file(assertRuntimeModeScript).text()
-    expect(assertRuntimeMode).toContain("RUNTIME_RE='compiled'")
+    expect(assertRuntimeMode).toContain("RUNTIME_RE='node-bundled'")
     expect(assertRuntimeMode).toContain('PATTERN="\\"runtimeMode\\":\\"${RUNTIME_RE}\\""')
     expect(text).not.toContain("npm install -g")
     expect(text).not.toContain("npm view")
@@ -247,13 +252,13 @@ describe("distribution support guardrails", () => {
     expect(buildJob![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
     // The smoke leg no longer drives a tui-backend stdio handshake; it runs
     // `doctor` and greps the reported runtime against the per-leg matrix value.
-    // macOS arm64 still ships the compiled (SEA) backend; Windows ships
-    // node-bundled — both verified by the same generic step.
+    // With Bun removed, every leg (macOS + Windows) ships node-bundled — verified
+    // by the same generic step.
     expect(buildJob![0]).toContain("Smoke — release runtime")
     expect(buildJob![0]).toContain("smoke-bin:")
     expect(buildJob![0]).toContain('BIN="${{ matrix.smoke-bin }}"')
-    expect(buildJob![0]).toContain("smoke-runtime: compiled")
     expect(buildJob![0]).toContain("smoke-runtime: node-bundled")
+    expect(buildJob![0]).not.toContain("smoke-runtime: compiled")
     expect(buildJob![0]).not.toContain("find dist -path")
     expect(buildJob![0]).toContain('grep -E "Runtime: .* \\(${{ matrix.smoke-runtime }}\\)"')
   })

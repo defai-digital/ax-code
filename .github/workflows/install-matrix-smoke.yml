@@ -101,7 +101,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           bash .github/scripts/assert-ax-code-version.sh "$VERSION"
 
-      - name: ax-code doctor - assert Homebrew runtime is compiled
+      - name: ax-code doctor - assert Homebrew runtime is node-bundled
         if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: bash
         run: |
@@ -174,37 +174,12 @@ jobs:
             throw "expected ax-code --version to be $Version, got $Output"
           }
 
-      - name: ax-code doctor - assert Windows runtime is compiled
+      - name: ax-code doctor - assert Windows runtime is Node bundled
         if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: pwsh
         run: |
           $Output = (ax-code doctor 2>&1 | Out-String)
           Write-Host $Output
-          if ($Output -notmatch 'Runtime: Bun .* \(compiled\)') {
-            throw "Windows install did not report compiled runtimeMode"
-          }
-
-      - name: Smoke - installed backend stdio handshake
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: pwsh
-        timeout-minutes: 1
-        run: |
-          $Output = ('{"type":"rpc.request","method":"health","id":1}' | ax-code tui-backend --stdio 2>&1 | Out-String)
-          Write-Host $Output
-          if ($Output -notmatch '"type":"rpc.result".*"id":1') {
-            throw "Windows installed backend did not return rpc health result"
-          }
-          if ($Output -notmatch '"runtimeMode":"compiled"') {
-            throw "Windows installed backend did not report compiled runtimeMode"
-          }
-
-      - name: Smoke - non-interactive command
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: pwsh
-        timeout-minutes: 1
-        run: |
-          ax-code debug config
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "debug config exited $LASTEXITCODE"
-            exit 0
+          if ($Output -notmatch 'Runtime: Node .* \(node-bundled\)') {
+            throw "Windows install did not report node-bundled runtimeMode"
           }

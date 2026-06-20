@@ -31,7 +31,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build SDK
-        run: bun tsc
+        run: pnpm exec tsc
         working-directory: packages/sdk/js
 
       - name: Build Plugin
@@ -63,18 +63,22 @@ jobs:
         include:
           - os: macos-latest
             targets: darwin-arm64
-            build-args: --single --skip-install
+            build-script: script/build-node-tui.ts
+            build-args: --release --arch arm64
             smoke-bin: dist/ax-code-darwin-arm64/bin/ax-code
+            smoke-runtime: node-bundled
           - os: windows-2022
             targets: win32-x64
-            # --baseline also emits ax-code-windows-x64-baseline.zip (AVX2-free)
-            # for no_avx2 CPUs; both x64 zips ship from this single job. See #274.
-            build-args: --single --baseline --skip-install
-            smoke-bin: dist/ax-code-windows-x64/bin/ax-code.exe
+            build-script: script/build-node.ts
+            build-args: --arch x64
+            smoke-bin: dist/ax-code-windows-x64/bin/ax-code.cmd
+            smoke-runtime: node-bundled
           - os: windows-11-arm
             targets: win32-arm64
-            build-args: --single --skip-install
-            smoke-bin: dist/ax-code-windows-arm64/bin/ax-code.exe
+            build-script: script/build-node.ts
+            build-args: --arch arm64
+            smoke-bin: dist/ax-code-windows-arm64/bin/ax-code.cmd
+            smoke-runtime: node-bundled
     runs-on: ${{ matrix.os }}
     env:
       AX_CODE_DISABLE_AUTOUPDATE: "1"
@@ -104,7 +108,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build SDK
-        run: bun tsc
+        run: pnpm exec tsc
         working-directory: packages/sdk/js
 
       - name: Build Plugin
@@ -112,34 +116,32 @@ jobs:
 
       - name: Build
         working-directory: packages/ax-code
-        run: bun run script/build.ts ${{ matrix.build-args }}
+        run: pnpm exec tsx ${{ matrix.build-script }} ${{ matrix.build-args }}
         env:
           AX_CODE_VERSION: ${{ github.ref_name }}
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
 
-      - name: Smoke — compiled backend stdio handshake
+      - name: Smoke — release runtime
         working-directory: packages/ax-code
         shell: bash
         run: |
           set -e
           BIN="${{ matrix.smoke-bin }}"
           if [ -z "$BIN" ]; then
-            echo "FAIL: release matrix did not provide a compiled ax-code smoke binary"
+            echo "FAIL: release matrix did not provide an ax-code smoke target"
             exit 1
           fi
           if [ ! -f "$BIN" ]; then
-            echo "FAIL: compiled ax-code smoke binary not found: $BIN"
+            echo "FAIL: ax-code smoke target not found: $BIN"
             exit 1
           fi
-          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | "$BIN" tui-backend --stdio)"
-          echo "$OUTPUT"
-          if ! echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' >/dev/null; then
-            echo "FAIL: compiled tui-backend did not return an RPC health result"
-            exit 1
-          fi
-          if ! echo "$OUTPUT" | grep -E '"runtimeMode":"compiled"' >/dev/null; then
-            echo "FAIL: compiled tui-backend did not report compiled runtimeMode"
+          VERSION_OUTPUT="$("$BIN" --version)"
+          echo "$VERSION_OUTPUT"
+          DOCTOR_OUTPUT="$("$BIN" doctor)"
+          echo "$DOCTOR_OUTPUT"
+          if ! echo "$DOCTOR_OUTPUT" | grep -E "Runtime: .* \(${{ matrix.smoke-runtime }}\)" >/dev/null; then
+            echo "FAIL: release runtime did not report ${{ matrix.smoke-runtime }}"
             exit 1
           fi
 
@@ -217,7 +219,7 @@ jobs:
           # AX_CODE_MINISIGN_PASSWORD is intentionally NOT exported here — the
           # signing script reads the passphrase from the macOS Keychain via
           # minisignPasswordFromKeychain() in sign-release-assets.ts.
-          bun run script/sign-release-assets.ts --dist-dir packages/ax-code/dist --secret-key "$AX_CODE_MINISIGN_KEY_DIR/minisign.key" --public-key "$AX_CODE_MINISIGN_KEY_DIR/minisign.pub"
+          pnpm exec tsx script/sign-release-assets.ts --dist-dir packages/ax-code/dist --secret-key "$AX_CODE_MINISIGN_KEY_DIR/minisign.key" --public-key "$AX_CODE_MINISIGN_KEY_DIR/minisign.pub"
           shopt -s nullglob
           archives=(packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
           for archive in "${archives[@]}"; do

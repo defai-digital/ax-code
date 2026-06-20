@@ -13,14 +13,17 @@ LABEL="${3:-$CHANNEL}"
 CHECK_LABEL="${LABEL}"
 
 if [ "$CHANNEL" = "source" ]; then
+  RUNTIME_NAME="Bun"
   RUNTIME_RE='(bun-bundled|source)'
 else
-  RUNTIME_RE='compiled'
+  # Homebrew/Windows ship the node-bundled distribution.
+  RUNTIME_NAME="Node"
+  RUNTIME_RE='node-bundled'
 fi
 
 case "$MODE" in
   doctor)
-    PATTERN="Runtime: Bun .* \\(${RUNTIME_RE}\\)"
+    PATTERN="Runtime: ${RUNTIME_NAME} .* \\(${RUNTIME_RE}\\)"
     CHECK_LABEL="runtimeMode"
     ;;
   backend)
