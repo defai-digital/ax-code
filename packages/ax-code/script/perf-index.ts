@@ -1,8 +1,27 @@
 import fs from "fs/promises"
+import { existsSync } from "fs"
+import { spawn } from "child_process"
 import os from "os"
 import path from "path"
 import { parse } from "jsonc-parser"
 import type { Bench, CacheMode } from "../src/cli/cmd/debug/perf"
+
+// Run a command capturing stdout/stderr + exit code (replaces Bun.spawn so this
+// script runs under Node/tsx).
+function spawnCapture(cmd: string[], opts: { cwd?: string; captureStderr?: boolean } = {}) {
+  return new Promise<{ code: number; stdout: string; stderr: string }>((resolve) => {
+    const proc = spawn(cmd[0], cmd.slice(1), {
+      cwd: opts.cwd,
+      stdio: ["ignore", "pipe", opts.captureStderr ? "pipe" : "ignore"],
+    })
+    let stdout = ""
+    let stderr = ""
+    proc.stdout?.on("data", (c) => (stdout += c))
+    proc.stderr?.on("data", (c) => (stderr += c))
+    proc.on("error", () => resolve({ code: 1, stdout, stderr }))
+    proc.on("close", (code) => resolve({ code: code ?? 1, stdout, stderr }))
+  })
+}
 
 type Threshold = {
   elapsedMs?: number
@@ -293,7 +312,7 @@ export function regression(): Regression {
 }
 
 export async function load(file: string) {
-  const text = await Bun.file(file).text()
+  const text = await fs.readFile(file, "utf8")
   const data = parse(text)
   const root = obj(data, "config")
   if (!root) return {} satisfies Config
@@ -338,7 +357,7 @@ export async function load(file: string) {
 export async function read(cwd: string): Promise<{ file: string | undefined; cfg: Config }> {
   const input = arg("--config")
   const file = input ? path.resolve(cwd, input) : path.resolve(cwd, "perf-index.jsonc")
-  const exists = await Bun.file(file).exists()
+  const exists = existsSync(file)
   if (!exists) {
     if (input) throw new Error(`Config not found: ${file}`)
     return { file: undefined, cfg: {} satisfies Config }
@@ -409,15 +428,9 @@ export function resolve(cwd: string, file: string | undefined, cfg: Config): Opt
 
 async function git(cwd: string, args: string[]) {
   try {
-    const proc = Bun.spawn(["git", ...args], {
-      cwd,
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "ignore",
-    })
-    const [code, text] = await Promise.all([proc.exited, new Response(proc.stdout).text()])
+    const { code, stdout } = await spawnCapture(["git", ...args], { cwd })
     if (code !== 0) return
-    const out = text.trim()
+    const out = stdout.trim()
     return out.length > 0 ? out : undefined
   } catch {
     return
@@ -455,7 +468,7 @@ export async function meta(cwd: string, file?: string): Promise<Meta> {
 }
 
 export async function loadVerdict(file: string) {
-  return JSON.parse(await Bun.file(file).text()) as Verdict
+  return JSON.parse(await fs.readFile(file, "utf8")) as Verdict
 }
 
 export async function baselineSummary(file: string | undefined, required = false) {
@@ -465,7 +478,7 @@ export async function baselineSummary(file: string | undefined, required = false
       verdict: undefined,
     }
   }
-  const exists = await Bun.file(file).exists()
+  const exists = existsSync(file)
   if (!exists) {
     if (required) throw new Error(`Baseline summary not found: ${file}`)
     return {
@@ -820,17 +833,7 @@ async function run(cwd: string, opts: Opts) {
   if (opts.probe) cmd.push("--probe")
   if (opts.nativeProfile) cmd.push("--native-profile")
 
-  const proc = Bun.spawn(cmd, {
-    cwd,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
+  const { code, stdout, stderr } = await spawnCapture(cmd, { cwd, captureStderr: true })
   if (code !== 0) {
     throw new Error(stderr || stdout || `perf benchmark failed with exit code ${code}`)
   }
@@ -846,10 +849,10 @@ async function main() {
   const gate = evaluate(report, opts.gate)
 
   await fs.mkdir(path.dirname(opts.out), { recursive: true })
-  await Bun.write(opts.out, JSON.stringify(report, null, 2) + "\n")
+  await fs.writeFile(opts.out, JSON.stringify(report, null, 2) + "\n")
   if (opts.baseline.out) {
     await fs.mkdir(path.dirname(opts.baseline.out), { recursive: true })
-    await Bun.write(opts.baseline.out, JSON.stringify(report, null, 2) + "\n")
+    await fs.writeFile(opts.baseline.out, JSON.stringify(report, null, 2) + "\n")
   }
 
   const out = [render(report, gate, opts.out, opts.summary, opts.baseline.out)]
@@ -868,10 +871,10 @@ async function main() {
       Object.keys(opts.baseline.regression.phases).length > 0)
 
   if (hasBase) {
-    if (!(await Bun.file(base).exists())) {
+    if (!(existsSync(base))) {
       throw new Error(`Baseline not found: ${base}`)
     }
-    const prev = JSON.parse(await Bun.file(base).text()) as Bench
+    const prev = JSON.parse(await fs.readFile(base, "utf8")) as Bench
     diff = compare(report, prev, opts.baseline.regression)
     diff.compat = guard({ directory: report.directory, meta: info, requested: report.requested }, baseSummary.verdict)
     out.push(renderCompare(report, diff, opts.out, base))
@@ -892,10 +895,10 @@ async function main() {
     opts.baseline.outSummary,
     info,
   )
-  await Bun.write(opts.summary, JSON.stringify(result, null, 2) + "\n")
+  await fs.writeFile(opts.summary, JSON.stringify(result, null, 2) + "\n")
   if (opts.baseline.outSummary && opts.baseline.out) {
     await fs.mkdir(path.dirname(opts.baseline.outSummary), { recursive: true })
-    await Bun.write(
+    await fs.writeFile(
       opts.baseline.outSummary,
       JSON.stringify(
         verdict(
@@ -921,12 +924,8 @@ async function main() {
 
   const fileOut = process.env["GITHUB_STEP_SUMMARY"]
   if (fileOut) {
-    await Bun.write(
-      fileOut,
-      `${await Bun.file(fileOut)
-        .text()
-        .catch(() => "")}${text}\n`,
-    )
+    const existing = await fs.readFile(fileOut, "utf8").catch(() => "")
+    await fs.writeFile(fileOut, `${existing}${text}\n`)
   }
 
   if (failures.length > 0) process.exit(1)
