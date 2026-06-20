@@ -9,7 +9,7 @@ describe("probeCliLanguageModel", () => {
         providerID: "test-cli",
         modelID: "test-model",
         binary: process.execPath,
-        args: ["-e", "process.stdout.write('ok')"],
+        args: ["-e", "process.stdout.write('ok')", "--"],
         parser: {
           parseComplete: (output: string) => ({ text: output.trim() }),
           parseStreamLine: () => null,
@@ -25,7 +25,7 @@ describe("probeCliLanguageModel", () => {
         providerID: "test-cli",
         modelID: "test-model",
         binary: process.execPath,
-        args: ["-e", "process.stdout.write('broken probe'); process.exit(7)"],
+        args: ["-e", "process.stdout.write('broken probe'); process.exit(7)", "--"],
         parser: {
           parseComplete: (output: string) => ({ text: output.trim() }),
           parseStreamLine: () => null,

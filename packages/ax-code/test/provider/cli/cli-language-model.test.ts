@@ -123,7 +123,7 @@ describe("CliLanguageModel", () => {
   test("doGenerate throws on non-zero exit even when stdout is present", async () => {
     const model = makeModel({
       binary: process.execPath,
-      args: ["-e", "process.stdout.write('partial output'); process.exit(7)"],
+      args: ["-e", "process.stdout.write('partial output'); process.exit(7)", "--"],
       parser: {
         parseComplete: () => ({ text: "unexpected success" }),
         parseStreamLine: () => null,
@@ -306,7 +306,7 @@ describe("CliLanguageModel", () => {
   test("doStream surfaces process failure after stdout and does not finish", async () => {
     const model = makeModel({
       binary: process.execPath,
-      args: ["-e", "process.stdout.write('partial output'); process.exit(9)"],
+      args: ["-e", "process.stdout.write('partial output'); process.exit(9)", "--"],
       parser: {
         parseComplete: () => ({ text: "" }),
         parseStreamLine: (line: string) => line.trim() || null,
@@ -497,7 +497,7 @@ describe("CliLanguageModel", () => {
   test("doStream tolerates parser exceptions and falls back to raw stdout", async () => {
     const model = makeModel({
       binary: process.execPath,
-      args: ["-e", "process.stdout.write('bad line\\n')"],
+      args: ["-e", "process.stdout.write('bad line\\n')", "--"],
       parser: {
         parseComplete: () => ({ text: "" }),
         parseStreamLine: () => {
@@ -530,7 +530,7 @@ describe("CliLanguageModel", () => {
   test("doStream preserves raw fallback whitespace", async () => {
     const model = makeModel({
       binary: process.execPath,
-      args: ["-e", "process.stdout.write('  indented answer  \\n')"],
+      args: ["-e", "process.stdout.write('  indented answer  \\n')", "--"],
       parser: {
         parseComplete: () => ({ text: "" }),
         parseStreamLine: () => null,
