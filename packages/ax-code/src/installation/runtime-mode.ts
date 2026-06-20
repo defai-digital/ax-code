@@ -11,7 +11,7 @@
 // declared in `./index.ts`. They are referenced here without a local
 // `declare global` block to avoid duplicate-declaration errors.
 
-export type RuntimeMode = "compiled" | "source" | "bun-bundled" | "unknown"
+export type RuntimeMode = "compiled" | "source" | "bun-bundled" | "node-bundled" | "unknown"
 
 export type DetectInput = {
   execPath?: string
@@ -35,9 +35,11 @@ export function detectRuntimeMode(input: DetectInput = {}): RuntimeMode {
   const execPath = input.execPath ?? process.execPath
   const base = basenameAcrossSeparators(execPath).toLowerCase()
   const isBunRuntime = base === "bun" || base === "bun.exe"
+  const isNodeRuntime = base === "node" || base === "node.exe"
   const channel = input.channel ?? (typeof AX_CODE_CHANNEL === "string" ? AX_CODE_CHANNEL : undefined)
   const versionDefined = input.versionDefined ?? typeof AX_CODE_VERSION === "string"
 
+  if (isNodeRuntime && versionDefined) return "node-bundled"
   if (!isBunRuntime) {
     return versionDefined ? "compiled" : "unknown"
   }
