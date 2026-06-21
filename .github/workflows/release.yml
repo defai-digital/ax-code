@@ -44,10 +44,8 @@ jobs:
         run: pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 1
         env:
           AX_CODE_DISABLE_AUTOUPDATE: "1"
-          AX_CODE_DISABLE_AUTO_INDEX: "1"
           AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
           AX_CODE_DISABLE_MODELS_FETCH: "1"
-          AX_CODE_DISABLE_PROJECT_CONFIG: "1"
           AX_CODE_DISABLE_SHARE: "true"
 
       - name: Upload deterministic test report
