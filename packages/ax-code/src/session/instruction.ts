@@ -65,7 +65,7 @@ function isHttpInstructionUrl(input: string) {
 
 async function resolveRelative(instruction: string): Promise<string[]> {
   if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
-    return Filesystem.globUp(instruction, Instance.directory, Instance.worktree).catch(() => [])
+    return Filesystem.globUp(instruction, Instance.directory, Instance.worktree)
   }
   if (!Flag.AX_CODE_CONFIG_DIR) {
     log.warn(
@@ -73,7 +73,7 @@ async function resolveRelative(instruction: string): Promise<string[]> {
     )
     return []
   }
-  return Filesystem.globUp(instruction, Flag.AX_CODE_CONFIG_DIR, Flag.AX_CODE_CONFIG_DIR).catch(() => [])
+  return Filesystem.globUp(instruction, Flag.AX_CODE_CONFIG_DIR, Flag.AX_CODE_CONFIG_DIR)
 }
 
 export namespace InstructionPrompt {
@@ -146,7 +146,7 @@ export namespace InstructionPrompt {
               cwd: path.dirname(instruction),
               absolute: true,
               include: "file",
-            }).catch(() => [])
+            })
           : await resolveRelative(instruction)
         for (const match of matches) {
           const resolved = path.resolve(match)
@@ -287,7 +287,7 @@ export namespace InstructionPrompt {
 
       if (found && found !== target && !system.has(found) && !already.has(found) && !isClaimed(messageID, found)) {
         claim(messageID, found)
-        const content = await Filesystem.readText(found).catch(() => undefined)
+        const content = await Filesystem.readText(found)
         if (content) {
           results.push({ filepath: found, content: "Instructions from: " + found + "\n" + content })
         }

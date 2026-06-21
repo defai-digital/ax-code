@@ -232,17 +232,13 @@ export namespace Filesystem {
     let current = start
     const result = []
     while (true) {
-      try {
-        const matches = await Glob.scan(pattern, {
-          cwd: current,
-          absolute: true,
-          include: "file",
-          dot: true,
-        })
-        result.push(...matches)
-      } catch {
-        // Skip invalid glob patterns
-      }
+      const matches = await Glob.scan(pattern, {
+        cwd: current,
+        absolute: true,
+        include: "file",
+        dot: true,
+      })
+      result.push(...matches)
       if (stop === current) break
       const parent = dirname(current)
       if (parent === current) break

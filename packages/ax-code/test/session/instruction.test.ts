@@ -7,6 +7,9 @@ import { Instance } from "../../src/project/instance"
 import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"
 import { Ssrf } from "../../src/util/ssrf"
+import { Filesystem } from "../../src/util/filesystem"
+import { Glob } from "../../src/util/glob"
+import { Config } from "../../src/config/config"
 
 describe("InstructionPrompt.resolve", () => {
   test("returns empty when AGENTS.md is at project root (already in systemPaths)", async () => {
@@ -117,6 +120,32 @@ describe("InstructionPrompt.resolve", () => {
         expect(results).toEqual([])
       },
     })
+  })
+
+  test("surfaces unreadable nested instruction files", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "subdir", "AGENTS.md"), "# Subdir Instructions")
+        await Bun.write(path.join(dir, "subdir", "nested", "file.ts"), "const x = 1")
+      },
+    })
+    const instructionPath = path.join(tmp.path, "subdir", "AGENTS.md")
+    await fs.chmod(instructionPath, 0)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(
+            InstructionPrompt.resolve([], path.join(tmp.path, "subdir", "nested", "file.ts"), "test-message-eacces"),
+          ).rejects.toMatchObject({ code: "EACCES" })
+        },
+      })
+    } finally {
+      await fs.chmod(instructionPath, 0o600)
+    }
   })
 })
 
@@ -294,6 +323,54 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
       })
     } finally {
       homedir.mockRestore()
+    }
+  })
+
+  test("surfaces relative instruction glob failures", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["CUSTOM.md"],
+      },
+    })
+    const error = Object.assign(new Error("permission denied"), { code: "EACCES" })
+    const globSpy = vi.spyOn(Filesystem, "globUp").mockRejectedValue(error)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(InstructionPrompt.systemPaths()).rejects.toMatchObject({ code: "EACCES" })
+        },
+      })
+    } finally {
+      globSpy.mockRestore()
+    }
+  })
+
+  test("surfaces absolute instruction glob failures", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const instructionPath = path.join(tmp.path, "private", "CUSTOM.md")
+    const error = Object.assign(new Error("permission denied"), { code: "EACCES" })
+    const globSpy = vi.spyOn(Glob, "scan").mockRejectedValue(error)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const getSpy = vi.spyOn(Config, "get").mockResolvedValue({
+            instructions: [instructionPath],
+          } as Awaited<ReturnType<typeof Config.get>>)
+
+          try {
+            await expect(InstructionPrompt.systemPaths()).rejects.toMatchObject({ code: "EACCES" })
+          } finally {
+            getSpy.mockRestore()
+          }
+        },
+      })
+    } finally {
+      globSpy.mockRestore()
     }
   })
 })

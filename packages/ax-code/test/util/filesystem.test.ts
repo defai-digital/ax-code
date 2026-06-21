@@ -98,6 +98,23 @@ describe("filesystem", () => {
     })
   })
 
+  describe("globUp()", () => {
+    test("throws for inaccessible search directories", async () => {
+      if (process.platform === "win32") return
+
+      await using tmp = await tmpdir()
+      const dirpath = path.join(tmp.path, "private")
+      await fs.mkdir(dirpath)
+      await fs.chmod(dirpath, 0)
+
+      try {
+        await expect(Filesystem.globUp("AGENTS.md", dirpath, dirpath)).rejects.toMatchObject({ code: "EACCES" })
+      } finally {
+        await fs.chmod(dirpath, 0o700)
+      }
+    })
+  })
+
   describe("readText()", () => {
     test("reads file content", async () => {
       await using tmp = await tmpdir()
