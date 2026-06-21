@@ -132,6 +132,10 @@ export const createSseClient = <TData = unknown>({
 
         if (!response.body) throw new Error("No body in SSE response")
 
+        // Reset retry counter on successful connection so a transient
+        // failure after a long-running stream starts with a short backoff.
+        attempt = 0
+
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
 
         let buffer = ""
@@ -214,6 +218,13 @@ export const createSseClient = <TData = unknown>({
           }
         } finally {
           signal.removeEventListener("abort", abortHandler)
+          // Cancel the reader so the upstream HTTP connection is torn down,
+          // not just detached - otherwise the server keeps buffering events.
+          try {
+            await reader.cancel()
+          } catch {
+            // noop
+          }
           reader.releaseLock()
         }
 
@@ -227,7 +238,7 @@ export const createSseClient = <TData = unknown>({
         }
 
         // exponential backoff: double retry each attempt, cap at 30s
-        const backoff = Math.min(retryDelay * 2 ** (attempt - 1), sseMaxRetryDelay ?? 30000)
+        const backoff = Math.min(retryDelay * 2 ** Math.max(attempt - 1, 0), sseMaxRetryDelay ?? 30000)
         await sleep(backoff)
       }
     }
