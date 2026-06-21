@@ -288,6 +288,25 @@ test("track keeps snapshot trees reachable through refs", async () => {
   })
 })
 
+test("track surfaces unreadable git exclude files", async () => {
+  if (process.platform === "win32") return
+
+  await using tmp = await bootstrap()
+  const exclude = path.join(tmp.path, ".git", "info", "exclude")
+  await fs.chmod(exclude, 0)
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Snapshot.track()).rejects.toMatchObject({ code: "EACCES" })
+      },
+    })
+  } finally {
+    await fs.chmod(exclude, 0o644)
+  }
+})
+
 test("cleanup deletes expired snapshot refs before pruning", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
