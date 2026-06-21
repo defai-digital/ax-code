@@ -2492,10 +2492,8 @@ export class WorkflowRun extends HeyApiClient {
           toolCalls?: number
           childAgents?: number
           retries?: number
-          estimatedCostUsd?: number
-          costPerConfirmedFindingUsd?: number | null
           verifiedCompletionCount?: number
-          costPerVerifiedCompletionUsd?: number | null
+          tokensPerConfirmedFinding?: number | null
           confirmedFindings?: number
           likelyFindings?: number
           rejectedFindings?: number

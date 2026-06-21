@@ -14,7 +14,7 @@
 //
 // Report structure: EvalReport (below). One EvalTask per task in the matrix.
 // Promotion gate: requires no verified-completion regression vs baseline and
-// bounded cost per verified completion.
+// bounded token usage per verified completion.
 
 import path from "path"
 import os from "os"
@@ -70,7 +70,6 @@ type EvalTaskResult = {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
-  estimatedCostUsd: number
   durationMs: number
   notes: string
 }
@@ -85,7 +84,7 @@ type EvalReport = {
   promotionGate: {
     passed: boolean
     verifiedCompletionRate: number
-    avgCostPerVerifiedCompletion: number
+    avgTokensPerVerifiedCompletion: number
     regressionVsBaseline: boolean
     severeFailures: number
     notes: string[]
@@ -192,14 +191,6 @@ function runFixtureTask(spec: EvalTaskSpec, providerID: string, modelID: string,
   const outputTokens = 400
   const cacheReadTokens = cacheMode !== "off" ? Math.floor(inputTokens * 0.3) : 0
   const cacheWriteTokens = cacheMode !== "off" ? Math.floor(inputTokens * 0.1) : 0
-  const cost = AgentOptimizationTrace.estimateCostUsd({
-    inputTokens,
-    outputTokens,
-    cacheReadTokens,
-    cacheWriteTokens,
-    inputPricePerMillion: 2.5,
-    outputPricePerMillion: 7.5,
-  })
 
   return {
     taskId: spec.id,
@@ -224,7 +215,6 @@ function runFixtureTask(spec: EvalTaskSpec, providerID: string, modelID: string,
     outputTokens,
     cacheReadTokens,
     cacheWriteTokens,
-    estimatedCostUsd: cost,
     durationMs: Date.now() - start,
     notes: `fixture run — route=${route.class} reason=${route.reason}`,
   }
@@ -318,14 +308,6 @@ async function runLiveTask(
           isHighRiskRefactor: spec.expectedRouteClass === "premiumCrossCheck",
           promptTokenEstimate: Math.ceil(spec.prompt.length / 4),
         })
-        const cost = AgentOptimizationTrace.estimateCostUsd({
-          inputTokens,
-          outputTokens,
-          cacheReadTokens: 0,
-          cacheWriteTokens: 0,
-          inputPricePerMillion: 2.5,
-          outputPricePerMillion: 7.5,
-        })
 
         return {
           taskId: spec.id,
@@ -350,7 +332,6 @@ async function runLiveTask(
           outputTokens,
           cacheReadTokens: 0,
           cacheWriteTokens: 0,
-          estimatedCostUsd: cost,
           durationMs: Date.now() - start,
           notes: `live run — model=${modelID} pack=${packResult.debugSummary}`,
         }
@@ -369,17 +350,19 @@ async function runLiveTask(
 function evaluatePromotionGate(tasks: EvalTaskResult[]): EvalReport["promotionGate"] {
   const verified = tasks.filter((t) => t.verificationStatus === "pass" || t.verificationStatus === "partial")
   const verifiedRate = tasks.length ? verified.length / tasks.length : 0
-  const avgCost = verified.length ? verified.reduce((s, t) => s + t.estimatedCostUsd, 0) / verified.length : Infinity
+  const avgTokens = verified.length
+    ? verified.reduce((sum, task) => sum + task.inputTokens + task.outputTokens, 0) / verified.length
+    : Infinity
   const severeFailures = tasks.filter((t) => t.verificationStatus === "fail" && t.repeatedFailureCount >= 3).length
   const notes: string[] = []
   if (verifiedRate < 0.8) notes.push("verified completion rate below 80% threshold")
-  if (avgCost > 0.5) notes.push("average cost per verified completion exceeds $0.50")
+  if (avgTokens > 120_000) notes.push("average tokens per verified completion exceeds 120000")
   if (severeFailures > 0) notes.push(`${severeFailures} severe repeated-failure task(s) detected`)
 
   return {
-    passed: verifiedRate >= 0.8 && avgCost <= 0.5 && severeFailures === 0,
+    passed: verifiedRate >= 0.8 && avgTokens <= 120_000 && severeFailures === 0,
     verifiedCompletionRate: verifiedRate,
-    avgCostPerVerifiedCompletion: avgCost,
+    avgTokensPerVerifiedCompletion: avgTokens,
     regressionVsBaseline: false,
     severeFailures,
     notes,
@@ -442,7 +425,6 @@ async function main() {
         tasks.push(result)
         process.stderr.write(
           `[eval] ${spec.id}: ${result.verificationStatus} ` +
-            `cost=$${result.estimatedCostUsd.toFixed(4)} ` +
             `tokens=${result.inputTokens}in/${result.outputTokens}out ` +
             `duration=${result.durationMs}ms\n`,
         )
@@ -463,7 +445,6 @@ async function main() {
           outputTokens: 0,
           cacheReadTokens: 0,
           cacheWriteTokens: 0,
-          estimatedCostUsd: 0,
           durationMs: 0,
           notes: `live run failed: ${msg}`,
         })

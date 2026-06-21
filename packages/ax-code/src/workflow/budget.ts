@@ -38,7 +38,6 @@ export function addWorkflowBudgetUsage(
     toolCalls: left.toolCalls + right.toolCalls,
     childAgents: left.childAgents + right.childAgents,
     retries: left.retries + right.retries,
-    estimatedCostUsd: left.estimatedCostUsd + right.estimatedCostUsd,
   }
 }
 

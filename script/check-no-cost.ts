@@ -11,7 +11,7 @@
  * Forbidden:
  *   - schema field named `cost` (zod, drizzle, openapi, plain TS object literal)
  *   - identifiers `pricePerToken`, `inputCost`, `outputCost`, `totalCost`,
- *     `costUsd`, `priceUsd`
+ *     `costUsd`, `priceUsd`, `estimatedCostUsd`, `costPer...Usd`, `formatUsd`
  *   - `model.cost`, `models[*].cost`, `Cost.compute`, `Cost.format`
  *   - `/cost` slash command registrations
  *
@@ -60,7 +60,10 @@ const PATTERNS: Array<{ name: string; re: RegExp }> = [
   // OpenAPI required arrays containing "cost".
   { name: "openapi-required-cost", re: /"required"\s*:\s*\[[^\]]*"cost"[^\]]*\]/g },
   // Pricing-style identifiers.
-  { name: "pricing-identifier", re: /\b(?:pricePerToken|inputCost|outputCost|totalCost|costUsd|priceUsd)\b/g },
+  {
+    name: "pricing-identifier",
+    re: /\b(?:pricePerToken|inputCost|outputCost|totalCost|costUsd|priceUsd|estimatedCostUsd|costPer[A-Za-z0-9_]*Usd|format(?:Signed|Optional)?Usd|estimateCostUsd)\b/g,
+  },
   // Common access patterns.
   { name: "model-cost-access", re: /\b(?:model|models\[[^\]]+\])\.cost\b/g },
   // Cost helper namespace.

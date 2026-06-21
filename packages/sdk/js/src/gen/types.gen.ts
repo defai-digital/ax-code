@@ -965,7 +965,6 @@ export type WorkflowRunEventRecord = {
     toolCalls?: number
     childAgents?: number
     retries?: number
-    estimatedCostUsd?: number
   }
   verificationEnvelopeIDs: Array<string>
   error?: string
@@ -1208,7 +1207,6 @@ export type WorkflowBudgetLedgerEventEntry = {
     toolCalls?: number
     childAgents?: number
     retries?: number
-    estimatedCostUsd?: number
   }
   message?: string
   time: {
@@ -6499,7 +6497,6 @@ export type WorkflowRunDashboardResponses = {
       toolCalls?: number
       childAgents?: number
       retries?: number
-      estimatedCostUsd?: number
     }
     budgetLimit: {
       maxTotalTokens: number
@@ -6555,10 +6552,8 @@ export type WorkflowRunDashboardResponses = {
         toolCalls: number
         childAgents: number
         retries: number
-        estimatedCostUsd: number
-        costPerConfirmedFindingUsd: number | null
         verifiedCompletionCount: number
-        costPerVerifiedCompletionUsd: number | null
+        tokensPerConfirmedFinding: number | null
         confirmedFindings: number
         likelyFindings: number
         rejectedFindings: number
@@ -6579,7 +6574,6 @@ export type WorkflowRunDashboardResponses = {
         falsePositiveFindingsDelta: number
         totalTokensDelta?: number
         elapsedMsDelta?: number
-        estimatedCostUsdDelta?: number
         interventionCountDelta?: number
       }
     }
@@ -6632,10 +6626,8 @@ export type WorkflowRunEvalCasesResponses = {
         toolCalls?: number
         childAgents?: number
         retries?: number
-        estimatedCostUsd?: number
-        costPerConfirmedFindingUsd?: number | null
         verifiedCompletionCount?: number
-        costPerVerifiedCompletionUsd?: number | null
+        tokensPerConfirmedFinding?: number | null
         confirmedFindings?: number
         likelyFindings?: number
         rejectedFindings?: number
@@ -6868,7 +6860,6 @@ export type WorkflowRunGetResponses = {
       toolCalls?: number
       childAgents?: number
       retries?: number
-      estimatedCostUsd?: number
     }
     verificationEnvelopeIDs: Array<string>
     error?: string
@@ -6938,10 +6929,8 @@ export type WorkflowRunEvalSummaryData = {
         toolCalls?: number
         childAgents?: number
         retries?: number
-        estimatedCostUsd?: number
-        costPerConfirmedFindingUsd?: number | null
         verifiedCompletionCount?: number
-        costPerVerifiedCompletionUsd?: number | null
+        tokensPerConfirmedFinding?: number | null
         confirmedFindings?: number
         likelyFindings?: number
         rejectedFindings?: number
@@ -6995,10 +6984,8 @@ export type WorkflowRunEvalSummaryResponses = {
       toolCalls: number
       childAgents: number
       retries: number
-      estimatedCostUsd: number
-      costPerConfirmedFindingUsd: number | null
       verifiedCompletionCount: number
-      costPerVerifiedCompletionUsd: number | null
+      tokensPerConfirmedFinding: number | null
       confirmedFindings: number
       likelyFindings: number
       rejectedFindings: number
@@ -7019,7 +7006,6 @@ export type WorkflowRunEvalSummaryResponses = {
       falsePositiveFindingsDelta: number
       totalTokensDelta?: number
       elapsedMsDelta?: number
-      estimatedCostUsdDelta?: number
       interventionCountDelta?: number
     }
   }
@@ -7080,10 +7066,8 @@ export type WorkflowRunEvalCaseResponses = {
         toolCalls: number
         childAgents: number
         retries: number
-        estimatedCostUsd: number
-        costPerConfirmedFindingUsd: number | null
         verifiedCompletionCount: number
-        costPerVerifiedCompletionUsd: number | null
+        tokensPerConfirmedFinding: number | null
         confirmedFindings: number
         likelyFindings: number
         rejectedFindings: number
@@ -7104,7 +7088,6 @@ export type WorkflowRunEvalCaseResponses = {
         falsePositiveFindingsDelta: number
         totalTokensDelta?: number
         elapsedMsDelta?: number
-        estimatedCostUsdDelta?: number
         interventionCountDelta?: number
       }
     }
@@ -7121,7 +7104,7 @@ export type WorkflowRunEvalCaseResponses = {
       mismatchedSeedFindings: number
       duplicateSeedArtifacts: number
       unmatchedFindingArtifacts: number
-      costPerConfirmedFindingUsd: number | null
+      tokensPerConfirmedFinding: number | null
       falsePositiveRejectionRate: number | null
       confirmedFindingRecall: number | null
       completionRate: number
@@ -7556,7 +7539,6 @@ export type WorkflowRunStartResponses = {
       toolCalls?: number
       childAgents?: number
       retries?: number
-      estimatedCostUsd?: number
     }
     verificationEnvelopeIDs: Array<string>
     error?: string
@@ -7786,7 +7768,6 @@ export type WorkflowRunPauseResponses = {
       toolCalls?: number
       childAgents?: number
       retries?: number
-      estimatedCostUsd?: number
     }
     verificationEnvelopeIDs: Array<string>
     error?: string
@@ -8016,7 +7997,6 @@ export type WorkflowRunResumeResponses = {
       toolCalls?: number
       childAgents?: number
       retries?: number
-      estimatedCostUsd?: number
     }
     verificationEnvelopeIDs: Array<string>
     error?: string
@@ -8246,7 +8226,6 @@ export type WorkflowRunCancelResponses = {
       toolCalls?: number
       childAgents?: number
       retries?: number
-      estimatedCostUsd?: number
     }
     verificationEnvelopeIDs: Array<string>
     error?: string
@@ -8477,7 +8456,6 @@ export type WorkflowRunRetryResponses = {
       toolCalls?: number
       childAgents?: number
       retries?: number
-      estimatedCostUsd?: number
     }
     verificationEnvelopeIDs: Array<string>
     error?: string
@@ -10006,7 +9984,6 @@ export type WorkflowRoutineRunResponses = {
         toolCalls?: number
         childAgents?: number
         retries?: number
-        estimatedCostUsd?: number
       }
       verificationEnvelopeIDs: Array<string>
       error?: string

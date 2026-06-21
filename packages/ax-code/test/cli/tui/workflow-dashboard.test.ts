@@ -259,17 +259,17 @@ describe("tui workflow dashboard view model", () => {
     expect(items[1]?.footer).toContain("reviewing the captured spec snapshot")
   })
 
-  test("renders workflow eval summary promotion gate and cost metrics", () => {
+  test("renders workflow eval summary promotion gate and token metrics", () => {
     const items = workflowEvalSummaryItems(workflowEvalSummary())
 
     expect(items.find((item) => item.value === "workflow.eval.decision")?.title).toBe("Decision hold")
     expect(items.find((item) => item.value === "workflow.eval.decision")?.description).toContain(
       "verification: missing",
     )
-    expect(items.find((item) => item.value === "workflow.eval.decision")?.footer).toContain("cost: $0.0400")
+    expect(items.find((item) => item.value === "workflow.eval.decision")?.footer).toContain("tokens: 8000")
     expect(items.find((item) => item.value === "workflow.eval.findings")?.description).toContain("confirmed: 1")
-    expect(items.find((item) => item.value === "workflow.eval.findings")?.footer).toContain("cost/finding: $0.0400")
-    expect(items.find((item) => item.value === "workflow.eval.execution")?.footer).toContain("cost/completion: n/a")
+    expect(items.find((item) => item.value === "workflow.eval.findings")?.footer).toContain("artifacts: 4")
+    expect(items.find((item) => item.value === "workflow.eval.execution")?.footer).toContain("verified completions: 0")
     expect(items.find((item) => item.value === "workflow.eval.comparison")?.footer).toContain("tokens -4000")
     expect(items.some((item) => item.category === "Budget" && item.description?.includes("tokens 8000/7000"))).toBe(
       true,
@@ -348,7 +348,6 @@ function workflowDashboardRun(input: Partial<WorkflowDashboardRun> = {}): Workfl
       toolCalls: 8,
       childAgents: 6,
       retries: 1,
-      estimatedCostUsd: 0,
     },
     budgetLimit: {
       maxTotalTokens: 5000,
@@ -410,10 +409,8 @@ function workflowEvalSummary(input: Partial<WorkflowEvalSummary> = {}): Workflow
       toolCalls: 16,
       childAgents: 6,
       retries: 1,
-      estimatedCostUsd: 0.04,
-      costPerConfirmedFindingUsd: 0.04,
+      tokensPerConfirmedFinding: 8000,
       verifiedCompletionCount: 0,
-      costPerVerifiedCompletionUsd: null,
       confirmedFindings: 1,
       likelyFindings: 1,
       rejectedFindings: 1,
@@ -433,7 +430,6 @@ function workflowEvalSummary(input: Partial<WorkflowEvalSummary> = {}): Workflow
       confirmedFindingsDelta: 0,
       falsePositiveFindingsDelta: -1,
       totalTokensDelta: -4_000,
-      estimatedCostUsdDelta: -0.02,
       interventionCountDelta: 0,
     },
     ...input,

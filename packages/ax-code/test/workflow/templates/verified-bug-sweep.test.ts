@@ -66,7 +66,7 @@ describe("verified bug sweep workflow template", () => {
           observedSeedUnverifiedFindings: 1,
           falsePositiveRejectionRate: 1,
           confirmedFindingRecall: 1,
-          costPerConfirmedFindingUsd: 0.04,
+          tokensPerConfirmedFinding: 8000,
           completionRate: 1,
           verificationPassRate: 1,
         })
@@ -177,7 +177,6 @@ async function createCompletedSeededRun(seeds: WorkflowEvalSeededFinding[]) {
       outputTokens: 2_000,
       toolCalls: 16,
       childAgents: 6,
-      estimatedCostUsd: 0.04,
     },
   })
   await WorkflowRun.setStatus({ id: run.id, status: "completed" })

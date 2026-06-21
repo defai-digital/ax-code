@@ -156,7 +156,7 @@ describe("workflow command helpers", () => {
     expect(output).toContain("2/2/4")
     expect(output).toContain("2500/10000")
     expect(output).toContain("3/1/4")
-    expect(output).toContain("hold/-")
+    expect(output).toContain("hold")
     expect(output).toContain("approval required before continui...")
   })
 
@@ -248,10 +248,8 @@ describe("workflow command helpers", () => {
           toolCalls: 16,
           childAgents: 6,
           retries: 0,
-          estimatedCostUsd: 0.04,
-          costPerConfirmedFindingUsd: 0.04,
+          tokensPerConfirmedFinding: 8000,
           verifiedCompletionCount: 0,
-          costPerVerifiedCompletionUsd: null,
           confirmedFindings: 1,
           likelyFindings: 1,
           rejectedFindings: 0,
@@ -280,7 +278,7 @@ describe("workflow command helpers", () => {
         mismatchedSeedFindings: 0,
         duplicateSeedArtifacts: 0,
         unmatchedFindingArtifacts: 0,
-        costPerConfirmedFindingUsd: 0.04,
+        tokensPerConfirmedFinding: 8000,
         falsePositiveRejectionRate: 0,
         confirmedFindingRecall: 1,
         completionRate: 1,
@@ -295,7 +293,7 @@ describe("workflow command helpers", () => {
     expect(output).toContain("seedFindings: confirmed 1/1, likely 1/1, rejected 0/1, unverified 1/1")
     expect(output).toContain("falsePositiveRejectionRate: 0%")
     expect(output).toContain("confirmedFindingRecall: 100%")
-    expect(output).toContain("costPerConfirmedFindingUsd: $0.0400")
+    expect(output).toContain("tokensPerConfirmedFinding: 8000")
     expect(output).toContain("missingSeeds: text-content-xss-rejected")
     expect(output).toContain("expected false-positive rejections are missing")
   })
@@ -455,7 +453,6 @@ function emptyUsage() {
     toolCalls: 0,
     childAgents: 0,
     retries: 0,
-    estimatedCostUsd: 0,
   }
 }
 
@@ -475,10 +472,8 @@ function workflowProjectionEvaluation(
       toolCalls: 0,
       childAgents: 0,
       retries: 0,
-      estimatedCostUsd: 0,
-      costPerConfirmedFindingUsd: null,
+      tokensPerConfirmedFinding: null,
       verifiedCompletionCount: 0,
-      costPerVerifiedCompletionUsd: null,
       confirmedFindings: 0,
       likelyFindings: 0,
       rejectedFindings: 0,

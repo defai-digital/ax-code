@@ -146,7 +146,6 @@ describe("WorkflowRun state", () => {
               toolCalls: 2,
               childAgents: 1,
               retries: 0,
-              estimatedCostUsd: 0.01,
             },
           })
           expect(budgetEntry.id).toStartWith("wfb_")

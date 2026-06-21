@@ -405,7 +405,7 @@ export function workflowEvalSummaryItems(summary: WorkflowEvalSummary): Workflow
         MAX_DESCRIPTION,
       ),
       footer: truncate(
-        `tokens: ${metrics.totalTokens} | cost: ${formatUsd(metrics.estimatedCostUsd)} | elapsed: ${formatWorkflowDuration(metrics.elapsedMs)}`,
+        `tokens: ${metrics.totalTokens} | elapsed: ${formatWorkflowDuration(metrics.elapsedMs)}`,
         MAX_FOOTER,
       ),
       category: "Gate",
@@ -419,7 +419,7 @@ export function workflowEvalSummaryItems(summary: WorkflowEvalSummary): Workflow
         MAX_DESCRIPTION,
       ),
       footer: truncate(
-        `cost/finding: ${formatOptionalUsd(metrics.costPerConfirmedFindingUsd)} | false positives: ${metrics.falsePositiveFindings} | artifacts: ${metrics.artifactCount}`,
+        `false positives: ${metrics.falsePositiveFindings} | artifacts: ${metrics.artifactCount}`,
         MAX_FOOTER,
       ),
       category: "Metrics",
@@ -433,7 +433,7 @@ export function workflowEvalSummaryItems(summary: WorkflowEvalSummary): Workflow
         MAX_DESCRIPTION,
       ),
       footer: truncate(
-        `verified completions: ${metrics.verifiedCompletionCount} | cost/completion: ${formatOptionalUsd(metrics.costPerVerifiedCompletionUsd)} | interventions: ${metrics.interventionCount}`,
+        `verified completions: ${metrics.verifiedCompletionCount} | interventions: ${metrics.interventionCount}`,
         MAX_FOOTER,
       ),
       category: "Metrics",
@@ -455,9 +455,6 @@ export function workflowEvalSummaryItems(summary: WorkflowEvalSummary): Workflow
         [
           summary.comparison.totalTokensDelta !== undefined
             ? `tokens ${formatDelta(summary.comparison.totalTokensDelta)}`
-            : undefined,
-          summary.comparison.estimatedCostUsdDelta !== undefined
-            ? `cost ${formatSignedUsd(summary.comparison.estimatedCostUsdDelta)}`
             : undefined,
           summary.comparison.interventionCountDelta !== undefined
             ? `interventions ${formatDelta(summary.comparison.interventionCountDelta)}`
@@ -639,18 +636,6 @@ function formatWorkflowBudget(used: number, limit: number) {
 
 function formatDelta(value: number) {
   return value > 0 ? `+${value}` : String(value)
-}
-
-function formatUsd(value: number) {
-  return `$${value.toFixed(4)}`
-}
-
-function formatOptionalUsd(value: number | null | undefined) {
-  return value === null || value === undefined ? "n/a" : formatUsd(value)
-}
-
-function formatSignedUsd(value: number) {
-  return value > 0 ? `+${formatUsd(value)}` : value < 0 ? `-${formatUsd(Math.abs(value))}` : formatUsd(value)
 }
 
 function totalArtifacts(run: WorkflowDashboardRun) {

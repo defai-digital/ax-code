@@ -597,7 +597,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
     `Status: ${detail.status}`,
     `Verification: ${verification.status} (${verification.mode})`,
     ...verification.summaryLines,
-    `Eval decision: ${evaluation.decision}; cost per verified completion: ${formatUsdMetric(evaluation.metrics.costPerVerifiedCompletionUsd)}.`,
+    `Eval decision: ${evaluation.decision}.`,
     `Evidence refs: ${formatEvidenceRefs(evidenceRefs)}`,
     `Budget limits: ${formatWorkflowBudgetLimit(detail.budget)}`,
     `Pacing: ${formatWorkflowPacing(detail.spec.pacing)}`,
@@ -721,10 +721,6 @@ function formatWorkflowPacing(pacing: WorkflowRunDetail["spec"]["pacing"]) {
   return `requests/min ${pacing.maxRequestsPerMinute}, tokens/min ${pacing.maxTokensPerMinute}.`
 }
 
-function formatUsdMetric(value: number | null | undefined) {
-  return value === null || value === undefined ? "n/a" : `$${value.toFixed(4)}`
-}
-
 function formatDurationMs(ms: number) {
   const seconds = Math.max(0, Math.round(ms / 1000))
   if (seconds % 3600 === 0) return `${seconds / 3600}h`
@@ -840,20 +836,16 @@ function findLatestUserMessage(messages: MessageV2.WithParts[]) {
 function formatParentFinalReport(detail: WorkflowRunDetail, artifact: WorkflowArtifactRecord) {
   const usage = detail.budgetUsage
   const evaluation = evaluateWorkflowRun({ run: detail, now: detail.time.completed ?? Date.now() })
-  const cost =
-    usage.estimatedCostUsd === undefined || usage.estimatedCostUsd <= 0
-      ? ""
-      : `, estimated cost $${usage.estimatedCostUsd.toFixed(4)}`
   return [
     artifact.summary ?? `Workflow final report: ${detail.spec.name}`,
     "",
     `Run: ${detail.id}`,
     `Final artifact: ${artifact.id}`,
     `Linked evidence refs: ${formatEvidenceRefs(artifact.evidenceRefs)}`,
-    `Eval decision: ${evaluation.decision}; cost per verified completion: ${formatUsdMetric(evaluation.metrics.costPerVerifiedCompletionUsd)}.`,
+    `Eval decision: ${evaluation.decision}.`,
     `Budget limits: ${formatWorkflowBudgetLimit(detail.budget)}`,
     `Pacing: ${formatWorkflowPacing(detail.spec.pacing)}`,
-    `Budget used: ${usage.totalTokens} tokens, ${usage.toolCalls} tool calls, ${usage.childAgents} child agents${cost}.`,
+    `Budget used: ${usage.totalTokens} tokens, ${usage.toolCalls} tool calls, ${usage.childAgents} child agents.`,
   ].join("\n")
 }
 

@@ -115,7 +115,7 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
     const childSummary = `${activeChildren}/${queuedChildren}/${run.budgetUsage.childAgents}`
     const budgetSummary = `${run.budgetUsage.totalTokens}/${run.budgetLimit.maxTotalTokens}`
     const evidenceSummary = `${run.evidenceRefCount}/${run.verificationEnvelopeCount}/${totalArtifacts(run)}`
-    const evalSummary = `${run.evaluation.decision}/${formatUsd(run.evaluation.metrics.costPerVerifiedCompletionUsd)}`
+    const evalSummary = run.evaluation.decision
     const blocker = run.blockedReason ? truncate(run.blockedReason, 36) : "-"
     const models = truncate(formatNamedModels(run.models) || "-", 32)
     return [
@@ -134,7 +134,7 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
   })
   return (
     [
-      "status     run                          name                     phase                  effort       models                           active/queued/total tokens             evidence/ver/art  eval/cost        blocker",
+      "status     run                          name                     phase                  effort       models                           active/queued/total tokens             evidence/ver/art  eval             blocker",
       ...lines,
     ].join(EOL) + EOL
   )
@@ -200,7 +200,7 @@ export function formatWorkflowEvalCaseRunSummary(result: WorkflowEvalCaseRunSumm
     ].join(" "),
     `falsePositiveRejectionRate: ${formatPercent(metrics.falsePositiveRejectionRate)}`,
     `confirmedFindingRecall: ${formatPercent(metrics.confirmedFindingRecall)}`,
-    `costPerConfirmedFindingUsd: ${formatUsd(metrics.costPerConfirmedFindingUsd)}`,
+    `tokensPerConfirmedFinding: ${metrics.tokensPerConfirmedFinding ?? "-"}`,
     `interventions: ${metrics.interventionCount}`,
   ]
   if (result.missingSeedIDs.length) lines.push(`missingSeeds: ${result.missingSeedIDs.join(", ")}`)
@@ -1061,11 +1061,6 @@ function namedModel(label: string, value: string | undefined) {
 function formatPercent(value: number | null) {
   if (value === null) return "-"
   return `${Math.round(value * 100)}%`
-}
-
-function formatUsd(value: number | null) {
-  if (value === null) return "-"
-  return `$${value.toFixed(4)}`
 }
 
 function formatArtifactPayload(payload: unknown) {

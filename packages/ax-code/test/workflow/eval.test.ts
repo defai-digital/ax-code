@@ -8,7 +8,7 @@ afterEach(async () => {
 })
 
 describe("workflow eval summary", () => {
-  test("reports cost per verified completion and confirmed finding", async () => {
+  test("reports token usage per confirmed finding and verified completion count", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -23,7 +23,6 @@ describe("workflow eval summary", () => {
             totalTokens: 120,
             inputTokens: 80,
             outputTokens: 40,
-            estimatedCostUsd: 0.06,
           },
         })
         await WorkflowRun.appendArtifact({
@@ -46,8 +45,7 @@ describe("workflow eval summary", () => {
 
         expect(summary.metrics.confirmedFindings).toBe(2)
         expect(summary.metrics.verifiedCompletionCount).toBe(1)
-        expect(summary.metrics.costPerConfirmedFindingUsd).toBeCloseTo(0.03)
-        expect(summary.metrics.costPerVerifiedCompletionUsd).toBeCloseTo(0.06)
+        expect(summary.metrics.tokensPerConfirmedFinding).toBe(60)
         expect(summary.verificationSatisfied).toBe(true)
       },
     })

@@ -1739,6 +1739,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses.*"
+            }
           }
         ],
         "summary": "Get Super-Long run status",
@@ -2354,7 +2369,6 @@
                     "additionalProperties": {}
                   },
                   "priority": {
-                    "default": 0,
                     "type": "integer",
                     "minimum": -1000,
                     "maximum": 1000
@@ -7445,11 +7459,6 @@
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
-                          },
-                          "estimatedCostUsd": {
-                            "default": 0,
-                            "type": "number",
-                            "minimum": 0
                           }
                         }
                       },
@@ -7716,27 +7725,12 @@
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "estimatedCostUsd": {
-                                "type": "number",
-                                "minimum": 0
-                              },
-                              "costPerConfirmedFindingUsd": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "minimum": 0
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
-                                ]
-                              },
                               "verifiedCompletionCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "costPerVerifiedCompletionUsd": {
+                              "tokensPerConfirmedFinding": {
                                 "anyOf": [
                                   {
                                     "type": "number",
@@ -7802,10 +7796,8 @@
                               "toolCalls",
                               "childAgents",
                               "retries",
-                              "estimatedCostUsd",
-                              "costPerConfirmedFindingUsd",
                               "verifiedCompletionCount",
-                              "costPerVerifiedCompletionUsd",
+                              "tokensPerConfirmedFinding",
                               "confirmedFindings",
                               "likelyFindings",
                               "rejectedFindings",
@@ -7861,9 +7853,6 @@
                                 "type": "integer",
                                 "minimum": -9007199254740991,
                                 "maximum": 9007199254740991
-                              },
-                              "estimatedCostUsdDelta": {
-                                "type": "number"
                               },
                               "interventionCountDelta": {
                                 "type": "integer",
@@ -8036,27 +8025,12 @@
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "estimatedCostUsd": {
-                                "type": "number",
-                                "minimum": 0
-                              },
-                              "costPerConfirmedFindingUsd": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "minimum": 0
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
-                                ]
-                              },
                               "verifiedCompletionCount": {
                                 "type": "integer",
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
-                              "costPerVerifiedCompletionUsd": {
+                              "tokensPerConfirmedFinding": {
                                 "anyOf": [
                                   {
                                     "type": "number",
@@ -9034,11 +9008,6 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
-                        },
-                        "estimatedCostUsd": {
-                          "default": 0,
-                          "type": "number",
-                          "minimum": 0
                         }
                       }
                     },
@@ -9198,8 +9167,7 @@
             "in": "query",
             "name": "includePayload",
             "schema": {
-              "type": "string",
-              "enum": ["true", "false"]
+              "type": "boolean"
             }
           }
         ],
@@ -9337,27 +9305,12 @@
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
-                        "estimatedCostUsd": {
-                          "type": "number",
-                          "minimum": 0
-                        },
-                        "costPerConfirmedFindingUsd": {
-                          "anyOf": [
-                            {
-                              "type": "number",
-                              "minimum": 0
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
                         "verifiedCompletionCount": {
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
-                        "costPerVerifiedCompletionUsd": {
+                        "tokensPerConfirmedFinding": {
                           "anyOf": [
                             {
                               "type": "number",
@@ -9423,10 +9376,8 @@
                         "toolCalls",
                         "childAgents",
                         "retries",
-                        "estimatedCostUsd",
-                        "costPerConfirmedFindingUsd",
                         "verifiedCompletionCount",
-                        "costPerVerifiedCompletionUsd",
+                        "tokensPerConfirmedFinding",
                         "confirmedFindings",
                         "likelyFindings",
                         "rejectedFindings",
@@ -9482,9 +9433,6 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
-                        },
-                        "estimatedCostUsdDelta": {
-                          "type": "number"
                         },
                         "interventionCountDelta": {
                           "type": "integer",
@@ -9586,27 +9534,12 @@
                             "minimum": 0,
                             "maximum": 9007199254740991
                           },
-                          "estimatedCostUsd": {
-                            "type": "number",
-                            "minimum": 0
-                          },
-                          "costPerConfirmedFindingUsd": {
-                            "anyOf": [
-                              {
-                                "type": "number",
-                                "minimum": 0
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          },
                           "verifiedCompletionCount": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
                           },
-                          "costPerVerifiedCompletionUsd": {
+                          "tokensPerConfirmedFinding": {
                             "anyOf": [
                               {
                                 "type": "number",
@@ -9817,27 +9750,12 @@
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "estimatedCostUsd": {
-                              "type": "number",
-                              "minimum": 0
-                            },
-                            "costPerConfirmedFindingUsd": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "minimum": 0
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            },
                             "verifiedCompletionCount": {
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
                             },
-                            "costPerVerifiedCompletionUsd": {
+                            "tokensPerConfirmedFinding": {
                               "anyOf": [
                                 {
                                   "type": "number",
@@ -9903,10 +9821,8 @@
                             "toolCalls",
                             "childAgents",
                             "retries",
-                            "estimatedCostUsd",
-                            "costPerConfirmedFindingUsd",
                             "verifiedCompletionCount",
-                            "costPerVerifiedCompletionUsd",
+                            "tokensPerConfirmedFinding",
                             "confirmedFindings",
                             "likelyFindings",
                             "rejectedFindings",
@@ -9962,9 +9878,6 @@
                               "type": "integer",
                               "minimum": -9007199254740991,
                               "maximum": 9007199254740991
-                            },
-                            "estimatedCostUsdDelta": {
-                              "type": "number"
                             },
                             "interventionCountDelta": {
                               "type": "integer",
@@ -10049,7 +9962,7 @@
                           "minimum": 0,
                           "maximum": 9007199254740991
                         },
-                        "costPerConfirmedFindingUsd": {
+                        "tokensPerConfirmedFinding": {
                           "anyOf": [
                             {
                               "type": "number",
@@ -10116,7 +10029,7 @@
                         "mismatchedSeedFindings",
                         "duplicateSeedArtifacts",
                         "unmatchedFindingArtifacts",
-                        "costPerConfirmedFindingUsd",
+                        "tokensPerConfirmedFinding",
                         "falsePositiveRejectionRate",
                         "confirmedFindingRecall",
                         "completionRate",
@@ -11880,11 +11793,6 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
-                        },
-                        "estimatedCostUsd": {
-                          "default": 0,
-                          "type": "number",
-                          "minimum": 0
                         }
                       }
                     },
@@ -11997,19 +11905,15 @@
                 "type": "object",
                 "properties": {
                   "allowScaleBeyondDefaults": {
-                    "default": false,
                     "type": "boolean"
                   },
                   "allowWriteWorkflows": {
-                    "default": false,
                     "type": "boolean"
                   },
                   "durableChildren": {
-                    "default": true,
                     "type": "boolean"
                   },
                   "enqueueChildren": {
-                    "default": true,
                     "type": "boolean"
                   }
                 }
@@ -12862,11 +12766,6 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
-                        },
-                        "estimatedCostUsd": {
-                          "default": 0,
-                          "type": "number",
-                          "minimum": 0
                         }
                       }
                     },
@@ -13817,11 +13716,6 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
-                        },
-                        "estimatedCostUsd": {
-                          "default": 0,
-                          "type": "number",
-                          "minimum": 0
                         }
                       }
                     },
@@ -14772,11 +14666,6 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
-                        },
-                        "estimatedCostUsd": {
-                          "default": 0,
-                          "type": "number",
-                          "minimum": 0
                         }
                       }
                     },
@@ -15735,11 +15624,6 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 9007199254740991
-                        },
-                        "estimatedCostUsd": {
-                          "default": 0,
-                          "type": "number",
-                          "minimum": 0
                         }
                       }
                     },
@@ -20241,7 +20125,6 @@
                     "maxLength": 160
                   },
                   "enabled": {
-                    "default": false,
                     "type": "boolean"
                   },
                   "securityGate": {
@@ -21956,11 +21839,6 @@
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 9007199254740991
-                            },
-                            "estimatedCostUsd": {
-                              "default": 0,
-                              "type": "number",
-                              "minimum": 0
                             }
                           }
                         },
@@ -22159,19 +22037,15 @@
                     "type": "object",
                     "properties": {
                       "allowScaleBeyondDefaults": {
-                        "default": false,
                         "type": "boolean"
                       },
                       "allowWriteWorkflows": {
-                        "default": false,
                         "type": "boolean"
                       },
                       "durableChildren": {
-                        "default": true,
                         "type": "boolean"
                       },
                       "enqueueChildren": {
-                        "default": true,
                         "type": "boolean"
                       }
                     }
@@ -24131,7 +24005,6 @@
                     "type": "string"
                   },
                   "auto": {
-                    "default": false,
                     "type": "boolean"
                   }
                 },
@@ -26486,7 +26359,6 @@
           "content": {
             "application/json": {
               "schema": {
-                "default": {},
                 "type": "object",
                 "properties": {
                   "modelPath": {
@@ -26560,7 +26432,6 @@
           "content": {
             "application/json": {
               "schema": {
-                "default": {},
                 "type": "object",
                 "properties": {
                   "modelPath": {
@@ -26721,10 +26592,10 @@
                 "type": "object",
                 "properties": {
                   "method": {
+                    "description": "Auth method index",
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 9007199254740991,
-                    "description": "Auth method index"
+                    "maximum": 9007199254740991
                   },
                   "inputs": {
                     "description": "Prompt inputs",
@@ -26802,10 +26673,10 @@
                 "type": "object",
                 "properties": {
                   "method": {
+                    "description": "Auth method index",
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 9007199254740991,
-                    "description": "Auth method index"
+                    "maximum": 9007199254740991
                   },
                   "code": {
                     "description": "OAuth authorization code",
@@ -26945,8 +26816,7 @@
             "in": "query",
             "name": "dirs",
             "schema": {
-              "type": "string",
-              "enum": ["true", "false"]
+              "type": "boolean"
             }
           },
           {
@@ -32640,11 +32510,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "estimatedCostUsd": {
-                "default": 0,
-                "type": "number",
-                "minimum": 0
               }
             }
           },
@@ -33370,11 +33235,6 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
-              },
-              "estimatedCostUsd": {
-                "default": 0,
-                "type": "number",
-                "minimum": 0
               }
             }
           },

@@ -73,7 +73,7 @@ describe("workflow projections", () => {
             metrics: {
               status: "running",
               childAgents: 8,
-              costPerVerifiedCompletionUsd: null,
+              verifiedCompletionCount: 0,
             },
           })
           expect(projection.elapsedMs).toBeGreaterThanOrEqual(0)

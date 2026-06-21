@@ -215,7 +215,6 @@ function workflowRun(
       toolCalls: 0,
       childAgents: 0,
       retries: 0,
-      estimatedCostUsd: 0,
     },
     budgetLimit: {
       maxTotalTokens: 10_000,

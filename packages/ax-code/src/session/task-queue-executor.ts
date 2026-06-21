@@ -875,7 +875,6 @@ type WorkflowSubagentBudgetUsage = {
   inputTokens: number
   outputTokens: number
   toolCalls: number
-  estimatedCostUsd: number
 }
 
 const EmptyWorkflowSubagentBudgetUsage: WorkflowSubagentBudgetUsage = {
@@ -883,20 +882,17 @@ const EmptyWorkflowSubagentBudgetUsage: WorkflowSubagentBudgetUsage = {
   inputTokens: 0,
   outputTokens: 0,
   toolCalls: 0,
-  estimatedCostUsd: 0,
 }
 
 function messageBudgetUsage(result: unknown): WorkflowSubagentBudgetUsage | undefined {
   const tokens = messageTokens(result)
   const toolCalls = messageToolCalls(result)
   if (!tokens && toolCalls === 0) return undefined
-  const estimatedCostUsd = messageEstimatedCostUsd(result)
   return {
     totalTokens: tokens?.total ?? 0,
     inputTokens: tokens?.input ?? 0,
     outputTokens: tokens?.output ?? 0,
     toolCalls,
-    estimatedCostUsd: estimatedCostUsd ?? 0,
   }
 }
 
@@ -936,13 +932,6 @@ function messageTokens(result: unknown) {
     input: input ?? 0,
     output: output ?? 0,
   }
-}
-
-function messageEstimatedCostUsd(result: unknown) {
-  if (!result || typeof result !== "object") return undefined
-  const info = (result as { info?: unknown }).info
-  if (!info || typeof info !== "object") return undefined
-  return nonNegativeNumber((info as { estimatedCostUsd?: unknown }).estimatedCostUsd)
 }
 
 function messageToolCalls(result: unknown) {

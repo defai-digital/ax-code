@@ -62,7 +62,6 @@ export const WorkflowUsageDelta = z.object({
   toolCalls: z.number().int().min(0).default(0),
   childAgents: z.number().int().min(0).default(0),
   retries: z.number().int().min(0).default(0),
-  estimatedCostUsd: z.number().min(0).default(0),
 })
 export type WorkflowBudgetUsage = z.infer<typeof WorkflowUsageDelta>
 
@@ -73,7 +72,6 @@ export const EmptyWorkflowBudgetUsage: WorkflowBudgetUsage = {
   toolCalls: 0,
   childAgents: 0,
   retries: 0,
-  estimatedCostUsd: 0,
 }
 
 export namespace WorkflowRun {

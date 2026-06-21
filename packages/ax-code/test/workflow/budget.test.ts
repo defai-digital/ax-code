@@ -28,7 +28,6 @@ describe("workflow budget helpers", () => {
       toolCalls: 0,
       childAgents: 0,
       retries: 0,
-      estimatedCostUsd: 0,
     })
   })
 

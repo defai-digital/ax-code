@@ -22,10 +22,8 @@ export const WorkflowEvalMetrics = z.object({
   toolCalls: z.number().int().min(0),
   childAgents: z.number().int().min(0),
   retries: z.number().int().min(0),
-  estimatedCostUsd: z.number().min(0),
-  costPerConfirmedFindingUsd: z.number().min(0).nullable(),
   verifiedCompletionCount: z.number().int().min(0),
-  costPerVerifiedCompletionUsd: z.number().min(0).nullable(),
+  tokensPerConfirmedFinding: z.number().min(0).nullable(),
   confirmedFindings: z.number().int().min(0),
   likelyFindings: z.number().int().min(0),
   rejectedFindings: z.number().int().min(0),
@@ -53,7 +51,6 @@ export const WorkflowEvalComparison = z.object({
   falsePositiveFindingsDelta: z.number().int(),
   totalTokensDelta: z.number().int().optional(),
   elapsedMsDelta: z.number().int().optional(),
-  estimatedCostUsdDelta: z.number().optional(),
   interventionCountDelta: z.number().int().optional(),
 })
 export type WorkflowEvalComparison = z.infer<typeof WorkflowEvalComparison>
@@ -132,10 +129,9 @@ function workflowMetrics(run: z.infer<typeof WorkflowRunDetail>, elapsedMs: numb
     status: run.status,
     elapsedMs,
     ...budgetUsage,
-    costPerConfirmedFindingUsd:
-      findingCounts.confirmedFindings === 0 ? null : budgetUsage.estimatedCostUsd / findingCounts.confirmedFindings,
     verifiedCompletionCount,
-    costPerVerifiedCompletionUsd: verifiedCompletionCount === 0 ? null : budgetUsage.estimatedCostUsd,
+    tokensPerConfirmedFinding:
+      findingCounts.confirmedFindings > 0 ? budgetUsage.totalTokens / findingCounts.confirmedFindings : null,
     ...findingCounts,
     falsePositiveFindings: findingCounts.rejectedFindings,
     artifactCount: run.artifacts.length,
@@ -281,10 +277,6 @@ function compareBaseline(metrics: WorkflowEvalMetrics, baseline: z.infer<typeof 
       baseline.metrics.totalTokens === undefined ? undefined : metrics.totalTokens - baseline.metrics.totalTokens,
     elapsedMsDelta:
       baseline.metrics.elapsedMs === undefined ? undefined : metrics.elapsedMs - baseline.metrics.elapsedMs,
-    estimatedCostUsdDelta:
-      baseline.metrics.estimatedCostUsd === undefined
-        ? undefined
-        : metrics.estimatedCostUsd - baseline.metrics.estimatedCostUsd,
     interventionCountDelta:
       baseline.metrics.interventionCount === undefined
         ? undefined
@@ -317,13 +309,6 @@ function promotionBlockers(input: {
     input.run.budgetUsage.totalTokens > input.baseline.metrics.totalTokens * BASELINE_MULTIPLIER_LIMIT
   ) {
     reasons.push("workflow used more than 2x baseline tokens")
-  }
-  if (
-    input.baseline.metrics.estimatedCostUsd !== undefined &&
-    input.baseline.metrics.estimatedCostUsd > 0 &&
-    input.run.budgetUsage.estimatedCostUsd > input.baseline.metrics.estimatedCostUsd * BASELINE_MULTIPLIER_LIMIT
-  ) {
-    reasons.push("workflow cost exceeded 2x baseline")
   }
   return reasons
 }

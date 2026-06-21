@@ -1,7 +1,7 @@
 // AgentOptimizationTrace — minimal event shape for long-agent session telemetry.
 //
 // Purpose: capture route class, model, context-pack summary, tool counts,
-// verification outcomes, patch results, failure signals, and cost tokens for
+// verification outcomes, patch results, failure signals, and token usage for
 // each agent session. Local-only; no external telemetry export in this module.
 //
 // Redaction: all string fields are safe to write to disk (no secrets, no raw
@@ -49,12 +49,11 @@ export namespace AgentOptimizationTrace {
     // Patch
     patchOutcome: PatchOutcome
 
-    // Cache / cost
+    // Token usage
     cacheReadTokens: number
     cacheWriteTokens: number
     inputTokens: number
     outputTokens: number
-    estimatedCostUsd?: number
   }
 
   export type ContextPackSummary = {
@@ -87,7 +86,6 @@ export namespace AgentOptimizationTrace {
     cacheWriteTokens: z.number(),
     inputTokens: z.number(),
     outputTokens: z.number(),
-    estimatedCostUsd: z.number().optional(),
   })
 
   // Repeated-failure detector: returns true when the same failure surface has
@@ -165,30 +163,5 @@ export namespace AgentOptimizationTrace {
     const parsed = parseJsonPayload(json)
     if (parsed === undefined) return null
     return decodeTraceEvent(parsed)
-  }
-
-  // Estimate cost in USD given per-million-token prices.
-  // cacheRead is billed at 0.1x input price; cacheWrite at 1.25x input price.
-  export function estimateCostUsd(params: {
-    inputTokens: number
-    outputTokens: number
-    cacheReadTokens: number
-    cacheWriteTokens: number
-    inputPricePerMillion: number
-    outputPricePerMillion: number
-  }): number {
-    const {
-      inputTokens,
-      outputTokens,
-      cacheReadTokens,
-      cacheWriteTokens,
-      inputPricePerMillion,
-      outputPricePerMillion,
-    } = params
-    const input = (inputTokens / 1_000_000) * inputPricePerMillion
-    const output = (outputTokens / 1_000_000) * outputPricePerMillion
-    const cacheRead = (cacheReadTokens / 1_000_000) * inputPricePerMillion * 0.1
-    const cacheWrite = (cacheWriteTokens / 1_000_000) * inputPricePerMillion * 1.25
-    return input + output + cacheRead + cacheWrite
   }
 }

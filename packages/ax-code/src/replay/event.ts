@@ -205,7 +205,6 @@ export const AgentOptimizationTraceEvent = Base.extend({
   cacheWriteTokens: z.number(),
   inputTokens: z.number(),
   outputTokens: z.number(),
-  estimatedCostUsd: z.number().optional(),
 })
 
 export const PlannerArchitectCallEvent = Base.extend({

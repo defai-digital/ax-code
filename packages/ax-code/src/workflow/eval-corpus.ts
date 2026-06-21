@@ -56,7 +56,7 @@ export const WorkflowEvalCaseMetrics = z.object({
   mismatchedSeedFindings: z.number().int().min(0),
   duplicateSeedArtifacts: z.number().int().min(0),
   unmatchedFindingArtifacts: z.number().int().min(0),
-  costPerConfirmedFindingUsd: z.number().min(0).nullable(),
+  tokensPerConfirmedFinding: z.number().min(0).nullable(),
   falsePositiveRejectionRate: z.number().min(0).max(1).nullable(),
   confirmedFindingRecall: z.number().min(0).max(1).nullable(),
   completionRate: z.number().min(0).max(1),
@@ -93,7 +93,6 @@ const VerifiedBugSweepSeededCase = WorkflowEvalCase.parse({
       falsePositiveFindings: 1,
       totalTokens: 12_000,
       elapsedMs: 60_000,
-      estimatedCostUsd: 0.06,
       interventionCount: 0,
     },
   },
@@ -192,7 +191,7 @@ export function evaluateWorkflowEvalCaseRun(input: {
       mismatchedSeedFindings: seedObservation.mismatchedSeedIDs.length,
       duplicateSeedArtifacts: seedObservation.duplicateSeedArtifacts,
       unmatchedFindingArtifacts: seedObservation.unmatchedFindingArtifacts,
-      costPerConfirmedFindingUsd: costPerConfirmedFinding(summary),
+      tokensPerConfirmedFinding: tokensPerConfirmedFinding(summary),
       falsePositiveRejectionRate: ratio(seedObservation.counts.rejected, expected.rejected),
       confirmedFindingRecall: ratio(seedObservation.counts.confirmed, expected.confirmed),
       completionRate: parsed.run.status === "completed" ? 1 : 0,
@@ -301,9 +300,9 @@ function payloadSeedID(payload: unknown) {
   return typeof value === "string" && value.length > 0 ? value : undefined
 }
 
-function costPerConfirmedFinding(summary: WorkflowEvalSummary) {
+function tokensPerConfirmedFinding(summary: WorkflowEvalSummary) {
   if (summary.metrics.confirmedFindings === 0) return null
-  return summary.metrics.estimatedCostUsd / summary.metrics.confirmedFindings
+  return summary.metrics.totalTokens / summary.metrics.confirmedFindings
 }
 
 function ratio(numerator: number, denominator: number) {

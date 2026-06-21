@@ -770,7 +770,6 @@ describe("TaskQueue", () => {
             role: "assistant",
             sessionID: session.id,
             tokens: { input: 10, output: 5, total: 15 },
-            estimatedCostUsd: 0.000125,
           },
           parts: [
             {
@@ -815,7 +814,6 @@ describe("TaskQueue", () => {
             inputTokens: 10,
             outputTokens: 5,
             toolCalls: 2,
-            estimatedCostUsd: 0.000125,
           })
           expect(failed.artifacts[0]).toMatchObject({
             childID: child.id,
@@ -831,7 +829,6 @@ describe("TaskQueue", () => {
                 inputTokens: 10,
                 outputTokens: 5,
                 toolCalls: 2,
-                estimatedCostUsd: 0.000125,
               },
             },
           })
@@ -852,7 +849,6 @@ describe("TaskQueue", () => {
                 inputTokens: 10,
                 outputTokens: 5,
                 toolCalls: 2,
-                estimatedCostUsd: 0.000125,
               },
             },
           })
@@ -934,7 +930,7 @@ describe("TaskQueue", () => {
             payload: {
               messageID: "msg_workflow_text_only",
               output: "Text only result.",
-              usage: { totalTokens: 0, inputTokens: 0, outputTokens: 0, toolCalls: 0, estimatedCostUsd: 0 },
+              usage: { totalTokens: 0, inputTokens: 0, outputTokens: 0, toolCalls: 0 },
             },
           })
         } finally {
