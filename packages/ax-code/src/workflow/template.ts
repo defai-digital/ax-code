@@ -198,7 +198,10 @@ export namespace WorkflowTemplate {
   async function readCatalog(source: Exclude<Source, "builtin">): Promise<Info[]> {
     const dir = safeTemplateDir(source)
     if (!dir) return []
-    const files = await fs.readdir(dir).catch(() => [])
+    const files = await fs.readdir(dir).catch((error) => {
+      if (isEnoent(error)) return []
+      throw error
+    })
 
     const templates = await Promise.all(
       files

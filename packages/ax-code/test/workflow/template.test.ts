@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -30,6 +30,17 @@ describe("WorkflowTemplate", () => {
     )
     expect(templates.find((template) => template.id === "builtin:verified-bug-sweep")?.trust).toBe("trusted")
     expect(templates.find((template) => template.id === "builtin:verified-bug-sweep")?.revision).toBe(1)
+  })
+
+  test("does not hide workflow template directory I/O failures", async () => {
+    const failure = Object.assign(new Error("permission denied"), { code: "EACCES" })
+    const readdir = vi.spyOn(fs, "readdir").mockRejectedValue(failure)
+
+    try {
+      await expect(WorkflowTemplate.list()).rejects.toBe(failure)
+    } finally {
+      readdir.mockRestore()
+    }
   })
 
   test("creates workflow runs from built-in templates", async () => {
