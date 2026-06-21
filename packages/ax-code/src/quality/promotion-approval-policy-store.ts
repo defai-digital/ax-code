@@ -1,6 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
+import { QualityStorageKey } from "./storage-key"
 
 export namespace QualityPromotionApprovalPolicyStore {
   export const Scope = z.enum(["global", "project"])
@@ -28,11 +29,11 @@ export namespace QualityPromotionApprovalPolicyStore {
   export type Resolution = z.output<typeof Resolution>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function requireProjectID(projectID: string | null | undefined) {
@@ -110,7 +111,9 @@ export namespace QualityPromotionApprovalPolicyStore {
       if (parts[1] !== "project") continue
       const encodedProjectID = parts[2]
       if (!encodedProjectID) continue
-      const record = await getProject(decode(encodedProjectID))
+      const projectID = decode(encodedProjectID)
+      if (!projectID) continue
+      const record = await getProject(projectID)
       if (record) records.push(record)
     }
     return records.sort((a, b) => {

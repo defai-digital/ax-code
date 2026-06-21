@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest"
+import fs from "fs/promises"
+import path from "path"
 import { QualityPromotionApprovalPolicy } from "../../src/quality/promotion-approval-policy"
 import { QualityPromotionApprovalPolicyStore } from "../../src/quality/promotion-approval-policy-store"
+import { Global } from "../../src/global"
 import { Storage } from "../../src/storage/storage"
 
 async function clearPolicyStore() {
@@ -53,6 +56,31 @@ describe("QualityPromotionApprovalPolicyStore", () => {
       expect(resolved.source).toBe("project")
       expect(resolved.policy.rules.force.minimumApprovals).toBe(3)
       expect(resolved.policy.rules.force.minimumRole).toBe("director")
+    } finally {
+      await clearPolicyStore()
+    }
+  })
+
+  test("skips malformed encoded project policy keys while listing", async () => {
+    const malformedPath = path.join(
+      Global.Path.data,
+      "storage",
+      "quality_model_approval_policy",
+      "project",
+      "%E0%A4%A.json",
+    )
+
+    await clearPolicyStore()
+    try {
+      await QualityPromotionApprovalPolicyStore.setProject(
+        "project-policy-malformed-key",
+        QualityPromotionApprovalPolicy.defaults(),
+      )
+      await fs.mkdir(path.dirname(malformedPath), { recursive: true })
+      await fs.writeFile(malformedPath, JSON.stringify({ corrupt: true }), "utf8")
+
+      const records = await QualityPromotionApprovalPolicyStore.list()
+      expect(records.map((record) => record.projectID)).toEqual(["project-policy-malformed-key"])
     } finally {
       await clearPolicyStore()
     }

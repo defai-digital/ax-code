@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest"
+import fs from "fs/promises"
+import path from "path"
 import { QualityPromotionApprovalPolicy } from "../../src/quality/promotion-approval-policy"
 import { QualityPromotionApprovalPolicyStore } from "../../src/quality/promotion-approval-policy-store"
 import { QualityPromotionReleasePolicy } from "../../src/quality/promotion-release-policy"
 import { QualityPromotionReleasePolicyStore } from "../../src/quality/promotion-release-policy-store"
+import { Global } from "../../src/global"
 import { Storage } from "../../src/storage/storage"
 
 async function clearPolicyStores() {
@@ -53,6 +56,31 @@ describe("QualityPromotionReleasePolicyStore", () => {
       const resolved = await QualityPromotionReleasePolicyStore.resolve({ projectID: "release-project-1" })
       expect(resolved.source).toBe("project")
       expect(resolved.policy.watch.minRecords).toBe(40)
+    } finally {
+      await clearPolicyStores()
+    }
+  })
+
+  test("skips malformed encoded project policy keys while listing", async () => {
+    const malformedPath = path.join(
+      Global.Path.data,
+      "storage",
+      "quality_model_release_policy",
+      "project",
+      "%E0%A4%A.json",
+    )
+
+    await clearPolicyStores()
+    try {
+      await QualityPromotionReleasePolicyStore.setProject(
+        "release-project-malformed-key",
+        QualityPromotionReleasePolicy.defaults(),
+      )
+      await fs.mkdir(path.dirname(malformedPath), { recursive: true })
+      await fs.writeFile(malformedPath, JSON.stringify({ corrupt: true }), "utf8")
+
+      const records = await QualityPromotionReleasePolicyStore.list()
+      expect(records.map((record) => record.projectID)).toEqual(["release-project-malformed-key"])
     } finally {
       await clearPolicyStores()
     }

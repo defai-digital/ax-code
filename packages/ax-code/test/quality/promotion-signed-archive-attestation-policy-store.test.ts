@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest"
+import fs from "fs/promises"
+import path from "path"
 import { QualityPromotionSignedArchiveAttestationPolicy } from "../../src/quality/promotion-signed-archive-attestation-policy"
 import { QualityPromotionSignedArchiveAttestationPolicyStore } from "../../src/quality/promotion-signed-archive-attestation-policy-store"
+import { Global } from "../../src/global"
 import { Storage } from "../../src/storage/storage"
 
 async function clearPolicies() {
@@ -44,6 +47,31 @@ describe("QualityPromotionSignedArchiveAttestationPolicyStore", () => {
       })
       expect(explicitResolved.source).toBe("explicit")
       expect(explicitResolved.policy.allowRevokedHistorical).toBe(true)
+    } finally {
+      await clearPolicies()
+    }
+  })
+
+  test("skips malformed encoded project policy keys while listing", async () => {
+    const malformedPath = path.join(
+      Global.Path.data,
+      "storage",
+      "quality_model_signed_archive_attestation_policy",
+      "project",
+      "%E0%A4%A.json",
+    )
+
+    await clearPolicies()
+    try {
+      await QualityPromotionSignedArchiveAttestationPolicyStore.setProject(
+        "signed-attestation-project-malformed-key",
+        QualityPromotionSignedArchiveAttestationPolicy.defaults(),
+      )
+      await fs.mkdir(path.dirname(malformedPath), { recursive: true })
+      await fs.writeFile(malformedPath, JSON.stringify({ corrupt: true }), "utf8")
+
+      const records = await QualityPromotionSignedArchiveAttestationPolicyStore.list()
+      expect(records.map((record) => record.projectID)).toEqual(["signed-attestation-project-malformed-key"])
     } finally {
       await clearPolicies()
     }
