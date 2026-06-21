@@ -85,6 +85,13 @@ export function formatTraceLogTime(entry: Pick<LogEntry, "time">): string {
   return entry.time?.split("T")[1]?.split(".")[0] ?? ""
 }
 
+export function normalizeTraceLimit(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error("--limit must be a positive integer")
+  }
+  return value
+}
+
 export const TraceCommand: CommandModule = {
   command: "trace [sessionID]",
   describe: "analyze execution trace from structured logs",
@@ -128,6 +135,8 @@ export const TraceCommand: CommandModule = {
         default: false,
       }),
   handler: async (args) => {
+    const limit = normalizeTraceLimit(args.limit)
+
     // DRE v3.0: replay-based trace with risk scoring
     if (!args.logs) {
       await Instance.provide({
@@ -168,13 +177,14 @@ export const TraceCommand: CommandModule = {
           const startTime = events[0].time_created
           const endTime = events[events.length - 1].time_created
           const duration = formatTraceDuration(endTime - startTime)
+          const visibleEvents = events.slice(-limit)
 
           console.log(`\n  Session: ${sessionID} (${duration})`)
           console.log(`  Title: ${resolvedSession.title}`)
           console.log(`  Risk: ${risk.level} (${risk.score}/100) — ${risk.summary}`)
           console.log("")
 
-          for (const { event_data: event, time_created } of events) {
+          for (const { event_data: event, time_created } of visibleEvents) {
             const offset = formatTraceOffset(time_created - startTime)
             const e = event as ReplayEvent & Record<string, unknown>
 
@@ -282,7 +292,6 @@ export const TraceCommand: CommandModule = {
     const errorsOnly = args.errors as boolean
     const slowThreshold = args.slow as number | undefined
     const serviceFilter = args.service as string | undefined
-    const limit = args.limit as number
     const jsonOutput = args.json as boolean
 
     let filtered = entries

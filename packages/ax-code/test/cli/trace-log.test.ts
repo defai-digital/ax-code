@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   decodeTraceLogEntryValue,
   formatTraceLogTime,
+  normalizeTraceLimit,
   parseTraceLogEntryJsonLine,
   parseTraceTextLogLine,
 } from "../../src/cli/cmd/trace"
@@ -67,5 +68,14 @@ describe("trace log entry decoding", () => {
     expect(formatTraceLogTime({ time: "2026-04-23T00:03:30.132Z" })).toBe("00:03:30")
     expect(() => formatTraceLogTime({ time: Number.MAX_VALUE })).not.toThrow()
     expect(formatTraceLogTime({ time: Number.MAX_VALUE })).toBe("")
+  })
+
+  test("normalizeTraceLimit rejects values that would bypass or invert limiting", () => {
+    expect(normalizeTraceLimit(1)).toBe(1)
+    expect(normalizeTraceLimit(50)).toBe(50)
+
+    for (const value of [0, -1, 1.5, Number.NaN, "10", undefined]) {
+      expect(() => normalizeTraceLimit(value)).toThrow("--limit must be a positive integer")
+    }
   })
 })
