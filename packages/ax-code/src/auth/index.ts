@@ -45,7 +45,10 @@ function readAuthData() {
 }
 
 async function cleanupAuthLockFile() {
-  await fsPromises.unlink(lockFile).catch(() => {})
+  await fsPromises.unlink(lockFile).catch((error) => {
+    if (isEnoent(error)) return
+    throw error
+  })
 }
 
 function staleLockClaimFile(text: string) {
@@ -108,8 +111,15 @@ async function acquireFileLock(): Promise<Disposable> {
     }
   }
 
+  async function readLockFile() {
+    return fsPromises.readFile(lockFile, "utf-8").catch((error) => {
+      if (isEnoent(error)) return undefined
+      throw error
+    })
+  }
+
   async function readSnapshot() {
-    const text = await fsPromises.readFile(lockFile, "utf-8").catch(() => undefined)
+    const text = await readLockFile()
     if (!text) return undefined
     return {
       text,
@@ -130,7 +140,7 @@ async function acquireFileLock(): Promise<Disposable> {
     }
 
     try {
-      const current = await fsPromises.readFile(lockFile, "utf-8").catch(() => undefined)
+      const current = await readLockFile()
       if (current === undefined) return true
       if (current !== snapshot.text) return false
       await cleanupAuthLockFile()

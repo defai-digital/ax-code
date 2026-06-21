@@ -154,6 +154,34 @@ test("set steals an abandoned auth lock owned by a dead process", async () => {
   expect(await Auth.get("anthropic")).toMatchObject({ type: "api", key: "sk-test" })
 })
 
+test("set does not steal an auth lock when its body cannot be read", async () => {
+  const authBefore = JSON.stringify({ anthropic: { type: "api", key: "sk-existing" } })
+  const lockBefore = JSON.stringify({
+    host: currentLockHost(),
+    pid: process.pid + 1,
+    startedAt: Date.now(),
+    token: "active-holder",
+  })
+  await fs.writeFile(file, authBefore)
+  await fs.writeFile(lockFile, lockBefore)
+
+  const readError = Object.assign(new Error("auth lock is unreadable"), { code: "EACCES" })
+  const readSpy = vi.spyOn(fs, "readFile").mockRejectedValueOnce(readError)
+
+  try {
+    await expect(
+      Auth.set("anthropic", {
+        type: "api",
+        key: "sk-new",
+      }),
+    ).rejects.toMatchObject({ name: "AuthError" })
+    expect(await fs.readFile(file, "utf-8")).toBe(authBefore)
+    expect(await fs.readFile(lockFile, "utf-8")).toBe(lockBefore)
+  } finally {
+    readSpy.mockRestore()
+  }
+})
+
 test("stale auth lock stealing claims and revalidates the stale snapshot before unlinking", async () => {
   const src = await Bun.file(path.join(import.meta.dirname, "../../src/auth/index.ts")).text()
   const start = src.indexOf("async function removeStaleSnapshot")
