@@ -385,6 +385,23 @@ describe("server route validation", () => {
     })
   })
 
+  test("session list rejects invalid timestamp cursors", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const sessionNegative = await Server.Default().request("/session?start=-1")
+        const sessionFractional = await Server.Default().request("/session?start=1.5")
+        const globalNegative = await Server.Default().request("/experimental/session?start=-1")
+        const globalFractional = await Server.Default().request("/experimental/session?cursor=1.5")
+
+        expect(sessionNegative.status).toBe(400)
+        expect(sessionFractional.status).toBe(400)
+        expect(globalNegative.status).toBe(400)
+        expect(globalFractional.status).toBe(400)
+      },
+    })
+  })
+
   test("experimental session list treats bare numeric query keys as omitted", async () => {
     await Instance.provide({
       directory: root,

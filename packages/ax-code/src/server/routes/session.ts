@@ -186,7 +186,7 @@ export const SessionRoutes = lazy(() =>
         z.object({
           directory: z.string().optional().meta({ description: "Filter sessions by project directory" }),
           roots: QueryBoolean.optional().meta({ description: "Only return root sessions (no parentID)" }),
-          start: OptionalQueryNumber(z.number()).meta({
+          start: OptionalQueryNumber(z.number().int().min(0)).meta({
             description: "Filter sessions updated on or after this timestamp (milliseconds since epoch)",
           }),
           search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
