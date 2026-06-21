@@ -41,7 +41,13 @@ ax-code
 
 No project setup or config file required. On first launch, use `/connect` inside the TUI to add a provider.
 
-Prefer a graphical desktop app? Use AX Code Desktop on macOS or Windows. The Desktop app shares the AX Code runtime and provider setup. AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac.
+Prefer a graphical desktop app? Use AX Code Desktop on macOS or Windows. The Desktop source lives in this monorepo under [`desktop/`](desktop/), and its release artifacts are published from the same [GitHub Releases](https://github.com/defai-digital/ax-code/releases) page. The standalone Desktop source repository has been retired.
+
+```bash
+brew install --cask defai-digital/ax-code-desktop/ax-code
+```
+
+The Desktop app shares the AX Code runtime and provider setup. AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac.
 
 For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
 
@@ -96,14 +102,14 @@ That source launcher should report `Runtime: Node vX.Y.Z (source)` and is intent
 
 AX Code is designed for agent work that touches real files, shells, sessions, and team policy. The same runtime powers every surface:
 
-| Need                         | Use                                                                                            |
-| ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| Desktop app                  | AX Code Desktop provides the graphical app as a separate Electron installable for macOS/Windows |
-| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows     |
-| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                              |
-| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                 |
-| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests   |
-| VS Code                      | The VS Code integration uses the installed CLI/server while staying editor-native              |
+| Need                         | Use                                                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Desktop app                  | AX Code Desktop provides the graphical app from [`desktop/`](desktop/) as a separate Electron installable for macOS/Windows |
+| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows                                  |
+| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                                                           |
+| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                                              |
+| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests                                |
+| VS Code                      | The VS Code integration uses the installed CLI/server while staying editor-native                                           |
 
 ## Current Capabilities
 

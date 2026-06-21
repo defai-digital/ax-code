@@ -396,8 +396,7 @@ jobs:
           const version = process.env.VERSION;
           const tag = process.env.TAG;
           const sha256 = process.env.DMG_SHA256;
-          const cask = [
-            'cask "ax-code-desktop" do',
+          const sharedLines = [
             `  version "${version}"`,
             `  sha256 "${sha256}"`,
             '',
@@ -421,13 +420,25 @@ jobs:
             '  ]',
             'end',
             '',
+          ];
+          const canonicalCask = [
+            'cask "ax-code" do',
+            ...sharedLines,
+          ].join('\n');
+          const compatibilityCask = [
+            'cask "ax-code-desktop" do',
+            ...sharedLines.slice(0, 8),
+            '  deprecate! date: "2026-06-21", because: "has been renamed to ax-code", replacement_cask: "ax-code"',
+            '',
+            ...sharedLines.slice(8),
           ].join('\n');
           fs.mkdirSync('Casks', { recursive: true });
-          fs.writeFileSync('Casks/ax-code-desktop.rb', cask);
+          fs.writeFileSync('Casks/ax-code.rb', canonicalCask);
+          fs.writeFileSync('Casks/ax-code-desktop.rb', compatibilityCask);
           NODE
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/ax-code-desktop.rb
+          git add Casks/ax-code.rb Casks/ax-code-desktop.rb
           git diff --cached --quiet && echo "No cask changes to commit." && exit 0
-          git commit -m "Update ax-code-desktop cask to ${VERSION}"
+          git commit -m "Update ax-code desktop casks to ${VERSION}"
           git push

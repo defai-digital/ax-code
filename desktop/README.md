@@ -2,12 +2,25 @@
 
 AX Code Desktop is the desktop UI for [AX Code](https://github.com/defai-digital/ax-code). It gives AX Code users a full workspace interface for chat sessions, file review, diffs, Git operations, terminals, project notes, and multi-agent workflows.
 
+## Repository and Release Policy
+
+AX Code Desktop source code lives in the AX Code monorepo at
+[`github.com/defai-digital/ax-code/tree/main/desktop`](https://github.com/defai-digital/ax-code/tree/main/desktop).
+The standalone Desktop source repository has been retired and is no longer the
+source of truth.
+
+Desktop releases use `desktop-v*` tags and publish artifacts to the main
+[`defai-digital/ax-code` Releases page](https://github.com/defai-digital/ax-code/releases).
+The Homebrew cask remains in the separate
+[`defai-digital/homebrew-ax-code-desktop`](https://github.com/defai-digital/homebrew-ax-code-desktop)
+tap because Homebrew taps are distribution indexes, not source-code repositories.
+
 ## Install On macOS
 
 The recommended way to install on macOS is via Homebrew:
 
 ```bash
-brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
+brew install --cask defai-digital/ax-code-desktop/ax-code
 ```
 
 To update:
@@ -62,12 +75,12 @@ If `ax-code` is not found, install AX Code before launching AX Code Desktop. The
 
 AX Code Desktop targets macOS and Windows first, but local model acceleration is intentionally platform-specific:
 
-| Capability | macOS Apple Silicon | Windows x64 |
-| --- | --- | --- |
-| Desktop app | Supported | Supported |
-| AX Code CLI/server integration | Supported | Supported |
-| Hosted providers | Supported | Supported |
-| AX Engine local provider | Supported on eligible Apple Silicon Macs | Not supported |
+| Capability                     | macOS Apple Silicon                      | Windows x64   |
+| ------------------------------ | ---------------------------------------- | ------------- |
+| Desktop app                    | Supported                                | Supported     |
+| AX Code CLI/server integration | Supported                                | Supported     |
+| Hosted providers               | Supported                                | Supported     |
+| AX Engine local provider       | Supported on eligible Apple Silicon Macs | Not supported |
 
 AX Engine uses the local MLX/Apple Silicon path. It can be enabled on supported macOS hosts through AX Code provider setup. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac when AX Engine is required.
 
@@ -126,13 +139,13 @@ brew upgrade --cask ax-code-desktop
 
 ## Platform Support
 
-| Platform | Support | Install |
-| --- | --- | --- |
-| macOS Apple Silicon | Supported | Homebrew (recommended) or DMG |
-| macOS Intel/x64 | Not supported | No artifact is built |
-| Windows x64 | Supported | Installer or portable ZIP; AX Engine local provider is unavailable |
-| Linux | Not supported | No artifact is built |
-| Mobile/tablet browsers | Not supported | Blocked to reduce data-leakage risk |
+| Platform               | Support       | Install                                                            |
+| ---------------------- | ------------- | ------------------------------------------------------------------ |
+| macOS Apple Silicon    | Supported     | Homebrew (recommended) or DMG                                      |
+| macOS Intel/x64        | Not supported | No artifact is built                                               |
+| Windows x64            | Supported     | Installer or portable ZIP; AX Engine local provider is unavailable |
+| Linux                  | Not supported | No artifact is built                                               |
+| Mobile/tablet browsers | Not supported | Blocked to reduce data-leakage risk                                |
 
 ## Security Notes
 
@@ -164,6 +177,8 @@ The web UI is available at `http://localhost:3000` by default.
 
 ## Development
 
+Run development commands from the AX Code monorepo root.
+
 Requirements:
 
 - Node.js 24 or newer (`>=24`)
@@ -183,11 +198,11 @@ node desktop/packages/electron/scripts/package.mjs --mac zip --publish=never
 
 Package layout:
 
-| Package | Purpose |
-| --- | --- |
-| `packages/ui` | Shared React UI, stores, hooks, and components |
-| `packages/web` | Local web runtime used by development and desktop packaging |
-| `packages/electron` | Desktop shell (Electron) |
+| Package             | Purpose                                                     |
+| ------------------- | ----------------------------------------------------------- |
+| `packages/ui`       | Shared React UI, stores, hooks, and components              |
+| `packages/web`      | Local web runtime used by development and desktop packaging |
+| `packages/electron` | Desktop shell (Electron)                                    |
 
 ## Legacy Compatibility Notes
 
@@ -201,6 +216,8 @@ identity for new docs, releases, or UI copy.
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
+New source changes should be made in the AX Code monorepo, not in the retired
+standalone Desktop source repository.
 
 ## License
 

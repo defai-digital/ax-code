@@ -10,6 +10,11 @@ There are two supported Desktop install paths:
 - macOS Apple Silicon app through Homebrew or DMG
 - Windows x64 app through installer or portable ZIP
 
+Desktop source code lives in the AX Code monorepo under `desktop/`, and Desktop
+release artifacts are published from the main
+[AX Code GitHub releases page](https://github.com/defai-digital/ax-code/releases).
+The Homebrew cask tap remains separate because it is a distribution index.
+
 ## Prerequisite
 
 Install [AX Code](https://ax-code.ai) first — AX Code Desktop runs on top of it.
@@ -19,21 +24,21 @@ Install [AX Code](https://ax-code.ai) first — AX Code Desktop runs on top of i
 Homebrew is the recommended macOS path:
 
 ```bash
-brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
+brew install --cask defai-digital/ax-code-desktop/ax-code
 ```
 
-You can also download the latest macOS DMG from the GitHub releases page. Open it, drag **AX Code** into **Applications**, and launch it from Applications.
+You can also download the latest macOS DMG from the [GitHub releases page](https://github.com/defai-digital/ax-code/releases). Open it, drag **AX Code** into **Applications**, and launch it from Applications.
 
 ## Windows
 
-Download the latest Windows installer from the GitHub releases page and run it. For portable use, download the Windows ZIP, extract the full folder, and run `AX Code.exe` from the extracted folder.
+Download the latest Windows installer from the [GitHub releases page](https://github.com/defai-digital/ax-code/releases) and run it. For portable use, download the Windows ZIP, extract the full folder, and run `AX Code.exe` from the extracted folder.
 
 ## Platform capabilities
 
-| Capability | macOS Apple Silicon | Windows x64 |
-| --- | --- | --- |
-| Desktop app | Supported | Supported |
-| Hosted providers | Supported | Supported |
+| Capability               | macOS Apple Silicon                      | Windows x64   |
+| ------------------------ | ---------------------------------------- | ------------- |
+| Desktop app              | Supported                                | Supported     |
+| Hosted providers         | Supported                                | Supported     |
 | AX Engine local provider | Supported on eligible Apple Silicon Macs | Not supported |
 
 AX Engine is a local MLX/Apple Silicon provider. On Windows, use hosted providers, OpenAI-compatible gateways, or connect Desktop to a remote AX Code server running on a supported Mac when AX Engine is required.

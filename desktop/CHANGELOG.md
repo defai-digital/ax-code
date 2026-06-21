@@ -7,10 +7,12 @@ All notable changes to this project will be documented in this file.
 ## [1.3.0] - 2026-06-19
 
 ### Changed
+
 - **Infrastructure**: migrated from Bun to Node.js + pnpm for better ecosystem compatibility and native module support. All scripts, CI workflows, and contributor documentation updated. Bun lockfile removed, pnpm workspace and lockfile added.
 - **Performance**: optimized startup and shutdown paths to reduce latency. Server shutdown now uses structured lifecycle hooks with configurable timeouts.
 
 ### Fixed
+
 - **Sync**: resolved persistent "no assistant response" errors on second+ prompts through multiple fixes:
   - Increased watchdog timeout from 12s to 60s and grace window from 30s to 60s (v1.2.9)
   - Added grace-window re-arm to prevent false errors from transient SSE idle events (v1.2.8)
@@ -22,21 +24,25 @@ All notable changes to this project will be documented in this file.
 - **Dependencies**: overrode node-gyp to ^11 so native builds work on Python 3.12.
 
 ### Added
+
 - **Testing**: added comprehensive vitest configuration with coverage reporting. Migrated all test files from bun test to vitest.
 
 ## [1.2.9] - 2026-06-19
 
 ### Fixed
+
 - Sync: increased watchdog timeout from 12s to 60s and grace window from 30s to 60s to prevent false "no assistant response" errors on slower models or network conditions. The watchdog now waits longer before fabricating an error, giving the assistant more time to respond. This addresses persistent reports of the error appearing on second+ prompts even after previous fixes.
 
 ## [1.2.8] - 2026-06-18
 
 ### Fixed
+
 - Sync: the accepted-prompt watchdog no longer fabricates a false "no assistant response" error when an SSE `session.idle` / `session.status:idle` event transiently clobbers busy→idle during the 30s prompt-accepted grace window. The grace window (`wasPromptRecentlyAccepted`) previously only guarded the status-poll/reconnect path (`resolveResyncedSessionStatus`), not the event-reducer's direct status writes. The watchdog's fabrication branch now checks `wasPromptRecentlyAccepted` and re-arms itself to fire again after the grace window expires, so transient grace-window clobbers do not produce false errors while genuinely dead turns (idle + no response after grace expires) are still caught. This fixes the "first prompt works, second prompt fails" pattern in v1.2.7.
 
 ## [1.2.7] - 2026-06-18
 
 ### Fixed
+
 - Sync: stale accepted-prompt watchdog from a previous prompt no longer fires during the next prompt's turn and clobbers the busy status to idle. The watchdog timer is now cancelled when a new prompt is sent for the same session (`scheduleAcceptedPromptWatchdog` tracks and clears the previous timer via `acceptedPromptWatchdogTimers`). A defense-in-depth guard also prevents the idle-forcing branch from running when a newer user message exists without its own assistant reply. This was the root cause of the "The request was accepted, but no assistant response or error was produced" error appearing on every 2nd+ prompt in v1.2.6.
 - Sync: the watchdog's async server-refetch recovery path (`recoverAcceptedPromptFromServer`) no longer clobbers a newer prompt's busy status. The `await` during recovery created a timing window where a new prompt could start; when recovery completed, it found the old prompt's completed response and forced idle based on `isSessionWorking()` alone — without checking whether a newer unanswered user message existed. Extracted `hasNewerUnansweredUserMessage` as a shared guard applied to both the initial-match and recovery branches.
 
@@ -71,7 +77,7 @@ All notable changes to this project will be documented in this file.
 - Client: `sendMessage` now parses structured backend error bodies and maps `ProviderModelNotFoundError` (returned by `prompt_async` when the provider/model pair is stale) to a clear "The selected model is no longer available" message instead of surfacing the raw 400 JSON. Fixes #40.
 - Client: `sendMessage` now omits the `agent` and `variant` fields from the prompt payload when they are unset, instead of serializing them as `null`. The AX Code backend rejects `null` for these fields with `InvalidRequestError` (400). The payload now uses conditional spread matching the `sendCommand` pattern.
 - Client: removed dead `readFile`/`listFiles` methods that were never called and used `POST` against `GET`-only `/api/fs/read` and `/api/fs/list` endpoints. The actual implementations in `RuntimeAPIs` (`packages/web/src/api/files.ts`) are unaffected and use the correct verbs.
-- Electron: support/help links now point at the desktop repository (`defai-digital/ax-code-desktop`) rather than the upstream CLI repo.
+- Electron: support/help links now point at the AX Code monorepo (`defai-digital/ax-code`) rather than a separate desktop source repo.
 
 ## [1.2.1] - 2026-06-17
 

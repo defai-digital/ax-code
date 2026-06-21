@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # AX Code Desktop Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code-desktop/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/desktop/scripts/install.sh | bash
 
 set -e
 

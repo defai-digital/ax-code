@@ -1,6 +1,6 @@
 # GitHub release publishing
 
-Use the guarded publish script from the repository root:
+Use the guarded publish script from the AX Code monorepo root:
 
 ```bash
 pnpm run release:desktop -- --version 0.8.0
@@ -25,7 +25,7 @@ The publish path:
 
 1. Verifies the worktree is clean and `HEAD` matches the release branch on
    `origin`.
-2. Verifies the local and remote `v<version>` tag do not already exist.
+2. Verifies the local and remote `desktop-v<version>` tag do not already exist.
 3. Verifies the GitHub Release does not already exist.
 4. Runs `pnpm run docs:validate`, `pnpm run test`, `pnpm run type-check`,
    `pnpm run lint`, and `pnpm run build`.
@@ -37,7 +37,7 @@ The publish path:
 8. The workflow uploads the generated `.minisig` files before publishing the
    draft release.
 9. Verifies the release is public and every signed asset has a matching
-    `.minisig`.
+   `.minisig`.
 
 If the GitHub workflow succeeded before signatures were uploaded, or you need
 to repair signature assets manually, rerun only the local signature upload step:
