@@ -170,4 +170,31 @@ describe("GET /session", () => {
       },
     })
   })
+
+  test("session patch rejects invalid archived timestamps", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "invalid-archive-route-session" })
+        const app = Server.Default()
+
+        try {
+          for (const archived of ["-1", "1.5"]) {
+            const response = await app.request(`/session/${session.id}?directory=${encodeURIComponent(tmp.path)}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ time: { archived } }),
+            })
+
+            expect(response.status).toBe(400)
+          }
+          expect((await Session.get(session.id)).time.archived).toBeUndefined()
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
 })

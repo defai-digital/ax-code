@@ -187,6 +187,22 @@ describe("session.setArchived", () => {
       },
     })
   })
+
+  test("rejects negative archive timestamps", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({})
+
+        try {
+          expect(() => Session.setArchived({ sessionID: session.id, time: -1 })).toThrow()
+          expect((await Session.get(session.id)).time.archived).toBeUndefined()
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
 })
 
 describe("session.remove", () => {

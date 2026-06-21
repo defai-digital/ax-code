@@ -187,7 +187,7 @@ export namespace Session {
         created: z.number(),
         updated: z.number(),
         compacting: z.number().optional(),
-        archived: z.number().optional(),
+        archived: z.number().int().min(0).optional(),
       }),
       permission: Permission.Ruleset.optional(),
       revert: z
@@ -492,8 +492,9 @@ export namespace Session {
     updateAndPublish(input.sessionID, { title: input.title }),
   )
 
-  export const setArchived = fn(z.object({ sessionID: SessionID.zod, time: z.number().optional() }), async (input) =>
-    updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() }),
+  export const setArchived = fn(
+    z.object({ sessionID: SessionID.zod, time: z.number().int().min(0).optional() }),
+    async (input) => updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() }),
   )
 
   export const setMetadata = fn(
