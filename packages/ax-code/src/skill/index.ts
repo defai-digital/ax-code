@@ -179,7 +179,7 @@ export namespace Skill {
     const builtinDir = path.resolve(import.meta.dirname, "../../skills")
     const entries = await Filesystem.isDir(builtinDir).then((exists) => {
       if (!exists) return [] as string[]
-      return Glob.scan("*/SKILL.md", { cwd: builtinDir, absolute: true, include: "file" }).catch(() => [] as string[])
+      return Glob.scan("*/SKILL.md", { cwd: builtinDir, absolute: true, include: "file" })
     })
     return Promise.all(entries.map(async (location) => ({ location, content: await Filesystem.readText(location) })))
   }

@@ -1,9 +1,10 @@
-import { afterEach, test, expect } from "vitest"
+import { afterEach, test, expect, vi } from "vitest"
 import { Skill } from "../../src/skill"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import path from "path"
 import fs from "fs/promises"
+import { Glob } from "../../src/util/glob"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -125,6 +126,28 @@ test("built-in skill instructions are portable across repositories", async () =>
       }
     },
   })
+})
+
+test("surfaces built-in skill scan failures", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const scan = Glob.scan
+  const scanSpy = vi.spyOn(Glob, "scan").mockImplementation((pattern, options) => {
+    if (pattern === "*/SKILL.md" && String(options?.cwd ?? "").endsWith(`${path.sep}skills`)) {
+      return Promise.reject(Object.assign(new Error("built-in skills are unreadable"), { code: "EACCES" }))
+    }
+    return scan(pattern, options)
+  })
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Skill.all()).rejects.toMatchObject({ code: "EACCES" })
+      },
+    })
+  } finally {
+    scanSpy.mockRestore()
+  }
 })
 
 test("returns skill directories from Skill.dirs", async () => {
