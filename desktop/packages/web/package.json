@@ -1,6 +1,6 @@
 {
   "name": "ax-code-desktop",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "AX Code Desktop local web runtime.",
   "private": false,
   "type": "module",

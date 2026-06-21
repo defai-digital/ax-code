@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-20
+
+### Changed
+
+- Release: publish the current desktop line as v1.4.0 from the ax-code monorepo release path.
+
 ## [1.3.0] - 2026-06-19
 
 ### Changed
