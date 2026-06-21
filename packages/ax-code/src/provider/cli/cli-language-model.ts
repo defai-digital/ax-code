@@ -49,6 +49,8 @@ function formatCliTimeout(stdout: Buffer, stderr: Buffer) {
   return detail ? `${base}: ${detail.slice(0, 1000)}` : base
 }
 
+const CLI_TIMEOUT_MS = 300_000 // 5 minutes
+
 export function cliEnv(providerEnvKeys: readonly string[] = []) {
   const env: Record<string, string> = {
     ...Env.withCliProviderKeys(Env.sanitize()),
@@ -76,7 +78,6 @@ export function buildCliCommand(config: CliLanguageModelConfig, prompt: string) 
   if (config.promptMode === "positional") cmd.push(prompt)
   return cmd
 }
-const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
 function estimatedUsage(input: string, output: string): LanguageModelV3Usage {
   const inputTokens = Token.estimate(input)
