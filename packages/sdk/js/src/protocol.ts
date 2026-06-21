@@ -32,7 +32,7 @@ export function withWorkspaceHeaders(headers: Record<string, string> | undefined
  * are killed by Bun's default connection timeout.
  */
 export function createNoTimeoutFetch(): typeof fetch {
-  return ((input: URL | RequestInfo, init?: RequestInit) => {
+  return ((input: string | URL | Request, init?: RequestInit) => {
     if (input instanceof Request) {
       ;(input as Request & { timeout?: boolean }).timeout = false
       return fetch(input, { timeout: false, ...init } as RequestInit)

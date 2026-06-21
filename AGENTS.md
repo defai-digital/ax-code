@@ -149,6 +149,7 @@ A session-first terminal UI that connects to a headless ax-code server via HTTP/
 | `tui/input.rs` | Keyboard/mouse handling per `AppMode` (Input, Permission, Question). Number keys 1-9 for direct question option selection. |
 
 **Key patterns in `ax-code-tui`**:
+
 - **FIFO queues**: Permission and question requests are queued front-to-back; the front of the queue is the active modal. Out-of-band `*Replied`/`*Rejected` SSE events clear stale entries by `request_id`.
 - **SSE cross-chunk buffering**: `drain_complete_sse_lines()` keeps a carry-over buffer because TCP chunk boundaries are NOT aligned to SSE line boundaries. Handles CRLF, `data:` with/without space, and envelope unwrapping.
 - **Multi-question support**: A single `question.asked` event can contain multiple sub-questions. `QuestionAnswerProgress` collects answers across sub-questions before sending the reply.

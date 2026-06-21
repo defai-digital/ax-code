@@ -1,0 +1,27 @@
+diff --git a/package.json b/package.json
+index 54418426d2ba36c9092acfbd4256efd58c6cf1bb..22dcb62c46c0847f2b4db46b2a9475e0c38ab5a0 100644
+--- a/package.json
++++ b/package.json
+@@ -9,6 +9,22 @@
+   "cdn": "./dist.umd/msgpack.min.js",
+   "unpkg": "./dist.umd/msgpack.min.js",
+   "types": "./dist.esm/index.d.ts",
++  "exports": {
++    ".": {
++      "import": {
++        "types": "./dist.esm/index.d.ts",
++        "default": "./dist.esm/index.mjs"
++      },
++      "require": {
++        "types": "./dist.esm/index.d.ts",
++        "default": "./dist.cjs/index.cjs"
++      },
++      "default": {
++        "types": "./dist.esm/index.d.ts",
++        "default": "./dist.esm/index.mjs"
++      }
++    }
++  },
+   "sideEffects": false,
+   "scripts": {
+     "build": "npm publish --dry-run",

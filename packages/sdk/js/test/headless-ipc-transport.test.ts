@@ -108,7 +108,7 @@ describe("ipc transport client", () => {
       expect(lastRequest?.method).toBe("GET")
       expect(lastRequest?.path).toBe("/global/health")
     } finally {
-      await transport.close()
+      await transport.close?.()
     }
   })
 
@@ -123,7 +123,7 @@ describe("ipc transport client", () => {
       expect(lastRequest?.headers?.["x-ax-code-directory"]).toBe("/tmp/project")
       expect(lastRequest?.headers?.["x-ax-code-workspace-id"]).toBe("ws-1")
     } finally {
-      await transport.close()
+      await transport.close?.()
     }
   })
 
@@ -134,7 +134,7 @@ describe("ipc transport client", () => {
         transport.requestJson<unknown>({ path: "/error", method: "GET" }),
       ).rejects.toThrow("something went wrong")
     } finally {
-      await transport.close()
+      await transport.close?.()
     }
   })
 
@@ -145,7 +145,7 @@ describe("ipc transport client", () => {
         transport.requestJson<unknown>({ path: "/not-found", method: "GET" }),
       ).rejects.toThrow('Headless runtime request failed (404): {"error":"missing"}')
     } finally {
-      await transport.close()
+      await transport.close?.()
     }
   })
 
@@ -168,7 +168,7 @@ describe("ipc transport client", () => {
         }),
       ).resolves.toEqual({ accepted: true, status: 200, body: true })
     } finally {
-      await transport.close()
+      await transport.close?.()
     }
   })
 
