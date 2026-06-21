@@ -1,6 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
+import { QualityStorageKey } from "./storage-key"
 
 export namespace QualityShadowStore {
   export const ShadowRecordEnvelope = z.object({
@@ -11,11 +12,11 @@ export namespace QualityShadowStore {
   export type ShadowRecordEnvelope = z.output<typeof ShadowRecordEnvelope>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(sessionID: string, candidateSource: string, artifactID: string) {
@@ -74,10 +75,13 @@ export namespace QualityShadowStore {
         const encodedCandidate = parts[parts.length - 2]
         const encodedArtifact = parts[parts.length - 1]
         if (!encodedCandidate || !encodedArtifact) continue
+        const decodedCandidate = decode(encodedCandidate)
+        const decodedArtifact = decode(encodedArtifact)
+        if (!decodedCandidate || !decodedArtifact) continue
         const envelope = await get({
           sessionID,
-          candidateSource: decode(encodedCandidate),
-          artifactID: decode(encodedArtifact),
+          candidateSource: decodedCandidate,
+          artifactID: decodedArtifact,
         })
         records.push(envelope.record)
       }

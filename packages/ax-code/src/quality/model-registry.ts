@@ -38,6 +38,7 @@ import { QualityReentryContext } from "./reentry-context"
 import { QualityReentryRemediation } from "./reentry-remediation"
 import { QualityPromotionWatch } from "./promotion-watch"
 import { QualityStabilityGuard } from "./stability-guard"
+import { QualityStorageKey } from "./storage-key"
 import {
   promotionApprovers,
   promotionReportingChains,
@@ -135,11 +136,11 @@ export namespace QualityModelRegistry {
   export const renderCanonicalPromotionReport = QualityModelRegistryCanonical.renderCanonicalPromotionReport
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function modelKey(source: string) {
@@ -194,7 +195,9 @@ export namespace QualityModelRegistry {
     for (const parts of keys) {
       const encodedSource = parts[parts.length - 1]
       if (!encodedSource) continue
-      out.push(await get(decode(encodedSource)))
+      const source = decode(encodedSource)
+      if (!source) continue
+      out.push(await get(source))
     }
     return sortModelRecords(out)
   }

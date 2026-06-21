@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest"
+import fs from "fs/promises"
+import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import {
@@ -49,6 +51,7 @@ import { QualityLabelStore } from "../../src/quality/label-store"
 import { QualityShadowStore } from "../../src/quality/shadow-store"
 import { QualityShadow } from "../../src/quality/shadow-runtime"
 import { Storage } from "../../src/storage/storage"
+import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"
 
 describe("ProbabilisticRollout.exportReplay", () => {
@@ -2100,6 +2103,75 @@ describe("QualityShadow", () => {
       ).rejects.toThrow("already exists")
     } finally {
       await clearModelRegistry()
+    }
+  })
+
+  test("skips malformed encoded model sources while listing registry models", async () => {
+    const model = createModel("registry-model-malformed-key-v1")
+    const malformedPath = path.join(Global.Path.data, "storage", "quality_model", "%E0%A4%A.json")
+
+    await clearModelRegistry()
+    try {
+      await QualityModelRegistry.register(model)
+      await fs.mkdir(path.dirname(malformedPath), { recursive: true })
+      await fs.writeFile(malformedPath, JSON.stringify({ corrupt: true }), "utf8")
+
+      const listed = await QualityModelRegistry.list()
+      expect(listed.map((record) => record.model.source)).toEqual(["registry-model-malformed-key-v1"])
+    } finally {
+      await clearModelRegistry()
+    }
+  })
+
+  test("skips malformed encoded shadow keys while listing shadow records", async () => {
+    const sessionID = "ses_shadow_malformed_key"
+    const record = ProbabilisticRollout.ShadowRecord.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-shadow-record",
+      artifactID: "review:ses_shadow_malformed_key",
+      sessionID,
+      workflow: "review",
+      artifactKind: "review_run",
+      title: "Review run",
+      createdAt: "2026-04-20T00:00:00.000Z",
+      baseline: {
+        source: "baseline",
+        available: true,
+        confidence: 0.5,
+        threshold: 0.5,
+        abstainBelow: null,
+        predictedPositive: true,
+        abstained: false,
+      },
+      candidate: {
+        source: "candidate-shadow-malformed-key-v1",
+        available: true,
+        confidence: 0.6,
+        threshold: 0.5,
+        abstainBelow: null,
+        predictedPositive: true,
+        abstained: false,
+      },
+      disagreement: {
+        candidateMissing: false,
+        predictionChanged: false,
+        abstentionChanged: false,
+        confidenceDelta: 0.1,
+        rankDelta: null,
+      },
+    })
+    const malformedPath = path.join(Global.Path.data, "storage", "quality_shadow", sessionID, "%E0%A4%A", "bad.json")
+
+    await clearSessionShadow(sessionID)
+    try {
+      await QualityShadowStore.upsert(record)
+      await fs.mkdir(path.dirname(malformedPath), { recursive: true })
+      await fs.writeFile(malformedPath, JSON.stringify({ corrupt: true }), "utf8")
+
+      const records = await QualityShadowStore.list(sessionID)
+      expect(records.map((item) => item.candidate.source)).toEqual(["candidate-shadow-malformed-key-v1"])
+    } finally {
+      await clearSessionShadow(sessionID)
     }
   })
 
