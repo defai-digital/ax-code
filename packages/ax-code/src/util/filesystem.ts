@@ -16,7 +16,10 @@ export namespace Filesystem {
     return fs
       .access(p)
       .then(() => true)
-      .catch(() => false)
+      .catch((err: NodeJS.ErrnoException) => {
+        if (err?.code === "ENOENT") return false
+        throw err
+      })
   }
 
   export async function isDir(p: string): Promise<boolean> {
