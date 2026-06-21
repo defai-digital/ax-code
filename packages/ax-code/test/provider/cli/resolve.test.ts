@@ -1,5 +1,8 @@
+import fs from "node:fs/promises"
+import path from "node:path"
 import { test, expect, describe } from "vitest"
 import { parseCliSettingsJson, resolveCliModel } from "../../../src/provider/cli/resolve"
+import { tmpdir } from "../../fixture/fixture"
 
 describe("resolveCliModel", () => {
   test("parseCliSettingsJson decodes object settings", () => {
@@ -25,6 +28,70 @@ describe("resolveCliModel", () => {
       }
     } finally {
       if (original !== undefined) process.env.ANTHROPIC_MODEL = original
+    }
+  })
+
+  test("claude-code reads settings from isolated test home", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.ANTHROPIC_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.ANTHROPIC_MODEL
+    try {
+      const settingsDir = path.join(tmp.path, ".claude")
+      await fs.mkdir(settingsDir, { recursive: true })
+      await fs.writeFile(path.join(settingsDir, "settings.json"), JSON.stringify({ model: "claude-sonnet-4-6" }))
+
+      const info = await resolveCliModel("claude-code")
+      expect(info).toEqual({
+        model: "claude-sonnet-4-6",
+        source: "~/.claude/settings.json",
+      })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.ANTHROPIC_MODEL = originalModel
+      else delete process.env.ANTHROPIC_MODEL
+    }
+  })
+
+  test.skipIf(process.platform === "win32")("claude-code surfaces settings access errors", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.ANTHROPIC_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.ANTHROPIC_MODEL
+    const settingsDir = path.join(tmp.path, ".claude")
+    try {
+      await fs.mkdir(settingsDir, { recursive: true })
+      await fs.writeFile(path.join(settingsDir, "settings.json"), JSON.stringify({ model: "claude-sonnet-4-6" }))
+      await fs.chmod(settingsDir, 0)
+
+      await expect(resolveCliModel("claude-code")).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      await fs.chmod(settingsDir, 0o700).catch(() => undefined)
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.ANTHROPIC_MODEL = originalModel
+      else delete process.env.ANTHROPIC_MODEL
+    }
+  })
+
+  test.skipIf(process.platform === "win32")("codex-cli surfaces config access errors", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    const configDir = path.join(tmp.path, ".codex")
+    try {
+      await fs.mkdir(configDir, { recursive: true })
+      await fs.writeFile(path.join(configDir, "config.toml"), 'model = "gpt-5.2-codex"\n')
+      await fs.chmod(configDir, 0)
+
+      await expect(resolveCliModel("codex-cli")).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      await fs.chmod(configDir, 0o700).catch(() => undefined)
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
     }
   })
 
@@ -84,6 +151,30 @@ describe("resolveCliModel", () => {
     const info = await resolveCliModel("qoder-cli")
     if (info.source === "default") {
       expect(info.model).toBe("qoder-cli")
+    }
+  })
+
+  test("qoder-cli reads settings from isolated test home", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.QODER_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.QODER_MODEL
+    try {
+      const settingsDir = path.join(tmp.path, ".qoder")
+      await fs.mkdir(settingsDir, { recursive: true })
+      await fs.writeFile(path.join(settingsDir, "settings.json"), JSON.stringify({ model: "qwen3-coder-next" }))
+
+      const info = await resolveCliModel("qoder-cli")
+      expect(info).toEqual({
+        model: "qwen3-coder-next",
+        source: "~/.qoder/settings.json",
+      })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.QODER_MODEL = originalModel
+      else delete process.env.QODER_MODEL
     }
   })
 

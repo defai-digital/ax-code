@@ -8,8 +8,6 @@ export interface CliModelInfo {
   source: string
 }
 
-const HOME = homedir()
-
 const DEFAULTS: Record<string, string> = {
   "claude-code": "claude-code",
   "gemini-cli": "gemini-cli",
@@ -24,20 +22,28 @@ export function parseCliSettingsJson(text: string): JsonLike | null {
   return parseCliJsonObject(text) ?? null
 }
 
+function homeDir() {
+  return process.env.AX_CODE_TEST_HOME || homedir()
+}
+
+function isEnoent(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
+}
+
 async function readJson(path: string): Promise<JsonLike | null> {
-  try {
-    return parseCliSettingsJson(await readFile(path, "utf-8"))
-  } catch {
-    return null
-  }
+  const text = await readFile(path, "utf-8").catch((error) => {
+    if (isEnoent(error)) return undefined
+    throw error
+  })
+  return text === undefined ? null : parseCliSettingsJson(text)
 }
 
 async function readText(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, "utf-8")
-  } catch {
-    return null
-  }
+  const text = await readFile(path, "utf-8").catch((error) => {
+    if (isEnoent(error)) return undefined
+    throw error
+  })
+  return text ?? null
 }
 
 type ResolveCliModelOptions = {
@@ -52,7 +58,7 @@ async function resolveModelFromJsonSettings(options: ResolveCliModelOptions): Pr
   const envModel = process.env[options.envVar]
   if (envModel) return { model: envModel, source: options.envVar }
 
-  const settings = await readJson(join(HOME, options.settingsPath))
+  const settings = await readJson(join(homeDir(), options.settingsPath))
   const model = settings ? options.read(settings) : undefined
   if (model !== undefined) return { model, source: options.sourceLabel }
 
@@ -77,7 +83,7 @@ async function resolveClaudeModel(): Promise<CliModelInfo> {
     settingsPath: ".claude/settings.json",
     sourceLabel: "~/.claude/settings.json",
     defaultModel: DEFAULTS["claude-code"]!,
-    read: resolveJsonModelString,
+    read: resolveModelFromObject,
   })
 }
 
@@ -92,7 +98,7 @@ async function resolveGeminiModel(): Promise<CliModelInfo> {
 }
 
 async function resolveCodexModel(): Promise<CliModelInfo> {
-  const toml = await readText(join(HOME, ".codex", "config.toml"))
+  const toml = await readText(join(homeDir(), ".codex", "config.toml"))
   if (toml) {
     const match = toml.match(/^model\s*=\s*"([^"]+)"/m)
     if (match?.[1]) return { model: match[1], source: "~/.codex/config.toml" }
@@ -107,7 +113,7 @@ async function resolveQoderModel(): Promise<CliModelInfo> {
     settingsPath: ".qoder/settings.json",
     sourceLabel: "~/.qoder/settings.json",
     defaultModel: DEFAULTS["qoder-cli"]!,
-    read: resolveJsonModelString,
+    read: resolveModelFromObject,
   })
 }
 
