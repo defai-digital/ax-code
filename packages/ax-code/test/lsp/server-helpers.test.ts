@@ -25,6 +25,7 @@ import {
   venvBin,
   venvPaths,
   venvPython,
+  pathExists,
 } from "../../src/lsp/server-helpers"
 import {
   PINNED_CHECKSUM_LSP_RELEASES,
@@ -60,6 +61,27 @@ import { Filesystem } from "../../src/util/filesystem"
 import { Process } from "../../src/util/process"
 
 describe("lsp server helpers", () => {
+  test("pathExists returns false only for missing paths", async () => {
+    await using tmp = await tmpdir()
+
+    expect(await pathExists(path.join(tmp.path, "missing"))).toBe(false)
+  })
+
+  test("pathExists surfaces inaccessible parent directories", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir()
+    const dirpath = path.join(tmp.path, "private")
+    await fs.mkdir(dirpath)
+    await fs.chmod(dirpath, 0)
+
+    try {
+      await expect(pathExists(path.join(dirpath, "tool"))).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      await fs.chmod(dirpath, 0o700)
+    }
+  })
+
   test("lists default venv search paths", async () => {
     await using tmp = await tmpdir()
     expect(venvPaths(tmp.path)).toEqual([
