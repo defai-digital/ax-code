@@ -2,6 +2,7 @@ import { EventQuery } from "../replay/query"
 import type { ReplayEvent } from "../replay/event"
 import type { AuditRecord } from "./index"
 import type { SessionID } from "../session/schema"
+import { Filesystem } from "@/util/filesystem"
 
 interface ExportContext {
   policy?: { name: string; version: string }
@@ -134,12 +135,23 @@ export namespace AuditExport {
   /** Load policy context from the current directory's .ax-code/policy.json */
   export async function policyContext(directory: string): Promise<ExportContext> {
     try {
-      const file = Bun.file(`${directory}/.ax-code/policy.json`)
-      if (!(await file.exists())) return {}
-      const raw = await file.json()
-      return { policy: { name: raw.name ?? "unknown", version: raw.version ?? "1" } }
-    } catch {
+      const raw = await Filesystem.readJson<Record<string, unknown>>(`${directory}/.ax-code/policy.json`)
+      return {
+        policy: {
+          name: typeof raw.name === "string" ? raw.name : "unknown",
+          version: typeof raw.version === "string" ? raw.version : "1",
+        },
+      }
+    } catch (error) {
+      const code = errnoCode(error)
+      if (code !== undefined && code !== "ENOENT") throw error
       return {}
     }
+  }
+
+  function errnoCode(error: unknown) {
+    if (typeof error !== "object" || error === null) return undefined
+    const code = (error as { code?: unknown }).code
+    return typeof code === "string" ? code : undefined
   }
 }

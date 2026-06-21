@@ -1,10 +1,11 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { AuditRecord } from "../../src/audit/index"
 import { AuditExport, formatAuditTimestamp } from "../../src/audit/export"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
+import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
 /**
@@ -43,6 +44,10 @@ import { tmpdir } from "../fixture/fixture"
  *   - tool → event.module ✓
  *   - agent → user.name ✓
  */
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe("R21: SIEM-compatible audit schema", () => {
   test("formats malformed audit timestamps without throwing", () => {
@@ -210,6 +215,14 @@ describe("R21: SIEM-compatible audit schema", () => {
       const record = JSON.parse(line)
       expect(record.policy).toEqual({ name: "test-policy", version: "1" })
     }
+  })
+
+  test("policy context propagates unreadable policy files", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const error = Object.assign(new Error("policy is unreadable"), { code: "EACCES" })
+    vi.spyOn(Filesystem, "readJson").mockRejectedValueOnce(error)
+
+    await expect(AuditExport.policyContext(tmp.path)).rejects.toBe(error)
   })
 
   test("JSON Lines format — one record per line, no trailing comma", async () => {
