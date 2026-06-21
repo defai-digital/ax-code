@@ -249,12 +249,13 @@ export async function clear(projectRoot: string): Promise<boolean> {
  */
 export async function exists(projectRoot: string): Promise<boolean> {
   const memoryPath = getMemoryPath(projectRoot)
-  try {
-    await fs.access(memoryPath)
-    return true
-  } catch {
-    return false
-  }
+  return fs
+    .access(memoryPath)
+    .then(() => true)
+    .catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return false
+      throw err
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -300,10 +301,11 @@ export async function clearGlobal(): Promise<boolean> {
 
 export async function existsGlobal(): Promise<boolean> {
   const memoryPath = getGlobalMemoryPath()
-  try {
-    await fs.access(memoryPath)
-    return true
-  } catch {
-    return false
-  }
+  return fs
+    .access(memoryPath)
+    .then(() => true)
+    .catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return false
+      throw err
+    })
 }

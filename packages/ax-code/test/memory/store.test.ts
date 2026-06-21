@@ -194,6 +194,49 @@ describe("memory.store cache", () => {
     expect(await store.load(tmp.path)).toBeNull()
   })
 
+  test("exists returns false only for missing memory files", async () => {
+    await using tmp = await tmpdir()
+    const realAccess = fs.access.bind(fs)
+    const accessSpy = vi.spyOn(fs, "access")
+
+    accessSpy.mockImplementation((async (...args: Parameters<typeof realAccess>) => {
+      const file = String(args[0])
+      if (file.includes(path.join(".ax-code", "memory.json"))) {
+        throw Object.assign(new Error("missing memory"), { code: "ENOENT" })
+      }
+      return realAccess(...args)
+    }) as any)
+
+    try {
+      expect(await store.exists(tmp.path)).toBe(false)
+    } finally {
+      accessSpy.mockRestore()
+    }
+  })
+
+  test("exists surfaces unreadable project memory files", async () => {
+    await using tmp = await tmpdir()
+    const error = Object.assign(new Error("project memory is unreadable"), { code: "EACCES" })
+    const accessSpy = vi.spyOn(fs, "access").mockRejectedValueOnce(error)
+
+    try {
+      await expect(store.exists(tmp.path)).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      accessSpy.mockRestore()
+    }
+  })
+
+  test("existsGlobal surfaces unreadable global memory files", async () => {
+    const error = Object.assign(new Error("global memory is unreadable"), { code: "EACCES" })
+    const accessSpy = vi.spyOn(fs, "access").mockRejectedValueOnce(error)
+
+    try {
+      await expect(store.existsGlobal()).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      accessSpy.mockRestore()
+    }
+  })
+
   test("repeated loads return distinct objects (caller mutations do not leak)", async () => {
     await using tmp = await tmpdir()
     await store.save(tmp.path, sampleMemory({ totalTokens: 100 }))
