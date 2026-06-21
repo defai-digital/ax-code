@@ -126,7 +126,7 @@ export function parseProjectConfigText(text: string): Config.Info {
 
 export async function readProjectConfig() {
   const file = filepath()
-  const text = await Filesystem.readText(file).catch(() => "{}")
+  const text = await readProjectConfigTextForUpdate(file)
   return parseProjectConfigText(text)
 }
 

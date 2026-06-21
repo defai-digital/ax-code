@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest"
+import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import {
   decodeProjectConfigValue,
   parseProjectConfigText,
+  readProjectConfig,
   updateProjectConfig,
 } from "../../src/server/routes/project-config"
 import { tmpdir } from "../fixture/fixture"
@@ -42,6 +44,26 @@ describe("project config route decoding", () => {
 
   test.each(["[]", "null", '"model"'])("falls back to an empty config for non-object JSON: %s", (text) => {
     expect(parseProjectConfigText(text)).toEqual({})
+  })
+
+  test("surfaces unreadable project config during reads", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "ax-code.json")
+    await Bun.write(file, JSON.stringify({ super_long: true }))
+    await fs.chmod(file, 0)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(readProjectConfig()).rejects.toMatchObject({ code: "EACCES" })
+        },
+      })
+    } finally {
+      await fs.chmod(file, 0o600)
+    }
   })
 
   test("does not overwrite malformed project config during updates", async () => {
