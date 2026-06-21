@@ -6,9 +6,6 @@ import { Agent } from "../agent/agent"
 import { ConfigMarkdown } from "../config/markdown"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
-import { Log } from "../util/log"
-
-const log = Log.create({ service: "session.prompt" })
 
 function errorCode(error: unknown) {
   return error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined
@@ -33,9 +30,7 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
         : path.resolve(Instance.worktree, name)
       const checkedPath = await fs.realpath(filepath).catch((error) => {
         const code = errorCode(error)
-        if (code !== "ENOENT") {
-          log.warn("failed to resolve included file path", { filepath, error })
-        }
+        if (code !== "ENOENT") throw error
         return undefined
       })
       if (!checkedPath) {
@@ -57,7 +52,11 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
         return
       }
 
-      const stats = await fs.stat(checkedPath).catch(() => undefined)
+      const stats = await fs.stat(checkedPath).catch((error) => {
+        const code = errorCode(error)
+        if (code !== "ENOENT") throw error
+        return undefined
+      })
       if (!stats) return
 
       if (stats.isDirectory()) {

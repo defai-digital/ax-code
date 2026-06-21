@@ -510,6 +510,31 @@ describe("session.prompt special characters", () => {
     }
   })
 
+  test("surfaces unreadable @file references", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "private"), { recursive: true })
+        await Bun.write(path.join(dir, "private", "secret.txt"), "secret\n")
+      },
+    })
+    const privateDir = path.join(tmp.path, "private")
+    await fs.chmod(privateDir, 0)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(resolvePromptParts("Read @private/secret.txt")).rejects.toMatchObject({ code: "EACCES" })
+        },
+      })
+    } finally {
+      await fs.chmod(privateDir, 0o700)
+    }
+  })
+
   test("resolves @agent mentions when no same-named file exists", async () => {
     await using tmp = await tmpdir({ git: true })
 
