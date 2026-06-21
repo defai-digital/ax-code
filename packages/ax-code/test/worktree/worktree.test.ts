@@ -52,6 +52,27 @@ test("create rolls back the git worktree when sandbox recording fails", async ()
   })
 })
 
+test("remove surfaces inaccessible target directories", async () => {
+  if (process.platform === "win32") return
+
+  await using tmp = await tmpdir({ git: true })
+  const locked = path.join(tmp.path, "locked")
+  const target = path.join(locked, "sandbox")
+  await fs.mkdir(locked)
+  await fs.chmod(locked, 0)
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Worktree.remove({ directory: target })).rejects.toMatchObject({ code: "EACCES" })
+      },
+    })
+  } finally {
+    await fs.chmod(locked, 0o700)
+  }
+})
+
 test("runStartScripts fails when the worktree start command fails", async () => {
   await using tmp = await tmpdir()
   const get = vi.spyOn(Project, "get").mockReturnValue({

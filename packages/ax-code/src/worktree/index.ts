@@ -223,7 +223,10 @@ export namespace Worktree {
     return fs
       .stat(target)
       .then(() => true)
-      .catch(() => false)
+      .catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return false
+        throw error
+      })
   }
 
   function outputText(input: Uint8Array | undefined) {
