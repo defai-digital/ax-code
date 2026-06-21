@@ -136,6 +136,7 @@ function aggregatePhaseStatus(
   if (isMajorityMergeStrategy(mergeStrategy)) {
     const completed = children.filter((child) => child.status === "completed").length
     if (completed > children.length / 2) return "completed"
+    if (children.every((child) => child.status === "cancelled")) return "cancelled"
     const failedOrCancelled = children.filter(
       (child) => child.status === "failed" || child.status === "cancelled",
     ).length
@@ -143,7 +144,6 @@ function aggregatePhaseStatus(
     if (children.some((child) => child.status === "blocked_permission" || child.status === "blocked_question")) {
       return "blocked"
     }
-    if (children.every((child) => child.status === "cancelled")) return "cancelled"
     if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
     if (children.some((child) => child.status === "paused")) return "paused"
     return "running"

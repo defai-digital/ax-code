@@ -1329,6 +1329,51 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("cancels durable majority phases when every child is cancelled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "durable-majority-cancelled",
+            name: "Durable Majority Cancelled",
+            description: "A durable queue workflow that should cancel when every child is cancelled.",
+            phases: [
+              {
+                id: "vote",
+                name: "Vote",
+                kind: "fanout",
+                inputs: ["a", "b", "c"],
+                mergeStrategy: "majority",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          await WorkflowScheduler.start(run.id)
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const queue = await TaskQueue.list()
+          expect(queue).toHaveLength(3)
+
+          await TaskQueue.setStatus({ id: queue[0]!.id, status: "cancelled", error: "first worker cancelled" })
+          await TaskQueue.setStatus({ id: queue[1]!.id, status: "cancelled", error: "second worker cancelled" })
+          await TaskQueue.setStatus({ id: queue[2]!.id, status: "cancelled", error: "third worker cancelled" })
+
+          const detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("cancelled")
+          expect(detail.phases[0]?.status).toBe("cancelled")
+          expect(detail.children.every((child) => child.status === "cancelled")).toBe(true)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("pauses and resumes queued workflow children without advancing future phases", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
