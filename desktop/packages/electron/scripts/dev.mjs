@@ -1,10 +1,30 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
+
+// Resolve the Electron the renderer should run on. Prefer the locally
+// installed, pinned binary so it matches the version `rebuild:native` built
+// node-pty against (avoids a native ABI mismatch and the ~290MB npx download
+// of whatever "electron@latest" resolves to). Fall back to a version-pinned
+// npx if the binary was not installed (e.g. its postinstall was skipped).
+const resolveElectron = () => {
+  try {
+    const bin = require('electron')
+    if (typeof bin === 'string' && fs.existsSync(bin)) return { command: bin, args: [] }
+  } catch {
+    // electron package present but binary not installed — fall through
+  }
+  const version = require('electron/package.json').version
+  console.warn(`[electron-dev] pinned electron binary not installed; falling back to npx electron@${version}`)
+  return { command: 'npx', args: [`electron@${version}`] }
+}
 const electronDir = path.resolve(__dirname, '..')
 const webDir = path.resolve(electronDir, '..', 'web')
 const root = path.resolve(electronDir, '..', '..')
@@ -116,7 +136,8 @@ vite.once('exit', (code, signal) => {
 
 await waitForUrl(rendererUrl)
 
-const electron = spawnManaged(children, 'npx', ['electron', path.join(electronDir, 'dist', 'main.js')], {
+const { command: electronCommand, args: electronArgs } = resolveElectron()
+const electron = spawnManaged(children, electronCommand, [...electronArgs, path.join(electronDir, 'dist', 'main.js')], {
   cwd: root,
   env: {
     ...sharedEnv,

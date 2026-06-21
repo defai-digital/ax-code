@@ -88,6 +88,9 @@
     "web-tree-sitter"
   ],
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ],
     "overrides": {
       "serialize-javascript": ">=7.0.5",
       "seroval": ">=1.4.1",

@@ -17,7 +17,7 @@
       "outputs": ["dist/**", "out/**"]
     },
     "@ax-code/electron#dev": {
-      "dependsOn": ["ax-code-desktop#build"],
+      "dependsOn": ["@ax-code/sdk#build"],
       "cache": false,
       "persistent": true
     },
