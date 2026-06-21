@@ -516,9 +516,7 @@ export namespace LSPClient {
             // diagnostics, and lastContent. Caller gets false ("nothing sent
             // to server").
             if (files[normalized] !== undefined) {
-              const exists = await Bun.file(normalized)
-                .exists()
-                .catch(() => false)
+              const exists = await Filesystem.exists(normalized)
               if (!exists) {
                 // closeUnlocked — we already hold the lock for this path.
                 await closeUnlocked({ path: normalized, deleted: true })

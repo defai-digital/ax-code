@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "vitest"
+import { afterEach, describe, expect, test, beforeEach, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
@@ -6,6 +6,7 @@ import { LSPClient } from "../../src/lsp/client"
 import { LSPServer } from "../../src/lsp/server"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
+import { Filesystem } from "../../src/util/filesystem"
 
 // Minimal fake LSP server that speaks JSON-RPC over stdio
 function spawnFakeServer(env?: Record<string, string>) {
@@ -33,6 +34,10 @@ function deferred() {
 describe("LSPClient interop", () => {
   beforeEach(async () => {
     await Log.init({ print: true })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   test("registers close and error handlers for dead LSP connections", async () => {
@@ -298,6 +303,44 @@ describe("LSPClient interop", () => {
           item.params?.changes?.some((change: { type: number }) => change.type === 3),
       ),
     ).toBe(true)
+
+    await client.shutdown()
+  })
+
+  test("notify.open propagates filesystem errors when checking tracked files", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "private.ts")
+    await Bun.write(file, "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        }),
+    })
+
+    const sent: { method: string; params: any }[] = []
+    const conn = client.connection as typeof client.connection & {
+      sendNotification: (method: string, params: any) => Promise<void>
+    }
+    const orig = conn.sendNotification.bind(conn)
+    conn.sendNotification = ((method: string, params: any) => {
+      sent.push({ method, params })
+      return orig(method, params)
+    }) as typeof conn.sendNotification
+
+    await client.notify.open({ path: file })
+    sent.length = 0
+
+    const error = Object.assign(new Error("file is unreadable"), { code: "EACCES" })
+    vi.spyOn(Filesystem, "exists").mockRejectedValueOnce(error)
+
+    await expect(client.notify.open({ path: file })).rejects.toBe(error)
+    expect(sent.some((item) => item.method === "textDocument/didClose")).toBe(false)
 
     await client.shutdown()
   })
