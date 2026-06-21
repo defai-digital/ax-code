@@ -2,7 +2,7 @@ import { Database, eq, and, or, gt, gte, lte, desc, sql } from "../storage/db"
 import { EventLogTable } from "./event-log.sql"
 import { EventLogID } from "./index"
 import type { ReplayEvent } from "./event"
-import type { SessionID } from "../session/schema"
+import { SessionID } from "../session/schema"
 import { Log } from "../util/log"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
@@ -185,24 +185,37 @@ export namespace EventQuery {
       sequence: number
     }
   }): { session_id: SessionID; event_data: ReplayEvent; time_created: number; sequence: number }[] {
-    const where = input.cursor
+    const parsed = z
+      .object({
+        since: z.number().int().min(0),
+        limit: z.number().int().positive().optional(),
+        cursor: z
+          .object({
+            time_created: z.number().int().min(0),
+            session_id: SessionID.zod,
+            sequence: z.number().int().min(0),
+          })
+          .optional(),
+      })
+      .parse(input)
+    const where = parsed.cursor
       ? and(
-          gte(EventLogTable.time_created, input.since),
+          gte(EventLogTable.time_created, parsed.since),
           or(
-            gt(EventLogTable.time_created, input.cursor.time_created),
+            gt(EventLogTable.time_created, parsed.cursor.time_created),
             and(
-              eq(EventLogTable.time_created, input.cursor.time_created),
+              eq(EventLogTable.time_created, parsed.cursor.time_created),
               or(
-                gt(EventLogTable.session_id, input.cursor.session_id),
+                gt(EventLogTable.session_id, parsed.cursor.session_id),
                 and(
-                  eq(EventLogTable.session_id, input.cursor.session_id),
-                  gt(EventLogTable.sequence, input.cursor.sequence),
+                  eq(EventLogTable.session_id, parsed.cursor.session_id),
+                  gt(EventLogTable.sequence, parsed.cursor.sequence),
                 ),
               ),
             ),
           ),
         )
-      : gte(EventLogTable.time_created, input.since)
+      : gte(EventLogTable.time_created, parsed.since)
     return Database.use((db) =>
       db
         .select({
@@ -214,7 +227,7 @@ export namespace EventQuery {
         .from(EventLogTable)
         .where(where)
         .orderBy(EventLogTable.time_created, EventLogTable.session_id, EventLogTable.sequence)
-        .limit(input.limit ?? ALL_SINCE_LIMIT)
+        .limit(parsed.limit ?? ALL_SINCE_LIMIT)
         .all(),
     )
   }
