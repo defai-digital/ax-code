@@ -22,6 +22,7 @@ import {
   AX_ENGINE_QWEN35_9B_MODEL_ID,
   AX_ENGINE_GLM47_MODEL_ID,
   axEngineLoader,
+  axEngineServerLaunchArgs,
   evaluateDiskStatus,
   evaluateAxEngineCapabilityFromModels,
   evaluatePlatformEligibility,
@@ -316,6 +317,47 @@ describe("ax-engine server lifecycle", () => {
   })
 })
 
+describe("ax-engine server launch args", () => {
+  test("omits block-pool flags when no context window is requested", () => {
+    expect(axEngineServerLaunchArgs({ apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID })).toEqual([
+      "--model-id",
+      AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID,
+    ])
+  })
+
+  test("sizes the KV-cache block pool to match the requested context window", () => {
+    // 32768 / 16 = 2048 blocks → server window of exactly 32768 tokens,
+    // instead of the binary default of 1024 × 16 = 16384.
+    expect(axEngineServerLaunchArgs({ apiModelID: "qwen3", contextTokens: 32_768 })).toEqual([
+      "--model-id",
+      "qwen3",
+      "--block-size-tokens",
+      "16",
+      "--total-blocks",
+      "2048",
+    ])
+    expect(axEngineServerLaunchArgs({ apiModelID: "qwen3", contextTokens: 65_536 })).toEqual([
+      "--model-id",
+      "qwen3",
+      "--block-size-tokens",
+      "16",
+      "--total-blocks",
+      "4096",
+    ])
+  })
+
+  test("rounds a non-block-aligned context window up to the next whole block", () => {
+    expect(axEngineServerLaunchArgs({ apiModelID: "qwen3", contextTokens: 16_385 })).toEqual([
+      "--model-id",
+      "qwen3",
+      "--block-size-tokens",
+      "16",
+      "--total-blocks",
+      "1025",
+    ])
+  })
+})
+
 describe("ax-engine prepare lifecycle", () => {
   const eligibility = {
     supported: true,
@@ -473,7 +515,7 @@ describe("ax-engine provider integration", () => {
     ])
     expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID]).toMatchObject({
       tool_call: true,
-      limit: { context: 32_768, output: 8_192 },
+      limit: { context: 65_536, output: 8_192 },
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })

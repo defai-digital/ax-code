@@ -86,6 +86,7 @@ async function ensureReady(provider: Provider.Info, options: AxEngineModelOption
     modelPath: model.path,
     modelRevision: model.revision,
     preferredPort: AX_ENGINE_DEFAULT_PORT,
+    contextTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].contextTokens,
     baseURL,
     signal,
   })

@@ -16,6 +16,7 @@ export const AxEngineServerState = z.object({
   modelPath: z.string(),
   modelRevision: z.string().optional(),
   binaryPath: z.string(),
+  contextTokens: z.number().int().positive().optional(),
   startedAt: z.number(),
   lastHealthAt: z.number().optional(),
 })
@@ -37,7 +38,40 @@ export type AxEngineServerOptions = {
   modelRevision?: string
   preferredPort?: number
   baseURL?: string
+  /**
+   * Full context window the server should allocate, in tokens. The ax-engine
+   * server has no direct context-length flag — its window is the KV-cache block
+   * pool (`--total-blocks` × `--block-size-tokens`). When omitted the server
+   * defaults to 1024 × 16 = 16384, which silently caps every model at 16k
+   * regardless of its declared contextTokens.
+   */
+  contextTokens?: number
   signal?: AbortSignal
+}
+
+// The ax-engine server sizes its context window as `--total-blocks` *
+// `--block-size-tokens`. We pin the block size and derive the block count from
+// the model's declared contextTokens so the server window matches what the
+// prompt budgeter assumes.
+const AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS = 16
+
+/**
+ * Build the `ax-engine serve … -- <args>` passthrough args. When contextTokens
+ * is provided, size the KV-cache block pool so the server window equals it;
+ * otherwise the server falls back to its 1024×16 = 16384 default.
+ */
+export function axEngineServerLaunchArgs(input: { apiModelID: string; contextTokens?: number }): string[] {
+  const args = ["--model-id", input.apiModelID]
+  if (input.contextTokens && input.contextTokens > 0) {
+    const totalBlocks = Math.ceil(input.contextTokens / AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS)
+    args.push(
+      "--block-size-tokens",
+      String(AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS),
+      "--total-blocks",
+      String(totalBlocks),
+    )
+  }
+  return args
 }
 
 function baseURLForPort(port: number) {
@@ -180,26 +214,39 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
     throw new Error(`${AX_ENGINE_ERROR.ServerStartFailed}: failed to read server state`)
   }
   const existing = existingResult.state
+  // The context window is fixed at launch (KV-cache block pool), so a running
+  // server whose contextTokens differ from the request — e.g. an older build
+  // that started it at the default 16384 — must be relaunched, not reused.
+  const contextMatches = (existing?.contextTokens ?? undefined) === (options.contextTokens ?? undefined)
   if (existing && pidLive(existing.pid) && (await isServerReady(existing.baseURL, options.signal))) {
-    if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
-    try {
-      await loadServerModel({
-        baseURL: existing.baseURL,
-        apiModelID: options.apiModelID,
-        modelPath: options.modelPath,
-        signal: options.signal,
-      })
-      const nextState: AxEngineServerState = {
-        ...existing,
-        modelID: options.modelID,
-        apiModelID: options.apiModelID,
-        modelPath: options.modelPath,
-        modelRevision: options.modelRevision,
-        lastHealthAt: Date.now(),
+    if (contextMatches) {
+      if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
+      try {
+        await loadServerModel({
+          baseURL: existing.baseURL,
+          apiModelID: options.apiModelID,
+          modelPath: options.modelPath,
+          signal: options.signal,
+        })
+        const nextState: AxEngineServerState = {
+          ...existing,
+          modelID: options.modelID,
+          apiModelID: options.apiModelID,
+          modelPath: options.modelPath,
+          modelRevision: options.modelRevision,
+          lastHealthAt: Date.now(),
+        }
+        await writeServerState(nextState)
+        return nextState
+      } catch {
+        try {
+          process.kill(existing.pid, "SIGTERM")
+        } catch {
+          // Already gone.
+        }
+        await removeServerState()
       }
-      await writeServerState(nextState)
-      return nextState
-    } catch {
+    } else {
       try {
         process.kill(existing.pid, "SIGTERM")
       } catch {
@@ -219,10 +266,14 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
   const resolvedBaseURL = baseURL ?? baseURLForPort(port)
   const origin = originFromBaseURL(resolvedBaseURL)
   const logFile = await fs.open(AxEnginePaths.serverLog, "a")
+  const serverArgs = axEngineServerLaunchArgs({
+    apiModelID: options.apiModelID,
+    contextTokens: options.contextTokens,
+  })
   let proc: ReturnType<typeof Process.spawn>
   try {
     proc = Process.spawn(
-      [options.binaryPath, "serve", options.modelPath, "--port", String(port), "--", "--model-id", options.apiModelID],
+      [options.binaryPath, "serve", options.modelPath, "--port", String(port), "--", ...serverArgs],
       {
         stdout: logFile.fd,
         stderr: logFile.fd,
@@ -250,6 +301,7 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
     modelPath: options.modelPath,
     modelRevision: options.modelRevision,
     binaryPath: options.binaryPath,
+    contextTokens: options.contextTokens,
     startedAt: Date.now(),
     lastHealthAt: Date.now(),
   }

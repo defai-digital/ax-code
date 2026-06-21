@@ -49,7 +49,11 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     name: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx4bit",
     toolcall: true,
-    contextTokens: 32_768,
+    // As the default agentic model, this needs room for the tool schemas
+    // (~26k tokens) plus meaningful conversation and output. A 32k window left
+    // almost nothing after tools, overflowing real sessions; 64k matches the
+    // other tool-calling local model (qwen3.6-27b).
+    contextTokens: 65_536,
     outputTokens: 8_192,
     quantizations: {
       mlx4bit: {
