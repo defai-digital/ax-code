@@ -109,6 +109,24 @@ function makeTargets(text: string) {
   return out
 }
 
+function isEnoent(error: unknown): error is { code: "ENOENT" } {
+  return isRecord(error) && error.code === "ENOENT"
+}
+
+async function readOptionalJson(file: string) {
+  return Filesystem.readJson<unknown>(file).catch((error) => {
+    if (isEnoent(error)) return null
+    throw error
+  })
+}
+
+async function readOptionalText(file: string) {
+  return Filesystem.readText(file).catch((error) => {
+    if (isEnoent(error)) return ""
+    throw error
+  })
+}
+
 export async function contextChecks(input: { root: string; dir: string }) {
   const order = ["typecheck", "test", "lint", "build"] as const
   const rootPkg = path.join(input.root, "package.json")
@@ -118,7 +136,7 @@ export async function contextChecks(input: { root: string; dir: string }) {
   const out: AppContextCheckData[] = []
 
   for (const file of pkgs) {
-    const json = await Filesystem.readJson<unknown>(file).catch(() => null)
+    const json = await readOptionalJson(file)
     if (!isRecord(json) || !isRecord(json.scripts)) continue
     const scripts = json.scripts
 
@@ -139,7 +157,7 @@ export async function contextChecks(input: { root: string; dir: string }) {
   )
   for (const file of makeFiles) {
     if (!(await Filesystem.exists(file))) continue
-    const text = await Filesystem.readText(file).catch(() => "")
+    const text = await readOptionalText(file)
     const targets = makeTargets(text)
     const cwd = path.dirname(file)
     for (const name of makeOrder) {
