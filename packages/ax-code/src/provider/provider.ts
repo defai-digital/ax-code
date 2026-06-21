@@ -57,6 +57,10 @@ import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform
 export namespace Provider {
   const log = Log.create({ service: "provider" })
 
+  function isEnoent(error: unknown): error is { code: "ENOENT" } {
+    return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
+  }
+
   function isFileUrlSpecifier(value: string) {
     try {
       return new URL(value).protocol === "file:"
@@ -1167,7 +1171,10 @@ export namespace Provider {
     const providers = await list()
     const recent = (await Filesystem.readJson<{ recent?: unknown }>(path.join(Global.Path.state, "model.json"))
       .then((x) => providerModelList(x.recent))
-      .catch(() => [])) as { providerID: ProviderID; modelID: ModelID }[]
+      .catch((error) => {
+        if (isEnoent(error)) return []
+        throw error
+      })) as { providerID: ProviderID; modelID: ModelID }[]
     for (const entry of recent) {
       const provider = providers[entry.providerID]
       if (!provider) continue

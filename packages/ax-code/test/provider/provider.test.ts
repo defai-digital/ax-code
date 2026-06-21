@@ -1,4 +1,4 @@
-import { test, expect } from "vitest"
+import { test, expect, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { pathToFileURL } from "url"
@@ -12,6 +12,7 @@ import { Auth } from "../../src/auth"
 import bundledSnapshot from "../../src/provider/models-snapshot.json"
 import { CUSTOM_LOADERS, type CustomLoader } from "../../src/provider/loaders"
 import { Global } from "../../src/global"
+import { Filesystem } from "../../src/util/filesystem"
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -830,6 +831,96 @@ test("defaultModel skips recent models that are not selectable for agent tool us
   } finally {
     if (previousState === undefined) await fs.rm(statePath, { force: true })
     else await Bun.write(statePath, previousState)
+  }
+})
+
+test("defaultModel treats a missing recent-model store as empty state", async () => {
+  const statePath = path.join(Global.Path.state, "model.json")
+  const readJson = Filesystem.readJson
+  const readJsonSpy = vi.spyOn(Filesystem, "readJson").mockImplementation(async (file: string) => {
+    if (file === statePath) {
+      throw Object.assign(new Error("missing model state"), { code: "ENOENT" })
+    }
+    return readJson(file)
+  })
+
+  try {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          "custom-openai": {
+            name: "Custom OpenAI",
+            npm: "@ai-sdk/openai-compatible",
+            options: {
+              apiKey: "test-key",
+              baseURL: "https://custom.openai.com/v1",
+            },
+            models: {
+              "tool-model": {
+                name: "Tool Model",
+                tool_call: true,
+                limit: { context: 128000, output: 4096 },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.defaultModel()
+        expect(String(model.providerID)).toBe("custom-openai")
+        expect(String(model.modelID)).toBe("tool-model")
+      },
+    })
+  } finally {
+    readJsonSpy.mockRestore()
+  }
+})
+
+test("defaultModel surfaces unreadable recent-model store errors", async () => {
+  const statePath = path.join(Global.Path.state, "model.json")
+  const readJson = Filesystem.readJson
+  const readJsonSpy = vi.spyOn(Filesystem, "readJson").mockImplementation(async (file: string) => {
+    if (file === statePath) {
+      throw Object.assign(new Error("permission denied"), { code: "EACCES" })
+    }
+    return readJson(file)
+  })
+
+  try {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          "custom-openai": {
+            name: "Custom OpenAI",
+            npm: "@ai-sdk/openai-compatible",
+            options: {
+              apiKey: "test-key",
+              baseURL: "https://custom.openai.com/v1",
+            },
+            models: {
+              "tool-model": {
+                name: "Tool Model",
+                tool_call: true,
+                limit: { context: 128000, output: 4096 },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Provider.defaultModel()).rejects.toMatchObject({ code: "EACCES" })
+      },
+    })
+  } finally {
+    readJsonSpy.mockRestore()
   }
 })
 
