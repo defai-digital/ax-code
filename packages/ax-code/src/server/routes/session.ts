@@ -871,13 +871,9 @@ export const SessionRoutes = lazy(() =>
         "query",
         z
           .object({
-            limit: z.coerce
-              .number()
-              .int()
-              .min(0)
-              .max(500)
-              .optional()
-              .meta({ description: "Maximum number of messages to return (0-500)" }),
+            limit: OptionalQueryNumber(z.number().int().min(0).max(500)).meta({
+              description: "Maximum number of messages to return (0-500)",
+            }),
             before: z
               .string()
               .optional()

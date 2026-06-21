@@ -18,6 +18,14 @@ describe("DRE tool schemas", () => {
     expect(parsed.maxCandidates).toBe(25)
   })
 
+  test("dedup_scan rejects non-decimal numeric strings", async () => {
+    const tool = await DedupScanTool.init()
+
+    expect(() => tool.parameters.parse({ minSignatureLength: "0x10" })).toThrow()
+    expect(() => tool.parameters.parse({ similarityThreshold: "1e-1" })).toThrow()
+    expect(() => tool.parameters.parse({ maxCandidates: "1e3" })).toThrow()
+  })
+
   test("impact_analyze coerces numeric traversal parameters from string values", async () => {
     const tool = await ImpactAnalyzeTool.init()
 
@@ -29,6 +37,14 @@ describe("DRE tool schemas", () => {
 
     expect(parsed.depth).toBe(2)
     expect(parsed.maxVisited).toBe(25)
+  })
+
+  test("impact_analyze rejects non-decimal numeric strings", async () => {
+    const tool = await ImpactAnalyzeTool.init()
+    const changes = [{ kind: "file" as const, path: "src/index.ts" }]
+
+    expect(() => tool.parameters.parse({ changes, depth: "0x2" })).toThrow()
+    expect(() => tool.parameters.parse({ changes, maxVisited: "1e3" })).toThrow()
   })
 
   test("debug_repair_from_envelope coerces maxFailures from string values", async () => {

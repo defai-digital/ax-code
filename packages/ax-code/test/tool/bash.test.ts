@@ -31,6 +31,20 @@ function shellQuote(value: string) {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 
+describe("BashTool schema", () => {
+  test("rejects non-decimal timeout strings", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const tool = await BashTool.init()
+
+        expect(() => tool.parameters.parse({ command: "echo ok", timeout: "0x10" })).toThrow()
+        expect(() => tool.parameters.parse({ command: "echo ok", timeout: "1e3" })).toThrow()
+      },
+    })
+  })
+})
+
 async function withAutonomous<T>(fn: () => Promise<T>): Promise<T> {
   const original = process.env.AX_CODE_AUTONOMOUS
   process.env.AX_CODE_AUTONOMOUS = "true"

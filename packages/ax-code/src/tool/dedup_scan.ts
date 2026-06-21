@@ -5,7 +5,7 @@ import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
 import { dedupCoverageNotice } from "./scan-coverage"
-import { ToolBoolean } from "./schema"
+import { ToolBoolean, ToolNumber } from "./schema"
 
 // Tool wrapper around DebugEngine.detectDuplicates. Read-only, no file
 // writes, no cloud calls. See PRD §4.3.1 and ADR-009.
@@ -29,24 +29,14 @@ export const DedupScanTool = Tool.define("dedup_scan", {
   description: DESCRIPTION,
   parameters: z.object({
     kinds: z.array(z.enum(NODE_KINDS)).optional().describe("Node kinds to scan (default: function, method)"),
-    minSignatureLength: z.coerce
-      .number()
-      .int()
-      .min(1)
+    minSignatureLength: ToolNumber(z.number().int().min(1))
       .optional()
       .describe("Skip signatures shorter than this (default 20)"),
-    similarityThreshold: z.coerce
-      .number()
-      .min(0)
-      .max(1)
+    similarityThreshold: ToolNumber(z.number().min(0).max(1))
       .optional()
       .describe("Jaccard threshold for near-match clustering (default 0.85)"),
     excludeTests: ToolBoolean.optional().describe("Skip test files (default true)"),
-    maxCandidates: z.coerce
-      .number()
-      .int()
-      .min(10)
-      .max(10000)
+    maxCandidates: ToolNumber(z.number().int().min(10).max(10000))
       .optional()
       .describe("Hard cap on candidate pool (default 2000)"),
   }),

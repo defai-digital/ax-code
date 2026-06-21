@@ -4,6 +4,7 @@ import DESCRIPTION from "./impact_analyze.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
 import { CodeNodeID } from "../code-intelligence/id"
+import { ToolNumber } from "./schema"
 
 // Tool wrapper around DebugEngine.analyzeImpact. Read-only, no file
 // writes, no cloud calls. See PRD §4.4 and ADR-008.
@@ -30,18 +31,10 @@ export const ImpactAnalyzeTool = Tool.define("impact_analyze", {
   description: DESCRIPTION,
   parameters: z.object({
     changes: z.array(changeSchema).min(1).describe("Change seeds (symbol, file, or diff)"),
-    depth: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(MAX_DEPTH)
+    depth: ToolNumber(z.number().int().min(1).max(MAX_DEPTH))
       .optional()
       .describe(`BFS depth cap (default 3, max ${MAX_DEPTH})`),
-    maxVisited: z.coerce
-      .number()
-      .int()
-      .min(10)
-      .max(10000)
+    maxVisited: ToolNumber(z.number().int().min(10).max(10000))
       .optional()
       .describe("Hard cap on nodes visited (default 2000, max 10000)"),
   }),

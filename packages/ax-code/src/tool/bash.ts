@@ -16,6 +16,7 @@ import { TOAST_DURATION_LONG_MS } from "@/constants/server"
 import { createRequire } from "module"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
+import { ToolNumber } from "./schema"
 
 import { BashArity } from "@/permission/arity"
 import { Config } from "@/config/config"
@@ -196,10 +197,7 @@ export const BashTool = Tool.define("bash", async () => {
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
     parameters: z.object({
       command: z.string().describe("The command to execute"),
-      timeout: z.coerce
-        .number()
-        .min(1)
-        .max(600_000)
+      timeout: ToolNumber(z.number().min(1).max(600_000))
         .describe("Optional timeout in milliseconds (max 600000)")
         .optional(),
       workdir: z

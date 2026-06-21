@@ -31,6 +31,23 @@ describe("goal tools", () => {
     expect(parsed.tokenBudget).toBe(100)
   })
 
+  test("create_goal rejects non-decimal token budgets", async () => {
+    const tool = await CreateGoalTool.init()
+
+    expect(() =>
+      tool.parameters.parse({
+        objective: "finish goal tool schema test",
+        tokenBudget: "0x100",
+      }),
+    ).toThrow()
+    expect(() =>
+      tool.parameters.parse({
+        objective: "finish goal tool schema test",
+        tokenBudget: "1e3",
+      }),
+    ).toThrow()
+  })
+
   test("create, read, and update a durable session goal", async () => {
     await using tmp = await tmpdir({ git: true })
 

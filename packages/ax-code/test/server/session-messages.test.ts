@@ -121,6 +121,24 @@ describe("session messages endpoint", () => {
     })
   })
 
+  test("rejects non-decimal message limits", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const app = Server.Default()
+
+        const exponential = await app.request(`/session/${session.id}/message?limit=1e2`)
+        const hex = await app.request(`/session/${session.id}/message?limit=0x10`)
+
+        expect(exponential.status).toBe(400)
+        expect(hex.status).toBe(400)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("respects max limit of 500 on message pagination", async () => {
     await Instance.provide({
       directory: root,
