@@ -31,6 +31,26 @@ const e2e = new Set([
   "test/server/session-list.test.ts",
   "test/server/session-messages.test.ts",
   "test/server/session-select.test.ts",
+  // Real filesystem, ripgrep, LSP, PTY, OpenTUI, provider-CLI, and script
+  // integration tests depend on host binaries/runtime flags or external process
+  // behavior. Keep them out of deterministic release validation.
+  "test/cli/tui/prompt-submit-key.test.ts",
+  "test/file/index.test.ts",
+  "test/file/ripgrep.test.ts",
+  "test/lsp/perf-sampler.test.ts",
+  "test/lsp/prewarm.test.ts",
+  "test/lsp/workspace-symbol.test.ts",
+  "test/provider/cli/cli-language-model.test.ts",
+  "test/pty/pty-output-isolation.test.ts",
+  "test/pty/pty-session.test.ts",
+  "test/script/root-structure-script.test.ts",
+  "test/tool/debug_runtime_workflow.test.ts",
+  "test/tool/glob.test.ts",
+  "test/tool/grep.test.ts",
+  "test/tool/ls.test.ts",
+  "test/tool/skill.test.ts",
+  "test/tool/tool.test.ts",
+  "test/tool/verify_project.test.ts",
 ])
 
 const recovery = new Set([
