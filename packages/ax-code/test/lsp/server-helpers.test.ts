@@ -473,7 +473,7 @@ describe("lsp server helpers", () => {
       })
 
       expect(result).toBeUndefined()
-      expect(spawn).toHaveBeenCalledTimes(1)
+      expect(spawn).toHaveBeenCalledTimes(process.env["AX_CODE_DISABLE_LSP_DOWNLOAD"] ? 0 : 1)
     } finally {
       exists.mockRestore()
       whichBun.mockRestore()
