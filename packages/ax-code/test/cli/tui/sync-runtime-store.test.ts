@@ -87,16 +87,16 @@ describe("tui sync runtime store", () => {
   test("normalizes invalid debug-engine payload fields to safe defaults", () => {
     expect(
       normalizeDebugEngineState({
-        count: "2",
+        count: -2,
         plans: [{ planId: "bad" }],
-        toolCount: "4",
+        toolCount: -4,
         graph: {
-          nodeCount: "10",
+          nodeCount: -10,
           edgeCount: {},
           lastIndexedAt: "456",
           state: "unknown",
-          completed: "3",
-          total: null,
+          completed: -3,
+          total: -7,
           error: 123,
         },
       }),

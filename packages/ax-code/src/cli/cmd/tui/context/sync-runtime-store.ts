@@ -50,8 +50,8 @@ export interface WorkflowDashboardState {
 
 type DebugEngineGraphState = NonNullable<NonNullable<DebugEnginePayload["graph"]>["state"]>
 
-function finiteNumber(value: unknown, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback
+function nonNegativeNumber(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback
 }
 
 function nullableNumber(value: unknown) {
@@ -78,16 +78,16 @@ export function normalizeDebugEngineState(body: unknown) {
   const state: DebugEngineGraphState = graph.state === "indexing" || graph.state === "failed" ? graph.state : "idle"
   const error = typeof graph.error === "string" ? graph.error : null
   return {
-    pendingPlans: finiteNumber(record.count, plans.length),
+    pendingPlans: nonNegativeNumber(record.count, plans.length),
     plans,
-    toolCount: finiteNumber(record.toolCount, 0),
+    toolCount: nonNegativeNumber(record.toolCount, 0),
     graph: {
-      nodeCount: finiteNumber(graph.nodeCount, 0),
-      edgeCount: finiteNumber(graph.edgeCount, 0),
+      nodeCount: nonNegativeNumber(graph.nodeCount, 0),
+      edgeCount: nonNegativeNumber(graph.edgeCount, 0),
       lastIndexedAt: nullableNumber(graph.lastIndexedAt),
       state,
-      completed: finiteNumber(graph.completed, 0),
-      total: finiteNumber(graph.total, 0),
+      completed: nonNegativeNumber(graph.completed, 0),
+      total: nonNegativeNumber(graph.total, 0),
       error,
     },
   }
