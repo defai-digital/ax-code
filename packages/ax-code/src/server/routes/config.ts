@@ -13,9 +13,27 @@ const log = Log.create({ service: "server" })
 
 export const REDACTED = "[redacted]"
 
+const SECRET_OPTION_PATTERN = /key|secret|token|password|credential|auth/i
+
 function stripRedactedRecord(record: Record<string, string> | undefined) {
   if (!record) return record
   return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== REDACTED))
+}
+
+function stripRedactedProviderOptions(options: Record<string, unknown> | undefined) {
+  if (!options) return options
+  return Object.fromEntries(
+    Object.entries(options).filter(([key, value]) => value !== REDACTED || !SECRET_OPTION_PATTERN.test(key)),
+  )
+}
+
+function redactProviderOptions(options: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(options).map(([key, value]) => [
+      key,
+      value != null && SECRET_OPTION_PATTERN.test(key) ? REDACTED : value,
+    ]),
+  )
 }
 
 export function stripRedactedConfig(config: Config.Info): Config.Info {
@@ -27,10 +45,7 @@ export function stripRedactedConfig(config: Config.Info): Config.Info {
             id,
             {
               ...p,
-              options:
-                p.options && p.options.apiKey === REDACTED
-                  ? Object.fromEntries(Object.entries(p.options).filter(([key]) => key !== "apiKey"))
-                  : p.options,
+              options: stripRedactedProviderOptions(p.options),
             },
           ]),
         )
@@ -71,7 +86,7 @@ export function redactConfig(config: Config.Info): Config.Info {
             id,
             {
               ...p,
-              options: p.options ? { ...p.options, apiKey: p.options.apiKey ? REDACTED : p.options.apiKey } : p.options,
+              options: p.options ? redactProviderOptions(p.options) : p.options,
             },
           ]),
         )
@@ -107,16 +122,12 @@ export function redactConfig(config: Config.Info): Config.Info {
 // and redact any secret-looking option value — mirroring the redactConfig
 // contract used by the /config endpoints. Non-secret options (e.g. baseURL)
 // are preserved.
-const SECRET_OPTION_PATTERN = /key|secret|token|password|credential|auth/i
-
 export function redactProviderInfo(info: Provider.Info): Provider.Info {
   const { key: _key, ...rest } = info
   if (!rest.options) return rest
   return {
     ...rest,
-    options: Object.fromEntries(
-      Object.entries(rest.options).map(([k, v]) => [k, v != null && SECRET_OPTION_PATTERN.test(k) ? REDACTED : v]),
-    ),
+    options: redactProviderOptions(rest.options),
   }
 }
 

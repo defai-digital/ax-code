@@ -30,6 +30,8 @@ describe("/global/config redaction", () => {
             openai: {
               options: {
                 apiKey: "openai-secret",
+                accessToken: "oauth-token",
+                clientSecret: "client-secret",
                 baseURL: "https://api.openai.com",
               },
             },
@@ -59,6 +61,8 @@ describe("/global/config redaction", () => {
           {
             options?: {
               apiKey?: string
+              accessToken?: string
+              clientSecret?: string
               baseURL?: string
             }
           }
@@ -74,6 +78,8 @@ describe("/global/config redaction", () => {
       }
 
       expect(payload.provider?.openai?.options?.apiKey).toBe("[redacted]")
+      expect(payload.provider?.openai?.options?.accessToken).toBe("[redacted]")
+      expect(payload.provider?.openai?.options?.clientSecret).toBe("[redacted]")
       expect(payload.provider?.openai?.options?.baseURL).toBe("https://api.openai.com")
       expect(payload.mcp?.remote?.headers?.Authorization).toBe("[redacted]")
       expect(payload.mcp?.remote?.oauth?.clientSecret).toBe("[redacted]")
@@ -100,6 +106,7 @@ describe("/global/config redaction", () => {
             openai: {
               options: {
                 apiKey: "openai-secret",
+                accessToken: "oauth-token",
                 baseURL: "https://api.openai.com",
               },
             },
@@ -135,6 +142,7 @@ describe("/global/config redaction", () => {
             openai: {
               options: {
                 apiKey: "[redacted]",
+                accessToken: "[redacted]",
                 baseURL: "https://proxy.example",
               },
             },
@@ -164,22 +172,24 @@ describe("/global/config redaction", () => {
       expect(response.status).toBe(200)
 
       const payload = (await response.json()) as {
-        provider?: Record<string, { options?: { apiKey?: string; baseURL?: string } }>
+        provider?: Record<string, { options?: { apiKey?: string; accessToken?: string; baseURL?: string } }>
         mcp?: Record<string, { headers?: Record<string, string>; oauth?: { clientSecret?: string } }>
       }
       expect(payload.provider?.openai?.options?.apiKey).toBe("[redacted]")
+      expect(payload.provider?.openai?.options?.accessToken).toBe("[redacted]")
       expect(payload.provider?.openai?.options?.baseURL).toBe("https://proxy.example")
       expect(payload.mcp?.remote?.headers?.Authorization).toBe("[redacted]")
       expect(payload.mcp?.remote?.oauth?.clientSecret).toBe("[redacted]")
 
       const stored = JSON.parse(await Filesystem.readText(configPath)) as {
-        provider?: Record<string, { options?: { apiKey?: string; baseURL?: string } }>
+        provider?: Record<string, { options?: { apiKey?: string; accessToken?: string; baseURL?: string } }>
         mcp?: Record<
           string,
           { headers?: Record<string, string>; oauth?: { clientSecret?: string }; environment?: Record<string, string> }
         >
       }
       expect(stored.provider?.openai?.options?.apiKey).toBe("openai-secret")
+      expect(stored.provider?.openai?.options?.accessToken).toBe("oauth-token")
       expect(stored.provider?.openai?.options?.baseURL).toBe("https://proxy.example")
       expect(stored.mcp?.remote?.headers?.Authorization).toBe("Bearer mcp-secret")
       expect(stored.mcp?.remote?.oauth?.clientSecret).toBe("oauth-secret")
@@ -200,6 +210,7 @@ describe("/global/config redaction", () => {
           openai: {
             options: {
               apiKey: "project-secret",
+              accessToken: "project-token",
               baseURL: "https://api.openai.com",
             },
           },
@@ -218,6 +229,7 @@ describe("/global/config redaction", () => {
               openai: {
                 options: {
                   apiKey: "[redacted]",
+                  accessToken: "[redacted]",
                   baseURL: "https://proxy.example",
                 },
               },
@@ -226,17 +238,19 @@ describe("/global/config redaction", () => {
         })
         expect(response.status).toBe(200)
         const payload = (await response.json()) as {
-          provider?: Record<string, { options?: { apiKey?: string; baseURL?: string } }>
+          provider?: Record<string, { options?: { apiKey?: string; accessToken?: string; baseURL?: string } }>
         }
         expect(payload.provider?.openai?.options?.apiKey).toBe("[redacted]")
+        expect(payload.provider?.openai?.options?.accessToken).toBe("[redacted]")
         expect(payload.provider?.openai?.options?.baseURL).toBe("https://proxy.example")
       },
     })
 
     const stored = JSON.parse(await Filesystem.readText(configPath)) as {
-      provider?: Record<string, { options?: { apiKey?: string; baseURL?: string } }>
+      provider?: Record<string, { options?: { apiKey?: string; accessToken?: string; baseURL?: string } }>
     }
     expect(stored.provider?.openai?.options?.apiKey).toBe("project-secret")
+    expect(stored.provider?.openai?.options?.accessToken).toBe("project-token")
     expect(stored.provider?.openai?.options?.baseURL).toBe("https://proxy.example")
   })
 })
