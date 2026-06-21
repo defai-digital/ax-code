@@ -10,6 +10,7 @@ import { Filesystem } from "../util/filesystem"
 import { AuditSemanticCall } from "../audit/semantic-call"
 import type { LSPServer } from "../lsp/server"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+import { ToolNumber } from "./schema"
 
 // Synthesize a minimal envelope for operations that don't yet have an
 // envelope-returning LSP variant. Lets us audit every tool call
@@ -81,11 +82,8 @@ export const LspTool = Tool.define("lsp", {
     operation: z.enum(operations).describe("The LSP operation to perform"),
     query: z.string().optional().describe("Search query for workspaceSymbol"),
     filePath: z.string().optional().describe("The absolute or relative path to the file"),
-    line: z.coerce.number().int().min(1).optional().describe("The line number (1-based, as shown in editors)"),
-    character: z.coerce
-      .number()
-      .int()
-      .min(1)
+    line: ToolNumber(z.number().int().min(1)).optional().describe("The line number (1-based, as shown in editors)"),
+    character: ToolNumber(z.number().int().min(1))
       .optional()
       .describe("The character offset (1-based, as shown in editors)"),
   }),

@@ -9,8 +9,7 @@ import { CodeNodeID } from "../code-intelligence/id"
 import { assertSymlinkInsideProject } from "./external-directory"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
 import { resolveToolFilePath } from "./file-path"
-import { ToolBoolean } from "./schema"
-import { JsonNumber } from "../util/schema"
+import { ToolBoolean, ToolNumber } from "./schema"
 
 // Semantic Trust v2 §S4: every operation returns an envelope stamped
 // with graph provenance (source, timestamp, degraded). The `output`
@@ -106,22 +105,16 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       .optional()
       .describe("Optional graph-context seeds: symbol id, absolute file path, or symbol name"),
     kind: z.enum(NODE_KINDS).optional().describe("Optional kind filter for findSymbol/findSymbolByPrefix"),
-    limit: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(MAX_RESULTS)
+    limit: ToolNumber(z.number().int().min(1).max(MAX_RESULTS))
       .optional()
       .describe(`Max results to return (default ${MAX_RESULTS})`),
-    maxSymbols: z.coerce.number().int().min(1).max(20).optional().describe("Max selected symbols for buildContext"),
-    maxSnippets: JsonNumber(z.number().int().min(0).max(12))
+    maxSymbols: ToolNumber(z.number().int().min(1).max(20))
+      .optional()
+      .describe("Max selected symbols for buildContext"),
+    maxSnippets: ToolNumber(z.number().int().min(0).max(12))
       .optional()
       .describe("Max source snippets for buildContext"),
-    maxDepth: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(3)
+    maxDepth: ToolNumber(z.number().int().min(1).max(3))
       .optional()
       .describe("Max graph depth for buildContext impact summary"),
     includeImpact: ToolBoolean.optional().describe("Whether buildContext should include a bounded impact summary"),

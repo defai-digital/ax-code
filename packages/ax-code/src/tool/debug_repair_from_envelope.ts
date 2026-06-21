@@ -5,6 +5,7 @@ import { ENVELOPE_ID_PATTERN } from "../quality/verification-envelope"
 import { briefFromFailure, shouldHandoff } from "../planner/verification/repair-handoff"
 import { SessionVerifications } from "../session/verifications"
 import type { SessionID } from "../session/schema"
+import { ToolNumber } from "./schema"
 
 export const DebugRepairFromEnvelopeTool = Tool.define("debug_repair_from_envelope", {
   description: DESCRIPTION,
@@ -12,7 +13,7 @@ export const DebugRepairFromEnvelopeTool = Tool.define("debug_repair_from_envelo
     envelopeId: z
       .string()
       .regex(ENVELOPE_ID_PATTERN, "envelopeId must be 16-char hex from verify_project/refactor_apply"),
-    maxFailures: z.coerce.number().int().min(1).max(50).optional(),
+    maxFailures: ToolNumber(z.number().int().min(1).max(50)).optional(),
   }),
   execute: async (args, ctx) => {
     const sessionID = ctx.sessionID as SessionID

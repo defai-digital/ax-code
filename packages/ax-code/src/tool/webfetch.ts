@@ -11,6 +11,7 @@ import {
 } from "@/constants/network"
 import { Isolation } from "@/isolation"
 import { parseContentLengthHeader } from "@/util/http-header"
+import { ToolNumber } from "./schema"
 
 // Block SSRF to private/reserved IP ranges. Uses pinnedFetch to
 // resolve DNS once and connect to the validated IP directly —
@@ -26,7 +27,7 @@ export const WebFetchTool = Tool.define("webfetch", {
       .enum(["text", "markdown", "html"])
       .default("markdown")
       .describe("The format to return the content in (text, markdown, or html). Defaults to markdown."),
-    timeout: z.coerce.number().min(1).describe("Optional timeout in seconds (max 120)").optional(),
+    timeout: ToolNumber(z.number().min(1)).describe("Optional timeout in seconds (max 120)").optional(),
   }),
   async execute(params, ctx) {
     let parsedUrl: URL

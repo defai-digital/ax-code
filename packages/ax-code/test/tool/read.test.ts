@@ -408,6 +408,30 @@ describe("tool.read truncation", () => {
     })
   })
 
+  test("rejects non-decimal numeric strings", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "numbers.txt"), "line1\nline2\n")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const filePath = path.join(tmp.path, "numbers.txt")
+
+        for (const input of [
+          { offset: "1e3" },
+          { offset: "0x10" },
+          { limit: "1e3" },
+          { limit: "0x10" },
+        ]) {
+          await expect(read.execute({ filePath, ...input } as any, ctx)).rejects.toThrow("invalid arguments")
+        }
+      },
+    })
+  })
+
   test("rejects non-positive and non-integer limits", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

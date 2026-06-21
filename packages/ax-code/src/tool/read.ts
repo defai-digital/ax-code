@@ -16,6 +16,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
+import { ToolNumber } from "./schema"
 
 const log = Log.create({ service: "tool.read" })
 
@@ -72,12 +73,10 @@ export const ReadTool = Tool.define("read", {
   parameters: withFilePathAliases(
     z.object({
       filePath: z.string().min(1).describe("The absolute path to the file or directory to read"),
-      offset: z.coerce.number().int().min(1).describe("The line number to start reading from (1-indexed)").optional(),
-      limit: z.coerce
-        .number()
-        .int()
-        .min(1)
-        .max(10000)
+      offset: ToolNumber(z.number().int().min(1))
+        .describe("The line number to start reading from (1-indexed)")
+        .optional(),
+      limit: ToolNumber(z.number().int().min(1).max(10000))
         .describe("The maximum number of lines to read (defaults to 2000)")
         .optional(),
     }),
