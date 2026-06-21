@@ -173,6 +173,43 @@ if (install.status !== 0) {
   console.error("npm install for the distribution failed")
   process.exit(1)
 }
+
+// Re-apply pnpm patches to the freshly npm-installed dist deps. The install
+// above pulls @opentui/core et al. clean from the registry, which drops the
+// pnpm patches that `pnpm dev` runs with — so without this step the shipped
+// binary silently differs from source. Critically it carries the OpenTUI FFI
+// coordinate guards; missing them, the TUI throws on every render frame the
+// moment a cell scrolls off-screen (negative coord -> strict-u32 FFI reject)
+// and spams an unstoppable crash. Overlay each patched file from the (patched)
+// workspace copy so the distribution matches source.
+const rootPkg = JSON.parse(await readText(path.join(dir, "..", "..", "package.json"))) as {
+  pnpm?: { patchedDependencies?: Record<string, string> }
+}
+for (const [spec, patchRel] of Object.entries(rootPkg.pnpm?.patchedDependencies ?? {})) {
+  const name = spec.replace(/@[^@/]+$/, "") // strip the trailing @version
+  if (!(name in distDeps)) continue // only deps shipped beside the bundle need overlaying
+  // Resolve the workspace copy via its node_modules path rather than
+  // require.resolve(`${name}/package.json`): packages restrict that subpath in
+  // their exports map, which throws ERR_PACKAGE_PATH_NOT_EXPORTED.
+  const pkgRoot = path.join(dir, "node_modules", ...name.split("/"))
+  if (!fs.existsSync(pkgRoot)) {
+    console.warn(`Cannot resolve patched dep ${name} to overlay into the distribution`)
+    continue
+  }
+  const patchText = await readText(path.join(dir, "..", "..", patchRel))
+  const files = [...patchText.matchAll(/^\+\+\+ b\/(.+)$/gm)].map((m) => m[1].trim())
+  for (const rel of files) {
+    const src = path.join(pkgRoot, rel)
+    const dest = path.join(outRoot, "node_modules", name, rel)
+    if (!fs.existsSync(src)) {
+      console.warn(`Patched file missing in workspace copy: ${name}/${rel}`)
+      continue
+    }
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.copyFileSync(src, dest)
+  }
+  console.log(`Re-applied pnpm patch for ${name} (${files.length} file(s)) into the distribution`)
+}
 // node-pty ships a node-gyp addon; build it for this platform (no abi prebuild
 // for newer Node yet). Cross-platform builds run this on each target in CI.
 const ptyDir = path.join(outRoot, "node_modules", "node-pty-prebuilt-multiarch")

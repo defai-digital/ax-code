@@ -122,7 +122,8 @@
     "patchedDependencies": {
       "@standard-community/standard-openapi@0.2.9": "patches/@standard-community%2Fstandard-openapi@0.2.9.patch",
       "gray-matter@4.0.3": "patches/gray-matter@4.0.3.patch",
-      "@msgpack/msgpack@3.1.3": "patches/@msgpack__msgpack@3.1.3.patch"
+      "@msgpack/msgpack@3.1.3": "patches/@msgpack__msgpack@3.1.3.patch",
+      "@opentui/core@0.4.1": "patches/@opentui__core@0.4.1.patch"
     }
   }
 }
