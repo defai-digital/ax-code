@@ -62,12 +62,12 @@ export async function recall(projectRoot: string, query: RecallQuery = {}): Prom
   const results: RecallResult[] = []
 
   if (scope === "project" || scope === "all") {
-    const memory = await store.load(projectRoot).catch(() => null)
+    const memory = await store.load(projectRoot)
     if (memory) results.push(...collectResults(projectRoot, memory.sections, query, "project"))
   }
 
   if (scope === "global" || scope === "all") {
-    const global = await store.loadGlobal().catch(() => null)
+    const global = await store.loadGlobal()
     if (global) results.push(...collectResults(projectRoot, global.sections, query, "global"))
   }
 

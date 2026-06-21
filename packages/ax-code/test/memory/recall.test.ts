@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import { recall } from "../../src/memory/recall"
 import { recordEntry } from "../../src/memory/recorder"
@@ -8,6 +8,30 @@ describe("memory.recall", () => {
   test("empty memory returns []", async () => {
     await using tmp = await tmpdir()
     expect(await recall(tmp.path)).toEqual([])
+  })
+
+  test("surfaces project memory load failures", async () => {
+    await using tmp = await tmpdir()
+    const error = Object.assign(new Error("project memory is unreadable"), { code: "EACCES" })
+    const loadSpy = vi.spyOn(store, "load").mockRejectedValueOnce(error)
+
+    try {
+      await expect(recall(tmp.path)).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      loadSpy.mockRestore()
+    }
+  })
+
+  test("surfaces global memory load failures", async () => {
+    await using tmp = await tmpdir()
+    const error = Object.assign(new Error("global memory is unreadable"), { code: "EACCES" })
+    const loadGlobalSpy = vi.spyOn(store, "loadGlobal").mockRejectedValueOnce(error)
+
+    try {
+      await expect(recall(tmp.path, { scope: "global" })).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      loadGlobalSpy.mockRestore()
+    }
   })
 
   test("returns all entries across kinds when no filter is given", async () => {
