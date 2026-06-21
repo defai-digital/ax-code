@@ -15,9 +15,40 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 
-## Get Started in 20 Seconds
+## Get Started
 
-**1. Install**
+**Recommended: AX Code Desktop**
+
+**macOS**
+
+```bash
+brew install defai-digital/ax-code/ax-code
+brew install --cask defai-digital/ax-code-desktop/ax-code
+```
+
+**Windows**
+
+1. Install AX Code with PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
+```
+
+2. Download and run the latest AX Code Desktop installer from the [GitHub Releases](https://github.com/defai-digital/ax-code/releases) page.
+
+AX Code Desktop is the primary graphical workspace. It shares the AX Code runtime and provider setup, and its source lives in this monorepo under [`desktop/`](desktop/). The standalone Desktop source repository has been retired.
+
+**Run**
+
+```bash
+ax-code # terminal UI
+```
+
+Or open **AX Code** from Applications / Start Menu to use the Desktop app. No project setup or config file is required. On first launch, connect a provider from the Desktop onboarding flow or use `/connect` inside the terminal UI.
+
+**CLI-only install**
+
+Use this path for terminals, headless tasks, CI jobs, bots, servers, and SDK/integration hosts.
 
 **macOS**
 
@@ -31,25 +62,9 @@ brew install defai-digital/ax-code/ax-code
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
 
-> Supported install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
+Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
 
-**2. Run**
-
-```bash
-ax-code
-```
-
-No project setup or config file required. On first launch, use `/connect` inside the TUI to add a provider.
-
-Prefer a graphical desktop app? Use AX Code Desktop on macOS or Windows. The Desktop source lives in this monorepo under [`desktop/`](desktop/), and its release artifacts are published from the same [GitHub Releases](https://github.com/defai-digital/ax-code/releases) page. The standalone Desktop source repository has been retired.
-
-```bash
-brew install --cask defai-digital/ax-code-desktop/ax-code
-```
-
-The Desktop app shares the AX Code runtime and provider setup. AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac.
-
-For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
+AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
 
 ### Update
 
@@ -63,6 +78,7 @@ ax-code upgrade
 
 ```bash
 brew upgrade ax-code
+brew upgrade --cask ax-code
 ```
 
 **Windows**

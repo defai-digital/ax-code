@@ -26,7 +26,7 @@ brew install --cask defai-digital/ax-code-desktop/ax-code
 To update:
 
 ```bash
-brew upgrade --cask ax-code-desktop
+brew upgrade --cask ax-code
 ```
 
 ### Manual DMG (alternative)
@@ -100,7 +100,7 @@ The app can run local AX Code sessions, connect to existing AX Code servers, and
 **macOS (Homebrew):**
 
 ```bash
-brew upgrade --cask ax-code-desktop
+brew upgrade --cask ax-code
 ```
 
 **Windows / manual installs:** Download the latest installer or archive from the [Releases page](https://github.com/defai-digital/ax-code/releases). When auto-update metadata is available, the app can also check GitHub releases for updates automatically.
