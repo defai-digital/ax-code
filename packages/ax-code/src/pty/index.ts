@@ -9,6 +9,7 @@ import { lazy } from "@ax-code/util/lazy"
 import { Shell } from "@/shell/shell"
 import { Plugin } from "@/plugin"
 import { Env } from "@/util/env"
+import { JsonNumber } from "@/util/schema"
 import { PtyID } from "./schema"
 import fs from "fs/promises"
 import path from "path"
@@ -178,8 +179,8 @@ export namespace Pty {
   // fractional, non-finite, and excessively large values previously reached
   // the native PTY resize path and could cause undefined behavior. See #244.
   const TerminalSize = z.object({
-    rows: z.coerce.number().int().min(1).max(1000),
-    cols: z.coerce.number().int().min(1).max(1000),
+    rows: JsonNumber(z.number().int().min(1).max(1000)),
+    cols: JsonNumber(z.number().int().min(1).max(1000)),
   })
 
   export const UpdateInput = z.object({

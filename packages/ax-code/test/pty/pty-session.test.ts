@@ -33,6 +33,26 @@ describe("pty", () => {
     expect(parsed.size).toEqual({ rows: 24, cols: 120 })
   })
 
+  test("update input rejects non-decimal terminal size strings", () => {
+    expect(
+      Pty.UpdateInput.safeParse({
+        size: {
+          rows: "0x18",
+          cols: "120",
+        },
+      }).success,
+    ).toBe(false)
+
+    expect(
+      Pty.UpdateInput.safeParse({
+        size: {
+          rows: "24",
+          cols: "1e2",
+        },
+      }).success,
+    ).toBe(false)
+  })
+
   test("sanitizes user-provided terminal env before spawn", () => {
     const env = Pty.sanitizeUserEnv({
       OPENAI_API_KEY: "api_key_from_user",
