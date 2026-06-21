@@ -82,7 +82,10 @@ const isBunRuntime = Boolean((process.versions as Record<string, string | undefi
 const useSetsidProcessGroup = process.platform === "linux" && isBunRuntime
 
 async function estimateFileLineDelta(filePath: string) {
-  const stat = await fs.stat(filePath).catch(() => undefined)
+  const stat = await fs.stat(filePath).catch((error: NodeJS.ErrnoException) => {
+    if (error?.code === "ENOENT") return undefined
+    throw error
+  })
   if (!stat?.isFile()) return 1
   return Math.max(1, Math.ceil(stat.size / 80))
 }

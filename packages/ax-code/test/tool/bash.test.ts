@@ -460,6 +460,36 @@ describe("tool.bash truncation", () => {
     })
   })
 
+  test("redirect blast radius surfaces inaccessible output files", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir({ git: true })
+    const locked = path.join(tmp.path, "locked")
+    await fs.mkdir(locked, { recursive: true })
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const script = "chmod 000 locked"
+
+          await expect(
+            bash.execute(
+              {
+                command: `sh -c ${shellQuote(script)} > locked/out.txt`,
+                description: "Write and lock redirected file",
+              },
+              ctx,
+            ),
+          ).rejects.toMatchObject({ code: "EACCES" })
+        },
+      })
+    } finally {
+      await fs.chmod(locked, 0o700).catch(() => {})
+    }
+  })
+
   test("truncates output exceeding line limit", async () => {
     await Instance.provide({
       directory: projectRoot,
