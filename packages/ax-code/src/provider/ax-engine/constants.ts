@@ -86,7 +86,13 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     apiModelID: AX_ENGINE_GEMMA4_12B_API_MODEL_ID,
     name: AX_ENGINE_GEMMA4_12B_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx4bit",
-    toolcall: false,
+    // The Gemma 4 family advertises openai_tool_calling_supported via the
+    // ax-engine /v1/models card. Tool calling is a serving-level capability
+    // shared across the family, so all three Gemma 4 sizes enable it. Keeping
+    // this false starves the session of tools (session/llm.ts gates tool
+    // dispatch on capabilities.toolcall) and the model degrades to a tool-less
+    // chatbot.
+    toolcall: true,
     contextTokens: 32_768,
     outputTokens: 8_192,
     quantizations: {
@@ -101,7 +107,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     apiModelID: AX_ENGINE_GEMMA4_26B_API_MODEL_ID,
     name: AX_ENGINE_GEMMA4_26B_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx4bit",
-    toolcall: false,
+    toolcall: true,
     contextTokens: 32_768,
     outputTokens: 8_192,
     quantizations: {
@@ -116,7 +122,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     apiModelID: AX_ENGINE_GEMMA4_31B_API_MODEL_ID,
     name: AX_ENGINE_GEMMA4_31B_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx4bit",
-    toolcall: false,
+    toolcall: true,
     contextTokens: 32_768,
     outputTokens: 8_192,
     quantizations: {

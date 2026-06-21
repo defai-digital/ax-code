@@ -530,7 +530,7 @@ describe("ax-engine provider integration", () => {
       experimental: { localRuntime: "ax-engine" },
     })
     expect(provider.models[AX_ENGINE_GEMMA4_12B_MODEL_ID]).toMatchObject({
-      tool_call: false,
+      tool_call: true,
       limit: { context: 32_768, output: 8_192 },
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
