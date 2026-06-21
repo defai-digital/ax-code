@@ -653,7 +653,8 @@ export namespace Config {
     const pkgExists = await Filesystem.exists(pkg)
     if (!pkgExists) return true
 
-    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => null)
+    const raw = await Filesystem.readJson<unknown>(pkg)
+    const parsed = normalizeDependencyPackageJson(pkg, raw)
     const dependencies = parsed?.dependencies ?? {}
     const depVersion = dependencies["@ax-code/plugin"]
     if (!depVersion) return true

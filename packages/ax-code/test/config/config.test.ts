@@ -1023,6 +1023,17 @@ test("does not overwrite malformed config package.json during dependency install
   }
 })
 
+test("rejects malformed config package.json during dependency install checks", async () => {
+  await using tmp = await tmpdir()
+  await fs.mkdir(path.join(tmp.path, "node_modules"), { recursive: true })
+  const pkg = path.join(tmp.path, "package.json")
+  const malformed = "{not json"
+  await Filesystem.write(pkg, malformed)
+
+  await expect(Config.needsInstall(tmp.path)).rejects.toThrow("Failed to parse JSON")
+  expect(await Bun.file(pkg).text()).toBe(malformed)
+})
+
 test("does not overwrite non-object config package.json during dependency install", async () => {
   await using tmp = await tmpdir()
   const pkg = path.join(tmp.path, "package.json")
