@@ -43,6 +43,27 @@ describe("WorkflowTemplate", () => {
     }
   })
 
+  test("does not hide corrupt saved workflow templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const spec = {
+      ...getParsedWorkflowFixtureSpec("noopDryRun"),
+      id: "corrupt-list",
+      name: "Corrupt List",
+      description: "Project-local workflow template for corrupt list tests.",
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const saved = await WorkflowTemplate.save({ scope: "project", spec })
+        if (!saved.path) throw new Error("expected saved template path")
+        await fs.writeFile(saved.path, "{not json", "utf8")
+
+        await expect(WorkflowTemplate.list()).rejects.toThrow("Failed to parse JSON")
+      },
+    })
+  })
+
   test("creates workflow runs from built-in templates", async () => {
     await using tmp = await tmpdir({ git: true })
 

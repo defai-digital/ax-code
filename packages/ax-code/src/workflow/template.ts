@@ -223,9 +223,12 @@ export namespace WorkflowTemplate {
   }
 
   async function readStoredTemplate(file: string): Promise<Stored | undefined> {
-    return Filesystem.readJson<unknown>(file)
-      .then((value) => Stored.parse(value))
-      .catch(() => undefined)
+    const value = await Filesystem.readJson<unknown>(file).catch((error) => {
+      if (isEnoent(error)) return undefined
+      throw error
+    })
+    if (value === undefined) return undefined
+    return Stored.parse(value)
   }
 
   async function readStoredTemplateForUpdate(file: string): Promise<Stored | undefined> {
