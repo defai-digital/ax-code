@@ -68,6 +68,21 @@ describe("filesystem", () => {
 
       expect(await Filesystem.isDir(filepath)).toBe(false)
     })
+
+    test("throws for inaccessible parent directories", async () => {
+      if (process.platform === "win32") return
+
+      await using tmp = await tmpdir()
+      const dirpath = path.join(tmp.path, "private")
+      await fs.mkdir(dirpath)
+      await fs.chmod(dirpath, 0)
+
+      try {
+        await expect(Filesystem.isDir(path.join(dirpath, "child"))).rejects.toMatchObject({ code: "EACCES" })
+      } finally {
+        await fs.chmod(dirpath, 0o700)
+      }
+    })
   })
 
   describe("size()", () => {

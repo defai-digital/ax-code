@@ -26,7 +26,10 @@ export namespace Filesystem {
     return fs
       .stat(p)
       .then((stat) => stat.isDirectory())
-      .catch(() => false)
+      .catch((err) => {
+        if (isEnoent(err)) return false
+        throw err
+      })
   }
 
   export function stat(p: string): ReturnType<typeof statSync> | undefined {
