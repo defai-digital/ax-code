@@ -341,7 +341,11 @@ export namespace Ripgrep {
     }
 
     // Guard against invalid cwd to provide a consistent ENOENT error.
-    if (!(await fs.stat(input.cwd).catch(() => undefined))?.isDirectory()) {
+    const cwdStat = await fs.stat(input.cwd).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT" || error.code === "ENOTDIR") return undefined
+      throw error
+    })
+    if (!cwdStat?.isDirectory()) {
       throw Object.assign(new Error(`No such file or directory: '${input.cwd}'`), {
         code: "ENOENT",
         errno: -2,

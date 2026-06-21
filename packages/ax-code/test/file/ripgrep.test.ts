@@ -111,6 +111,23 @@ describe("file.ripgrep", () => {
     expect(hits).toEqual([])
   })
 
+  test("files() surfaces inaccessible cwd instead of reporting it missing", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir()
+    const locked = path.join(tmp.path, "locked")
+    const cwd = path.join(locked, "project")
+    await fs.mkdir(locked)
+    await fs.chmod(locked, 0)
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+
+    try {
+      await expect(Array.fromAsync(Ripgrep.files({ cwd }))).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      await fs.chmod(locked, 0o700)
+    }
+  })
+
   test("files() terminates spawned ripgrep process when generator is returned early", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
