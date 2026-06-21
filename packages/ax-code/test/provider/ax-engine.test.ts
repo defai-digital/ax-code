@@ -210,6 +210,32 @@ describe("ax-engine model cache", () => {
     await expect(markPrepared({ modelPath: tmp.path })).rejects.toThrow("model-manifest.json")
   })
 
+  test("surfaces inaccessible model paths instead of treating them as missing", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir()
+    const locked = path.join(tmp.path, "locked")
+    const modelPath = path.join(locked, "model")
+    await fs.mkdir(locked)
+    await fs.chmod(locked, 0)
+
+    try {
+      await expect(markPrepared({ modelPath })).rejects.toMatchObject({ code: "EACCES" })
+
+      const status = await getModelStatus({
+        modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+        modelPath,
+        quantization: "mlx4bit",
+      })
+
+      expect(status.present).toBe(false)
+      expect(status.blockers).toContainEqual(expect.stringContaining("failed to inspect model path"))
+      expect(status.blockers).not.toContainEqual(expect.stringContaining("prepare Qwen3-Coder-Next"))
+    } finally {
+      await fs.chmod(locked, 0o700)
+    }
+  })
+
   test("reports malformed prepared model state instead of treating it as a missing model", async () => {
     await using tmp = await tmpdir()
     const originalPrepareState = AxEnginePaths.prepareState

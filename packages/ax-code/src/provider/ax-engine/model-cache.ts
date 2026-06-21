@@ -77,7 +77,10 @@ async function exists(file: string) {
   return fs
     .stat(file)
     .then(() => true)
-    .catch(() => false)
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return false
+      throw error
+    })
 }
 
 async function directorySize(dir: string): Promise<number | undefined> {
@@ -239,20 +242,30 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
   )
 
   for (const candidate of candidates) {
-    if (!(await exists(candidate))) continue
-    const marker = await readCompletionMarker(candidate)
-    const matchingMarker = marker?.modelID === modelID && marker.quantization === quantization ? marker : undefined
-    const complete = !!matchingMarker || (await hasManifest(candidate))
-    if (!complete) continue
-    return {
-      present: true,
-      modelID,
-      quantization,
-      path: candidate,
-      revision: matchingMarker?.revision,
-      bytes: await directorySize(candidate),
-      complete: true,
-      blockers: [],
+    try {
+      if (!(await exists(candidate))) continue
+      const marker = await readCompletionMarker(candidate)
+      const matchingMarker = marker?.modelID === modelID && marker.quantization === quantization ? marker : undefined
+      const complete = !!matchingMarker || (await hasManifest(candidate))
+      if (!complete) continue
+      return {
+        present: true,
+        modelID,
+        quantization,
+        path: candidate,
+        revision: matchingMarker?.revision,
+        bytes: await directorySize(candidate),
+        complete: true,
+        blockers: [],
+      }
+    } catch (error) {
+      return {
+        present: false,
+        modelID,
+        quantization,
+        complete: false,
+        blockers: [`${AX_ENGINE_ERROR.ModelMissing}: failed to inspect model path (${toErrorMessage(error)})`],
+      }
     }
   }
 
