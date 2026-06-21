@@ -133,7 +133,10 @@ export namespace FileCommand {
     sourceTool: SourceTool
     scope: Scope
   }): Promise<Info | undefined> {
-    const md = await ConfigMarkdown.parse(input.file).catch(() => undefined)
+    const md = await ConfigMarkdown.parse(input.file).catch((error) => {
+      if (isMissingFile(error)) return undefined
+      throw error
+    })
     if (!md) return undefined
     return parse({
       name: commandName(input.file, input.root),
@@ -180,7 +183,10 @@ export namespace FileCommand {
       include: "file",
       symlink: true,
       dot: true,
-    }).catch(() => [] as string[])
+    }).catch((error) => {
+      if (isEnoent(error)) return [] as string[]
+      throw error
+    })
     const parsed = await Promise.all(
       matches.map((file) =>
         parseFile({
@@ -206,5 +212,15 @@ export namespace FileCommand {
     const ext = path.extname(relative)
     const name = ext ? relative.slice(0, -ext.length) : relative
     return name.split(path.sep).join("/")
+  }
+
+  function isEnoent(error: unknown): error is NodeJS.ErrnoException {
+    return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
+  }
+
+  function isMissingFile(error: unknown) {
+    if (isEnoent(error)) return true
+    if (!ConfigMarkdown.FrontmatterError.isInstance(error)) return false
+    return isEnoent((error as Error).cause)
   }
 }

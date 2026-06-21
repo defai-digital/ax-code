@@ -60,6 +60,65 @@ Review branch $ARGUMENTS.
   })
 })
 
+test("surfaces invalid file-backed command frontmatter", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const commandDir = path.join(dir, ".agents", "commands")
+      await fs.mkdir(commandDir, { recursive: true })
+      await Bun.write(
+        path.join(commandDir, "bad.md"),
+        `---
+<<: *unsupported
+---
+This command should fail discovery.
+`,
+      )
+    },
+  })
+
+  await withTestHome(path.join(tmp.path, "home"), async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(Command.get("bad")).rejects.toMatchObject({
+          name: "ConfigFrontmatterError",
+          data: { path: path.join(tmp.path, ".agents", "commands", "bad.md") },
+        })
+      },
+    })
+  })
+})
+
+test.skipIf(process.platform === "win32")("surfaces unreadable file-backed command files", async () => {
+  const commandPath = path.join(".agents", "commands", "blocked.md")
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const fullPath = path.join(dir, commandPath)
+      await fs.mkdir(path.dirname(fullPath), { recursive: true })
+      await Bun.write(fullPath, "Blocked command\n")
+      await fs.chmod(fullPath, 0)
+    },
+    dispose: async (dir) => {
+      await fs.chmod(path.join(dir, commandPath), 0o600).catch(() => undefined)
+    },
+  })
+
+  await withTestHome(path.join(tmp.path, "home"), async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const fullPath = path.join(tmp.path, commandPath)
+        await expect(Command.get("blocked")).rejects.toMatchObject({
+          name: "ConfigFrontmatterError",
+          data: { path: fullPath },
+        })
+      },
+    })
+  })
+})
+
 test("exposes skill agent metadata on skill-backed commands", async () => {
   await using tmp = await tmpdir({ git: true })
 
