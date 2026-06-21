@@ -192,6 +192,10 @@ export namespace SessionProcessor {
     let blocked = false
     let attempt = 0
     let needsCompaction = false
+    // Underlying provider/stream error captured when a turn finishes with no
+    // usage (an "empty model turn"). Surfaced via `result.streamError` so the
+    // prompt loop can attribute the stall to its real cause.
+    let lastStreamError: unknown
     let lastStatusWrite = 0
     let lastWaitState: string | undefined
     let lastActiveTool: string | undefined
@@ -237,6 +241,9 @@ export namespace SessionProcessor {
       get message() {
         return input.assistantMessage
       },
+      get streamError() {
+        return lastStreamError
+      },
       partFromToolCall(toolCallID: string) {
         return toolcalls[toolCallID]
       },
@@ -244,6 +251,7 @@ export namespace SessionProcessor {
         log.info("process started", { sessionId: input.sessionID, command: "session.process", status: "started" })
         attempt = 0
         needsCompaction = false
+        lastStreamError = undefined
         const autonomous = Flag.AX_CODE_AUTONOMOUS
         const shouldBreak = autonomous ? false : (await Config.get()).experimental?.continue_loop_on_deny !== true
         if (autonomous) {
@@ -815,8 +823,17 @@ export namespace SessionProcessor {
                     cacheWriteTokens: usage.tokens.cache.write,
                     totalTokens: usage.tokens.total,
                   }
-                  if (source === "missing") log.warn("provider usage missing", usageLog)
-                  else log.info("provider usage normalized", usageLog)
+                  if (source === "missing") {
+                    // A missing-usage finish almost always means the stream
+                    // errored or returned an empty completion. Capture the
+                    // non-throwing onError cause so the empty-turn diagnostic
+                    // can name it instead of reporting an unattributable stall.
+                    lastStreamError = LLM.lastStreamError(stream)
+                    log.warn("provider usage missing", {
+                      ...usageLog,
+                      streamError: lastStreamError === undefined ? undefined : toErrorMessage(lastStreamError),
+                    })
+                  } else log.info("provider usage normalized", usageLog)
                   const finishReason =
                     typeof value.finishReason === "string"
                       ? value.finishReason

@@ -51,6 +51,7 @@ import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
 import { isEmptyModelTurn, isTruncatedModelTurn, modelTurnFinished } from "./prompt-autonomous-decisions"
+import { toErrorMessage } from "../util/error-message"
 import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { executePromptCommand } from "./prompt-command-execution"
@@ -81,6 +82,16 @@ import {
 globalThis.AI_SDK_LOG_WARNINGS = false
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
+
+// Turns the (often opaque) provider/stream error captured for an empty turn
+// into a short, single-line cause for the stop diagnostic. Returns undefined
+// when no error was recorded so the message falls back to its generic form.
+function describeStreamErrorCause(error: unknown): string | undefined {
+  if (error === undefined || error === null) return undefined
+  const message = toErrorMessage(error).trim()
+  if (!message) return undefined
+  return message.length > 300 ? `${message.slice(0, 297)}...` : message
+}
 
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
@@ -595,6 +606,7 @@ export namespace SessionPrompt {
           maxEmptyModelTurnRetries,
           todoRetries,
           pendingCount: pendingTodos.length,
+          cause: emptyModelTurn ? describeStreamErrorCause(processor.streamError) : undefined,
         })
         emptyModelTurnRetries = emptyTurnTransition.emptyModelTurnRetries
         todoRetries = emptyTurnTransition.todoRetries

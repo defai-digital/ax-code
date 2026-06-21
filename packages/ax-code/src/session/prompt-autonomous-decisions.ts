@@ -4,6 +4,12 @@ const EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE =
   `Autonomous mode received an empty model turn: the provider returned finish=other with zero input, ` +
   `output, and reasoning tokens. The session is stopped, but the work should not be treated as complete.`
 
+function emptyModelTurnIncompleteMessage(cause: string | undefined): string {
+  const trimmed = cause?.trim()
+  if (!trimmed) return EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE
+  return `${EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE} Underlying provider error: ${trimmed}`
+}
+
 const TRUNCATED_MODEL_TURN_INCOMPLETE_MESSAGE =
   `Autonomous mode received a truncated model turn: the provider returned finish=length before the model ` +
   `could complete its response. The session is stopped, but the work should not be treated as complete.`
@@ -355,6 +361,7 @@ export function emptyModelTurnDecision(input: {
   emptyModelTurnRetries: number
   maxEmptyModelTurnRetries: number
   todoRetries: number
+  cause?: string
 }): EmptyModelTurnDecision {
   if (!input.emptyModelTurn) {
     return {
@@ -373,7 +380,7 @@ export function emptyModelTurnDecision(input: {
       action: "stop",
       reason: "stalled",
       errorCode: "EMPTY_MODEL_TURN",
-      message: EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE,
+      message: emptyModelTurnIncompleteMessage(input.cause),
     }
   }
 

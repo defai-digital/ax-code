@@ -65,6 +65,17 @@ export namespace LLM {
 
   export type StreamOutput = StreamTextResult<ToolSet, any>
 
+  const STREAM_ERROR = Symbol("ax-code.llm.streamError")
+
+  // The AI SDK reports stream errors through the `onError` callback WITHOUT
+  // throwing, so a stream that errors mid-flight still completes its async
+  // iterator and surfaces a default `finishReason: "other"` with no usage — i.e.
+  // an "empty model turn". Capturing the cause here lets the loop explain *why*
+  // the turn came back empty instead of reporting a bare, unattributable stall.
+  export function lastStreamError(output: StreamOutput): unknown {
+    return (output as { [STREAM_ERROR]?: unknown })[STREAM_ERROR]
+  }
+
   export function repairedToolName(toolName: string, tools: Record<string, unknown>): string | undefined {
     const lower = toolName.toLowerCase()
     const snake = lower.replace(/[-\s]+/g, "_")
@@ -353,12 +364,14 @@ export namespace LLM {
       ...input.model.headers,
       ...headers,
     }
+    const streamErrorHolder: { error?: unknown } = {}
     let output: StreamOutput
     try {
       output = streamText({
         // @ts-expect-error
         maxDuration: 300_000,
         onError(error) {
+          streamErrorHolder.error = error
           l.error("stream error", {
             error: DiagnosticLog.redactForLog(error),
           })
@@ -422,6 +435,14 @@ export namespace LLM {
       if (pacingReservation) await releaseSuperLongPacingReservation(pacingReservation)
       throw error
     }
+    // Expose the (non-throwing) stream error captured by onError so the loop can
+    // attribute an empty/missing-usage turn to its underlying provider failure.
+    // Read through the pacing proxy via Reflect.get, which falls through to here.
+    Object.defineProperty(output, STREAM_ERROR, {
+      get: () => streamErrorHolder.error,
+      enumerable: false,
+      configurable: true,
+    })
     return attachSuperLongPacingReservation(output, pacingReservation, input.abort)
   }
 

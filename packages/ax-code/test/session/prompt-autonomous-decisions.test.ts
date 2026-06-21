@@ -589,6 +589,35 @@ describe("autonomous continuation decisions", () => {
     expect(decision.message).toContain("should not be treated as complete")
   })
 
+  test("appends the underlying provider cause to the empty model turn diagnostic", () => {
+    const decision = emptyModelTurnDecision({
+      emptyModelTurn: true,
+      emptyModelTurnRetries: 1,
+      maxEmptyModelTurnRetries: 1,
+      todoRetries: 3,
+      cause: "AI_APICallError: 429 rate_limit_exceeded",
+    })
+
+    expect(decision.action).toBe("stop")
+    if (decision.action !== "stop") throw new Error("expected stop decision")
+    expect(decision.message).toContain("should not be treated as complete")
+    expect(decision.message).toContain("Underlying provider error: AI_APICallError: 429 rate_limit_exceeded")
+  })
+
+  test("omits the cause clause when no provider error was captured", () => {
+    const withBlankCause = emptyModelTurnDecision({
+      emptyModelTurn: true,
+      emptyModelTurnRetries: 1,
+      maxEmptyModelTurnRetries: 1,
+      todoRetries: 3,
+      cause: "   ",
+    })
+
+    expect(withBlankCause.action).toBe("stop")
+    if (withBlankCause.action !== "stop") throw new Error("expected stop decision")
+    expect(withBlankCause.message).not.toContain("Underlying provider error")
+  })
+
   test("stops empty-model-turn recovery when retry budget is non-comparable", () => {
     const decision = emptyModelTurnDecision({
       emptyModelTurn: true,

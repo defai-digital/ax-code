@@ -40,6 +40,7 @@ export async function handlePromptLoopEmptyTurn(
     maxEmptyModelTurnRetries: number
     todoRetries: number
     pendingCount: number
+    cause?: string
   },
   deps: PromptLoopEmptyTurnDeps = {},
 ): Promise<PromptLoopEmptyTurnTransition> {
@@ -48,6 +49,7 @@ export async function handlePromptLoopEmptyTurn(
     emptyModelTurnRetries: input.emptyModelTurnRetries,
     maxEmptyModelTurnRetries: input.maxEmptyModelTurnRetries,
     todoRetries: input.todoRetries,
+    cause: input.cause,
   })
 
   if (decision.action === "stop") {
@@ -64,6 +66,10 @@ export async function handlePromptLoopEmptyTurn(
       sessionID: input.sessionID,
       assistant: input.assistant,
       message: decision.message,
+      // An empty turn leaves the assistant message contentless; surface the
+      // stop reason as visible text so the UI shows a clear terminal state
+      // instead of an empty bubble that reads as "still working".
+      surfaceAsText: true,
     })
     return {
       action: "stop",
