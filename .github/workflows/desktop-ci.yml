@@ -57,7 +57,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check Desktop boundaries
-        run: pnpm run check:desktop-boundaries
+        run: pnpm run check:desktop-boundaries:strict
 
       - name: Typecheck Desktop
         run: pnpm run desktop:typecheck

@@ -1,21 +1,10 @@
 import { spawn, spawnSync } from 'node:child_process';
 import net from 'node:net';
-import { startHeadlessBackend } from '@ax-code/sdk/headless';
+import { startHeadlessBackend, isLoopbackHostname as isSdkLoopbackHostname } from '@ax-code/sdk/headless';
 import { createManagedAxCodeRuntimeAdapter } from './managed-ax-code-runtime.js';
 import { evaluateAxCodeCompatibility } from './version-compat.js';
 
-// Mirrors the SDK v2.2.0 isLoopbackHostname guard so allowNetworkBind is only
-// set when the caller explicitly configured a non-loopback hostname.
-// Exported for the workspace SDK contract test (sdk-contract.test.js).
-export const isSdkLoopbackHostname = (hostname) => {
-  if (!hostname) return true;
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (normalized === 'localhost' || normalized === '::1') return true;
-  const parts = normalized.split('.');
-  if (parts.length !== 4) return false;
-  const nums = parts.map(Number);
-  return nums.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) && nums[0] === 127;
-};
+export { isSdkLoopbackHostname };
 
 const parsePositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(String(value ?? ''), 10);

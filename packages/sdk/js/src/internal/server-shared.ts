@@ -189,7 +189,7 @@ export function assertSdkHttpLoopbackBind(hostname: string, allowNetworkBind: bo
   )
 }
 
-function isLoopbackHostname(hostname: string) {
+export function isLoopbackHostname(hostname: string) {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "")
   return normalized === "localhost" || normalized === "::1" || isIpv4Loopback(normalized)
 }

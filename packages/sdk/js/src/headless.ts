@@ -120,3 +120,5 @@ export type {
   HeadlessQuestionReplyBody,
 } from "./headless/command.js"
 export { commandAcceptsAsyncMode } from "./headless/command.js"
+
+export { isLoopbackHostname } from "./internal/server-shared.js"

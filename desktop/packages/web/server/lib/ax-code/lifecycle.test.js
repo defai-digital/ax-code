@@ -11,6 +11,15 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('@ax-code/sdk/headless', () => ({
   startHeadlessBackend: startHeadlessBackendMock,
+  isLoopbackHostname: (hostname) => {
+    if (!hostname) return true;
+    const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (normalized === 'localhost' || normalized === '::1') return true;
+    const parts = normalized.split('.');
+    if (parts.length !== 4) return false;
+    const nums = parts.map(Number);
+    return nums.every((n) => Number.isInteger(n) && n >= 0 && n <= 255) && nums[0] === 127;
+  },
 }));
 
 const { createAxCodeLifecycleRuntime } = await import('./lifecycle.js');

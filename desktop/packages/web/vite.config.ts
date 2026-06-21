@@ -76,7 +76,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: [
-      { find: /^@ax-code\/sdk\/v2$/, replacement: path.resolve(__dirname, '../../../packages/sdk/js/dist/v2/client.js') },
+      { find: /^@ax-code\/sdk\/v2$/, replacement: path.resolve(__dirname, '../../../packages/sdk/js/dist/v2/index.js') },
       { find: '@openchamber/ui', replacement: path.resolve(__dirname, '../ui/src') },
       { find: '@web', replacement: path.resolve(__dirname, './src') },
       { find: '@', replacement: path.resolve(__dirname, '../ui/src') },
