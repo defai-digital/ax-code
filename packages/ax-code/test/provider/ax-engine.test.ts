@@ -10,10 +10,17 @@ import { Instance } from "../../src/project/instance"
 import { getAxEngineDoctorCheck } from "../../src/cli/cmd/doctor"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
+  AX_ENGINE_ERROR,
   AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
   AX_ENGINE_PROVIDER_ID,
   AX_ENGINE_QWEN36_35B_MODEL_ID,
+  AX_ENGINE_GEMMA4_12B_MODEL_ID,
+  AX_ENGINE_GEMMA4_26B_MODEL_ID,
+  AX_ENGINE_GEMMA4_31B_MODEL_ID,
+  AX_ENGINE_QWEN36_27B_MODEL_ID,
+  AX_ENGINE_QWEN35_9B_MODEL_ID,
+  AX_ENGINE_GLM47_MODEL_ID,
   axEngineLoader,
   evaluateDiskStatus,
   evaluateAxEngineCapabilityFromModels,
@@ -451,10 +458,19 @@ describe("ax-engine prepare lifecycle", () => {
 })
 
 describe("ax-engine provider integration", () => {
-  test("built-in models declare Qwen3-Coder-Next and Qwen3.6 35B as experimental local models", async () => {
+  test("built-in models declare all ax-engine models as experimental local models", async () => {
     const provider = (await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]
     expect(provider).toBeDefined()
-    expect(Object.keys(provider.models)).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, AX_ENGINE_QWEN36_35B_MODEL_ID])
+    expect(Object.keys(provider.models)).toEqual([
+      AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+      AX_ENGINE_QWEN36_35B_MODEL_ID,
+      AX_ENGINE_GEMMA4_12B_MODEL_ID,
+      AX_ENGINE_GEMMA4_26B_MODEL_ID,
+      AX_ENGINE_GEMMA4_31B_MODEL_ID,
+      AX_ENGINE_QWEN36_27B_MODEL_ID,
+      AX_ENGINE_QWEN35_9B_MODEL_ID,
+      AX_ENGINE_GLM47_MODEL_ID,
+    ])
     expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID]).toMatchObject({
       tool_call: true,
       limit: { context: 32_768, output: 8_192 },
@@ -469,6 +485,30 @@ describe("ax-engine provider integration", () => {
         modelID: AX_ENGINE_QWEN36_35B_MODEL_ID,
         quantization: "mlx4bit",
       },
+      experimental: { localRuntime: "ax-engine" },
+    })
+    expect(provider.models[AX_ENGINE_GEMMA4_12B_MODEL_ID]).toMatchObject({
+      tool_call: false,
+      limit: { context: 32_768, output: 8_192 },
+      status: "beta",
+      experimental: { localRuntime: "ax-engine" },
+    })
+    expect(provider.models[AX_ENGINE_QWEN36_27B_MODEL_ID]).toMatchObject({
+      tool_call: true,
+      limit: { context: 65_536, output: 16_384 },
+      status: "beta",
+      experimental: { localRuntime: "ax-engine" },
+    })
+    expect(provider.models[AX_ENGINE_QWEN35_9B_MODEL_ID]).toMatchObject({
+      tool_call: true,
+      limit: { context: 32_768, output: 8_192 },
+      status: "beta",
+      experimental: { localRuntime: "ax-engine" },
+    })
+    expect(provider.models[AX_ENGINE_GLM47_MODEL_ID]).toMatchObject({
+      tool_call: false,
+      limit: { context: 32_768, output: 8_192 },
+      status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
   })
@@ -708,6 +748,31 @@ describe("ax-engine provider integration", () => {
 
     expect(model).toEqual({ id: "qwen3.6-35b" })
     expect(requested).toEqual(["qwen3.6-35b"])
+  })
+
+  test("loader throws actionable ModelNotPrepared error when model is not downloaded", async () => {
+    if (!isPlausiblySupportedHost()) return
+
+    const loader = await axEngineLoader()({
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: {},
+      models: {},
+    } as any)
+
+    await expect(
+      loader.getModel!(
+        {
+          languageModel(id: string) {
+            return { id }
+          },
+        },
+        AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+        { modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID },
+      ),
+    ).rejects.toThrow(AX_ENGINE_ERROR.ModelNotPrepared)
   })
 
   test("provider list exposes ax-engine only after full host eligibility passes", () => {

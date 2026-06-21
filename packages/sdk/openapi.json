@@ -154,7 +154,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.global.health({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.global.health({
+  ...
+})"
           }
         ]
       }
@@ -408,7 +413,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.global.capabilities({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.global.capabilities({
+  ...
+})"
           }
         ]
       }
@@ -433,7 +443,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.global.event({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.global.event({
+  ...
+})"
           }
         ]
       }
@@ -458,7 +473,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.global.config.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.global.config.get({
+  ...
+})"
           }
         ]
       },
@@ -500,7 +520,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.global.config.update({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.global.config.update({
+  ...
+})"
           }
         ]
       }
@@ -525,7 +550,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.global.dispose({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.global.dispose({
+  ...
+})"
           }
         ]
       }
@@ -594,7 +624,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.global.upgrade({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.global.upgrade({
+  ...
+})"
           }
         ]
       }
@@ -649,7 +684,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.auth.set({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.auth.set({
+  ...
+})"
           }
         ]
       },
@@ -693,7 +733,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.auth.remove({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.auth.remove({
+  ...
+})"
           }
         ]
       }
@@ -730,7 +775,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.project.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.project.list({
+  ...
+})"
           }
         ]
       }
@@ -764,7 +814,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.project.current({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.project.current({
+  ...
+})"
           }
         ]
       }
@@ -798,7 +853,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.project.initGit({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.project.initGit({
+  ...
+})"
           }
         ]
       }
@@ -897,7 +957,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.project.update({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.project.update({
+  ...
+})"
           }
         ]
       }
@@ -934,7 +999,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.pty.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.pty.list({
+  ...
+})"
           }
         ]
       },
@@ -1011,7 +1081,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.pty.create({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.pty.create({
+  ...
+})"
           }
         ]
       }
@@ -1064,7 +1139,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.pty.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.pty.get({
+  ...
+})"
           }
         ]
       },
@@ -1145,7 +1225,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.pty.update({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.pty.update({
+  ...
+})"
           }
         ]
       },
@@ -1196,7 +1281,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.pty.remove({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.pty.remove({
+  ...
+})"
           }
         ]
       }
@@ -1249,7 +1339,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.pty.connect({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.pty.connect({
+  ...
+})"
           }
         ]
       }
@@ -1283,7 +1378,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.config.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.config.get({
+  ...
+})"
           }
         ]
       },
@@ -1334,7 +1434,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.config.update({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.config.update({
+  ...
+})"
           }
         ]
       }
@@ -1386,7 +1491,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.config.providers({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.config.providers({
+  ...
+})"
           }
         ]
       }
@@ -1420,7 +1530,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.isolation.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.isolation.get({
+  ...
+})"
           }
         ]
       },
@@ -1471,7 +1586,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.isolation.set({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.isolation.set({
+  ...
+})"
           }
         ]
       }
@@ -1505,7 +1625,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomous.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.autonomous.get({
+  ...
+})"
           }
         ]
       },
@@ -1552,7 +1677,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.autonomous.set({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.autonomous.set({
+  ...
+})"
           }
         ]
       }
@@ -1586,7 +1716,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.smartLlm.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.smartLlm.get({
+  ...
+})"
           }
         ]
       },
@@ -1633,7 +1768,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.smartLlm.set({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.smartLlm.set({
+  ...
+})"
           }
         ]
       }
@@ -1667,7 +1807,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.superLong.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.superLong.get({
+  ...
+})"
           }
         ]
       },
@@ -1724,7 +1869,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.superLong.set({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.superLong.set({
+  ...
+})"
           }
         ]
       }
@@ -1773,7 +1923,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.superLong.status({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.superLong.status({
+  ...
+})"
           }
         ]
       }
@@ -1864,7 +2019,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.promptHistory.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.promptHistory.list({
+  ...
+})"
           }
         ]
       },
@@ -1985,7 +2145,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.promptHistory.append({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.promptHistory.append({
+  ...
+})"
           }
         ]
       }
@@ -2177,7 +2342,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.list({
+  ...
+})"
           }
         ]
       },
@@ -2382,7 +2552,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.enqueue({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.enqueue({
+  ...
+})"
           }
         ]
       }
@@ -2545,7 +2720,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.get({
+  ...
+})"
           }
         ]
       },
@@ -2606,7 +2786,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.delete({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.delete({
+  ...
+})"
           }
         ]
       }
@@ -2807,7 +2992,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.status({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.status({
+  ...
+})"
           }
         ]
       }
@@ -3032,7 +3222,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.edit({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.edit({
+  ...
+})"
           }
         ]
       }
@@ -3195,7 +3390,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.pause({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.pause({
+  ...
+})"
           }
         ]
       }
@@ -3358,7 +3558,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.resume({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.resume({
+  ...
+})"
           }
         ]
       }
@@ -3521,7 +3726,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.cancel({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.cancel({
+  ...
+})"
           }
         ]
       }
@@ -3684,7 +3894,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.retry({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.retry({
+  ...
+})"
           }
         ]
       }
@@ -3847,7 +4062,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.send_now({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.send_now({
+  ...
+})"
           }
         ]
       }
@@ -4027,7 +4247,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.taskQueue.reorder({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.taskQueue.reorder({
+  ...
+})"
           }
         ]
       }
@@ -4263,7 +4488,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.list({
+  ...
+})"
           }
         ]
       },
@@ -4593,7 +4823,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.create({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.create({
+  ...
+})"
           }
         ]
       }
@@ -4809,7 +5044,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.get({
+  ...
+})"
           }
         ]
       },
@@ -4870,7 +5110,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.delete({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.delete({
+  ...
+})"
           }
         ]
       }
@@ -5214,7 +5459,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.update({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.update({
+  ...
+})"
           }
         ]
       }
@@ -5430,7 +5680,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.pause({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.pause({
+  ...
+})"
           }
         ]
       }
@@ -5646,7 +5901,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.resume({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.resume({
+  ...
+})"
           }
         ]
       }
@@ -5992,7 +6252,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.run_now({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.run_now({
+  ...
+})"
           }
         ]
       }
@@ -6341,7 +6606,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.scheduledTask.run_due({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.scheduledTask.run_due({
+  ...
+})"
           }
         ]
       }
@@ -6423,7 +6693,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.list({
+  ...
+})"
           }
         ]
       },
@@ -7300,7 +7575,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.create({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.create({
+  ...
+})"
           }
         ]
       }
@@ -7924,7 +8204,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.dashboard({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.dashboard({
+  ...
+})"
           }
         ]
       }
@@ -8166,7 +8451,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.eval_cases({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.eval_cases({
+  ...
+})"
           }
         ]
       }
@@ -9106,7 +9396,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.get({
+  ...
+})"
           }
         ]
       }
@@ -9211,7 +9506,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.artifacts({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.artifacts({
+  ...
+})"
           }
         ]
       }
@@ -9615,7 +9915,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.eval_summary({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.eval_summary({
+  ...
+})"
           }
         ]
       }
@@ -10099,7 +10404,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.eval_case({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.eval_case({
+  ...
+})"
           }
         ]
       }
@@ -10951,7 +11261,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.save_template({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.save_template({
+  ...
+})"
           }
         ]
       }
@@ -11924,7 +12239,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.start({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.start({
+  ...
+})"
           }
         ]
       }
@@ -12874,7 +13194,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.pause({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.pause({
+  ...
+})"
           }
         ]
       }
@@ -13824,7 +14149,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.resume({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.resume({
+  ...
+})"
           }
         ]
       }
@@ -14774,7 +15104,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.cancel({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.cancel({
+  ...
+})"
           }
         ]
       }
@@ -15732,7 +16067,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRun.retry({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRun.retry({
+  ...
+})"
           }
         ]
       }
@@ -16562,7 +16902,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowTemplate.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowTemplate.list({
+  ...
+})"
           }
         ]
       },
@@ -18127,7 +18472,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowTemplate.save({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowTemplate.save({
+  ...
+})"
           }
         ]
       }
@@ -18965,7 +19315,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowTemplate.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowTemplate.get({
+  ...
+})"
           }
         ]
       }
@@ -19813,7 +20168,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowTemplate.promote({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowTemplate.promote({
+  ...
+})"
           }
         ]
       }
@@ -19944,7 +20304,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRoutine.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRoutine.list({
+  ...
+})"
           }
         ]
       },
@@ -20140,7 +20505,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRoutine.create({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRoutine.create({
+  ...
+})"
           }
         ]
       }
@@ -22059,7 +22429,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.workflowRoutine.run({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.workflowRoutine.run({
+  ...
+})"
           }
         ]
       }
@@ -22103,7 +22478,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tool.ids({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tool.ids({
+  ...
+})"
           }
         ]
       }
@@ -22163,7 +22543,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tool.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tool.list({
+  ...
+})"
           }
         ]
       }
@@ -22216,7 +22601,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.worktree.create({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.worktree.create({
+  ...
+})"
           }
         ]
       },
@@ -22251,7 +22641,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.worktree.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.worktree.list({
+  ...
+})"
           }
         ]
       },
@@ -22302,7 +22697,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.worktree.remove({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.worktree.remove({
+  ...
+})"
           }
         ]
       }
@@ -22355,7 +22755,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.worktree.reset({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.worktree.reset({
+  ...
+})"
           }
         ]
       }
@@ -22443,7 +22848,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.experimental.session.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.experimental.session.list({
+  ...
+})"
           }
         ]
       }
@@ -22483,7 +22893,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.experimental.resource.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.experimental.resource.list({
+  ...
+})"
           }
         ]
       }
@@ -22555,7 +22970,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.list({
+  ...
+})"
           }
         ]
       },
@@ -22622,7 +23042,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.create({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.create({
+  ...
+})"
           }
         ]
       }
@@ -22672,7 +23097,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.status({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.status({
+  ...
+})"
           }
         ]
       }
@@ -22736,7 +23166,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.get({
+  ...
+})"
           }
         ]
       },
@@ -22797,7 +23232,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.delete({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.delete({
+  ...
+})"
           }
         ]
       },
@@ -22883,7 +23323,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.update({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.update({
+  ...
+})"
           }
         ]
       }
@@ -23000,7 +23445,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.goal({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.goal({
+  ...
+})"
           }
         ]
       }
@@ -23067,7 +23517,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.children({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.children({
+  ...
+})"
           }
         ]
       }
@@ -23139,7 +23594,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.branch_rank({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.branch_rank({
+  ...
+})"
           }
         ]
       }
@@ -23203,7 +23663,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.dre({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.dre({
+  ...
+})"
           }
         ]
       }
@@ -23267,7 +23732,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.graph({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.graph({
+  ...
+})"
           }
         ]
       }
@@ -23379,7 +23849,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.risk({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.risk({
+  ...
+})"
           }
         ]
       }
@@ -23450,7 +23925,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.semantic_diff({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.semantic_diff({
+  ...
+})"
           }
         ]
       }
@@ -23531,7 +24011,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.compare({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.compare({
+  ...
+})"
           }
         ]
       }
@@ -23606,7 +24091,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.rollback_points({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.rollback_points({
+  ...
+})"
           }
         ]
       }
@@ -23672,7 +24162,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.todo({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.todo({
+  ...
+})"
           }
         ]
       }
@@ -23757,7 +24252,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.init({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.init({
+  ...
+})"
           }
         ]
       }
@@ -23815,7 +24315,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.fork({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.fork({
+  ...
+})"
           }
         ]
       }
@@ -23878,7 +24383,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.abort({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.abort({
+  ...
+})"
           }
         ]
       }
@@ -23932,7 +24442,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.diff({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.diff({
+  ...
+})"
           }
         ]
       }
@@ -24016,7 +24531,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.summarize({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.summarize({
+  ...
+})"
           }
         ]
       }
@@ -24112,7 +24632,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.messages({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.messages({
+  ...
+})"
           }
         ]
       },
@@ -24283,7 +24808,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.prompt({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.prompt({
+  ...
+})"
           }
         ]
       }
@@ -24367,7 +24897,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.message({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.message({
+  ...
+})"
           }
         ]
       },
@@ -24437,7 +24972,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.deleteMessage({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.deleteMessage({
+  ...
+})"
           }
         ]
       }
@@ -24517,7 +25057,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.part.delete({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.part.delete({
+  ...
+})"
           }
         ]
       },
@@ -24604,7 +25149,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.part.update({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.part.update({
+  ...
+})"
           }
         ]
       }
@@ -24758,7 +25308,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.prompt_async({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.prompt_async({
+  ...
+})"
           }
         ]
       }
@@ -24851,7 +25406,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.command_async({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.command_async({
+  ...
+})"
           }
         ]
       }
@@ -24963,7 +25523,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.command({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.command({
+  ...
+})"
           }
         ]
       }
@@ -25049,7 +25614,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.shell_async({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.shell_async({
+  ...
+})"
           }
         ]
       }
@@ -25142,7 +25712,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.shell({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.shell({
+  ...
+})"
           }
         ]
       }
@@ -25225,7 +25800,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.revert({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.revert({
+  ...
+})"
           }
         ]
       }
@@ -25288,7 +25868,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.session.unrevert({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.session.unrevert({
+  ...
+})"
           }
         ]
       }
@@ -25377,7 +25962,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.permission.respond({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.permission.respond({
+  ...
+})"
           }
         ]
       }
@@ -25459,7 +26049,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.permission.reply({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.permission.reply({
+  ...
+})"
           }
         ]
       }
@@ -25496,7 +26091,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.permission.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.permission.list({
+  ...
+})"
           }
         ]
       }
@@ -25541,7 +26141,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.audit.export({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.audit.export({
+  ...
+})"
           }
         ]
       }
@@ -25603,7 +26208,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.audit.exportAll({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.audit.exportAll({
+  ...
+})"
           }
         ]
       }
@@ -25648,7 +26258,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.audit.replay({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.audit.replay({
+  ...
+})"
           }
         ]
       }
@@ -25711,7 +26326,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.graph.topology({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.graph.topology({
+  ...
+})"
           }
         ]
       }
@@ -25788,7 +26408,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.graph.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.graph.get({
+  ...
+})"
           }
         ]
       }
@@ -25827,7 +26452,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.getDre-graphSession:sessionID({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.getDre-graphSession:sessionID({
+  ...
+})"
           }
         ]
       }
@@ -25866,7 +26496,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.getDre-graphSession:sessionIDFingerprint({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.getDre-graphSession:sessionIDFingerprint({
+  ...
+})"
           }
         ]
       }
@@ -25903,7 +26538,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.question.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.question.list({
+  ...
+})"
           }
         ]
       }
@@ -25985,7 +26625,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.question.reply({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.question.reply({
+  ...
+})"
           }
         ]
       }
@@ -26048,7 +26693,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.question.reject({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.question.reject({
+  ...
+})"
           }
         ]
       }
@@ -26284,7 +26934,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.provider.list({
+  ...
+})"
           }
         ]
       }
@@ -26316,7 +26971,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.status({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.provider.axEngine.status({
+  ...
+})"
           }
         ]
       }
@@ -26334,7 +26994,7 @@
           }
         ],
         "summary": "Prepare ax-engine local provider",
-        "description": "Mark an existing Qwen3-Coder-Next MLX path or explicitly download it through ax-engine.",
+        "description": "Mark an existing MLX model path as prepared or explicitly download one through ax-engine.",
         "responses": {
           "200": {
             "description": "Preparation result",
@@ -26369,7 +27029,7 @@
                   },
                   "modelID": {
                     "type": "string",
-                    "enum": ["qwen3-coder-next", "qwen3.6-35b-a3b"]
+                    "enum": ["qwen3-coder-next", "qwen3.6-35b-a3b", "gemma-4-12b", "gemma-4-26b-a4b", "gemma-4-31b", "qwen3.6-27b", "qwen3.5-9b", "glm-4.7"]
                   },
                   "quantization": {
                     "type": "string",
@@ -26389,7 +27049,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.prepare({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.provider.axEngine.prepare({
+  ...
+})"
           }
         ]
       }
@@ -26407,7 +27072,7 @@
           }
         ],
         "summary": "Start managed ax-engine server",
-        "description": "Start ax-engine for an already prepared or explicitly provided Qwen3-Coder-Next MLX model.",
+        "description": "Start ax-engine for an already prepared or explicitly provided MLX model.",
         "responses": {
           "200": {
             "description": "Start result",
@@ -26442,7 +27107,7 @@
                   },
                   "modelID": {
                     "type": "string",
-                    "enum": ["qwen3-coder-next", "qwen3.6-35b-a3b"]
+                    "enum": ["qwen3-coder-next", "qwen3.6-35b-a3b", "gemma-4-12b", "gemma-4-26b-a4b", "gemma-4-31b", "qwen3.6-27b", "qwen3.5-9b", "glm-4.7"]
                   },
                   "quantization": {
                     "type": "string",
@@ -26459,7 +27124,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.start({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.provider.axEngine.start({
+  ...
+})"
           }
         ]
       }
@@ -26492,7 +27162,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.stop({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.provider.axEngine.stop({
+  ...
+})"
           }
         ]
       }
@@ -26535,7 +27210,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.auth({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.provider.auth({
+  ...
+})"
           }
         ]
       }
@@ -26616,7 +27296,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.oauth.authorize({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.provider.oauth.authorize({
+  ...
+})"
           }
         ]
       }
@@ -26691,7 +27376,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.provider.oauth.callback({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.provider.oauth.callback({
+  ...
+})"
           }
         ]
       }
@@ -26788,7 +27478,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.find.text({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.find.text({
+  ...
+})"
           }
         ]
       }
@@ -26857,7 +27552,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.find.files({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.find.files({
+  ...
+})"
           }
         ]
       }
@@ -26902,7 +27602,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.find.symbols({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.find.symbols({
+  ...
+})"
           }
         ]
       }
@@ -26948,7 +27653,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.file.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.file.list({
+  ...
+})"
           }
         ]
       }
@@ -26991,7 +27701,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.file.read({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.file.read({
+  ...
+})"
           }
         ]
       }
@@ -27028,7 +27743,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.file.status({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.file.status({
+  ...
+})"
           }
         ]
       }
@@ -27062,7 +27782,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.event.subscribe({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.event.subscribe({
+  ...
+})"
           }
         ]
       }
@@ -27102,7 +27827,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.status({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.mcp.status({
+  ...
+})"
           }
         ]
       },
@@ -27179,7 +27909,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.add({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.mcp.add({
+  ...
+})"
           }
         ]
       }
@@ -27251,7 +27986,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.auth.start({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.mcp.auth.start({
+  ...
+})"
           }
         ]
       },
@@ -27311,7 +28051,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.auth.remove({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.mcp.auth.remove({
+  ...
+})"
           }
         ]
       }
@@ -27392,7 +28137,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.auth.callback({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.mcp.auth.callback({
+  ...
+})"
           }
         ]
       }
@@ -27457,7 +28207,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.auth.authenticate({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.mcp.auth.authenticate({
+  ...
+})"
           }
         ]
       }
@@ -27501,7 +28256,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.connect({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.mcp.connect({
+  ...
+})"
           }
         ]
       }
@@ -27545,7 +28305,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.mcp.disconnect({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.mcp.disconnect({
+  ...
+})"
           }
         ]
       }
@@ -27604,7 +28369,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.appendPrompt({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.appendPrompt({
+  ...
+})"
           }
         ]
       }
@@ -27638,7 +28408,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.openHelp({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.openHelp({
+  ...
+})"
           }
         ]
       }
@@ -27672,7 +28447,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.openSessions({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.openSessions({
+  ...
+})"
           }
         ]
       }
@@ -27706,7 +28486,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.openThemes({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.openThemes({
+  ...
+})"
           }
         ]
       }
@@ -27740,7 +28525,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.openModels({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.openModels({
+  ...
+})"
           }
         ]
       }
@@ -27774,7 +28564,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.submitPrompt({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.submitPrompt({
+  ...
+})"
           }
         ]
       }
@@ -27808,7 +28603,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.clearPrompt({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.clearPrompt({
+  ...
+})"
           }
         ]
       }
@@ -27867,7 +28667,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.executeCommand({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.executeCommand({
+  ...
+})"
           }
         ]
       }
@@ -27927,7 +28732,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.showToast({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.showToast({
+  ...
+})"
           }
         ]
       }
@@ -27993,7 +28803,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.publish({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.publish({
+  ...
+})"
           }
         ]
       }
@@ -28064,7 +28879,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.tui.selectSession({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.tui.selectSession({
+  ...
+})"
           }
         ]
       }
@@ -28098,7 +28918,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.instance.dispose({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.instance.dispose({
+  ...
+})"
           }
         ]
       }
@@ -28132,7 +28957,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.instance.restart({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.instance.restart({
+  ...
+})"
           }
         ]
       }
@@ -28166,7 +28996,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.path.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.path.get({
+  ...
+})"
           }
         ]
       }
@@ -28200,7 +29035,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.vcs.get({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.vcs.get({
+  ...
+})"
           }
         ]
       }
@@ -28237,7 +29077,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.command.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.command.list({
+  ...
+})"
           }
         ]
       }
@@ -28325,7 +29170,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.capability.list({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.capability.list({
+  ...
+})"
           }
         ]
       }
@@ -28405,7 +29255,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.app.log({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.app.log({
+  ...
+})"
           }
         ]
       }
@@ -28442,7 +29297,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.app.agents({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.app.agents({
+  ...
+})"
           }
         ]
       }
@@ -28620,7 +29480,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.app.context({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.app.context({
+  ...
+})"
           }
         ]
       }
@@ -28699,7 +29564,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.app.contextTemplateCreate({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.app.contextTemplateCreate({
+  ...
+})"
           }
         ]
       }
@@ -28754,7 +29624,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.app.contextMemoryWarmup({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.app.contextMemoryWarmup({
+  ...
+})"
           }
         ]
       }
@@ -28788,7 +29663,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.app.contextMemoryClear({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.app.contextMemoryClear({
+  ...
+})"
           }
         ]
       }
@@ -28890,7 +29770,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.app.skills({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.app.skills({
+  ...
+})"
           }
         ]
       },
@@ -28973,7 +29858,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.create({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.skill.create({
+  ...
+})"
           }
         ]
       }
@@ -29046,7 +29936,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.validate({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.skill.validate({
+  ...
+})"
           }
         ]
       }
@@ -29130,7 +30025,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.doctor({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.skill.doctor({
+  ...
+})"
           }
         ]
       }
@@ -29217,7 +30117,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.skill.testTrigger({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.skill.testTrigger({
+  ...
+})"
           }
         ]
       }
@@ -29254,7 +30159,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.lsp.status({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.lsp.status({
+  ...
+})"
           }
         ]
       }
@@ -29389,7 +30299,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.debugEngine.pendingPlans({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.debugEngine.pendingPlans({
+  ...
+})"
           }
         ]
       }
@@ -29426,7 +30341,12 @@
         "x-codeSamples": [
           {
             "lang": "js",
-            "source": "import { createOpencodeClient } from \"@ax-code/sdk\n\nconst client = createOpencodeClient()\nawait client.formatter.status({\n  ...\n})"
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk
+
+const client = createOpencodeClient()
+await client.formatter.status({
+  ...
+})"
           }
         ]
       }

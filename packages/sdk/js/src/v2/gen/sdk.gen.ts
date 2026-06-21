@@ -5129,7 +5129,7 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b"
+      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b-a4b" | "gemma-4-31b" | "qwen3.6-27b" | "qwen3.5-9b" | "glm-4.7"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
       start?: boolean
@@ -5178,7 +5178,7 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b"
+      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b-a4b" | "gemma-4-31b" | "qwen3.6-27b" | "qwen3.5-9b" | "glm-4.7"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
     },

@@ -158,7 +158,7 @@ export const ProviderRoutes = lazy(() =>
       "/ax-engine/prepare",
       describeRoute({
         summary: "Prepare ax-engine local provider",
-        description: "Mark an existing Qwen3-Coder-Next MLX path or explicitly download it through ax-engine.",
+        description: "Mark an existing MLX model path as prepared or explicitly download one through ax-engine.",
         operationId: "provider.axEngine.prepare",
         responses: {
           200: {
@@ -196,7 +196,7 @@ export const ProviderRoutes = lazy(() =>
       "/ax-engine/start",
       describeRoute({
         summary: "Start managed ax-engine server",
-        description: "Start ax-engine for an already prepared or explicitly provided Qwen3-Coder-Next MLX model.",
+        description: "Start ax-engine for an already prepared or explicitly provided MLX model.",
         operationId: "provider.axEngine.start",
         responses: {
           200: {

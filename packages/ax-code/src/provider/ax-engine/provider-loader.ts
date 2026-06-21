@@ -4,6 +4,7 @@ import { ProviderID, ModelID } from "../schema"
 import {
   AX_ENGINE_API_KEY,
   AX_ENGINE_DEFAULT_PORT,
+  AX_ENGINE_ERROR,
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_PROVIDER_ID,
@@ -11,10 +12,10 @@ import {
 import { requirePlatformEligibility } from "./platform"
 import { getDependencyStatus } from "./dependency"
 import {
-  downloadModel,
   getModelStatus,
   normalizeModelID,
   normalizeQuantization,
+  requiredDiskBytes,
   type AxEngineModelOptions,
 } from "./model-cache"
 import { ensureServer } from "./server"
@@ -66,26 +67,24 @@ async function ensureReady(provider: Provider.Info, options: AxEngineModelOption
   }
 
   const model = await getModelStatus({ ...provider.options, ...options, modelID, quantization })
-  let modelPath = model.path
-  let modelRevision = model.revision
-  if (!model.present || !modelPath) {
-    // Download on first use so connecting and picking a model "just works" like
-    // the other providers, instead of forcing the user to run a CLI prepare step.
-    const prepared = await downloadModel({
-      binaryPath: dependency.binaryPath,
-      modelID,
-      quantization,
-      signal,
-    })
-    modelPath = prepared.path
-    modelRevision = prepared.revision
+  if (!model.present || !model.path) {
+    const definition = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+    const requiredBytes = requiredDiskBytes(modelID, quantization)
+    const requiredGiB = Math.ceil(requiredBytes / 1024 ** 3)
+    throw new Error(
+      [
+        `${AX_ENGINE_ERROR.ModelNotPrepared}: ${definition.name} is not downloaded`,
+        `Required disk space: ~${requiredGiB} GiB for ${quantization}`,
+        `Download via: ax-code providers ax-engine prepare --model ${modelID} --quantization ${quantization} --download`,
+      ].join("\n"),
+    )
   }
   await ensureServer({
     binaryPath: dependency.binaryPath,
     modelID,
     apiModelID: AX_ENGINE_MODEL_DEFINITIONS[modelID].apiModelID,
-    modelPath,
-    modelRevision,
+    modelPath: model.path,
+    modelRevision: model.revision,
     preferredPort: AX_ENGINE_DEFAULT_PORT,
     baseURL,
     signal,
