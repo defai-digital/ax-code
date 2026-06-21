@@ -1,4 +1,4 @@
-import { afterEach, test, expect } from "vitest"
+import { afterEach, test, expect, vi } from "vitest"
 import os from "os"
 import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
@@ -6,10 +6,12 @@ import { PermissionID } from "../../src/permission/schema"
 import { Instance } from "../../src/project/instance"
 import { PermissionTable } from "../../src/session/session.sql"
 import { Database, eq } from "../../src/storage/db"
+import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Instance.disposeAll()
 })
 
@@ -298,6 +300,14 @@ test("loadPolicy - malformed policy returns empty ruleset and does not block too
   const ruleset = await Permission.loadPolicy(tmp.path)
 
   expect(ruleset).toEqual([])
+})
+
+test("loadPolicy - unreadable policy file propagates the filesystem error", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const error = Object.assign(new Error("policy is unreadable"), { code: "EACCES" })
+  vi.spyOn(Filesystem, "readJson").mockRejectedValueOnce(error)
+
+  await expect(Permission.loadPolicy(tmp.path)).rejects.toBe(error)
 })
 
 test("fromPolicy - filters rules by agent name", () => {

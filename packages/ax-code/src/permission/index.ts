@@ -11,6 +11,7 @@ import { PermissionTable } from "@/session/session.sql"
 import { Database, eq } from "@/storage/db"
 import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
+import { Filesystem } from "@/util/filesystem"
 import os from "os"
 import path from "path"
 import z from "zod"
@@ -554,16 +555,23 @@ export namespace Permission {
   export async function loadPolicy(directory: string, currentAgent?: string): Promise<Ruleset> {
     const filepath = path.join(directory, ".ax-code", "policy.json")
     try {
-      const file = Bun.file(filepath)
-      if (!(await file.exists())) return []
-      const raw = await file.json()
+      const raw = await Filesystem.readJson(filepath)
       const policy = PolicyFile.parse(raw)
       log.info("loaded policy", { name: policy.name, rules: policy.rules.length, path: filepath })
       return fromPolicy(policy, currentAgent)
     } catch (e) {
+      const code = errnoCode(e)
+      if (code === "ENOENT") return []
+      if (code !== undefined) throw e
       log.warn("policy file malformed — all rules ignored until fixed", { path: filepath, error: e })
       return []
     }
+  }
+
+  function errnoCode(error: unknown) {
+    if (typeof error !== "object" || error === null) return undefined
+    const code = (error as { code?: unknown }).code
+    return typeof code === "string" ? code : undefined
   }
 
   const EDIT_TOOLS = ["edit", "write", "apply_patch", "multiedit", "refactor_apply"]
