@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import path from "path"
+import fs from "fs/promises"
 import { FileLock } from "../../src/util/filelock"
 import { currentLockHost } from "../../src/util/process-lock"
 import { tmpdir } from "../fixture/fixture"
@@ -31,6 +32,28 @@ describe("util.filelock", () => {
     lock[Symbol.dispose]()
 
     expect(JSON.parse(await Bun.file(lockpath).text())).toEqual(otherOwner)
+  })
+
+  test("does not steal a lock when its body cannot be read", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockpath = filepath + ".lock"
+    const otherOwner = {
+      pid: process.pid + 1,
+      startedAt: Date.now(),
+      host: currentLockHost(),
+    }
+    await Bun.write(lockpath, JSON.stringify(otherOwner))
+
+    const readError = Object.assign(new Error("lock body is unreadable"), { code: "EACCES" })
+    const readSpy = vi.spyOn(fs, "readFile").mockRejectedValueOnce(readError)
+
+    try {
+      await expect(FileLock.acquire(filepath, { timeoutMs: 5 })).rejects.toThrow("lock body is unreadable")
+      expect(JSON.parse(await Bun.file(lockpath).text())).toEqual(otherOwner)
+    } finally {
+      readSpy.mockRestore()
+    }
   })
 
   test("unreferences polling timers while waiting for an active holder", async () => {

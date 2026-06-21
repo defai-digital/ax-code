@@ -38,9 +38,19 @@ export namespace FileLock {
   }
 
   async function readLockBody(target: string): Promise<ProcessLockBody | undefined> {
-    const text = await fs.readFile(target, "utf-8").catch(() => undefined)
+    const text = await fs.readFile(target, "utf-8").catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return undefined
+      throw err
+    })
     if (!text) return undefined
     return parseProcessLockBody(text)
+  }
+
+  async function removeLockFile(target: string): Promise<void> {
+    await fs.unlink(target).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return
+      throw err
+    })
   }
 
   function readLockBodySync(target: string): ProcessLockBody | undefined {
@@ -50,13 +60,13 @@ export namespace FileLock {
   async function maybeSteal(target: string, staleMs: number): Promise<boolean> {
     const body = await readLockBody(target)
     if (!body) {
-      await fs.unlink(target).catch(() => undefined)
+      await removeLockFile(target)
       return true
     }
     const age = Date.now() - body.startedAt
     if (age > staleMs) {
       log.warn("stealing stale file lock", { target, age })
-      await fs.unlink(target).catch(() => undefined)
+      await removeLockFile(target)
       return true
     }
     const sameHost = isSameProcessLockHost(body)
@@ -66,7 +76,7 @@ export namespace FileLock {
       } catch (err) {
         if ((err as NodeJS.ErrnoException)?.code === "ESRCH") {
           log.warn("stealing abandoned file lock", { target, pid: body.pid })
-          await fs.unlink(target).catch(() => undefined)
+          await removeLockFile(target)
           return true
         }
       }
