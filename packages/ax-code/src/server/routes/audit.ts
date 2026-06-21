@@ -56,6 +56,7 @@ export async function collectAuditExportRecords(
     limit: number
     risk?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
     type?: string
+    sessionIDs?: Set<string>
   },
 ): Promise<AuditRecord[]> {
   const records: AuditRecord[] = []
@@ -67,6 +68,7 @@ export async function collectAuditExportRecords(
   for (const line of lines) {
     const record = parseAuditJsonLine(line)
     if (!isAuditRecord(record)) continue
+    if (options.sessionIDs && !options.sessionIDs.has(record.session_id)) continue
     if (options.type && record.event_type !== options.type) continue
     if (RiskEngine && minLevel !== undefined) {
       let level = sessionRisks.get(record.session_id)
@@ -125,9 +127,12 @@ export const AuditRoutes = lazy(() =>
         // current project and only keep records for those sessions.
         const directory = Instance.directory
         const allowedSessions = new Set(Session.list({ directory }).map((s) => s.id))
-        const records = (
-          await collectAuditExportRecords(AuditExport.streamAll({ since }), { limit, risk, type })
-        ).filter((record) => allowedSessions.has(record.session_id as SessionID))
+        const records = await collectAuditExportRecords(AuditExport.streamAll({ since }), {
+          limit,
+          risk,
+          type,
+          sessionIDs: allowedSessions,
+        })
         return c.json({ data: records })
       },
     )
