@@ -239,7 +239,7 @@ export const ExperimentalRoutes = lazy(() =>
         const limit = query.limit ?? 100
         const sessions = [
           ...Session.listGlobal({
-            directory: query.directory === undefined ? undefined : Instance.directory,
+            directory: query.directory ? Instance.directory : undefined,
             roots: query.roots,
             start: query.start,
             cursor: query.cursor,

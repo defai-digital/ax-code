@@ -714,6 +714,11 @@ describe("server route validation", () => {
           expect(globalListInput?.directory).toBeUndefined()
           expect(globalListInput?.roots).toBe(true)
           expect(globalListInput?.archived).toBe(true)
+
+          const emptyDirectoryRes = await Server.Default().request("/experimental/session?directory=")
+
+          expect(emptyDirectoryRes.status).toBe(200)
+          expect(globalListInput?.directory).toBeUndefined()
         } finally {
           sessionListSpy.mockRestore()
           globalListSpy.mockRestore()
