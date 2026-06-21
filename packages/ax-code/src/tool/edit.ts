@@ -101,7 +101,10 @@ export const EditTool = Tool.define("edit", {
         return
       }
 
-      const stats = await fs.stat(filePath).catch(() => null)
+      const stats = await fs.stat(filePath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null
+        throw error
+      })
       if (!stats) throw new Error(`File ${filePath} not found`)
       if (stats.isDirectory()) throw new Error(`Path is a directory, not a file: ${filePath}`)
       await FileTime.assert(ctx.sessionID, filePath)

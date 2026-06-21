@@ -203,6 +203,38 @@ describe("tool.edit", () => {
       })
     })
 
+    test("surfaces stat access errors instead of reporting missing files", async () => {
+      if (process.platform === "win32") return
+
+      await using tmp = await tmpdir()
+      const privateDir = path.join(tmp.path, "private")
+      const filepath = path.join(privateDir, "secret.txt")
+      await fs.mkdir(privateDir)
+      await fs.writeFile(filepath, "old", "utf-8")
+      await fs.chmod(privateDir, 0)
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const edit = await EditTool.init()
+            await expect(
+              edit.execute(
+                {
+                  filePath: filepath,
+                  oldString: "old",
+                  newString: "new",
+                },
+                ctx,
+              ),
+            ).rejects.toMatchObject({ code: "EACCES" })
+          },
+        })
+      } finally {
+        await fs.chmod(privateDir, 0o700)
+      }
+    })
+
     test("throws error when oldString equals newString", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "file.txt")
