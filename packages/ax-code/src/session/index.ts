@@ -592,22 +592,31 @@ export namespace Session {
     search?: string
     limit?: number
   }) {
+    const parsed = z
+      .object({
+        directory: z.string().optional(),
+        roots: z.boolean().optional(),
+        start: z.number().int().min(0).optional(),
+        search: z.string().optional(),
+        limit: z.number().int().positive().optional(),
+      })
+      .parse(input ?? {})
     const project = Instance.project
     const conditions = [eq(SessionTable.project_id, project.id)]
-    if (input?.directory) {
-      conditions.push(eq(SessionTable.directory, input.directory))
+    if (parsed.directory) {
+      conditions.push(eq(SessionTable.directory, parsed.directory))
     }
-    if (input?.roots) {
+    if (parsed.roots) {
       conditions.push(isNull(SessionTable.parent_id))
     }
-    if (input?.start !== undefined) {
-      conditions.push(gte(SessionTable.time_updated, input.start))
+    if (parsed.start !== undefined) {
+      conditions.push(gte(SessionTable.time_updated, parsed.start))
     }
-    if (input?.search) {
-      conditions.push(like(SessionTable.title, `%${escapeLike(input.search)}%`))
+    if (parsed.search) {
+      conditions.push(like(SessionTable.title, `%${escapeLike(parsed.search)}%`))
     }
 
-    const limit = input?.limit ?? 100
+    const limit = parsed.limit ?? 100
 
     const rows = Database.use((db) =>
       db
@@ -639,28 +648,39 @@ export namespace Session {
     limit?: number
     archived?: boolean
   }) {
+    const parsed = z
+      .object({
+        directory: z.string().optional(),
+        roots: z.boolean().optional(),
+        start: z.number().int().min(0).optional(),
+        cursor: z.number().int().min(0).optional(),
+        search: z.string().optional(),
+        limit: z.number().int().positive().optional(),
+        archived: z.boolean().optional(),
+      })
+      .parse(input ?? {})
     const conditions: SQL[] = []
 
-    if (input?.directory) {
-      conditions.push(eq(SessionTable.directory, input.directory))
+    if (parsed.directory) {
+      conditions.push(eq(SessionTable.directory, parsed.directory))
     }
-    if (input?.roots) {
+    if (parsed.roots) {
       conditions.push(isNull(SessionTable.parent_id))
     }
-    if (input?.start !== undefined) {
-      conditions.push(gte(SessionTable.time_updated, input.start))
+    if (parsed.start !== undefined) {
+      conditions.push(gte(SessionTable.time_updated, parsed.start))
     }
-    if (input?.cursor !== undefined) {
-      conditions.push(lt(SessionTable.time_updated, input.cursor))
+    if (parsed.cursor !== undefined) {
+      conditions.push(lt(SessionTable.time_updated, parsed.cursor))
     }
-    if (input?.search) {
-      conditions.push(like(SessionTable.title, `%${escapeLike(input.search)}%`))
+    if (parsed.search) {
+      conditions.push(like(SessionTable.title, `%${escapeLike(parsed.search)}%`))
     }
-    if (!input?.archived) {
+    if (!parsed.archived) {
       conditions.push(isNull(SessionTable.time_archived))
     }
 
-    const limit = input?.limit ?? 100
+    const limit = parsed.limit ?? 100
 
     const rows = Database.use((db) => {
       const query =

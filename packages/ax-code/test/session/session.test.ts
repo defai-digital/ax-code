@@ -223,6 +223,26 @@ describe("session.messages", () => {
   })
 })
 
+describe("session lists", () => {
+  test("reject invalid pagination inputs", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        expect(() => [...Session.list({ start: -1 })]).toThrow()
+        expect(() => [...Session.list({ start: 1.5 })]).toThrow()
+        expect(() => [...Session.list({ limit: 0 })]).toThrow()
+        expect(() => [...Session.list({ limit: 1.5 })]).toThrow()
+
+        expect(() => [...Session.listGlobal({ start: -1 })]).toThrow()
+        expect(() => [...Session.listGlobal({ cursor: -1 })]).toThrow()
+        expect(() => [...Session.listGlobal({ cursor: 1.5 })]).toThrow()
+        expect(() => [...Session.listGlobal({ limit: 0 })]).toThrow()
+        expect(() => [...Session.listGlobal({ limit: 1.5 })]).toThrow()
+      },
+    })
+  })
+})
+
 describe("session.remove", () => {
   test("removes descendant shares", async () => {
     const originalFetch = globalThis.fetch
