@@ -1,6 +1,7 @@
 import { createHash } from "crypto"
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
 
 export namespace QualityPromotionSignedArchiveTrust {
@@ -83,11 +84,11 @@ export namespace QualityPromotionSignedArchiveTrust {
   export type TrustSummary = z.output<typeof TrustSummary>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function scopeKey(scope: Scope, projectID: string | null) {
@@ -240,9 +241,12 @@ export namespace QualityPromotionSignedArchiveTrust {
         const encodedProject = parts[parts.length - 2]
         const trustID = parts[parts.length - 1]
         if (!scope || !encodedProject || !trustID) continue
+        const parsedScope = Scope.parse(scope)
+        const projectID = parsedScope === "project" ? decode(encodedProject) : null
+        if (parsedScope === "project" && !projectID) continue
         const record = await get({
-          scope: Scope.parse(scope),
-          projectID: scope === "project" ? decode(encodedProject) : null,
+          scope: parsedScope,
+          projectID,
           trustID,
         })
         trusts.push(record.trust)

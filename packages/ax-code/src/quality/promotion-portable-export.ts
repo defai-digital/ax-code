@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -60,11 +61,11 @@ export namespace QualityPromotionPortableExport {
   export type ExportRecord = z.output<typeof ExportRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, exportID: string) {
@@ -310,7 +311,9 @@ export namespace QualityPromotionPortableExport {
         const encodedSource = parts[parts.length - 2]
         const exportID = parts[parts.length - 1]
         if (!encodedSource || !exportID) continue
-        const record = await get({ source: decode(encodedSource), exportID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, exportID })
         exports.push(record.export)
       }
     }

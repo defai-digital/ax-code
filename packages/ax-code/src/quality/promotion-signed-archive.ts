@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionPackagedArchive } from "./promotion-packaged-archive"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -85,11 +86,11 @@ export namespace QualityPromotionSignedArchive {
   }
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, signedArchiveID: string) {
@@ -339,7 +340,9 @@ export namespace QualityPromotionSignedArchive {
         const encodedSource = parts[parts.length - 2]
         const signedArchiveID = parts[parts.length - 1]
         if (!encodedSource || !signedArchiveID) continue
-        const record = await get({ source: decode(encodedSource), signedArchiveID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, signedArchiveID })
         archives.push(record.archive)
       }
     }

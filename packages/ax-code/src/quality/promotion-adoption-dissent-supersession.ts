@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
@@ -86,11 +87,11 @@ export namespace QualityPromotionAdoptionDissentSupersession {
   }
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, supersessionID: string) {
@@ -412,7 +413,9 @@ export namespace QualityPromotionAdoptionDissentSupersession {
         const encodedSource = parts[parts.length - 2]
         const supersessionID = parts[parts.length - 1]
         if (!encodedSource || !supersessionID) continue
-        const record = await get({ source: decode(encodedSource), supersessionID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, supersessionID })
         supersessions.push(record.supersession)
       }
     }

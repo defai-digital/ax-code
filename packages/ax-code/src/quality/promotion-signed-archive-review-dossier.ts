@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
 import { QualityPromotionSignedArchiveGovernancePacket } from "./promotion-signed-archive-governance-packet"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
@@ -48,11 +49,11 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
   export type DossierRecord = z.output<typeof DossierRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, dossierID: string) {
@@ -296,7 +297,9 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
         const encodedSource = parts[parts.length - 2]
         const dossierID = parts[parts.length - 1]
         if (!encodedSource || !dossierID) continue
-        const record = await get({ source: decode(encodedSource), dossierID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, dossierID })
         dossiers.push(record.dossier)
       }
     }

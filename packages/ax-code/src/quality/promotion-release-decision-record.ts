@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionBoardDecision } from "./promotion-board-decision"
 import { overallStatusFromGates } from "./promotion-summary"
 
@@ -45,11 +46,11 @@ export namespace QualityPromotionReleaseDecisionRecord {
   export type StoredRecord = z.output<typeof StoredRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, recordID: string) {
@@ -239,7 +240,9 @@ export namespace QualityPromotionReleaseDecisionRecord {
         const encodedSource = parts[parts.length - 2]
         const recordID = parts[parts.length - 1]
         if (!encodedSource || !recordID) continue
-        const stored = await get({ source: decode(encodedSource), recordID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const stored = await get({ source, recordID })
         records.push(stored.record)
       }
     }

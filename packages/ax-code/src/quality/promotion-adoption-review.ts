@@ -1,6 +1,7 @@
 import { createHash } from "crypto"
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -79,11 +80,11 @@ export namespace QualityPromotionAdoptionReview {
   }
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, reviewID: string) {
@@ -366,7 +367,9 @@ export namespace QualityPromotionAdoptionReview {
         const encodedSource = parts[parts.length - 2]
         const reviewID = parts[parts.length - 1]
         if (!encodedSource || !reviewID) continue
-        const record = await get({ source: decode(encodedSource), reviewID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, reviewID })
         reviews.push(record.review)
       }
     }

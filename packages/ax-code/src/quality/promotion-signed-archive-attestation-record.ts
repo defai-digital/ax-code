@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
 import { QualityPromotionSignedArchiveAttestationPolicy } from "./promotion-signed-archive-attestation-policy"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
@@ -43,11 +44,11 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   export type StoredRecord = z.output<typeof StoredRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, recordID: string) {
@@ -246,7 +247,9 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
         const encodedSource = parts[parts.length - 2]
         const recordID = parts[parts.length - 1]
         if (!encodedSource || !recordID) continue
-        const record = await get({ source: decode(encodedSource), recordID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, recordID })
         records.push(record.record)
       }
     }

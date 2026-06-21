@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -177,11 +178,11 @@ export namespace QualityPromotionAuditManifest {
   export type ManifestRecord = z.output<typeof ManifestRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, manifestID: string) {
@@ -347,7 +348,9 @@ export namespace QualityPromotionAuditManifest {
         const encodedSource = parts[parts.length - 2]
         const manifestID = parts[parts.length - 1]
         if (!encodedSource || !manifestID) continue
-        const record = await get({ source: decode(encodedSource), manifestID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, manifestID })
         manifests.push(record.manifest)
       }
     }

@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
 
 export namespace QualityReentryContext {
@@ -79,11 +80,11 @@ export namespace QualityReentryContext {
   }
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, contextID: string) {
@@ -165,7 +166,9 @@ export namespace QualityReentryContext {
         const encodedSource = parts[parts.length - 2]
         const contextID = parts[parts.length - 1]
         if (!encodedSource || !contextID) continue
-        const record = await get({ source: decode(encodedSource), contextID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, contextID })
         contexts.push(record.context)
       }
     }

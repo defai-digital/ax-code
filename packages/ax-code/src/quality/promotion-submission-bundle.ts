@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -45,11 +46,11 @@ export namespace QualityPromotionSubmissionBundle {
   export type BundleRecord = z.output<typeof BundleRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, submissionID: string) {
@@ -212,7 +213,9 @@ export namespace QualityPromotionSubmissionBundle {
         const encodedSource = parts[parts.length - 2]
         const submissionID = parts[parts.length - 1]
         if (!encodedSource || !submissionID) continue
-        const record = await get({ source: decode(encodedSource), submissionID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, submissionID })
         submissions.push(record.submission)
       }
     }

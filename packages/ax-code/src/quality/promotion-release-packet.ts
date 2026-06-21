@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 
@@ -48,11 +49,11 @@ export namespace QualityPromotionReleasePacket {
   export type PacketRecord = z.output<typeof PacketRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, packetID: string) {
@@ -243,7 +244,9 @@ export namespace QualityPromotionReleasePacket {
         const encodedSource = parts[parts.length - 2]
         const packetID = parts[parts.length - 1]
         if (!encodedSource || !packetID) continue
-        const record = await get({ source: decode(encodedSource), packetID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, packetID })
         packets.push(record.packet)
       }
     }

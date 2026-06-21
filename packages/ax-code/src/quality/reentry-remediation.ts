@@ -1,5 +1,6 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityReentryContext } from "./reentry-context"
 
 export namespace QualityReentryRemediation {
@@ -36,11 +37,11 @@ export namespace QualityReentryRemediation {
   export type RemediationRecord = z.output<typeof RemediationRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, contextID: string, remediationID: string) {
@@ -128,7 +129,9 @@ export namespace QualityReentryRemediation {
       const contextID = parts[parts.length - 2]
       const remediationID = parts[parts.length - 1]
       if (!encodedSource || !contextID || !remediationID) continue
-      const record = await get({ source: decode(encodedSource), contextID, remediationID })
+      const source = decode(encodedSource)
+      if (!source) continue
+      const record = await get({ source, contextID, remediationID })
       remediations.push(record.remediation)
     }
 

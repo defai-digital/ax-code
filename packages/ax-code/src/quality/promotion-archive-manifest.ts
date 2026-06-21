@@ -1,6 +1,7 @@
 import { createHash } from "crypto"
 import z from "zod"
 import { Storage } from "../storage/storage"
+import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionExportBundle } from "./promotion-export-bundle"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -68,11 +69,11 @@ export namespace QualityPromotionArchiveManifest {
   export type ArchiveRecord = z.output<typeof ArchiveRecord>
 
   function encode(input: string) {
-    return encodeURIComponent(input)
+    return QualityStorageKey.encode(input)
   }
 
   function decode(input: string) {
-    return decodeURIComponent(input)
+    return QualityStorageKey.decode(input)
   }
 
   function key(source: string, archiveID: string) {
@@ -328,7 +329,9 @@ export namespace QualityPromotionArchiveManifest {
         const encodedSource = parts[parts.length - 2]
         const archiveID = parts[parts.length - 1]
         if (!encodedSource || !archiveID) continue
-        const record = await get({ source: decode(encodedSource), archiveID })
+        const source = decode(encodedSource)
+        if (!source) continue
+        const record = await get({ source, archiveID })
         archives.push(record.archive)
       }
     }
