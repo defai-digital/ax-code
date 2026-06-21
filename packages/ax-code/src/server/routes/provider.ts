@@ -21,10 +21,11 @@ const log = Log.create({ service: "server" })
 
 // Natively supported providers — shown by default when enabled_providers is not configured.
 // Users can expand this list via enabled_providers in ax-code.json.
+// Note: ollama and ax-studio are intentionally excluded — they are opt-in only
+// because local inference models have inconsistent tool-calling and structured
+// output support. Users must add them to enabled_providers in ax-code.json.
 const NATIVE_PROVIDERS = new Set([
   "ax-engine",
-  "ax-studio",
-  "ollama",
   "google",
   "alibaba-coding-plan",
   "alibaba-coding-plan-cn",
@@ -38,6 +39,7 @@ const NATIVE_PROVIDERS = new Set([
   "codex-cli",
   "grok-build-cli",
   "qoder-cli",
+  "antigravity-cli",
 ])
 
 export function shouldShowProviderInList(input: {
@@ -48,8 +50,6 @@ export function shouldShowProviderInList(input: {
 }) {
   if (input.disabled.has(input.key)) return false
   if (input.key === "ax-engine" && !input.axEngineSupported) return false
-  const alwaysShow = input.key === "ollama" || input.key === "ax-studio"
-  if (alwaysShow) return true
   return input.enabled ? input.enabled.has(input.key) : NATIVE_PROVIDERS.has(input.key)
 }
 

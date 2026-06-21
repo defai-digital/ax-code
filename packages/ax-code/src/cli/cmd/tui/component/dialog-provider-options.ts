@@ -50,10 +50,11 @@ export const CLI_BINARIES: Record<string, string> = {
   "codex-cli": "codex",
   "grok-build-cli": "grok",
   "qoder-cli": "qodercli",
+  "antigravity-cli": "agy",
 }
 
 export const OFFLINE_PROVIDERS = new Set(["ax-engine", "ax-studio", "ollama"])
-export const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "qoder-cli"])
+export const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "qoder-cli", "antigravity-cli"])
 
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
 

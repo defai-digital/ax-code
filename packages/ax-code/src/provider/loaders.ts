@@ -245,7 +245,10 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
               temperature: true,
               reasoning: false,
               attachment: false,
-              toolcall: true,
+              // Local inference models have inconsistent tool-calling support.
+              // Default to false so they don't silently get selected for agent
+              // workflows that depend on reliable tool execution.
+              toolcall: false,
               input: { text: true, audio: false, image: false, video: false, pdf: false },
               output: { text: true, audio: false, image: false, video: false, pdf: false },
               interleaved: false,
@@ -283,12 +286,17 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
         for (const item of discovered.data ?? []) {
           if (typeof item.id !== "string" || !item.id.trim()) continue
           const id = ModelID.make(item.id)
+          const caps = openAICompatibleCapabilities(item)
+          // Local inference endpoints (ax-studio) serve models with inconsistent
+          // tool-calling support. Override to false so discovered models don't
+          // silently get selected for agent workflows that need tools.
+          caps.toolcall = false
           models[id] = {
             id,
             providerID: ProviderID.make(providerID),
             name: item.id,
             api: { id: item.id, url: endpoint.inferenceBaseURL, npm: "@ai-sdk/openai-compatible" },
-            capabilities: openAICompatibleCapabilities(item),
+            capabilities: caps,
             limit: openAICompatibleLimit(item),
             status: "active",
             options: {},
@@ -309,6 +317,7 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "codex-cli": "Codex CLI default",
   "grok-build-cli": "Grok Build CLI default",
   "qoder-cli": "Qoder CLI default",
+  "antigravity-cli": "Antigravity CLI default",
 }
 
 function cliModels(providerID: string, provider: Provider.Info, resolved?: string): Record<string, Provider.Model> {
@@ -392,6 +401,7 @@ const geminiCli = getCliProviderDefinition("gemini-cli")!
 const codexCli = getCliProviderDefinition("codex-cli")!
 const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
 const qoderCli = getCliProviderDefinition("qoder-cli")!
+const antigravityCli = getCliProviderDefinition("antigravity-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   xai: async () => {
@@ -445,5 +455,13 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     parser: qoderCli.parser,
     promptMode: qoderCli.promptMode,
     promptFlag: qoderCli.promptFlag,
+  }),
+  "antigravity-cli": cliLoader({
+    providerID: "antigravity-cli",
+    binary: antigravityCli.binary,
+    args: antigravityCli.args,
+    parser: antigravityCli.parser,
+    promptMode: antigravityCli.promptMode,
+    promptFlag: antigravityCli.promptFlag,
   }),
 }

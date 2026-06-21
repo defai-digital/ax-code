@@ -249,6 +249,7 @@ export const DEFAULT_LOGIN_PROVIDER_IDS = new Set([
   "codex-cli",
   "grok-build-cli",
   "qoder-cli",
+  "antigravity-cli",
 ])
 
 export const ProvidersCommand = cmd({

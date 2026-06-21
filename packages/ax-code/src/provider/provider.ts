@@ -522,6 +522,11 @@ export namespace Provider {
       }
     }
 
+    // Providers that require explicit opt-in via enabled_providers or config.provider.
+    // Local inference endpoints (ollama, ax-studio) are excluded from auto-discovery
+    // because their models have inconsistent tool-calling and structured output support.
+    const OPT_IN_PROVIDERS = new Set(["ollama", "ax-studio"])
+
     await Promise.all(
       Object.entries(CUSTOM_LOADERS).map(async ([id, fn]) => {
         try {
@@ -538,7 +543,11 @@ export namespace Provider {
           }
           if (!database[providerID]) database[providerID] = data
           const result = await withTimeout(fn(data), 15_000, `custom loader '${id}' timed out`)
-          if (result && (result.autoload || providers[providerID] || configured)) {
+          // Opt-in providers skip autoload — they only activate when explicitly
+          // configured in ax-code.json (enabled_providers or provider.<id>).
+          const explicitlyEnabled = enabled?.has(providerID) ?? false
+          const optInGated = OPT_IN_PROVIDERS.has(providerID) && !configured && !providers[providerID] && !explicitlyEnabled
+          if (result && !optInGated && (result.autoload || providers[providerID] || configured)) {
             if (result.getModel) modelLoaders[providerID] = result.getModel
             if (result.vars) varsLoaders[providerID] = result.vars
             if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels

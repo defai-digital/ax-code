@@ -195,7 +195,10 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({ enabled_providers: ["ollama"] }),
+        )
       },
     })
 
@@ -244,7 +247,10 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({ enabled_providers: ["ax-studio"] }),
+        )
       },
     })
 
@@ -348,7 +354,10 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({ enabled_providers: ["ax-studio"] }),
+        )
       },
     })
 
@@ -397,7 +406,10 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({ enabled_providers: ["ax-studio"] }),
+        )
       },
     })
 
@@ -445,7 +457,10 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({ enabled_providers: ["ax-studio"] }),
+        )
       },
     })
 
@@ -546,7 +561,10 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({ enabled_providers: ["ollama"] }),
+        )
       },
     })
 
@@ -561,7 +579,7 @@ describe("offline provider loaders", () => {
     })
   })
 
-  test("ollama provider autoloads when server reachable", async () => {
+  test("ollama provider autoloads when server reachable and explicitly enabled", async () => {
     // Test ollama discovery — this only passes when ollama is running locally
     const reachable = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(1000) })
       .then((r) => r.ok)
@@ -574,6 +592,7 @@ describe("offline provider loaders", () => {
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: ["ollama"],
           }),
         )
       },

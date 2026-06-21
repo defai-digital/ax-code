@@ -1,4 +1,5 @@
 import {
+  antigravityCliParser,
   claudeCodeParser,
   codexCliParser,
   geminiCliParser,
@@ -46,6 +47,13 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     binary: "qodercli",
     args: ["--output-format", "stream-json"],
     parser: qoderCliParser,
+    promptMode: "arg",
+    promptFlag: "-p",
+  },
+  "antigravity-cli": {
+    binary: "agy",
+    args: ["--output-format", "stream-json"],
+    parser: antigravityCliParser,
     promptMode: "arg",
     promptFlag: "-p",
   },

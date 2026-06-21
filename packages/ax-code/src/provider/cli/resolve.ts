@@ -14,6 +14,7 @@ const DEFAULTS: Record<string, string> = {
   "codex-cli": "codex-cli",
   "grok-build-cli": "grok-build-cli",
   "qoder-cli": "qoder-cli",
+  "antigravity-cli": "antigravity-cli",
 }
 
 type JsonLike = CliJsonObject
@@ -117,12 +118,23 @@ async function resolveQoderModel(): Promise<CliModelInfo> {
   })
 }
 
+async function resolveAntigravityModel(): Promise<CliModelInfo> {
+  return resolveModelFromJsonSettings({
+    envVar: "ANTIGRAVITY_MODEL",
+    settingsPath: ".antigravity/settings.json",
+    sourceLabel: "~/.antigravity/settings.json",
+    defaultModel: DEFAULTS["antigravity-cli"]!,
+    read: resolveModelFromObject,
+  })
+}
+
 const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
   "gemini-cli": resolveGeminiModel,
   "codex-cli": resolveCodexModel,
   "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),
   "qoder-cli": resolveQoderModel,
+  "antigravity-cli": resolveAntigravityModel,
 }
 
 export async function resolveCliModel(providerID: string): Promise<CliModelInfo> {

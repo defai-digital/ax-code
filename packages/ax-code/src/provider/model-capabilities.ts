@@ -290,8 +290,11 @@ const MODEL_REGISTRY: ModelRegistration[] = [
       thinking: "blocked",
       preserveThinking: "blocked",
       promptCache: "blocked",
-      toolCalling: "supported",
-      structuredOutput: "supported",
+      // Local inference models have inconsistent tool-calling and structured
+      // output support. Mark as experimental so agent workflows don't silently
+      // depend on capabilities that may fail at runtime.
+      toolCalling: "experimental",
+      structuredOutput: "experimental",
       webOrBuiltInTools: "blocked",
       rateLimitTier: "unlimited",
     },
