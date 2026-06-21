@@ -12,8 +12,8 @@ export const ArtifactRefKindEnum = z.enum(ArtifactRefKind)
 export const FindingAnchor = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("line"),
-    line: z.coerce.number().int().min(1),
-    endLine: z.coerce.number().int().min(1).optional(),
+    line: JsonNumber(z.number().int().min(1)),
+    endLine: JsonNumber(z.number().int().min(1)).optional(),
   }),
   z.object({
     kind: z.literal("symbol"),

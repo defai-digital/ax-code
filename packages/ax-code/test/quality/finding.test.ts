@@ -45,6 +45,31 @@ describe("FindingSchema", () => {
     expect(parsed.evidenceRefs?.[0].kind).toBe("verification")
   })
 
+  test("accepts decimal line anchor strings", () => {
+    const parsed = FindingSchema.parse({
+      ...validFinding,
+      anchor: { kind: "line", line: "42", endLine: "45" },
+    })
+
+    expect(parsed.anchor).toEqual({ kind: "line", line: 42, endLine: 45 })
+  })
+
+  test("rejects non-decimal line anchor strings", () => {
+    expect(() =>
+      FindingSchema.parse({
+        ...validFinding,
+        anchor: { kind: "line", line: "0x2a" },
+      }),
+    ).toThrow()
+
+    expect(() =>
+      FindingSchema.parse({
+        ...validFinding,
+        anchor: { kind: "line", line: "42", endLine: "4.5e1" },
+      }),
+    ).toThrow()
+  })
+
   test("rejects schemaVersion other than 1", () => {
     expect(() => FindingSchema.parse({ ...validFinding, schemaVersion: 2 })).toThrow()
   })
