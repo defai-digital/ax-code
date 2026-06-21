@@ -572,7 +572,7 @@ export namespace Session {
   export const messages = fn(
     z.object({
       sessionID: SessionID.zod,
-      limit: z.number().optional(),
+      limit: z.number().int().positive().optional(),
     }),
     async (input) => {
       const result = [] as MessageV2.WithParts[]

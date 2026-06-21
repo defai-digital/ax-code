@@ -205,6 +205,24 @@ describe("session.setArchived", () => {
   })
 })
 
+describe("session.messages", () => {
+  test("rejects invalid message limits", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({})
+
+        try {
+          expect(() => Session.messages({ sessionID: session.id, limit: -1 })).toThrow()
+          expect(() => Session.messages({ sessionID: session.id, limit: 1.5 })).toThrow()
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+})
+
 describe("session.remove", () => {
   test("removes descendant shares", async () => {
     const originalFetch = globalThis.fetch
