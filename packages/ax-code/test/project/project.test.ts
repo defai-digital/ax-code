@@ -92,6 +92,16 @@ describe("Project.fromDirectory", () => {
     expect(b.id).toBe(a.id)
   })
 
+  test("ignores a blank cached project ID and derives from the root commit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, ".git", "ax-code"), "\n")
+
+    const { project } = await Project.fromDirectory(tmp.path)
+
+    expect(project.id).not.toBe(ProjectID.global)
+    expect(project.id).not.toBe("")
+  })
+
   test("propagates error when startup persistence is read-only", async () => {
     await using tmp = await tmpdir({ git: true })
     const originalUse = Database.use

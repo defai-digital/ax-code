@@ -167,7 +167,10 @@ export namespace Project {
 
   async function readCachedProjectId(dir: string) {
     return Filesystem.readText(path.join(dir, "ax-code"))
-      .then((text) => ProjectID.make(text.trim()))
+      .then((text) => {
+        const id = text.trim()
+        return id ? ProjectID.make(id) : undefined
+      })
       .catch(() => undefined)
   }
 
