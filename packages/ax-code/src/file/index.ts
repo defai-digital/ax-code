@@ -471,7 +471,7 @@ export namespace File {
       const entries = await fs.promises
         .readdir(absolute, { withFileTypes: true })
         .catch((error: NodeJS.ErrnoException) => {
-          if (error.code === "ENOENT" || error.code === "ENOTDIR" || error.code === "EACCES") return [] as fs.Dirent[]
+          if (error.code === "ENOENT" || error.code === "ENOTDIR") return [] as fs.Dirent[]
           throw error
         })
       for (const entry of entries) {
@@ -494,7 +494,10 @@ export namespace File {
     const current = await state()
     if (!current.scan) {
       current.scan = scan()
-        .catch(() => undefined)
+        .catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT" || error.code === "ENOTDIR") return undefined
+          throw error
+        })
         .finally(() => {
           current.scan = undefined
         })

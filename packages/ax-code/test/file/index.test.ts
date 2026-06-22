@@ -959,6 +959,26 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("surfaces unreadable directories during search indexing", async () => {
+      if (process.platform === "win32") return
+
+      await using tmp = await setupSearchableRepo()
+      const locked = path.join(tmp.path, "locked")
+      await fs.mkdir(locked)
+      await fs.chmod(locked, 0)
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await expect(File.init()).rejects.toMatchObject({ code: "EACCES" })
+          },
+        })
+      } finally {
+        await fs.chmod(locked, 0o700).catch(() => undefined)
+      }
+    })
+
     test("respects limit", async () => {
       await using tmp = await setupSearchableRepo()
 
