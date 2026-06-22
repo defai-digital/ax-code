@@ -28,6 +28,12 @@ export function parseNativeSearchMatches(json: string): NativeSearchMatch[] {
   return parseNativeJsonArray(json, NativeSearchMatch, "Invalid native search output")
 }
 
+export function parseRipgrepLineNumber(value: string): number | undefined {
+  if (!/^\d+$/.test(value)) return undefined
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : undefined
+}
+
 const RESULT_LIMIT = 100
 const NATIVE_SCAN_LIMIT = RESULT_LIMIT + 1
 
@@ -215,8 +221,8 @@ export const GrepTool = Tool.define("grep", {
       const [filePath, lineNumStr, ...lineTextParts] = line.split(FIELD_SEP)
       if (!filePath || !lineNumStr || lineTextParts.length === 0) continue
 
-      const lineNum = parseInt(lineNumStr, 10)
-      if (isNaN(lineNum)) continue
+      const lineNum = parseRipgrepLineNumber(lineNumStr)
+      if (lineNum === undefined) continue
       // Rejoin on the field separator so matched lines that happened
       // to contain 0x1f reconstruct correctly (edge case for binary
       // files or terminal escape sequences).

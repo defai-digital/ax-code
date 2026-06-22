@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
-import { GrepTool, parseNativeSearchMatches } from "../../src/tool/grep"
+import { GrepTool, parseNativeSearchMatches, parseRipgrepLineNumber } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
@@ -40,6 +40,14 @@ describe("tool.grep", () => {
     expect(() =>
       parseNativeSearchMatches(JSON.stringify([{ path: "/repo/a.ts", line: "2", column: 4, matchText: "needle" }])),
     ).toThrow(SyntaxError)
+  })
+
+  test("parseRipgrepLineNumber accepts only complete safe integers", () => {
+    expect(parseRipgrepLineNumber("12")).toBe(12)
+    expect(parseRipgrepLineNumber("12abc")).toBeUndefined()
+    expect(parseRipgrepLineNumber("-1")).toBeUndefined()
+    expect(parseRipgrepLineNumber("1.5")).toBeUndefined()
+    expect(parseRipgrepLineNumber("9007199254740992")).toBeUndefined()
   })
 
   test("basic search", async () => {
