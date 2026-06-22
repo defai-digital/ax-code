@@ -125,7 +125,14 @@ async function list(input: Partial<WorkflowRunState.ListInput> = {}): Promise<Wo
       .orderBy(desc(WorkflowRunTable.time_created), desc(WorkflowRunTable.id))
       .$dynamic()
     if (parsed.limit) query = query.limit(parsed.limit)
-    return query.all().map(fromRunRow)
+    return query.all().flatMap((row) => {
+      try {
+        return [fromRunRow(row)]
+      } catch {
+        log.warn("skipping corrupt workflow run row", { id: row.id })
+        return []
+      }
+    })
   })
 }
 

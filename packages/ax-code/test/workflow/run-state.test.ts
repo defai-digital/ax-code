@@ -3,8 +3,15 @@ import { Bus } from "../../src/bus"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Database, eq } from "../../src/storage/db"
-import { WorkflowChildID, WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../src/workflow"
-import { WorkflowChildTable } from "../../src/workflow/workflow.sql"
+import {
+  EmptyWorkflowBudgetUsage,
+  WorkflowChildID,
+  WorkflowFixtureSpecs,
+  WorkflowRun,
+  WorkflowRunID,
+  parseWorkflowSpecV1,
+} from "../../src/workflow"
+import { WorkflowChildTable, WorkflowRunTable } from "../../src/workflow/workflow.sql"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -196,6 +203,41 @@ describe("WorkflowRun state", () => {
           for (const unsubscribe of unsubscribers) unsubscribe()
           await Session.remove(session.id)
         }
+      },
+    })
+  })
+
+  test("list skips corrupt persisted workflow run rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spec = parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun)
+        const valid = await WorkflowRun.create({
+          sourceTemplateID: "builtin:noop-dry-run",
+          spec,
+        })
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(WorkflowRunTable)
+            .values({
+              id: WorkflowRunID.ascending("wfr_corrupt_status"),
+              project_id: Instance.project.id,
+              directory: Instance.directory,
+              status: "not-a-status",
+              spec_snapshot: spec,
+              input_values: {},
+              budget: spec.budget,
+              budget_usage: EmptyWorkflowBudgetUsage,
+              verification_envelope_ids: [],
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+        })
+
+        expect((await WorkflowRun.list()).map((run) => run.id)).toEqual([valid.id])
       },
     })
   })
