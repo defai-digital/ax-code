@@ -96,7 +96,7 @@ const useSetsidProcessGroup = process.platform === "linux" && isBunRuntime
 
 async function estimateFileLineDelta(filePath: string) {
   const stat = await fs.stat(filePath).catch((error: NodeJS.ErrnoException) => {
-    if (error?.code === "ENOENT") return undefined
+    if (Filesystem.isMissingPathError(error)) return undefined
     throw error
   })
   if (!stat?.isFile()) return 1

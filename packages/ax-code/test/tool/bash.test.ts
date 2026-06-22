@@ -504,6 +504,44 @@ describe("tool.bash truncation", () => {
     }
   })
 
+  test("redirect blast radius treats ENOTDIR output stats as missing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const dir = path.join(tmp.path, "target")
+    const output = path.join(dir, "out.txt")
+    await fs.mkdir(dir, { recursive: true })
+
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_redirect_enotdir")
+      BlastRadius.reset(sessionID)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            const script = [
+              "const fs = require('fs')",
+              `fs.rmSync(${JSON.stringify(output)})`,
+              `fs.rmdirSync(${JSON.stringify(dir)})`,
+              `fs.writeFileSync(${JSON.stringify(dir)}, 'not a directory')`,
+            ].join(";")
+
+            const result = await bash.execute(
+              {
+                command: `${shellQuote(process.execPath)} -e ${shellQuote(script)} > ${shellQuote(output)}`,
+                description: "Replace redirect parent with file",
+              },
+              { ...ctx, sessionID },
+            )
+
+            expect(result.metadata.exit).toBe(0)
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
   test("input redirect is not treated as an autonomous write", async () => {
     await using tmp = await tmpdir({
       git: true,
