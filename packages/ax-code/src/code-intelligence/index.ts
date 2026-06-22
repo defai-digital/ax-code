@@ -102,6 +102,17 @@ export namespace CodeIntelligence {
     }
   }
 
+  function normalizeResultLimit(limit: number | undefined): number | undefined {
+    if (limit === undefined) return undefined
+    if (!Number.isFinite(limit)) return 0
+    return Math.max(0, Math.floor(limit))
+  }
+
+  function applyResultLimit<T>(rows: T[], limit: number | undefined): T[] {
+    const normalized = normalizeResultLimit(limit)
+    return normalized === undefined ? rows : rows.slice(0, normalized)
+  }
+
   function nodeRowToSymbol(
     row: ReturnType<typeof CodeGraphQuery.getNode> & {},
     projectID: ProjectID,
@@ -132,7 +143,10 @@ export namespace CodeIntelligence {
   ): Symbol[] {
     const queryId = nextQueryId()
     const scope = opts?.scope ?? "none"
-    const rows = CodeGraphQuery.findNodesByName(projectID, name, opts)
+    const limit = normalizeResultLimit(opts?.limit)
+    const queryLimit = scope === "none" ? limit : undefined
+    if (limit === 0) return []
+    const rows = CodeGraphQuery.findNodesByName(projectID, name, { ...opts, limit: queryLimit })
     const filtered = rows.filter((row) => inScope(row.file, scope))
     log.info("findSymbol", {
       projectID,
@@ -142,7 +156,7 @@ export namespace CodeIntelligence {
       scope,
       queryId,
     })
-    return filtered.map((row) => nodeRowToSymbol(row, projectID, queryId))
+    return applyResultLimit(filtered, limit).map((row) => nodeRowToSymbol(row, projectID, queryId))
   }
 
   export function findSymbolByPrefix(
@@ -152,7 +166,10 @@ export namespace CodeIntelligence {
   ): Symbol[] {
     const queryId = nextQueryId()
     const scope = opts?.scope ?? "none"
-    const rows = CodeGraphQuery.findNodesByNamePrefix(projectID, prefix, opts)
+    const limit = normalizeResultLimit(opts?.limit)
+    const queryLimit = scope === "none" ? limit : undefined
+    if (limit === 0) return []
+    const rows = CodeGraphQuery.findNodesByNamePrefix(projectID, prefix, { ...opts, limit: queryLimit })
     const filtered = rows.filter((row) => inScope(row.file, scope))
     log.info("findSymbolByPrefix", {
       projectID,
@@ -162,7 +179,7 @@ export namespace CodeIntelligence {
       scope,
       queryId,
     })
-    return filtered.map((row) => nodeRowToSymbol(row, projectID, queryId))
+    return applyResultLimit(filtered, limit).map((row) => nodeRowToSymbol(row, projectID, queryId))
   }
 
   export function getSymbol(projectID: ProjectID, id: CodeNodeID, opts?: { scope?: Scope }): Symbol | null {

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
@@ -120,6 +121,25 @@ describe("CodeIntelligence.findSymbol", () => {
       },
     })
   })
+
+  test("applies worktree scope before result limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        seedSymbol(projectID, { name: "resolveUser", file: "/0-outside.ts" })
+        seedSymbol(projectID, { name: "resolveUser", file: path.join(tmp.path, "src/user.ts") })
+
+        const results = CodeIntelligence.findSymbol(projectID, "resolveUser", { scope: "worktree", limit: 1 })
+        expect(results.map((symbol) => symbol.file)).toEqual([path.join(tmp.path, "src/user.ts")])
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
 })
 
 describe("CodeIntelligence.findSymbolByPrefix", () => {
@@ -138,6 +158,25 @@ describe("CodeIntelligence.findSymbolByPrefix", () => {
         const handlers = CodeIntelligence.findSymbolByPrefix(projectID, "handle")
         expect(handlers.length).toBe(2)
         expect(handlers.every((s) => s.name.startsWith("handle"))).toBe(true)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("applies worktree scope before prefix result limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        seedSymbol(projectID, { name: "resolveAccount", file: "/0-outside.ts" })
+        seedSymbol(projectID, { name: "resolveUser", file: path.join(tmp.path, "src/user.ts") })
+
+        const results = CodeIntelligence.findSymbolByPrefix(projectID, "resolve", { scope: "worktree", limit: 1 })
+        expect(results.map((symbol) => symbol.name)).toEqual(["resolveUser"])
 
         CodeIntelligence.__clearProject(projectID)
       },
