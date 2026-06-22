@@ -141,4 +141,34 @@ describe("ipc server transport", () => {
       await transport.close?.()
     }
   })
+
+  test("forwards trailing SSE events at EOF", async () => {
+    const event = { type: "server.connected", properties: { eof: true } }
+    const encoder = new TextEncoder()
+    const app = new Hono()
+    app.get("/global/event", () => {
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}`))
+            controller.close()
+          },
+        }),
+        { headers: { "content-type": "text/event-stream" } },
+      )
+    })
+    server = await listenIpc({ socketPath, fetch: app.fetch })
+
+    const transport = createIpcTransport({ socketPath })
+    try {
+      const subscription = transport.subscribe()[Symbol.asyncIterator]()
+      const next = await Promise.race([
+        subscription.next(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out waiting for IPC event")), 1_000)),
+      ])
+      expect(next).toEqual({ value: event, done: false })
+    } finally {
+      await transport.close?.()
+    }
+  })
 })

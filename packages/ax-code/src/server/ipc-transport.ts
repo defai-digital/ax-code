@@ -208,28 +208,41 @@ async function* parseSseStream(response: Response): AsyncGenerator<unknown> {
       const frames = normalised.split("\n\n")
       buffer = frames.pop() ?? ""
       for (const frame of frames) {
-        if (!frame.trim()) continue
-        // Collect data lines; skip comment (:) and field-only (retry:, id:, event:) lines.
-        const dataLines: string[] = []
-        for (const line of frame.split("\n")) {
-          if (line.startsWith("data:")) {
-            // Value starts after "data:" with an optional single space.
-            dataLines.push(line.length > 5 && line[5] === " " ? line.slice(6) : line.slice(5))
-          }
-        }
-        if (dataLines.length === 0) continue
-        const data = dataLines.join("\n")
-        try {
-          yield JSON.parse(data)
-        } catch {
-          // Ignore malformed SSE frames.
-        }
+        const event = parseSseFrame(frame)
+        if (event !== undefined) yield event
       }
+    }
+    buffer += decoder.decode()
+    if (buffer.trim()) {
+      const event = parseSseFrame(buffer)
+      if (event !== undefined) yield event
     }
   } finally {
     // Cancel the reader so the upstream SSE connection is torn down,
     // not just detached — otherwise the server keeps buffering events.
-    try { await reader.cancel() } catch {}
+    try {
+      await reader.cancel()
+    } catch {}
     reader.releaseLock()
+  }
+}
+
+function parseSseFrame(frame: string): unknown | undefined {
+  if (!frame.trim()) return undefined
+  // Collect data lines; skip comment (:) and field-only (retry:, id:, event:) lines.
+  const dataLines: string[] = []
+  for (const line of frame.split("\n")) {
+    if (line.startsWith("data:")) {
+      // Value starts after "data:" with an optional single space.
+      dataLines.push(line.length > 5 && line[5] === " " ? line.slice(6) : line.slice(5))
+    }
+  }
+  if (dataLines.length === 0) return undefined
+  const data = dataLines.join("\n")
+  try {
+    return JSON.parse(data)
+  } catch {
+    // Ignore malformed SSE frames.
+    return undefined
   }
 }
