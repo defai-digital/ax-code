@@ -8,7 +8,9 @@ export namespace ConfigMarkdown {
   export const SHELL_REGEX = /!`([^`]+)`/g
 
   export function files(template: string) {
-    return Array.from(template.matchAll(FILE_REGEX))
+    return Array.from(template.matchAll(FILE_REGEX)).filter(
+      (match) => !isInsideBacktickSpan(template, match.index ?? 0),
+    )
   }
 
   export function shell(template: string) {
@@ -79,6 +81,18 @@ export namespace ConfigMarkdown {
   // word characters and hyphens, so glob patterns like `**/*.css` are not
   // false-positive matches.
   const YAML_ALIAS_PATTERN = /(^|\s)[&*][a-zA-Z_][\w-]*|^<<:/m
+
+  function isInsideBacktickSpan(text: string, index: number) {
+    let inside = false
+    for (let i = 0; i < index; i++) {
+      if (text[i] !== "`") continue
+      let run = 1
+      while (text[i + run] === "`") run++
+      inside = !inside
+      i += run - 1
+    }
+    return inside
+  }
 
   function rejectDangerousFrontmatter(file: string, frontmatter: string): InstanceType<typeof FrontmatterError> | null {
     if (Buffer.byteLength(frontmatter, "utf8") > MAX_FRONTMATTER_BYTES) {

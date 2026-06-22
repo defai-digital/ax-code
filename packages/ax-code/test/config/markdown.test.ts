@@ -83,6 +83,12 @@ describe("ConfigMarkdown: normal template", () => {
     expect(backtickMatches.length).toBe(0)
   })
 
+  test("should not match references inside inline code spans", () => {
+    const inlineCodeTest = "This `please inspect @should/not/match.ts` should be ignored"
+    const inlineCodeMatches = ConfigMarkdown.files(inlineCodeTest)
+    expect(inlineCodeMatches.length).toBe(0)
+  })
+
   test("should not match email addresses", () => {
     const emailTest = "Contact user@example.com for help"
     const emailMatches = ConfigMarkdown.files(emailTest)
