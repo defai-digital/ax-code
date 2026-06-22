@@ -472,6 +472,39 @@ describe("session.prompt special characters", () => {
     })
   })
 
+  test("keeps multiple @file references in template order", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "first.txt"), "first\n")
+        await Bun.write(path.join(dir, "second.txt"), "second\n")
+      },
+    })
+
+    const realRealpath = fs.realpath.bind(fs)
+    const realpath = vi.spyOn(fs, "realpath").mockImplementation(async (target, options?: any) => {
+      if (String(target).endsWith("first.txt")) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      return realRealpath(target as any, options) as any
+    })
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const parts = await resolvePromptParts("Read @first.txt then @second.txt")
+          expect(parts.filter((part) => part.type === "file").map((part) => part.filename)).toEqual([
+            "first.txt",
+            "second.txt",
+          ])
+        },
+      })
+    } finally {
+      realpath.mockRestore()
+    }
+  })
+
   test("ignores @file references that escape the worktree", async () => {
     await using tmp = await tmpdir({ git: true })
     const outside = path.join(tmp.path, "..", `outside-${Date.now()}.txt`)

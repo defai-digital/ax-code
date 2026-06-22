@@ -20,62 +20,60 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
   ]
   const files = ConfigMarkdown.files(template)
   const seen = new Set<string>()
-  await Promise.all(
-    files.map(async (match) => {
-      const name = match[1]
-      if (seen.has(name)) return
-      seen.add(name)
-      const filepath = name.startsWith("~/")
-        ? path.resolve(os.homedir(), name.slice(2))
-        : path.resolve(Instance.worktree, name)
-      const checkedPath = await fs.realpath(filepath).catch((error) => {
-        const code = errorCode(error)
-        if (code !== "ENOENT") throw error
-        return undefined
-      })
-      if (!checkedPath) {
-        const agent = await Agent.get(name)
-        if (agent) {
-          parts.push({
-            type: "agent",
-            name: agent.name,
-          })
-        }
-        return
-      }
-
-      if (name.startsWith("~/") && !Filesystem.contains(os.homedir(), checkedPath)) {
-        return
-      }
-
-      if (!name.startsWith("~/") && !Filesystem.contains(Instance.worktree, checkedPath)) {
-        return
-      }
-
-      const stats = await fs.stat(checkedPath).catch((error) => {
-        const code = errorCode(error)
-        if (code !== "ENOENT") throw error
-        return undefined
-      })
-      if (!stats) return
-
-      if (stats.isDirectory()) {
+  for (const match of files) {
+    const name = match[1]
+    if (seen.has(name)) continue
+    seen.add(name)
+    const filepath = name.startsWith("~/")
+      ? path.resolve(os.homedir(), name.slice(2))
+      : path.resolve(Instance.worktree, name)
+    const checkedPath = await fs.realpath(filepath).catch((error) => {
+      const code = errorCode(error)
+      if (code !== "ENOENT") throw error
+      return undefined
+    })
+    if (!checkedPath) {
+      const agent = await Agent.get(name)
+      if (agent) {
         parts.push({
-          type: "file",
-          url: pathToFileURL(checkedPath).href,
-          filename: name,
-          mime: "application/x-directory",
+          type: "agent",
+          name: agent.name,
         })
-        return
       }
+      continue
+    }
 
+    if (name.startsWith("~/") && !Filesystem.contains(os.homedir(), checkedPath)) {
+      continue
+    }
+
+    if (!name.startsWith("~/") && !Filesystem.contains(Instance.worktree, checkedPath)) {
+      continue
+    }
+
+    const stats = await fs.stat(checkedPath).catch((error) => {
+      const code = errorCode(error)
+      if (code !== "ENOENT") throw error
+      return undefined
+    })
+    if (!stats) continue
+
+    if (stats.isDirectory()) {
       parts.push({
         type: "file",
         url: pathToFileURL(checkedPath).href,
         filename: name,
-        mime: "text/plain",
+        mime: "application/x-directory",
       })
-    }),
-  )
+      continue
+    }
+
+    parts.push({
+      type: "file",
+      url: pathToFileURL(checkedPath).href,
+      filename: name,
+      mime: "text/plain",
+    })
+  }
   return parts
 }
