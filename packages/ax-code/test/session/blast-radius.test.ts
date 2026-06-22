@@ -33,6 +33,12 @@ describe("BlastRadius", () => {
     expect(state.lines).toBe(15)
   })
 
+  test("recordWrite ignores malformed line deltas", () => {
+    BlastRadius.recordWrite(SID, "/a/b.ts", Number.NaN)
+    BlastRadius.recordWrite(SID, "/a/c.ts", Number.NEGATIVE_INFINITY)
+    expect(BlastRadius.get(SID).lines).toBe(0)
+  })
+
   test("isPathBlocked matches glob patterns", () => {
     BlastRadius.get(SID, { blockedPaths: [".env", "**/secrets/**", "infra/**"] })
     expect(BlastRadius.isPathBlocked(SID, ".env").blocked).toBe(true)

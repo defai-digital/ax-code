@@ -162,7 +162,7 @@ export namespace BlastRadius {
   export function recordWrite(sessionID: SessionID, filePath: string, lineDelta: number) {
     const state = get(sessionID)
     state.files.add(filePath)
-    state.lines += Math.max(0, lineDelta)
+    state.lines += Number.isFinite(lineDelta) ? Math.max(0, lineDelta) : 0
   }
 
   /**
