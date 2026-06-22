@@ -591,8 +591,8 @@ export namespace LSP {
   export async function prewarmWorkspace(
     opts: ClientOptions & PrewarmSelectionOptions = {},
   ): Promise<PrewarmWorkspaceResult> {
-    const maxFiles = Math.max(0, opts.maxFiles ?? 0)
-    const maxLanguages = Math.max(0, opts.maxLanguages ?? maxFiles)
+    const maxFiles = normalizePrewarmWorkspaceLimit(opts.maxFiles, 0)
+    const maxLanguages = normalizePrewarmWorkspaceLimit(opts.maxLanguages, maxFiles)
     if (maxFiles === 0 || maxLanguages === 0) {
       return { files: [], readyCount: 0, freshSpawnCount: 0 }
     }
@@ -625,6 +625,10 @@ export namespace LSP {
       files: selected,
       ...warmed,
     }
+  }
+
+  function normalizePrewarmWorkspaceLimit(value: number | undefined, fallback: number) {
+    return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : fallback
   }
 
   export async function touchFile(input: string, waitForDiagnostics?: boolean, opts: ClientOptions = {}) {

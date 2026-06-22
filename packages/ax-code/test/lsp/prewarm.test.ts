@@ -218,4 +218,38 @@ describe("LSP.prewarmFiles", () => {
       },
     })
   })
+
+  test("prewarmWorkspace treats malformed limits as disabled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const a = path.join(tmp.path, "a.ts")
+    const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
+    await Bun.write(a, "export const a = 1\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({
+          lsp: {
+            fake: {
+              command: [process.execPath, serverPath],
+              extensions: [".ts"],
+            },
+          },
+        } as never)
+
+        const result = await LSP.prewarmWorkspace({
+          mode: "semantic",
+          methods: ["documentSymbol"],
+          maxFiles: Number.NaN,
+          maxLanguages: Number.POSITIVE_INFINITY,
+        })
+
+        expect(result).toEqual({
+          files: [],
+          readyCount: 0,
+          freshSpawnCount: 0,
+        })
+      },
+    })
+  })
 })
