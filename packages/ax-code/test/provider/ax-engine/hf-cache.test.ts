@@ -47,6 +47,7 @@ describe("HfCache.root precedence", () => {
   test("isInside detects cache membership", () => {
     const env = { HF_HUB_CACHE: "/hub" }
     expect(HfCache.isInside("/hub/models--x/snapshots/abc", env, home)).toBe(true)
+    expect(HfCache.isInside("/hub/..models--x/snapshots/abc", env, home)).toBe(true)
     expect(HfCache.isInside("/elsewhere/models", env, home)).toBe(false)
   })
 })

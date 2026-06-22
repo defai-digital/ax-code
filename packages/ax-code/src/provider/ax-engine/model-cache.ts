@@ -516,6 +516,5 @@ export async function reclaimManagedModelCopies(): Promise<AxEngineReclaimResult
 }
 
 function isInsideDir(target: string, dir: string): boolean {
-  const rel = path.relative(dir, target)
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
+  return Filesystem.contains(dir, target)
 }

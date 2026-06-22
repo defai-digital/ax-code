@@ -97,7 +97,7 @@ export namespace HfCache {
   // avoid mutating or deleting shared cache entries.
   export function isInside(target: string, env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): boolean {
     const rel = path.relative(root(env, home), path.resolve(target))
-    return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
+    return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))
   }
 }
 
