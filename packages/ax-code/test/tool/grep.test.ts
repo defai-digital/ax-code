@@ -1,9 +1,10 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import { GrepTool, parseNativeSearchMatches } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { NativeAddon } from "../../src/native/addon"
 
 const ctx = {
   sessionID: SessionID.make("ses_test"),
@@ -19,6 +20,10 @@ const ctx = {
 const projectRoot = path.join(__dirname, "../..")
 
 class StopAfterAsk extends Error {}
+
+afterEach(async () => {
+  await Instance.disposeAll()
+})
 
 describe("tool.grep", () => {
   test("parseNativeSearchMatches decodes valid native output", () => {
@@ -101,6 +106,65 @@ describe("tool.grep", () => {
         expect(result.metadata.matches).toBeGreaterThan(0)
       },
     })
+  })
+
+  test("native path does not mark exactly 100 results as truncated", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const matches = Array.from({ length: 100 }, (_, i) => ({
+      path: path.join(tmp.path, "file.ts"),
+      line: i + 1,
+      column: 1,
+      matchText: `needle ${i}`,
+    }))
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
+      searchContent: vi.fn(() => JSON.stringify(matches)),
+    } as any)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const grep = await GrepTool.init()
+          const result = await grep.execute({ pattern: "needle" }, ctx)
+
+          expect(result.metadata.matches).toBe(100)
+          expect(result.metadata.truncated).toBe(false)
+          expect(result.output).not.toContain("showing first")
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
+    }
+  })
+
+  test("native path uses one extra result to detect truncation", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const matches = Array.from({ length: 101 }, (_, i) => ({
+      path: path.join(tmp.path, "file.ts"),
+      line: i + 1,
+      column: 1,
+      matchText: `needle ${i}`,
+    }))
+    const searchContent = vi.fn((_: string, __: string, ___: string) => JSON.stringify(matches))
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({ searchContent } as any)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const grep = await GrepTool.init()
+          const result = await grep.execute({ pattern: "needle", include: "*.ts" }, ctx)
+
+          expect(JSON.parse(searchContent.mock.calls[0]![2])).toMatchObject({ glob: "*.ts", limit: 101 })
+          expect(result.metadata.matches).toBe(100)
+          expect(result.metadata.truncated).toBe(true)
+          expect(result.output).toContain("showing first 100")
+          expect(result.output).not.toContain("Line 101")
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
+    }
   })
 
   test("external search paths request external directory permission before grep permission", async () => {

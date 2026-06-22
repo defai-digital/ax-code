@@ -17,6 +17,9 @@ const NativeGlobEntry = z.object({
   size: z.number(),
 })
 
+const RESULT_LIMIT = 100
+const NATIVE_SCAN_LIMIT = RESULT_LIMIT + 1
+
 export type NativeGlobEntry = z.infer<typeof NativeGlobEntry>
 
 export function parseNativeGlobEntries(json: string): NativeGlobEntry[] {
@@ -59,30 +62,31 @@ export const GlobTool = Tool.define("glob", {
     const native = NativeAddon.fs()
     if (native) {
       try {
-        const json = NativePerf.run("fs.globFiles", { search, pattern: params.pattern, limit: 100 }, () =>
-          native.globFiles(search, params.pattern, 100),
+        const json = NativePerf.run("fs.globFiles", { search, pattern: params.pattern, limit: NATIVE_SCAN_LIMIT }, () =>
+          native.globFiles(search, params.pattern, NATIVE_SCAN_LIMIT),
         )
         const entries = parseNativeGlobEntries(json).filter(
           (item) =>
             !Filesystem.contains(Instance.directory, search) || Filesystem.contains(Instance.directory, item.path),
         )
         entries.sort((a, b) => b.mtime - a.mtime)
+        const truncated = entries.length > RESULT_LIMIT
+        const visible = truncated ? entries.slice(0, RESULT_LIMIT) : entries
 
         const output = []
-        const truncated = entries.length >= 100
-        if (entries.length === 0) output.push("No files found")
-        if (entries.length > 0) {
-          output.push(...entries.map((f) => f.path))
+        if (visible.length === 0) output.push("No files found")
+        if (visible.length > 0) {
+          output.push(...visible.map((f) => f.path))
         }
         if (truncated) {
           output.push("")
-          output.push("(Results are truncated: showing first 100 results...)")
+          output.push(`(Results are truncated: showing first ${RESULT_LIMIT} results...)`)
         }
 
         return {
           title,
           metadata: {
-            count: entries.length,
+            count: visible.length,
             truncated,
           },
           output: output.join("\n"),
@@ -92,7 +96,7 @@ export const GlobTool = Tool.define("glob", {
       }
     }
 
-    const limit = 100
+    const limit = RESULT_LIMIT
     const files = []
     let truncated = false
     for await (const file of Ripgrep.files({

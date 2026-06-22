@@ -28,6 +28,9 @@ export function parseNativeSearchMatches(json: string): NativeSearchMatch[] {
   return parseNativeJsonArray(json, NativeSearchMatch, "Invalid native search output")
 }
 
+const RESULT_LIMIT = 100
+const NATIVE_SCAN_LIMIT = RESULT_LIMIT + 1
+
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -69,7 +72,7 @@ export const GrepTool = Tool.define("grep", {
             searchPath,
             pattern: params.pattern,
             glob: params.include ? 1 : 0,
-            limit: 100,
+            limit: NATIVE_SCAN_LIMIT,
           },
           () =>
             native.searchContent(
@@ -77,7 +80,7 @@ export const GrepTool = Tool.define("grep", {
               params.pattern,
               JSON.stringify({
                 glob: params.include,
-                limit: 100,
+                limit: NATIVE_SCAN_LIMIT,
                 contextLines: 0,
               }),
             ),
@@ -90,8 +93,10 @@ export const GrepTool = Tool.define("grep", {
           (match) =>
             !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path),
         )
+        const truncated = matches.length > RESULT_LIMIT
+        const visibleMatches = truncated ? matches.slice(0, RESULT_LIMIT) : matches
 
-        if (matches.length === 0) {
+        if (visibleMatches.length === 0) {
           return {
             title: params.pattern,
             metadata: { matches: 0, truncated: false },
@@ -99,10 +104,10 @@ export const GrepTool = Tool.define("grep", {
           }
         }
 
-        const totalMatches = matches.length
-        const outputLines = [`Found ${totalMatches} matches`]
+        const totalMatches = visibleMatches.length
+        const outputLines = [`Found ${totalMatches} matches${truncated ? ` (showing first ${RESULT_LIMIT})` : ""}`]
         let currentFile = ""
-        for (const match of matches) {
+        for (const match of visibleMatches) {
           if (currentFile !== match.path) {
             if (currentFile !== "") outputLines.push("")
             currentFile = match.path
@@ -119,7 +124,7 @@ export const GrepTool = Tool.define("grep", {
           title: params.pattern,
           metadata: {
             matches: totalMatches,
-            truncated: totalMatches >= 100,
+            truncated,
           },
           output: outputLines.join("\n"),
         }
@@ -234,7 +239,7 @@ export const GrepTool = Tool.define("grep", {
 
     matches.sort((a, b) => b.modTime - a.modTime)
 
-    const limit = 100
+    const limit = RESULT_LIMIT
     const truncated = matches.length > limit
     const finalMatches = truncated ? matches.slice(0, limit) : matches
 
