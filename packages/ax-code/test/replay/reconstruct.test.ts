@@ -328,6 +328,31 @@ describe("replay.reconstructStream", () => {
     })
   })
 
+  test("normalizes malformed route confidence in summary", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: sid,
+          fromAgent: "build",
+          toAgent: "review",
+          confidence: "high",
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        expect(Replay.summary(sid)).toContain("[route]   build -> review (0.00, switch)")
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
   test("toFullStream generates valid stream events", async () => {
     const steps: Replay.ReconstructedStep[] = [
       {

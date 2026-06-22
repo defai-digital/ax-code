@@ -420,7 +420,7 @@ export namespace Replay {
           break
         case "agent.route":
           lines.push(
-            `[route]   ${event.fromAgent} -> ${event.toAgent} (${event.confidence.toFixed(2)}, ${event.routeMode ?? "switch"})`,
+            `[route]   ${event.fromAgent} -> ${event.toAgent} (${finiteNumber(event.confidence).toFixed(2)}, ${event.routeMode ?? "switch"})`,
           )
           break
         case "llm.request":
