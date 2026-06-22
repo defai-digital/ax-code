@@ -17,6 +17,7 @@ import { createRequire } from "module"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
 import { ToolNumber } from "./schema"
+import { isLocalHostname } from "@/util/local-host"
 
 import { BashArity } from "@/permission/arity"
 import { Config } from "@/config/config"
@@ -75,7 +76,7 @@ function isLocalBrowserUrl(target: string) {
   try {
     const url = new URL(stripShellQuotes(target))
     if (url.protocol !== "http:" && url.protocol !== "https:") return false
-    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]"
+    return isLocalHostname(url.hostname)
   } catch {
     return false
   }

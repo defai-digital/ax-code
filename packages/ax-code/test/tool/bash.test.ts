@@ -1239,6 +1239,21 @@ describe("tool.bash browser-open interception", () => {
     })
   })
 
+  test("intercepts open targeting shared local host aliases", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        for (const target of ["http://api.localhost:3000", "http://127.12.0.1:3000", "http://0.0.0.0:3000"]) {
+          const result = await bash.execute({ command: `open ${target}`, description: "Open local dev server" }, ctx)
+          expect(result.output).toContain("[Browser open intercepted]")
+          expect(result.output).toContain(target.replace("http://", ""))
+        }
+      },
+    })
+  })
+
   test("intercepts open with app options targeting localhost URL", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
