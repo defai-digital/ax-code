@@ -141,6 +141,53 @@ describe("session.prompt flow", () => {
     })
   })
 
+  test("stops autonomous prompt loop after completion gate allows a finished turn", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    gateSpy = vi.spyOn(AutonomousCompletionGate, "evaluate").mockReturnValue({ status: "allow" })
+    streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+      fullStream: (async function* () {
+        yield { type: "start" }
+        yield { type: "start-step" }
+        yield { type: "text-start", id: "text_1" }
+        yield { type: "text-delta", id: "text_1", text: "hello" }
+        yield { type: "text-end", id: "text_1" }
+        yield {
+          type: "finish-step",
+          finishReason: "stop",
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        }
+        yield { type: "finish" }
+      })(),
+    } as any)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Autonomous Stop Test" })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "hello" }],
+          })
+
+          expect(streamSpy).toHaveBeenCalledTimes(1)
+          expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+          expect(await Session.messages({ sessionID: session.id })).toHaveLength(2)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
   test("preflights clearly over-budget prompt and compacts before normal provider call", async () => {
     await using tmp = await tmpdir({ git: true })
     const tinyModel: Provider.Model = {

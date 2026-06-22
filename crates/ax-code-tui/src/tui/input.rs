@@ -60,6 +60,18 @@ fn handle_key(app: &mut App, event: KeyEvent) -> InputAction {
     }
 }
 
+fn handle_quit_shortcut(app: &mut App, event: KeyEvent) -> Option<InputAction> {
+    match event.code {
+        KeyCode::Char('c') | KeyCode::Char('q')
+            if event.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+            app.quit();
+            Some(InputAction::None)
+        }
+        _ => None,
+    }
+}
+
 /// Handle key in input mode.
 fn handle_input_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
     // If session list is shown, handle session navigation
@@ -206,6 +218,10 @@ fn handle_session_list_key(app: &mut App, event: KeyEvent) -> InputAction {
 
 /// Handle key in permission mode.
 fn handle_permission_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
+    if let Some(action) = handle_quit_shortcut(app, event) {
+        return action;
+    }
+
     match event.code {
         // Accept on 'y' or 'Y'
         KeyCode::Char('y') | KeyCode::Char('Y') => {
@@ -246,6 +262,10 @@ fn handle_permission_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
 
 /// Handle key in question mode.
 fn handle_question_mode_key(app: &mut App, event: KeyEvent) -> InputAction {
+    if let Some(action) = handle_quit_shortcut(app, event) {
+        return action;
+    }
+
     match event.code {
         // Navigate up
         KeyCode::Up | KeyCode::Char('k') => {
@@ -326,4 +346,35 @@ fn handle_mouse(app: &mut App, event: crossterm::event::MouseEvent) -> InputActi
     }
 
     InputAction::None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ctrl_key(ch: char) -> Event {
+        Event::Key(KeyEvent::new(KeyCode::Char(ch), KeyModifiers::CONTROL))
+    }
+
+    #[test]
+    fn ctrl_c_quits_in_permission_mode() {
+        let mut app = App::new();
+        app.mode = AppMode::Permission;
+
+        let action = handle_input(&mut app, ctrl_key('c'));
+
+        assert!(matches!(action, InputAction::None));
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn ctrl_q_quits_in_question_mode() {
+        let mut app = App::new();
+        app.mode = AppMode::Question;
+
+        let action = handle_input(&mut app, ctrl_key('q'));
+
+        assert!(matches!(action, InputAction::None));
+        assert!(app.should_quit);
+    }
 }

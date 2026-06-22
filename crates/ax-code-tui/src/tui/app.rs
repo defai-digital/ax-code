@@ -466,6 +466,13 @@ impl App {
             RuntimeEvent::ServerHeartbeat => {
                 // Heartbeat, no action needed
             }
+            RuntimeEvent::ServerReconnecting { retry_ms } => {
+                self.status_message =
+                    Some(format!("Event stream lost; reconnecting in {}ms", retry_ms));
+            }
+            RuntimeEvent::ServerDisconnected => {
+                self.status_message = Some("Event stream disconnected".to_string());
+            }
             RuntimeEvent::ServerInstanceDisposed => {
                 self.status_message = Some("Server instance disposed".to_string());
                 self.should_quit = true;

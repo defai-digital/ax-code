@@ -570,6 +570,7 @@ export namespace SessionPrompt {
       })
       if (!emptyModelTurn) emptyModelTurnRetries = 0
       if (!truncatedModelTurn) truncatedModelTurnRetries = 0
+      let completionGateAllowedComplete = false
 
       if (modelFinished && !processor.message.error) {
         if (await structuredOutput.failIfMissing(processor.message)) {
@@ -761,6 +762,8 @@ export namespace SessionPrompt {
           })
           continue
         }
+
+        completionGateAllowedComplete = modelFinished && completionGate.status === "allow" && pendingTodos.length === 0
       }
 
       // Goal auto-continuation runs when autonomous mode is explicitly
@@ -793,6 +796,11 @@ export namespace SessionPrompt {
           reason = goalTransition.reason
           break
         }
+      }
+
+      if (completionGateAllowedComplete) {
+        reason = "completed"
+        break
       }
 
       const errorTransition = await resolvePromptLoopErrorTransition({

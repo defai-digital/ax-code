@@ -11,7 +11,7 @@ import { Plugin } from "@/plugin"
 import { Flag } from "@/flag/flag"
 import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
 import { BlastRadius } from "./blast-radius"
-import { detectCycle } from "./cycle-detection"
+import { detectCycle, type RingEntry } from "./cycle-detection"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
@@ -145,7 +145,7 @@ export namespace SessionProcessor {
       }
       return visit(obj, 0)
     }
-    const recentToolRing: { tool: string; input: string }[] = []
+    const recentToolRing: RingEntry[] = []
     const doomLoopWarnings: Record<string, string> = {}
     // Window large enough to evaluate the longest cycle length plus headroom.
     const recentToolRingLimit = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
@@ -601,6 +601,7 @@ export namespace SessionProcessor {
                     const completedCycleLen = detectCycle(
                       [...recentToolRing, { tool: match.tool, input: completedInput, output: completedOutput }],
                       AUTONOMOUS_MAX_CYCLE_LEN,
+                      { compareOutput: true },
                     )
                     const completedLoopWarning =
                       completedCycleLen === null

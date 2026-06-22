@@ -18,12 +18,13 @@ export interface RingEntry {
 export function detectCycle(
   entries: ReadonlyArray<RingEntry>,
   maxCycleLen: number = AUTONOMOUS_MAX_CYCLE_LEN,
+  options: { compareOutput?: boolean } = {},
 ): number | null {
   const eq = (i: number, j: number) => {
     const left = entries[i]!
     const right = entries[j]!
     if (left.tool !== right.tool || left.input !== right.input) return false
-    if (left.output !== undefined && right.output !== undefined) return left.output === right.output
+    if (options.compareOutput && left.output !== undefined && right.output !== undefined) return left.output === right.output
     return true
   }
   for (let k = 1; k <= maxCycleLen; k++) {

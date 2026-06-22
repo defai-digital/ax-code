@@ -72,3 +72,17 @@ test("pinnedFetch strips credentials on a cross-origin redirect but keeps them s
   expect(same[0]).toBe("Bearer secret")
   expect(same[1]).toBe("Bearer secret") // same origin keeps it
 })
+
+test("pinnedFetch no longer passes Bun-only tls RequestInit extension", async () => {
+  const dnsResolveFn = vi.fn(async (_hostname: string) => [{ address: "1.2.3.4", family: 4 }])
+  let seenInit: RequestInit | undefined
+  const fetchFn: NonNullable<Parameters<typeof Ssrf.pinnedFetch>[2]> = async (_url, init) => {
+    seenInit = init
+    return new Response("ok", { status: 200 })
+  }
+
+  await Ssrf.pinnedFetch("https://example.invalid/path", { label: "t" }, fetchFn, dnsResolveFn)
+
+  expect((seenInit as RequestInit & { tls?: unknown })?.tls).toBeUndefined()
+  expect(new Headers(seenInit?.headers).get("host")).toBe("example.invalid")
+})
