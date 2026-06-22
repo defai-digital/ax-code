@@ -59,6 +59,15 @@ describe("session.retry.delay", () => {
     expect(d).toBeLessThanOrEqual(2500)
   })
 
+  test("normalizes malformed retry attempts to the first retry window", () => {
+    for (const attempt of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+      const delay = SessionRetry.delay(attempt, apiError())
+      expect(Number.isFinite(delay)).toBe(true)
+      expect(delay).toBeGreaterThanOrEqual(1500)
+      expect(delay).toBeLessThanOrEqual(2500)
+    }
+  })
+
   test("ignores partial or negative numeric retry hints", () => {
     const partialSeconds = SessionRetry.delay(1, apiError({ "retry-after": "1abc" }))
     expect(partialSeconds).toBeGreaterThanOrEqual(1500)

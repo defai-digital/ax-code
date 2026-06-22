@@ -68,7 +68,12 @@ export namespace SessionRetry {
     return retryAfterDelay(headers?.["retry-after"])
   }
 
+  function normalizedAttempt(attempt: number) {
+    return Number.isFinite(attempt) && attempt >= 1 ? Math.floor(attempt) : 1
+  }
+
   export function delay(attempt: number, error?: MessageV2.APIError) {
+    const effectiveAttempt = normalizedAttempt(attempt)
     if (error) {
       const headers = error.data.responseHeaders
       if (isAlibabaTokenPlanShortWindowQuota(error)) {
@@ -81,13 +86,16 @@ export namespace SessionRetry {
         if (parsedHeaderDelay !== undefined) return parsedHeaderDelay
 
         return jitter(
-          Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS),
+          Math.min(
+            RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, effectiveAttempt - 1),
+            RETRY_MAX_DELAY_NO_HEADERS,
+          ),
         )
       }
     }
 
     return jitter(
-      Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS),
+      Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, effectiveAttempt - 1), RETRY_MAX_DELAY_NO_HEADERS),
     )
   }
 
