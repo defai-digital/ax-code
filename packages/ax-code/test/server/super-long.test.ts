@@ -3,6 +3,8 @@ import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
+import { Session } from "../../src/session"
+import type { SessionID } from "../../src/session/schema"
 
 const OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
 
@@ -240,33 +242,95 @@ describe("super-long route", () => {
           }),
         )
         const startedAt = Date.now() - 60_000
-        await Bun.write(storePath, JSON.stringify({ runs: { ses_status_test: { startedAt, lastSeenAt: startedAt } } }))
 
         await Instance.provide({
           directory: tmp.path,
           fn: async () => {
-            const response = await Server.Default().request(
-              `/super-long/status?directory=${encodeURIComponent(tmp.path)}&sessionID=ses_status_test`,
-            )
-            expect(response.status).toBe(200)
-            const body = (await response.json()) as {
-              enabled: boolean
-              source: string
-              durationMs: number | null
-              startedAt: number | null
-              elapsedMs: number | null
-              remainingMs: number | null
+            const session = await Session.create({ title: "super-long-status-session" })
+            try {
+              await Bun.write(
+                storePath,
+                JSON.stringify({ runs: { [session.id]: { startedAt, lastSeenAt: startedAt } } }),
+              )
+              const response = await Server.Default().request(
+                `/super-long/status?directory=${encodeURIComponent(tmp.path)}&sessionID=${session.id}`,
+              )
+              expect(response.status).toBe(200)
+              const body = (await response.json()) as {
+                enabled: boolean
+                source: string
+                durationMs: number | null
+                startedAt: number | null
+                elapsedMs: number | null
+                remainingMs: number | null
+              }
+              expect(body.enabled).toBe(true)
+              expect(body.source).toBe("config")
+              expect(body.durationMs).toBe(2 * 60 * 60 * 1000)
+              expect(body.startedAt).toBe(startedAt)
+              expect(body.elapsedMs).toBeGreaterThanOrEqual(60_000)
+              expect(body.remainingMs).toBeLessThanOrEqual(2 * 60 * 60 * 1000 - 60_000)
+              expect(body.remainingMs).toBeGreaterThan(0)
+            } finally {
+              await Session.remove(session.id)
             }
-            expect(body.enabled).toBe(true)
-            expect(body.source).toBe("config")
-            expect(body.durationMs).toBe(2 * 60 * 60 * 1000)
-            expect(body.startedAt).toBe(startedAt)
-            expect(body.elapsedMs).toBeGreaterThanOrEqual(60_000)
-            expect(body.remainingMs).toBeLessThanOrEqual(2 * 60 * 60 * 1000 - 60_000)
-            expect(body.remainingMs).toBeGreaterThan(0)
           },
         })
       } finally {
+        if (previousStore === undefined) delete process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE
+        else process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE = previousStore
+      }
+    })
+  })
+
+  test("status rejects session timing from a different project", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using current = await tmpdir({ git: true })
+      await using other = await tmpdir({ git: true })
+      const storePath = path.join(current.path, "super-long-runtime.json")
+      const previousStore = process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE
+      process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE = storePath
+      let otherSessionID: SessionID | undefined
+      try {
+        await Bun.write(
+          path.join(current.path, "ax-code.json"),
+          JSON.stringify({
+            model: "anthropic/claude-opus-4-8",
+            super_long: { enabled: true, duration_hours: 2 },
+          }),
+        )
+        await Instance.provide({
+          directory: other.path,
+          fn: async () => {
+            const session = await Session.create({ title: "other-project-super-long-status-session" })
+            otherSessionID = session.id
+          },
+        })
+        const startedAt = Date.now() - 60_000
+        await Bun.write(
+          storePath,
+          JSON.stringify({ runs: { [otherSessionID!]: { startedAt, lastSeenAt: startedAt } } }),
+        )
+
+        await Instance.provide({
+          directory: current.path,
+          fn: async () => {
+            const response = await Server.Default().request(
+              `/super-long/status?directory=${encodeURIComponent(current.path)}&sessionID=${otherSessionID}`,
+            )
+            expect(response.status).toBe(409)
+          },
+        })
+      } finally {
+        if (otherSessionID) {
+          const sessionID = otherSessionID
+          await Instance.provide({
+            directory: other.path,
+            fn: async () => {
+              await Session.remove(sessionID)
+            },
+          }).catch(() => undefined)
+        }
         if (previousStore === undefined) delete process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE
         else process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE = previousStore
       }

@@ -12,6 +12,7 @@ import { SuperLongRuntime } from "../../session/super-long-runtime"
 import type { Config } from "../../config/config"
 import { errors, serviceUnavailable } from "../error"
 import { SessionID } from "../../session/schema"
+import { requireCurrentProjectSession } from "./session-lookup"
 
 const log = Log.create({ service: "super-long" })
 const SUPER_LONG_OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
@@ -163,6 +164,7 @@ export const SuperLongRoutes = lazy(() =>
         const durationDecision = SuperLongPolicy.duration(runtimeConfig.requestedDurationMs)
         const durationMs = durationDecision.ok ? durationDecision.durationMs : null
         const sessionID = query.sessionID
+        if (sessionID) await requireCurrentProjectSession(sessionID)
         const startedAt = sessionID
           ? await SuperLongRuntime.peekSessionStartedAt(sessionID).catch(() => undefined)
           : undefined
