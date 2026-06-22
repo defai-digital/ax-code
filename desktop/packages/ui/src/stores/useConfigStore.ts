@@ -1286,9 +1286,15 @@ export const useConfigStore = create<ConfigStore>()(
                   return true
                 }
 
-                // Helper to validate model exists in providers
-                const validateModel = (providerId: string, modelId: string): boolean =>
-                  hasProviderModel(providers, providerId, modelId)
+                const findModel = (providerId: string, modelId: string): ProviderModel | undefined => {
+                  const provider = providers.find((p) => p.id === providerId)
+                  return provider?.models.find((m) => m.id === modelId)
+                }
+
+                const modelIsSelectable = (providerId: string, modelId: string): boolean => {
+                  const model = findModel(providerId, modelId)
+                  return Boolean(model && isProviderModelSelectable(model))
+                }
 
                 // --- Agent Selection ---
                 // Priority: settings.defaultAgent → build → first primary → first agent
@@ -1321,13 +1327,13 @@ export const useConfigStore = create<ConfigStore>()(
                 // 1. Check OpenChamber settings for default model
                 if (openChamberDefaults.defaultModel) {
                   const parsed = parseModelString(openChamberDefaults.defaultModel)
-                  if (parsed && validateModel(parsed.providerId, parsed.modelId)) {
+                  const defaultModel = parsed ? findModel(parsed.providerId, parsed.modelId) : undefined
+                  if (parsed && defaultModel && isProviderModelSelectable(defaultModel)) {
                     resolvedProviderId = parsed.providerId
                     resolvedModelId = parsed.modelId
 
                     if (openChamberDefaults.defaultVariant) {
-                      const provider = providers.find((p) => p.id === parsed.providerId)
-                      const model = provider?.models.find((m) => m.id === parsed.modelId) as
+                      const model = defaultModel as
                         | { variants?: Record<string, unknown> }
                         | undefined
                       const variants = model?.variants
@@ -1341,15 +1347,19 @@ export const useConfigStore = create<ConfigStore>()(
                       }
                     }
                   } else {
-                    // Model no longer exists - mark for clearing
-                    invalidSettings.defaultModel = ""
+                    // Only clear settings for malformed or removed models. A
+                    // memory-blocked local model may still be a valid user
+                    // default on another machine, so do not erase it here.
+                    if (!parsed || !defaultModel) {
+                      invalidSettings.defaultModel = ""
+                    }
                   }
                 }
 
                 // 2. Fall back to agent's preferred model
                 if (!resolvedProviderId && resolvedAgent?.model?.providerID && resolvedAgent?.model?.modelID) {
                   const { providerID, modelID } = resolvedAgent.model
-                  if (validateModel(providerID, modelID)) {
+                  if (modelIsSelectable(providerID, modelID)) {
                     resolvedProviderId = providerID
                     resolvedModelId = modelID
                   }
@@ -1357,16 +1367,15 @@ export const useConfigStore = create<ConfigStore>()(
 
                 // 3. Fall back to ax-code/big-pickle
                 if (!resolvedProviderId) {
-                  if (validateModel(FALLBACK_PROVIDER_ID, FALLBACK_MODEL_ID)) {
+                  if (modelIsSelectable(FALLBACK_PROVIDER_ID, FALLBACK_MODEL_ID)) {
                     resolvedProviderId = FALLBACK_PROVIDER_ID
                     resolvedModelId = FALLBACK_MODEL_ID
                   } else {
-                    // Last resort: first provider's first model
-                    const firstProvider = providers[0]
-                    const firstModel = firstProvider?.models[0]
-                    if (firstProvider && firstModel) {
-                      resolvedProviderId = firstProvider.id
-                      resolvedModelId = firstModel.id
+                    // Last resort: first selectable provider model.
+                    const fallback = resolveFirstSelectableSelection(providers, FALLBACK_PROVIDER_ID)
+                    if (fallback) {
+                      resolvedProviderId = fallback.currentProviderId
+                      resolvedModelId = fallback.currentModelId
                     }
                   }
                 }
