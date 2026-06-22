@@ -441,13 +441,14 @@ export async function reclaimManagedCopy(
 
   // Repoint prepare.json off the managed dir before deleting it.
   const current = await readPrepareState()
+  if (current.error) return undefined
   if (
     current.state &&
     current.state.modelID === modelID &&
     current.state.quantization === quantization &&
     isInsideDir(current.state.path, managedPath)
   ) {
-    await writePrepareState({ ...current.state, path: snapshotPath, preparedAt: Date.now() }).catch(() => undefined)
+    await writePrepareState({ ...current.state, path: snapshotPath, preparedAt: Date.now() })
   }
 
   const freedBytes = await directorySize(managedPath)

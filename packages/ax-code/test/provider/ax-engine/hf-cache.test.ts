@@ -157,6 +157,22 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     expect(await Filesystem.exists(managed)).toBe(true)
   })
 
+  test("reclaimManagedCopy refuses to delete when prepare state cannot be inspected", async () => {
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
+    await fs.mkdir(managed, { recursive: true })
+    await fs.writeFile(path.join(managed, "model.safetensors"), "weights")
+    await fs.mkdir(path.dirname(AxEnginePaths.prepareState), { recursive: true })
+    await fs.writeFile(AxEnginePaths.prepareState, "{not json")
+
+    const result = await reclaimManagedCopy(GEMMA.modelID, GEMMA.quant)
+    expect(result).toBeUndefined()
+    expect(await Filesystem.exists(managed)).toBe(true)
+  })
+
   test("reclaimManagedModelCopies is a no-op when there is no managed dir", async () => {
     await using dir = await tmpdir()
     process.env.HF_HUB_CACHE = path.join(dir.path, "hub")
