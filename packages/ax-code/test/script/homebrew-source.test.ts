@@ -168,7 +168,7 @@ describe("distribution support guardrails", () => {
     const text = await Bun.file(installMatrixWorkflow).text()
     expect(text).toContain("permissions:")
     expect(text).toContain("contents: read")
-    expect(text).toContain("uses: actions/checkout@v6")
+    expect(text).toContain("uses: actions/checkout@v7")
     expect(text).toContain("workflow_dispatch:")
     expect(text).not.toContain("types: [published]")
     expect(text).not.toMatch(/\n  release:\n/)

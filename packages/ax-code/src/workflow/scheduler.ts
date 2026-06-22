@@ -1,6 +1,7 @@
 import z from "zod"
 import { Instance } from "../project/instance"
 import { Session } from "../session"
+import type { TaskQueue } from "../session/task-queue"
 import type { TaskQueueID } from "../session/schema"
 import { KeyedSerialQueue } from "../util/queue"
 import { JsonBoolean } from "../util/schema"
@@ -35,6 +36,7 @@ export namespace WorkflowScheduler {
     allowWriteWorkflows: JsonBoolean.default(false),
     durableChildren: JsonBoolean.default(true),
     enqueueChildren: JsonBoolean.default(true),
+    autoStartChildren: JsonBoolean.default(true),
   })
   export type StartOptions = z.input<typeof StartOptions> & {
     dispatchExecutor?: WorkflowDispatchExecutor
@@ -157,13 +159,15 @@ export namespace WorkflowScheduler {
           enqueuedTasks.push({ task })
         }
 
-        // Enqueue creates the queue items but does not start them. Without
-        // this explicit start, workflow children sit in "queued" forever —
-        // drainNextWorkflowPhaseItem() only fires after a child completes,
-        // so the first batch never gets picked up.
-        const TaskQueueExecutor = await loadTaskQueueExecutor()
-        for (const { task } of enqueuedTasks) {
-          await TaskQueueExecutor.start(task)
+        if (parsed.autoStartChildren) {
+          // Enqueue creates the queue items but does not start them. Without
+          // this explicit start, workflow children sit in "queued" forever -
+          // drainNextWorkflowPhaseItem() only fires after a child completes,
+          // so the first batch never gets picked up.
+          const TaskQueueExecutor = await loadTaskQueueExecutor()
+          for (const { task } of enqueuedTasks) {
+            await TaskQueueExecutor.start(task)
+          }
         }
       } else {
         const { WorkflowDispatchAdapter, WorkflowDispatchExecutorMissingError } = await import("./dispatch-adapter")
@@ -263,8 +267,10 @@ export namespace WorkflowScheduler {
         const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
         if (item?.status === "paused") {
           const resumed = await TaskQueue.resume(child.taskQueueID)
-          const TaskQueueExecutor = await loadTaskQueueExecutor()
-          await TaskQueueExecutor.start(resumed)
+          if (shouldAutoStartWorkflowQueueItem(resumed)) {
+            const TaskQueueExecutor = await loadTaskQueueExecutor()
+            await TaskQueueExecutor.start(resumed)
+          }
           continue
         }
       }
@@ -449,8 +455,10 @@ async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {
       const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
       if (item?.status === "failed" || item?.status === "cancelled") {
         const retried = await TaskQueue.retry(child.taskQueueID)
-        const TaskQueueExecutor = await loadTaskQueueExecutor()
-        await TaskQueueExecutor.start(retried)
+        if (shouldAutoStartWorkflowQueueItem(retried)) {
+          const TaskQueueExecutor = await loadTaskQueueExecutor()
+          await TaskQueueExecutor.start(retried)
+        }
         continue
       }
     }
@@ -536,4 +544,11 @@ async function loadTaskQueue() {
 
 async function loadTaskQueueExecutor() {
   return (await import("../session/task-queue-executor")).TaskQueueExecutor
+}
+
+function shouldAutoStartWorkflowQueueItem(item: TaskQueue.Info) {
+  const workflow = item.payload["workflow"]
+  if (!workflow || typeof workflow !== "object") return true
+  const startOptions = (workflow as { startOptions?: unknown }).startOptions
+  return WorkflowScheduler.StartOptions.parse(startOptions ?? {}).autoStartChildren
 }

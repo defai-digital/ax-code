@@ -288,13 +288,10 @@ export namespace SessionPrompt {
         break
       }
 
-      // Safety: a session with an active goal is treated as effectively
-      // autonomous — the goal itself is the "keep going" signal, and it has
-      // its own budget/complete/blocked termination conditions. Without this,
-      // setting a goal when AX_CODE_AUTONOMOUS is off runs only the first
-      // turn and stops, leaving the goal "active on paper but dormant".
+      // Goal continuation is autonomous continuation. The goal stays active
+      // when autonomous mode is off, but the next turn must be user-driven.
       const activeGoal = await SessionGoal.get(sessionID)
-      const effectivelyAutonomous = autonomous || activeGoal?.status === "active"
+      const effectivelyAutonomous = autonomous
 
       // Safety: prevent infinite loops
       const effectiveMaxContinuations = superLongActive ? Number.POSITIVE_INFINITY : maxContinuations
@@ -766,12 +763,8 @@ export namespace SessionPrompt {
         completionGateAllowedComplete = modelFinished && completionGate.status === "allow" && pendingTodos.length === 0
       }
 
-      // Goal auto-continuation runs when autonomous mode is explicitly
-      // enabled OR the session has an active goal (effectivelyAutonomous).
-      // An active goal is its own "keep going" signal — it terminates when
-      // the model marks it complete/blocked, the user pauses or clears it,
-      // or the token budget is exhausted. Super-Long deadline and global
-      // step limits still apply as safety guardrails.
+      // Goal auto-continuation runs only when autonomous mode is enabled.
+      // Without autonomy, active goals persist for the next user-driven turn.
       if (effectivelyAutonomous && modelFinished && !processor.message.error) {
         const goal = updatedGoal ?? activeGoal
         const goalTransition = handlePromptLoopGoalContinuation({

@@ -42,7 +42,14 @@ const fetched = await loadFetchedModels()
 const existing = await readJson<Record<string, any>>(snapshotPath).catch((): Record<string, any> => ({}))
 
 // Preserve local-only provider entries that models.dev doesn't include
-const cliImageProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "qoder-cli"] as const
+const cliImageProviderIDs = [
+  "claude-code",
+  "gemini-cli",
+  "codex-cli",
+  "grok-build-cli",
+  "qoder-cli",
+  "antigravity-cli",
+] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = JSON.parse(JSON.stringify(existing[id]))
@@ -158,6 +165,61 @@ if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
       id: "qoder-cli",
       name: "Qoder CLI",
       family: "qoder",
+      attachment: true,
+      reasoning: false,
+      tool_call: false,
+      temperature: false,
+      release_date: "2026-06-01",
+      modalities: {
+        input: ["text", "image"],
+        output: ["text"],
+      },
+      limit: {
+        context: 200000,
+        output: 16384,
+      },
+      options: {},
+      status: "active",
+    },
+  }
+}
+if (!fetched["antigravity-cli"]) {
+  fetched["antigravity-cli"] = {
+    id: "antigravity-cli",
+    name: "Google (Antigravity CLI)",
+    env: [],
+    npm: "cli",
+    models: {
+      "antigravity-cli": {
+        id: "antigravity-cli",
+        name: "Google (Antigravity CLI)",
+        family: "antigravity",
+        attachment: true,
+        reasoning: false,
+        tool_call: false,
+        temperature: false,
+        release_date: "2026-06-01",
+        modalities: {
+          input: ["text", "image"],
+          output: ["text"],
+        },
+        limit: {
+          context: 200000,
+          output: 16384,
+        },
+        options: {},
+        status: "active",
+      },
+    },
+  }
+}
+if (!fetched["antigravity-cli"].models?.["antigravity-cli"]) {
+  fetched["antigravity-cli"].models = {
+    ...(fetched["antigravity-cli"].models ?? {}),
+    "antigravity-cli": {
+      id: "antigravity-cli",
+      name: "Google (Antigravity CLI)",
+      family: "antigravity",
       attachment: true,
       reasoning: false,
       tool_call: false,
@@ -321,6 +383,31 @@ if (!fetched["qoder-cli"].models?.["qoder-cli"]) {
       id: "qoder-cli",
       name: "Qoder CLI",
       family: "qoder",
+      attachment: true,
+      reasoning: false,
+      tool_call: false,
+      temperature: false,
+      release_date: "2026-06-01",
+      modalities: {
+        input: ["text", "image"],
+        output: ["text"],
+      },
+      limit: {
+        context: 200000,
+        output: 16384,
+      },
+      options: {},
+      status: "active",
+    },
+  }
+}
+if (!fetched["antigravity-cli"].models?.["antigravity-cli"]) {
+  fetched["antigravity-cli"].models = {
+    ...(fetched["antigravity-cli"].models ?? {}),
+    "antigravity-cli": {
+      id: "antigravity-cli",
+      name: "Google (Antigravity CLI)",
+      family: "antigravity",
       attachment: true,
       reasoning: false,
       tool_call: false,

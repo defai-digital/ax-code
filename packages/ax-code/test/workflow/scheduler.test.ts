@@ -627,7 +627,10 @@ describe("WorkflowScheduler", () => {
             sourceTaskID: "scheduled_task_issue_triage",
             spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage),
           })
-          const result = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const result = await WorkflowScheduler.start(run.id, {
+            allowScaleBeyondDefaults: true,
+            autoStartChildren: false,
+          })
 
           expect(result.status).toBe("running")
           expect(result.phases[0]?.status).toBe("running")
@@ -816,8 +819,14 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          const firstStart = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
-          const secondStart = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const firstStart = await WorkflowScheduler.start(run.id, {
+            allowScaleBeyondDefaults: true,
+            autoStartChildren: false,
+          })
+          const secondStart = await WorkflowScheduler.start(run.id, {
+            allowScaleBeyondDefaults: true,
+            autoStartChildren: false,
+          })
 
           expect(firstStart.children).toHaveLength(8)
           expect(secondStart.children).toHaveLength(8)
@@ -843,8 +852,8 @@ describe("WorkflowScheduler", () => {
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
           const [firstStart, secondStart] = await Promise.all([
-            WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true }),
-            WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true }),
+            WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false }),
+            WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false }),
           ])
 
           const detail = await WorkflowRun.getDetail(run.id)
@@ -871,7 +880,7 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
           const { TaskQueue } = await import("../../src/session/task-queue")
           const { TaskQueueExecutor } = await import("../../src/session/task-queue-executor")
           const { SessionPrompt } = await import("../../src/session/prompt")
@@ -940,7 +949,10 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          const started = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const started = await WorkflowScheduler.start(run.id, {
+            allowScaleBeyondDefaults: true,
+            autoStartChildren: false,
+          })
           const { TaskQueue } = await import("../../src/session/task-queue")
           const [first] = await TaskQueue.list()
           expect(first).toBeDefined()
@@ -979,7 +991,7 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
           const { TaskQueue } = await import("../../src/session/task-queue")
           const firstPhaseQueue = await TaskQueue.list()
 
@@ -1044,7 +1056,7 @@ describe("WorkflowScheduler", () => {
           expect(finalPayload?.redactionSummary?.counts?.pending).toBeGreaterThan(0)
           expect(finalPayload?.redactionSummary?.summaries?.some((item) => item.includes("payload omitted"))).toBe(true)
 
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
           const finalDetail = await WorkflowRun.getDetail(run.id)
           expect(
             finalDetail.artifacts.filter(
@@ -1383,7 +1395,7 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
 
           const paused = await WorkflowScheduler.pause(run.id)
           expect(paused.status).toBe("paused")
@@ -1416,7 +1428,7 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
           const { TaskQueue } = await import("../../src/session/task-queue")
           const [first] = await TaskQueue.list()
 
@@ -1450,7 +1462,7 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
           const { TaskQueue } = await import("../../src/session/task-queue")
           const [first] = await TaskQueue.list()
 
@@ -1483,7 +1495,7 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
           const { TaskQueue } = await import("../../src/session/task-queue")
           const firstPhaseQueue = await TaskQueue.list()
           for (const item of firstPhaseQueue) {
@@ -1526,7 +1538,7 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
 
           const cancelled = await WorkflowScheduler.cancel(run.id)
 
@@ -1552,7 +1564,7 @@ describe("WorkflowScheduler", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true, autoStartChildren: false })
           const { TaskQueue } = await import("../../src/session/task-queue")
           const queued = await TaskQueue.list()
           expect(queued.length).toBeGreaterThan(0)

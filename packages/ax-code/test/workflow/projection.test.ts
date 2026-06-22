@@ -18,7 +18,10 @@ describe("workflow projections", () => {
         directory: tmp.path,
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
-          const started = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const started = await WorkflowScheduler.start(run.id, {
+            allowScaleBeyondDefaults: true,
+            autoStartChildren: false,
+          })
           await WorkflowRun.appendArtifact({
             runID: run.id,
             phaseID: started.phases[0]?.id,

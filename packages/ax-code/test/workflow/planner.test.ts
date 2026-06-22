@@ -27,12 +27,14 @@ describe("workflow dry-run planner", () => {
       allowWriteWorkflows: "false",
       durableChildren: "true",
       enqueueChildren: "0",
+      autoStartChildren: "false",
     })
     expect(startOptions).toEqual({
       allowScaleBeyondDefaults: true,
       allowWriteWorkflows: false,
       durableChildren: true,
       enqueueChildren: false,
+      autoStartChildren: false,
     })
   })
 
