@@ -6,6 +6,7 @@ import { PassThrough } from "node:stream"
 import { Auth } from "../../src/auth"
 import {
   DEFAULT_LOGIN_PROVIDER_IDS,
+  ProvidersAxEngineCommand,
   ProvidersLoginCommand,
   ProvidersListCommand,
   ProvidersLogoutCommand,
@@ -15,6 +16,7 @@ import { Ssrf } from "../../src/util/ssrf"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
+import { AX_ENGINE_QUANTIZATION_IDS } from "../../src/provider/ax-engine"
 
 const originalCwd = process.cwd()
 const authFile = path.join(Global.Path.data, "auth.json")
@@ -36,6 +38,24 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("grok-build-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("qoder-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(true)
+  })
+
+  test("ax-engine quantization choices match the supported catalog", () => {
+    const options = new Map<string, Record<string, unknown>>()
+    const yargs = {
+      positional() {
+        return yargs
+      },
+      option(name: string, config: Record<string, unknown>) {
+        options.set(name, config)
+        return yargs
+      },
+    }
+
+    ;(ProvidersAxEngineCommand.builder as Function)(yargs)
+
+    expect(options.get("quantization")?.choices).toBe(AX_ENGINE_QUANTIZATION_IDS)
+    expect(options.get("quantization")?.choices).not.toContain("mlx4bit")
   })
 
   test("providers list reports saved credentials", async () => {

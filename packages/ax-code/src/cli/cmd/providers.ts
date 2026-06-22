@@ -21,6 +21,7 @@ import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
 import {
   AX_ENGINE_MODEL_IDS,
+  AX_ENGINE_QUANTIZATION_IDS,
   getAxEngineStatus,
   normalizeModelID,
   normalizeQuantization,
@@ -326,7 +327,7 @@ export const ProvidersAxEngineCommand = cmd({
       })
       .option("quantization", {
         describe: "MLX quantization to prepare",
-        choices: ["mlx4bit", "mlx6bit"] as const,
+        choices: AX_ENGINE_QUANTIZATION_IDS,
       })
       .option("download", {
         describe: "download the model through `ax-engine download`",
