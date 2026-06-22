@@ -179,8 +179,8 @@ export namespace QualityCalibrationModel {
     return ratio(records.filter((record) => record.actualPositive).length, records.length) ?? 0.5
   }
 
-  function finiteOption(value: number, fallback: number) {
-    return Number.isFinite(value) ? value : fallback
+  function finiteOption(value: number | undefined, fallback: number) {
+    return typeof value === "number" && Number.isFinite(value) ? value : fallback
   }
 
   function predictionConfidence(item: ProbabilisticRollout.ReplayItem, model: ModelFile) {
@@ -270,9 +270,9 @@ export namespace QualityCalibrationModel {
       laplaceAlpha?: number
     },
   ): ModelFile {
-    const requestedBinCount = Math.max(1, Math.floor(options?.binCount ?? 5))
-    const minBinCount = Math.max(1, Math.floor(options?.minBinCount ?? 5))
-    const laplaceAlpha = options?.laplaceAlpha ?? 2
+    const requestedBinCount = Math.max(1, Math.floor(finiteOption(options?.binCount, 5)))
+    const minBinCount = Math.max(1, Math.floor(finiteOption(options?.minBinCount, 5)))
+    const laplaceAlpha = finiteOption(options?.laplaceAlpha, 2)
     const records = trainingRecords(items, labels)
     const prior = globalPrior(records)
     const grouped = new Map<string, TrainingRecord[]>()

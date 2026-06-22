@@ -147,4 +147,26 @@ describe("QualityCalibrationModel", () => {
     expect(split.trainSessionIDs.length).toBeGreaterThan(0)
     expect(split.evalSessionIDs.length).toBeGreaterThan(0)
   })
+
+  test("normalizes non-finite training options", () => {
+    const items: ProbabilisticRollout.ReplayItem[] = [
+      replayItem({ artifactID: "a", sessionID: "ses_1", createdAt: "2026-04-20T00:00:00.000Z", confidence: 0.9 }),
+      replayItem({ artifactID: "b", sessionID: "ses_1", createdAt: "2026-04-20T00:00:01.000Z", confidence: 0.2 }),
+    ]
+    const labels: ProbabilisticRollout.Label[] = [
+      label({ labelID: "lbl_a", artifactID: "a", sessionID: "ses_1", outcome: "accepted" }),
+      label({ labelID: "lbl_b", artifactID: "b", sessionID: "ses_1", outcome: "dismissed" }),
+    ]
+
+    const model = QualityCalibrationModel.train(items, labels, {
+      binCount: Number.NaN,
+      minBinCount: Number.POSITIVE_INFINITY,
+      laplaceAlpha: Number.NaN,
+    })
+
+    expect(() => QualityCalibrationModel.ModelFile.parse(model)).not.toThrow()
+    expect(model.requestedBinCount).toBe(5)
+    expect(model.minBinCount).toBe(5)
+    expect(model.laplaceAlpha).toBe(2)
+  })
 })
