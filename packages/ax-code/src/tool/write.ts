@@ -72,7 +72,14 @@ export const WriteTool = Tool.define("write", {
       // swapped between validation and write.
       await assertSymlinkInsideProject(filepath)
 
-      const stats = await fs.promises.stat(filepath).catch(() => null)
+      const stats = await fs.promises.stat(filepath).catch((error: unknown) => {
+        const code = Filesystem.errnoCode(error)
+        if (code === "ENOENT") return null
+        if (code === "ENOTDIR") {
+          throw new Error(`write verification failed: parent path is not a directory: ${filepath}`)
+        }
+        throw error
+      })
       if (stats?.isDirectory()) throw new Error(`Path is a directory, not a file: ${filepath}`)
 
       exists = await Filesystem.exists(filepath)

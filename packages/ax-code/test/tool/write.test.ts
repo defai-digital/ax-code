@@ -496,6 +496,36 @@ describe("tool.write", () => {
       })
     })
 
+    test("rejects writes when a parent path component is a file before asking permission", async () => {
+      await using tmp = await tmpdir()
+      const parent = path.join(tmp.path, "parent.txt")
+      await fs.writeFile(parent, "content", "utf-8")
+      let askCount = 0
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await expect(
+            write.execute(
+              {
+                filePath: path.join(parent, "child.txt"),
+                content: "new content",
+              },
+              {
+                ...ctx,
+                ask: async () => {
+                  askCount++
+                },
+              },
+            ),
+          ).rejects.toThrow("parent path is not a directory")
+        },
+      })
+
+      expect(askCount).toBe(0)
+    })
+
     test.skipIf(process.platform === "win32" || process.getuid?.() === 0 || !!process.env.CI)(
       "throws error when OS denies write access",
       async () => {
