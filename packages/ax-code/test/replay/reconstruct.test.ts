@@ -353,6 +353,48 @@ describe("replay.reconstructStream", () => {
     })
   })
 
+  test("normalizes malformed collection fields in summary", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "skill.recommended",
+          sessionID: sid,
+          agent: "build",
+          source: "path_match",
+          availableSkillCount: 1,
+          filePaths: "src/app.ts",
+          skills: [{ name: "repo" }, { label: "missing-name" }],
+        } as any)
+        Recorder.emit({
+          type: "permission.ask",
+          sessionID: sid,
+          permission: "bash",
+          patterns: "pnpm test",
+        } as any)
+        Recorder.emit({
+          type: "llm.output",
+          sessionID: sid,
+          parts: "hello",
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        expect(Replay.summary(sid)).toEqual([
+          "[skill]   recommended repo paths=",
+          "[perm]    ask bash patterns=",
+          "[llm]     output 0 parts",
+        ])
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
   test("toFullStream generates valid stream events", async () => {
     const steps: Replay.ReconstructedStep[] = [
       {

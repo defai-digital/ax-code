@@ -19,6 +19,24 @@ function eventTokens(value: unknown) {
   }
 }
 
+function stringList(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === "string")
+}
+
+function skillNames(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const name = (item as { name?: unknown }).name
+    return typeof name === "string" ? [name] : []
+  })
+}
+
+function arrayLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0
+}
+
 export namespace Replay {
   export type Mode = "verify" | "check" | "summary"
 
@@ -446,20 +464,20 @@ export namespace Replay {
           break
         case "skill.recommended":
           lines.push(
-            `[skill]   recommended ${event.skills.map((skill) => skill.name).join(",")} paths=${event.filePaths.join(",")}`,
+            `[skill]   recommended ${skillNames(event.skills).join(",")} paths=${stringList(event.filePaths).join(",")}`,
           )
           break
         case "skill.loaded":
           lines.push(`[skill]   loaded ${event.skillName}${event.callID ? ` call=${event.callID}` : ""}`)
           break
         case "permission.ask":
-          lines.push(`[perm]    ask ${event.permission} patterns=${event.patterns.join(",")}`)
+          lines.push(`[perm]    ask ${event.permission} patterns=${stringList(event.patterns).join(",")}`)
           break
         case "permission.reply":
           lines.push(`[perm]    reply ${event.reply}`)
           break
         case "llm.output":
-          lines.push(`[llm]     output ${event.parts.length} parts`)
+          lines.push(`[llm]     output ${arrayLength(event.parts)} parts`)
           break
         case "error":
           lines.push(`[error]   ${event.errorType}: ${event.message}`)
