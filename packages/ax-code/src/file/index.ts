@@ -661,7 +661,7 @@ export namespace File {
     }
 
     const content = await Filesystem.readText(readTarget).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return ""
+      if (Filesystem.isMissingPathError(error)) return ""
       throw error
     })
 

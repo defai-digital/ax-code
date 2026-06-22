@@ -146,6 +146,29 @@ describe("file/index Filesystem patterns", () => {
         readText.mockRestore()
       }
     })
+
+    test("returns empty content when text read races with parent path replacement", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "raced.txt")
+      await fs.writeFile(filepath, "content", "utf-8")
+
+      const readText = vi.spyOn(Filesystem, "readText").mockImplementation(async (target) => {
+        if (target === filepath) throw Object.assign(new Error("not a directory"), { code: "ENOTDIR" })
+        return fs.readFile(target, "utf-8")
+      })
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const result = await File.read("raced.txt")
+            expect(result).toMatchObject({ type: "text", content: "" })
+          },
+        })
+      } finally {
+        readText.mockRestore()
+      }
+    })
   })
 
   describe("File.read() - binary content", () => {
