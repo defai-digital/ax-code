@@ -186,6 +186,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         setModelStore("recent", rememberRecentModelEntry(modelStore.recent, model))
       }
 
+      function isVariantValid(model: ProviderModelKeyInput, variant: string | undefined) {
+        if (variant === undefined) return true
+        const provider = sync.data.provider.find((x) => x.id === model.providerID)
+        const variants = provider?.models[model.modelID]?.variants
+        return !!variants && Object.hasOwn(variants, variant)
+      }
+
       function save() {
         if (state.persistenceBlocked) {
           state.pending = true
@@ -324,6 +331,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             variant: modelStore.variant,
           },
           isModelValid,
+          isVariantValid,
         )
         if (pruned.changed) {
           log.info("removing invalid stored model preferences after providers loaded", {
@@ -465,7 +473,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             const m = currentModel()
             if (!m) return undefined
             const key = providerModelKey(m)
-            return modelStore.variant[key]
+            const value = modelStore.variant[key]
+            return isVariantValid(m, value) ? value : undefined
           },
           list() {
             const m = currentModel()

@@ -104,13 +104,14 @@ function sameVariantStore(left: Record<string, string | undefined>, right: Recor
 export function pruneModelPreferences(
   input: ModelPreferenceStore,
   isModelValid: (model: ProviderModelKeyInput) => boolean,
+  isVariantValid: (model: ProviderModelKeyInput, variant: string | undefined) => boolean = () => true,
 ): ModelPreferenceStore & { changed: boolean } {
   const recent = filterKnownModels(input.recent, isModelValid, RECENT_MODEL_LIMIT)
   const favorite = filterKnownModels(input.favorite, isModelValid)
   const variant = Object.fromEntries(
-    Object.entries(input.variant).filter(([key]) => {
+    Object.entries(input.variant).filter(([key, value]) => {
       const model = parseProviderModelKey(key)
-      return model !== undefined && isModelValid(model)
+      return model !== undefined && isModelValid(model) && isVariantValid(model, value)
     }),
   )
   return {

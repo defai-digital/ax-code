@@ -112,4 +112,35 @@ describe("tui local model preferences", () => {
     })
     expect(result.changed).toBe(true)
   })
+
+  test("pruneModelPreferences removes stale variants for otherwise valid models", () => {
+    const valid = new Set(["provider/model-1", "provider/model-2", "provider/model-3"])
+    const validVariants = new Map([
+      ["provider/model-1", new Set(["high"])],
+      ["provider/model-2", new Set(["low", "medium"])],
+    ])
+    const result = pruneModelPreferences(
+      {
+        recent: [model(1), model(2), model(3)],
+        favorite: [model(1)],
+        variant: {
+          "provider/model-1": "high",
+          "provider/model-2": "stale",
+          "provider/model-3": "orphaned",
+        },
+      },
+      (item) => valid.has(`${item.providerID}/${item.modelID}`),
+      (item, variant) => {
+        if (variant === undefined) return true
+        return validVariants.get(`${item.providerID}/${item.modelID}`)?.has(variant) ?? false
+      },
+    )
+
+    expect(result.recent).toEqual([model(1), model(2), model(3)])
+    expect(result.favorite).toEqual([model(1)])
+    expect(result.variant).toEqual({
+      "provider/model-1": "high",
+    })
+    expect(result.changed).toBe(true)
+  })
 })
