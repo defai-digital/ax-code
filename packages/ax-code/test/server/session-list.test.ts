@@ -77,6 +77,27 @@ describe("Session.list", () => {
     })
   })
 
+  test("treats LIKE wildcard characters as literal search text", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const prefix = `literal-wildcard-${Date.now()}`
+        await Session.create({ title: `${prefix}-percent-%-needle` })
+        await Session.create({ title: `${prefix}-percent-X-needle` })
+        await Session.create({ title: `${prefix}-underscore-_-needle` })
+        await Session.create({ title: `${prefix}-underscore-X-needle` })
+
+        const percentTitles = [...Session.list({ search: `${prefix}-percent-%-needle` })].map((s) => s.title)
+        expect(percentTitles).toContain(`${prefix}-percent-%-needle`)
+        expect(percentTitles).not.toContain(`${prefix}-percent-X-needle`)
+
+        const underscoreTitles = [...Session.list({ search: `${prefix}-underscore-_-needle` })].map((s) => s.title)
+        expect(underscoreTitles).toContain(`${prefix}-underscore-_-needle`)
+        expect(underscoreTitles).not.toContain(`${prefix}-underscore-X-needle`)
+      },
+    })
+  })
+
   test("respects limit parameter", async () => {
     await Instance.provide({
       directory: projectRoot,

@@ -8,7 +8,7 @@ import { Config } from "../config/config"
 import { Flag } from "../flag/flag"
 import { Installation } from "../installation"
 
-import { Database, NotFoundError, eq, and, or, gte, isNull, desc, like, inArray, lt } from "../storage/db"
+import { Database, NotFoundError, eq, and, or, gte, isNull, desc, inArray, lt, sql } from "../storage/db"
 import type { SQL } from "../storage/db"
 import { SessionTable, MessageTable, PartTable } from "./session.sql"
 import { SessionGoal } from "./goal"
@@ -67,6 +67,10 @@ export namespace Session {
   // but a semantic-injection bug that changes query behavior.
   function escapeLike(input: string) {
     return input.replace(/[\\%_]/g, "\\$&")
+  }
+
+  function titleMatchesSearch(input: string): SQL {
+    return sql`${SessionTable.title} like ${`%${escapeLike(input)}%`} escape '\\'`
   }
 
   type SessionRow = typeof SessionTable.$inferSelect
@@ -614,7 +618,7 @@ export namespace Session {
       conditions.push(gte(SessionTable.time_updated, parsed.start))
     }
     if (parsed.search) {
-      conditions.push(like(SessionTable.title, `%${escapeLike(parsed.search)}%`))
+      conditions.push(titleMatchesSearch(parsed.search))
     }
 
     const limit = parsed.limit ?? 100
@@ -675,7 +679,7 @@ export namespace Session {
       conditions.push(lt(SessionTable.time_updated, parsed.cursor))
     }
     if (parsed.search) {
-      conditions.push(like(SessionTable.title, `%${escapeLike(parsed.search)}%`))
+      conditions.push(titleMatchesSearch(parsed.search))
     }
     if (!parsed.archived) {
       conditions.push(isNull(SessionTable.time_archived))
