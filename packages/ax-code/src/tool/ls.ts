@@ -1,9 +1,10 @@
 import z from "zod"
 import { Tool } from "./tool"
 import * as path from "path"
+import fs from "fs/promises"
+import { minimatch } from "minimatch"
 import DESCRIPTION from "./ls.txt"
 import { Instance } from "../project/instance"
-import { Ripgrep } from "../file/ripgrep"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
@@ -34,6 +35,66 @@ const IGNORE_PATTERNS = [
 ]
 
 const LIMIT = 100
+type ListedEntry = {
+  path: string
+  type: "directory" | "file"
+}
+type IgnoreRule = {
+  pattern: string
+  prefix: boolean
+}
+
+function toSlashPath(value: string) {
+  return value.split(path.sep).join("/")
+}
+
+function matchesIgnore(rule: IgnoreRule, entry: ListedEntry) {
+  const pattern = rule.pattern
+  const normalized = pattern.replaceAll("\\", "/")
+  const rel = entry.path
+  if (normalized.endsWith("/")) {
+    const dir = normalized.slice(0, -1)
+    return rel === dir || rel.startsWith(`${dir}/`)
+  }
+  if (rel === normalized || rel.startsWith(`${normalized}/`)) return true
+  if (minimatch(rel, normalized, { dot: true })) return true
+  return rule.prefix && minimatch(rel, `${normalized}*`, { dot: true })
+}
+
+async function listEntries(root: string, ignore: string[] | undefined, signal: AbortSignal) {
+  const ignored: IgnoreRule[] = IGNORE_PATTERNS.map((pattern) => ({ pattern, prefix: true })).concat(
+    (ignore ?? []).map((pattern) => ({ pattern, prefix: false })),
+  )
+  const entries: ListedEntry[] = []
+  const stack = [""]
+  let truncated = false
+
+  while (stack.length > 0) {
+    signal.throwIfAborted()
+    const dir = stack.pop()!
+    const fullDir = path.join(root, dir)
+    const children = await fs.readdir(fullDir, { withFileTypes: true })
+    children.sort((a, b) => a.name.localeCompare(b.name))
+
+    for (const child of children) {
+      signal.throwIfAborted()
+      const rel = toSlashPath(path.join(dir, child.name))
+      const type = child.isDirectory() ? "directory" : "file"
+      const entry: ListedEntry = { path: rel, type }
+      if (ignored.some((rule) => matchesIgnore(rule, entry))) continue
+
+      entries.push(entry)
+      if (entries.length >= LIMIT) {
+        truncated = true
+        return { entries, truncated }
+      }
+
+      if (type === "directory") stack.push(rel)
+    }
+  }
+
+  return { entries, truncated }
+}
 
 export const ListTool = Tool.define("list", {
   description: DESCRIPTION,
@@ -55,19 +116,14 @@ export const ListTool = Tool.define("list", {
       },
     })
 
-    const ignoreGlobs = IGNORE_PATTERNS.map((p) => `!${p}*`).concat(params.ignore?.map((p) => `!${p}`) || [])
-    const files = []
-    for await (const file of Ripgrep.files({ cwd: searchPath, glob: ignoreGlobs, signal: ctx.abort })) {
-      files.push(file)
-      if (files.length >= LIMIT) break
-    }
+    const { entries, truncated } = await listEntries(searchPath, params.ignore, ctx.abort)
 
     // Build directory structure
     const dirs = new Set<string>()
     const filesByDir = new Map<string, string[]>()
 
-    for (const file of files) {
-      const dir = path.dirname(file)
+    for (const entry of entries) {
+      const dir = entry.type === "directory" ? entry.path : path.dirname(entry.path)
       const parts = dir === "." ? [] : dir.split("/")
 
       // Add all parent directories
@@ -77,6 +133,8 @@ export const ListTool = Tool.define("list", {
       }
 
       // Add file to its directory
+      if (entry.type === "directory") continue
+      const file = entry.path
       if (!filesByDir.has(dir)) filesByDir.set(dir, [])
       filesByDir.get(dir)!.push(path.basename(file))
     }
@@ -115,8 +173,8 @@ export const ListTool = Tool.define("list", {
     return {
       title,
       metadata: {
-        count: files.length,
-        truncated: files.length >= LIMIT,
+        count: entries.length,
+        truncated,
       },
       output,
     }
