@@ -208,9 +208,10 @@ export namespace ProbabilisticRollout {
     const calls = new Map<string, ToolCall>()
     for (const row of events) {
       if (row.event_data.type !== "tool.call") continue
-      calls.set(row.event_data.callID, {
-        callID: row.event_data.callID,
-        tool: row.event_data.tool,
+      const callID = stringValue(row.event_data.callID)
+      calls.set(callID, {
+        callID,
+        tool: stringValue(row.event_data.tool),
         input: row.event_data.input,
       })
     }
@@ -219,12 +220,24 @@ export namespace ProbabilisticRollout {
 
   function numberField(input: Record<string, unknown> | undefined, key: string) {
     const value = input?.[key]
-    return typeof value === "number" ? value : undefined
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined
   }
 
   function stringField(input: Record<string, unknown> | undefined, key: string) {
     const value = input?.[key]
     return typeof value === "string" ? value : undefined
+  }
+
+  function stringValue(value: unknown, fallback = "unknown") {
+    return typeof value === "string" && value.length > 0 ? value : fallback
+  }
+
+  function finiteNumber(value: unknown) {
+    return typeof value === "number" && Number.isFinite(value) ? value : 0
+  }
+
+  function toolStatus(value: unknown): ToolSummary["status"] {
+    return value === "error" ? "error" : "completed"
   }
 
   function booleanField(input: Record<string, unknown> | undefined, key: string) {
@@ -287,17 +300,17 @@ export namespace ProbabilisticRollout {
     if (row.event_data.type !== "tool.result") return
     const metadata = row.event_data.metadata
     return {
-      tool: row.event_data.tool,
-      callID: row.event_data.callID,
-      status: row.event_data.status,
+      tool: stringValue(row.event_data.tool),
+      callID: stringValue(row.event_data.callID),
+      status: toolStatus(row.event_data.status),
       timeCreated: row.time_created,
-      durationMs: row.event_data.durationMs,
+      durationMs: finiteNumber(row.event_data.durationMs),
       findingCount: numberField(metadata, "findingCount"),
       riskLabel: stringField(metadata, "riskLabel"),
       riskScore: numberField(metadata, "riskScore"),
       confidence: numberField(metadata, "confidence"),
       truncated: booleanField(metadata, "truncated"),
-      error: row.event_data.error,
+      error: typeof row.event_data.error === "string" ? row.event_data.error : undefined,
       input: call?.input,
     }
   }

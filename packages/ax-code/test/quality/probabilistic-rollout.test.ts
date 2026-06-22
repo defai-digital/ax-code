@@ -139,6 +139,46 @@ describe("ProbabilisticRollout.exportReplay", () => {
     })
   })
 
+  test("normalizes malformed legacy tool durations in replay exports", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "security_scan",
+          callID: "call_security",
+          input: { patterns: ["path_traversal"] },
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "security_scan",
+          callID: "call_security",
+          status: "completed",
+          output: "ok",
+          metadata: { findingCount: 0 },
+          durationMs: "slow",
+        } as any)
+        Recorder.end(sid)
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const exported = await ProbabilisticRollout.exportReplay(sid, "review")
+        expect(() => ProbabilisticRollout.ReplayExport.parse(exported)).not.toThrow()
+        expect(exported.items[0]?.evidence.toolSummaries[0]?.durationMs).toBe(0)
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
   test("exports debug case and hypothesis items from debug_analyze results", async () => {
     await using tmp = await tmpdir({ git: true })
 
