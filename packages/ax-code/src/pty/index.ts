@@ -13,6 +13,7 @@ import { JsonNumber } from "@/util/schema"
 import { PtyID } from "./schema"
 import fs from "fs/promises"
 import path from "path"
+import { NamedError } from "@ax-code/util/error"
 
 export namespace Pty {
   const log = Log.create({ service: "pty" })
@@ -165,6 +166,14 @@ export namespace Pty {
 
   export type Info = z.infer<typeof Info>
 
+  export const InvalidCwdError = NamedError.create(
+    "PtyInvalidCwd",
+    z.object({
+      cwd: z.string(),
+      message: z.string(),
+    }),
+  )
+
   export const CreateInput = z.object({
     command: z.string().optional(),
     args: z.array(z.string()).optional(),
@@ -300,6 +309,27 @@ export namespace Pty {
     }
   }
 
+  async function resolveCwd(input: CreateInput) {
+    const current = state()
+    const cwd = input.cwd ? path.resolve(current.dir, input.cwd) : current.dir
+    if (!input.cwd) return cwd
+
+    const projectRoot = await fs.realpath(Instance.directory)
+    const targetCwd = await fs.realpath(cwd).catch(() => {
+      throw new InvalidCwdError({
+        cwd: input.cwd!,
+        message: `PTY cwd is not a valid project directory: ${input.cwd}`,
+      })
+    })
+    if (!Filesystem.contains(projectRoot, targetCwd)) {
+      throw new InvalidCwdError({
+        cwd: input.cwd,
+        message: `PTY cwd escapes project directory: ${input.cwd}`,
+      })
+    }
+    return cwd
+  }
+
   export async function create(input: CreateInput) {
     const current = state()
     const id = PtyID.ascending()
@@ -314,13 +344,7 @@ export namespace Pty {
       args.push("-l")
     }
 
-    const cwd = input.cwd ? path.resolve(current.dir, input.cwd) : current.dir
-    if (input.cwd) {
-      const [projectRoot, targetCwd] = await Promise.all([fs.realpath(Instance.directory), fs.realpath(cwd)])
-      if (!Filesystem.contains(projectRoot, targetCwd)) {
-        throw new Error(`PTY cwd escapes project directory: ${input.cwd}`)
-      }
-    }
+    const cwd = await resolveCwd(input)
     const shellEnv = await Plugin.trigger("shell.env", { cwd }, { env: {} })
     const baseEnv = Env.sanitize({
       ...Env.sanitize(process.env),

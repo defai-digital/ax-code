@@ -205,7 +205,12 @@ describe("pty", () => {
             cwd: link,
             title: "escaped-cwd",
           }),
-        ).rejects.toThrow("PTY cwd escapes project directory")
+        ).rejects.toMatchObject({
+          name: "PtyInvalidCwd",
+          data: {
+            message: expect.stringContaining("PTY cwd escapes project directory:"),
+          },
+        })
       },
     })
   })

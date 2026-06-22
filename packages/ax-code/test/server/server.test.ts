@@ -90,6 +90,22 @@ test("websocket upgrades reject cross-origin browser requests", async () => {
   })
 })
 
+test("pty create rejects invalid cwd as a client error", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const directory = encodeURIComponent(tmp.path)
+  const response = await Server.Default().request(`/pty?directory=${directory}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd: "missing-directory" }),
+  })
+
+  expect(response.status).toBe(400)
+  expect(await response.json()).toMatchObject({
+    name: "InvalidRequestError",
+    details: { resource: "ptyCwd" },
+  })
+})
+
 test("path route resolves symlinked directory requests to their canonical path", async () => {
   await using tmp = await tmpdir({ git: true })
   const link = path.join(tmp.path, "..", `${path.basename(tmp.path)}-link`)

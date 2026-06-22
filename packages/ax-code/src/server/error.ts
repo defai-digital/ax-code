@@ -135,6 +135,15 @@ function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelop
       details: resource ? { resource } : undefined,
     }
   }
+  if (error.name === "PtyInvalidCwd") {
+    const data = namedErrorData(error)
+    return {
+      name: "InvalidRequestError",
+      message: typeof data.message === "string" ? data.message : "Invalid PTY working directory",
+      status: 400,
+      details: { resource: "ptyCwd" },
+    }
+  }
   if (error.name === "FileAccessDenied") {
     const data = namedErrorData(error)
     return {
