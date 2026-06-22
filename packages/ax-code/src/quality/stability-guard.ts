@@ -61,6 +61,10 @@ export namespace QualityStabilityGuard {
     return isoAt(new Date(new Date(iso).getTime() - hours * 60 * 60 * 1000))
   }
 
+  function finiteOption(value: number | undefined, fallback: number) {
+    return typeof value === "number" && Number.isFinite(value) ? value : fallback
+  }
+
   export function summarize(input: {
     source: string
     rollbacks: RollbackLike[]
@@ -71,9 +75,15 @@ export namespace QualityStabilityGuard {
   }): StabilitySummary {
     const normalizedNow = input.now === undefined ? new Date().toISOString() : normalizeTimestamp(input.now)
     const evaluatedAt = normalizedNow ?? new Date(0).toISOString()
-    const cooldownHours = Math.max(0, input.cooldownHours ?? DEFAULT_COOLDOWN_HOURS)
-    const repeatFailureWindowHours = Math.max(1, input.repeatFailureWindowHours ?? DEFAULT_REPEAT_FAILURE_WINDOW_HOURS)
-    const repeatFailureThreshold = Math.max(1, input.repeatFailureThreshold ?? DEFAULT_REPEAT_FAILURE_THRESHOLD)
+    const cooldownHours = Math.max(0, finiteOption(input.cooldownHours, DEFAULT_COOLDOWN_HOURS))
+    const repeatFailureWindowHours = Math.max(
+      1,
+      finiteOption(input.repeatFailureWindowHours, DEFAULT_REPEAT_FAILURE_WINDOW_HOURS),
+    )
+    const repeatFailureThreshold = Math.max(
+      1,
+      Math.floor(finiteOption(input.repeatFailureThreshold, DEFAULT_REPEAT_FAILURE_THRESHOLD)),
+    )
     const sourceRecords = input.rollbacks.filter((record) => record.source === input.source)
     const records = sourceRecords
       .flatMap((record): ParsedRollback[] => {

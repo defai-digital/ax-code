@@ -85,4 +85,20 @@ describe("QualityStabilityGuard", () => {
       detail: "invalid evaluation timestamp; defaulted to Unix epoch",
     })
   })
+
+  test("normalizes non-finite policy options to schema-valid defaults", () => {
+    const summary = QualityStabilityGuard.summarize({
+      source: "bad-policy-model-v1",
+      rollbacks: [{ source: "bad-policy-model-v1", rolledBackAt: "2026-04-20T10:00:00.000Z" }],
+      now: "2026-04-20T12:00:00.000Z",
+      cooldownHours: Number.NaN,
+      repeatFailureWindowHours: Number.POSITIVE_INFINITY,
+      repeatFailureThreshold: Number.NaN,
+    })
+
+    expect(() => QualityStabilityGuard.StabilitySummary.parse(summary)).not.toThrow()
+    expect(summary.cooldownHours).toBe(QualityStabilityGuard.DEFAULT_COOLDOWN_HOURS)
+    expect(summary.repeatFailureWindowHours).toBe(QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_WINDOW_HOURS)
+    expect(summary.repeatFailureThreshold).toBe(QualityStabilityGuard.DEFAULT_REPEAT_FAILURE_THRESHOLD)
+  })
 })
