@@ -8,7 +8,7 @@ import { ProjectID } from "@/project/schema"
 import { Database, NotFoundError, and, asc, desc, eq, lte } from "@/storage/db"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
-import { JsonBoolean } from "@/util/schema"
+import { JsonBoolean, JsonNumber } from "@/util/schema"
 import { ScheduledTaskID } from "./schema"
 import { ScheduledTaskTable } from "./session.sql"
 import { TaskQueue } from "./task-queue"
@@ -55,7 +55,7 @@ export namespace ScheduledTask {
   export const Schedule = z.discriminatedUnion("type", [
     z.object({
       type: z.literal("once"),
-      runAt: z.number().int().positive(),
+      runAt: JsonNumber(z.number().int().positive()),
     }),
     z.object({
       type: z.literal("daily"),
@@ -64,7 +64,7 @@ export namespace ScheduledTask {
     }),
     z.object({
       type: z.literal("weekly"),
-      day: z.number().int().min(0).max(6),
+      day: JsonNumber(z.number().int().min(0).max(6)),
       time: TimeOfDay,
       timezone: z.string().optional(),
     }),

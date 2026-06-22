@@ -241,6 +241,31 @@ describe("scheduled task routes", () => {
     })
   })
 
+  test("rejects unsafe scheduled task timestamps", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.Default()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+        const response = await app.request(`/scheduled-task?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            title: "Unsafe schedule",
+            prompt: "x",
+            schedule: { type: "once", runAt: Number.MAX_SAFE_INTEGER + 1 },
+          }),
+        })
+
+        expect(response.status).toBe(400)
+        const list = (await (await app.request(`/scheduled-task?${directoryQuery}`)).json()) as unknown[]
+        expect(list).toHaveLength(0)
+      },
+    })
+  })
+
   test("list skips corrupt persisted scheduled task rows", async () => {
     await using tmp = await tmpdir({ git: true })
 
