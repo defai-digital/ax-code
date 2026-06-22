@@ -69,6 +69,71 @@ test("loads config with defaults when no files exist", async () => {
   })
 })
 
+test("rejects unsafe integer config values", () => {
+  const unsafe = Number.MAX_SAFE_INTEGER + 1
+  const parsed = Config.Info.safeParse({
+    server: { port: unsafe },
+    provider: {
+      openai: {
+        options: {
+          timeout: unsafe,
+          chunkTimeout: unsafe,
+        },
+      },
+    },
+    session: {
+      ttl_days: unsafe,
+      max_steps: unsafe,
+      max_continuations: unsafe,
+      max_todo_retries: unsafe,
+    },
+    attachment: {
+      image: {
+        max_width: unsafe,
+        max_height: unsafe,
+        max_base64_bytes: unsafe,
+      },
+    },
+    experimental: {
+      mcp_timeout: unsafe,
+      autonomous_caps: {
+        steps: unsafe,
+        files: unsafe,
+        lines: unsafe,
+        perTool: {
+          bash: unsafe,
+        },
+      },
+    },
+    mcp: {
+      local: {
+        type: "local",
+        command: ["node", "server.js"],
+        timeout: unsafe,
+      },
+    },
+  })
+
+  expect(parsed.success).toBe(false)
+  const paths = parsed.error?.issues.map((issue) => issue.path.join("."))
+  expect(paths).toContain("server.port")
+  expect(paths).toContain("provider.openai.options.timeout")
+  expect(paths).toContain("provider.openai.options.chunkTimeout")
+  expect(paths).toContain("session.ttl_days")
+  expect(paths).toContain("session.max_steps")
+  expect(paths).toContain("session.max_continuations")
+  expect(paths).toContain("session.max_todo_retries")
+  expect(paths).toContain("attachment.image.max_width")
+  expect(paths).toContain("attachment.image.max_height")
+  expect(paths).toContain("attachment.image.max_base64_bytes")
+  expect(paths).toContain("experimental.mcp_timeout")
+  expect(paths).toContain("experimental.autonomous_caps.steps")
+  expect(paths).toContain("experimental.autonomous_caps.files")
+  expect(paths).toContain("experimental.autonomous_caps.lines")
+  expect(paths).toContain("experimental.autonomous_caps.perTool.bash")
+  expect(paths).toContain("mcp.local.timeout")
+})
+
 test("loads JSON config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

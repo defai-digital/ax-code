@@ -13,6 +13,9 @@ const PROVIDER_TIMEOUT_MINUTES = 5
 const RFC_DYNAMIC_CLIENT_REGISTRATION = "RFC 7591"
 
 const ModelId = z.string().meta({ $ref: MODEL_SCHEMA_URL })
+const SafeInteger = z.number().int().refine(Number.isSafeInteger, "must be a safe integer")
+const PositiveInteger = SafeInteger.positive()
+const NonNegativeInteger = SafeInteger.min(0)
 const McpLocalCommand = z
   .array(z.string())
   .min(1, "Command must include an executable")
@@ -32,10 +35,7 @@ const McpRemoteUrl = z.string().refine(
   { message: "Remote MCP URL must be a valid HTTP(S) URL" },
 )
 
-const McpTimeout = z
-  .number()
-  .int()
-  .positive()
+const McpTimeout = PositiveInteger
   .optional()
   .describe(
     `Timeout in ms for MCP server requests. Defaults to ${MCP_TIMEOUT_MS} (${MCP_TIMEOUT_SECONDS} seconds) if not specified.`,
@@ -260,13 +260,8 @@ export const Agent = z
       ])
       .optional()
       .describe("Hex color code (e.g., #FF5733) or theme color (e.g., primary)"),
-    steps: z
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe("Maximum number of agentic iterations before forcing text-only response"),
-    maxSteps: z.number().int().positive().optional().describe("@deprecated Use 'steps' field instead."),
+    steps: PositiveInteger.optional().describe("Maximum number of agentic iterations before forcing text-only response"),
+    maxSteps: PositiveInteger.optional().describe("@deprecated Use 'steps' field instead."),
     permission: Permission.optional(),
   })
   .catchall(z.any())
@@ -485,7 +480,7 @@ export const Keybinds = z
 
 export const Server = z
   .object({
-    port: z.number().int().positive().optional().describe("Port to listen on"),
+    port: PositiveInteger.optional().describe("Port to listen on"),
     hostname: z.string().optional().describe("Hostname to listen on"),
     mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
     mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: ax-code.local)"),
@@ -531,24 +526,15 @@ export const Provider = ModelsDev.Provider.partial()
         setCacheKey: z.boolean().optional().describe("Enable promptCacheKey for this provider (default false)"),
         timeout: z
           .union([
-            z
-              .number()
-              .int()
-              .positive()
-              .describe(
-                `Timeout in milliseconds for requests to this provider. Default is ${PROVIDER_TIMEOUT_MS} (${PROVIDER_TIMEOUT_MINUTES} minutes). Set to false to disable timeout.`,
-              ),
+            PositiveInteger.describe(
+              `Timeout in milliseconds for requests to this provider. Default is ${PROVIDER_TIMEOUT_MS} (${PROVIDER_TIMEOUT_MINUTES} minutes). Set to false to disable timeout.`,
+            ),
             z.literal(false).describe("Disable timeout for this provider entirely."),
           ])
           .optional(),
-        chunkTimeout: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe(
-            "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.",
-          ),
+        chunkTimeout: PositiveInteger.optional().describe(
+          "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.",
+        ),
       })
       .catchall(z.any())
       .optional(),
@@ -675,8 +661,8 @@ export const Info = z
               languageId: z.string().optional(),
               disabled: z.boolean().optional(),
               semantic: z.boolean().optional(),
-              priority: z.number().int().optional(),
-              concurrency: z.number().int().positive().optional(),
+              priority: SafeInteger.optional(),
+              concurrency: PositiveInteger.optional(),
               capabilities: z
                 .object({
                   hover: z.boolean().optional(),
@@ -734,35 +720,17 @@ export const Info = z
     tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
     session: z
       .object({
-        ttl_days: z
-          .number()
-          .int()
-          .min(1)
-          .optional()
-          .describe("Auto-prune sessions older than this many days (default: 30)"),
+        ttl_days: SafeInteger.min(1).optional().describe("Auto-prune sessions older than this many days (default: 30)"),
         auto_prune: z.boolean().optional().describe("Automatically prune expired sessions on startup (default: true)"),
-        max_steps: z
-          .number()
-          .int()
-          .min(10)
+        max_steps: SafeInteger.min(10)
           .optional()
           .describe("Maximum agentic steps per session turn before stopping (default: 200)"),
-        max_continuations: z
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe(
-            "In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)",
-          ),
-        max_todo_retries: z
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe(
-            "In autonomous mode, how many times to auto-continue when todos remain pending after the model stops (default: 10, 0 to disable)",
-          ),
+        max_continuations: NonNegativeInteger.optional().describe(
+          "In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)",
+        ),
+        max_todo_retries: NonNegativeInteger.optional().describe(
+          "In autonomous mode, how many times to auto-continue when todos remain pending after the model stops (default: 10, 0 to disable)",
+        ),
       })
       .optional()
       .describe("Session lifecycle management"),
@@ -795,12 +763,9 @@ export const Info = z
       .object({
         auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),
         prune: z.boolean().optional().describe("Enable pruning of old tool outputs (default: true)"),
-        reserved: z
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe("Token buffer for compaction. Leaves enough window to avoid overflow during compaction."),
+        reserved: NonNegativeInteger.optional().describe(
+          "Token buffer for compaction. Leaves enough window to avoid overflow during compaction.",
+        ),
       })
       .optional(),
     browser: z
@@ -822,19 +787,11 @@ export const Info = z
               .boolean()
               .optional()
               .describe("Automatically resize images that exceed limits before sending to the model (default: true)"),
-            max_width: z.number().int().positive().optional().describe("Maximum image width in pixels (default: 2000)"),
-            max_height: z
-              .number()
-              .int()
-              .positive()
-              .optional()
-              .describe("Maximum image height in pixels (default: 2000)"),
-            max_base64_bytes: z
-              .number()
-              .int()
-              .positive()
-              .optional()
-              .describe("Maximum image size in base64 bytes (default: 5242880 = 5MiB)"),
+            max_width: PositiveInteger.optional().describe("Maximum image width in pixels (default: 2000)"),
+            max_height: PositiveInteger.optional().describe("Maximum image height in pixels (default: 2000)"),
+            max_base64_bytes: PositiveInteger.optional().describe(
+              "Maximum image size in base64 bytes (default: 5242880 = 5MiB)",
+            ),
           })
           .optional(),
       })
@@ -853,12 +810,7 @@ export const Info = z
           .optional()
           .describe("Tools that should only be available to primary agents."),
         continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
-        mcp_timeout: z
-          .number()
-          .int()
-          .positive()
-          .optional()
-          .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+        mcp_timeout: PositiveInteger.optional().describe("Timeout in milliseconds for model context protocol (MCP) requests"),
         autonomous_escalate_low_confidence: z
           .boolean()
           .optional()
@@ -873,12 +825,12 @@ export const Info = z
           ),
         autonomous_caps: z
           .object({
-            steps: z.number().int().positive().optional(),
-            files: z.number().int().positive().optional(),
-            lines: z.number().int().positive().optional(),
+            steps: PositiveInteger.optional(),
+            files: PositiveInteger.optional(),
+            lines: PositiveInteger.optional(),
             blockedPaths: z.array(z.string()).optional(),
             perTool: z
-              .record(z.string(), z.number().int())
+              .record(z.string(), SafeInteger)
               .optional()
               .describe(
                 "Per-tool call-count caps. 0 or negative disables the cap for that tool. Tools not listed are unrestricted at the per-tool layer.",
