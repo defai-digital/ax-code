@@ -251,6 +251,32 @@ describe("workflow spec v1", () => {
     expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "budget.maxTotalAgents")).toBe(true)
   })
 
+  test("rejects unsafe integer workflow budgets", () => {
+    const parsed = WorkflowSpecV1.safeParse({
+      schemaVersion: 1,
+      id: "unsafe-budget",
+      name: "Unsafe Budget",
+      description: "Invalid unsafe integer budgets.",
+      budget: {
+        maxToolCalls: Number.MAX_SAFE_INTEGER + 1,
+      },
+      phases: [
+        {
+          id: "scan",
+          name: "Scan",
+          kind: "fanout",
+          budget: {
+            maxToolCalls: Number.MAX_SAFE_INTEGER + 1,
+          },
+        },
+      ],
+    })
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "budget.maxToolCalls")).toBe(true)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "phases.0.budget.maxToolCalls")).toBe(true)
+  })
+
   test("rejects phase parallelism above the workflow budget", () => {
     const parsed = WorkflowSpecV1.safeParse({
       schemaVersion: 1,

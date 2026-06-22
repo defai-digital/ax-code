@@ -24,7 +24,8 @@ const Identifier = z
   .regex(/^[a-z][a-z0-9-]*$/, "must be kebab-case starting with a lowercase letter")
 
 const NonEmptyString = z.string().trim().min(1)
-const PositiveInteger = z.number().int().positive()
+const SafeInteger = z.number().int().refine(Number.isSafeInteger, "must be a safe integer")
+const PositiveInteger = SafeInteger.positive()
 
 export const WorkflowTrigger = z.discriminatedUnion("kind", [
   z.object({
@@ -65,7 +66,7 @@ const WorkflowBudgetFields = {
   ),
   maxTotalAgents: PositiveInteger.max(WORKFLOW_MAX_TOTAL_AGENTS).default(WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS),
   maxToolCalls: PositiveInteger.default(WORKFLOW_DEFAULT_MAX_TOOL_CALLS),
-  maxRetries: z.number().int().min(0).max(5).default(WORKFLOW_DEFAULT_MAX_RETRIES),
+  maxRetries: SafeInteger.min(0).max(5).default(WORKFLOW_DEFAULT_MAX_RETRIES),
 }
 
 const DefaultWorkflowBudget = {
@@ -98,7 +99,7 @@ export const WorkflowPhaseBudget = z.object({
   maxConcurrentAgents: PositiveInteger.max(WORKFLOW_MAX_CONCURRENT_AGENTS).optional(),
   maxTotalAgents: PositiveInteger.max(WORKFLOW_MAX_TOTAL_AGENTS).optional(),
   maxToolCalls: PositiveInteger.optional(),
-  maxRetries: z.number().int().min(0).max(5).optional(),
+  maxRetries: SafeInteger.min(0).max(5).optional(),
 })
 export type WorkflowPhaseBudget = z.infer<typeof WorkflowPhaseBudget>
 
