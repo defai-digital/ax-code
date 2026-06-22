@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest"
-import { aggregateSessionStats, displayStats } from "../../src/cli/cmd/stats"
+import { aggregateSessionStats, displayStats, validateStatsDays, validateStatsDisplayLimit } from "../../src/cli/cmd/stats"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
@@ -111,6 +111,26 @@ test("displayStats sanitizes non-finite numbers", () => {
   expect(output).toContain("TOOL USAGE")
   expect(output).not.toContain("Infinity")
   expect(output).not.toContain("NaN")
+})
+
+test("validateStatsDays rejects invalid time windows", () => {
+  expect(validateStatsDays(undefined)).toBeUndefined()
+  expect(validateStatsDays(0)).toBe(0)
+  expect(validateStatsDays(7)).toBe(7)
+
+  for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "7"]) {
+    expect(() => validateStatsDays(value)).toThrow("--days must be a non-negative integer")
+  }
+})
+
+test("validateStatsDisplayLimit rejects invalid display limits", () => {
+  expect(validateStatsDisplayLimit(undefined, "--tools")).toBeUndefined()
+  expect(validateStatsDisplayLimit(0, "--tools")).toBe(0)
+  expect(validateStatsDisplayLimit(5, "--models")).toBe(5)
+
+  for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "5"]) {
+    expect(() => validateStatsDisplayLimit(value, "--tools")).toThrow("--tools must be a non-negative integer")
+  }
 })
 
 test("aggregateSessionStats skips sessions whose messages fail with an unprintable reason", async () => {

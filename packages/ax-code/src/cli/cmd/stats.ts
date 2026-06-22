@@ -66,6 +66,12 @@ export const StatsCommand = cmd({
         describe: "filter by project (default: all projects, empty string: current project)",
         type: "string",
       })
+      .check((argv) => {
+        validateStatsDays(argv.days)
+        validateStatsDisplayLimit(argv.tools, "--tools")
+        if (typeof argv.models === "number") validateStatsDisplayLimit(argv.models, "--models")
+        return true
+      })
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
@@ -75,13 +81,29 @@ export const StatsCommand = cmd({
       if (args.models === true) {
         modelLimit = Infinity
       } else if (typeof args.models === "number") {
-        modelLimit = args.models
+        modelLimit = validateStatsDisplayLimit(args.models, "--models")
       }
 
-      displayStats(stats, args.tools, modelLimit)
+      displayStats(stats, validateStatsDisplayLimit(args.tools, "--tools"), modelLimit)
     })
   },
 })
+
+export function validateStatsDays(days: unknown): number | undefined {
+  if (days === undefined) return undefined
+  if (typeof days !== "number" || !Number.isInteger(days) || days < 0) {
+    throw new Error("--days must be a non-negative integer")
+  }
+  return days
+}
+
+export function validateStatsDisplayLimit(limit: unknown, option: "--tools" | "--models"): number | undefined {
+  if (limit === undefined) return undefined
+  if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 0) {
+    throw new Error(`${option} must be a non-negative integer`)
+  }
+  return limit
+}
 
 async function getCurrentProject(): Promise<Project.Info> {
   return Instance.project
@@ -96,6 +118,7 @@ async function getAllSessions(): Promise<Session.Info[]> {
 }
 
 export async function aggregateSessionStats(days?: number, projectFilter?: string): Promise<SessionStats> {
+  days = validateStatsDays(days)
   const sessions = await getAllSessions()
   const MS_IN_DAY = 24 * 60 * 60 * 1000
 
