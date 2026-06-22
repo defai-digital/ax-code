@@ -57,6 +57,11 @@ export namespace QualityPromotionWatch {
     })
   }
 
+  function positiveInt(value: number | null | undefined, fallback: number | null) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return fallback
+    return Math.max(1, Math.floor(value))
+  }
+
   export function windowedRecords(input: {
     records: ProbabilisticRollout.ShadowRecord[]
     source: string
@@ -110,9 +115,8 @@ export namespace QualityPromotionWatch {
           }),
         }
     const policy = effectiveReleasePolicy.policy.watch
-    const minRecords = Math.max(1, input.minRecords ?? policy.minRecords)
-    const maxRecords =
-      input.maxRecords === undefined ? policy.maxRecords : input.maxRecords ? Math.max(1, input.maxRecords) : null
+    const minRecords = positiveInt(input.minRecords, policy.minRecords) ?? policy.minRecords
+    const maxRecords = input.maxRecords === undefined ? policy.maxRecords : positiveInt(input.maxRecords, policy.maxRecords)
     const records = windowedRecords({
       records: input.records,
       source: input.source,

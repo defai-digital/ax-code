@@ -149,6 +149,30 @@ describe("QualityPromotionWatch", () => {
     expect(summary.gates.find((gate) => gate.name === "candidate-coverage")?.status).toBe("fail")
   })
 
+  test("normalizes non-finite watch record options to policy defaults", () => {
+    const records: ProbabilisticRollout.ShadowRecord[] = [
+      shadowRecord({
+        artifactID: "after-1",
+        sessionID: "ses_1",
+        createdAt: "2026-04-20T03:00:00.000Z",
+        capturedAt: "2026-04-20T03:00:00.000Z",
+        candidateAvailable: true,
+      }),
+    ]
+
+    const summary = QualityPromotionWatch.summarize({
+      records,
+      source: "watch-model-v1",
+      promotedAt: "2026-04-20T00:30:00.000Z",
+      minRecords: Number.NaN,
+      maxRecords: Number.POSITIVE_INFINITY,
+    })
+
+    expect(() => QualityPromotionWatch.WatchSummary.parse(summary)).not.toThrow()
+    expect(summary.window.minRecords).toBe(QualityPromotionReleasePolicy.DEFAULT_WATCH_MIN_RECORDS)
+    expect(summary.window.maxRecords).toBe(QualityPromotionReleasePolicy.DEFAULT_WATCH_MAX_RECORDS)
+  })
+
   test("uses release policy watch thresholds instead of fixed defaults", () => {
     const records: ProbabilisticRollout.ShadowRecord[] = [
       shadowRecord({
