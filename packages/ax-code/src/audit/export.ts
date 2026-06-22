@@ -14,6 +14,23 @@ function summarizeText(text: string | undefined, max: number): string {
   return text.slice(0, max - 3) + "..."
 }
 
+function finiteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0
+}
+
+function eventTokens(value: unknown) {
+  if (!value || typeof value !== "object") return { input: 0, output: 0 }
+  const tokens = value as { input?: unknown; output?: unknown }
+  return {
+    input: finiteNumber(tokens.input),
+    output: finiteNumber(tokens.output),
+  }
+}
+
+function arrayLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0
+}
+
 export function formatAuditTimestamp(timestamp: number): string {
   const date = new Date(timestamp)
   return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString()
@@ -37,22 +54,22 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
     case "session.end":
       return { ...base, action: "end", result: event.reason }
     case "agent.route":
-      const confidence = event.confidence ?? 0
       return {
         ...base,
         agent: event.toAgent,
         action: "route",
-        result: `${event.routeMode ?? "switch"} from ${event.fromAgent} (${confidence.toFixed(2)})`,
+        result: `${event.routeMode ?? "switch"} from ${event.fromAgent} (${finiteNumber(event.confidence).toFixed(2)})`,
       }
     case "llm.request":
       return { ...base, action: "request", target: event.model }
     case "llm.response":
+      const responseTokens = eventTokens(event.tokens)
       return {
         ...base,
         action: "response",
         result: event.finishReason,
-        duration_ms: event.latencyMs,
-        token_usage: { input: event.tokens.input, output: event.tokens.output },
+        duration_ms: finiteNumber(event.latencyMs),
+        token_usage: { input: responseTokens.input, output: responseTokens.output },
       }
     case "tool.call":
       return { ...base, tool: event.tool, action: "call", target: event.callID }
@@ -67,23 +84,24 @@ function toAuditRecord(sessionID: string, event: ReplayEvent, timestamp: number,
             ? summarizeText(event.output, 500)
             : event.status,
         metadata: event.metadata,
-        duration_ms: event.durationMs,
+        duration_ms: finiteNumber(event.durationMs),
       }
     case "step.start":
       return { ...base, action: "step.start" }
     case "step.finish":
+      const stepTokens = eventTokens(event.tokens)
       return {
         ...base,
         action: "step.finish",
         result: event.finishReason,
-        token_usage: { input: event.tokens.input, output: event.tokens.output },
+        token_usage: { input: stepTokens.input, output: stepTokens.output },
       }
     case "permission.ask":
       return { ...base, action: "permission.ask", target: event.permission, tool: event.tool }
     case "permission.reply":
       return { ...base, action: "permission.reply", result: event.reply }
     case "llm.output":
-      return { ...base, action: "output", result: `${event.parts.length} parts` }
+      return { ...base, action: "output", result: `${arrayLength(event.parts)} parts` }
     case "error":
       return { ...base, action: "error", result: `${event.errorType}: ${event.message}` }
     case "code.graph.snapshot":

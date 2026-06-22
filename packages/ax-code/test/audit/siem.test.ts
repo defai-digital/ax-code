@@ -201,6 +201,65 @@ describe("R21: SIEM-compatible audit schema", () => {
     })
   })
 
+  test("normalizes malformed legacy event fields during export", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: sid,
+          fromAgent: "build",
+          toAgent: "review",
+          confidence: "high",
+        } as any)
+        Recorder.emit({
+          type: "llm.response",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: {},
+          latencyMs: "slow",
+        } as any)
+        Recorder.emit({
+          type: "step.finish",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: {},
+        } as any)
+        Recorder.emit({
+          type: "llm.output",
+          sessionID: sid,
+          stepIndex: 0,
+          parts: "text",
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const records = [...AuditExport.stream(sid)].map((line) => JSON.parse(line))
+        expect(records.map((record) => record.result)).toEqual([
+          "switch from build (0.00)",
+          "stop",
+          "stop",
+          "0 parts",
+        ])
+        expect(records[1]).toMatchObject({
+          duration_ms: 0,
+          token_usage: { input: 0, output: 0 },
+        })
+        expect(records[2]).toMatchObject({
+          token_usage: { input: 0, output: 0 },
+        })
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
   test("audit records with policy context include policy field", async () => {
     const lines = [
       ...AuditExport.streamAll(
