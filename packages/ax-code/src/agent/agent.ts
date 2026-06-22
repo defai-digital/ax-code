@@ -28,6 +28,8 @@ import { Skill } from "../skill"
 import { normalizeToWorkspacePath } from "../tool/file-path"
 
 export namespace Agent {
+  const SafeInteger = z.number().int().refine(Number.isSafeInteger, "must be a safe integer")
+
   export const Info = z
     .object({
       name: z.string(),
@@ -50,7 +52,7 @@ export namespace Agent {
       prompt: z.string().optional(),
       displayName: z.string().optional(),
       options: z.record(z.string(), z.any()),
-      steps: z.number().int().positive().optional(),
+      steps: SafeInteger.positive().optional(),
     })
     .meta({
       ref: "Agent",

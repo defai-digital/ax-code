@@ -15,6 +15,19 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
+test("rejects unsafe integer agent steps", () => {
+  const parsed = Agent.Info.safeParse({
+    name: "unsafe",
+    mode: "primary",
+    permission: [],
+    options: {},
+    steps: Number.MAX_SAFE_INTEGER + 1,
+  })
+
+  expect(parsed.success).toBe(false)
+  expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "steps")).toBe(true)
+})
+
 test("returns default native agents when no config", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
