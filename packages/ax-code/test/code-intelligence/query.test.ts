@@ -104,6 +104,23 @@ describe("CodeGraphQuery nodes", () => {
     })
   })
 
+  test("findNodesByName treats zero limit as no results", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "limited" }))
+
+        expect(CodeGraphQuery.findNodesByName(projectID, "limited", { limit: 0 })).toEqual([])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
   test("findNodesByNamePrefix returns name-prefixed matches", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -119,6 +136,23 @@ describe("CodeGraphQuery nodes", () => {
         const handles = CodeGraphQuery.findNodesByNamePrefix(projectID, "handle")
         expect(handles.length).toBe(2)
         expect(handles.map((n) => n.name).sort()).toEqual(["handleRequest", "handleResponse"])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
+  test("findNodesByNamePrefix treats zero limit as no results", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "limitedPrefix" }))
+
+        expect(CodeGraphQuery.findNodesByNamePrefix(projectID, "limited", { limit: 0 })).toEqual([])
 
         CodeGraphQuery.clearProject(projectID)
       },

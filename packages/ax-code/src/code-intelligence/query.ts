@@ -33,6 +33,12 @@ import { NativeStore } from "./native-store"
 
 const useNative = Flag.AX_CODE_NATIVE_INDEX && NativeStore.available
 
+function normalizeQueryLimit(limit: number | undefined): number | undefined {
+  if (limit === undefined) return undefined
+  if (!Number.isFinite(limit)) return 0
+  return Math.max(0, Math.floor(limit))
+}
+
 export namespace CodeGraphQuery {
   // ─── Node CRUD ──────────────────────────────────────────────────────
 
@@ -70,7 +76,10 @@ export namespace CodeGraphQuery {
     name: string,
     opts?: { kind?: CodeNodeKind; file?: string; limit?: number },
   ): NodeRow[] {
-    if (useNative) return NativeStore.findNodesByName(projectID, name, opts)
+    const limit = normalizeQueryLimit(opts?.limit)
+    if (limit === 0) return []
+    const queryOpts = { ...opts, limit }
+    if (useNative) return NativeStore.findNodesByName(projectID, name, queryOpts)
     const filters = [eq(CodeNodeTable.project_id, projectID), eq(CodeNodeTable.name, name)]
     if (opts?.kind) filters.push(eq(CodeNodeTable.kind, opts.kind))
     if (opts?.file) filters.push(eq(CodeNodeTable.file, opts.file))
@@ -80,7 +89,7 @@ export namespace CodeGraphQuery {
         .from(CodeNodeTable)
         .where(and(...filters))
         .orderBy(CodeNodeTable.file, CodeNodeTable.range_start_line)
-      return opts?.limit ? q.limit(opts.limit).all() : q.all()
+      return limit === undefined ? q.all() : q.limit(limit).all()
     })
   }
 
@@ -89,7 +98,10 @@ export namespace CodeGraphQuery {
     prefix: string,
     opts?: { kind?: CodeNodeKind; limit?: number },
   ): NodeRow[] {
-    if (useNative) return NativeStore.findNodesByNamePrefix(projectID, prefix, opts)
+    const limit = normalizeQueryLimit(opts?.limit)
+    if (limit === 0) return []
+    const queryOpts = { ...opts, limit }
+    if (useNative) return NativeStore.findNodesByNamePrefix(projectID, prefix, queryOpts)
     const upper = prefix + "\uFFFF"
     const filters = [
       eq(CodeNodeTable.project_id, projectID),
@@ -106,7 +118,7 @@ export namespace CodeGraphQuery {
         // "ORDER BY name, file, range_start_line") so a `limit` truncates to
         // the same rows whether or not the native addon is enabled.
         .orderBy(CodeNodeTable.name, CodeNodeTable.file, CodeNodeTable.range_start_line)
-      return opts?.limit ? q.limit(opts.limit).all() : q.all()
+      return limit === undefined ? q.all() : q.limit(limit).all()
     })
   }
 
