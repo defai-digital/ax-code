@@ -57,6 +57,7 @@ describe("provider routes", () => {
         expect(ids).toContain("zai-coding-plan")
         expect(ids).toContain("grok-build-cli")
         expect(ids).toContain("qoder-cli")
+        expect(ids).toContain("antigravity-cli")
       },
     })
   })

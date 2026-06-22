@@ -5122,14 +5122,14 @@ export class AxEngine extends HeyApiClient {
   /**
    * Prepare ax-engine local provider
    *
-   * Mark an existing Qwen3-Coder-Next MLX path or explicitly download it through ax-engine.
+   * Mark an existing MLX model path as prepared or explicitly download one through ax-engine.
    */
   public prepare<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b-a4b" | "gemma-4-31b" | "qwen3.6-27b" | "qwen3.5-9b" | "glm-4.7"
+      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-31b" | "glm-4.7-flash"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
       start?: boolean
@@ -5171,14 +5171,14 @@ export class AxEngine extends HeyApiClient {
   /**
    * Start managed ax-engine server
    *
-   * Start ax-engine for an already prepared or explicitly provided Qwen3-Coder-Next MLX model.
+   * Start ax-engine for an already prepared or explicitly provided MLX model.
    */
   public start<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b-a4b" | "gemma-4-31b" | "qwen3.6-27b" | "qwen3.5-9b" | "glm-4.7"
+      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-31b" | "glm-4.7-flash"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
     },

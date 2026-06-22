@@ -17,6 +17,17 @@ import {
 } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
+import { HfCache } from "./hf-cache"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "ax-engine-model-cache" })
+
+// The Hugging Face repo that backs a model+quantization, used to locate the
+// shared snapshot the engine downloaded.
+function hfRepoFor(modelID: AxEngineModelID, quantization: AxEngineQuantization): string | undefined {
+  const model = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+  return model.quantizations[quantization as keyof typeof model.quantizations]?.hfRepo
+}
 
 export const AxEngineModelStatus = z.object({
   present: z.boolean(),
@@ -237,16 +248,29 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
   const preparedPath =
     prepared?.modelID === modelID && prepared.quantization === quantization ? prepared.path : undefined
 
-  const candidates = [configured, preparedPath, AxEnginePaths.managedModelDir(modelID, quantization)].filter(
-    (item): item is string => !!item,
-  )
+  // Resolve the shared Hugging Face Hub snapshot so a model the engine (or
+  // `huggingface-cli`) already downloaded is found without a redundant copy.
+  // Ordered after the explicit/prepared paths but before the legacy managed
+  // dir, so the standard cache wins for fresh setups while old layouts still
+  // resolve.
+  const repo = hfRepoFor(modelID, quantization)
+  const hfSnapshot = repo ? await HfCache.snapshotDir(repo) : undefined
+
+  const candidates = [
+    configured,
+    preparedPath,
+    hfSnapshot,
+    AxEnginePaths.managedModelDir(modelID, quantization),
+  ].filter((item): item is string => !!item)
 
   for (const candidate of candidates) {
     try {
       if (!(await exists(candidate))) continue
       const marker = await readCompletionMarker(candidate)
       const matchingMarker = marker?.modelID === modelID && marker.quantization === quantization ? marker : undefined
-      const complete = !!matchingMarker || (await hasManifest(candidate))
+      const complete =
+        !!matchingMarker ||
+        (candidate === hfSnapshot ? await HfCache.isCompleteSnapshot(candidate) : await hasManifest(candidate))
       if (!complete) continue
       return {
         present: true,
@@ -352,12 +376,16 @@ export async function downloadModel(input: {
       `${AX_ENGINE_ERROR.DownloadFailed}: ${AX_ENGINE_MODEL_DEFINITIONS[modelID].name} does not support ${quantization}`,
     )
   }
-  const dest = resolveDownloadDestination(modelID, quantization, input.dest)
+  // Only pass --dest when an explicit destination is requested. Without it the
+  // engine downloads into the shared Hugging Face Hub cache (its documented
+  // default) and returns that snapshot path, so the weights live in one
+  // standard location instead of being copied into ax-code's own cache.
+  const dest = input.dest ? resolveDownloadDestination(modelID, quantization, input.dest) : undefined
   const cmd = [input.binaryPath, "download", repo, "--json"]
-  cmd.push("--dest", dest)
+  if (dest) cmd.push("--dest", dest)
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 60 * 60_000 })
-  await assertDiskSpace({ quantization, downloadDir: dest })
+  await assertDiskSpace({ quantization, downloadDir: dest ?? HfCache.root() })
   const result = await Process.text(cmd, {
     timeout: 6 * 60 * 60 * 1000,
     abort: input.signal,
@@ -381,4 +409,105 @@ export async function downloadModel(input: {
   }).catch((error: unknown) => {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${toErrorMessage(error)}`)
   })
+}
+
+export type AxEngineReclaimResult = {
+  modelID: AxEngineModelID
+  quantization: AxEngineQuantization
+  managedPath: string
+  snapshotPath: string
+  freedBytes?: number
+}
+
+// Migrate one legacy managed copy (ax-code's own cache) to the shared Hugging
+// Face Hub snapshot. Only deletes the managed copy once the HF snapshot is
+// verified complete (weights + AX manifest) — never the sole copy. Repoints
+// prepare.json if it still pointed into the managed dir. Returns undefined when
+// there is nothing to reclaim or the HF copy is not a safe replacement.
+export async function reclaimManagedCopy(
+  modelID: AxEngineModelID,
+  quantization: AxEngineQuantization,
+): Promise<AxEngineReclaimResult | undefined> {
+  const managedPath = AxEnginePaths.managedModelDir(modelID, quantization)
+  if (!(await exists(managedPath))) return undefined
+
+  const repo = hfRepoFor(modelID, quantization)
+  const snapshotPath = repo ? await HfCache.snapshotDir(repo) : undefined
+  // Refuse to delete the managed copy unless an equivalent, complete snapshot
+  // exists in the HF cache — otherwise we would destroy the only copy.
+  if (!snapshotPath || !(await HfCache.isCompleteSnapshot(snapshotPath))) return undefined
+
+  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 10 * 60_000 })
+
+  // Repoint prepare.json off the managed dir before deleting it.
+  const current = await readPrepareState()
+  if (
+    current.state &&
+    current.state.modelID === modelID &&
+    current.state.quantization === quantization &&
+    isInsideDir(current.state.path, managedPath)
+  ) {
+    await writePrepareState({ ...current.state, path: snapshotPath, preparedAt: Date.now() }).catch(() => undefined)
+  }
+
+  const freedBytes = await directorySize(managedPath)
+  await fs.rm(managedPath, { recursive: true, force: true })
+  // Drop now-empty parent (models/<modelID>) when it has no other quantizations.
+  await fs.rmdir(path.dirname(managedPath)).catch(() => undefined)
+  log.info("reclaimed redundant ax-engine model copy", {
+    status: "success",
+    durationMs: 0,
+    modelID,
+    quantization,
+    managedPath,
+    snapshotPath,
+    freedBytes: freedBytes ?? 0,
+  })
+  return { modelID, quantization, managedPath, snapshotPath, freedBytes }
+}
+
+// Scan the legacy managed models directory and reclaim every copy that the HF
+// cache can now serve. Safe to call repeatedly; a no-op once nothing redundant
+// remains. Best-effort: failures are logged, never thrown.
+export async function reclaimManagedModelCopies(): Promise<AxEngineReclaimResult[]> {
+  const reclaimed: AxEngineReclaimResult[] = []
+  let modelDirs: string[]
+  try {
+    const entries = await fs.readdir(AxEnginePaths.models, { withFileTypes: true })
+    modelDirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+  } catch {
+    return reclaimed
+  }
+  for (const modelName of modelDirs) {
+    if (!isAxEngineModelID(modelName)) continue
+    let quantDirs: string[]
+    try {
+      const entries = await fs.readdir(path.join(AxEnginePaths.models, modelName), { withFileTypes: true })
+      quantDirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+    } catch {
+      continue
+    }
+    for (const quant of quantDirs) {
+      if (!AX_ENGINE_QUANTIZATION_IDS.includes(quant as AxEngineQuantization)) continue
+      try {
+        const result = await reclaimManagedCopy(modelName, quant as AxEngineQuantization)
+        if (result) reclaimed.push(result)
+      } catch (error) {
+        log.warn("failed to reclaim managed ax-engine copy", {
+          status: "error",
+          durationMs: 0,
+          errorCode: "AX_ENGINE_RECLAIM_FAILED",
+          modelID: modelName,
+          quantization: quant,
+          error: toErrorMessage(error),
+        })
+      }
+    }
+  }
+  return reclaimed
+}
+
+function isInsideDir(target: string, dir: string): boolean {
+  const rel = path.relative(dir, target)
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
 }

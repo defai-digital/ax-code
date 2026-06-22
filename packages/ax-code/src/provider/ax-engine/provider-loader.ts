@@ -15,11 +15,22 @@ import {
   getModelStatus,
   normalizeModelID,
   normalizeQuantization,
+  reclaimManagedModelCopies,
   requiredDiskBytes,
   type AxEngineModelOptions,
 } from "./model-cache"
 import { ensureServer } from "./server"
 import { isLocalHostname } from "@/util/local-host"
+
+// Reclaim legacy managed copies once per process. The loader runs whenever the
+// provider list is resolved; the guard keeps the (potentially large) directory
+// scan and delete off the hot path after the first call.
+let reclaimStarted = false
+function reclaimManagedCopiesOnce() {
+  if (reclaimStarted) return
+  reclaimStarted = true
+  void reclaimManagedModelCopies().catch(() => undefined)
+}
 
 function configuredBaseURL(provider: Provider.Info) {
   const baseURL = provider.options?.baseURL
@@ -94,6 +105,7 @@ async function ensureReady(provider: Provider.Info, options: AxEngineModelOption
 
 export function axEngineLoader(): CustomLoader {
   return async (provider) => {
+    reclaimManagedCopiesOnce()
     const baseURL = configuredBaseURL(provider) ?? `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`
     return {
       autoload: false,

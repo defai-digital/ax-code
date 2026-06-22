@@ -53,6 +53,7 @@ const keep = [
   ".ruff_cache",
   ".tmp",
   ".turbo",
+  ".vscode",
   "crates",
   "debug-log",
   "desktop",

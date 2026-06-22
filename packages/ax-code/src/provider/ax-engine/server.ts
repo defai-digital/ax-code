@@ -3,7 +3,14 @@ import z from "zod"
 import { FileLock } from "@/util/filelock"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
-import { AX_ENGINE_API_KEY, AX_ENGINE_DEFAULT_PORT, AX_ENGINE_ERROR, AX_ENGINE_MODEL_IDS } from "./constants"
+import {
+  AX_ENGINE_API_KEY,
+  AX_ENGINE_DEFAULT_PORT,
+  AX_ENGINE_ERROR,
+  AX_ENGINE_MTP_MODE,
+  AX_ENGINE_MODEL_IDS,
+  AX_ENGINE_SPECULATION_PROFILE,
+} from "./constants"
 import type { AxEngineModelID } from "./constants"
 import { AxEnginePaths } from "./paths"
 
@@ -17,6 +24,8 @@ export const AxEngineServerState = z.object({
   modelRevision: z.string().optional(),
   binaryPath: z.string(),
   contextTokens: z.number().int().positive().optional(),
+  speculationProfile: z.string().optional(),
+  mtpMode: z.string().optional(),
   startedAt: z.number(),
   lastHealthAt: z.number().optional(),
 })
@@ -46,6 +55,8 @@ export type AxEngineServerOptions = {
    * regardless of its declared contextTokens.
    */
   contextTokens?: number
+  speculationProfile?: string
+  mtpMode?: string
   signal?: AbortSignal
 }
 
@@ -60,16 +71,20 @@ const AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS = 16
  * is provided, size the KV-cache block pool so the server window equals it;
  * otherwise the server falls back to its 1024×16 = 16384 default.
  */
-export function axEngineServerLaunchArgs(input: { apiModelID: string; contextTokens?: number }): string[] {
+export function axEngineServerLaunchArgs(input: {
+  apiModelID: string
+  contextTokens?: number
+  speculationProfile?: string
+  mtpMode?: string
+}): string[] {
   const args = ["--model-id", input.apiModelID]
+  args.push("--speculation-profile", input.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE)
+  if ((input.mtpMode ?? AX_ENGINE_MTP_MODE) === "pure") {
+    args.push("--mlx-mtp-disable-ngram-stacking")
+  }
   if (input.contextTokens && input.contextTokens > 0) {
     const totalBlocks = Math.ceil(input.contextTokens / AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS)
-    args.push(
-      "--block-size-tokens",
-      String(AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS),
-      "--total-blocks",
-      String(totalBlocks),
-    )
+    args.push("--block-size-tokens", String(AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS), "--total-blocks", String(totalBlocks))
   }
   return args
 }
@@ -218,8 +233,12 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
   // server whose contextTokens differ from the request — e.g. an older build
   // that started it at the default 16384 — must be relaunched, not reused.
   const contextMatches = (existing?.contextTokens ?? undefined) === (options.contextTokens ?? undefined)
+  const speculationProfile = options.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE
+  const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
+  const speculationMatches = existing?.speculationProfile === speculationProfile
+  const mtpModeMatches = existing?.mtpMode === mtpMode
   if (existing && pidLive(existing.pid) && (await isServerReady(existing.baseURL, options.signal))) {
-    if (contextMatches) {
+    if (contextMatches && speculationMatches && mtpModeMatches) {
       if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
       try {
         await loadServerModel({
@@ -234,6 +253,8 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
           apiModelID: options.apiModelID,
           modelPath: options.modelPath,
           modelRevision: options.modelRevision,
+          speculationProfile,
+          mtpMode,
           lastHealthAt: Date.now(),
         }
         await writeServerState(nextState)
@@ -269,6 +290,8 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
   const serverArgs = axEngineServerLaunchArgs({
     apiModelID: options.apiModelID,
     contextTokens: options.contextTokens,
+    speculationProfile,
+    mtpMode,
   })
   let proc: ReturnType<typeof Process.spawn>
   try {
@@ -302,6 +325,8 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
     modelRevision: options.modelRevision,
     binaryPath: options.binaryPath,
     contextTokens: options.contextTokens,
+    speculationProfile,
+    mtpMode,
     startedAt: Date.now(),
     lastHealthAt: Date.now(),
   }

@@ -1,5 +1,6 @@
 import { afterEach, test, expect, describe } from "vitest"
 import path from "path"
+import { writeFile, readFile } from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
@@ -25,7 +26,7 @@ async function expectMissingCliProvider(input: {
 
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -53,7 +54,7 @@ async function expectMissingCliProvider(input: {
 
 describe("CLI provider loaders", () => {
   test("CLI provider discovery publishes resolved external model ids", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/provider/loaders.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/provider/loaders.ts"), "utf-8")
     expect(src).toContain("return cliModels(opts.providerID, provider, resolved.model)")
     expect(src).toContain("if (resolved && resolved !== providerID)")
     expect(src).toContain("add(resolved, `${name} (${resolved})`)")
@@ -109,7 +110,7 @@ describe("online provider loaders", () => {
   test("xai provider loaded with api key", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -133,7 +134,7 @@ describe("online provider loaders", () => {
   test("google provider loaded with api key", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -158,7 +159,7 @@ describe("online provider loaders", () => {
   test("provider not loaded without credentials", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -195,10 +196,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({ enabled_providers: ["ollama"] }),
-        )
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ enabled_providers: ["ollama"] }))
       },
     })
 
@@ -247,10 +245,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({ enabled_providers: ["ax-studio"] }),
-        )
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ enabled_providers: ["ax-studio"] }))
       },
     })
 
@@ -290,7 +285,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({}))
       },
     })
 
@@ -320,7 +315,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({}))
       },
     })
 
@@ -354,10 +349,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({ enabled_providers: ["ax-studio"] }),
-        )
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ enabled_providers: ["ax-studio"] }))
       },
     })
 
@@ -406,10 +398,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({ enabled_providers: ["ax-studio"] }),
-        )
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ enabled_providers: ["ax-studio"] }))
       },
     })
 
@@ -457,10 +446,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({ enabled_providers: ["ax-studio"] }),
-        )
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ enabled_providers: ["ax-studio"] }))
       },
     })
 
@@ -495,7 +481,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             provider: {
@@ -533,7 +519,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({}))
       },
     })
 
@@ -561,10 +547,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
-          path.join(dir, "ax-code.json"),
-          JSON.stringify({ enabled_providers: ["ollama"] }),
-        )
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ enabled_providers: ["ollama"] }))
       },
     })
 
@@ -588,7 +571,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -616,7 +599,7 @@ describe("offline provider loaders", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -640,7 +623,7 @@ describe("provider config integration", () => {
   test("config-based provider with baseURL", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -670,7 +653,7 @@ describe("provider config integration", () => {
   test("disabled_providers excludes CLI provider", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",

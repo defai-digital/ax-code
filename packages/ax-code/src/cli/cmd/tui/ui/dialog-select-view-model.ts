@@ -1,5 +1,5 @@
 import * as fuzzysort from "fuzzysort"
-import { entries, filter, flatMap, groupBy, pipe } from "remeda"
+import { entries, flatMap, groupBy, pipe } from "remeda"
 
 export type DialogSelectViewOption<T = unknown> = {
   title: string
@@ -13,17 +13,13 @@ export function dialogSelectFilteredOptions<T extends DialogSelectViewOption>(
   query: string,
   skipFilter?: boolean,
 ): T[] {
-  const enabled = pipe(
-    options,
-    filter((option) => option.disabled !== true),
-  )
-  if (skipFilter) return enabled
+  if (skipFilter) return options
 
   const needle = query.toLowerCase()
-  if (!needle) return enabled
+  if (!needle) return options
 
   return fuzzysort
-    .go(needle, enabled, {
+    .go(needle, options, {
       keys: ["title", "category"],
       scoreFn: (result) => {
         const titleScore = result[0]?.score ?? 0

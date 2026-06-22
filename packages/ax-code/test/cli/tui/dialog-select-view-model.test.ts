@@ -16,14 +16,15 @@ describe("tui dialog select view model", () => {
     { title: "Disabled", value: "disabled", disabled: true },
   ]
 
-  test("filters disabled options and preserves groups", () => {
+  test("preserves disabled options and groups", () => {
     const grouped = dialogSelectGroupedOptions({ options, query: "" })
 
     expect(grouped).toEqual([
       ["Navigation", [options[0]]],
       ["Settings", [options[1]]],
+      ["", [options[2]]],
     ])
-    expect(dialogSelectFlatOptions(grouped)).toEqual([options[0], options[1]])
+    expect(dialogSelectFlatOptions(grouped)).toEqual(options)
   })
 
   test("flattens search results when flat mode is enabled", () => {
@@ -48,7 +49,7 @@ describe("tui dialog select view model", () => {
   test("derives row count, visible height, and wrapped movement", () => {
     const grouped = dialogSelectGroupedOptions({ options, query: "" })
 
-    expect(dialogSelectRows(grouped)).toBe(5)
+    expect(dialogSelectRows(grouped)).toBe(6)
     expect(dialogSelectVisibleHeight(20, 40)).toBe(14)
     expect(dialogSelectVisibleHeight(20, 8)).toBe(1)
     expect(dialogSelectMoveIndex(0, -1, 2)).toBe(1)

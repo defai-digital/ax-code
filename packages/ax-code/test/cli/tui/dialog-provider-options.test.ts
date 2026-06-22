@@ -132,10 +132,24 @@ describe("provider dialog options", () => {
     expect(CLI_BINARIES["qoder-cli"]).toBe("qodercli")
   })
 
+  test("includes Antigravity CLI as a CLI provider", () => {
+    expect(CLI_PROVIDERS.has("antigravity-cli")).toBe(true)
+    expect(CLI_BINARIES["antigravity-cli"]).toBe("agy")
+  })
+
+  test("shows Antigravity as a Google CLI provider", () => {
+    const [item] = providerDialogProviders({
+      available: [provider("antigravity-cli", "Google (Antigravity CLI)")],
+      configured: [],
+    })
+    expect(item).toMatchObject({ id: "antigravity-cli", name: "Google (Antigravity CLI)" })
+  })
+
   test("separates API, CLI, and local provider categories", () => {
     expect(providerDialogCategory("xai")).toBe("API plan")
     expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
     expect(providerDialogCategory("qoder-cli")).toBe("CLI plan")
+    expect(providerDialogCategory("antigravity-cli")).toBe("CLI plan")
     expect(providerDialogCategory("ollama")).toBe("Local runtime")
   })
 
@@ -143,6 +157,7 @@ describe("provider dialog options", () => {
     expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "qoder-cli", toolcall: false })).toBe(true)
+    expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "xai", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "xai", toolcall: true })).toBe(true)
   })

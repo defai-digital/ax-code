@@ -111,7 +111,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   createEffect(() => {
     const next = dialogSelectClampIndex(store.selected, flat().length)
-    if (next !== store.selected) setStore("selected", next)
+    const option = flat()[next]
+    const enabledIndex = option?.disabled === true ? flat().findIndex((candidate) => candidate.disabled !== true) : next
+    const clamped = enabledIndex >= 0 ? enabledIndex : next
+    if (clamped !== store.selected) setStore("selected", clamped)
   })
 
   const rows = createMemo(() => dialogSelectRows(grouped()))
@@ -140,7 +143,16 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   )
 
   function move(direction: number) {
-    moveTo(dialogSelectMoveIndex(store.selected, direction, flat().length), true)
+    const options = flat()
+    if (options.length === 0) return
+    let next = store.selected
+    for (let i = 0; i < options.length; i++) {
+      next = dialogSelectMoveIndex(next, direction, options.length)
+      if (options[next]?.disabled !== true) {
+        moveTo(next, true)
+        return
+      }
+    }
   }
 
   function optionID(index: number) {
@@ -189,6 +201,14 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     if (confirmInFlight) return
     const option = selected()
     if (!option) return
+    if (option.disabled) {
+      toast.show({
+        message: option.description ?? `${option.title} is not selectable`,
+        variant: "warning",
+        duration: 3000,
+      })
+      return
+    }
     confirmInFlight = true
     void runDialogSelectAction(
       () => {
@@ -341,6 +361,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           setStore("input", "mouse")
                         }}
                         onMouseUp={() => {
+                          if (option.disabled) return
                           void runDialogSelectAction(
                             () => {
                               option.onSelect?.(dialog)
@@ -361,7 +382,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           if (index === -1) return
                           moveTo(index)
                         }}
-                        backgroundColor={active() ? (option.bg ?? theme.primary) : RGBA.fromInts(0, 0, 0, 0)}
+                        backgroundColor={
+                          active()
+                            ? option.disabled
+                              ? theme.backgroundElement
+                              : (option.bg ?? theme.primary)
+                            : RGBA.fromInts(0, 0, 0, 0)
+                        }
                         paddingLeft={current() || option.gutter ? 1 : 3}
                         paddingRight={3}
                         gap={1}
@@ -373,6 +400,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           descriptionFg={option.descriptionFg}
                           active={active()}
                           current={current()}
+                          disabled={option.disabled}
                           gutter={option.gutter}
                         />
                       </box>
@@ -410,6 +438,7 @@ function Option(props: {
   current?: boolean
   footer?: JSX.Element | string
   gutter?: JSX.Element
+  disabled?: boolean
   onMouseOver?: () => void
 }) {
   const { theme } = useTheme()
@@ -429,20 +458,27 @@ function Option(props: {
       </Show>
       <text
         flexGrow={1}
-        fg={props.active ? fg : props.current ? theme.primary : theme.text}
-        attributes={props.active ? TextAttributes.BOLD : undefined}
+        fg={props.disabled ? theme.textMuted : props.active ? fg : props.current ? theme.primary : theme.text}
+        attributes={props.active && !props.disabled ? TextAttributes.BOLD : undefined}
         overflow="hidden"
         wrapMode="none"
         paddingLeft={3}
       >
         {Locale.truncate(props.title, 61)}
         <Show when={props.description}>
-          <span style={{ fg: props.active ? fg : (props.descriptionFg ?? theme.textMuted) }}> {props.description}</span>
+          <span
+            style={{
+              fg: props.disabled ? theme.textMuted : props.active ? fg : (props.descriptionFg ?? theme.textMuted),
+            }}
+          >
+            {" "}
+            {props.description}
+          </span>
         </Show>
       </text>
       <Show when={props.footer}>
         <box flexShrink={0}>
-          <text fg={props.active ? fg : theme.textMuted}>{props.footer}</text>
+          <text fg={props.disabled ? theme.textMuted : props.active ? fg : theme.textMuted}>{props.footer}</text>
         </box>
       </Show>
     </>

@@ -546,7 +546,8 @@ export namespace Provider {
           // Opt-in providers skip autoload — they only activate when explicitly
           // configured in ax-code.json (enabled_providers or provider.<id>).
           const explicitlyEnabled = enabled?.has(providerID) ?? false
-          const optInGated = OPT_IN_PROVIDERS.has(providerID) && !configured && !providers[providerID] && !explicitlyEnabled
+          const optInGated =
+            OPT_IN_PROVIDERS.has(providerID) && !configured && !providers[providerID] && !explicitlyEnabled
           if (result && !optInGated && (result.autoload || providers[providerID] || configured)) {
             if (result.getModel) modelLoaders[providerID] = result.getModel
             if (result.vars) varsLoaders[providerID] = result.vars
@@ -817,15 +818,15 @@ export namespace Provider {
               : 90_000
         delete options["chunkTimeout"]
 
-        options["fetch"] = async (input: string | Request | URL, init?: BunFetchRequestInit) => {
+        options["fetch"] = async (input: string | Request | URL, init?: any) => {
           // Preserve custom fetch if it exists, wrap it with timeout logic
           const fetchFn = customFetch ?? fetch
           // Shallow copy to avoid mutating caller's init object
-          const opts = init ? { ...init } : {}
+          const opts: Record<string, unknown> = init ? { ...init } : {}
           const chunkAbortCtl = typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
           const signals: AbortSignal[] = []
 
-          if (opts.signal) signals.push(opts.signal)
+          if (opts.signal) signals.push(opts.signal as AbortSignal)
           if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
           if (options["timeout"] !== undefined && options["timeout"] !== null && options["timeout"] !== false)
             signals.push(AbortSignal.timeout(options["timeout"]))
@@ -833,14 +834,10 @@ export namespace Provider {
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined
 
-          const res = await fetchFn(input, {
-            ...opts,
-            // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
-            timeout: false,
-          })
+          const res = await fetchFn(input, opts)
 
           if (!chunkAbortCtl) return res
-          return wrapSSE(res, chunkTimeout, chunkAbortCtl, opts.signal ?? undefined)
+          return wrapSSE(res, chunkTimeout, chunkAbortCtl, (opts.signal as AbortSignal) ?? undefined)
         }
 
         const bundledFn = BUNDLED_PROVIDERS[model.api.npm]

@@ -97,7 +97,12 @@ void (async () => {
     let cleaned = true
     try {
       const contents = await fs.readdir(Global.Path.cache)
-      const stale = contents.filter((item) => !item.startsWith(TRASH_PREFIX))
+      // Never wipe `ax-engine/`: it can hold (or, for legacy layouts, still
+      // hold) many-GiB local MLX model weights that are NOT regenerable cache.
+      // Deleting them on a cache-version bump would silently force a full
+      // re-download. Model storage now lives in the shared Hugging Face Hub
+      // cache, but keep this guard so any remaining managed copy survives.
+      const stale = contents.filter((item) => !item.startsWith(TRASH_PREFIX) && item !== "ax-engine")
       if (stale.length > 0) {
         const trash = path.join(Global.Path.cache, `${TRASH_PREFIX}${Date.now()}`)
         await fs.mkdir(trash, { recursive: true })

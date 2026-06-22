@@ -10,12 +10,15 @@ import * as fuzzysort from "fuzzysort"
 import { useConnected } from "./provider-state"
 import { modelDisplayInfo } from "./model-vision-label"
 import { CLI_PROVIDERS, providerModelSelectable } from "./dialog-provider-options"
+import { modelMemoryBlockReason } from "@/provider/model-selectability"
+import { useTheme } from "../context/theme"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
   const sync = useSync()
   const dialog = useDialog()
   const keybind = useKeybind()
+  const { theme } = useTheme()
   const [query, setQuery] = createSignal("")
 
   const connected = useConnected()
@@ -37,15 +40,17 @@ export function DialogModel(props: { providerID?: string }) {
         const model = provider.models[item.modelID]
         if (!model) return []
         const display = modelDisplayInfo(item.modelID, model)
+        const blockReason = modelMemoryBlockReason(provider.id, model)
         return [
           {
             key: item,
             value: { providerID: provider.id, modelID: model.id },
             title: display.label,
             searchText: display.searchText,
-            description: provider.name,
+            description: blockReason ?? provider.name,
+            descriptionFg: blockReason ? theme.warning : undefined,
             category,
-            disabled: provider.id === "opencode" && model.id.includes("-nano"),
+            disabled: !!blockReason || (provider.id === "opencode" && model.id.includes("-nano")),
             onSelect: () => {
               dialog.clear()
               local.model.set({ providerID: provider.id, modelID: model.id }, { recent: true })
@@ -80,15 +85,19 @@ export function DialogModel(props: { providerID?: string }) {
           filter(([_, info]) => (props.providerID ? info.providerID === props.providerID : true)),
           map(([model, info]) => {
             const display = modelDisplayInfo(model, info)
+            const blockReason = modelMemoryBlockReason(provider.id, info)
             return {
               value: { providerID: provider.id, modelID: model },
               title: display.label,
               searchText: display.searchText,
-              description: favorites.some((item) => item.providerID === provider.id && item.modelID === model)
-                ? "(Favorite)"
-                : undefined,
+              description:
+                blockReason ??
+                (favorites.some((item) => item.providerID === provider.id && item.modelID === model)
+                  ? "(Favorite)"
+                  : undefined),
+              descriptionFg: blockReason ? theme.warning : undefined,
               category: connected() ? provider.name : undefined,
-              disabled: provider.id === "opencode" && model.includes("-nano"),
+              disabled: !!blockReason || (provider.id === "opencode" && model.includes("-nano")),
               onSelect() {
                 dialog.clear()
                 local.model.set({ providerID: provider.id, modelID: model }, { recent: true })

@@ -66,8 +66,14 @@ export namespace Filesystem {
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
   }
 
-  function isEnoent(e: unknown): e is { code: "ENOENT" } {
+  export function isEnoent(e: unknown): e is { code: "ENOENT" } {
     return isRecord(e) && e.code === "ENOENT"
+  }
+
+  export function errnoCode(error: unknown): string | undefined {
+    if (!isRecord(error)) return undefined
+    const code = error.code
+    return typeof code === "string" ? code : undefined
   }
 
   export async function write(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {

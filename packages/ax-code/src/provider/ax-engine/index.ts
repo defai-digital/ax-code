@@ -1,5 +1,6 @@
 export * from "./constants"
 export * from "./dependency"
+export * from "./hf-cache"
 export * from "./model-cache"
 export * from "./platform"
 export * from "./prepare"

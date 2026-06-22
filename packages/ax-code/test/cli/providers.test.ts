@@ -35,6 +35,7 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("codex-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("grok-build-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("qoder-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(true)
   })
 
   test("providers list reports saved credentials", async () => {

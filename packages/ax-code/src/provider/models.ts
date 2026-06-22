@@ -7,6 +7,7 @@ import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { isModelSupportedForProvider } from "./model-support"
+import { modelMemoryBlockReason } from "./model-selectability"
 import bundledSnapshot from "./models-snapshot.json"
 import {
   AX_ENGINE_DEFAULT_PORT,
@@ -91,6 +92,10 @@ export namespace ModelsDev {
 
   function builtinAxEngineModel(modelID: AxEngineModelID): Model {
     const definition = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+    const minMemoryBytes = definition.minMemoryBytes
+    const memoryBlockReason = modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, {
+      options: { minMemoryBytes },
+    })
     return {
       id: modelID,
       name: definition.name,
@@ -106,6 +111,8 @@ export namespace ModelsDev {
       options: {
         modelID,
         quantization: definition.defaultQuantization,
+        minMemoryBytes,
+        ...(memoryBlockReason ? { memoryBlockReason } : {}),
       },
       experimental: { localRuntime: AX_ENGINE_PROVIDER_ID },
     }
