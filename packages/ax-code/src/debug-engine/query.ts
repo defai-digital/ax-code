@@ -12,6 +12,12 @@ import type { ProjectID } from "../project/schema"
 // code_index_cursor. This namespace has no imports from
 // code-intelligence/schema.sql — enforced by the file itself.
 
+function normalizeQueryLimit(limit: number | undefined): number | undefined {
+  if (limit === undefined) return undefined
+  if (!Number.isFinite(limit)) return 0
+  return Math.max(0, Math.floor(limit))
+}
+
 export namespace DebugEngineQuery {
   // ─── Refactor plan CRUD ─────────────────────────────────────────────
 
@@ -34,6 +40,8 @@ export namespace DebugEngineQuery {
   }
 
   export function listPlans(projectID: ProjectID, opts?: { status?: RefactorPlanStatus; limit?: number }): PlanRow[] {
+    const limit = normalizeQueryLimit(opts?.limit)
+    if (limit === 0) return []
     const filters = [eq(RefactorPlanTable.project_id, projectID)]
     if (opts?.status) filters.push(eq(RefactorPlanTable.status, opts.status))
     return Database.use((db) => {
@@ -42,7 +50,7 @@ export namespace DebugEngineQuery {
         .from(RefactorPlanTable)
         .where(and(...filters))
         .orderBy(desc(RefactorPlanTable.time_created))
-      return opts?.limit ? q.limit(opts.limit).all() : q.all()
+      return limit === undefined ? q.all() : q.limit(limit).all()
     })
   }
 
