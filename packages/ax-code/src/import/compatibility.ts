@@ -144,7 +144,7 @@ export namespace CompatibilityImport {
   function relativeAfterAny(file: string, roots: string[]) {
     for (const root of roots) {
       const rel = path.relative(root, file)
-      if (!rel.startsWith("..")) return rel
+      if (Filesystem.contains(root, file)) return rel
     }
     return path.basename(file)
   }
