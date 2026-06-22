@@ -1082,6 +1082,19 @@ describe("tool.bash browser-open interception", () => {
     })
   })
 
+  test("intercepts quoted open targeting a local HTML file", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute({ command: 'open "index.html"', description: "Open quoted HTML file" }, ctx)
+        expect(result.output).toContain("[Browser open intercepted]")
+        expect(result.output).toContain("index.html")
+      },
+    })
+  })
+
   test("intercepts xdg-open targeting a local HTML file", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -1103,6 +1116,22 @@ describe("tool.bash browser-open interception", () => {
         const bash = await BashTool.init()
         const result = await bash.execute(
           { command: "open http://localhost:3000", description: "Open dev server" },
+          ctx,
+        )
+        expect(result.output).toContain("[Browser open intercepted]")
+        expect(result.output).toContain("localhost:3000")
+      },
+    })
+  })
+
+  test("intercepts open with app options targeting localhost URL", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          { command: "open -a Safari http://localhost:3000", description: "Open dev server in Safari" },
           ctx,
         )
         expect(result.output).toContain("[Browser open intercepted]")

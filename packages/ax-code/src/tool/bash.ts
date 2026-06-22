@@ -53,6 +53,7 @@ const LOCAL_HTML_PATH_RE = /^(?!https?:\/\/).*\.html?(?:\s*$|#|\?)/i
 // Patterns that identify intentional (non-development) browser opens.
 // These are allowed through even when targeting localhost/local files.
 const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|dre-graph|mcp)/i
+const BROWSER_OPEN_ARG_RE = /"[^"]*"|'[^']*'|[^\s]+/g
 
 /**
  * Returns the target argument if the command is a browser-open call targeting
@@ -61,7 +62,8 @@ const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|dre-graph|mc
  */
 function isBrowserOpenToLocal(command: string): string | null {
   if (!BROWSER_OPEN_RE.test(command)) return null
-  const target = command.replace(BROWSER_OPEN_RE, "").trim()
+  const args = command.replace(BROWSER_OPEN_RE, "").trim().match(BROWSER_OPEN_ARG_RE) ?? []
+  const target = stripShellQuotes(args[args.length - 1] ?? "")
   if (!LOCAL_HTML_PATH_RE.test(target) && !isLocalBrowserUrl(target)) return null
   if (BROWSER_INTENT_PASSTHROUGH_RE.test(target)) return null
   return target
