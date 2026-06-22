@@ -405,6 +405,10 @@ describe("filesystem", () => {
       expect(Filesystem.contains("/tmp/project", "/tmp/project-other/file.txt")).toBe(false)
     })
 
+    test("allows child paths whose first segment starts with dots", () => {
+      expect(Filesystem.contains("/tmp/project", "/tmp/project/..cache/file.txt")).toBe(true)
+    })
+
     test.skipIf(process.platform !== "win32")("rejects Windows paths on a different drive", () => {
       expect(Filesystem.contains("C:\\repo", "D:\\outside\\file.txt")).toBe(false)
     })

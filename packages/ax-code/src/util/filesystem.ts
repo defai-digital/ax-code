@@ -2,7 +2,7 @@ import * as fs from "fs/promises"
 import { createWriteStream, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
-import { dirname, isAbsolute, join, relative, resolve as pathResolve } from "path"
+import { dirname, isAbsolute, join, relative, resolve as pathResolve, sep } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import { Flag } from "../flag/flag"
@@ -205,7 +205,7 @@ export namespace Filesystem {
     // does NOT resolve symlinks — callers that need the stronger
     // guarantee must realpath() first.
     const rel = relative(pathResolve(parent), pathResolve(child))
-    return !isAbsolute(rel) && !rel.startsWith("..") && !rel.startsWith("/")
+    return !isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`) && !rel.startsWith("/")
   }
 
   export async function findUp(target: string, start: string, stop?: string) {

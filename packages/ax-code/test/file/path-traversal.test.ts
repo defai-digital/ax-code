@@ -29,6 +29,10 @@ describe("Filesystem.contains", () => {
     expect(Filesystem.contains("/project", "/project-other/file")).toBe(false)
     expect(Filesystem.contains("/project", "/projectfile")).toBe(false)
   })
+
+  test("allows child paths whose first segment starts with dots", () => {
+    expect(Filesystem.contains("/project", "/project/..cache/file")).toBe(true)
+  })
 })
 
 /*
