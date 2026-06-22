@@ -702,7 +702,7 @@ export namespace File {
     }
 
     const realResolved = await fs.promises.realpath(resolved).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return null
+      if (Filesystem.isMissingPathError(error)) return null
       throw error
     })
     if (realResolved && !Filesystem.contains(Instance.directory, realResolved)) {
@@ -714,7 +714,7 @@ export namespace File {
     for (const entry of await fs.promises
       .readdir(resolved, { withFileTypes: true })
       .catch((error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") return []
+        if (Filesystem.isMissingPathError(error)) return []
         log.warn("failed to list directory", { directory: resolved, error })
         throw error
       })) {

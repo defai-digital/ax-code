@@ -792,6 +792,18 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("returns empty list when a parent path component is a file", async () => {
+      await using tmp = await tmpdir({ git: true })
+      await fs.writeFile(path.join(tmp.path, "file.txt"), "content", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await expect(File.list("file.txt/child")).resolves.toEqual([])
+        },
+      })
+    })
+
     test("throws for paths outside project directory", async () => {
       await using tmp = await tmpdir({ git: true })
 
