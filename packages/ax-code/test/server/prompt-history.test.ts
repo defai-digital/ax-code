@@ -11,6 +11,8 @@ const runtime = Promise.all([
   import("../../src/server/server"),
   import("../fixture/fixture"),
   import("../../src/storage/db"),
+  import("../../src/project/instance"),
+  import("../../src/prompt-history"),
 ])
 
 afterAll(async () => {
@@ -81,5 +83,23 @@ describe("prompt history route", () => {
     expect(body).toHaveLength(50)
     expect(body[0]?.input).toBe("prompt 5")
     expect(body.at(-1)?.input).toBe("prompt 54")
+  })
+
+  test("normalizes non-finite direct list limits", async () => {
+    const [, { tmpdir }, , { Instance }, { PromptHistory }] = await runtime
+    await using project = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        PromptHistory.append({
+          input: "prompt with non-finite list limit",
+          parts: [{ type: "text", text: "prompt with non-finite list limit" }],
+        })
+
+        expect(() => PromptHistory.list({ limit: Number.NaN })).not.toThrow()
+        expect(PromptHistory.list({ limit: Number.NaN })).toHaveLength(0)
+      },
+    })
   })
 })

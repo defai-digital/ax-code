@@ -16,8 +16,15 @@ export namespace PromptHistory {
     )
   }
 
+  function normalizeListLimit(limit: number | undefined) {
+    if (limit === undefined) return MAX_ENTRIES
+    if (!Number.isFinite(limit)) return 0
+    return Math.min(Math.max(Math.floor(limit), 1), MAX_ENTRIES)
+  }
+
   export function list(input: { limit?: number } = {}): PromptHistoryEntry[] {
-    const limit = Math.min(Math.max(input.limit ?? MAX_ENTRIES, 1), MAX_ENTRIES)
+    const limit = normalizeListLimit(input.limit)
+    if (limit === 0) return []
     const rows = Database.use((db) =>
       db
         .select()
