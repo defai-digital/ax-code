@@ -25,16 +25,32 @@ type CacheEntry = {
   timestamp: number
 }
 
+type LspProvenance = {
+  timestamp: number
+  serverIDs: string[]
+}
+
+type GraphProvenance = {
+  queryIds: string[]
+  indexedAt: number
+  completeness: DebugEngine.Completeness
+}
+
+type CorrelationState = {
+  cache: Map<string, CacheEntry>
+  pendingTimers: Map<string, ReturnType<typeof setTimeout>>
+  unsubscribe: () => void
+}
+
 // LRU-ish cache keyed by normalized file path.
 const MAX_CACHE_ENTRIES = 200
 const CACHE_TTL_MS = 30_000
-const cache = new Map<string, CacheEntry>()
 
 // Debounce map: file path -> pending timer. Prevents redundant correlation
 // work when a language server fires multiple diagnostic events within a short
 // window for the same file (common with tsserver during incremental builds).
 const DEBOUNCE_MS = 300
-const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const activeStates = new Set<CorrelationState>()
 
 // Maximum callers to walk per symbol during correlation. Keeps the graph
 // traversal bounded even for heavily-referenced symbols.
@@ -50,20 +66,21 @@ type ErrorDiagnostic = LSPClient.Diagnostic & { severity: number }
 
 export namespace DiagnosticCorrelation {
   /**
-   * Start listening for LSP diagnostic events. Call once at module init
-   * time (or when the DRE flag is enabled). Returns an unsubscribe function.
+   * Initialize the instance-scoped LSP diagnostic subscriber. This is cheap
+   * and idempotent for the current workspace instance.
+   */
+  export function init(): void {
+    state()
+  }
+
+  /**
+   * Back-compat wrapper for older callers/tests. Prefer init(); instance
+   * disposal now owns the actual subscriber lifecycle.
    */
   export function start(): () => void {
-    const unsub = Bus.subscribe(LSPClient.Event.Diagnostics, (event) => {
-      const { path } = event.properties
-      scheduleCorrelation(path)
-    })
-    log.info("diagnostic correlation subscriber started")
+    state()
     return () => {
-      unsub()
-      for (const timer of pendingTimers.values()) clearTimeout(timer)
-      pendingTimers.clear()
-      log.info("diagnostic correlation subscriber stopped")
+      void state.invalidate()
     }
   }
 
@@ -72,10 +89,11 @@ export namespace DiagnosticCorrelation {
    * array if no correlations are cached or the cache has expired.
    */
   export function correlateDiagnostics(file: string): DebugEngine.CorrelatedDiagnostic[] {
-    const entry = cache.get(normalizePath(file))
+    const current = state()
+    const entry = current.cache.get(cacheKey(file))
     if (!entry) return []
     if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-      cache.delete(normalizePath(file))
+      current.cache.delete(cacheKey(file))
       return []
     }
     return entry.correlations
@@ -94,9 +112,11 @@ export namespace DiagnosticCorrelation {
    * Clear the entire cache. Test helper.
    */
   export function __clearCache(): void {
-    cache.clear()
-    for (const timer of pendingTimers.values()) clearTimeout(timer)
-    pendingTimers.clear()
+    for (const current of activeStates) {
+      current.cache.clear()
+      for (const timer of current.pendingTimers.values()) clearTimeout(timer)
+      current.pendingTimers.clear()
+    }
   }
 }
 
@@ -117,7 +137,7 @@ export function __testFindCrossFileRootCause(
   severity: number,
   symbol: CodeIntelligence.Symbol,
 ): DebugEngine.CorrelatedDiagnostic {
-  return findCrossFileRootCause(ProjectID.make(projectID), file, line, message, severity, symbol)
+  return findCrossFileRootCause(ProjectID.make(projectID), file, line, message, severity, symbol, defaultLspProvenance())
 }
 
 export function __testRenderCorrelationBlock(
@@ -133,38 +153,70 @@ function normalizePath(file: string): string {
   return file.replace(/\\/g, "/")
 }
 
+function cacheKey(file: string): string {
+  return `${Instance.project.id}\0${normalizePath(file)}`
+}
+
+const state = Instance.state(
+  () => {
+    const current: CorrelationState = {
+      cache: new Map<string, CacheEntry>(),
+      pendingTimers: new Map<string, ReturnType<typeof setTimeout>>(),
+      unsubscribe: () => {},
+    }
+    current.unsubscribe = Bus.subscribe(LSPClient.Event.Diagnostics, (event) => {
+      const { path } = event.properties
+      scheduleCorrelation(current, path)
+    })
+    activeStates.add(current)
+    log.info("diagnostic correlation subscriber started")
+    return current
+  },
+  async (current) => {
+    current.unsubscribe()
+    for (const timer of current.pendingTimers.values()) clearTimeout(timer)
+    current.pendingTimers.clear()
+    current.cache.clear()
+    activeStates.delete(current)
+    log.info("diagnostic correlation subscriber stopped")
+  },
+)
+
 function isErrorDiagnostic(diagnostic: LSPClient.Diagnostic): diagnostic is ErrorDiagnostic {
   return diagnostic.severity === 1
 }
 
-function scheduleCorrelation(file: string): void {
+function scheduleCorrelation(current: CorrelationState, file: string): void {
   const key = normalizePath(file)
-  const existing = pendingTimers.get(key)
+  const existing = current.pendingTimers.get(key)
   if (existing) clearTimeout(existing)
-  pendingTimers.set(
+  const run = Instance.bind(async () => {
+    current.pendingTimers.delete(key)
+    try {
+      await runCorrelation(file)
+    } catch (err) {
+      log.warn("correlation failed", { file, error: err })
+    }
+  })
+  current.pendingTimers.set(
     key,
-    setTimeout(async () => {
-      pendingTimers.delete(key)
-      try {
-        await runCorrelation(file)
-      } catch (err) {
-        log.warn("correlation failed", { file, error: err })
-      }
-    }, DEBOUNCE_MS),
+    setTimeout(run, DEBOUNCE_MS),
   )
 }
 
 async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagnostic[]> {
+  const current = state()
   const projectID = Instance.project.id
   const normalized = normalizePath(file)
+  const key = cacheKey(file)
 
   // Get current LSP diagnostics for this file from the LSP namespace
   // rather than the raw client cache — this ensures we get the aggregated
   // and normalized view.
-  const allDiagnostics = await getDiagnosticsForFile(file)
+  const { diagnostics: allDiagnostics, provenance: lspProvenance } = await getDiagnosticsForFile(file)
   const errorDiagnostics = allDiagnostics.filter(isErrorDiagnostic)
   if (errorDiagnostics.length === 0) {
-    cache.set(normalized, { correlations: [], timestamp: Date.now() })
+    current.cache.set(key, { correlations: [], timestamp: Date.now() })
     return []
   }
 
@@ -181,8 +233,9 @@ async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagn
       rootCauseSymbol: null,
       rootCauseChain: [],
       confidence: "low" as const,
+      ...provenanceFields(lspProvenance, graphProvenance([])),
     }))
-    cache.set(normalized, { correlations: uncorrelated, timestamp: Date.now() })
+    current.cache.set(key, { correlations: uncorrelated, timestamp: Date.now() })
     return uncorrelated
   }
 
@@ -205,18 +258,27 @@ async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagn
         rootCauseSymbol: null,
         rootCauseChain: [],
         confidence: "low",
+        ...provenanceFields(lspProvenance, graphProvenance(symbols)),
       })
       continue
     }
 
     // Walk callers to find cross-file root causes.
-    const correlation = findCrossFileRootCause(projectID, file, diagLine, diag.message, diag.severity, enclosingSymbol)
+    const correlation = findCrossFileRootCause(
+      projectID,
+      file,
+      diagLine,
+      diag.message,
+      diag.severity,
+      enclosingSymbol,
+      lspProvenance,
+    )
     correlations.push(correlation)
   }
 
   // Cache and emit.
-  cache.set(normalized, { correlations, timestamp: Date.now() })
-  evictStaleEntries()
+  current.cache.set(key, { correlations, timestamp: Date.now() })
+  evictStaleEntries(current)
 
   if (correlations.some((c) => c.rootCauseFile !== null)) {
     Bus.publishDetached(DebugEngine.Event.CorrelatedDiagnostics, {
@@ -263,6 +325,7 @@ function findCrossFileRootCause(
   message: string,
   severity: number,
   symbol: CodeIntelligence.Symbol,
+  lspProvenance: LspProvenance,
 ): DebugEngine.CorrelatedDiagnostic {
   // Walk callers at depth 1 first (direct callers in other files).
   const callers = CodeIntelligence.findCallers(projectID, symbol.id, { scope: "worktree" })
@@ -298,6 +361,7 @@ function findCrossFileRootCause(
       rootCauseSymbol: null,
       rootCauseChain: [symbol.qualifiedName],
       confidence: "low",
+      ...provenanceFields(lspProvenance, graphProvenance([symbol, ...allCandidates.map((c) => c.sym)])),
     }
   }
 
@@ -323,6 +387,7 @@ function findCrossFileRootCause(
       rootCauseSymbol: null,
       rootCauseChain: [symbol.qualifiedName],
       confidence: "low",
+      ...provenanceFields(lspProvenance, graphProvenance([symbol, ...allCandidates.map((c) => c.sym)])),
     }
   }
 
@@ -354,6 +419,7 @@ function findCrossFileRootCause(
     rootCauseSymbol: best.sym.qualifiedName,
     rootCauseChain: chain,
     confidence,
+    ...provenanceFields(lspProvenance, graphProvenance([symbol, ...allCandidates.map((c) => c.sym)])),
   }
 }
 
@@ -377,25 +443,64 @@ function renderCorrelationBlockInternal(
   return `\n<correlation file="${file}">\n${lines.join("\n")}\n</correlation>`
 }
 
-async function getDiagnosticsForFile(file: string): Promise<LSPClient.Diagnostic[]> {
+async function getDiagnosticsForFile(file: string): Promise<{
+  diagnostics: LSPClient.Diagnostic[]
+  provenance: LspProvenance
+}> {
   // Pull from the aggregated LSP diagnostics cache. This uses the same
   // data source as tool/diagnostics.ts — the per-client diagnostic maps
   // populated by textDocument/publishDiagnostics.
-  const all = await import("../lsp").then((m) => m.LSP.diagnostics())
-  return all[file] ?? []
+  const lsp = await import("../lsp").then((m) => m.LSP)
+  const [all, envelope] = await Promise.all([lsp.diagnostics(), lsp.diagnosticsAggregated(file)])
+  return {
+    diagnostics: all[file] ?? [],
+    provenance: {
+      timestamp: envelope.timestamp,
+      serverIDs: envelope.serverIDs,
+    },
+  }
 }
 
-function evictStaleEntries(): void {
-  if (cache.size <= MAX_CACHE_ENTRIES) return
+function defaultLspProvenance(): LspProvenance {
+  return { timestamp: Date.now(), serverIDs: [] }
+}
+
+function graphProvenance(symbols: CodeIntelligence.Symbol[]): GraphProvenance {
+  const explains = symbols.map((symbol) => symbol.explain)
+  const queryIds = [...new Set(explains.map((explain) => explain.queryId))]
+  const indexedAt = explains.length === 0 ? 0 : Math.min(...explains.map((explain) => explain.indexedAt))
+  let completeness: DebugEngine.Completeness = "full"
+  for (const explain of explains) {
+    if (explain.completeness === "partial") {
+      completeness = "partial"
+      break
+    }
+    if (explain.completeness === "lsp-only") completeness = "lsp-only"
+  }
+  return { queryIds, indexedAt, completeness }
+}
+
+function provenanceFields(lsp: LspProvenance, graph: GraphProvenance) {
+  return {
+    lspTimestamp: lsp.timestamp,
+    lspServerIDs: lsp.serverIDs,
+    graphQueryIds: graph.queryIds,
+    graphIndexedAt: graph.indexedAt,
+    graphCompleteness: graph.completeness,
+  }
+}
+
+function evictStaleEntries(current: CorrelationState): void {
+  if (current.cache.size <= MAX_CACHE_ENTRIES) return
   // Evict oldest entries first.
   const now = Date.now()
-  const entries = [...cache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp)
+  const entries = [...current.cache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp)
   const toRemove = entries.slice(0, Math.max(1, entries.length - MAX_CACHE_ENTRIES))
   for (const [key] of toRemove) {
-    cache.delete(key)
+    current.cache.delete(key)
   }
   // Also evict anything older than 2x TTL as a safety net.
-  for (const [key, entry] of cache) {
-    if (now - entry.timestamp > CACHE_TTL_MS * 2) cache.delete(key)
+  for (const [key, entry] of current.cache) {
+    if (now - entry.timestamp > CACHE_TTL_MS * 2) current.cache.delete(key)
   }
 }

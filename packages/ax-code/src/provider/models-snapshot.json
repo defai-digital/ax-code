@@ -6745,30 +6745,6 @@
           "output": 0
         }
       },
-      "bytedance/seedance-v1.0-lite-t2v": {
-        "id": "bytedance/seedance-v1.0-lite-t2v",
-        "name": "Seedance v1.0 Lite Text-to-Video",
-        "family": "seed",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2025-06-01",
-        "last_updated": "2025-06-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "video"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 0,
-          "output": 0
-        }
-      },
       "bytedance/seedance-v1.0-pro-fast": {
         "id": "bytedance/seedance-v1.0-pro-fast",
         "name": "Seedance v1.0 Pro Fast",
@@ -6872,30 +6848,6 @@
           "output": 64000
         }
       },
-      "bytedance/seedance-v1.0-lite-i2v": {
-        "id": "bytedance/seedance-v1.0-lite-i2v",
-        "name": "Seedance v1.0 Lite Image-to-Video",
-        "family": "seed",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2025-06-01",
-        "last_updated": "2025-06-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "video"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 0,
-          "output": 0
-        }
-      },
       "morph/morph-v3-large": {
         "id": "morph/morph-v3-large",
         "name": "Morph v3 Large",
@@ -6942,6 +6894,31 @@
         "limit": {
           "context": 16000,
           "output": 16000
+        }
+      },
+      "sakana/fugu-ultra": {
+        "id": "sakana/fugu-ultra",
+        "name": "Fugu Ultra",
+        "family": "aura",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-06-21",
+        "last_updated": "2026-06-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 1000000
         }
       },
       "nvidia/nemotron-3-ultra-550b-a55b": {
@@ -12064,6 +12041,44 @@
         "open_weights": true,
         "limit": {
           "context": 204800,
+          "output": 131072
+        }
+      },
+      "zai-org/glm-5.2": {
+        "id": "zai-org/glm-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
           "output": 131072
         }
       },
@@ -28428,6 +28443,74 @@
         "open_weights": false,
         "limit": {
           "context": 200000,
+          "output": 131072
+        }
+      },
+      "z-ai/glm-5.2": {
+        "id": "z-ai/glm-5.2",
+        "name": "GLM 5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "z-ai/glm-5.2-free": {
+        "id": "z-ai/glm-5.2-free",
+        "name": "GLM 5.2 (Free)",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
           "output": 131072
         }
       },

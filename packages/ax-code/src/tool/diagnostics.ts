@@ -148,7 +148,9 @@ async function runCorrelationAndPrewarm(
 
   // Impact-driven prewarming: if any edited file has errors, run a quick
   // impact analysis to prewarm LSP for downstream files. This makes the
-  // NEXT edit cycle faster.
+  // NEXT edit cycle faster without taxing clean edits.
+  if (filesWithErrors.length === 0) return correlationMap
+
   try {
     const projectID = Instance.project.id
     const impact = await DebugEngine.analyzeImpact(projectID, {

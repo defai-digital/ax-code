@@ -1,4 +1,5 @@
-import { describe, expect, test, beforeEach } from "vitest"
+import { afterEach, describe, expect, test, beforeEach, vi } from "vitest"
+import { setTimeout as sleep } from "node:timers/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -14,8 +15,21 @@ import {
   __testRenderCorrelationBlock,
 } from "../../src/debug-engine/diagnostic-correlation"
 import type { DebugEngine } from "../../src/debug-engine"
+import { LSP } from "../../src/lsp"
+import { Bus } from "../../src/bus"
+import { LSPClient } from "../../src/lsp/client"
 
 Log.init({ print: false })
+
+let diagnosticsSpy: ReturnType<typeof spyOn> | undefined
+let diagnosticsAggregatedSpy: ReturnType<typeof spyOn> | undefined
+
+afterEach(() => {
+  diagnosticsSpy?.mockRestore()
+  diagnosticsAggregatedSpy?.mockRestore()
+  diagnosticsSpy = undefined
+  diagnosticsAggregatedSpy = undefined
+})
 
 // ─── Helpers (mirror debug-engine.test.ts seeding pattern) ──────────
 
@@ -81,6 +95,25 @@ function seedCallEdge(projectID: ProjectID, from: string, to: string, file: stri
     time_created: t,
     time_updated: t,
   })
+}
+
+function correlated(input: Partial<DebugEngine.CorrelatedDiagnostic> = {}): DebugEngine.CorrelatedDiagnostic {
+  return {
+    file: "/tmp/a.ts",
+    line: 10,
+    message: "Type error",
+    severity: 1,
+    rootCauseFile: "/tmp/b.ts",
+    rootCauseSymbol: "caller",
+    rootCauseChain: ["broken", "caller"],
+    confidence: "high",
+    lspTimestamp: 1_700_000_000_000,
+    lspServerIDs: ["typescript"],
+    graphQueryIds: ["q_test"],
+    graphIndexedAt: 1_700_000_000_000,
+    graphCompleteness: "full",
+    ...input,
+  }
 }
 
 // ─── findEnclosingSymbol ────────────────────────────────────────────
@@ -294,16 +327,7 @@ describe("DiagnosticCorrelation — renderCorrelationBlock", () => {
       [
         "/tmp/a.ts",
         [
-          {
-            file: "/tmp/a.ts",
-            line: 10,
-            message: "Type error",
-            severity: 1,
-            rootCauseFile: "/tmp/b.ts",
-            rootCauseSymbol: "caller",
-            rootCauseChain: ["broken", "caller"],
-            confidence: "low",
-          },
+            correlated({ confidence: "low" }),
         ],
       ],
     ])
@@ -315,16 +339,7 @@ describe("DiagnosticCorrelation — renderCorrelationBlock", () => {
       [
         "/tmp/a.ts",
         [
-          {
-            file: "/tmp/a.ts",
-            line: 10,
-            message: "Type error",
-            severity: 1,
-            rootCauseFile: "/tmp/b.ts",
-            rootCauseSymbol: "formatValue",
-            rootCauseChain: ["broken", "formatValue"],
-            confidence: "high",
-          },
+            correlated({ rootCauseSymbol: "formatValue", rootCauseChain: ["broken", "formatValue"] }),
         ],
       ],
     ])
@@ -352,5 +367,65 @@ describe("DiagnosticCorrelation — cache", () => {
     // so we just verify it doesn't throw.
     DiagnosticCorrelation.__clearCache()
     expect(DiagnosticCorrelation.correlateDiagnostics("/tmp/a.ts")).toEqual([])
+  })
+
+  test("event subscriber correlates diagnostics and preserves LSP and graph provenance", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const fileA = path.join(tmp.path, "a.ts")
+        const fileB = path.join(tmp.path, "b.ts")
+        const brokenFnId = seedSymbol(projectID, {
+          name: "brokenFn",
+          file: fileA,
+          startLine: 10,
+          endLine: 20,
+        })
+        const callerFnId = seedSymbol(projectID, {
+          name: "callerFn",
+          file: fileB,
+          startLine: 5,
+          endLine: 15,
+        })
+        seedCallEdge(projectID, callerFnId, brokenFnId, fileB)
+
+        diagnosticsSpy = vi.spyOn(LSP, "diagnostics").mockResolvedValue({
+          [fileA]: [
+            {
+              range: { start: { line: 15, character: 0 }, end: { line: 15, character: 8 } },
+              severity: 1,
+              message: "Type 'string' is not assignable to type 'number'",
+            },
+          ],
+        })
+        diagnosticsAggregatedSpy = vi.spyOn(LSP, "diagnosticsAggregated").mockResolvedValue({
+          data: [],
+          source: "lsp",
+          completeness: "full",
+          timestamp: 1_700_000_000_000,
+          serverIDs: ["typescript"],
+          degraded: false,
+        })
+
+        DiagnosticCorrelation.init()
+        await Bus.publish(LSPClient.Event.Diagnostics, { path: fileA, serverID: "typescript" })
+        await sleep(350)
+
+        const result = DiagnosticCorrelation.correlateDiagnostics(fileA)
+        expect(result).toHaveLength(1)
+        expect(result[0]).toMatchObject({
+          rootCauseFile: fileB,
+          rootCauseSymbol: expect.stringContaining("callerFn"),
+          lspTimestamp: 1_700_000_000_000,
+          lspServerIDs: ["typescript"],
+        })
+        expect(result[0].graphQueryIds.length).toBeGreaterThan(0)
+        expect(result[0].graphIndexedAt).toBeGreaterThan(0)
+      },
+    })
   })
 })

@@ -40,16 +40,21 @@ const log = Log.create({ service: "debug-engine" })
 export namespace DebugEngine {
   // ─── Bus Events ────────────────────────────────────────────────────
 
-  export const CorrelatedDiagnosticSchema = z.object({
-    file: z.string(),
-    line: z.number(),
-    message: z.string(),
-    severity: z.number(),
-    rootCauseFile: z.string().nullable(),
-    rootCauseSymbol: z.string().nullable(),
-    rootCauseChain: z.array(z.string()),
-    confidence: z.enum(["high", "medium", "low"]),
-  })
+	  export const CorrelatedDiagnosticSchema = z.object({
+	    file: z.string(),
+	    line: z.number(),
+	    message: z.string(),
+	    severity: z.number(),
+	    rootCauseFile: z.string().nullable(),
+	    rootCauseSymbol: z.string().nullable(),
+	    rootCauseChain: z.array(z.string()),
+	    confidence: z.enum(["high", "medium", "low"]),
+	    lspTimestamp: z.number(),
+	    lspServerIDs: z.array(z.string()),
+	    graphQueryIds: z.array(z.string()),
+	    graphIndexedAt: z.number(),
+	    graphCompleteness: z.enum(["full", "partial", "lsp-only"]),
+	  })
 
   export type CorrelatedDiagnostic = z.infer<typeof CorrelatedDiagnosticSchema>
 
