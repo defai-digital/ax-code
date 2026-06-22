@@ -242,6 +242,41 @@ describe("WorkflowRun state", () => {
     })
   })
 
+  test("detail skips corrupt persisted workflow child rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spec = parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun)
+        const run = await WorkflowRun.create({
+          sourceTemplateID: "builtin:noop-dry-run",
+          spec,
+        })
+        const phase = (await WorkflowRun.getDetail(run.id)).phases[0]!
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(WorkflowChildTable)
+            .values({
+              id: WorkflowChildID.ascending("wfc_corrupt_status"),
+              run_id: run.id,
+              phase_id: phase.id,
+              status: "not-a-status",
+              artifact_ids: [],
+              evidence_refs: [],
+              time_created: now,
+              time_updated: now,
+            } as any)
+            .run()
+        })
+
+        const detail = await WorkflowRun.getDetail(run.id)
+        expect(detail.phases.map((item) => item.id)).toEqual([phase.id])
+        expect(detail.children).toEqual([])
+      },
+    })
+  })
+
   test("publishes run, phase, and child status transition events", async () => {
     await using tmp = await tmpdir({ git: true })
 

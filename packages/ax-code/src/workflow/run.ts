@@ -149,37 +149,52 @@ async function get(id: WorkflowRunID): Promise<WorkflowRunState.Info> {
 async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
   const run = await get(id)
   const detail = Database.use((db) => {
-    const phases = db
+    const phaseRows = db
       .select()
       .from(WorkflowPhaseTable)
       .where(eq(WorkflowPhaseTable.run_id, id))
       .orderBy(asc(WorkflowPhaseTable.position), asc(WorkflowPhaseTable.id))
       .all()
-      .map(fromPhaseRow)
-    const children = db
+    const phases = parseWorkflowDetailRows(phaseRows, fromPhaseRow, "phase")
+    const childRows = db
       .select()
       .from(WorkflowChildTable)
       .where(eq(WorkflowChildTable.run_id, id))
       .orderBy(asc(WorkflowChildTable.time_created), asc(WorkflowChildTable.id))
       .all()
-      .map(fromChildRow)
-    const artifacts = db
+    const children = parseWorkflowDetailRows(childRows, fromChildRow, "child")
+    const artifactRows = db
       .select()
       .from(WorkflowArtifactTable)
       .where(eq(WorkflowArtifactTable.run_id, id))
       .orderBy(asc(WorkflowArtifactTable.time_created), asc(WorkflowArtifactTable.id))
       .all()
-      .map(fromArtifactRow)
-    const budgetLedger = db
+    const artifacts = parseWorkflowDetailRows(artifactRows, fromArtifactRow, "artifact")
+    const budgetRows = db
       .select()
       .from(WorkflowBudgetLedgerTable)
       .where(eq(WorkflowBudgetLedgerTable.run_id, id))
       .orderBy(asc(WorkflowBudgetLedgerTable.time_created), asc(WorkflowBudgetLedgerTable.id))
       .all()
-      .map(fromBudgetLedgerRow)
+    const budgetLedger = parseWorkflowDetailRows(budgetRows, fromBudgetLedgerRow, "budget ledger")
     return { ...run, phases, children, artifacts, budgetLedger }
   })
   return WorkflowRunDetail.parse(detail)
+}
+
+function parseWorkflowDetailRows<TRow extends { id: string }, TInfo>(
+  rows: TRow[],
+  parse: (row: TRow) => TInfo,
+  kind: string,
+): TInfo[] {
+  return rows.flatMap((row) => {
+    try {
+      return [parse(row)]
+    } catch {
+      log.warn("skipping corrupt workflow detail row", { kind, id: row.id })
+      return []
+    }
+  })
 }
 
 async function setStatus(input: WorkflowRunState.SetStatusInput): Promise<WorkflowRunState.Info> {
