@@ -156,6 +156,7 @@ export namespace Session {
     if (match) {
       const base = match[1]
       const num = parseInt(match[2], 10)
+      if (!Number.isSafeInteger(num)) return `${base} (fork #1)`
       return `${base} (fork #${num + 1})`
     }
     return `${title} (fork #1)`

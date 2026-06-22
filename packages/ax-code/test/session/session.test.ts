@@ -223,6 +223,28 @@ describe("session.messages", () => {
   })
 })
 
+describe("session.fork", () => {
+  test("does not render unsafe fork suffixes as Infinity", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({
+          title: `Investigation (fork #${"9".repeat(400)})`,
+        })
+
+        try {
+          const fork = await Session.fork({ sessionID: session.id })
+
+          expect(fork.title).toBe("Investigation (fork #1)")
+          expect(fork.title).not.toContain("Infinity")
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+})
+
 describe("session lists", () => {
   test("reject invalid pagination inputs", async () => {
     await Instance.provide({
