@@ -27,6 +27,7 @@ import {
   evaluatePlatformEligibility,
   formatAxEngineCapabilityInspectionFailureReason,
   ensureServer,
+  getDiskStatus,
   getServerStatus,
   getModelStatus,
   isPlausiblySupportedHost,
@@ -207,6 +208,21 @@ describe("ax-engine model cache", () => {
       ok: true,
       blockers: [],
     })
+  })
+
+  test("checks disk space at the default Hugging Face cache download root", async () => {
+    await using tmp = await tmpdir()
+    const previous = process.env.HF_HUB_CACHE
+    const hfRoot = path.join(tmp.path, "hf-hub")
+    process.env.HF_HUB_CACHE = hfRoot
+
+    try {
+      const status = await getDiskStatus({ modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, quantization: "mlx6bit" })
+      expect(status.path).toBe(hfRoot)
+    } finally {
+      if (previous === undefined) delete process.env.HF_HUB_CACHE
+      else process.env.HF_HUB_CACHE = previous
+    }
   })
 
   test("refuses to mark a missing or manifest-less model path prepared", async () => {

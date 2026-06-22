@@ -178,7 +178,7 @@ export async function getDiskStatus(options: AxEngineModelOptions = {}): Promise
   const target =
     typeof options.downloadDir === "string" && options.downloadDir.trim()
       ? options.downloadDir.trim()
-      : AxEnginePaths.downloads
+      : HfCache.root()
   await fs.mkdir(target, { recursive: true })
   const result = await Process.text(["df", "-Pk", target], { nothrow: true })
   const freeBytes = result.code === 0 ? parseDfPkAvailableBytes(result.text) : undefined
