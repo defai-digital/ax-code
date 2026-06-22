@@ -32,6 +32,27 @@ function formatDuration(ms: number): string {
   return `${s}.${Math.floor((ms % MS_PER_SECOND) / TENTH_SECOND_UNIT_MS)}s`
 }
 
+function finiteNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0
+}
+
+function eventTokens(value: unknown): { input: number; output: number; reasoning: number } {
+  if (!value || typeof value !== "object") {
+    return { input: 0, output: 0, reasoning: 0 }
+  }
+  const tokens = value as { input?: unknown; output?: unknown; reasoning?: unknown }
+  return {
+    input: finiteNumber(tokens.input),
+    output: finiteNumber(tokens.output),
+    reasoning: finiteNumber(tokens.reasoning),
+  }
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === "string")
+}
+
 function summarize(s: string | undefined, max: number): string {
   if (!s) return ""
   const flat = s.replace(/\s+/g, " ").trim()
@@ -213,8 +234,8 @@ export namespace AuditReport {
             from: event.fromAgent,
             to: event.toAgent,
             mode: event.routeMode ?? "switch",
-            conf: event.confidence ?? 0,
-            matched: event.matched ?? [],
+            conf: finiteNumber(event.confidence),
+            matched: stringList(event.matched),
           })
           break
         case "tool.call": {
@@ -232,17 +253,19 @@ export namespace AuditReport {
               tool: call.tool,
               target: call.target,
               result: formatResult(event),
-              duration: formatDuration(event.durationMs),
+              duration: formatDuration(finiteNumber(event.durationMs)),
             })
             pending.delete(event.callID)
           }
           break
         }
-        case "llm.response":
-          totalInput += event.tokens.input
-          totalOutput += event.tokens.output
-          totalReasoning += event.tokens.reasoning ?? 0
+        case "llm.response": {
+          const tokens = eventTokens(event.tokens)
+          totalInput += tokens.input
+          totalOutput += tokens.output
+          totalReasoning += tokens.reasoning
           break
+        }
       }
     }
 

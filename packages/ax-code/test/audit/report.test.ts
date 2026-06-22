@@ -90,6 +90,44 @@ describe("AuditReport.generate", () => {
     })
   })
 
+  test("normalizes malformed legacy route and token fields", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: sid,
+          fromAgent: "build",
+          toAgent: "review",
+          confidence: "high",
+          matched: "security",
+        } as any)
+        Recorder.emit({
+          type: "llm.response",
+          sessionID: sid,
+          finishReason: "stop",
+          tokens: {},
+          latencyMs: "slow",
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const report = await AuditReport.generate(sid)
+        expect(report).toContain("switch `build` -> `review` (0.00)")
+        expect(report).toContain("- **Input:** 0")
+        expect(report).toContain("- **Output:** 0")
+        expect(report).toContain("- **Total:** 0")
+        expect(report).not.toContain("NaN")
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
   test("does not infer validation pass or fail from raw bash status", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
