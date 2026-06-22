@@ -288,13 +288,21 @@ export namespace SessionPrompt {
         break
       }
 
+      // Safety: a session with an active goal is treated as effectively
+      // autonomous — the goal itself is the "keep going" signal, and it has
+      // its own budget/complete/blocked termination conditions. Without this,
+      // setting a goal when AX_CODE_AUTONOMOUS is off runs only the first
+      // turn and stops, leaving the goal "active on paper but dormant".
+      const activeGoal = await SessionGoal.get(sessionID)
+      const effectivelyAutonomous = autonomous || activeGoal?.status === "active"
+
       // Safety: prevent infinite loops
       const effectiveMaxContinuations = superLongActive ? Number.POSITIVE_INFINITY : maxContinuations
       const globalStepLimit = handlePromptLoopGlobalStepLimit({
         sessionID,
         step,
         stepLimit: sessionStepLimit,
-        autonomous,
+        autonomous: effectivelyAutonomous,
         continuations,
         maxContinuations: effectiveMaxContinuations,
       })
@@ -327,7 +335,7 @@ export namespace SessionPrompt {
         sessionID,
         lastUser,
         lastAssistant,
-        autonomous,
+        autonomous: effectivelyAutonomous,
         config: SuperLongPolicy.fromConfig(cfg.super_long),
       })
       if (superLongDeadline.action === "stop") {
@@ -444,7 +452,7 @@ export namespace SessionPrompt {
         agentName: agent.name,
         step,
         maxSteps,
-        autonomous,
+        autonomous: effectivelyAutonomous,
         continuations,
         maxContinuations: superLongActive ? Number.POSITIVE_INFINITY : maxContinuations,
       })
@@ -571,12 +579,13 @@ export namespace SessionPrompt {
       }
       const updatedGoal = await addPromptGoalUsage({ sessionID, message: processor.message })
 
-      // In autonomous mode, when the model ends a turn cleanly but leaves todos
-      // pending, inject a continuation user message and keep the loop running.
-      // This is the runtime guarantee — complements the system-prompt reminder
-      // injected per turn. Capped by maxTodoRetries to prevent infinite loops when
-      // the model genuinely cannot finish a todo (blocked tool, missing data, etc.).
-      if (autonomous && !processor.message.error) {
+      // When autonomous (explicitly or via active goal), when the model ends
+      // a turn cleanly but leaves todos pending, inject a continuation user
+      // message and keep the loop running. This is the runtime guarantee —
+      // complements the system-prompt reminder injected per turn. Capped by
+      // maxTodoRetries to prevent infinite loops when the model genuinely
+      // cannot finish a todo (blocked tool, missing data, etc.).
+      if (effectivelyAutonomous && !processor.message.error) {
         const latestMessages = await Session.messages({ sessionID })
         const pendingTodos = Todo.active(sessionID)
         const completionGate = AutonomousCompletionGate.evaluate({
@@ -754,15 +763,14 @@ export namespace SessionPrompt {
         }
       }
 
-      // Goal auto-continuation is autonomy, so it must respect the autonomous
-      // gate like every other continuation (global/agent step limits, todos,
-      // completion gate). Without this gate a goal keeps auto-continuing even
-      // when the user disabled autonomous mode — and because the Super-Long
-      // ceiling requires autonomous and each continuation resets `step`, such a
-      // goal runs with no time or step guardrail at all. When autonomous is off
-      // the goal still persists in context; the user just drives each turn.
-      if (autonomous && modelFinished && !processor.message.error) {
-        const goal = updatedGoal ?? (await SessionGoal.get(sessionID))
+      // Goal auto-continuation runs when autonomous mode is explicitly
+      // enabled OR the session has an active goal (effectivelyAutonomous).
+      // An active goal is its own "keep going" signal — it terminates when
+      // the model marks it complete/blocked, the user pauses or clears it,
+      // or the token budget is exhausted. Super-Long deadline and global
+      // step limits still apply as safety guardrails.
+      if (effectivelyAutonomous && modelFinished && !processor.message.error) {
+        const goal = updatedGoal ?? activeGoal
         const goalTransition = handlePromptLoopGoalContinuation({
           sessionID,
           goal,

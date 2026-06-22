@@ -96,7 +96,7 @@ describe("workflow routes", () => {
           status: "running",
           currentPhaseName: "Collect Issues",
           effort: "max-workflow",
-          childCounts: expect.objectContaining({ queued: 8 }),
+          childCounts: expect.objectContaining({ running: 8 }),
           budgetUsage: expect.objectContaining({ childAgents: 8 }),
         }),
       ])

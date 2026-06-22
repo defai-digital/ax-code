@@ -15,6 +15,7 @@ import { Session } from "../session"
 import { ScheduledTask } from "@/session/scheduled-task"
 import { TaskQueue } from "@/session/task-queue"
 import { Provider } from "../provider/provider"
+import { DiagnosticCorrelation } from "../debug-engine/diagnostic-correlation"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { toErrorMessage } from "@/util/error-message"
 import {
@@ -80,7 +81,19 @@ export async function InstanceBootstrap() {
   await runtimeTask({
     service: "TaskQueue.recoverInterrupted",
     label: "task queue restart recovery",
-    task: () => TaskQueue.recoverInterrupted(),
+    task: async () => {
+      const result = await TaskQueue.recoverInterrupted()
+      // Requeued items are reset to "queued" but never auto-started —
+      // drainNextForSession() only fires after a task completes, so the
+      // first recovered item would sit idle forever without an explicit
+      // start.
+      if (result.requeued.length > 0) {
+        const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
+        for (const item of result.requeued) {
+          await TaskQueueExecutor.start(item)
+        }
+      }
+    },
   })
   background({
     service: "Format.init",
@@ -97,6 +110,11 @@ export async function InstanceBootstrap() {
       service: "LSP.init",
       label: "lsp init",
       task: () => LSP.init(),
+    }),
+    runtimeTask({
+      service: "DiagnosticCorrelation.init",
+      label: "diagnostic correlation init",
+      task: () => DiagnosticCorrelation.init(),
     }),
   ])
   // Start provider loading in the background so it's ready by the time

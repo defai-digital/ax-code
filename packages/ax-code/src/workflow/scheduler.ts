@@ -97,6 +97,7 @@ export namespace WorkflowScheduler {
       }
 
       if (parsed.enqueueChildren) {
+        const enqueuedTasks: Array<{ task: Awaited<ReturnType<typeof TaskQueue.enqueue>> }> = []
         for (const childPlan of phasePlan.children) {
           const target = await prepareChildRuntimeTarget(runID, phase, childPlan)
           const { child, task } = await Instance.provide({
@@ -153,6 +154,16 @@ export namespace WorkflowScheduler {
             kind: "reserve",
             usageDelta: { childAgents: 1 },
           })
+          enqueuedTasks.push({ task })
+        }
+
+        // Enqueue creates the queue items but does not start them. Without
+        // this explicit start, workflow children sit in "queued" forever —
+        // drainNextWorkflowPhaseItem() only fires after a child completes,
+        // so the first batch never gets picked up.
+        const TaskQueueExecutor = await loadTaskQueueExecutor()
+        for (const { task } of enqueuedTasks) {
+          await TaskQueueExecutor.start(task)
         }
       } else {
         const { WorkflowDispatchAdapter, WorkflowDispatchExecutorMissingError } = await import("./dispatch-adapter")
@@ -216,8 +227,25 @@ export namespace WorkflowScheduler {
           await TaskQueue.pause(child.taskQueueID)
           continue
         }
+        // Children whose queue items are actively running (or blocked) must
+        // have their session cancelled so the executor drains and the child
+        // can be marked paused.  Without this, refreshPausedRunState sees
+        // live children and refuses to flip the workflow to "paused".
+        if (
+          item?.status === "running" ||
+          item?.status === "blocked_permission" ||
+          item?.status === "blocked_question"
+        ) {
+          if (item.sessionID) {
+            const { SessionPrompt } = await import("../session/prompt")
+            await SessionPrompt.cancel(item.sessionID).catch(() => undefined)
+          }
+          await TaskQueue.pause(child.taskQueueID).catch(() => undefined)
+          await WorkflowRun.setChildStatus({ id: child.id, status: "paused" })
+          continue
+        }
       }
-      if (child.status === "queued") {
+      if (child.status === "queued" || child.status === "running") {
         await WorkflowRun.setChildStatus({ id: child.id, status: "paused" })
       }
     }
@@ -234,7 +262,9 @@ export namespace WorkflowScheduler {
       if (child.taskQueueID) {
         const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
         if (item?.status === "paused") {
-          await TaskQueue.resume(child.taskQueueID)
+          const resumed = await TaskQueue.resume(child.taskQueueID)
+          const TaskQueueExecutor = await loadTaskQueueExecutor()
+          await TaskQueueExecutor.start(resumed)
           continue
         }
       }
@@ -418,7 +448,9 @@ async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {
     if (child.taskQueueID) {
       const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
       if (item?.status === "failed" || item?.status === "cancelled") {
-        await TaskQueue.retry(child.taskQueueID)
+        const retried = await TaskQueue.retry(child.taskQueueID)
+        const TaskQueueExecutor = await loadTaskQueueExecutor()
+        await TaskQueueExecutor.start(retried)
         continue
       }
     }
@@ -500,4 +532,8 @@ async function refreshRunningRunState(runID: WorkflowRunID) {
 
 async function loadTaskQueue() {
   return (await import("../session/task-queue")).TaskQueue
+}
+
+async function loadTaskQueueExecutor() {
+  return (await import("../session/task-queue-executor")).TaskQueueExecutor
 }
