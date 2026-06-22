@@ -613,7 +613,7 @@ export namespace File {
 
     const realFull = await fs.promises
       .realpath(full)
-      .catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error)))
+      .catch((error: NodeJS.ErrnoException) => (Filesystem.isMissingPathError(error) ? null : Promise.reject(error)))
     if (realFull && !Filesystem.contains(Instance.directory, realFull)) {
       throw new AccessDeniedError({ message: "Access denied: symlink target escapes project directory" })
     }

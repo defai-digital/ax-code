@@ -17,7 +17,7 @@ export namespace Filesystem {
       .access(p)
       .then(() => true)
       .catch((err: NodeJS.ErrnoException) => {
-        if (err?.code === "ENOENT") return false
+        if (isMissingPathError(err)) return false
         throw err
       })
   }
@@ -27,7 +27,7 @@ export namespace Filesystem {
       .stat(p)
       .then((stat) => stat.isDirectory())
       .catch((err) => {
-        if (isEnoent(err)) return false
+        if (isMissingPathError(err)) return false
         throw err
       })
   }
@@ -68,6 +68,10 @@ export namespace Filesystem {
 
   export function isEnoent(e: unknown): e is { code: "ENOENT" } {
     return isRecord(e) && e.code === "ENOENT"
+  }
+
+  export function isMissingPathError(e: unknown): e is { code: "ENOENT" | "ENOTDIR" } {
+    return isRecord(e) && (e.code === "ENOENT" || e.code === "ENOTDIR")
   }
 
   export function errnoCode(error: unknown): string | undefined {

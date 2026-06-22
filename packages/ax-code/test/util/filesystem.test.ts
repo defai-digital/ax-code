@@ -21,6 +21,14 @@ describe("filesystem", () => {
       expect(await Filesystem.exists(filepath)).toBe(false)
     })
 
+    test("returns false when a parent path component is a file", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "content", "utf-8")
+
+      expect(await Filesystem.exists(path.join(filepath, "child.txt"))).toBe(false)
+    })
+
     test("returns true for existing directory", async () => {
       await using tmp = await tmpdir()
       const dirpath = path.join(tmp.path, "subdir")
@@ -67,6 +75,14 @@ describe("filesystem", () => {
       const filepath = path.join(tmp.path, "does-not-exist")
 
       expect(await Filesystem.isDir(filepath)).toBe(false)
+    })
+
+    test("returns false when a parent path component is a file", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "content", "utf-8")
+
+      expect(await Filesystem.isDir(path.join(filepath, "child"))).toBe(false)
     })
 
     test("throws for inaccessible parent directories", async () => {

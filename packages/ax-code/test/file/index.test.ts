@@ -43,6 +43,20 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("returns empty content when a parent path component is a file", async () => {
+      await using tmp = await tmpdir()
+      await fs.writeFile(path.join(tmp.path, "file.txt"), "content", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await File.read("file.txt/child.txt")
+          expect(result.type).toBe("text")
+          expect(result.content).toBe("")
+        },
+      })
+    })
+
     test("preserves whitespace in text content", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "test.txt")
