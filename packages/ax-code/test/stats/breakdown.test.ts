@@ -90,6 +90,19 @@ describe("stats.breakdown.calculateBreakdown", () => {
     expect(result.available).toBe(0)
     expect(result.total).toBe(50_000)
   })
+
+  test("treats non-finite model context limits as unknown", () => {
+    const result = calculateBreakdown({
+      model: createModel(Number.NaN),
+      systemPromptLength: 0,
+      toolCount: 0,
+      memoryTokens: 0,
+      historyTokens: 50_000,
+    })
+    expect(result.modelLimit).toBe(0)
+    expect(result.available).toBe(0)
+    expect(result.total).toBe(50_000)
+  })
 })
 
 describe("stats.breakdown.getStatus", () => {

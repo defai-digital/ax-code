@@ -19,7 +19,8 @@ export function calculateBreakdown(input: {
   memoryTokens: number
   historyTokens: number
 }): ContextBreakdown {
-  const modelLimit = input.model?.limit.context ?? 0
+  const contextLimit = input.model?.limit.context
+  const modelLimit = typeof contextLimit === "number" && Number.isFinite(contextLimit) && contextLimit > 0 ? contextLimit : 0
 
   const systemPrompt = estimateTokens(" ".repeat(input.systemPromptLength))
   const toolDefinitions = input.toolCount * 800 // ~800 tokens per tool definition
