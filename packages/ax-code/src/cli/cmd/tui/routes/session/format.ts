@@ -16,7 +16,7 @@ export const normalize = (input?: string, home?: string) => {
   const relative = path.relative(cwd, absolute)
 
   if (!relative) return "."
-  if (!relative.startsWith("..")) return relative
+  if (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) return relative
   if (home && (absolute === home || absolute.startsWith(home + path.sep))) {
     return absolute.replace(home, "~")
   }

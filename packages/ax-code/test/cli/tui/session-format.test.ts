@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import path from "node:path"
 import { detail, diagnostics, filetype, normalize, workdir } from "../../../src/cli/cmd/tui/routes/session/format"
 
 describe("tui session format", () => {
@@ -7,6 +8,11 @@ describe("tui session format", () => {
     expect(normalize(cwd)).toBe(".")
     expect(normalize("src/index.ts")).toBe("src/index.ts")
     expect(normalize("/tmp/ax-code-outside.txt")).toBe("/tmp/ax-code-outside.txt")
+  })
+
+  test("normalizes cwd-local paths whose first segment starts with dots", () => {
+    const local = path.join(process.cwd(), "..cache", "trace.log")
+    expect(normalize(local)).toBe("..cache/trace.log")
   })
 
   test("formats primitive tool input details and omits excluded keys", () => {
