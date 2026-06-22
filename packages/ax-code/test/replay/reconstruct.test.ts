@@ -292,6 +292,42 @@ describe("replay.reconstructStream", () => {
     })
   })
 
+  test("normalizes malformed legacy token fields", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 })
+        Recorder.emit({
+          type: "llm.response",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: {},
+          latencyMs: "slow",
+        } as any)
+        Recorder.emit({
+          type: "step.finish",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: {},
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const { steps } = Replay.reconstructStream(sid)
+        expect(steps[0]?.usage).toEqual({ inputTokens: 0, outputTokens: 0 })
+        expect(Replay.summary(sid)).toContain("[llm]     response finish=stop tokens=0/0 0ms")
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
   test("toFullStream generates valid stream events", async () => {
     const steps: Replay.ReconstructedStep[] = [
       {

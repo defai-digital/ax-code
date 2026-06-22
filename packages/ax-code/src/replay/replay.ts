@@ -6,6 +6,19 @@ import { ToolCallReplayQuery } from "./tool-call-query"
 
 const log = Log.create({ service: "replay" })
 
+function finiteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0
+}
+
+function eventTokens(value: unknown) {
+  if (!value || typeof value !== "object") return { input: 0, output: 0 }
+  const tokens = value as { input?: unknown; output?: unknown }
+  return {
+    input: finiteNumber(tokens.input),
+    output: finiteNumber(tokens.output),
+  }
+}
+
 export namespace Replay {
   export type Mode = "verify" | "check" | "summary"
 
@@ -187,8 +200,9 @@ export namespace Replay {
         })
       }
       if (event.type === "step.finish") {
+        const tokens = eventTokens(event.tokens)
         current.finishReason = event.finishReason
-        current.usage = { inputTokens: event.tokens.input, outputTokens: event.tokens.output }
+        current.usage = { inputTokens: tokens.input, outputTokens: tokens.output }
         current = undefined
       }
     }
@@ -413,8 +427,9 @@ export namespace Replay {
           lines.push(`[llm]     request model=${event.model} messages=${event.messageCount}`)
           break
         case "llm.response":
+          const tokens = eventTokens(event.tokens)
           lines.push(
-            `[llm]     response finish=${event.finishReason} tokens=${event.tokens.input}/${event.tokens.output} ${event.latencyMs}ms`,
+            `[llm]     response finish=${event.finishReason} tokens=${tokens.input}/${tokens.output} ${finiteNumber(event.latencyMs)}ms`,
           )
           break
         case "step.start":
