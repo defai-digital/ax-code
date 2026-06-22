@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Database } from "../../src/storage/db"
@@ -128,6 +128,29 @@ describe("scheduled task routes", () => {
         expect(refreshed.nextRunAt).toBeUndefined()
       },
     })
+  })
+
+  test("scheduler normalizes non-finite poll intervals to the default", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval")
+    try {
+      setIntervalSpy.mockImplementation((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+        if (typeof handler === "function") handler(...args)
+        return { unref() {} } as ReturnType<typeof setInterval>
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          ScheduledTask.initScheduler({ pollMs: Number.NaN })
+        },
+      })
+
+      expect(setIntervalSpy).toHaveBeenCalled()
+      expect(setIntervalSpy.mock.calls[0]?.[1]).toBe(60_000)
+    } finally {
+      setIntervalSpy.mockRestore()
+    }
   })
 
   test("run-now can create workflow runs for workflow scheduled tasks", async () => {

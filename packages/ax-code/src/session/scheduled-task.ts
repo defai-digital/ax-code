@@ -477,11 +477,17 @@ export namespace ScheduledTask {
     })
   }
 
+  function normalizeSchedulerPollMs(value: number | undefined) {
+    if (value === undefined) return 60_000
+    if (!Number.isFinite(value)) return 60_000
+    return Math.max(10, value)
+  }
+
   export function initScheduler(input: { pollMs?: number } = {}) {
     const state = schedulerState()
     if (state.initialized) return
     state.initialized = true
-    const pollMs = Math.max(10, input.pollMs ?? 60_000)
+    const pollMs = normalizeSchedulerPollMs(input.pollMs)
     // Bind the tick to the current Instance async context so that
     // runDue() can access Instance.project when the interval fires
     // outside the original provide() call.
