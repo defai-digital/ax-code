@@ -166,11 +166,11 @@ function hash(input: string | Uint8Array | ArrayBuffer) {
 export class Glob {
   constructor(private readonly pattern: string) {}
 
-  private options(input: { cwd?: string; absolute?: boolean; dot?: boolean } | string = {}) {
+  private options(input: { cwd?: string; absolute?: boolean; onlyFiles?: boolean; dot?: boolean } | string = {}) {
     return typeof input === "string" ? { cwd: input } : input
   }
 
-  async *scan(input: { cwd?: string; absolute?: boolean; dot?: boolean } | string = {}) {
+  async *scan(input: { cwd?: string; absolute?: boolean; onlyFiles?: boolean; dot?: boolean } | string = {}) {
     const options = this.options(input)
     const cwd = options.cwd ?? process.cwd()
     const stack = [cwd]
@@ -180,18 +180,21 @@ export class Glob {
       const entries = await fs.promises.readdir(current, { withFileTypes: true }).catch(() => [])
       for (const entry of entries) {
         const full = path.join(current, entry.name)
+        const relative = path.relative(cwd, full).split(path.sep).join("/")
         if (entry.isDirectory()) {
+          if (options.onlyFiles === false && minimatch(relative, this.pattern, { dot: options.dot ?? false })) {
+            yield options.absolute ? full : relative
+          }
           stack.push(full)
           continue
         }
-        const relative = path.relative(cwd, full).split(path.sep).join("/")
         if (!minimatch(relative, this.pattern, { dot: options.dot ?? false })) continue
         yield options.absolute ? full : relative
       }
     }
   }
 
-  *scanSync(input: { cwd?: string; absolute?: boolean; dot?: boolean } | string = {}) {
+  *scanSync(input: { cwd?: string; absolute?: boolean; onlyFiles?: boolean; dot?: boolean } | string = {}) {
     const options = this.options(input)
     const cwd = options.cwd ?? process.cwd()
     const stack = [cwd]
@@ -206,11 +209,14 @@ export class Glob {
       }
       for (const entry of entries) {
         const full = path.join(current, entry.name)
+        const relative = path.relative(cwd, full).split(path.sep).join("/")
         if (entry.isDirectory()) {
+          if (options.onlyFiles === false && minimatch(relative, this.pattern, { dot: options.dot ?? false })) {
+            yield options.absolute ? full : relative
+          }
           stack.push(full)
           continue
         }
-        const relative = path.relative(cwd, full).split(path.sep).join("/")
         if (!minimatch(relative, this.pattern, { dot: options.dot ?? false })) continue
         yield options.absolute ? full : relative
       }

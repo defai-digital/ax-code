@@ -67,4 +67,33 @@ describe("node-compat Bun.$ shell", () => {
     expect(Array.from(glob.scanSync({ cwd: dir.path, dot: true })).sort()).toEqual([".hidden.ts", "visible.ts"])
     expect(Array.from(glob.scanSync({ cwd: dir.path, absolute: true }))).toEqual([path.join(dir.path, "visible.ts")])
   })
+
+  test("Glob.scan includes matching directories when onlyFiles is false", async () => {
+    await using dir = await tmpdir({
+      init: async (root) => {
+        await Bun.write(path.join(root, "file.txt"), "")
+        await Bun.write(path.join(root, "subdir", "nested.txt"), "")
+      },
+    })
+
+    const glob = new Bun.Glob("*")
+    expect((await Array.fromAsync(glob.scan({ cwd: dir.path }))).sort()).toEqual(["file.txt"])
+    expect((await Array.fromAsync(glob.scan({ cwd: dir.path, onlyFiles: false }))).sort()).toEqual([
+      "file.txt",
+      "subdir",
+    ])
+  })
+
+  test("Glob.scanSync includes matching directories when onlyFiles is false", async () => {
+    await using dir = await tmpdir({
+      init: async (root) => {
+        await Bun.write(path.join(root, "file.txt"), "")
+        await Bun.write(path.join(root, "subdir", "nested.txt"), "")
+      },
+    })
+
+    const glob = new Bun.Glob("*")
+    expect(Array.from(glob.scanSync({ cwd: dir.path })).sort()).toEqual(["file.txt"])
+    expect(Array.from(glob.scanSync({ cwd: dir.path, onlyFiles: false })).sort()).toEqual(["file.txt", "subdir"])
+  })
 })
