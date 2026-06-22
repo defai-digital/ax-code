@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { mkdir, writeFile } from "node:fs/promises"
 import path from "path"
 import z from "zod"
 import { Instance } from "../../src/project/instance"
@@ -56,6 +57,35 @@ describe("scan coverage notices", () => {
         expect(found).toBe(true)
       },
     })
+  })
+
+  test("detects workspaces without relying on Bun runtime APIs", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeFile(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
+        await mkdir(path.join(dir, "scripts"), { recursive: true })
+        await writeFile(path.join(dir, "scripts", "tool.py"), "print('hello')\n")
+      },
+    })
+
+    const runtime = globalThis as typeof globalThis & { Bun?: unknown }
+    const originalBun = runtime.Bun
+    Reflect.set(runtime, "Bun", undefined)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const notice = await scanCoverageNotice({ include: ["**/*.ts"] })
+
+          expect(notice.metadata.rustWorkspace).toBe(true)
+          expect(notice.metadata.pythonWorkspace).toBe(true)
+          expect(notice.metadata.rustSourceCoverage).toBe("not_covered")
+          expect(notice.metadata.pythonSourceCoverage).toBe("not_covered")
+        },
+      })
+    } finally {
+      Reflect.set(runtime, "Bun", originalBun)
+    }
   })
 
   test("warns when JS/TS scanners run in a Rust workspace without Rust coverage", async () => {

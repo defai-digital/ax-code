@@ -1,5 +1,7 @@
+import fs from "node:fs/promises"
 import z from "zod"
 import { Instance } from "../project/instance"
+import { Glob } from "../util/glob"
 import { Locale } from "../util/locale"
 import { resolveToolFilePath } from "./file-path"
 import { ToolBoolean, ToolNumber } from "./schema"
@@ -76,9 +78,20 @@ function isBroadSourceGlob(pattern: string) {
 
 async function anyExists(candidates: string[]) {
   for (const candidate of candidates) {
-    if (await Bun.file(resolveToolFilePath(candidate, Instance.directory)).exists()) return true
+    if (await fileExists(resolveToolFilePath(candidate, Instance.directory))) return true
   }
   return false
+}
+
+async function fileExists(file: string) {
+  try {
+    await fs.access(file)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    if (code === "ENOENT" || code === "ENOTDIR") return false
+    throw error
+  }
 }
 
 type SourceGlob = {
@@ -87,7 +100,9 @@ type SourceGlob = {
 
 export function hasSourceFile(
   patterns: string[],
-  createGlob: (pattern: string) => SourceGlob = (pattern) => new Bun.Glob(pattern),
+  createGlob: (pattern: string) => SourceGlob = (pattern) => ({
+    scanSync: (options) => Glob.scanSync(pattern, { cwd: options.cwd, include: "file" }),
+  }),
 ) {
   for (const pattern of patterns) {
     try {
@@ -102,7 +117,7 @@ export function hasSourceFile(
 
 async function detectedWorkspaces() {
   const rustWorkspace =
-    (await Bun.file(resolveToolFilePath("Cargo.toml", Instance.directory)).exists()) ||
+    (await fileExists(resolveToolFilePath("Cargo.toml", Instance.directory))) ||
     hasSourceFile(["src/**/*.rs", "crates/**/*.rs"])
   const pythonWorkspace =
     (await anyExists(["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile"])) ||
