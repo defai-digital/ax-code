@@ -167,6 +167,19 @@ describe("file/index Filesystem patterns", () => {
         },
       })
     })
+
+    test("missing binary-extension files are treated as missing, not existing binary files", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await File.read("missing.so")
+          expect(result.type).toBe("text")
+          expect(result.content).toBe("")
+        },
+      })
+    })
   })
 
   describe("File.read() - Filesystem.mimeType()", () => {

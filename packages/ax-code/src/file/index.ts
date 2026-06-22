@@ -609,9 +609,10 @@ export namespace File {
       throw new AccessDeniedError({ message: "Access denied: symlink target escapes project directory" })
     }
     const readTarget = realFull ?? full
+    const exists = await Filesystem.exists(full)
 
     if (isImageByExtension(file)) {
-      if (await Filesystem.exists(full)) {
+      if (exists) {
         const buffer = await Filesystem.readBytes(readTarget)
         return {
           type: "text",
@@ -625,12 +626,12 @@ export namespace File {
 
     const knownText = isTextByExtension(file) || isTextByName(file)
 
-    if (isBinaryByExtension(file) && !knownText) {
-      return { type: "binary", content: "" }
+    if (!exists) {
+      return { type: "text", content: "" }
     }
 
-    if (!(await Filesystem.exists(full))) {
-      return { type: "text", content: "" }
+    if (isBinaryByExtension(file) && !knownText) {
+      return { type: "binary", content: "" }
     }
 
     const mimeType = Filesystem.mimeType(full)
