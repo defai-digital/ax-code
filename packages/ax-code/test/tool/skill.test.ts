@@ -130,6 +130,7 @@ Use this skill.
 `,
         )
         await Bun.write(path.join(skillDir, "scripts", "demo.txt"), "demo")
+        await Bun.write(path.join(skillDir, "scripts", "ABOUT_SKILL.md.txt"), "about")
       },
     })
 
@@ -160,6 +161,7 @@ Use this skill.
           await Session.remove(session.id)
           const dir = path.join(tmp.path, ".ax-code", "skill", "tool-skill")
           const file = path.resolve(dir, "scripts", "demo.txt")
+          const skillNamedResource = path.resolve(dir, "scripts", "ABOUT_SKILL.md.txt")
 
           expect(requests.length).toBe(1)
           expect(requests[0].permission).toBe("skill")
@@ -170,6 +172,7 @@ Use this skill.
           expect(result.output).toContain(`<skill_content name="tool-skill">`)
           expect(result.output).toContain(`Base directory for this skill: ${pathToFileURL(dir).href}`)
           expect(result.output).toContain(`<file>${file}</file>`)
+          expect(result.output).toContain(`<file>${skillNamedResource}</file>`)
           expect(events).toHaveLength(1)
           expect(events[0]).toMatchObject({
             type: "skill.loaded",
@@ -178,7 +181,7 @@ Use this skill.
             skillName: "tool-skill",
             sourceTool: "ax-code",
             scope: "config",
-            fileCount: 1,
+            fileCount: 2,
           })
         },
       })

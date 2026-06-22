@@ -21,6 +21,11 @@ function escapePromptMetadata(value: string) {
   return escapeXmlAttribute(value).replace(/\s+/g, " ").trim()
 }
 
+function isSkillEntrypoint(relativePath: string) {
+  const normalized = relativePath.replaceAll("\\", "/")
+  return normalized === "SKILL.md"
+}
+
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const list = await Skill.available(ctx?.agent)
 
@@ -85,7 +90,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           hidden: true,
           signal: ctx.abort,
         })) {
-          if (file.includes("SKILL.md")) {
+          if (isSkillEntrypoint(file)) {
             continue
           }
           arr.push(path.resolve(dir, file))
