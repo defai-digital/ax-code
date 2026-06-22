@@ -81,7 +81,7 @@ export namespace Command {
         result.push(match)
       }
     }
-    if (template.includes("$ARGUMENTS")) result.push("$ARGUMENTS")
+    if (/\$ARGUMENTS(?![A-Za-z0-9_])/.test(template)) result.push("$ARGUMENTS")
     return result
   }
 

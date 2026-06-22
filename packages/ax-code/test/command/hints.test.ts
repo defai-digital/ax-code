@@ -14,6 +14,11 @@ describe("Command.hints", () => {
     expect(Command.hints("keep $1abc and $1_name but replace $1")).toEqual(["$1"])
   })
 
+  test("does not expose partial arguments placeholder prefixes", () => {
+    expect(Command.hints("keep $ARGUMENTS_EXTRA but replace $ARGUMENTS")).toEqual(["$ARGUMENTS"])
+    expect(Command.hints("keep $ARGUMENTS_EXTRA")).toEqual([])
+  })
+
   test("labels and truncates MCP prompt templates as untrusted content", async () => {
     const text = await Command.mcpPromptTemplateText({
       client: "docs",

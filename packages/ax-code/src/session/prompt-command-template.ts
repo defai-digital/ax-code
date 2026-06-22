@@ -4,6 +4,7 @@ import { Process } from "../util/process"
 
 const argsRegex = /(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)/gi
 const placeholderRegex = /\$(\d+)(?![A-Za-z0-9_])/g
+const argumentsPlaceholderRegex = /\$ARGUMENTS(?![A-Za-z0-9_])/g
 const quoteTrimRegex = /^["']|["']$/g
 const bashRegex = /!`([^`]+)`/g
 
@@ -15,7 +16,8 @@ function commandArgs(input: string) {
 function commandTemplate(template: string, input: string) {
   const args = commandArgs(input)
   const placeholders = template.match(placeholderRegex) ?? []
-  const hasArgumentsPlaceholder = template.includes("$ARGUMENTS")
+  const hasArgumentsPlaceholder = argumentsPlaceholderRegex.test(template)
+  argumentsPlaceholderRegex.lastIndex = 0
   let last = 0
   for (const item of placeholders) {
     const value = Number(item.slice(1))
@@ -41,7 +43,7 @@ function commandTemplate(template: string, input: string) {
   if (!hasArgumentsPlaceholder) return withArgs
 
   const remaining = placeholders.length > 0 ? args.slice(last).join(" ") : input
-  return withArgs.replaceAll("$ARGUMENTS", remaining)
+  return withArgs.replaceAll(argumentsPlaceholderRegex, remaining)
 }
 
 export async function commandTemplateText(input: {
