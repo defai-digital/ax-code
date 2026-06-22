@@ -65,10 +65,16 @@ test("parseNumstatLine normalizes text and binary entries", () => {
     binary: false,
   })
   expect(parseNumstatLine("missing-tab")).toBeUndefined()
+  expect(parseNumstatLine("12abc\t3\tsrc/index.ts")).toBeUndefined()
+  expect(parseNumstatLine("12\t3abc\tsrc/index.ts")).toBeUndefined()
+  expect(parseNumstatLine("-\t3\tsrc/index.ts")).toBeUndefined()
+  expect(parseNumstatLine("9007199254740992\t0\tsrc/index.ts")).toBeUndefined()
 })
 
 test("parseLsTreeSize reads file sizes from ls-tree metadata", () => {
   expect(parseLsTreeSize("100644 blob 1111111111111111111111111111111111111111 42\tsrc/index.ts")).toBe(42)
   expect(parseLsTreeSize("100644 blob 1111111111111111111111111111111111111111 -\timage.png")).toBeUndefined()
+  expect(parseLsTreeSize("100644 blob 1111111111111111111111111111111111111111 42bytes\tsrc/index.ts")).toBeUndefined()
+  expect(parseLsTreeSize("100644 blob 1111111111111111111111111111111111111111 -1\tsrc/index.ts")).toBeUndefined()
   expect(parseLsTreeSize("malformed")).toBeUndefined()
 })

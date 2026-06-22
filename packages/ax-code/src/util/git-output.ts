@@ -36,8 +36,9 @@ function splitPair(line: string) {
 }
 
 function parseCount(value: string) {
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) ? parsed : 0
+  if (!/^\d+$/.test(value)) return undefined
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : undefined
 }
 
 export function parsePathLine(line: string): string | undefined {
@@ -66,10 +67,13 @@ export function parseNumstatLine(line: string): NumstatEntry | undefined {
   if (!file) return
 
   const binary = rawAdditions === "-" && rawDeletions === "-"
+  const additions = binary ? 0 : parseCount(rawAdditions)
+  const deletions = binary ? 0 : parseCount(rawDeletions)
+  if (additions === undefined || deletions === undefined) return
   return {
     file,
-    additions: binary ? 0 : parseCount(rawAdditions),
-    deletions: binary ? 0 : parseCount(rawDeletions),
+    additions,
+    deletions,
     binary,
   }
 }
@@ -83,6 +87,5 @@ export function parseLsTreeSize(line: string): number | undefined {
   const raw = parts[3]
   if (!raw || raw === "-") return
 
-  const size = Number.parseInt(raw, 10)
-  return Number.isFinite(size) ? size : undefined
+  return parseCount(raw)
 }
