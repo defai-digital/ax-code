@@ -822,7 +822,15 @@ export namespace Session {
    * sessions. Uses `time_updated` (not `time_created`) so active
    * sessions are never pruned regardless of age.
    */
+  export function validatePruneTtlDays(ttlDays: unknown): number {
+    if (typeof ttlDays !== "number" || !Number.isInteger(ttlDays) || ttlDays < 1) {
+      throw new Error("Session prune ttlDays must be a positive integer")
+    }
+    return ttlDays
+  }
+
   export async function pruneExpired(ttlDays: number): Promise<number> {
+    ttlDays = validatePruneTtlDays(ttlDays)
     const cutoff = Date.now() - ttlDays * 24 * 60 * 60 * 1000
     const project = Instance.project
     const rows = Database.use((db) =>

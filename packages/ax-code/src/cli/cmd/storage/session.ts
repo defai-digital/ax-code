@@ -340,16 +340,21 @@ export const SessionPruneCommand = cmd({
   command: "prune",
   describe: "delete sessions older than N days (default: config session.ttl_days or 30)",
   builder: (yargs: Argv) => {
-    return yargs.option("days", {
-      describe: "delete sessions older than this many days (default: config session.ttl_days or 30)",
-      type: "number",
-    })
+    return yargs
+      .option("days", {
+        describe: "delete sessions older than this many days (default: config session.ttl_days or 30)",
+        type: "number",
+      })
+      .check((argv) => {
+        if (argv.days !== undefined) Session.validatePruneTtlDays(argv.days)
+        return true
+      })
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
       const { Config } = await import("../../../config/config")
       const cfg = await Config.get()
-      const days = args.days ?? cfg.session?.ttl_days ?? 30
+      const days = Session.validatePruneTtlDays(args.days ?? cfg.session?.ttl_days ?? 30)
       const pruned = await Session.pruneExpired(days)
 
       if (pruned === 0) {
