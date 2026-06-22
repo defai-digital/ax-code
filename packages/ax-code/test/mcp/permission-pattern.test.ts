@@ -39,6 +39,19 @@ describe("McpPermissionPattern.derive", () => {
     expect(result.durable).toBe(true)
   })
 
+  test("keeps worktree-local paths whose first segment starts with dots", () => {
+    const worktree = path.join(path.sep, "tmp", "repo")
+    const result = McpPermissionPattern.derive(
+      "fs_read",
+      { filePath: path.join(worktree, "..cache", "data.txt") },
+      { worktree },
+    )
+
+    expect(result.patterns).toEqual(["path:..cache/data.txt"])
+    expect(result.always).toEqual(["path:..cache/data.txt"])
+    expect(result.durable).toBe(true)
+  })
+
   test("redacts external paths and disables durable approval", () => {
     const worktree = path.join(path.sep, "tmp", "repo")
     const result = McpPermissionPattern.derive("fs_read", { path: path.join(path.sep, "etc", "passwd") }, { worktree })

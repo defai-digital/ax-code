@@ -44,12 +44,16 @@ function normalizeUrl(value: string): string | undefined {
   }
 }
 
+function isOutsideRelativePath(relative: string) {
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
+}
+
 function normalizePath(value: string, worktree?: string): Candidate {
   const absolute = path.isAbsolute(value) ? path.normalize(value) : path.normalize(path.join(worktree ?? ".", value))
   if (!worktree) return { pattern: `path:${cap(value)}`, durable: false }
 
   const relative = path.relative(worktree, absolute)
-  if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+  if (relative && !isOutsideRelativePath(relative)) {
     return { pattern: `path:${cap(relative)}`, durable: true }
   }
 
