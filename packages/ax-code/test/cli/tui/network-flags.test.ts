@@ -19,4 +19,9 @@ describe("hasExplicitNetworkBindFlag", () => {
     expect(hasExplicitNetworkBindFlag(["bun", "ax-code", "tui", "--portable"])).toBe(false)
     expect(hasExplicitNetworkBindFlag(["bun", "ax-code", "tui", "--hostnamefile=hosts"])).toBe(false)
   })
+
+  test("does not treat explicit mdns false forms as network binds", () => {
+    expect(hasExplicitNetworkBindFlag(["bun", "ax-code", "tui", "--mdns=false"])).toBe(false)
+    expect(hasExplicitNetworkBindFlag(["bun", "ax-code", "tui", "--no-mdns"])).toBe(false)
+  })
 })
