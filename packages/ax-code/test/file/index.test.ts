@@ -497,6 +497,26 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("surfaces unreadable untracked files", async () => {
+      if (process.platform === "win32") return
+
+      await using tmp = await tmpdir({ git: true })
+      const filepath = path.join(tmp.path, "locked.txt")
+      await fs.writeFile(filepath, "secret\n", "utf-8")
+      await fs.chmod(filepath, 0)
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await expect(File.status()).rejects.toMatchObject({ code: "EACCES" })
+          },
+        })
+      } finally {
+        await fs.chmod(filepath, 0o600).catch(() => undefined)
+      }
+    })
+
     test("detects deleted file", async () => {
       await using tmp = await tmpdir({ git: true })
       const filepath = path.join(tmp.path, "gone.txt")

@@ -548,8 +548,14 @@ export namespace File {
         try {
           const content = await Filesystem.readText(path.join(Instance.directory, file))
           return untrackedFileStatus(file, content)
-        } catch {
-          return null
+        } catch (error) {
+          if (
+            (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT" ||
+            (error as NodeJS.ErrnoException | undefined)?.code === "ENOTDIR"
+          ) {
+            return null
+          }
+          throw error
         }
       }
       await Promise.all(
