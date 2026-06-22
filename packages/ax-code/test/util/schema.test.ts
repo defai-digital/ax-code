@@ -17,4 +17,12 @@ describe("JsonNumber", () => {
     expect(schema.safeParse("0x10").success).toBe(false)
     expect(schema.safeParse("1e3").success).toBe(false)
   })
+
+  test("rejects unsafe integer strings instead of rounding them", () => {
+    const schema = JsonNumber(z.number())
+
+    expect(schema.safeParse("9007199254740993").success).toBe(false)
+    expect(schema.safeParse("-9007199254740993").success).toBe(false)
+    expect(schema.safeParse("9007199254740992.5").success).toBe(false)
+  })
 })

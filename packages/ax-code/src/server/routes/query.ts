@@ -18,6 +18,7 @@ function normalizeQueryNumberValue(value: unknown) {
   if (trimmed === "") return undefined
   if (!/^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) return value
   const parsed = Number(trimmed)
+  if (Number.isInteger(parsed) && !Number.isSafeInteger(parsed)) return value
   return Number.isFinite(parsed) ? parsed : value
 }
 
