@@ -26,13 +26,15 @@ import {
 import { WorkflowTemplate } from "@/workflow/template"
 import {
   WorkflowArtifactEventRecord,
+  WorkflowArtifactID,
   WorkflowBudgetLedgerEventEntry,
+  WorkflowChildID,
   WorkflowChildEventRecord,
+  WorkflowPhaseID,
   WorkflowPhaseEventRecord,
+  WorkflowRunID,
   WorkflowRun as WorkflowRunState,
   WorkflowRunEventRecord,
-  type WorkflowPhaseID,
-  type WorkflowRunID,
 } from "@/workflow/state"
 import type { SessionID } from "@/session/schema"
 import { errors } from "../error"
@@ -45,7 +47,7 @@ const WorkflowTemplateIDSchema = z
   .min(1)
   .max(120)
   .regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
-const WORKFLOW_RUN_ID_PARAM = z.object({ runID: z.string().min(1) })
+const WORKFLOW_RUN_ID_PARAM = z.object({ runID: WorkflowRunID.zod })
 const WORKFLOW_TEMPLATE_ID_PARAM = z.object({ templateID: WorkflowTemplateIDSchema })
 
 const WorkflowRunListQuery = z.object({
@@ -73,9 +75,9 @@ const WorkflowRunCreateBody = z
   })
 
 const WorkflowArtifactListQuery = z.object({
-  artifactID: z.string().min(1).optional(),
-  phaseID: z.string().min(1).optional(),
-  childID: z.string().min(1).optional(),
+  artifactID: WorkflowArtifactID.zod.optional(),
+  phaseID: WorkflowPhaseID.zod.optional(),
+  childID: WorkflowChildID.zod.optional(),
   kind: WorkflowRunState.ArtifactKind.optional(),
   includePayload: QueryBoolean.optional(),
 })
@@ -111,7 +113,7 @@ const WorkflowRoutineRunBody = z.object({
 const WorkflowRoutineCreateBody = WorkflowRoutineTrigger.CreateInput
 
 const WorkflowRetryQuery = z.object({
-  phaseID: z.string().min(1).optional(),
+  phaseID: WorkflowPhaseID.zod.optional(),
 })
 
 const WorkflowRunResponse = WorkflowRunEventRecord

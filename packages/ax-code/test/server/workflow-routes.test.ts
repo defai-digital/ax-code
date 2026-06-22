@@ -139,6 +139,35 @@ describe("workflow routes", () => {
     }
   })
 
+  test("rejects malformed workflow route ids at the HTTP boundary", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const malformedRun = await app.request(`/workflow-runs/not-a-run-id?${directoryQuery}`)
+      expect(malformedRun.status).toBe(400)
+
+      const createResponse = await app.request(`/workflow-runs?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "builtin:noop-dry-run" }),
+      })
+      expect(createResponse.status).toBe(200)
+      const created = (await createResponse.json()) as { id: string }
+
+      const malformedPhaseFilter = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=not-a-phase-id`,
+      )
+      expect(malformedPhaseFilter.status).toBe(400)
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("lists workflow artifacts with compact drill-down filters", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
