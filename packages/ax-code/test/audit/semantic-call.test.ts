@@ -216,4 +216,31 @@ describe("AuditQuery.listRecent", () => {
       },
     })
   })
+
+  test("treats non-positive limits as no results", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        setSyncMode(true)
+        const session = await Session.create({ title: "audit-list-limit-test" })
+        AuditSemanticCall.record({
+          sessionID: session.id,
+          tool: "lsp",
+          operation: "limit",
+          args: {},
+          envelope: {
+            data: [],
+            source: "lsp",
+            completeness: "empty",
+            timestamp: Date.now(),
+            serverIDs: [],
+          },
+        })
+
+        expect(AuditQuery.listRecent(session.id, 0)).toEqual([])
+        expect(AuditQuery.listRecent(session.id, -1)).toEqual([])
+      },
+    })
+  })
 })

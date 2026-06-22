@@ -25,6 +25,11 @@ export namespace AuditQuery {
     error_code: string | null
   }
 
+  function normalizeLimit(limit: number) {
+    if (!Number.isFinite(limit)) return 0
+    return Math.max(0, Math.floor(limit))
+  }
+
   export function insert(row: Insert): void {
     Database.use((db) =>
       db
@@ -76,13 +81,15 @@ export namespace AuditQuery {
   // Most-recent rows, bounded for the replay/debug UX. Not paged —
   // the caller passes a hard limit.
   export function listRecent(sessionID: SessionID, limit: number): Row[] {
+    const normalizedLimit = normalizeLimit(limit)
+    if (normalizedLimit === 0) return []
     return Database.use((db) =>
       db
         .select()
         .from(AuditSemanticCallTable)
         .where(eq(AuditSemanticCallTable.session_id, sessionID))
         .orderBy(desc(AuditSemanticCallTable.time_created))
-        .limit(limit)
+        .limit(normalizedLimit)
         .all(),
     )
   }
