@@ -203,6 +203,30 @@ describe("tool.edit", () => {
       })
     })
 
+    test("throws not found when a parent path component is a file", async () => {
+      await using tmp = await tmpdir()
+      const parent = path.join(tmp.path, "file.txt")
+      const filepath = path.join(parent, "child.txt")
+      await fs.writeFile(parent, "content", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const edit = await EditTool.init()
+          await expect(
+            edit.execute(
+              {
+                filePath: filepath,
+                oldString: "old",
+                newString: "new",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("not found")
+        },
+      })
+    })
+
     test("surfaces stat access errors instead of reporting missing files", async () => {
       if (process.platform === "win32") return
 

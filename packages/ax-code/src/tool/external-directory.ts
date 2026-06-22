@@ -58,7 +58,7 @@ export async function assertSymlinkInsideProject(target: string): Promise<void> 
   if (targetPath === projectRoot) return
 
   const lstat = await fs.lstat(targetPath).catch((err: NodeJS.ErrnoException) => {
-    if (err?.code === "ENOENT") return null
+    if (err?.code === "ENOENT" || err?.code === "ENOTDIR") return null
     throw err
   })
   if (lstat?.isSymbolicLink()) {

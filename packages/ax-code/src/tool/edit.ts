@@ -102,7 +102,7 @@ export const EditTool = Tool.define("edit", {
       }
 
       const stats = await fs.stat(filePath).catch((error: NodeJS.ErrnoException) => {
-        if (error.code === "ENOENT") return null
+        if (Filesystem.isMissingPathError(error)) return null
         throw error
       })
       if (!stats) throw new Error(`File ${filePath} not found`)
