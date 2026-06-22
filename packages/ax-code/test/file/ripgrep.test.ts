@@ -127,6 +127,23 @@ describe("file.ripgrep", () => {
     expect(hits).toEqual([])
   })
 
+  test("search limit caps total matches, not matches per file", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "a.ts"), "needle one\nneedle two\n")
+        await Bun.write(path.join(dir, "b.ts"), "needle three\nneedle four\n")
+      },
+    })
+
+    const hits = await Ripgrep.search({
+      cwd: tmp.path,
+      pattern: "needle",
+      limit: 1,
+    })
+
+    expect(hits).toHaveLength(1)
+  })
+
   test("files() surfaces inaccessible cwd instead of reporting it missing", async () => {
     if (process.platform === "win32") return
 

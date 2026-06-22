@@ -499,7 +499,7 @@ export namespace Ripgrep {
       const parsed = parseJsonLine(line)
       if (parsed?.type === "match") matches.push(parsed.data)
     }
-    return matches
+    return limit === undefined ? matches : matches.slice(0, limit)
   }
 
   function normalizeLimit(limit: number | undefined) {
