@@ -158,6 +158,13 @@ See [Sandbox Mode](docs/sandbox.md), [Autonomous Mode](docs/autonomous.md), [MCP
 
 Grok is exposed as two separate provider plans in `/connect`: `Grok Cloud API` uses `XAI_API_KEY` and hosted xAI models, while `Grok Build CLI` uses the local `grok` command and its CLI login/session.
 
+## Local AX Engine Models
+
+AX Engine local inference is optimized for eligible Apple Silicon Macs. The built-in AX Code provider uses a
+curated 6-bit MLX MTP model set and defaults to Qwen3.6-27B for the best daily balance of offline coding,
+reasoning, and local memory fit. See [AX Engine Model Selection](docs/ax-engine-model-selection.md) for the
+ranking, GLM-4.7-Flash placement, and memory-based recommendations.
+
 ## Documentation
 
 - [Start Here](docs/start-here.md): understand what AX Code is, where the value comes from, and which docs to read next
@@ -166,6 +173,7 @@ Grok is exposed as two separate provider plans in `/connect`: `Grok Cloud API` u
 - [Autonomous Mode](docs/autonomous.md): unattended execution behavior and safeguards
 - [MCP Integrations](docs/mcp.md): trust, permissions, and prompt/resource safety for MCP servers
 - [Auto-Route](docs/auto-route.md): keyword-based specialist routing and optional fast-model complexity routing
+- [AX Engine Model Selection](docs/ax-engine-model-selection.md): local AX Engine model ranking and memory guidance
 - [Semantic Layer](docs/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
 
 ## Common Commands

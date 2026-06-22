@@ -1,6 +1,9 @@
 // Ambient declarations for the test suite, replacing the jest-extended-style
 // matchers and the global `spyOn` that `bun:test` bundled. The matchers are
 // registered at runtime in `test/support/vitest.setup.ts` via `expect.extend`.
+//
+// vitest 4: augment `Matchers` (not `Assertion`), which `Assertion<T>` extends.
+// See https://vitest.dev/guide/extending-matchers
 import "vitest"
 
 interface BunCompatMatchers<R = unknown> {
@@ -17,8 +20,7 @@ interface BunCompatMatchers<R = unknown> {
 }
 
 declare module "vitest" {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  interface Assertion<T = any> extends BunCompatMatchers<void> {}
+  interface Matchers<T = any> extends BunCompatMatchers<void> {}
   interface AsymmetricMatchersContaining extends BunCompatMatchers {}
 }
 
