@@ -12,6 +12,7 @@ import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
 import { WorkflowTemplate } from "../../workflow/template"
 import type { SessionID } from "../../session/schema"
 import {
+  WorkflowChildID,
   WorkflowPhaseID,
   WorkflowRunID,
   type WorkflowArtifactRecord,
@@ -773,6 +774,10 @@ export function parseWorkflowPhaseID(value: string): WorkflowPhaseID {
   return WorkflowPhaseID.zod.parse(value)
 }
 
+export function parseWorkflowChildID(value: string): WorkflowChildID {
+  return WorkflowChildID.zod.parse(value)
+}
+
 function parseWorkflowInputValue(value: string): unknown {
   if (value === "") return ""
   try {
@@ -839,9 +844,11 @@ const WorkflowRunArtifactsCommand = cmd({
     await withWorkflowRuntime(async () => {
       const options = args as unknown as ArtifactOptions
       const detail = await WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
+      const phaseID = options.phaseId ? parseWorkflowPhaseID(options.phaseId) : undefined
+      const childID = options.childId ? parseWorkflowChildID(options.childId) : undefined
       const artifacts = detail.artifacts
-        .filter((artifact) => (options.phaseId ? artifact.phaseID === options.phaseId : true))
-        .filter((artifact) => (options.childId ? artifact.childID === options.childId : true))
+        .filter((artifact) => (phaseID ? artifact.phaseID === phaseID : true))
+        .filter((artifact) => (childID ? artifact.childID === childID : true))
         .filter((artifact) => (options.kind ? artifact.kind === options.kind : true))
         .map((artifact) => (options.includePayload ? artifact : compactWorkflowArtifact(artifact)))
 

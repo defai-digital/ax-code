@@ -8,6 +8,7 @@ import {
   formatWorkflowRunList,
   formatWorkflowRoutineList,
   formatWorkflowTemplateList,
+  parseWorkflowChildID,
   parseWorkflowPhaseID,
   parseWorkflowInputArguments,
   parseWorkflowRunID,
@@ -449,8 +450,10 @@ describe("workflow command helpers", () => {
   test("validates workflow CLI identifiers before execution", () => {
     expect(parseWorkflowRunID("wfr_01")).toBe("wfr_01")
     expect(parseWorkflowPhaseID("wfp_01")).toBe("wfp_01")
+    expect(parseWorkflowChildID("wfc_01")).toBe("wfc_01")
     expect(() => parseWorkflowRunID("not-a-run")).toThrow()
     expect(() => parseWorkflowPhaseID("wfr_01")).toThrow()
+    expect(() => parseWorkflowChildID("wfp_01")).toThrow()
   })
 })
 
