@@ -4,7 +4,9 @@ import path from "path"
 import { tmpdir } from "../../fixture/fixture"
 import { HfCache } from "../../../src/provider/ax-engine/hf-cache"
 import {
+  downloadModel,
   getModelStatus,
+  markPrepared,
   reclaimManagedCopy,
   reclaimManagedModelCopies,
 } from "../../../src/provider/ax-engine/model-cache"
@@ -148,6 +150,41 @@ describe("ax-engine model storage uses the HF snapshot", () => {
 
     const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
     expect(status.present).toBe(false)
+  })
+
+  test("markPrepared rejects incomplete HF snapshots before reporting them complete", async () => {
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
+
+    await expect(
+      markPrepared({ modelID: GEMMA.modelID, quantization: GEMMA.quant, modelPath: snapshot }),
+    ).rejects.toThrow("model path is incomplete")
+    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    expect(status.present).toBe(false)
+  })
+
+  test("downloadModel rejects incomplete HF snapshots returned by ax-engine", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
+    const binary = path.join(dir.path, "fake-ax-engine")
+    await fs.writeFile(
+      binary,
+      `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: COMMIT }))})\n`,
+    )
+    await fs.chmod(binary, 0o755)
+
+    await expect(
+      downloadModel({ binaryPath: binary, modelID: GEMMA.modelID, quantization: GEMMA.quant }),
+    ).rejects.toThrow("downloaded model path is incomplete")
+    expect(await Filesystem.exists(AxEnginePaths.prepareState)).toBe(false)
   })
 
   test("getModelStatus falls back to another complete HF snapshot when refs/main is incomplete", async () => {

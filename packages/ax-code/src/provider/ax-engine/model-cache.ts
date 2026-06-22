@@ -324,7 +324,11 @@ export async function markPrepared(input: {
   if (!(await exists(input.modelPath))) {
     throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path does not exist`)
   }
-  if (!(await hasManifest(input.modelPath))) {
+  if (HfCache.isInside(input.modelPath)) {
+    if (!(await HfCache.isCompleteSnapshot(input.modelPath))) {
+      throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path is incomplete`)
+    }
+  } else if (!(await hasManifest(input.modelPath))) {
     throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path is missing model-manifest.json`)
   }
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
@@ -398,7 +402,10 @@ export async function downloadModel(input: {
   if (!parsed.dest) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ax-engine download did not return a destination`)
   }
-  if (!(await hasManifest(parsed.dest))) {
+  const complete = HfCache.isInside(parsed.dest)
+    ? await HfCache.isCompleteSnapshot(parsed.dest)
+    : await hasManifest(parsed.dest)
+  if (!complete) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded model path is incomplete`)
   }
   return markPreparedWithLockHeld({
