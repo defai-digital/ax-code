@@ -127,4 +127,24 @@ describe("QualityCalibrationModel", () => {
     expect(report).toContain("- train sessions: 2")
     expect(report).toContain("- eval sessions: 2")
   })
+
+  test("normalizes non-finite benchmark split ratios", () => {
+    const items: ProbabilisticRollout.ReplayItem[] = [
+      replayItem({ artifactID: "a", sessionID: "ses_1", createdAt: "2026-04-20T00:00:00.000Z", confidence: 0.1 }),
+      replayItem({ artifactID: "b", sessionID: "ses_2", createdAt: "2026-04-20T00:01:00.000Z", confidence: 0.9 }),
+      replayItem({ artifactID: "c", sessionID: "ses_3", createdAt: "2026-04-20T00:02:00.000Z", confidence: 0.2 }),
+    ]
+    const labels: ProbabilisticRollout.Label[] = [
+      label({ labelID: "lbl_a", artifactID: "a", sessionID: "ses_1", outcome: "dismissed" }),
+      label({ labelID: "lbl_b", artifactID: "b", sessionID: "ses_2", outcome: "accepted" }),
+      label({ labelID: "lbl_c", artifactID: "c", sessionID: "ses_3", outcome: "dismissed" }),
+    ]
+
+    const split = QualityCalibrationModel.split(items, labels, Number.NaN)
+
+    expect(() => QualityCalibrationModel.BenchmarkSplit.parse(split)).not.toThrow()
+    expect(split.ratio).toBe(0.7)
+    expect(split.trainSessionIDs.length).toBeGreaterThan(0)
+    expect(split.evalSessionIDs.length).toBeGreaterThan(0)
+  })
 })

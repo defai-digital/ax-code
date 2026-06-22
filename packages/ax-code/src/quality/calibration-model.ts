@@ -179,6 +179,10 @@ export namespace QualityCalibrationModel {
     return ratio(records.filter((record) => record.actualPositive).length, records.length) ?? 0.5
   }
 
+  function finiteOption(value: number, fallback: number) {
+    return Number.isFinite(value) ? value : fallback
+  }
+
   function predictionConfidence(item: ProbabilisticRollout.ReplayItem, model: ModelFile) {
     const baselineConfidence = item.baseline.confidence
     if (typeof baselineConfidence !== "number") return null
@@ -340,7 +344,7 @@ export namespace QualityCalibrationModel {
     if (ordered.length < 2) {
       throw new Error("Benchmark split requires labels from at least two sessions")
     }
-    const normalizedRatio = Math.min(0.95, Math.max(0.05, ratio))
+    const normalizedRatio = Math.min(0.95, Math.max(0.05, finiteOption(ratio, 0.7)))
     const rawTrainCount = Math.floor(ordered.length * normalizedRatio)
     const trainCount = Math.min(ordered.length - 1, Math.max(1, rawTrainCount))
 
