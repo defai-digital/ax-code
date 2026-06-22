@@ -133,5 +133,10 @@ describe("quality model registry selection helpers", () => {
       ["platform / core", 1.5],
       ["platform / infra", 1],
     ])
+
+    expect(reviewerCarryoverHistory(promotions, Number.NaN)).toEqual([])
+    expect(teamCarryoverHistory(promotions, Number.POSITIVE_INFINITY)).toEqual([])
+    expect(reportingChainCarryoverHistory(promotions, 0)).toEqual([])
+    expect(reviewerCarryoverHistory(promotions, 1.9).map((entry) => entry.approver)).toEqual(["alice", "bob"])
   })
 })

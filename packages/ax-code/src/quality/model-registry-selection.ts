@@ -84,9 +84,11 @@ export function promotionReportingChains(promotion: RegistryPromotionRecord) {
 }
 
 function reentryPromotions<T extends RegistryPromotionRecord>(promotions: readonly T[], lookbackPromotions: number) {
+  const lookback = Number.isFinite(lookbackPromotions) ? Math.floor(lookbackPromotions) : 0
+  if (lookback < 1) return []
   return promotions
     .filter((promotion) => promotion.eligibility?.reentryContext)
-    .slice(-lookbackPromotions)
+    .slice(-lookback)
     .reverse()
 }
 
