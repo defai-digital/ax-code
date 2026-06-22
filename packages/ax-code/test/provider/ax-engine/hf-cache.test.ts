@@ -13,6 +13,7 @@ import { Filesystem } from "../../../src/util/filesystem"
 
 const GEMMA = { modelID: "gemma-4-12b", quant: "mlx6bit", repo: "mlx-community/gemma-4-12B-it-6bit" } as const
 const COMMIT = "1111111111111111111111111111111111111111"
+const FALLBACK_COMMIT = "2222222222222222222222222222222222222222"
 
 async function makeHfSnapshot(hfRoot: string, repo: string, commit: string, opts: { manifest?: boolean } = {}) {
   const base = path.join(hfRoot, `models--${repo.replace(/\//g, "--")}`)
@@ -66,9 +67,21 @@ describe("HfCache.snapshotDir / isCompleteSnapshot", () => {
     expect(await HfCache.isCompleteSnapshot(snapshot)).toBe(false)
   })
 
+  test("completeSnapshotDir falls back when refs/main points at an incomplete snapshot", async () => {
+    await using dir = await tmpdir()
+    const hfRoot = path.join(dir.path, "hub")
+    const pinned = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { manifest: false })
+    const fallback = await makeHfSnapshot(hfRoot, GEMMA.repo, FALLBACK_COMMIT)
+    await fs.writeFile(path.join(hfRoot, `models--${GEMMA.repo.replace(/\//g, "--")}`, "refs", "main"), COMMIT)
+
+    expect(await HfCache.snapshotDir(GEMMA.repo, { HF_HUB_CACHE: hfRoot })).toBe(pinned)
+    expect(await HfCache.completeSnapshotDir(GEMMA.repo, { HF_HUB_CACHE: hfRoot })).toBe(fallback)
+  })
+
   test("returns undefined when the repo is not cached", async () => {
     await using dir = await tmpdir()
     expect(await HfCache.snapshotDir(GEMMA.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
+    expect(await HfCache.completeSnapshotDir(GEMMA.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
   })
 })
 
@@ -118,6 +131,19 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     expect(status.blockers).toEqual([
       "AX_ENGINE_MODEL_MISSING: prepare Gemma 4 12B 6-bit (Local MLX MTP) before using ax-engine",
     ])
+  })
+
+  test("getModelStatus falls back to another complete HF snapshot when refs/main is incomplete", async () => {
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { manifest: false })
+    const fallback = await makeHfSnapshot(hfRoot, GEMMA.repo, FALLBACK_COMMIT)
+    await fs.writeFile(path.join(hfRoot, `models--${GEMMA.repo.replace(/\//g, "--")}`, "refs", "main"), COMMIT)
+
+    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    expect(status.present).toBe(true)
+    expect(status.path).toBe(fallback)
   })
 
   test("reclaimManagedCopy deletes the managed copy once the HF snapshot is verified", async () => {

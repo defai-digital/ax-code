@@ -254,7 +254,7 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
   // dir, so the standard cache wins for fresh setups while old layouts still
   // resolve.
   const repo = hfRepoFor(modelID, quantization)
-  const hfSnapshot = repo ? await HfCache.snapshotDir(repo) : undefined
+  const hfSnapshot = repo ? await HfCache.completeSnapshotDir(repo) : undefined
 
   const candidates = [
     configured,
@@ -432,7 +432,7 @@ export async function reclaimManagedCopy(
   if (!(await exists(managedPath))) return undefined
 
   const repo = hfRepoFor(modelID, quantization)
-  const snapshotPath = repo ? await HfCache.snapshotDir(repo) : undefined
+  const snapshotPath = repo ? await HfCache.completeSnapshotDir(repo) : undefined
   // Refuse to delete the managed copy unless an equivalent, complete snapshot
   // exists in the HF cache — otherwise we would destroy the only copy.
   if (!snapshotPath || !(await HfCache.isCompleteSnapshot(snapshotPath))) return undefined

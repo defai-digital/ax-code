@@ -30,8 +30,27 @@ export namespace HfCache {
     env: NodeJS.ProcessEnv = process.env,
     home: string = os.homedir(),
   ): Promise<string | undefined> {
+    return (await snapshotDirs(repo, env, home))[0]
+  }
+
+  // Resolve the first complete snapshot, preferring refs/main but falling back
+  // to another cached snapshot when the pinned one is partial or stale.
+  export async function completeSnapshotDir(
+    repo: string,
+    env: NodeJS.ProcessEnv = process.env,
+    home: string = os.homedir(),
+  ): Promise<string | undefined> {
+    for (const dir of await snapshotDirs(repo, env, home)) {
+      if (await isCompleteSnapshot(dir)) return dir
+    }
+    return undefined
+  }
+
+  async function snapshotDirs(repo: string, env: NodeJS.ProcessEnv, home: string): Promise<string[]> {
     const base = repoDir(repo, env, home)
     const snapshots = path.join(base, "snapshots")
+    const ordered: string[] = []
+    const seen = new Set<string>()
 
     const ref = await fs
       .readFile(path.join(base, "refs", "main"), "utf8")
@@ -39,13 +58,19 @@ export namespace HfCache {
       .catch(() => undefined)
     if (ref) {
       const pinned = path.join(snapshots, ref)
-      if (await isDir(pinned)) return pinned
+      if (await isDir(pinned)) {
+        ordered.push(pinned)
+        seen.add(pinned)
+      }
     }
 
     const entries = await fs.readdir(snapshots, { withFileTypes: true }).catch(() => [])
-    const dirs = entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(snapshots, entry.name))
-    if (dirs.length === 0) return undefined
-    if (dirs.length === 1) return dirs[0]
+    const dirs = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(snapshots, entry.name))
+      .filter((dir) => !seen.has(dir))
+    if (dirs.length === 0) return ordered
+    if (dirs.length === 1) return [...ordered, dirs[0]]
     const withMtime = await Promise.all(
       dirs.map(async (dir) => ({
         dir,
@@ -56,7 +81,7 @@ export namespace HfCache {
       })),
     )
     withMtime.sort((a, b) => b.mtime - a.mtime)
-    return withMtime[0]?.dir
+    return [...ordered, ...withMtime.map((item) => item.dir)]
   }
 
   // A snapshot is usable by ax-engine only when it carries MLX weights and the
