@@ -59,6 +59,11 @@ export namespace EventQuery {
     })
   }
 
+  function normalizeRecentLimit(limit: number) {
+    if (!Number.isFinite(limit)) return 0
+    return Math.max(0, Math.min(Math.floor(limit), BY_SESSION_LIMIT))
+  }
+
   export function bySession(sessionID: SessionID): ReplayEvent[] {
     const rows = Database.use((db) =>
       db
@@ -94,13 +99,15 @@ export namespace EventQuery {
   }
 
   export function recentBySession(sessionID: SessionID, limit = 500): ReplayEvent[] {
+    const normalizedLimit = normalizeRecentLimit(limit)
+    if (normalizedLimit === 0) return []
     const rows = Database.use((db) =>
       db
         .select()
         .from(EventLogTable)
         .where(eq(EventLogTable.session_id, sessionID))
         .orderBy(desc(EventLogTable.sequence))
-        .limit(Math.max(0, Math.min(limit, BY_SESSION_LIMIT)))
+        .limit(normalizedLimit)
         .all(),
     )
     return rows.reverse().map((row) => row.event_data)

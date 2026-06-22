@@ -118,4 +118,23 @@ describe("Recorder.emit batching", () => {
       },
     })
   })
+
+  test("treats non-finite recent event limits as empty", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        Recorder.begin(session.id)
+        Recorder.emit({ type: "step.start", sessionID: session.id, stepIndex: 0 } as any)
+        Recorder.end(session.id)
+        await new Promise((r) => setTimeout(r, 50))
+
+        expect(EventQuery.recentBySession(session.id, Number.NaN)).toEqual([])
+
+        EventQuery.deleteBySession(session.id)
+        await Session.remove(session.id)
+      },
+    })
+  })
 })
