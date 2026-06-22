@@ -14,8 +14,12 @@ import { applySafeRefactorImpl, type ApplySafeRefactorInput } from "./apply-safe
 import { detectRacesImpl, type DetectRacesInput } from "./detect-races"
 import { detectLifecycleImpl, type DetectLifecycleInput } from "./detect-lifecycle"
 import { detectSecurityImpl, type DetectSecurityInput } from "./detect-security"
+import { BusEvent } from "../bus/bus-event"
+import z from "zod"
 
 export { Incremental } from "./incremental"
+export { DiagnosticCorrelation } from "./diagnostic-correlation"
+export { prewarmAffectedFiles } from "./prewarm-lsp"
 
 const log = Log.create({ service: "debug-engine" })
 
@@ -34,6 +38,31 @@ const log = Log.create({ service: "debug-engine" })
 // planRefactor. The remaining two (detectHardcodes, analyzeImpact,
 // applySafeRefactor) land in Phase 2/3 per the PRD §6 delivery plan.
 export namespace DebugEngine {
+  // ─── Bus Events ────────────────────────────────────────────────────
+
+  export const CorrelatedDiagnosticSchema = z.object({
+    file: z.string(),
+    line: z.number(),
+    message: z.string(),
+    severity: z.number(),
+    rootCauseFile: z.string().nullable(),
+    rootCauseSymbol: z.string().nullable(),
+    rootCauseChain: z.array(z.string()),
+    confidence: z.enum(["high", "medium", "low"]),
+  })
+
+  export type CorrelatedDiagnostic = z.infer<typeof CorrelatedDiagnosticSchema>
+
+  export const Event = {
+    CorrelatedDiagnostics: BusEvent.define(
+      "debug-engine.correlated-diagnostics",
+      z.object({
+        file: z.string(),
+        correlations: z.array(CorrelatedDiagnosticSchema),
+      }),
+    ),
+  }
+
   // ─── Explain ────────────────────────────────────────────────────────
 
   export type Tool =

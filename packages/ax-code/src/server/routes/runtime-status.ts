@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import { LSP } from "@/lsp"
 import { DebugEngine } from "@/debug-engine"
+import { DiagnosticCorrelation } from "@/debug-engine"
 import { CodeIntelligence } from "@/code-intelligence"
 import { AutoIndex } from "@/code-intelligence/auto-index"
 import { Format } from "@/format"
@@ -162,6 +163,35 @@ export const RuntimeStatusRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await Format.status())
+      },
+    )
+    .get(
+      "/debug-engine/correlated-diagnostics",
+      describeRoute({
+        summary: "Get correlated diagnostics for a file",
+        description:
+          "Return DRE cross-file root-cause correlations for a given file. Each entry maps an LSP error to a possible root-cause location in another file, with a confidence level and a symbol chain linking the error back to its origin. Returns an empty array when the DRE flag is off or no correlations are cached.",
+        operationId: "debugEngine.correlatedDiagnostics",
+        responses: {
+          200: {
+            description: "Correlated diagnostics",
+            content: {
+              "application/json": {
+                schema: resolver(DebugEngine.CorrelatedDiagnosticSchema.array()),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        if (!Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE) {
+          return c.json([])
+        }
+        const file = c.req.query("file")
+        if (!file) {
+          return c.json([])
+        }
+        return c.json(DiagnosticCorrelation.correlateDiagnostics(file))
       },
     ),
 )
