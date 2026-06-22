@@ -179,6 +179,47 @@ describe("ProbabilisticRollout.exportReplay", () => {
     })
   })
 
+  test("normalizes malformed legacy call IDs in qa replay exports", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "bash",
+          callID: 123,
+          input: { command: "pnpm test" },
+        } as any)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "bash",
+          callID: 123,
+          status: "completed",
+          output: "1 failed",
+          durationMs: 9,
+        } as any)
+        Recorder.end(sid)
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const exported = await ProbabilisticRollout.exportReplay(sid, "qa")
+        expect(() => ProbabilisticRollout.ReplayExport.parse(exported)).not.toThrow()
+        expect(exported.items.map((item) => item.artifactKind)).toEqual(["qa_run", "qa_failure"])
+        expect(exported.items[1]?.artifactID).toBe(`qa:${sid}:failure:unknown`)
+        expect(exported.items[0]?.evidence.toolSummaries[0]?.callID).toBe("unknown")
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
   test("exports debug case and hypothesis items from debug_analyze results", async () => {
     await using tmp = await tmpdir({ git: true })
 

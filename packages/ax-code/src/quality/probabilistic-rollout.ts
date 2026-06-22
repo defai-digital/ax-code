@@ -395,21 +395,22 @@ export namespace ProbabilisticRollout {
   function extractQARuns(rows: ReturnType<typeof toolResultRows>, calls: Map<string, ToolCall>): QARunExtract[] {
     return rows.flatMap((row) => {
       if (row.event_data.tool !== "bash") return []
-      const call = calls.get(row.event_data.callID)
+      const callID = stringValue(row.event_data.callID)
+      const call = calls.get(callID)
       const command = toolCallCommand(call)
       if (!command || !isQATestCommand(command)) return []
       const summary = toolSummary(row, call)
       if (!summary) return []
-      const output = row.event_data.output ?? ""
+      const output = typeof row.event_data.output === "string" ? row.event_data.output : ""
       return [
         {
-          callID: row.event_data.callID,
+          callID,
           command,
           failed: qaCommandFailed({
             command,
-            status: row.event_data.status,
+            status: toolStatus(row.event_data.status),
             output,
-            error: row.event_data.error,
+            error: typeof row.event_data.error === "string" ? row.event_data.error : undefined,
           }),
           framework: qaFramework(command),
           output,
@@ -537,7 +538,7 @@ export namespace ProbabilisticRollout {
 
     const toolRows = toolResultRows(events)
     const toolSummaries = toolRows
-      .map((row) => toolSummary(row, calls.get(row.event_data.callID)))
+      .map((row) => toolSummary(row, calls.get(stringValue(row.event_data.callID))))
       .filter((item): item is ToolSummary => !!item)
 
     const common = {
@@ -643,7 +644,7 @@ export namespace ProbabilisticRollout {
           },
           evidence: {
             toolSummaries: debugResults
-              .map((row) => toolSummary(row, calls.get(row.event_data.callID)))
+              .map((row) => toolSummary(row, calls.get(stringValue(row.event_data.callID))))
               .filter((item): item is ToolSummary => !!item),
             summary: {
               debugAnalyzeCount: debugResults.length,
@@ -654,7 +655,7 @@ export namespace ProbabilisticRollout {
       }
 
       for (const row of debugResults) {
-        const call = calls.get(row.event_data.callID)
+        const call = calls.get(stringValue(row.event_data.callID))
         const metadata = row.event_data.metadata
         const finding = findingField(metadata, "finding")
         items.push({
@@ -698,7 +699,7 @@ export namespace ProbabilisticRollout {
           const caseToolSummaries = toolRows
             .filter((row) => RUNTIME_DEBUG_TOOLS.has(row.event_data.tool))
             .filter((row) => debugMetadataCaseId(row.event_data.metadata) === debugCase.caseId)
-            .map((row) => toolSummary(row, calls.get(row.event_data.callID)))
+            .map((row) => toolSummary(row, calls.get(stringValue(row.event_data.callID))))
             .filter((item): item is ToolSummary => !!item)
 
           items.push({
@@ -740,7 +741,7 @@ export namespace ProbabilisticRollout {
                   row.event_data.tool === "debug_apply_verification",
               )
               .filter((row) => debugMetadataHypothesisId(row.event_data.metadata) === hypothesis.hypothesisId)
-              .map((row) => toolSummary(row, calls.get(row.event_data.callID)))
+              .map((row) => toolSummary(row, calls.get(stringValue(row.event_data.callID))))
               .filter((item): item is ToolSummary => !!item)
             items.push({
               schemaVersion: 1,
