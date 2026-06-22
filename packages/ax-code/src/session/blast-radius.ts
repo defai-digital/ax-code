@@ -61,11 +61,28 @@ export namespace BlastRadius {
    * The `blockedPaths` array replaces — users overriding the path list
    * intentionally want a different list, not an extension.
    */
+  function numericCap(value: number | undefined, fallback: number) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback
+  }
+
+  function mergePerToolCaps(
+    base: Readonly<Record<string, number>>,
+    overrides: Readonly<Record<string, number>> | undefined,
+  ) {
+    if (!overrides) return base
+    const next = { ...base }
+    for (const [tool, limit] of Object.entries(overrides)) {
+      if (typeof limit === "number" && Number.isFinite(limit)) next[tool] = limit
+    }
+    return next
+  }
+
   function mergeCaps(base: Caps, overrides: Partial<Caps>): Caps {
     return {
-      ...base,
-      ...overrides,
-      perTool: overrides.perTool ? { ...base.perTool, ...overrides.perTool } : base.perTool,
+      steps: numericCap(overrides.steps, base.steps),
+      files: numericCap(overrides.files, base.files),
+      lines: numericCap(overrides.lines, base.lines),
+      perTool: mergePerToolCaps(base.perTool, overrides.perTool),
       blockedPaths: overrides.blockedPaths ?? base.blockedPaths,
     }
   }

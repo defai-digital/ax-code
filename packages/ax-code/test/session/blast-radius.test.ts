@@ -1,5 +1,10 @@
 import { describe, expect, test, afterEach, beforeEach } from "vitest"
-import { AUTONOMOUS_MAX_STEPS } from "../../src/constants/session"
+import {
+  AUTONOMOUS_MAX_FILES_CHANGED,
+  AUTONOMOUS_MAX_LINES_CHANGED,
+  AUTONOMOUS_MAX_STEPS,
+  AUTONOMOUS_PER_TOOL_MAX_CALLS,
+} from "../../src/constants/session"
 import { BlastRadius } from "../../src/session/blast-radius"
 import type { SessionID } from "../../src/session/schema"
 
@@ -69,6 +74,22 @@ describe("BlastRadius", () => {
     BlastRadius.get(SID, { steps: 5, files: 5, lines: 100 })
     BlastRadius.incrementStep(SID)
     expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
+  })
+
+  test("normalizes non-finite cap overrides to defaults", () => {
+    const state = BlastRadius.get(SID, {
+      steps: Number.NaN,
+      files: Number.POSITIVE_INFINITY,
+      lines: Number.NEGATIVE_INFINITY,
+      perTool: { bash: Number.NaN, write: Number.POSITIVE_INFINITY, edit: 0 },
+    })
+
+    expect(state.caps.steps).toBe(AUTONOMOUS_MAX_STEPS)
+    expect(state.caps.files).toBe(AUTONOMOUS_MAX_FILES_CHANGED)
+    expect(state.caps.lines).toBe(AUTONOMOUS_MAX_LINES_CHANGED)
+    expect(state.caps.perTool.bash).toBe(AUTONOMOUS_PER_TOOL_MAX_CALLS.bash)
+    expect(state.caps.perTool.write).toBe(AUTONOMOUS_PER_TOOL_MAX_CALLS.write)
+    expect(state.caps.perTool.edit).toBe(0)
   })
 
   test("checkAfterIncrement reports steps overage", () => {
