@@ -268,9 +268,9 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
       if (!(await exists(candidate))) continue
       const marker = await readCompletionMarker(candidate)
       const matchingMarker = marker?.modelID === modelID && marker.quantization === quantization ? marker : undefined
-      const complete =
-        !!matchingMarker ||
-        (candidate === hfSnapshot ? await HfCache.isCompleteSnapshot(candidate) : await hasManifest(candidate))
+      const complete = HfCache.isInside(candidate)
+        ? await HfCache.isCompleteSnapshot(candidate)
+        : !!matchingMarker || (await hasManifest(candidate))
       if (!complete) continue
       return {
         present: true,

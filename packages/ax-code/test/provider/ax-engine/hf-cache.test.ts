@@ -133,6 +133,23 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     ])
   })
 
+  test("getModelStatus does not let prepared HF state bypass snapshot completeness checks", async () => {
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
+    await Filesystem.writeJson(AxEnginePaths.prepareState, {
+      modelID: GEMMA.modelID,
+      quantization: GEMMA.quant,
+      path: snapshot,
+      preparedAt: 1,
+    })
+
+    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    expect(status.present).toBe(false)
+  })
+
   test("getModelStatus falls back to another complete HF snapshot when refs/main is incomplete", async () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
