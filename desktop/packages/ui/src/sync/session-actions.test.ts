@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, vi } from "vitest";
+import { describe, expect, test, beforeEach, vi } from "vitest"
 import type { PermissionRequest } from "@/types/permission"
 import type { Message, Part } from "@ax-code/sdk/v2/client"
 import { resolveResyncedSessionStatus, hasCompletedAssistantReply } from "./reconnect-recovery"
@@ -430,8 +430,10 @@ describe("optimisticSend responsiveness", () => {
       const messages = store.getState().message["session-a"] ?? []
       const fallback = messages.find((message) => message.role === "assistant")
       expect(fallback).toBeTruthy()
-      expect((fallback as Message & { metadata?: Record<string, unknown> } | undefined)?.metadata?.source).toBe("desktop-accepted-prompt-watchdog")
-      expect((fallback as Message & { metadata?: Record<string, unknown> } | undefined)?.metadata?.error).toBe(true)
+      expect((fallback as (Message & { metadata?: Record<string, unknown> }) | undefined)?.metadata?.source).toBe(
+        "desktop-accepted-prompt-watchdog",
+      )
+      expect((fallback as (Message & { metadata?: Record<string, unknown> }) | undefined)?.metadata?.error).toBe(true)
       expect(store.getState().part[fallback?.id ?? ""]?.[0]?.type).toBe("text")
     } finally {
       globalThis.setTimeout = originalSetTimeout
@@ -479,10 +481,31 @@ describe("optimisticSend responsiveness", () => {
           // goes idle locally, but the server actually has the assistant reply.
           scopedMessagesResult = {
             data: [
-              { info: { id: messageID, sessionID: "session-a", role: "user", time: { created: 1 } } as unknown as Message, parts: [] },
               {
-                info: { id: "msg_assistant", sessionID: "session-a", role: "assistant", parentID: messageID, time: { created: 2, completed: 3 } } as unknown as Message,
-                parts: [{ id: "prt_assistant", type: "text", messageID: "msg_assistant", text: "real reply" } as unknown as Part],
+                info: {
+                  id: messageID,
+                  sessionID: "session-a",
+                  role: "user",
+                  time: { created: 1 },
+                } as unknown as Message,
+                parts: [],
+              },
+              {
+                info: {
+                  id: "msg_assistant",
+                  sessionID: "session-a",
+                  role: "assistant",
+                  parentID: messageID,
+                  time: { created: 2, completed: 3 },
+                } as unknown as Message,
+                parts: [
+                  {
+                    id: "prt_assistant",
+                    type: "text",
+                    messageID: "msg_assistant",
+                    text: "real reply",
+                  } as unknown as Part,
+                ],
               },
             ],
           }
@@ -500,7 +523,9 @@ describe("optimisticSend responsiveness", () => {
 
       const messages = store.getState().message["session-a"] ?? []
       const synthetic = messages.find(
-        (message) => (message as Message & { metadata?: Record<string, unknown> }).metadata?.source === "desktop-accepted-prompt-watchdog",
+        (message) =>
+          (message as Message & { metadata?: Record<string, unknown> }).metadata?.source ===
+          "desktop-accepted-prompt-watchdog",
       )
       expect(synthetic).toBeFalsy()
       const recovered = messages.find((message) => message.role === "assistant")
@@ -642,7 +667,9 @@ describe("optimisticSend: stale watchdog from previous prompt is cancelled (stal
       // No synthetic error messages were created (watchdog returned early)
       const messages = store.getState().message["session-a"] ?? []
       const syntheticErrors = messages.filter(
-        (m) => (m as Message & { metadata?: Record<string, unknown> }).metadata?.source === "desktop-accepted-prompt-watchdog",
+        (m) =>
+          (m as Message & { metadata?: Record<string, unknown> }).metadata?.source ===
+          "desktop-accepted-prompt-watchdog",
       )
       expect(syntheticErrors.length).toBe(0)
     } finally {
@@ -747,7 +774,9 @@ describe("optimisticSend: markPromptAccepted is synchronous with busy-set (race 
 
   const setupOptimistic = async (store: ReturnType<typeof createStore>) => {
     const childStores = createChildStores([["/test/project", store]])
-    const { setActionRefs, setOptimisticRefs, optimisticSend, wasPromptRecentlyAccepted } = await import("./session-actions")
+    const { setActionRefs, setOptimisticRefs, optimisticSend, wasPromptRecentlyAccepted } = await import(
+      "./session-actions"
+    )
     setActionRefs(mockSdk as unknown as AxCodeClient, childStores, () => "/test/project")
     setOptimisticRefs(
       ({ sessionID, message, parts }) => {
@@ -902,10 +931,26 @@ describe("optimisticSend: watchdog recovery does not clobber a newer prompt (asy
       resetScopedMessagesResult()
       scopedMessagesResult = {
         data: [
-          { info: { id: firstMessageId, sessionID: "session-a", role: "user", time: { created: 1 } } as unknown as Message, parts: [] },
           {
-            info: { id: "msg_first_assistant", sessionID: "session-a", role: "assistant", parentID: firstMessageId, time: { created: 2, completed: 3 } } as unknown as Message,
-            parts: [{ id: "prt_a", type: "text", messageID: "msg_first_assistant", text: "real reply" } as unknown as Part],
+            info: {
+              id: firstMessageId,
+              sessionID: "session-a",
+              role: "user",
+              time: { created: 1 },
+            } as unknown as Message,
+            parts: [],
+          },
+          {
+            info: {
+              id: "msg_first_assistant",
+              sessionID: "session-a",
+              role: "assistant",
+              parentID: firstMessageId,
+              time: { created: 2, completed: 3 },
+            } as unknown as Message,
+            parts: [
+              { id: "prt_a", type: "text", messageID: "msg_first_assistant", text: "real reply" } as unknown as Part,
+            ],
           },
         ],
       }
@@ -1035,7 +1080,9 @@ describe("optimisticSend: grace-window re-arm prevents false error on same-turn 
       // message was added.
       const messages = store.getState().message["session-a"] ?? []
       const syntheticErrors = messages.filter(
-        (m) => (m as Message & { metadata?: Record<string, unknown> }).metadata?.source === "desktop-accepted-prompt-watchdog",
+        (m) =>
+          (m as Message & { metadata?: Record<string, unknown> }).metadata?.source ===
+          "desktop-accepted-prompt-watchdog",
       )
       expect(syntheticErrors.length).toBe(0)
 

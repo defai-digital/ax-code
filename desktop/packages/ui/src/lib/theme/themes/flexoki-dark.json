@@ -5,12 +5,7 @@
     "description": "An inky color scheme for prose and code - dark variant",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [
-      "dark",
-      "warm",
-      "natural",
-      "ink"
-    ]
+    "tags": ["dark", "warm", "natural", "ink"]
   },
   "colors": {
     "primary": {

@@ -10,16 +10,14 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
  * The silent `x.data!` / `x.data ?? []` pattern lets HTTP 5xx warmup
  * errors become empty state. Wrap into a real Error so retry() fires.
  */
-function unwrap<T>(
-  result: { data?: T; error?: unknown; response?: { status?: number } },
-  name: string,
-): T {
+function unwrap<T>(result: { data?: T; error?: unknown; response?: { status?: number } }, name: string): T {
   if (result.error) {
     const rawError = result.error
     const status = result.response?.status
-    const message = typeof rawError === "object" && rawError !== null && "message" in rawError
-      ? String((rawError as { message?: unknown }).message)
-      : String(rawError)
+    const message =
+      typeof rawError === "object" && rawError !== null && "message" in rawError
+        ? String((rawError as { message?: unknown }).message)
+        : String(rawError)
     const err = new Error(`${name} failed${status ? ` (${status})` : ""}: ${message}`)
     if (status !== undefined) {
       ;(err as Error & { status?: number }).status = status
@@ -54,19 +52,14 @@ function groupBySession<T extends { id: string; sessionID: string }>(input: T[])
 }
 
 function projectID(directory: string, projects: Project[]) {
-  return projects.find(
-    (project) => project.worktree === directory || project.sandboxes?.includes(directory),
-  )?.id
+  return projects.find((project) => project.worktree === directory || project.sandboxes?.includes(directory))?.id
 }
 
 // ---------------------------------------------------------------------------
 // Bootstrap global state
 // ---------------------------------------------------------------------------
 
-export async function bootstrapGlobal(
-  sdk: AxCodeClient,
-  set: (patch: Partial<GlobalState>) => void,
-) {
+export async function bootstrapGlobal(sdk: AxCodeClient, set: (patch: Partial<GlobalState>) => void) {
   const results = await Promise.allSettled([
     retry(() => sdk.path.get().then((x) => set({ path: unwrap(x, "path.get") }))),
     retry(() => sdk.global.config.get().then((x) => set({ config: unwrap(x, "global.config.get") }))),
@@ -83,9 +76,7 @@ export async function bootstrapGlobal(
     retry(() => sdk.provider.list().then((x) => set({ providers: unwrap(x, "provider.list") }))),
   ])
 
-  const errors = results
-    .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-    .map((r) => r.reason)
+  const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map((r) => r.reason)
   if (errors.length) {
     console.error("[bootstrap] global bootstrap failed", errors[0])
   }
@@ -172,8 +163,7 @@ export async function bootstrapDirectory(input: {
   // path.get and session.status have no global-state fallback.
   // If either fails, the UI cannot safely advance to "complete".
   const [, , , pathResult, sessionStatusResult] = phase1Results
-  const criticalPhase1Failed =
-    pathResult.status === "rejected" || sessionStatusResult.status === "rejected"
+  const criticalPhase1Failed = pathResult.status === "rejected" || sessionStatusResult.status === "rejected"
 
   if (phase1Errors.length === phase1Results.length || criticalPhase1Failed) {
     console.error(`[bootstrap] directory bootstrap failed for ${directory}`, phase1Errors[0])
@@ -213,14 +203,10 @@ export async function bootstrapDirectory(input: {
         if (status !== undefined) (err as Error & { status?: number }).status = status
         throw err
       }
-      const grouped = groupBySession(
-        (x.data ?? []).filter((q): q is QuestionRequest => !!q?.id && !!q.sessionID),
-      )
+      const grouped = groupBySession((x.data ?? []).filter((q): q is QuestionRequest => !!q?.id && !!q.sessionID))
       const merged = { ...getState().question }
       for (const [sessionID, questions] of Object.entries(grouped)) {
-        merged[sessionID] = questions
-          .filter((q) => !!q?.id)
-          .sort((a, b) => cmp(a.id, b.id))
+        merged[sessionID] = questions.filter((q) => !!q?.id).sort((a, b) => cmp(a.id, b.id))
       }
       for (const sessionID of beforeSignatures.keys()) {
         if (grouped[sessionID]) continue
@@ -234,7 +220,10 @@ export async function bootstrapDirectory(input: {
     retry(async () => {
       const before = getState()
       const beforeSignatures = new Map(
-        Object.entries(before.permission ?? {}).map(([sessionID, permissions]) => [sessionID, requestSignature(permissions)]),
+        Object.entries(before.permission ?? {}).map(([sessionID, permissions]) => [
+          sessionID,
+          requestSignature(permissions),
+        ]),
       )
       const x = await sdk.permission.list(directory ? { directory } : undefined)
       if (x.error) {
@@ -248,9 +237,7 @@ export async function bootstrapDirectory(input: {
       )
       const merged = { ...getState().permission }
       for (const [sessionID, perms] of Object.entries(grouped)) {
-        merged[sessionID] = perms
-          .filter((p) => !!p?.id)
-          .sort((a, b) => cmp(a.id, b.id))
+        merged[sessionID] = perms.filter((p) => !!p?.id).sort((a, b) => cmp(a.id, b.id))
       }
       for (const sessionID of beforeSignatures.keys()) {
         if (grouped[sessionID]) continue
@@ -262,9 +249,7 @@ export async function bootstrapDirectory(input: {
       set({ permission: merged })
     }),
   ]).then((results) => {
-    const errors = results
-      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-      .map((r) => r.reason)
+    const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map((r) => r.reason)
     if (errors.length) {
       console.error(`[bootstrap] deferred phase failed for ${directory}`, errors[0])
     }

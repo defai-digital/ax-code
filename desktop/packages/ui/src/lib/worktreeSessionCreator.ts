@@ -4,184 +4,179 @@
  * and other non-hook contexts.
  */
 
-import { toast } from '@/components/ui';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useSelectionStore } from '@/sync/selection-store';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { checkIsGitRepository, previewGitWorktree } from '@/lib/gitApi';
-import { generateBranchName } from '@/lib/git/branchNameGenerator';
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
-import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
-import {
-  removeProjectWorktree,
-  type ProjectRef,
-} from '@/lib/worktrees/worktreeManager';
-import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
+import { toast } from "@/components/ui"
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { useProjectsStore } from "@/stores/useProjectsStore"
+import { useConfigStore } from "@/stores/useConfigStore"
+import { useSelectionStore } from "@/sync/selection-store"
+import { useDirectoryStore } from "@/stores/useDirectoryStore"
+import { checkIsGitRepository, previewGitWorktree } from "@/lib/gitApi"
+import { generateBranchName } from "@/lib/git/branchNameGenerator"
+import { parseModelIdentifier } from "@/lib/modelIdentifier"
+import { getRootBranch } from "@/lib/worktrees/worktreeStatus"
+import { getWorktreeSetupCommands } from "@/lib/openchamberConfig"
+import { removeProjectWorktree, type ProjectRef } from "@/lib/worktrees/worktreeManager"
+import { createWorktreeWithDefaults } from "@/lib/worktrees/worktreeCreate"
 import {
   createPendingDraftWorktreeRequest,
   rejectPendingDraftWorktreeRequest,
   resolvePendingDraftWorktreeRequest,
-} from '@/lib/worktrees/pendingDraftWorktree';
+} from "@/lib/worktrees/pendingDraftWorktree"
 
-const normalizePath = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/, '') || value;
+const normalizePath = (value: string): string => value.replace(/\\/g, "/").replace(/\/+$/, "") || value
 
 const resolveProjectRef = (directory: string): ProjectRef | null => {
-  const normalized = normalizePath(directory);
-  const projects = useProjectsStore.getState().projects;
+  const normalized = normalizePath(directory)
+  const projects = useProjectsStore.getState().projects
   if (projects.length === 0) {
-    return null;
+    return null
   }
 
-  const activeProject = useProjectsStore.getState().getActiveProject();
+  const activeProject = useProjectsStore.getState().getActiveProject()
   if (activeProject?.path) {
-    const activePath = normalizePath(activeProject.path);
+    const activePath = normalizePath(activeProject.path)
     if (normalized === activePath || normalized.startsWith(`${activePath}/`)) {
-      return { id: activeProject.id, path: activeProject.path };
+      return { id: activeProject.id, path: activeProject.path }
     }
   }
 
   const matches = projects.filter((project) => {
-    const projectPath = normalizePath(project.path);
-    return normalized === projectPath || normalized.startsWith(`${projectPath}/`);
-  });
+    const projectPath = normalizePath(project.path)
+    return normalized === projectPath || normalized.startsWith(`${projectPath}/`)
+  })
 
-  const match = matches.sort((a, b) => normalizePath(b.path).length - normalizePath(a.path).length)[0];
+  const match = matches.sort((a, b) => normalizePath(b.path).length - normalizePath(a.path).length)[0]
 
-  return match ? { id: match.id, path: match.path } : null;
-};
+  return match ? { id: match.id, path: match.path } : null
+}
 
 // Track if a worktree creation flow is already running
-let isCreatingWorktreeSession = false;
-
-
+let isCreatingWorktreeSession = false
 
 const applyDefaultAgentAndModelSelection = (sessionId: string, configState = useConfigStore.getState()) => {
   try {
-    const visibleAgents = configState.getVisibleAgents();
-    let agentName: string | undefined;
+    const visibleAgents = configState.getVisibleAgents()
+    let agentName: string | undefined
 
     if (configState.settingsDefaultAgent) {
-      const settingsAgent = visibleAgents.find((a) => a.name === configState.settingsDefaultAgent);
+      const settingsAgent = visibleAgents.find((a) => a.name === configState.settingsDefaultAgent)
       if (settingsAgent) {
-        agentName = settingsAgent.name;
+        agentName = settingsAgent.name
       }
     }
 
     if (!agentName) {
-      agentName =
-        visibleAgents.find((agent) => agent.name === 'build')?.name ||
-        visibleAgents[0]?.name;
+      agentName = visibleAgents.find((agent) => agent.name === "build")?.name || visibleAgents[0]?.name
     }
 
     if (!agentName) {
-      return;
+      return
     }
 
-    configState.setAgent(agentName);
-    useSelectionStore.getState().saveSessionAgentSelection(sessionId, agentName);
+    configState.setAgent(agentName)
+    useSelectionStore.getState().saveSessionAgentSelection(sessionId, agentName)
 
-    const settingsDefaultModel = configState.settingsDefaultModel;
+    const settingsDefaultModel = configState.settingsDefaultModel
     if (!settingsDefaultModel) {
-      return;
+      return
     }
 
-    const parsed = parseModelIdentifier(settingsDefaultModel);
+    const parsed = parseModelIdentifier(settingsDefaultModel)
     if (!parsed) {
-      return;
+      return
     }
 
-    const { providerId, modelId } = parsed;
-    const modelMetadata = configState.getModelMetadata(providerId, modelId);
+    const { providerId, modelId } = parsed
+    const modelMetadata = configState.getModelMetadata(providerId, modelId)
     if (!modelMetadata) {
-      return;
+      return
     }
 
-    useSelectionStore.getState().saveSessionModelSelection(sessionId, providerId, modelId);
-    useSelectionStore.getState().saveAgentModelForSession(sessionId, agentName, providerId, modelId);
+    useSelectionStore.getState().saveSessionModelSelection(sessionId, providerId, modelId)
+    useSelectionStore.getState().saveAgentModelForSession(sessionId, agentName, providerId, modelId)
 
-    const settingsDefaultVariant = configState.settingsDefaultVariant;
+    const settingsDefaultVariant = configState.settingsDefaultVariant
     if (!settingsDefaultVariant) {
-      return;
+      return
     }
 
-    const provider = configState.providers.find((p) => p.id === providerId);
+    const provider = configState.providers.find((p) => p.id === providerId)
     const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === modelId) as
       | { variants?: Record<string, unknown> }
-      | undefined;
-    const variants = model?.variants;
+      | undefined
+    const variants = model?.variants
 
     if (variants && Object.prototype.hasOwnProperty.call(variants, settingsDefaultVariant)) {
-      configState.setCurrentVariant(settingsDefaultVariant);
+      configState.setCurrentVariant(settingsDefaultVariant)
       useSelectionStore
         .getState()
-        .saveAgentModelVariantForSession(sessionId, agentName, providerId, modelId, settingsDefaultVariant);
+        .saveAgentModelVariantForSession(sessionId, agentName, providerId, modelId, settingsDefaultVariant)
     }
   } catch {
     // Ignore errors setting default agent
   }
-};
+}
 
-const initializeSessionForWorktree = (sessionId: string, metadata: {
-  path: string;
-  projectDirectory: string;
-  branch: string;
-  label: string;
-  name?: string;
-  createdFromBranch?: string;
-  kind?: 'pr' | 'standard';
-}) => {
-  const sessionStore = useSessionUIStore.getState();
-  const configState = useConfigStore.getState();
-  sessionStore.setWorktreeMetadata(sessionId, metadata);
-  applyDefaultAgentAndModelSelection(sessionId, configState);
-  useDirectoryStore.getState().setDirectory(metadata.path, { showOverlay: false });
-};
-
+const initializeSessionForWorktree = (
+  sessionId: string,
+  metadata: {
+    path: string
+    projectDirectory: string
+    branch: string
+    label: string
+    name?: string
+    createdFromBranch?: string
+    kind?: "pr" | "standard"
+  },
+) => {
+  const sessionStore = useSessionUIStore.getState()
+  const configState = useConfigStore.getState()
+  sessionStore.setWorktreeMetadata(sessionId, metadata)
+  applyDefaultAgentAndModelSelection(sessionId, configState)
+  useDirectoryStore.getState().setDirectory(metadata.path, { showOverlay: false })
+}
 
 const createInstantWorktreeDraft = async (options?: {
-  initialPrompt?: string;
-  title?: string;
+  initialPrompt?: string
+  title?: string
 }): Promise<string | null> => {
   if (isCreatingWorktreeSession) {
-    return null;
+    return null
   }
 
-  const activeProject = useProjectsStore.getState().getActiveProject();
+  const activeProject = useProjectsStore.getState().getActiveProject()
   if (!activeProject?.path) {
-    toast.error('No active project', {
-      description: 'Please select a project first.',
-    });
-    return null;
+    toast.error("No active project", {
+      description: "Please select a project first.",
+    })
+    return null
   }
 
-  const projectDirectory = activeProject.path;
+  const projectDirectory = activeProject.path
 
-  let isGitRepo = false;
+  let isGitRepo = false
   try {
-    isGitRepo = await checkIsGitRepository(projectDirectory);
+    isGitRepo = await checkIsGitRepository(projectDirectory)
   } catch {
     // Ignore errors, treat as not a git repo
   }
 
   if (!isGitRepo) {
-    toast.error('Not a Git repository', {
-      description: 'Worktrees can only be created in Git repositories.',
-    });
-    return null;
+    toast.error("Not a Git repository", {
+      description: "Worktrees can only be created in Git repositories.",
+    })
+    return null
   }
 
-  isCreatingWorktreeSession = true;
+  isCreatingWorktreeSession = true
 
   try {
-    const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
-    const pendingRequestId = createPendingDraftWorktreeRequest();
+    const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory }
+    const pendingRequestId = createPendingDraftWorktreeRequest()
 
     // Lock the draft immediately so no React effect can reset it to the project
     // root while we await the preview / worktree creation below.
-    const sessionStore = useSessionUIStore.getState();
+    const sessionStore = useSessionUIStore.getState()
     if (sessionStore.newSessionDraft?.open) {
       sessionStore.overrideNewSessionDraftTarget({
         projectId: projectRef.id,
@@ -190,7 +185,7 @@ const createInstantWorktreeDraft = async (options?: {
         preserveDirectoryOverride: true,
         title: options?.title,
         initialPrompt: options?.initialPrompt,
-      });
+      })
     } else {
       sessionStore.openNewSessionDraft({
         selectedProjectId: projectRef.id,
@@ -199,16 +194,16 @@ const createInstantWorktreeDraft = async (options?: {
         preserveDirectoryOverride: true,
         title: options?.title,
         initialPrompt: options?.initialPrompt,
-      });
+      })
     }
 
-    const preferredName = generateBranchName();
+    const preferredName = generateBranchName()
 
     const preview = await previewGitWorktree(projectRef.path, {
-      mode: 'new',
+      mode: "new",
       branchName: preferredName,
       worktreeName: preferredName,
-    }).catch(() => null);
+    }).catch(() => null)
 
     // Refine draft target once we know the actual worktree path from the preview.
     if (preview?.path) {
@@ -220,20 +215,20 @@ const createInstantWorktreeDraft = async (options?: {
         preserveDirectoryOverride: true,
         title: options?.title,
         initialPrompt: options?.initialPrompt,
-      });
-      useDirectoryStore.getState().setDirectory(preview.path, { showOverlay: false });
+      })
+      useDirectoryStore.getState().setDirectory(preview.path, { showOverlay: false })
     }
 
-    const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const setupCommands = await getWorktreeSetupCommands(projectRef)
     const metadata = await createWorktreeWithDefaults(projectRef, {
       preferredName,
-      mode: 'new',
+      mode: "new",
       branchName: preferredName,
       worktreeName: preferredName,
       setupCommands,
-    });
+    })
 
-    resolvePendingDraftWorktreeRequest(pendingRequestId, metadata.path);
+    resolvePendingDraftWorktreeRequest(pendingRequestId, metadata.path)
     useSessionUIStore.getState().overrideNewSessionDraftTarget({
       projectId: projectRef.id,
       directoryOverride: metadata.path,
@@ -242,99 +237,101 @@ const createInstantWorktreeDraft = async (options?: {
       preserveDirectoryOverride: true,
       title: options?.title,
       initialPrompt: options?.initialPrompt,
-    });
-    useDirectoryStore.getState().setDirectory(metadata.path, { showOverlay: false });
+    })
+    useDirectoryStore.getState().setDirectory(metadata.path, { showOverlay: false })
 
-    return metadata.path;
+    return metadata.path
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create worktree';
-    const requestId = useSessionUIStore.getState().newSessionDraft.pendingWorktreeRequestId;
+    const message = error instanceof Error ? error.message : "Failed to create worktree"
+    const requestId = useSessionUIStore.getState().newSessionDraft.pendingWorktreeRequestId
     if (requestId) {
-      rejectPendingDraftWorktreeRequest(requestId, error instanceof Error ? error : new Error(message));
-      useSessionUIStore.getState().resolvePendingDraftWorktreeTarget(requestId, null);
+      rejectPendingDraftWorktreeRequest(requestId, error instanceof Error ? error : new Error(message))
+      useSessionUIStore.getState().resolvePendingDraftWorktreeTarget(requestId, null)
     }
-    useSessionUIStore.getState().setDraftBootstrapPendingDirectory(null);
-    toast.error('Failed to create worktree', {
+    useSessionUIStore.getState().setDraftBootstrapPendingDirectory(null)
+    toast.error("Failed to create worktree", {
       description: message,
-    });
-    return null;
+    })
+    return null
   } finally {
-    isCreatingWorktreeSession = false;
+    isCreatingWorktreeSession = false
   }
-};
+}
 
 /**
  * Create a new worktree and open a draft scoped to it.
- * 
+ *
  * @returns The worktree path, or null if creation failed
  */
 export async function createWorktreeSession(): Promise<string | null> {
-  return createInstantWorktreeDraft();
+  return createInstantWorktreeDraft()
 }
 
-export async function createWorktreeDraft(options?: { initialPrompt?: string; title?: string }): Promise<string | null> {
-  return createInstantWorktreeDraft(options);
+export async function createWorktreeDraft(options?: {
+  initialPrompt?: string
+  title?: string
+}): Promise<string | null> {
+  return createInstantWorktreeDraft(options)
 }
 
 export async function createWorktreeOnly(): Promise<string | null> {
   if (isCreatingWorktreeSession) {
-    return null;
+    return null
   }
 
-  const activeProject = useProjectsStore.getState().getActiveProject();
+  const activeProject = useProjectsStore.getState().getActiveProject()
   if (!activeProject?.path) {
-    toast.error('No active project', {
-      description: 'Please select a project first.',
-    });
-    return null;
+    toast.error("No active project", {
+      description: "Please select a project first.",
+    })
+    return null
   }
 
-  const projectDirectory = activeProject.path;
-  let isGitRepo = false;
+  const projectDirectory = activeProject.path
+  let isGitRepo = false
   try {
-    isGitRepo = await checkIsGitRepository(projectDirectory);
+    isGitRepo = await checkIsGitRepository(projectDirectory)
   } catch {
     // ignored
   }
 
   if (!isGitRepo) {
-    toast.error('Not a Git repository', {
-      description: 'Worktrees can only be created in Git repositories.',
-    });
-    return null;
+    toast.error("Not a Git repository", {
+      description: "Worktrees can only be created in Git repositories.",
+    })
+    return null
   }
 
-  isCreatingWorktreeSession = true;
+  isCreatingWorktreeSession = true
 
   try {
-    const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
-    const preferredName = generateBranchName();
-    const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory }
+    const preferredName = generateBranchName()
+    const setupCommands = await getWorktreeSetupCommands(projectRef)
     const metadata = await createWorktreeWithDefaults(projectRef, {
       preferredName,
-      mode: 'new',
+      mode: "new",
       branchName: preferredName,
       worktreeName: preferredName,
       setupCommands,
-    });
+    })
 
-
-    return metadata.path;
+    return metadata.path
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create worktree';
-    toast.error('Failed to create worktree', {
+    const message = error instanceof Error ? error.message : "Failed to create worktree"
+    toast.error("Failed to create worktree", {
       description: message,
-    });
-    return null;
+    })
+    return null
   } finally {
-    isCreatingWorktreeSession = false;
+    isCreatingWorktreeSession = false
   }
 }
 
 /**
  * Create a new session with a worktree for a specific branch.
  * Unlike createWorktreeSession(), this allows specifying the project and branch explicitly.
- * 
+ *
  * @param projectDirectory - The root directory of the git repository
  * @param branchName - The name of the branch to create a worktree for
  * @returns The created session, or null if creation failed
@@ -343,49 +340,49 @@ export async function createWorktreeSessionForBranch(
   projectDirectory: string,
   branchName: string,
   options?: {
-    kind?: 'pr' | 'standard';
-    existingBranch?: string;
-    worktreeName?: string;
-    setUpstream?: boolean;
-    upstreamRemote?: string;
-    upstreamBranch?: string;
-    ensureRemoteName?: string;
-    ensureRemoteUrl?: string;
-    createdFromBranch?: string;
-  }
+    kind?: "pr" | "standard"
+    existingBranch?: string
+    worktreeName?: string
+    setUpstream?: boolean
+    upstreamRemote?: string
+    upstreamBranch?: string
+    ensureRemoteName?: string
+    ensureRemoteUrl?: string
+    createdFromBranch?: string
+  },
 ): Promise<{ id: string } | null> {
   if (isCreatingWorktreeSession) {
-    return null;
+    return null
   }
 
-  isCreatingWorktreeSession = true;
+  isCreatingWorktreeSession = true
 
   try {
-    const projectRef = resolveProjectRef(projectDirectory);
+    const projectRef = resolveProjectRef(projectDirectory)
     if (!projectRef) {
-      throw new Error('Project is not registered in AX Code Desktop');
+      throw new Error("Project is not registered in AX Code Desktop")
     }
 
     // Check if it's a git repo (root project path)
-    let isGitRepo = false;
+    let isGitRepo = false
     try {
-      isGitRepo = await checkIsGitRepository(projectRef.path);
+      isGitRepo = await checkIsGitRepository(projectRef.path)
     } catch {
       // Ignore errors, treat as not a git repo
     }
 
     if (!isGitRepo) {
-      toast.error('Not a Git repository', {
-        description: 'Worktrees can only be created in Git repositories.',
-      });
-      return null;
+      toast.error("Not a Git repository", {
+        description: "Worktrees can only be created in Git repositories.",
+      })
+      return null
     }
 
-    const setupCommands = await getWorktreeSetupCommands(projectRef);
-    const rootBranch = await getRootBranch(projectRef.path);
+    const setupCommands = await getWorktreeSetupCommands(projectRef)
+    const rootBranch = await getRootBranch(projectRef.path)
     const metadata = await createWorktreeWithDefaults(projectRef, {
       preferredName: branchName,
-      mode: 'existing',
+      mode: "existing",
       existingBranch: options?.existingBranch || branchName,
       branchName,
       worktreeName: options?.worktreeName || branchName,
@@ -395,38 +392,38 @@ export async function createWorktreeSessionForBranch(
       ensureRemoteName: options?.ensureRemoteName,
       ensureRemoteUrl: options?.ensureRemoteUrl,
       setupCommands,
-    });
+    })
 
-    const kind = options?.kind ?? 'standard';
+    const kind = options?.kind ?? "standard"
     const createdMetadata = {
       ...metadata,
       createdFromBranch: options?.createdFromBranch || rootBranch,
       kind,
-    };
-
-    // Create the session
-    const sessionStore = useSessionUIStore.getState();
-    const session = await sessionStore.createSession(undefined, metadata.path);
-    if (!session) {
-      // Clean up the worktree if session creation failed
-      await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined);
-      toast.error('Failed to create session', {
-        description: 'Could not create a session for the worktree.',
-      });
-      return null;
     }
 
-    initializeSessionForWorktree(session.id, createdMetadata);
+    // Create the session
+    const sessionStore = useSessionUIStore.getState()
+    const session = await sessionStore.createSession(undefined, metadata.path)
+    if (!session) {
+      // Clean up the worktree if session creation failed
+      await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined)
+      toast.error("Failed to create session", {
+        description: "Could not create a session for the worktree.",
+      })
+      return null
+    }
 
-    return session;
+    initializeSessionForWorktree(session.id, createdMetadata)
+
+    return session
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create worktree session';
-    toast.error('Failed to create worktree', {
+    const message = error instanceof Error ? error.message : "Failed to create worktree session"
+    toast.error("Failed to create worktree", {
       description: message,
-    });
-    return null;
+    })
+    return null
   } finally {
-    isCreatingWorktreeSession = false;
+    isCreatingWorktreeSession = false
   }
 }
 
@@ -439,56 +436,56 @@ export async function createWorktreeSessionForNewBranch(
   preferredBranchName: string,
   startPoint?: string,
   options?: {
-    kind?: 'pr' | 'standard';
-    worktreeName?: string;
-    setUpstream?: boolean;
-    upstreamRemote?: string;
-    upstreamBranch?: string;
-    ensureRemoteName?: string;
-    ensureRemoteUrl?: string;
-    createdFromBranch?: string;
-  }
+    kind?: "pr" | "standard"
+    worktreeName?: string
+    setUpstream?: boolean
+    upstreamRemote?: string
+    upstreamBranch?: string
+    ensureRemoteName?: string
+    ensureRemoteUrl?: string
+    createdFromBranch?: string
+  },
 ): Promise<{ id: string; branch: string } | null> {
   if (isCreatingWorktreeSession) {
-    return null;
+    return null
   }
 
-  isCreatingWorktreeSession = true;
+  isCreatingWorktreeSession = true
 
   try {
-    const start = startPoint?.trim() || 'HEAD';
-    const base = preferredBranchName?.trim();
+    const start = startPoint?.trim() || "HEAD"
+    const base = preferredBranchName?.trim()
     if (!base) {
-      throw new Error('Branch name is required');
+      throw new Error("Branch name is required")
     }
 
-    const kind = options?.kind ?? 'standard';
+    const kind = options?.kind ?? "standard"
 
-    const projectRef = resolveProjectRef(projectDirectory);
+    const projectRef = resolveProjectRef(projectDirectory)
     if (!projectRef) {
-      throw new Error('Project is not registered in AX Code Desktop');
+      throw new Error("Project is not registered in AX Code Desktop")
     }
 
-    let isGitRepo = false;
+    let isGitRepo = false
     try {
-      isGitRepo = await checkIsGitRepository(projectRef.path);
+      isGitRepo = await checkIsGitRepository(projectRef.path)
     } catch {
       // ignore
     }
 
     if (!isGitRepo) {
-      toast.error('Not a Git repository', {
-        description: 'Worktrees can only be created in Git repositories.',
-      });
-      return null;
+      toast.error("Not a Git repository", {
+        description: "Worktrees can only be created in Git repositories.",
+      })
+      return null
     }
 
-    const setupCommands = await getWorktreeSetupCommands(projectRef);
-    const rootBranch = await getRootBranch(projectRef.path);
+    const setupCommands = await getWorktreeSetupCommands(projectRef)
+    const rootBranch = await getRootBranch(projectRef.path)
     try {
       const metadata = await createWorktreeWithDefaults(projectRef, {
         preferredName: base,
-        mode: 'new',
+        mode: "new",
         branchName: base,
         worktreeName: options?.worktreeName || base,
         startRef: start,
@@ -498,30 +495,30 @@ export async function createWorktreeSessionForNewBranch(
         ensureRemoteName: options?.ensureRemoteName,
         ensureRemoteUrl: options?.ensureRemoteUrl,
         setupCommands,
-      });
+      })
       const createdMetadata = {
         ...metadata,
         createdFromBranch: options?.createdFromBranch || rootBranch || start,
         kind,
-      };
-
-      const sessionStore = useSessionUIStore.getState();
-      const session = await sessionStore.createSession(undefined, metadata.path);
-      if (!session) {
-        await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined);
-        throw new Error('Could not create a session for the worktree.');
       }
 
-      initializeSessionForWorktree(session.id, createdMetadata);
+      const sessionStore = useSessionUIStore.getState()
+      const session = await sessionStore.createSession(undefined, metadata.path)
+      if (!session) {
+        await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined)
+        throw new Error("Could not create a session for the worktree.")
+      }
 
-      return { id: session.id, branch: metadata.branch || base };
+      initializeSessionForWorktree(session.id, createdMetadata)
+
+      return { id: session.id, branch: metadata.branch || base }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create worktree session';
-      toast.error('Failed to create worktree', { description: message });
-      return null;
+      const message = error instanceof Error ? error.message : "Failed to create worktree session"
+      toast.error("Failed to create worktree", { description: message })
+      return null
     }
   } finally {
-    isCreatingWorktreeSession = false;
+    isCreatingWorktreeSession = false
   }
 }
 
@@ -534,15 +531,15 @@ export async function createWorktreeSessionForNewBranchExact(
   branchName: string,
   startPoint: string,
   options?: {
-    kind?: 'pr' | 'standard';
-    worktreeName?: string;
-    setUpstream?: boolean;
-    upstreamRemote?: string;
-    upstreamBranch?: string;
-    ensureRemoteName?: string;
-    ensureRemoteUrl?: string;
-    createdFromBranch?: string;
-  }
+    kind?: "pr" | "standard"
+    worktreeName?: string
+    setUpstream?: boolean
+    upstreamRemote?: string
+    upstreamBranch?: string
+    ensureRemoteName?: string
+    ensureRemoteUrl?: string
+    createdFromBranch?: string
+  },
 ): Promise<{ id: string; branch: string } | null> {
   return createWorktreeSessionForNewBranch(projectDirectory, branchName, startPoint, {
     kind: options?.kind,
@@ -553,5 +550,5 @@ export async function createWorktreeSessionForNewBranchExact(
     ensureRemoteName: options?.ensureRemoteName,
     ensureRemoteUrl: options?.ensureRemoteUrl,
     createdFromBranch: options?.createdFromBranch,
-  });
+  })
 }

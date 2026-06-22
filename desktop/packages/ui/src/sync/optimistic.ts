@@ -74,9 +74,7 @@ export function mergeOptimisticPage(page: MessagePage, items: OptimisticItem[]) 
     cursor: page.cursor,
     complete: page.complete,
     session,
-    part: [...part.entries()]
-      .sort((a, b) => compareIds(a[0], b[0]))
-      .map(([id, part]) => ({ id, part })),
+    part: [...part.entries()].sort((a, b) => compareIds(a[0], b[0])).map(([id, part]) => ({ id, part })),
     confirmed,
   }
 }

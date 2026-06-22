@@ -8,11 +8,13 @@
 
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use reqwest::{Client, RequestBuilder, StatusCode};
+use reqwest::{Client, RequestBuilder, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
-use crate::events::RuntimeEvent;
+use crate::events::{
+    MessageData, MessageInfo, MessagePartData, MessagePartInfo, MessageRole, RuntimeEvent,
+};
 
 /// Default server URL for the headless runtime.
 pub const DEFAULT_SERVER_URL: &str = "http://127.0.0.1:4096";
@@ -45,6 +47,7 @@ impl Default for ClientConfig {
 pub type EventStream = std::pin::Pin<Box<dyn futures_util::Stream<Item = RuntimeEvent> + Send>>;
 
 /// HTTP/SSE client for the headless ax-code server.
+#[derive(Clone)]
 pub struct HeadlessClient {
     config: ClientConfig,
     http: Client,
@@ -112,6 +115,48 @@ impl HeadlessClient {
     /// The stream will emit events as they occur and can be cancelled
     /// by dropping the returned receiver.
     pub async fn subscribe(&self) -> Result<mpsc::Receiver<RuntimeEvent>> {
+        let initial_response = self.open_event_stream().await?;
+        let (tx, rx) = mpsc::channel(256);
+        let client = self.clone();
+
+        tokio::spawn(async move {
+            let mut retry_ms = 1_000_u64;
+            let mut next_response = Some(initial_response);
+            loop {
+                match match next_response.take() {
+                    Some(response) => Ok(response),
+                    None => client.open_event_stream().await,
+                } {
+                    Ok(response) => {
+                        retry_ms = 1_000;
+                        if tx.send(RuntimeEvent::ServerConnected).await.is_err() {
+                            return;
+                        }
+                        if !drain_sse_response(response, &tx).await {
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("SSE subscription failed: {}", e);
+                    }
+                }
+
+                if tx
+                    .send(RuntimeEvent::ServerReconnecting { retry_ms })
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(retry_ms)).await;
+                retry_ms = (retry_ms * 2).min(30_000);
+            }
+        });
+
+        Ok(rx)
+    }
+
+    async fn open_event_stream(&self) -> Result<Response> {
         let url = format!("{}/global/event", self.config.base_url);
         let request = self
             .with_directory_query(self.http.get(&url))
@@ -126,38 +171,31 @@ impl HeadlessClient {
             anyhow::bail!("Event subscription failed: {}", response.status());
         }
 
-        let (tx, rx) = mpsc::channel(256);
+        Ok(response)
+    }
 
-        // Spawn a task to parse SSE events. A carry-over buffer is required
-        // because reqwest's `bytes_stream()` splits on network chunk
-        // boundaries, which are NOT aligned to SSE line boundaries. A single
-        // `data: {...}\n` line commonly arrives across two chunks.
-        tokio::spawn(async move {
-            use futures_util::StreamExt;
-            let mut stream = response.bytes_stream();
-            let mut buffer = String::new();
+    pub async fn session_transcript_events(&self, session_id: &str) -> Result<Vec<RuntimeEvent>> {
+        let url = format!(
+            "{}/session/{}/message",
+            self.config.base_url,
+            urlencoding::encode(session_id)
+        );
+        let response = self
+            .with_directory_query(self.http.get(&url).query(&[("limit", "100")]))
+            .send()
+            .await
+            .context("Failed to load session messages")?;
 
-            while let Some(chunk_result) = stream.next().await {
-                match chunk_result {
-                    Ok(chunk) => {
-                        buffer.push_str(&String::from_utf8_lossy(&chunk));
-                        let events = drain_complete_sse_lines(&mut buffer);
-                        for event in events {
-                            if tx.send(event).await.is_err() {
-                                // Receiver dropped: TUI is shutting down.
-                                return;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("SSE stream error: {}", e);
-                        return;
-                    }
-                }
-            }
-        });
+        if !response.status().is_success() {
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Session message load failed: {}", text);
+        }
 
-        Ok(rx)
+        let messages: Vec<serde_json::Value> = response
+            .json()
+            .await
+            .context("Failed to parse session messages")?;
+        Ok(transcript_events_from_messages(messages))
     }
 
     /// Create a new session on the server.
@@ -365,6 +403,92 @@ impl HeadlessClient {
 
         Ok(())
     }
+}
+
+async fn drain_sse_response(response: Response, tx: &mpsc::Sender<RuntimeEvent>) -> bool {
+    use futures_util::StreamExt;
+    let mut stream = response.bytes_stream();
+    let mut buffer = String::new();
+
+    while let Some(chunk_result) = stream.next().await {
+        match chunk_result {
+            Ok(chunk) => {
+                buffer.push_str(&String::from_utf8_lossy(&chunk));
+                let events = drain_complete_sse_lines(&mut buffer);
+                for event in events {
+                    if tx.send(event).await.is_err() {
+                        return false;
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!("SSE stream error: {}", e);
+                return true;
+            }
+        }
+    }
+    true
+}
+
+fn transcript_events_from_messages(messages: Vec<serde_json::Value>) -> Vec<RuntimeEvent> {
+    let mut events = Vec::new();
+    for message in messages {
+        let Some(info) = message.get("info") else {
+            continue;
+        };
+        let Some(id) = info.get("id").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let Some(session_id) = info.get("sessionID").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let role = info
+            .get("role")
+            .and_then(|role| serde_json::from_value::<MessageRole>(role.clone()).ok());
+
+        events.push(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: id.to_string(),
+                    session_id: session_id.to_string(),
+                    role,
+                }),
+            },
+        });
+
+        let Some(parts) = message.get("parts").and_then(serde_json::Value::as_array) else {
+            continue;
+        };
+        for part in parts {
+            let Some(part_id) = part.get("id").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let Some(part_type) = part.get("type").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            if part_type != "text" && part_type != "reasoning" {
+                continue;
+            }
+            events.push(RuntimeEvent::MessagePartUpdated {
+                properties: MessagePartInfo {
+                    part: Some(MessagePartData {
+                        id: part_id.to_string(),
+                        session_id: session_id.to_string(),
+                        message_id: id.to_string(),
+                        part_type: part_type.to_string(),
+                        call_id: None,
+                        tool: None,
+                        state: None,
+                        text: part
+                            .get("text")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_string),
+                    }),
+                },
+            });
+        }
+    }
+    events
 }
 
 /// Drain complete SSE lines from `buffer`, leaving any partial trailing line

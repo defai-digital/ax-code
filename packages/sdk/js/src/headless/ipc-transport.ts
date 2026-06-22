@@ -1,15 +1,8 @@
 import { randomUUID } from "node:crypto"
 import { connect, type Socket } from "node:net"
 import type { Event } from "../v2/index.js"
-import type {
-  HeadlessRuntimeCommand,
-  HeadlessRuntimeCommandResult,
-} from "./command.js"
-import type {
-  HeadlessTransport,
-  HeadlessTransportRequest,
-  HeadlessTransportSubscribeOptions,
-} from "./transport.js"
+import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command.js"
+import type { HeadlessTransport, HeadlessTransportRequest, HeadlessTransportSubscribeOptions } from "./transport.js"
 import {
   decodeIpcFrames,
   type IpcErrorMessage,
@@ -370,10 +363,7 @@ function commandResult(response: IpcTransportResponse): HeadlessRuntimeCommandRe
 }
 
 function commandRoute(
-  command: Extract<
-    HeadlessRuntimeCommand,
-    { type: "session.prompt" | "session.command" | "session.shell" }
-  >,
+  command: Extract<HeadlessRuntimeCommand, { type: "session.prompt" | "session.command" | "session.shell" }>,
 ): string {
   switch (command.type) {
     case "session.prompt":

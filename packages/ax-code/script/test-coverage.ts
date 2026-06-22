@@ -514,8 +514,7 @@ export async function createCoverageSummary(input: {
   }
 
   if (input.baselineFile) {
-    const baselineText = await readText(input.baselineFile)
-      .catch(() => "")
+    const baselineText = await readText(input.baselineFile).catch(() => "")
     if (baselineText) {
       const baseline = JSON.parse(baselineText) as CoverageSummary
       if (baseline.kind === "ax-code-coverage-summary" && baseline.group === input.group) {
@@ -547,8 +546,7 @@ export async function writeCoverageArtifacts(input: {
   console.log(report)
   const stepSummary = process.env["GITHUB_STEP_SUMMARY"]
   if (stepSummary) {
-    const previous = await readText(stepSummary)
-      .catch(() => "")
+    const previous = await readText(stepSummary).catch(() => "")
     await writeText(stepSummary, `${previous}${report}\n`)
   }
   return summary

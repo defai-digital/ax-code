@@ -1,141 +1,128 @@
 export const createSettingsNormalizationRuntime = (dependencies) => {
-  const {
-    os,
-    path,
-    processLike,
-    realpathSync,
-  } = dependencies;
+  const { os, path, processLike, realpathSync } = dependencies
 
   const normalizeDirectoryPath = (value) => {
-    if (typeof value !== 'string') {
-      return value;
+    if (typeof value !== "string") {
+      return value
     }
 
-    const trimmed = value.trim();
+    const trimmed = value.trim()
     if (!trimmed) {
-      return trimmed;
+      return trimmed
     }
 
-    if (trimmed === '~') {
-      return os.homedir();
+    if (trimmed === "~") {
+      return os.homedir()
     }
 
-    if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
-      return path.join(os.homedir(), trimmed.slice(2));
+    if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
+      return path.join(os.homedir(), trimmed.slice(2))
     }
 
-    return trimmed;
-  };
+    return trimmed
+  }
 
   // Resolve symlinks, falling back to the original value on failure.
   const safeRealpathSync = (value) => {
-    if (!realpathSync || typeof value !== 'string' || !value) {
-      return value;
+    if (!realpathSync || typeof value !== "string" || !value) {
+      return value
     }
     try {
-      return realpathSync(value);
+      return realpathSync(value)
     } catch {
-      return value;
+      return value
     }
-  };
+  }
 
   const normalizePathForPersistence = (value, options = {}) => {
-    if (typeof value !== 'string') {
-      return value;
+    if (typeof value !== "string") {
+      return value
     }
 
-    const normalized = normalizeDirectoryPath(value);
-    if (typeof normalized !== 'string') {
-      return normalized;
+    const normalized = normalizeDirectoryPath(value)
+    if (typeof normalized !== "string") {
+      return normalized
     }
 
-    const trimmed = normalized.trim();
+    const trimmed = normalized.trim()
     if (!trimmed) {
-      return trimmed;
+      return trimmed
     }
 
-    const resolved = options.resolveRealpath === false ? trimmed : safeRealpathSync(trimmed);
+    const resolved = options.resolveRealpath === false ? trimmed : safeRealpathSync(trimmed)
 
-    if (processLike.platform !== 'win32') {
-      return resolved;
+    if (processLike.platform !== "win32") {
+      return resolved
     }
 
-    return resolved.replace(/\//g, '\\');
-  };
+    return resolved.replace(/\//g, "\\")
+  }
 
   const areStringArraysEqual = (a, b) => {
     if (!Array.isArray(a) || !Array.isArray(b)) {
-      return false;
+      return false
     }
     if (a.length !== b.length) {
-      return false;
+      return false
     }
     for (let i = 0; i < a.length; i += 1) {
       if (a[i] !== b[i]) {
-        return false;
+        return false
       }
     }
-    return true;
-  };
+    return true
+  }
 
   const normalizeStringArray = (input) => {
     if (!Array.isArray(input)) {
-      return [];
+      return []
     }
-    return Array.from(
-      new Set(
-        input.filter((entry) => typeof entry === 'string' && entry.length > 0)
-      )
-    );
-  };
+    return Array.from(new Set(input.filter((entry) => typeof entry === "string" && entry.length > 0)))
+  }
 
   const sanitizeProjects = (input) => {
     if (!Array.isArray(input)) {
-      return undefined;
+      return undefined
     }
 
-    const hexColorPattern = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/;
+    const hexColorPattern = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/
     const normalizeIconBackground = (value) => {
-      if (typeof value !== 'string') {
-        return null;
+      if (typeof value !== "string") {
+        return null
       }
-      const trimmed = value.trim();
+      const trimmed = value.trim()
       if (!trimmed) {
-        return null;
+        return null
       }
-      return hexColorPattern.test(trimmed) ? trimmed.toLowerCase() : null;
-    };
+      return hexColorPattern.test(trimmed) ? trimmed.toLowerCase() : null
+    }
 
-    const result = [];
-    const seenIds = new Set();
-    const seenPaths = new Set();
+    const result = []
+    const seenIds = new Set()
+    const seenPaths = new Set()
 
     for (const entry of input) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!entry || typeof entry !== "object") continue
 
-      const candidate = entry;
-      const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
-      const rawPath = typeof candidate.path === 'string' ? candidate.path.trim() : '';
-      const resolvedPath = rawPath ? safeRealpathSync(path.resolve(normalizeDirectoryPath(rawPath))) : '';
-      const normalizedPath = resolvedPath ? normalizePathForPersistence(resolvedPath, { resolveRealpath: false }) : '';
-      const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
-      const icon = typeof candidate.icon === 'string' ? candidate.icon.trim() : '';
-      const iconImage = candidate.iconImage && typeof candidate.iconImage === 'object'
-        ? candidate.iconImage
-        : null;
-      const iconBackground = normalizeIconBackground(candidate.iconBackground);
-      const color = typeof candidate.color === 'string' ? candidate.color.trim() : '';
-      const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null;
-      const lastOpenedAt = Number.isFinite(candidate.lastOpenedAt)
-        ? Number(candidate.lastOpenedAt)
-        : null;
+      const candidate = entry
+      const id = typeof candidate.id === "string" ? candidate.id.trim() : ""
+      const rawPath = typeof candidate.path === "string" ? candidate.path.trim() : ""
+      const resolvedPath = rawPath ? safeRealpathSync(path.resolve(normalizeDirectoryPath(rawPath))) : ""
+      const normalizedPath = resolvedPath ? normalizePathForPersistence(resolvedPath, { resolveRealpath: false }) : ""
+      const label = typeof candidate.label === "string" ? candidate.label.trim() : ""
+      const icon = typeof candidate.icon === "string" ? candidate.icon.trim() : ""
+      const iconImage = candidate.iconImage && typeof candidate.iconImage === "object" ? candidate.iconImage : null
+      const iconBackground = normalizeIconBackground(candidate.iconBackground)
+      const color = typeof candidate.color === "string" ? candidate.color.trim() : ""
+      const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null
+      const lastOpenedAt = Number.isFinite(candidate.lastOpenedAt) ? Number(candidate.lastOpenedAt) : null
 
-      if (!id || !normalizedPath) continue;
-      if (seenIds.has(id)) continue;
-      if (seenPaths.has(normalizedPath)) continue;
+      if (!id || !normalizedPath) continue
+      if (seenIds.has(id)) continue
+      if (seenPaths.has(normalizedPath)) continue
 
-      seenIds.add(id);
-      seenPaths.add(normalizedPath);
+      seenIds.add(id)
+      seenPaths.add(normalizedPath)
 
       const project = {
         id,
@@ -146,176 +133,175 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
         ...(color ? { color } : {}),
         ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
         ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
-      };
+      }
 
       if (candidate.iconImage === null) {
-        project.iconImage = null;
+        project.iconImage = null
       } else if (iconImage) {
-        const mime = typeof iconImage.mime === 'string' ? iconImage.mime.trim() : '';
-        const updatedAt = typeof iconImage.updatedAt === 'number' && Number.isFinite(iconImage.updatedAt)
-          ? Math.max(0, Math.round(iconImage.updatedAt))
-          : 0;
-        const source = iconImage.source === 'custom' || iconImage.source === 'auto'
-          ? iconImage.source
-          : null;
+        const mime = typeof iconImage.mime === "string" ? iconImage.mime.trim() : ""
+        const updatedAt =
+          typeof iconImage.updatedAt === "number" && Number.isFinite(iconImage.updatedAt)
+            ? Math.max(0, Math.round(iconImage.updatedAt))
+            : 0
+        const source = iconImage.source === "custom" || iconImage.source === "auto" ? iconImage.source : null
         if (mime && updatedAt > 0 && source) {
-          project.iconImage = { mime, updatedAt, source };
+          project.iconImage = { mime, updatedAt, source }
         }
       }
 
       if (candidate.iconBackground === null) {
-        project.iconBackground = null;
+        project.iconBackground = null
       }
 
-      if (typeof candidate.sidebarCollapsed === 'boolean') {
-        project.sidebarCollapsed = candidate.sidebarCollapsed;
+      if (typeof candidate.sidebarCollapsed === "boolean") {
+        project.sidebarCollapsed = candidate.sidebarCollapsed
       }
 
-      result.push(project);
+      result.push(project)
     }
 
-    return result;
-  };
+    return result
+  }
 
   const normalizeSettingsPaths = (input) => {
-    const settings = input && typeof input === 'object' ? input : {};
-    let next = settings;
-    let changed = false;
+    const settings = input && typeof input === "object" ? input : {}
+    let next = settings
+    let changed = false
 
     const ensureNext = () => {
       if (next === settings) {
-        next = { ...settings };
+        next = { ...settings }
       }
-    };
+    }
 
     const normalizePathField = (key) => {
-      if (typeof settings[key] !== 'string' || settings[key].length === 0) {
-        return;
+      if (typeof settings[key] !== "string" || settings[key].length === 0) {
+        return
       }
-      const normalized = normalizePathForPersistence(settings[key]);
+      const normalized = normalizePathForPersistence(settings[key])
       if (normalized !== settings[key]) {
-        ensureNext();
-        next[key] = normalized;
-        changed = true;
+        ensureNext()
+        next[key] = normalized
+        changed = true
       }
-    };
+    }
 
     const normalizePathArrayField = (key) => {
       if (!Array.isArray(settings[key])) {
-        return;
+        return
       }
 
       const normalized = normalizeStringArray(
         settings[key]
-          .map((entry) => (typeof entry === 'string' ? normalizePathForPersistence(entry) : entry))
-          .filter((entry) => typeof entry === 'string' && entry.length > 0)
-      );
+          .map((entry) => (typeof entry === "string" ? normalizePathForPersistence(entry) : entry))
+          .filter((entry) => typeof entry === "string" && entry.length > 0),
+      )
 
       if (!areStringArraysEqual(normalized, settings[key])) {
-        ensureNext();
-        next[key] = normalized;
-        changed = true;
+        ensureNext()
+        next[key] = normalized
+        changed = true
       }
-    };
+    }
 
-    normalizePathField('lastDirectory');
-    normalizePathField('homeDirectory');
-    normalizePathArrayField('approvedDirectories');
-    normalizePathArrayField('pinnedDirectories');
+    normalizePathField("lastDirectory")
+    normalizePathField("homeDirectory")
+    normalizePathArrayField("approvedDirectories")
+    normalizePathArrayField("pinnedDirectories")
 
     if (Array.isArray(settings.projects)) {
-      const normalizedProjects = sanitizeProjects(settings.projects) || [];
+      const normalizedProjects = sanitizeProjects(settings.projects) || []
       if (JSON.stringify(normalizedProjects) !== JSON.stringify(settings.projects)) {
-        ensureNext();
-        next.projects = normalizedProjects;
-        changed = true;
+        ensureNext()
+        next.projects = normalizedProjects
+        changed = true
       }
     }
 
-    return { settings: next, changed };
-  };
+    return { settings: next, changed }
+  }
 
   const isUnsafeSkillRelativePath = (value) => {
-    if (typeof value !== 'string' || value.length === 0) {
-      return true;
+    if (typeof value !== "string" || value.length === 0) {
+      return true
     }
 
-    const normalized = value.replace(/\\/g, '/');
+    const normalized = value.replace(/\\/g, "/")
     if (path.posix.isAbsolute(normalized)) {
-      return true;
+      return true
     }
 
-    return normalized.split('/').some((segment) => segment === '..');
-  };
+    return normalized.split("/").some((segment) => segment === "..")
+  }
 
   const sanitizeTypographySizesPartial = (input) => {
-    if (!input || typeof input !== 'object') {
-      return undefined;
+    if (!input || typeof input !== "object") {
+      return undefined
     }
-    const candidate = input;
-    const result = {};
-    let populated = false;
+    const candidate = input
+    const result = {}
+    let populated = false
 
     const assign = (key) => {
-      if (typeof candidate[key] === 'string' && candidate[key].length > 0) {
-        result[key] = candidate[key];
-        populated = true;
+      if (typeof candidate[key] === "string" && candidate[key].length > 0) {
+        result[key] = candidate[key]
+        populated = true
       }
-    };
+    }
 
-    assign('markdown');
-    assign('code');
-    assign('uiHeader');
-    assign('uiLabel');
-    assign('meta');
-    assign('micro');
+    assign("markdown")
+    assign("code")
+    assign("uiHeader")
+    assign("uiLabel")
+    assign("meta")
+    assign("micro")
 
-    return populated ? result : undefined;
-  };
+    return populated ? result : undefined
+  }
 
   const sanitizeModelRefs = (input, limit) => {
     if (!Array.isArray(input)) {
-      return undefined;
+      return undefined
     }
 
-    const result = [];
-    const seen = new Set();
+    const result = []
+    const seen = new Set()
 
     for (const entry of input) {
-      if (!entry || typeof entry !== 'object') continue;
-      const providerID = typeof entry.providerID === 'string' ? entry.providerID.trim() : '';
-      const modelID = typeof entry.modelID === 'string' ? entry.modelID.trim() : '';
-      if (!providerID || !modelID) continue;
-      const key = `${providerID}/${modelID}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push({ providerID, modelID });
-      if (result.length >= limit) break;
+      if (!entry || typeof entry !== "object") continue
+      const providerID = typeof entry.providerID === "string" ? entry.providerID.trim() : ""
+      const modelID = typeof entry.modelID === "string" ? entry.modelID.trim() : ""
+      if (!providerID || !modelID) continue
+      const key = `${providerID}/${modelID}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push({ providerID, modelID })
+      if (result.length >= limit) break
     }
 
-    return result;
-  };
+    return result
+  }
 
   const sanitizeSkillCatalogs = (input) => {
     if (!Array.isArray(input)) {
-      return undefined;
+      return undefined
     }
 
-    const result = [];
-    const seen = new Set();
+    const result = []
+    const seen = new Set()
 
     for (const entry of input) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!entry || typeof entry !== "object") continue
 
-      const id = typeof entry.id === 'string' ? entry.id.trim() : '';
-      const label = typeof entry.label === 'string' ? entry.label.trim() : '';
-      const source = typeof entry.source === 'string' ? entry.source.trim() : '';
-      const subpath = typeof entry.subpath === 'string' ? entry.subpath.trim() : '';
-      const gitIdentityId = typeof entry.gitIdentityId === 'string' ? entry.gitIdentityId.trim() : '';
+      const id = typeof entry.id === "string" ? entry.id.trim() : ""
+      const label = typeof entry.label === "string" ? entry.label.trim() : ""
+      const source = typeof entry.source === "string" ? entry.source.trim() : ""
+      const subpath = typeof entry.subpath === "string" ? entry.subpath.trim() : ""
+      const gitIdentityId = typeof entry.gitIdentityId === "string" ? entry.gitIdentityId.trim() : ""
 
-      if (!id || !label || !source) continue;
-      if (seen.has(id)) continue;
-      seen.add(id);
+      if (!id || !label || !source) continue
+      if (seen.has(id)) continue
+      seen.add(id)
 
       result.push({
         id,
@@ -323,11 +309,11 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
         source,
         ...(subpath ? { subpath } : {}),
         ...(gitIdentityId ? { gitIdentityId } : {}),
-      });
+      })
     }
 
-    return result;
-  };
+    return result
+  }
 
   return {
     normalizeDirectoryPath,
@@ -339,5 +325,5 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     sanitizeModelRefs,
     sanitizeSkillCatalogs,
     sanitizeProjects,
-  };
-};
+  }
+}

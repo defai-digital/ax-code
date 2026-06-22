@@ -1,1 +1,1 @@
-export * from './lib/terminalApi';
+export * from "./lib/terminalApi"

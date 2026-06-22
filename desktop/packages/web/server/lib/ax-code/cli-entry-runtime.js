@@ -1,25 +1,18 @@
 export const runCliEntryIfMain = (dependencies) => {
-  const {
-    process,
-    currentFilename,
-    parseServeCliOptions,
-    defaultPort,
-    setExitOnShutdown,
-    startServer,
-  } = dependencies;
+  const { process, currentFilename, parseServeCliOptions, defaultPort, setExitOnShutdown, startServer } = dependencies
 
-  const isCliExecution = process.argv[1] === currentFilename;
+  const isCliExecution = process.argv[1] === currentFilename
   if (!isCliExecution) {
-    return;
+    return
   }
 
   const cliOptions = parseServeCliOptions({
     argv: process.argv.slice(2),
     env: process.env,
     defaultPort,
-  });
+  })
 
-  setExitOnShutdown(true);
+  setExitOnShutdown(true)
   startServer({
     port: cliOptions.port,
     host: cliOptions.host,
@@ -27,7 +20,7 @@ export const runCliEntryIfMain = (dependencies) => {
     exitOnShutdown: true,
     uiPassword: cliOptions.uiPassword,
   }).catch((error) => {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  });
-};
+    console.error("Failed to start server:", error)
+    process.exit(1)
+  })
+}

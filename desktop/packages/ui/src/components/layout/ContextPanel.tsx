@@ -1,26 +1,26 @@
-import React from 'react';
+import React from "react"
 
-import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
-import { Button } from '@/components/ui/button';
-import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { openExternalUrl } from '@/lib/url';
-import { API_ENDPOINTS } from '@/lib/http';
-import { copyTextToClipboard } from '@/lib/clipboard';
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { cn } from '@/lib/utils';
-import { useI18n } from '@/lib/i18n';
-import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
-import { useUIStore, type ContextPanelMode } from '@/stores/useUIStore';
-import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useInputStore } from '@/sync/input-store';
-import { ContextPanelContent } from './ContextSidebarTab';
-import { toast } from '@/components/ui';
-import { Icon } from "@/components/icon/Icon";
-import { AxCodeIcon } from "@/components/ui/AxCodeIcon";
-import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
-import { invokeDesktopCommand } from '@/lib/desktopNative';
+import { FileTypeIcon } from "@/components/icons/FileTypeIcon"
+import { Button } from "@/components/ui/button"
+import { SortableTabsStrip } from "@/components/ui/sortable-tabs-strip"
+import { useThemeSystem } from "@/contexts/useThemeSystem"
+import { openExternalUrl } from "@/lib/url"
+import { API_ENDPOINTS } from "@/lib/http"
+import { copyTextToClipboard } from "@/lib/clipboard"
+import { useEffectiveDirectory } from "@/hooks/useEffectiveDirectory"
+import { cn } from "@/lib/utils"
+import { useI18n } from "@/lib/i18n"
+import { useFilesViewTabsStore } from "@/stores/useFilesViewTabsStore"
+import { useUIStore, type ContextPanelMode } from "@/stores/useUIStore"
+import { useInlineCommentDraftStore } from "@/stores/useInlineCommentDraftStore"
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { useInputStore } from "@/sync/input-store"
+import { ContextPanelContent } from "./ContextSidebarTab"
+import { toast } from "@/components/ui"
+import { Icon } from "@/components/icon/Icon"
+import { AxCodeIcon } from "@/components/ui/AxCodeIcon"
+import { lazyWithChunkRecovery } from "@/lib/chunkLoadRecovery"
+import { invokeDesktopCommand } from "@/lib/desktopNative"
 import {
   type PreviewElementMetadata,
   isPreviewElementMetadata,
@@ -30,222 +30,221 @@ import {
   getCachedProxyTarget,
   getBrowserProxyTargetKey,
   previewProxyTargetCache,
-} from '@/lib/preview/screenshot-capture';
+} from "@/lib/preview/screenshot-capture"
 
-const DiffView = lazyWithChunkRecovery(() => import('@/components/views/DiffView').then((m) => ({ default: m.DiffView })));
-const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesView').then((m) => ({ default: m.FilesView })));
-const PlanView = lazyWithChunkRecovery(() => import('@/components/views/PlanView').then((m) => ({ default: m.PlanView })));
+const DiffView = lazyWithChunkRecovery(() =>
+  import("@/components/views/DiffView").then((m) => ({ default: m.DiffView })),
+)
+const FilesView = lazyWithChunkRecovery(() =>
+  import("@/components/views/FilesView").then((m) => ({ default: m.FilesView })),
+)
+const PlanView = lazyWithChunkRecovery(() =>
+  import("@/components/views/PlanView").then((m) => ({ default: m.PlanView })),
+)
 
-const CONTEXT_PANEL_MIN_WIDTH = 380;
-const CONTEXT_PANEL_MAX_WIDTH = 1400;
-const CONTEXT_PANEL_DEFAULT_WIDTH = 600;
-const CONTEXT_TAB_LABEL_MAX_CHARS = 24;
-type TranslateFn = ReturnType<typeof useI18n>['t'];
+const CONTEXT_PANEL_MIN_WIDTH = 380
+const CONTEXT_PANEL_MAX_WIDTH = 1400
+const CONTEXT_PANEL_DEFAULT_WIDTH = 600
+const CONTEXT_TAB_LABEL_MAX_CHARS = 24
+type TranslateFn = ReturnType<typeof useI18n>["t"]
 
 type PreviewConsoleEvent = {
-  id: number;
-  level: 'log' | 'info' | 'warn' | 'error' | 'debug' | 'resource' | 'runtime';
-  message: string;
-  details?: string;
-  ts: number;
-};
+  id: number
+  level: "log" | "info" | "warn" | "error" | "debug" | "resource" | "runtime"
+  message: string
+  details?: string
+  ts: number
+}
 
-type PreviewConsoleFilter = 'all' | 'errors' | 'warnings' | 'logs';
+type PreviewConsoleFilter = "all" | "errors" | "warnings" | "logs"
 
 type PreviewBridgeMessage = {
-  source?: string;
-  version?: number;
-  type?: string;
-  level?: PreviewConsoleEvent['level'];
-  args?: unknown[];
-  message?: unknown;
-  stack?: unknown;
-  filename?: unknown;
-  line?: unknown;
-  column?: unknown;
-  tag?: unknown;
-  url?: unknown;
-  outerHTML?: unknown;
-  title?: unknown;
-  ts?: unknown;
-  target?: unknown;
-  navigation?: unknown;
-};
+  source?: string
+  version?: number
+  type?: string
+  level?: PreviewConsoleEvent["level"]
+  args?: unknown[]
+  message?: unknown
+  stack?: unknown
+  filename?: unknown
+  line?: unknown
+  column?: unknown
+  tag?: unknown
+  url?: unknown
+  outerHTML?: unknown
+  title?: unknown
+  ts?: unknown
+  target?: unknown
+  navigation?: unknown
+}
 
-
-const PREVIEW_CONSOLE_EVENT_LIMIT = 200;
+const PREVIEW_CONSOLE_EVENT_LIMIT = 200
 
 const getPreviewConsoleFilterMatch = (event: PreviewConsoleEvent, filter: PreviewConsoleFilter): boolean => {
-  if (filter === 'all') return true;
-  if (filter === 'errors') return event.level === 'error' || event.level === 'runtime' || event.level === 'resource';
-  if (filter === 'warnings') return event.level === 'warn';
-  return event.level === 'log' || event.level === 'info' || event.level === 'debug';
-};
-
+  if (filter === "all") return true
+  if (filter === "errors") return event.level === "error" || event.level === "runtime" || event.level === "resource"
+  if (filter === "warnings") return event.level === "warn"
+  return event.level === "log" || event.level === "info" || event.level === "debug"
+}
 
 const normalizeDirectoryKey = (value: string): string => {
-  if (!value) return '';
+  if (!value) return ""
 
-  const raw = value.replace(/\\/g, '/');
-  const hadUncPrefix = raw.startsWith('//');
-  let normalized = raw.replace(/\/+$/g, '');
-  normalized = normalized.replace(/\/+/g, '/');
+  const raw = value.replace(/\\/g, "/")
+  const hadUncPrefix = raw.startsWith("//")
+  let normalized = raw.replace(/\/+$/g, "")
+  normalized = normalized.replace(/\/+/g, "/")
 
-  if (hadUncPrefix && !normalized.startsWith('//')) {
-    normalized = `/${normalized}`;
+  if (hadUncPrefix && !normalized.startsWith("//")) {
+    normalized = `/${normalized}`
   }
 
-  if (normalized === '') {
-    return raw.startsWith('/') ? '/' : '';
+  if (normalized === "") {
+    return raw.startsWith("/") ? "/" : ""
   }
 
-  return normalized;
-};
+  return normalized
+}
 
 const clampWidth = (width: number): number => {
   if (!Number.isFinite(width)) {
-    return CONTEXT_PANEL_DEFAULT_WIDTH;
+    return CONTEXT_PANEL_DEFAULT_WIDTH
   }
 
-  return Math.min(CONTEXT_PANEL_MAX_WIDTH, Math.max(CONTEXT_PANEL_MIN_WIDTH, Math.round(width)));
-};
+  return Math.min(CONTEXT_PANEL_MAX_WIDTH, Math.max(CONTEXT_PANEL_MIN_WIDTH, Math.round(width)))
+}
 
 const getAvailablePanelWidth = (panel: HTMLElement | null): number | null => {
-  const parentWidth = panel?.parentElement?.clientWidth;
+  const parentWidth = panel?.parentElement?.clientWidth
   if (!parentWidth || parentWidth <= 0) {
-    return null;
+    return null
   }
 
-  return parentWidth;
-};
+  return parentWidth
+}
 
 const clampWidthToAvailableSpace = (width: number, panel: HTMLElement | null): number => {
-  const clampedWidth = clampWidth(width);
-  const availableWidth = getAvailablePanelWidth(panel);
+  const clampedWidth = clampWidth(width)
+  const availableWidth = getAvailablePanelWidth(panel)
   if (availableWidth === null) {
-    return clampedWidth;
+    return clampedWidth
   }
 
-  return Math.min(clampedWidth, Math.max(1, availableWidth));
-};
+  return Math.min(clampedWidth, Math.max(1, availableWidth))
+}
 
 const getRelativePathLabel = (filePath: string | null, directory: string): string => {
   if (!filePath) {
-    return '';
+    return ""
   }
-  const normalizedFile = filePath.replace(/\\/g, '/');
-  const normalizedDir = directory.replace(/\\/g, '/').replace(/\/+$/, '');
-  if (normalizedDir && normalizedFile.startsWith(normalizedDir + '/')) {
-    return normalizedFile.slice(normalizedDir.length + 1);
+  const normalizedFile = filePath.replace(/\\/g, "/")
+  const normalizedDir = directory.replace(/\\/g, "/").replace(/\/+$/, "")
+  if (normalizedDir && normalizedFile.startsWith(normalizedDir + "/")) {
+    return normalizedFile.slice(normalizedDir.length + 1)
   }
-  return normalizedFile;
-};
+  return normalizedFile
+}
 
-const getModeLabel = (
-  mode: ContextPanelMode,
-  t: TranslateFn
-): string => {
-  if (mode === 'chat') return t('contextPanel.mode.chat');
-  if (mode === 'file') return t('contextPanel.mode.files');
-  if (mode === 'diff') return t('contextPanel.mode.diff');
-  if (mode === 'plan') return t('contextPanel.mode.plan');
-  if (mode === 'preview') return t('contextPanel.mode.preview');
-  if (mode === 'browser') return t('contextPanel.mode.browser');
-  return t('contextPanel.mode.context');
-};
+const getModeLabel = (mode: ContextPanelMode, t: TranslateFn): string => {
+  if (mode === "chat") return t("contextPanel.mode.chat")
+  if (mode === "file") return t("contextPanel.mode.files")
+  if (mode === "diff") return t("contextPanel.mode.diff")
+  if (mode === "plan") return t("contextPanel.mode.plan")
+  if (mode === "preview") return t("contextPanel.mode.preview")
+  if (mode === "browser") return t("contextPanel.mode.browser")
+  return t("contextPanel.mode.context")
+}
 
 const getFileNameFromPath = (path: string | null): string | null => {
   if (!path) {
-    return null;
+    return null
   }
 
-  const normalized = path.replace(/\\/g, '/').trim();
+  const normalized = path.replace(/\\/g, "/").trim()
   if (!normalized) {
-    return null;
+    return null
   }
 
-  const segments = normalized.split('/').filter(Boolean);
+  const segments = normalized.split("/").filter(Boolean)
   if (segments.length === 0) {
-    return normalized;
+    return normalized
   }
 
-  return segments[segments.length - 1] || null;
-};
+  return segments[segments.length - 1] || null
+}
 
 const getTabLabel = (
   tab: { mode: ContextPanelMode; label: string | null; targetPath: string | null; stagedDiff?: boolean },
-  t: TranslateFn
+  t: TranslateFn,
 ): string => {
   if (tab.label) {
-    return tab.label;
+    return tab.label
   }
 
-  if (tab.mode === 'file') {
-    return getFileNameFromPath(tab.targetPath) || t('contextPanel.mode.files');
+  if (tab.mode === "file") {
+    return getFileNameFromPath(tab.targetPath) || t("contextPanel.mode.files")
   }
 
-  if (tab.mode === 'preview') {
-    const url = tab.targetPath;
+  if (tab.mode === "preview") {
+    const url = tab.targetPath
     if (url) {
       try {
-        const parsed = new URL(url);
-        return parsed.host || parsed.hostname || t('contextPanel.mode.preview');
+        const parsed = new URL(url)
+        return parsed.host || parsed.hostname || t("contextPanel.mode.preview")
       } catch {
         // ignore invalid URL
       }
     }
-    return t('contextPanel.mode.preview');
+    return t("contextPanel.mode.preview")
   }
 
-  if (tab.mode === 'diff') {
-    return tab.stagedDiff ? t('contextPanel.mode.stagedDiff') : t('contextPanel.mode.workingDiff');
+  if (tab.mode === "diff") {
+    return tab.stagedDiff ? t("contextPanel.mode.stagedDiff") : t("contextPanel.mode.workingDiff")
   }
 
-  return getModeLabel(tab.mode, t);
-};
+  return getModeLabel(tab.mode, t)
+}
 
 const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }): React.ReactNode | undefined => {
-  if (tab.mode === 'file') {
-    return tab.targetPath
-      ? <FileTypeIcon filePath={tab.targetPath} className="h-3.5 w-3.5" />
-      : undefined;
+  if (tab.mode === "file") {
+    return tab.targetPath ? <FileTypeIcon filePath={tab.targetPath} className="h-3.5 w-3.5" /> : undefined
   }
 
-  if (tab.mode === 'diff') {
-    return <Icon name="arrow-left-right" className="h-3.5 w-3.5" />;
+  if (tab.mode === "diff") {
+    return <Icon name="arrow-left-right" className="h-3.5 w-3.5" />
   }
 
-  if (tab.mode === 'plan') {
-    return <Icon name="file-text" className="h-3.5 w-3.5" />;
+  if (tab.mode === "plan") {
+    return <Icon name="file-text" className="h-3.5 w-3.5" />
   }
 
-  if (tab.mode === 'context') {
-    return <Icon name="donut-chart-fill" className="h-3.5 w-3.5" />;
+  if (tab.mode === "context") {
+    return <Icon name="donut-chart-fill" className="h-3.5 w-3.5" />
   }
 
-  if (tab.mode === 'chat') {
-    return <Icon name="chat-4" className="h-3.5 w-3.5" />;
+  if (tab.mode === "chat") {
+    return <Icon name="chat-4" className="h-3.5 w-3.5" />
   }
 
-  if (tab.mode === 'preview') {
-    return <Icon name="global" className="h-3.5 w-3.5 text-[var(--status-info)]" />;
+  if (tab.mode === "preview") {
+    return <Icon name="global" className="h-3.5 w-3.5 text-[var(--status-info)]" />
   }
 
-  if (tab.mode === 'browser') {
-    return <Icon name="global" className="h-3.5 w-3.5" />;
+  if (tab.mode === "browser") {
+    return <Icon name="global" className="h-3.5 w-3.5" />
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 const getSessionIDFromDedupeKey = (dedupeKey: string | undefined): string | null => {
-  if (!dedupeKey || !dedupeKey.startsWith('session:')) {
-    return null;
+  if (!dedupeKey || !dedupeKey.startsWith("session:")) {
+    return null
   }
 
-  const sessionID = dedupeKey.slice('session:'.length).trim();
-  return sessionID || null;
-};
+  const sessionID = dedupeKey.slice("session:".length).trim()
+  return sessionID || null
+}
 
 const DESKTOP_BROWSER_INSPECT_SCRIPT = `new Promise((resolve) => {
   const existing = document.getElementById('__openchamber_desktop_browser_overlay');
@@ -331,7 +330,7 @@ const DESKTOP_BROWSER_INSPECT_SCRIPT = `new Promise((resolve) => {
   window.addEventListener('mousemove', move, true);
   window.addEventListener('click', click, true);
   window.addEventListener('keydown', keydown, true);
-});`;
+});`
 
 const DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT = `(() => {
   if (typeof window.__openchamberDesktopBrowserCancelInspect === 'function') {
@@ -340,7 +339,7 @@ const DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT = `(() => {
   }
   const overlay = document.getElementById('__openchamber_desktop_browser_overlay');
   if (overlay) overlay.remove();
-})()`;
+})()`
 
 const DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT = `(() => {
   if (window.__openchamberSameWebviewNavigationInstalled) return;
@@ -374,597 +373,602 @@ const DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT = `(() => {
     event.preventDefault();
     event.stopPropagation();
   }, true);
-})()`;
+})()`
 
 const normalizeBrowserUrl = (value: string): string => {
-  const trimmed = value.trim();
-  if (!trimmed) return 'about:blank';
+  const trimmed = value.trim()
+  if (!trimmed) return "about:blank"
   try {
-    const parsed = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'about:blank';
-    return parsed.toString();
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "about:blank"
+    return parsed.toString()
   } catch {
-    return 'about:blank';
+    return "about:blank"
   }
-};
+}
 
 const runIframeScript = async <T,>(iframe: HTMLIFrameElement, script: string): Promise<T> => {
-  const frameWindow = iframe.contentWindow;
+  const frameWindow = iframe.contentWindow
   if (!frameWindow) {
-    throw new Error('Iframe window is not available');
+    throw new Error("Iframe window is not available")
   }
 
-  const evaluate = (frameWindow as Window & { eval: (code: string) => unknown }).eval;
-  const result = evaluate.call(frameWindow, script) as unknown;
-  return await Promise.resolve(result) as T;
-};
-
+  const evaluate = (frameWindow as Window & { eval: (code: string) => unknown }).eval
+  const result = evaluate.call(frameWindow, script) as unknown
+  return (await Promise.resolve(result)) as T
+}
 
 const buildEmbeddedSessionChatURL = (sessionID: string, directory: string | null, readOnly: boolean): string => {
-  if (typeof window === 'undefined') {
-    return '';
+  if (typeof window === "undefined") {
+    return ""
   }
 
-  const url = new URL(window.location.pathname, window.location.origin);
-  url.searchParams.set('ocPanel', 'session-chat');
-  url.searchParams.set('sessionId', sessionID);
+  const url = new URL(window.location.pathname, window.location.origin)
+  url.searchParams.set("ocPanel", "session-chat")
+  url.searchParams.set("sessionId", sessionID)
   if (readOnly) {
-    url.searchParams.set('readOnly', '1');
+    url.searchParams.set("readOnly", "1")
   } else {
-    url.searchParams.delete('readOnly');
+    url.searchParams.delete("readOnly")
   }
   if (directory && directory.trim().length > 0) {
-    url.searchParams.set('directory', directory);
+    url.searchParams.set("directory", directory)
   } else {
-    url.searchParams.delete('directory');
+    url.searchParams.delete("directory")
   }
 
-  url.hash = '';
-  return url.toString();
-};
+  url.hash = ""
+  return url.toString()
+}
 
 const truncateTabLabel = (value: string, maxChars: number): string => {
   if (value.length <= maxChars) {
-    return value;
+    return value
   }
 
-  return `${value.slice(0, maxChars - 3)}...`;
-};
+  return `${value.slice(0, maxChars - 3)}...`
+}
 
 type PreviewPaneProps = {
-  rawUrl: string;
-  onNavigate: (url: string) => void;
-};
+  rawUrl: string
+  onNavigate: (url: string) => void
+}
 
 type PreviewProxyState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'ready'; proxyBasePath: string; expiresAt: number }
-  | { status: 'error'; message: string };
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; proxyBasePath: string; expiresAt: number }
+  | { status: "error"; message: string }
 
 const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
-  const { t } = useI18n();
-  const { currentTheme } = useThemeSystem();
-  const [reloadNonce, bumpReload] = React.useReducer((x: number) => x + 1, 0);
-  const [proxyRegistrationNonce, bumpProxyRegistration] = React.useReducer((x: number) => x + 1, 0);
-  const [proxyState, setProxyState] = React.useState<PreviewProxyState>({ status: 'idle' });
-  const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
-  const nextConsoleEventIdRef = React.useRef(1);
-  const [bridgeReady, setBridgeReady] = React.useState(false);
-  const [consoleOpen, setConsoleOpen] = React.useState(false);
-  const [consoleFilter, setConsoleFilter] = React.useState<PreviewConsoleFilter>('all');
-  const [consoleEvents, setConsoleEvents] = React.useState<PreviewConsoleEvent[]>([]);
-  const [inspectMode, setInspectMode] = React.useState(false);
-  const [hoverTarget, setHoverTarget] = React.useState<PreviewElementMetadata | null>(null);
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open);
-  const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft);
-  const addAttachedFile = useInputStore((state) => state.addAttachedFile);
+  const { t } = useI18n()
+  const { currentTheme } = useThemeSystem()
+  const [reloadNonce, bumpReload] = React.useReducer((x: number) => x + 1, 0)
+  const [proxyRegistrationNonce, bumpProxyRegistration] = React.useReducer((x: number) => x + 1, 0)
+  const [proxyState, setProxyState] = React.useState<PreviewProxyState>({ status: "idle" })
+  const iframeRef = React.useRef<HTMLIFrameElement | null>(null)
+  const nextConsoleEventIdRef = React.useRef(1)
+  const [bridgeReady, setBridgeReady] = React.useState(false)
+  const [consoleOpen, setConsoleOpen] = React.useState(false)
+  const [consoleFilter, setConsoleFilter] = React.useState<PreviewConsoleFilter>("all")
+  const [consoleEvents, setConsoleEvents] = React.useState<PreviewConsoleEvent[]>([])
+  const [inspectMode, setInspectMode] = React.useState(false)
+  const [hoverTarget, setHoverTarget] = React.useState<PreviewElementMetadata | null>(null)
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open)
+  const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft)
+  const addAttachedFile = useInputStore((state) => state.addAttachedFile)
 
-  let parsedUrl: URL | null = null;
+  let parsedUrl: URL | null = null
   try {
-    parsedUrl = rawUrl ? new URL(rawUrl) : null;
+    parsedUrl = rawUrl ? new URL(rawUrl) : null
   } catch {
-    parsedUrl = null;
+    parsedUrl = null
   }
 
   const isLoopback = parsedUrl
-    ? (parsedUrl.hostname === 'localhost'
-        || parsedUrl.hostname === '127.0.0.1'
-        || parsedUrl.hostname === '::1'
-        || parsedUrl.hostname === '[::1]'
-        || parsedUrl.hostname === '0.0.0.0')
-    : false;
+    ? parsedUrl.hostname === "localhost" ||
+      parsedUrl.hostname === "127.0.0.1" ||
+      parsedUrl.hostname === "::1" ||
+      parsedUrl.hostname === "[::1]" ||
+      parsedUrl.hostname === "0.0.0.0"
+    : false
 
   const normalizedUrl = parsedUrl
-    ? (parsedUrl.hostname === '0.0.0.0'
-        ? new URL(parsedUrl.toString().replace('0.0.0.0', '127.0.0.1'))
-        : parsedUrl)
-    : null;
+    ? parsedUrl.hostname === "0.0.0.0"
+      ? new URL(parsedUrl.toString().replace("0.0.0.0", "127.0.0.1"))
+      : parsedUrl
+    : null
 
-  const targetKey = normalizedUrl ? normalizedUrl.toString() : '';
-  const previewColorScheme = currentTheme.metadata.variant;
+  const targetKey = normalizedUrl ? normalizedUrl.toString() : ""
+  const previewColorScheme = currentTheme.metadata.variant
 
   React.useEffect(() => {
     if (!targetKey || !isLoopback) {
-      setProxyState({ status: 'idle' });
-      return;
+      setProxyState({ status: "idle" })
+      return
     }
 
-    const cached = getCachedProxyTarget(targetKey);
+    const cached = getCachedProxyTarget(targetKey)
     if (cached) {
-      setProxyState({ status: 'ready', proxyBasePath: cached.proxyBasePath, expiresAt: cached.expiresAt });
-      return;
+      setProxyState({ status: "ready", proxyBasePath: cached.proxyBasePath, expiresAt: cached.expiresAt })
+      return
     }
 
-    let cancelled = false;
-    setProxyState({ status: 'loading' });
+    let cancelled = false
+    setProxyState({ status: "loading" })
 
     void (async () => {
       try {
         const response = await fetch(API_ENDPOINTS.preview.targets, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ url: targetKey }),
-        });
+        })
 
         if (!response.ok) {
-          previewProxyTargetCache.delete(targetKey);
-          const errorBody = await response.json().catch(() => ({}));
-          const message = typeof errorBody?.error === 'string'
-            ? errorBody.error
-            : `HTTP ${response.status}`;
+          previewProxyTargetCache.delete(targetKey)
+          const errorBody = await response.json().catch(() => ({}))
+          const message = typeof errorBody?.error === "string" ? errorBody.error : `HTTP ${response.status}`
           if (!cancelled) {
-            setProxyState({ status: 'error', message });
+            setProxyState({ status: "error", message })
           }
-          return;
+          return
         }
 
-        const body = await response.json() as { proxyBasePath?: unknown; expiresAt?: unknown };
-        const proxyBasePath = typeof body.proxyBasePath === 'string' ? body.proxyBasePath : '';
-        const expiresAt = typeof body.expiresAt === 'number' ? body.expiresAt : 0;
+        const body = (await response.json()) as { proxyBasePath?: unknown; expiresAt?: unknown }
+        const proxyBasePath = typeof body.proxyBasePath === "string" ? body.proxyBasePath : ""
+        const expiresAt = typeof body.expiresAt === "number" ? body.expiresAt : 0
         if (!proxyBasePath) {
-          previewProxyTargetCache.delete(targetKey);
+          previewProxyTargetCache.delete(targetKey)
           if (!cancelled) {
-            setProxyState({ status: 'error', message: t('contextPanel.preview.proxyError') });
+            setProxyState({ status: "error", message: t("contextPanel.preview.proxyError") })
           }
-          return;
+          return
         }
 
-        previewProxyTargetCache.set(targetKey, { proxyBasePath, expiresAt });
+        previewProxyTargetCache.set(targetKey, { proxyBasePath, expiresAt })
         if (!cancelled) {
-          setProxyState({ status: 'ready', proxyBasePath, expiresAt });
+          setProxyState({ status: "ready", proxyBasePath, expiresAt })
         }
       } catch (error) {
-        previewProxyTargetCache.delete(targetKey);
+        previewProxyTargetCache.delete(targetKey)
         if (!cancelled) {
-          const message = error instanceof Error ? error.message : String(error);
-          setProxyState({ status: 'error', message });
+          const message = error instanceof Error ? error.message : String(error)
+          setProxyState({ status: "error", message })
         }
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [isLoopback, proxyRegistrationNonce, t, targetKey]);
-
-  const directSrc = normalizedUrl
-    && (normalizedUrl.protocol === 'http:' || normalizedUrl.protocol === 'https:')
-    ? normalizedUrl.toString()
-    : '';
-
-  const proxySrc = isLoopback && proxyState.status === 'ready' && normalizedUrl
-    ? (() => {
-      const path = normalizedUrl.pathname || '/';
-      const searchParams = new URLSearchParams(normalizedUrl.search);
-      searchParams.set('ocPreview', String(reloadNonce));
-      const search = searchParams.toString();
-      const hash = normalizedUrl.hash || '';
-      return `${proxyState.proxyBasePath}${path}${search ? `?${search}` : ''}${hash}`;
-    })()
-    : '';
-
-  const effectiveSrc = isLoopback ? proxySrc : directSrc;
-  const headerSrc = effectiveSrc || directSrc;
-  const showLoading = isLoopback && (proxyState.status === 'loading' || proxyState.status === 'idle');
-  const showError = isLoopback && proxyState.status === 'error';
-
-  const attachPreviewAnnotation = React.useCallback((target: PreviewElementMetadata) => {
-    const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
-    if (!sessionKey) {
-      toast.error(t('contextPanel.preview.inspect.attachNoSession'));
-      return;
+      cancelled = true
     }
+  }, [isLoopback, proxyRegistrationNonce, t, targetKey])
 
-    const pageUrl = rawUrl || effectiveSrc || '';
-    const viewport = typeof window !== 'undefined'
-      ? { width: window.innerWidth, height: window.innerHeight }
-      : { width: 0, height: 0 };
-    const devicePixelRatio = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
+  const directSrc =
+    normalizedUrl && (normalizedUrl.protocol === "http:" || normalizedUrl.protocol === "https:")
+      ? normalizedUrl.toString()
+      : ""
 
-    void (async () => {
-      let attachedScreenshot = false;
-      try {
-        const iframe = iframeRef.current;
-        const screenshot = iframe ? await renderPreviewScreenshot(iframe, target) : null;
-        if (screenshot) {
-          await addAttachedFile(screenshot);
-          attachedScreenshot = true;
+  const proxySrc =
+    isLoopback && proxyState.status === "ready" && normalizedUrl
+      ? (() => {
+          const path = normalizedUrl.pathname || "/"
+          const searchParams = new URLSearchParams(normalizedUrl.search)
+          searchParams.set("ocPreview", String(reloadNonce))
+          const search = searchParams.toString()
+          const hash = normalizedUrl.hash || ""
+          return `${proxyState.proxyBasePath}${path}${search ? `?${search}` : ""}${hash}`
+        })()
+      : ""
+
+  const effectiveSrc = isLoopback ? proxySrc : directSrc
+  const headerSrc = effectiveSrc || directSrc
+  const showLoading = isLoopback && (proxyState.status === "loading" || proxyState.status === "idle")
+  const showError = isLoopback && proxyState.status === "error"
+
+  const attachPreviewAnnotation = React.useCallback(
+    (target: PreviewElementMetadata) => {
+      const sessionKey = currentSessionId ?? (newSessionDraftOpen ? "draft" : null)
+      if (!sessionKey) {
+        toast.error(t("contextPanel.preview.inspect.attachNoSession"))
+        return
+      }
+
+      const pageUrl = rawUrl || effectiveSrc || ""
+      const viewport =
+        typeof window !== "undefined"
+          ? { width: window.innerWidth, height: window.innerHeight }
+          : { width: 0, height: 0 }
+      const devicePixelRatio = typeof window !== "undefined" ? window.devicePixelRatio : 1
+
+      void (async () => {
+        let attachedScreenshot = false
+        try {
+          const iframe = iframeRef.current
+          const screenshot = iframe ? await renderPreviewScreenshot(iframe, target) : null
+          if (screenshot) {
+            await addAttachedFile(screenshot)
+            attachedScreenshot = true
+          }
+        } catch {
+          attachedScreenshot = false
         }
-      } catch {
-        attachedScreenshot = false;
-      }
 
-      addInlineCommentDraft({
-        sessionKey,
-        source: 'preview-annotation',
-        fileLabel: pageUrl || 'preview',
-        startLine: 1,
-        endLine: 1,
-        code: formatPreviewAnnotationMarkdown({
-          pageUrl,
-          viewport,
-          devicePixelRatio,
-          target,
-          screenshotAttached: attachedScreenshot,
-          intro: t('contextPanel.preview.inspect.attachAnnotation'),
-        }),
-        language: 'markdown',
-        text: '',
-      });
-      toast.success(t('contextPanel.preview.inspect.attached'));
-    })();
-  }, [addAttachedFile, addInlineCommentDraft, currentSessionId, effectiveSrc, newSessionDraftOpen, rawUrl, t]);
-
-  React.useEffect(() => {
-    setBridgeReady(false);
-    setConsoleEvents([]);
-    setConsoleOpen(false);
-    setConsoleFilter('all');
-    setInspectMode(false);
-    setHoverTarget(null);
-    nextConsoleEventIdRef.current = 1;
-  }, [effectiveSrc]);
+        addInlineCommentDraft({
+          sessionKey,
+          source: "preview-annotation",
+          fileLabel: pageUrl || "preview",
+          startLine: 1,
+          endLine: 1,
+          code: formatPreviewAnnotationMarkdown({
+            pageUrl,
+            viewport,
+            devicePixelRatio,
+            target,
+            screenshotAttached: attachedScreenshot,
+            intro: t("contextPanel.preview.inspect.attachAnnotation"),
+          }),
+          language: "markdown",
+          text: "",
+        })
+        toast.success(t("contextPanel.preview.inspect.attached"))
+      })()
+    },
+    [addAttachedFile, addInlineCommentDraft, currentSessionId, effectiveSrc, newSessionDraftOpen, rawUrl, t],
+  )
 
   React.useEffect(() => {
-    const frameWindow = iframeRef.current?.contentWindow;
+    setBridgeReady(false)
+    setConsoleEvents([])
+    setConsoleOpen(false)
+    setConsoleFilter("all")
+    setInspectMode(false)
+    setHoverTarget(null)
+    nextConsoleEventIdRef.current = 1
+  }, [effectiveSrc])
+
+  React.useEffect(() => {
+    const frameWindow = iframeRef.current?.contentWindow
     if (!bridgeReady || !frameWindow) {
-      return;
+      return
     }
-    frameWindow.postMessage({
-      source: 'openchamber-preview-parent',
-      version: 1,
-      type: 'set-inspect-mode',
-      enabled: inspectMode,
-    }, window.location.origin);
-  }, [bridgeReady, inspectMode]);
+    frameWindow.postMessage(
+      {
+        source: "openchamber-preview-parent",
+        version: 1,
+        type: "set-inspect-mode",
+        enabled: inspectMode,
+      },
+      window.location.origin,
+    )
+  }, [bridgeReady, inspectMode])
 
   React.useEffect(() => {
-    const frameWindow = iframeRef.current?.contentWindow;
+    const frameWindow = iframeRef.current?.contentWindow
     if (!bridgeReady || !frameWindow) {
-      return;
+      return
     }
-    frameWindow.postMessage({
-      source: 'openchamber-preview-parent',
-      version: 1,
-      type: 'set-color-scheme',
-      scheme: previewColorScheme,
-    }, window.location.origin);
-  }, [bridgeReady, previewColorScheme]);
+    frameWindow.postMessage(
+      {
+        source: "openchamber-preview-parent",
+        version: 1,
+        type: "set-color-scheme",
+        scheme: previewColorScheme,
+      },
+      window.location.origin,
+    )
+  }, [bridgeReady, previewColorScheme])
 
   React.useEffect(() => {
-    if (!inspectMode || typeof window === 'undefined') return;
+    if (!inspectMode || typeof window === "undefined") return
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        setInspectMode(false);
+      if (event.key === "Escape") {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        setInspectMode(false)
       }
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
-  }, [inspectMode]);
+    }
+    window.addEventListener("keydown", handler, true)
+    return () => window.removeEventListener("keydown", handler, true)
+  }, [inspectMode])
 
   React.useEffect(() => {
-    if (!isLoopback || typeof window === 'undefined') {
-      return;
+    if (!isLoopback || typeof window === "undefined") {
+      return
     }
 
     const stringify = (value: unknown): string => {
-      if (typeof value === 'string') return value;
-      if (value === null || value === undefined) return '';
+      if (typeof value === "string") return value
+      if (value === null || value === undefined) return ""
       try {
-        return JSON.stringify(value);
+        return JSON.stringify(value)
       } catch {
-        return String(value);
+        return String(value)
       }
-    };
+    }
 
-    const pushConsoleEvent = (event: Omit<PreviewConsoleEvent, 'id'>) => {
-      const id = nextConsoleEventIdRef.current;
-      nextConsoleEventIdRef.current += 1;
+    const pushConsoleEvent = (event: Omit<PreviewConsoleEvent, "id">) => {
+      const id = nextConsoleEventIdRef.current
+      nextConsoleEventIdRef.current += 1
       setConsoleEvents((current) => {
-        const next = [...current, { ...event, id }];
-        return next.length > PREVIEW_CONSOLE_EVENT_LIMIT
-          ? next.slice(next.length - PREVIEW_CONSOLE_EVENT_LIMIT)
-          : next;
-      });
-    };
+        const next = [...current, { ...event, id }]
+        return next.length > PREVIEW_CONSOLE_EVENT_LIMIT ? next.slice(next.length - PREVIEW_CONSOLE_EVENT_LIMIT) : next
+      })
+    }
 
     const handler = (event: MessageEvent<PreviewBridgeMessage>) => {
       if (event.source !== iframeRef.current?.contentWindow) {
-        return;
+        return
       }
-      const data = event.data;
-      if (!data || data.source !== 'openchamber-preview-bridge' || data.version !== 1) {
-        return;
-      }
-
-      if (data.type === 'ready') {
-        setBridgeReady(true);
-        return;
+      const data = event.data
+      if (!data || data.source !== "openchamber-preview-bridge" || data.version !== 1) {
+        return
       }
 
-      if (data.type === 'console') {
-        const level = data.level === 'error' || data.level === 'warn' || data.level === 'info' || data.level === 'debug'
-          ? data.level
-          : 'log';
-        const args = Array.isArray(data.args) ? data.args.map(stringify).filter(Boolean) : [];
+      if (data.type === "ready") {
+        setBridgeReady(true)
+        return
+      }
+
+      if (data.type === "console") {
+        const level =
+          data.level === "error" || data.level === "warn" || data.level === "info" || data.level === "debug"
+            ? data.level
+            : "log"
+        const args = Array.isArray(data.args) ? data.args.map(stringify).filter(Boolean) : []
         pushConsoleEvent({
           level,
-          message: args.join(' '),
-          ts: typeof data.ts === 'number' ? data.ts : Date.now(),
-        });
-        return;
+          message: args.join(" "),
+          ts: typeof data.ts === "number" ? data.ts : Date.now(),
+        })
+        return
       }
 
-      if (data.type === 'runtime-error') {
-        const filename = stringify(data.filename);
-        const line = typeof data.line === 'number' ? data.line : null;
-        const column = typeof data.column === 'number' ? data.column : null;
+      if (data.type === "runtime-error") {
+        const filename = stringify(data.filename)
+        const line = typeof data.line === "number" ? data.line : null
+        const column = typeof data.column === "number" ? data.column : null
         const location = filename
-          ? `${filename}${line !== null ? `:${line}${column !== null ? `:${column}` : ''}` : ''}`
-          : '';
-        const stack = stringify(data.stack);
+          ? `${filename}${line !== null ? `:${line}${column !== null ? `:${column}` : ""}` : ""}`
+          : ""
+        const stack = stringify(data.stack)
         pushConsoleEvent({
-          level: 'runtime',
-          message: stringify(data.message) || t('contextPanel.preview.console.runtimeError'),
-          details: [location, stack].filter(Boolean).join('\n'),
-          ts: typeof data.ts === 'number' ? data.ts : Date.now(),
-        });
-        return;
+          level: "runtime",
+          message: stringify(data.message) || t("contextPanel.preview.console.runtimeError"),
+          details: [location, stack].filter(Boolean).join("\n"),
+          ts: typeof data.ts === "number" ? data.ts : Date.now(),
+        })
+        return
       }
 
-      if (data.type === 'resource-error') {
-        const tag = stringify(data.tag) || 'resource';
-        const url = stringify(data.url);
+      if (data.type === "resource-error") {
+        const tag = stringify(data.tag) || "resource"
+        const url = stringify(data.url)
         pushConsoleEvent({
-          level: 'resource',
+          level: "resource",
           message: url ? `${tag}: ${url}` : tag,
           details: stringify(data.outerHTML),
-          ts: typeof data.ts === 'number' ? data.ts : Date.now(),
-        });
-        return;
+          ts: typeof data.ts === "number" ? data.ts : Date.now(),
+        })
+        return
       }
 
-      if (data.type === 'hover') {
-        setHoverTarget(isPreviewElementMetadata(data.target) ? data.target : null);
-        return;
+      if (data.type === "hover") {
+        setHoverTarget(isPreviewElementMetadata(data.target) ? data.target : null)
+        return
       }
 
-      if (data.type === 'select' && isPreviewElementMetadata(data.target)) {
-        setHoverTarget(data.target);
-        setInspectMode(false);
-        attachPreviewAnnotation(data.target);
-        return;
+      if (data.type === "select" && isPreviewElementMetadata(data.target)) {
+        setHoverTarget(data.target)
+        setInspectMode(false)
+        attachPreviewAnnotation(data.target)
+        return
       }
 
-      if (data.type === 'navigate-preview') {
-        const nextUrl = typeof data.url === 'string' ? data.url : '';
-        const navigation = data.navigation === 'external' ? 'external' : 'proxy';
-        if (nextUrl && navigation === 'external') {
-          void openExternalUrl(nextUrl);
-          return;
+      if (data.type === "navigate-preview") {
+        const nextUrl = typeof data.url === "string" ? data.url : ""
+        const navigation = data.navigation === "external" ? "external" : "proxy"
+        if (nextUrl && navigation === "external") {
+          void openExternalUrl(nextUrl)
+          return
         }
         if (nextUrl) {
-          onNavigate(nextUrl);
+          onNavigate(nextUrl)
         }
       }
-    };
+    }
 
-    window.addEventListener('message', handler);
+    window.addEventListener("message", handler)
     return () => {
-      window.removeEventListener('message', handler);
-    };
-  }, [attachPreviewAnnotation, isLoopback, onNavigate, t]);
+      window.removeEventListener("message", handler)
+    }
+  }, [attachPreviewAnnotation, isLoopback, onNavigate, t])
 
-  const consoleErrorCount = consoleEvents.filter((event) => event.level === 'error' || event.level === 'runtime' || event.level === 'resource').length;
-  const filteredConsoleEvents = consoleEvents.filter((event) => getPreviewConsoleFilterMatch(event, consoleFilter));
+  const consoleErrorCount = consoleEvents.filter(
+    (event) => event.level === "error" || event.level === "runtime" || event.level === "resource",
+  ).length
+  const filteredConsoleEvents = consoleEvents.filter((event) => getPreviewConsoleFilterMatch(event, consoleFilter))
 
   const copyConsoleEvents = React.useCallback(() => {
-    const header = [
-      `Preview URL: ${rawUrl || effectiveSrc || ''}`,
-      `Events: ${consoleEvents.length}`,
-      '',
-    ].join('\n');
-    const text = consoleEvents.map((event) => {
-      const timestamp = new Date(event.ts).toISOString();
-      const details = event.details ? `\n${event.details}` : '';
-      return `[${timestamp}] [${event.level}] ${event.message}${details}`;
-    }).join('\n');
+    const header = [`Preview URL: ${rawUrl || effectiveSrc || ""}`, `Events: ${consoleEvents.length}`, ""].join("\n")
+    const text = consoleEvents
+      .map((event) => {
+        const timestamp = new Date(event.ts).toISOString()
+        const details = event.details ? `\n${event.details}` : ""
+        return `[${timestamp}] [${event.level}] ${event.message}${details}`
+      })
+      .join("\n")
 
     void copyTextToClipboard(`${header}${text}`).then((result) => {
       if (result.ok) {
-        toast.success(t('contextPanel.preview.console.copied'));
+        toast.success(t("contextPanel.preview.console.copied"))
       } else {
-        toast.error(t('contextPanel.preview.console.copyFailed'));
+        toast.error(t("contextPanel.preview.console.copyFailed"))
       }
-    });
-  }, [consoleEvents, effectiveSrc, rawUrl, t]);
+    })
+  }, [consoleEvents, effectiveSrc, rawUrl, t])
 
   const attachConsoleEvents = React.useCallback(() => {
-    const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
+    const sessionKey = currentSessionId ?? (newSessionDraftOpen ? "draft" : null)
     if (!sessionKey) {
-      toast.error(t('contextPanel.preview.console.attachNoSession'));
-      return;
+      toast.error(t("contextPanel.preview.console.attachNoSession"))
+      return
     }
 
-    const header = [
-      `Preview URL: ${rawUrl || effectiveSrc || ''}`,
-      `Events: ${consoleEvents.length}`,
-      '',
-    ].join('\n');
-    const text = consoleEvents.map((event) => {
-      const timestamp = new Date(event.ts).toISOString();
-      const details = event.details ? `\n${event.details}` : '';
-      return `[${timestamp}] [${event.level}] ${event.message}${details}`;
-    }).join('\n');
+    const header = [`Preview URL: ${rawUrl || effectiveSrc || ""}`, `Events: ${consoleEvents.length}`, ""].join("\n")
+    const text = consoleEvents
+      .map((event) => {
+        const timestamp = new Date(event.ts).toISOString()
+        const details = event.details ? `\n${event.details}` : ""
+        return `[${timestamp}] [${event.level}] ${event.message}${details}`
+      })
+      .join("\n")
 
     addInlineCommentDraft({
       sessionKey,
-      source: 'preview-console',
-      fileLabel: rawUrl || effectiveSrc || 'preview',
+      source: "preview-console",
+      fileLabel: rawUrl || effectiveSrc || "preview",
       startLine: 1,
       endLine: Math.max(1, consoleEvents.length),
       code: `${header}${text}`,
-      language: 'text',
-      text: t('contextPanel.preview.console.attachAnnotation'),
-    });
-    toast.success(t('contextPanel.preview.console.attached'));
-  }, [addInlineCommentDraft, consoleEvents, currentSessionId, effectiveSrc, newSessionDraftOpen, rawUrl, t]);
+      language: "text",
+      text: t("contextPanel.preview.console.attachAnnotation"),
+    })
+    toast.success(t("contextPanel.preview.console.attached"))
+  }, [addInlineCommentDraft, consoleEvents, currentSessionId, effectiveSrc, newSessionDraftOpen, rawUrl, t])
 
   // Out-of-band upstream probe: iframes don't expose HTTP status to the parent,
   // so when the proxy returns a 502 (upstream dev server is offline) the iframe
   // would just render the raw JSON error body. Probe the proxy URL with a HEAD
   // request and surface a friendly overlay when the upstream is unreachable.
-  type UpstreamState = 'unknown' | 'starting' | 'reachable' | 'unreachable';
-  const [upstreamState, setUpstreamState] = React.useState<UpstreamState>('unknown');
-  const upstreamProbeStartedAtRef = React.useRef<number>(0);
-  const upstreamProbeAttemptRef = React.useRef<number>(0);
-  const PREVIEW_STARTUP_GRACE_MS = 15_000;
+  type UpstreamState = "unknown" | "starting" | "reachable" | "unreachable"
+  const [upstreamState, setUpstreamState] = React.useState<UpstreamState>("unknown")
+  const upstreamProbeStartedAtRef = React.useRef<number>(0)
+  const upstreamProbeAttemptRef = React.useRef<number>(0)
+  const PREVIEW_STARTUP_GRACE_MS = 15_000
 
   React.useEffect(() => {
     if (!proxySrc) {
-      setUpstreamState('unknown');
-      upstreamProbeStartedAtRef.current = 0;
-      upstreamProbeAttemptRef.current = 0;
-      return;
+      setUpstreamState("unknown")
+      upstreamProbeStartedAtRef.current = 0
+      upstreamProbeAttemptRef.current = 0
+      return
     }
 
-    let cancelled = false;
+    let cancelled = false
     if (!upstreamProbeStartedAtRef.current) {
-      upstreamProbeStartedAtRef.current = Date.now();
-      upstreamProbeAttemptRef.current = 0;
+      upstreamProbeStartedAtRef.current = Date.now()
+      upstreamProbeAttemptRef.current = 0
     }
-    setUpstreamState('unknown');
+    setUpstreamState("unknown")
 
     void (async () => {
       const probe = async (): Promise<Response | null> => {
         try {
           return await fetch(proxySrc, {
-            method: 'GET',
-            credentials: 'include',
-            cache: 'no-store',
-            redirect: 'manual',
-          });
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            redirect: "manual",
+          })
         } catch {
-          return null;
+          return null
         }
-      };
+      }
 
-      const response = await probe();
+      const response = await probe()
 
-      if (cancelled) return;
+      if (cancelled) return
 
       if (!response) {
         // Network-level failure (e.g. server itself is down) — treat as unreachable.
-        setUpstreamState('unreachable');
-        return;
+        setUpstreamState("unreachable")
+        return
       }
 
       if (response.status === 403 || response.status === 404) {
-        previewProxyTargetCache.delete(targetKey);
-        setProxyState({ status: 'loading' });
-        bumpProxyRegistration();
-        return;
+        previewProxyTargetCache.delete(targetKey)
+        setProxyState({ status: "loading" })
+        bumpProxyRegistration()
+        return
       }
 
       // The proxy emits 502 when the upstream is unreachable. Anything else
       // (including 4xx from the upstream) means the upstream answered.
       if (response.status !== 502) {
-        setUpstreamState('reachable');
-        return;
+        setUpstreamState("reachable")
+        return
       }
 
-      const startedAt = upstreamProbeStartedAtRef.current || Date.now();
-      const elapsed = Date.now() - startedAt;
+      const startedAt = upstreamProbeStartedAtRef.current || Date.now()
+      const elapsed = Date.now() - startedAt
       if (elapsed < PREVIEW_STARTUP_GRACE_MS) {
         // Dev servers can take a moment to bind. During the grace window,
         // keep retrying and show a softer "starting" state.
-        setUpstreamState('starting');
-        upstreamProbeAttemptRef.current += 1;
-        const attempt = upstreamProbeAttemptRef.current;
-        const delay = Math.min(2000, 250 * Math.pow(2, Math.min(4, attempt)));
+        setUpstreamState("starting")
+        upstreamProbeAttemptRef.current += 1
+        const attempt = upstreamProbeAttemptRef.current
+        const delay = Math.min(2000, 250 * Math.pow(2, Math.min(4, attempt)))
         setTimeout(() => {
           if (!cancelled) {
-            bumpReload();
+            bumpReload()
           }
-        }, delay).unref?.();
-        return;
+        }, delay).unref?.()
+        return
       }
 
-      setUpstreamState('unreachable');
-    })();
+      setUpstreamState("unreachable")
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [proxySrc, reloadNonce, targetKey]);
-
-  const showUpstreamStarting = isLoopback
-    && proxyState.status === 'ready'
-    && (upstreamState === 'unknown' || upstreamState === 'starting');
-
-  const showUpstreamUnreachable = isLoopback
-    && proxyState.status === 'ready'
-    && upstreamState === 'unreachable';
-
-  const handlePreviewFrameLoad = React.useCallback((event: React.SyntheticEvent<HTMLIFrameElement>) => {
-    if (!isLoopback || proxyState.status !== 'ready') {
-      return;
+      cancelled = true
     }
-    if (typeof window === 'undefined') {
-      return;
-    }
+  }, [proxySrc, reloadNonce, targetKey])
 
-    const frameWindow = event.currentTarget.contentWindow;
-    if (!frameWindow) {
-      return;
-    }
+  const showUpstreamStarting =
+    isLoopback && proxyState.status === "ready" && (upstreamState === "unknown" || upstreamState === "starting")
 
-    try {
-      const location = frameWindow.location;
-      if (location.origin !== window.location.origin) {
-        return;
+  const showUpstreamUnreachable = isLoopback && proxyState.status === "ready" && upstreamState === "unreachable"
+
+  const handlePreviewFrameLoad = React.useCallback(
+    (event: React.SyntheticEvent<HTMLIFrameElement>) => {
+      if (!isLoopback || proxyState.status !== "ready") {
+        return
       }
-      if (location.pathname.startsWith(proxyState.proxyBasePath)) {
-        return;
+      if (typeof window === "undefined") {
+        return
       }
 
-      const nextPath = `${proxyState.proxyBasePath}${location.pathname}${location.search}${location.hash}`;
-      frameWindow.location.replace(nextPath);
-    } catch {
-      // Cross-origin frames are expected for non-loopback/direct previews.
-    }
-  }, [isLoopback, proxyState]);
+      const frameWindow = event.currentTarget.contentWindow
+      if (!frameWindow) {
+        return
+      }
+
+      try {
+        const location = frameWindow.location
+        if (location.origin !== window.location.origin) {
+          return
+        }
+        if (location.pathname.startsWith(proxyState.proxyBasePath)) {
+          return
+        }
+
+        const nextPath = `${proxyState.proxyBasePath}${location.pathname}${location.search}${location.hash}`
+        frameWindow.location.replace(nextPath)
+      } catch {
+        // Cross-origin frames are expected for non-loopback/direct previews.
+      }
+    },
+    [isLoopback, proxyState],
+  )
 
   return (
     <div className="absolute inset-0 flex flex-col">
       <div className="flex items-center gap-1 border-b border-border/40 bg-[var(--surface-background)] px-2 py-1">
         <div className="min-w-0 flex-1 truncate typography-micro text-muted-foreground" title={headerSrc || rawUrl}>
-          {headerSrc || rawUrl || t('contextPanel.preview.empty')}
+          {headerSrc || rawUrl || t("contextPanel.preview.empty")}
         </div>
         <Button
           type="button"
@@ -972,8 +976,8 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
           variant="ghost"
           className="h-7 w-7 p-0"
           onClick={() => bumpReload()}
-          title={t('contextPanel.preview.actions.reload')}
-          aria-label={t('contextPanel.preview.actions.reload')}
+          title={t("contextPanel.preview.actions.reload")}
+          aria-label={t("contextPanel.preview.actions.reload")}
           disabled={!effectiveSrc}
         >
           <Icon name="refresh" className="h-3.5 w-3.5" />
@@ -984,11 +988,11 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
           variant="ghost"
           className="h-7 w-7 p-0"
           onClick={() => {
-            if (!directSrc) return;
-            void openExternalUrl(directSrc);
+            if (!directSrc) return
+            void openExternalUrl(directSrc)
           }}
-          title={t('contextPanel.preview.actions.openExternal')}
-          aria-label={t('contextPanel.preview.actions.openExternal')}
+          title={t("contextPanel.preview.actions.openExternal")}
+          aria-label={t("contextPanel.preview.actions.openExternal")}
           disabled={!directSrc}
         >
           <Icon name="external-link" className="h-3.5 w-3.5" />
@@ -997,11 +1001,11 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
           <Button
             type="button"
             size="sm"
-            variant={inspectMode ? 'secondary' : 'ghost'}
+            variant={inspectMode ? "secondary" : "ghost"}
             className="h-7 gap-1 px-2"
             onClick={() => setInspectMode((value) => !value)}
-            title={t('contextPanel.preview.inspect.toggle')}
-            aria-label={t('contextPanel.preview.inspect.toggle')}
+            title={t("contextPanel.preview.inspect.toggle")}
+            aria-label={t("contextPanel.preview.inspect.toggle")}
             disabled={!bridgeReady}
           >
             <Icon name="cursor" className="h-3.5 w-3.5" />
@@ -1011,11 +1015,13 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
           <Button
             type="button"
             size="sm"
-            variant={consoleOpen ? 'secondary' : 'ghost'}
+            variant={consoleOpen ? "secondary" : "ghost"}
             className="h-7 gap-1 px-2"
             onClick={() => setConsoleOpen((value) => !value)}
-            title={bridgeReady ? t('contextPanel.preview.console.open') : t('contextPanel.preview.console.waiting')}
-            aria-label={bridgeReady ? t('contextPanel.preview.console.open') : t('contextPanel.preview.console.waiting')}
+            title={bridgeReady ? t("contextPanel.preview.console.open") : t("contextPanel.preview.console.waiting")}
+            aria-label={
+              bridgeReady ? t("contextPanel.preview.console.open") : t("contextPanel.preview.console.waiting")
+            }
             disabled={!bridgeReady && consoleEvents.length === 0}
           >
             <Icon name="terminal-box" className="h-3.5 w-3.5" />
@@ -1028,35 +1034,32 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
       <div className="relative min-h-0 flex-1 bg-background">
         {showUpstreamStarting ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
-            <div>{t('contextPanel.preview.startingServer')}</div>
-            <div className="text-xs opacity-70">{t('contextPanel.preview.startingServerHint')}</div>
+            <div>{t("contextPanel.preview.startingServer")}</div>
+            <div className="text-xs opacity-70">{t("contextPanel.preview.startingServerHint")}</div>
           </div>
         ) : showUpstreamUnreachable ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
-            <div>{t('contextPanel.preview.upstreamUnreachable')}</div>
-            <div className="text-xs opacity-70">{t('contextPanel.preview.upstreamUnreachableHint')}</div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => bumpReload()}
-            >
-              {t('contextPanel.preview.actions.retry')}
+            <div>{t("contextPanel.preview.upstreamUnreachable")}</div>
+            <div className="text-xs opacity-70">{t("contextPanel.preview.upstreamUnreachableHint")}</div>
+            <Button type="button" size="sm" variant="outline" onClick={() => bumpReload()}>
+              {t("contextPanel.preview.actions.retry")}
             </Button>
           </div>
-        ) : effectiveSrc && (!isLoopback || upstreamState === 'reachable') ? (
+        ) : effectiveSrc && (!isLoopback || upstreamState === "reachable") ? (
           <div className="relative h-full w-full">
             <iframe
               ref={iframeRef}
               key={`${effectiveSrc}:${reloadNonce}`}
               src={effectiveSrc}
-              title={t('contextPanel.preview.iframeTitle')}
+              title={t("contextPanel.preview.iframeTitle")}
               className="h-full w-full border-0"
               style={{ colorScheme: previewColorScheme }}
               onLoad={handlePreviewFrameLoad}
-              sandbox={isLoopback
-                ? 'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads'
-                : 'allow-scripts allow-forms'}
+              sandbox={
+                isLoopback
+                  ? "allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+                  : "allow-scripts allow-forms"
+              }
             />
             {inspectMode && hoverTarget ? (
               <div
@@ -1069,31 +1072,32 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
                 }}
               >
                 <div className="absolute -top-6 left-0 max-w-64 truncate rounded bg-[var(--surface-elevated)] px-2 py-0.5 typography-micro text-foreground shadow">
-                  {hoverTarget.tag}{hoverTarget.text ? ` · ${hoverTarget.text}` : ''}
+                  {hoverTarget.tag}
+                  {hoverTarget.text ? ` · ${hoverTarget.text}` : ""}
                 </div>
               </div>
             ) : null}
           </div>
         ) : showLoading ? (
           <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-            {t('contextPanel.preview.loading')}
+            {t("contextPanel.preview.loading")}
           </div>
         ) : showError ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-sm text-muted-foreground">
-            <div>{t('contextPanel.preview.proxyError')}</div>
-            {proxyState.status === 'error' ? (
+            <div>{t("contextPanel.preview.proxyError")}</div>
+            {proxyState.status === "error" ? (
               <div className="text-center text-xs opacity-70">{proxyState.message}</div>
             ) : null}
           </div>
         ) : (
           <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-            {t('contextPanel.preview.invalidUrl')}
+            {t("contextPanel.preview.invalidUrl")}
           </div>
         )}
         {consoleOpen ? (
           <div className="absolute inset-x-3 bottom-3 z-10 max-h-[45%] overflow-hidden rounded-xl border border-border/70 bg-[var(--surface-elevated)] shadow-lg">
             <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
-              <div className="typography-ui-label text-foreground">{t('contextPanel.preview.console.title')}</div>
+              <div className="typography-ui-label text-foreground">{t("contextPanel.preview.console.title")}</div>
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -1102,7 +1106,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
                   onClick={attachConsoleEvents}
                   disabled={consoleEvents.length === 0}
                 >
-                  {t('contextPanel.preview.console.attach')}
+                  {t("contextPanel.preview.console.attach")}
                 </Button>
                 <Button
                   type="button"
@@ -1111,7 +1115,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
                   onClick={copyConsoleEvents}
                   disabled={consoleEvents.length === 0}
                 >
-                  {t('contextPanel.preview.console.copy')}
+                  {t("contextPanel.preview.console.copy")}
                 </Button>
                 <Button
                   type="button"
@@ -1120,468 +1124,543 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
                   onClick={() => setConsoleEvents([])}
                   disabled={consoleEvents.length === 0}
                 >
-                  {t('contextPanel.preview.console.clear')}
+                  {t("contextPanel.preview.console.clear")}
                 </Button>
               </div>
             </div>
             <div className="flex items-center gap-1 border-b border-border/30 px-3 py-1.5">
-              {(['all', 'errors', 'warnings', 'logs'] as const).map((filter) => (
+              {(["all", "errors", "warnings", "logs"] as const).map((filter) => (
                 <Button
                   key={filter}
                   type="button"
                   size="xs"
-                  variant={consoleFilter === filter ? 'secondary' : 'ghost'}
+                  variant={consoleFilter === filter ? "secondary" : "ghost"}
                   onClick={() => setConsoleFilter(filter)}
                 >
-                  {filter === 'all'
-                    ? t('contextPanel.preview.console.filter.all')
-                    : filter === 'errors'
-                      ? t('contextPanel.preview.console.filter.errors')
-                      : filter === 'warnings'
-                        ? t('contextPanel.preview.console.filter.warnings')
-                        : t('contextPanel.preview.console.filter.logs')}
+                  {filter === "all"
+                    ? t("contextPanel.preview.console.filter.all")
+                    : filter === "errors"
+                      ? t("contextPanel.preview.console.filter.errors")
+                      : filter === "warnings"
+                        ? t("contextPanel.preview.console.filter.warnings")
+                        : t("contextPanel.preview.console.filter.logs")}
                 </Button>
               ))}
             </div>
             <div className="max-h-64 overflow-auto p-2 typography-code text-xs">
               {consoleEvents.length === 0 ? (
-                <div className="px-2 py-3 text-muted-foreground">{t('contextPanel.preview.console.empty')}</div>
+                <div className="px-2 py-3 text-muted-foreground">{t("contextPanel.preview.console.empty")}</div>
               ) : filteredConsoleEvents.length === 0 ? (
-                <div className="px-2 py-3 text-muted-foreground">{t('contextPanel.preview.console.noFilteredEvents')}</div>
-              ) : filteredConsoleEvents.map((event) => (
-                <div key={event.id} className="border-b border-border/30 px-2 py-1 last:border-b-0">
-                  <div className="flex gap-2">
-                    <span className={cn(
-                      'shrink-0 uppercase',
-                      event.level === 'error' || event.level === 'runtime' || event.level === 'resource'
-                        ? 'text-status-error'
-                        : event.level === 'warn'
-                          ? 'text-status-warning'
-                          : 'text-muted-foreground'
-                    )}>
-                      {event.level}
-                    </span>
-                    <span className="min-w-0 break-words text-foreground">{event.message}</span>
-                  </div>
+                <div className="px-2 py-3 text-muted-foreground">
+                  {t("contextPanel.preview.console.noFilteredEvents")}
                 </div>
-              ))}
+              ) : (
+                filteredConsoleEvents.map((event) => (
+                  <div key={event.id} className="border-b border-border/30 px-2 py-1 last:border-b-0">
+                    <div className="flex gap-2">
+                      <span
+                        className={cn(
+                          "shrink-0 uppercase",
+                          event.level === "error" || event.level === "runtime" || event.level === "resource"
+                            ? "text-status-error"
+                            : event.level === "warn"
+                              ? "text-status-warning"
+                              : "text-muted-foreground",
+                        )}
+                      >
+                        {event.level}
+                      </span>
+                      <span className="min-w-0 break-words text-foreground">{event.message}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         ) : null}
       </div>
     </div>
-  );
-};
+  )
+}
 
 type DesktopBrowserPaneProps = {
-  initialUrl: string;
-  directory: string;
-  tabID: string;
-};
+  initialUrl: string
+  directory: string
+  tabID: string
+}
 
 const isElectronBrowserRuntime = (): boolean => {
-  return typeof window !== 'undefined' && Boolean(window.__AX_CODE_DESKTOP_ELECTRON__);
-};
+  return typeof window !== "undefined" && Boolean(window.__AX_CODE_DESKTOP_ELECTRON__)
+}
 
 const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, directory, tabID }) => {
-  const { t } = useI18n();
-  const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
-  const setContextPanelTabTargetPath = useUIStore((state) => state.setContextPanelTabTargetPath);
-  const normalized = normalizeBrowserUrl(initialUrl);
-  const startUrl = normalized !== 'about:blank' ? normalized : '';
-  const [urlInput, setUrlInput] = React.useState(startUrl);
-  const [currentUrl, setCurrentUrl] = React.useState(startUrl);
-  const [history, setHistory] = React.useState<string[]>(() => startUrl ? [startUrl] : []);
-  const [historyIndex, setHistoryIndex] = React.useState(() => startUrl ? 0 : -1);
-  const [reloadNonce, bumpReload] = React.useReducer((value: number) => value + 1, 0);
-  const [isLoading, setIsLoading] = React.useState(Boolean(startUrl));
-  const [isInspecting, setIsInspecting] = React.useState(false);
-  const [hoverTarget, setHoverTarget] = React.useState<PreviewElementMetadata | null>(null);
-  const [proxyState, setProxyState] = React.useState<PreviewProxyState>({ status: 'idle' });
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open);
-  const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft);
-  const addAttachedFile = useInputStore((state) => state.addAttachedFile);
+  const { t } = useI18n()
+  const iframeRef = React.useRef<HTMLIFrameElement | null>(null)
+  const setContextPanelTabTargetPath = useUIStore((state) => state.setContextPanelTabTargetPath)
+  const normalized = normalizeBrowserUrl(initialUrl)
+  const startUrl = normalized !== "about:blank" ? normalized : ""
+  const [urlInput, setUrlInput] = React.useState(startUrl)
+  const [currentUrl, setCurrentUrl] = React.useState(startUrl)
+  const [history, setHistory] = React.useState<string[]>(() => (startUrl ? [startUrl] : []))
+  const [historyIndex, setHistoryIndex] = React.useState(() => (startUrl ? 0 : -1))
+  const [reloadNonce, bumpReload] = React.useReducer((value: number) => value + 1, 0)
+  const [isLoading, setIsLoading] = React.useState(Boolean(startUrl))
+  const [isInspecting, setIsInspecting] = React.useState(false)
+  const [hoverTarget, setHoverTarget] = React.useState<PreviewElementMetadata | null>(null)
+  const [proxyState, setProxyState] = React.useState<PreviewProxyState>({ status: "idle" })
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open)
+  const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft)
+  const addAttachedFile = useInputStore((state) => state.addAttachedFile)
 
-  const persistUrl = React.useCallback((url: string) => {
-    if (!url || url === 'about:blank' || !directory || !tabID) return;
-    setContextPanelTabTargetPath(directory, tabID, url);
-  }, [directory, tabID, setContextPanelTabTargetPath]);
+  const persistUrl = React.useCallback(
+    (url: string) => {
+      if (!url || url === "about:blank" || !directory || !tabID) return
+      setContextPanelTabTargetPath(directory, tabID, url)
+    },
+    [directory, tabID, setContextPanelTabTargetPath],
+  )
 
-  const applyUrl = React.useCallback((url: string, options?: { replaceHistory?: boolean }) => {
-    const normalizedUrl = normalizeBrowserUrl(url);
-    const nextUrl = normalizedUrl !== 'about:blank' ? normalizedUrl : '';
-    setCurrentUrl(nextUrl);
-    setUrlInput(nextUrl);
-    setIsLoading(Boolean(nextUrl));
-    persistUrl(nextUrl);
+  const applyUrl = React.useCallback(
+    (url: string, options?: { replaceHistory?: boolean }) => {
+      const normalizedUrl = normalizeBrowserUrl(url)
+      const nextUrl = normalizedUrl !== "about:blank" ? normalizedUrl : ""
+      setCurrentUrl(nextUrl)
+      setUrlInput(nextUrl)
+      setIsLoading(Boolean(nextUrl))
+      persistUrl(nextUrl)
 
-    setHistory((current) => {
-      if (!nextUrl) {
-        setHistoryIndex(-1);
-        return [];
-      }
+      setHistory((current) => {
+        if (!nextUrl) {
+          setHistoryIndex(-1)
+          return []
+        }
 
-      if (options?.replaceHistory) {
-        return current;
-      }
+        if (options?.replaceHistory) {
+          return current
+        }
 
-      const kept = historyIndex >= 0 ? current.slice(0, historyIndex + 1) : [];
-      const previous = kept[kept.length - 1];
-      if (previous === nextUrl) {
-        setHistoryIndex(kept.length - 1);
-        return kept;
-      }
+        const kept = historyIndex >= 0 ? current.slice(0, historyIndex + 1) : []
+        const previous = kept[kept.length - 1]
+        if (previous === nextUrl) {
+          setHistoryIndex(kept.length - 1)
+          return kept
+        }
 
-      const nextHistory = [...kept, nextUrl];
-      setHistoryIndex(nextHistory.length - 1);
-      return nextHistory;
-    });
-  }, [historyIndex, persistUrl]);
+        const nextHistory = [...kept, nextUrl]
+        setHistoryIndex(nextHistory.length - 1)
+        return nextHistory
+      })
+    },
+    [historyIndex, persistUrl],
+  )
 
-  const goToHistory = React.useCallback((nextIndex: number) => {
-    const nextUrl = history[nextIndex];
-    if (!nextUrl) return;
-    setHistoryIndex(nextIndex);
-    setCurrentUrl(nextUrl);
-    setUrlInput(nextUrl);
-    setIsLoading(true);
-    persistUrl(nextUrl);
-  }, [history, persistUrl]);
+  const goToHistory = React.useCallback(
+    (nextIndex: number) => {
+      const nextUrl = history[nextIndex]
+      if (!nextUrl) return
+      setHistoryIndex(nextIndex)
+      setCurrentUrl(nextUrl)
+      setUrlInput(nextUrl)
+      setIsLoading(true)
+      persistUrl(nextUrl)
+    },
+    [history, persistUrl],
+  )
 
   const handleReload = React.useCallback(() => {
-    if (!currentUrl) return;
-    setIsLoading(true);
+    if (!currentUrl) return
+    setIsLoading(true)
     try {
-      iframeRef.current?.contentWindow?.location.reload();
+      iframeRef.current?.contentWindow?.location.reload()
     } catch {
-      bumpReload();
+      bumpReload()
     }
-  }, [currentUrl]);
+  }, [currentUrl])
 
   React.useEffect(() => {
     if (!currentUrl) {
-      setProxyState({ status: 'idle' });
-      return;
+      setProxyState({ status: "idle" })
+      return
     }
 
-    const proxyTargetKey = getBrowserProxyTargetKey(currentUrl);
-    const cached = getCachedProxyTarget(proxyTargetKey);
+    const proxyTargetKey = getBrowserProxyTargetKey(currentUrl)
+    const cached = getCachedProxyTarget(proxyTargetKey)
     if (cached) {
-      setProxyState({ status: 'ready', proxyBasePath: cached.proxyBasePath, expiresAt: cached.expiresAt });
-      return;
+      setProxyState({ status: "ready", proxyBasePath: cached.proxyBasePath, expiresAt: cached.expiresAt })
+      return
     }
 
-    let cancelled = false;
-    setProxyState({ status: 'loading' });
-    setIsLoading(true);
+    let cancelled = false
+    setProxyState({ status: "loading" })
+    setIsLoading(true)
 
     void (async () => {
       try {
         const response = await fetch(API_ENDPOINTS.preview.targets, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ url: currentUrl, allowExternal: true }),
-        });
+        })
 
         if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
-          const message = typeof errorBody?.error === 'string'
-            ? errorBody.error
-            : `HTTP ${response.status}`;
+          const errorBody = await response.json().catch(() => ({}))
+          const message = typeof errorBody?.error === "string" ? errorBody.error : `HTTP ${response.status}`
           if (!cancelled) {
-            setProxyState({ status: 'error', message });
+            setProxyState({ status: "error", message })
           }
-          return;
+          return
         }
 
-        const body = await response.json() as { proxyBasePath?: unknown; expiresAt?: unknown };
-        const proxyBasePath = typeof body.proxyBasePath === 'string' ? body.proxyBasePath : '';
-        const expiresAt = typeof body.expiresAt === 'number' ? body.expiresAt : 0;
+        const body = (await response.json()) as { proxyBasePath?: unknown; expiresAt?: unknown }
+        const proxyBasePath = typeof body.proxyBasePath === "string" ? body.proxyBasePath : ""
+        const expiresAt = typeof body.expiresAt === "number" ? body.expiresAt : 0
         if (!proxyBasePath) {
           if (!cancelled) {
-            setProxyState({ status: 'error', message: t('contextPanel.preview.proxyError') });
+            setProxyState({ status: "error", message: t("contextPanel.preview.proxyError") })
           }
-          return;
+          return
         }
 
-        previewProxyTargetCache.set(proxyTargetKey, { proxyBasePath, expiresAt });
+        previewProxyTargetCache.set(proxyTargetKey, { proxyBasePath, expiresAt })
         if (!cancelled) {
-          setProxyState({ status: 'ready', proxyBasePath, expiresAt });
+          setProxyState({ status: "ready", proxyBasePath, expiresAt })
         }
       } catch (error) {
         if (!cancelled) {
-          const message = error instanceof Error ? error.message : String(error);
-          setProxyState({ status: 'error', message });
+          const message = error instanceof Error ? error.message : String(error)
+          setProxyState({ status: "error", message })
         }
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [currentUrl, t]);
+      cancelled = true
+    }
+  }, [currentUrl, t])
 
   const proxySrc = React.useMemo(() => {
-    if (!currentUrl || proxyState.status !== 'ready') return '';
+    if (!currentUrl || proxyState.status !== "ready") return ""
     try {
-      const parsed = new URL(currentUrl);
-      const path = parsed.pathname || '/';
-      return `${proxyState.proxyBasePath}${path}${parsed.search}${parsed.hash}`;
+      const parsed = new URL(currentUrl)
+      const path = parsed.pathname || "/"
+      return `${proxyState.proxyBasePath}${path}${parsed.search}${parsed.hash}`
     } catch {
-      return '';
+      return ""
     }
-  }, [currentUrl, proxyState]);
+  }, [currentUrl, proxyState])
 
-  const iframeSrc = proxySrc || (proxyState.status === 'error' ? currentUrl : '');
+  const iframeSrc = proxySrc || (proxyState.status === "error" ? currentUrl : "")
 
-  const getCurrentUrlFromFrameUrl = React.useCallback((frameUrl: string): string => {
-    if (!frameUrl || !currentUrl || proxyState.status !== 'ready') return '';
-    try {
-      const parsedFrameUrl = new URL(frameUrl, window.location.origin);
-      const proxyBasePath = proxyState.proxyBasePath.endsWith('/')
-        ? proxyState.proxyBasePath.slice(0, -1)
-        : proxyState.proxyBasePath;
-      if (parsedFrameUrl.origin !== window.location.origin || !parsedFrameUrl.pathname.startsWith(proxyBasePath)) {
-        return '';
+  const getCurrentUrlFromFrameUrl = React.useCallback(
+    (frameUrl: string): string => {
+      if (!frameUrl || !currentUrl || proxyState.status !== "ready") return ""
+      try {
+        const parsedFrameUrl = new URL(frameUrl, window.location.origin)
+        const proxyBasePath = proxyState.proxyBasePath.endsWith("/")
+          ? proxyState.proxyBasePath.slice(0, -1)
+          : proxyState.proxyBasePath
+        if (parsedFrameUrl.origin !== window.location.origin || !parsedFrameUrl.pathname.startsWith(proxyBasePath)) {
+          return ""
+        }
+
+        const rest = parsedFrameUrl.pathname.slice(proxyBasePath.length) || "/"
+        const upstreamOrigin = new URL(currentUrl).origin
+        return new URL(`${rest}${parsedFrameUrl.search}${parsedFrameUrl.hash}`, upstreamOrigin).toString()
+      } catch {
+        return ""
       }
+    },
+    [currentUrl, proxyState],
+  )
 
-      const rest = parsedFrameUrl.pathname.slice(proxyBasePath.length) || '/';
-      const upstreamOrigin = new URL(currentUrl).origin;
-      return new URL(`${rest}${parsedFrameUrl.search}${parsedFrameUrl.hash}`, upstreamOrigin).toString();
-    } catch {
-      return '';
-    }
-  }, [currentUrl, proxyState]);
+  const getUpstreamUrlFromLocalFrameUrl = React.useCallback(
+    (frameUrl: string): string => {
+      if (!frameUrl || !currentUrl || proxyState.status !== "ready") return ""
+      try {
+        const parsedFrameUrl = new URL(frameUrl, window.location.origin)
+        const upstreamOrigin = new URL(currentUrl).origin
+        if (parsedFrameUrl.origin !== window.location.origin || upstreamOrigin === window.location.origin) {
+          return ""
+        }
 
-  const getUpstreamUrlFromLocalFrameUrl = React.useCallback((frameUrl: string): string => {
-    if (!frameUrl || !currentUrl || proxyState.status !== 'ready') return '';
-    try {
-      const parsedFrameUrl = new URL(frameUrl, window.location.origin);
-      const upstreamOrigin = new URL(currentUrl).origin;
-      if (parsedFrameUrl.origin !== window.location.origin || upstreamOrigin === window.location.origin) {
-        return '';
+        const proxyBasePath = proxyState.proxyBasePath.endsWith("/")
+          ? proxyState.proxyBasePath.slice(0, -1)
+          : proxyState.proxyBasePath
+        if (parsedFrameUrl.pathname.startsWith(proxyBasePath)) {
+          return ""
+        }
+
+        return new URL(
+          `${parsedFrameUrl.pathname}${parsedFrameUrl.search}${parsedFrameUrl.hash}`,
+          upstreamOrigin,
+        ).toString()
+      } catch {
+        return ""
       }
-
-      const proxyBasePath = proxyState.proxyBasePath.endsWith('/')
-        ? proxyState.proxyBasePath.slice(0, -1)
-        : proxyState.proxyBasePath;
-      if (parsedFrameUrl.pathname.startsWith(proxyBasePath)) {
-        return '';
-      }
-
-      return new URL(`${parsedFrameUrl.pathname}${parsedFrameUrl.search}${parsedFrameUrl.hash}`, upstreamOrigin).toString();
-    } catch {
-      return '';
-    }
-  }, [currentUrl, proxyState]);
+    },
+    [currentUrl, proxyState],
+  )
 
   const postInspectMode = React.useCallback((enabled: boolean) => {
-    const frameWindow = iframeRef.current?.contentWindow;
-    if (!frameWindow) return;
-    frameWindow.postMessage({
-      source: 'openchamber-preview-parent',
-      version: 1,
-      type: 'set-inspect-mode',
-      enabled,
-    }, window.location.origin);
-  }, []);
+    const frameWindow = iframeRef.current?.contentWindow
+    if (!frameWindow) return
+    frameWindow.postMessage(
+      {
+        source: "openchamber-preview-parent",
+        version: 1,
+        type: "set-inspect-mode",
+        enabled,
+      },
+      window.location.origin,
+    )
+  }, [])
 
-  const attachBrowserAnnotation = React.useCallback(async (target: PreviewElementMetadata) => {
-    const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
-    if (!sessionKey) {
-      toast.error(t('contextPanel.preview.inspect.attachNoSession'));
-      return;
-    }
+  const attachBrowserAnnotation = React.useCallback(
+    async (target: PreviewElementMetadata) => {
+      const sessionKey = currentSessionId ?? (newSessionDraftOpen ? "draft" : null)
+      if (!sessionKey) {
+        toast.error(t("contextPanel.preview.inspect.attachNoSession"))
+        return
+      }
 
-    const iframe = iframeRef.current;
-    const frameWindow = iframe?.contentWindow;
-    const rect = iframe?.getBoundingClientRect();
-    const viewport = {
-      width: Number.isFinite(frameWindow?.innerWidth) ? frameWindow?.innerWidth ?? rect?.width ?? 0 : rect?.width ?? 0,
-      height: Number.isFinite(frameWindow?.innerHeight) ? frameWindow?.innerHeight ?? rect?.height ?? 0 : rect?.height ?? 0,
-    };
+      const iframe = iframeRef.current
+      const frameWindow = iframe?.contentWindow
+      const rect = iframe?.getBoundingClientRect()
+      const viewport = {
+        width: Number.isFinite(frameWindow?.innerWidth)
+          ? (frameWindow?.innerWidth ?? rect?.width ?? 0)
+          : (rect?.width ?? 0),
+        height: Number.isFinite(frameWindow?.innerHeight)
+          ? (frameWindow?.innerHeight ?? rect?.height ?? 0)
+          : (rect?.height ?? 0),
+      }
 
-    const file = iframe ? await renderPreviewScreenshot(iframe, target) : null;
-    const screenshotAttached = Boolean(file);
-    if (file) {
-      await addAttachedFile(file);
-    }
+      const file = iframe ? await renderPreviewScreenshot(iframe, target) : null
+      const screenshotAttached = Boolean(file)
+      if (file) {
+        await addAttachedFile(file)
+      }
 
-    addInlineCommentDraft({
-      sessionKey,
-      source: 'preview-annotation',
-      fileLabel: currentUrl || 'browser',
-      startLine: 1,
-      endLine: 1,
-      code: formatPreviewAnnotationMarkdown({
-        pageUrl: currentUrl,
-        viewport,
-        devicePixelRatio: window.devicePixelRatio || 1,
-        target,
-        screenshotAttached,
-        intro: t(screenshotAttached
-          ? 'contextPanel.preview.inspect.attachAnnotationWithScreenshot'
-          : 'contextPanel.preview.inspect.attachAnnotation'),
-      }),
-      language: 'markdown',
-      text: '',
-    });
-    toast.success(t('contextPanel.preview.inspect.attached'));
-  }, [addAttachedFile, addInlineCommentDraft, currentSessionId, currentUrl, newSessionDraftOpen, t]);
+      addInlineCommentDraft({
+        sessionKey,
+        source: "preview-annotation",
+        fileLabel: currentUrl || "browser",
+        startLine: 1,
+        endLine: 1,
+        code: formatPreviewAnnotationMarkdown({
+          pageUrl: currentUrl,
+          viewport,
+          devicePixelRatio: window.devicePixelRatio || 1,
+          target,
+          screenshotAttached,
+          intro: t(
+            screenshotAttached
+              ? "contextPanel.preview.inspect.attachAnnotationWithScreenshot"
+              : "contextPanel.preview.inspect.attachAnnotation",
+          ),
+        }),
+        language: "markdown",
+        text: "",
+      })
+      toast.success(t("contextPanel.preview.inspect.attached"))
+    },
+    [addAttachedFile, addInlineCommentDraft, currentSessionId, currentUrl, newSessionDraftOpen, t],
+  )
 
   const cancelInspect = React.useCallback(() => {
-    const iframe = iframeRef.current;
-    setHoverTarget(null);
-    postInspectMode(false);
-    if (!iframe) return;
-    void runIframeScript<unknown>(iframe, DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT).catch(() => {});
-  }, [postInspectMode]);
+    const iframe = iframeRef.current
+    setHoverTarget(null)
+    postInspectMode(false)
+    if (!iframe) return
+    void runIframeScript<unknown>(iframe, DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT).catch(() => {})
+  }, [postInspectMode])
 
   React.useEffect(() => {
-    if (!isInspecting) return;
+    if (!isInspecting) return
     const handler = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setIsInspecting(false);
-      cancelInspect();
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
-  }, [cancelInspect, isInspecting]);
+      if (event.key !== "Escape") return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      setIsInspecting(false)
+      cancelInspect()
+    }
+    window.addEventListener("keydown", handler, true)
+    return () => window.removeEventListener("keydown", handler, true)
+  }, [cancelInspect, isInspecting])
 
-  React.useEffect(() => () => cancelInspect(), [cancelInspect]);
+  React.useEffect(() => () => cancelInspect(), [cancelInspect])
 
   React.useEffect(() => {
     const handler = (event: MessageEvent<PreviewBridgeMessage>) => {
-      if (event.source !== iframeRef.current?.contentWindow) return;
-      const data = event.data;
-      if (!data || data.source !== 'openchamber-preview-bridge' || data.version !== 1) return;
+      if (event.source !== iframeRef.current?.contentWindow) return
+      const data = event.data
+      if (!data || data.source !== "openchamber-preview-bridge" || data.version !== 1) return
 
-      if (data.type === 'ready') {
-        const frameUrl = typeof data.url === 'string' ? data.url : '';
-        const nextUrl = getCurrentUrlFromFrameUrl(frameUrl);
+      if (data.type === "ready") {
+        const frameUrl = typeof data.url === "string" ? data.url : ""
+        const nextUrl = getCurrentUrlFromFrameUrl(frameUrl)
         if (nextUrl && nextUrl !== currentUrl) {
-          applyUrl(nextUrl);
+          applyUrl(nextUrl)
         }
-        return;
+        return
       }
 
-      if (data.type === 'hover') {
-        setHoverTarget(isPreviewElementMetadata(data.target) ? data.target : null);
-        return;
+      if (data.type === "hover") {
+        setHoverTarget(isPreviewElementMetadata(data.target) ? data.target : null)
+        return
       }
 
-      if (data.type === 'select' && isPreviewElementMetadata(data.target)) {
-        setHoverTarget(null);
-        setIsInspecting(false);
-        postInspectMode(false);
-        void attachBrowserAnnotation(data.target);
-        return;
+      if (data.type === "select" && isPreviewElementMetadata(data.target)) {
+        setHoverTarget(null)
+        setIsInspecting(false)
+        postInspectMode(false)
+        void attachBrowserAnnotation(data.target)
+        return
       }
 
-      if (data.type === 'navigate-preview') {
-        const nextUrl = typeof data.url === 'string' ? data.url : '';
-        const upstreamUrl = getUpstreamUrlFromLocalFrameUrl(nextUrl);
+      if (data.type === "navigate-preview") {
+        const nextUrl = typeof data.url === "string" ? data.url : ""
+        const upstreamUrl = getUpstreamUrlFromLocalFrameUrl(nextUrl)
         if (upstreamUrl) {
-          applyUrl(upstreamUrl);
-          return;
+          applyUrl(upstreamUrl)
+          return
         }
         if (nextUrl) {
-          applyUrl(nextUrl);
+          applyUrl(nextUrl)
         }
       }
-    };
+    }
 
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [applyUrl, attachBrowserAnnotation, currentUrl, getCurrentUrlFromFrameUrl, getUpstreamUrlFromLocalFrameUrl, postInspectMode]);
+    window.addEventListener("message", handler)
+    return () => window.removeEventListener("message", handler)
+  }, [
+    applyUrl,
+    attachBrowserAnnotation,
+    currentUrl,
+    getCurrentUrlFromFrameUrl,
+    getUpstreamUrlFromLocalFrameUrl,
+    postInspectMode,
+  ])
 
   const handleInspect = React.useCallback(() => {
-    const iframe = iframeRef.current;
-    if (!iframe || !currentUrl) return;
+    const iframe = iframeRef.current
+    if (!iframe || !currentUrl) return
 
     if (isInspecting) {
-      setIsInspecting(false);
-      cancelInspect();
-      return;
+      setIsInspecting(false)
+      cancelInspect()
+      return
     }
 
     if (proxySrc) {
-      setHoverTarget(null);
-      setIsInspecting(true);
-      postInspectMode(true);
-      return;
+      setHoverTarget(null)
+      setIsInspecting(true)
+      postInspectMode(true)
+      return
     }
 
-    setIsInspecting(true);
+    setIsInspecting(true)
     void (async () => {
       try {
-        const target = await runIframeScript<unknown>(iframe, DESKTOP_BROWSER_INSPECT_SCRIPT);
-        setIsInspecting(false);
-        if (!target || !isPreviewElementMetadata(target)) return;
-        await attachBrowserAnnotation(target);
+        const target = await runIframeScript<unknown>(iframe, DESKTOP_BROWSER_INSPECT_SCRIPT)
+        setIsInspecting(false)
+        if (!target || !isPreviewElementMetadata(target)) return
+        await attachBrowserAnnotation(target)
       } catch {
-        setIsInspecting(false);
-        toast.error(t('contextPanel.browser.inspectUnavailable'));
+        setIsInspecting(false)
+        toast.error(t("contextPanel.browser.inspectUnavailable"))
       }
-    })();
-  }, [attachBrowserAnnotation, cancelInspect, currentUrl, isInspecting, postInspectMode, proxySrc, t]);
+    })()
+  }, [attachBrowserAnnotation, cancelInspect, currentUrl, isInspecting, postInspectMode, proxySrc, t])
 
   const handleIframeLoad = React.useCallback(() => {
     try {
-      const frameUrl = iframeRef.current?.contentWindow?.location.href || '';
-      const upstreamUrl = getUpstreamUrlFromLocalFrameUrl(frameUrl);
+      const frameUrl = iframeRef.current?.contentWindow?.location.href || ""
+      const upstreamUrl = getUpstreamUrlFromLocalFrameUrl(frameUrl)
       if (upstreamUrl) {
-        setIsLoading(true);
-        applyUrl(upstreamUrl);
-        return;
+        setIsLoading(true)
+        applyUrl(upstreamUrl)
+        return
       }
     } catch {
       // Cross-origin direct iframe fallback; regular load handling still applies.
     }
 
-    setIsLoading(false);
+    setIsLoading(false)
     if (isInspecting && proxySrc) {
-      postInspectMode(true);
+      postInspectMode(true)
     }
-  }, [applyUrl, getUpstreamUrlFromLocalFrameUrl, isInspecting, postInspectMode, proxySrc]);
+  }, [applyUrl, getUpstreamUrlFromLocalFrameUrl, isInspecting, postInspectMode, proxySrc])
 
   return (
     <div className="absolute inset-0 flex flex-col bg-background">
       <div className="flex items-center gap-1 border-b border-border/40 bg-[var(--surface-background)] px-2 py-1">
-        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={historyIndex <= 0} onClick={() => goToHistory(historyIndex - 1)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          disabled={historyIndex <= 0}
+          onClick={() => goToHistory(historyIndex - 1)}
+        >
           <Icon name="arrow-left" className="h-3.5 w-3.5" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={historyIndex < 0 || historyIndex >= history.length - 1} onClick={() => goToHistory(historyIndex + 1)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          disabled={historyIndex < 0 || historyIndex >= history.length - 1}
+          onClick={() => goToHistory(historyIndex + 1)}
+        >
           <Icon name="arrow-right" className="h-3.5 w-3.5" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={!currentUrl} onClick={handleReload}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          disabled={!currentUrl}
+          onClick={handleReload}
+        >
           <Icon name="refresh" className="h-3.5 w-3.5" />
         </Button>
-        <form className="min-w-0 flex-1" onSubmit={(event) => { event.preventDefault(); applyUrl(urlInput); }}>
+        <form
+          className="min-w-0 flex-1"
+          onSubmit={(event) => {
+            event.preventDefault()
+            applyUrl(urlInput)
+          }}
+        >
           <input
             value={urlInput}
             onChange={(event) => setUrlInput(event.target.value)}
             className="h-7 w-full rounded-md border border-border/50 bg-[var(--surface-elevated)] px-2 typography-micro text-foreground outline-none focus:border-[var(--interactive-focus-ring)]"
-            aria-label={t('contextPanel.browser.addressAria')}
+            aria-label={t("contextPanel.browser.addressAria")}
           />
         </form>
         <Button
           type="button"
-          variant={isInspecting ? 'secondary' : 'ghost'}
+          variant={isInspecting ? "secondary" : "ghost"}
           size="sm"
           className="h-7 w-7 p-0"
           disabled={!currentUrl}
           onClick={handleInspect}
-          title={t('contextPanel.preview.inspect.toggle')}
-          aria-label={t('contextPanel.preview.inspect.toggle')}
+          title={t("contextPanel.preview.inspect.toggle")}
+          aria-label={t("contextPanel.preview.inspect.toggle")}
         >
           <Icon name="cursor" className="h-3.5 w-3.5" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={!currentUrl} onClick={() => void openExternalUrl(currentUrl)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          disabled={!currentUrl}
+          onClick={() => void openExternalUrl(currentUrl)}
+        >
           <Icon name="external-link" className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -1592,7 +1671,7 @@ const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dire
               key={`${iframeSrc}:${reloadNonce}`}
               ref={iframeRef}
               src={iframeSrc}
-              title={t('contextPanel.browser.empty')}
+              title={t("contextPanel.browser.empty")}
               className="absolute inset-0 h-full w-full border-0 bg-background"
               allow="clipboard-read; clipboard-write; fullscreen"
               allowFullScreen
@@ -1609,7 +1688,8 @@ const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dire
                 }}
               >
                 <div className="absolute -top-6 left-0 max-w-64 truncate rounded bg-[var(--surface-elevated)] px-2 py-0.5 typography-micro text-foreground shadow">
-                  {hoverTarget.tag}{hoverTarget.text ? ` · ${hoverTarget.text}` : ''}
+                  {hoverTarget.tag}
+                  {hoverTarget.text ? ` · ${hoverTarget.text}` : ""}
                 </div>
               </div>
             ) : null}
@@ -1617,210 +1697,256 @@ const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dire
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-background p-6 text-center">
             <AxCodeIcon width={140} height={140} className="opacity-20" />
-            <span className="typography-ui-header text-muted-foreground">{t('contextPanel.browser.empty')}</span>
-            <span className="max-w-sm typography-micro text-muted-foreground">{t('contextPanel.browser.emptyHint')}</span>
-            <span className="max-w-md typography-micro leading-relaxed text-status-warning/70">{t('contextPanel.browser.trustNotice')}</span>
+            <span className="typography-ui-header text-muted-foreground">{t("contextPanel.browser.empty")}</span>
+            <span className="max-w-sm typography-micro text-muted-foreground">
+              {t("contextPanel.browser.emptyHint")}
+            </span>
+            <span className="max-w-md typography-micro leading-relaxed text-status-warning/70">
+              {t("contextPanel.browser.trustNotice")}
+            </span>
           </div>
         )}
         {isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 typography-micro text-muted-foreground">
-            {t('common.loading')}
+            {t("common.loading")}
           </div>
         ) : null}
       </div>
     </div>
-  );
-};
+  )
+}
 
 const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, directory, tabID }) => {
-  const { t } = useI18n();
-  const webviewRef = React.useRef<WebviewElement | null>(null);
-  const setContextPanelTabTargetPath = useUIStore((state) => state.setContextPanelTabTargetPath);
-  const normalized = normalizeBrowserUrl(initialUrl);
-  const startUrl = normalized !== 'about:blank' ? normalized : '';
-  const [urlInput, setUrlInput] = React.useState(startUrl);
-  const [currentUrl, setCurrentUrl] = React.useState(startUrl);
-  const [isInspecting, setIsInspecting] = React.useState(false);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const loadingTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showLoading = isLoading;
+  const { t } = useI18n()
+  const webviewRef = React.useRef<WebviewElement | null>(null)
+  const setContextPanelTabTargetPath = useUIStore((state) => state.setContextPanelTabTargetPath)
+  const normalized = normalizeBrowserUrl(initialUrl)
+  const startUrl = normalized !== "about:blank" ? normalized : ""
+  const [urlInput, setUrlInput] = React.useState(startUrl)
+  const [currentUrl, setCurrentUrl] = React.useState(startUrl)
+  const [isInspecting, setIsInspecting] = React.useState(false)
+  const [isLoading, setIsLoading] = React.useState(true)
+  const loadingTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showLoading = isLoading
 
-  const persistUrl = React.useCallback((url: string) => {
-    if (!url || url === 'about:blank' || !directory || !tabID) return;
-    setContextPanelTabTargetPath(directory, tabID, url);
-  }, [directory, tabID, setContextPanelTabTargetPath]);
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open);
-  const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft);
-  const addAttachedFile = useInputStore((state) => state.addAttachedFile);
+  const persistUrl = React.useCallback(
+    (url: string) => {
+      if (!url || url === "about:blank" || !directory || !tabID) return
+      setContextPanelTabTargetPath(directory, tabID, url)
+    },
+    [directory, tabID, setContextPanelTabTargetPath],
+  )
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open)
+  const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft)
+  const addAttachedFile = useInputStore((state) => state.addAttachedFile)
 
   // Listen to webview navigation events
   React.useEffect(() => {
-    const webview = webviewRef.current;
-    if (!webview) return;
+    const webview = webviewRef.current
+    if (!webview) return
 
     const syncUrl = () => {
       try {
-        const url = webview.getURL();
-        if (url && url !== 'about:blank') {
-          setCurrentUrl(url);
-          setUrlInput(url);
-          persistUrl(url);
+        const url = webview.getURL()
+        if (url && url !== "about:blank") {
+          setCurrentUrl(url)
+          setUrlInput(url)
+          persistUrl(url)
         }
-      } catch { /* webview not ready */ }
-    };
+      } catch {
+        /* webview not ready */
+      }
+    }
 
     const onNavigate = (event: Event) => {
-      const detail = (event as CustomEvent<{ url: string }>).detail;
-      if (typeof detail?.url === 'string' && detail.url) {
-        setCurrentUrl(detail.url);
-        setUrlInput(detail.url);
-        persistUrl(detail.url);
+      const detail = (event as CustomEvent<{ url: string }>).detail
+      if (typeof detail?.url === "string" && detail.url) {
+        setCurrentUrl(detail.url)
+        setUrlInput(detail.url)
+        persistUrl(detail.url)
       }
-    };
+    }
 
     const onStartLoading = () => {
-      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-      loadingTimerRef.current = setTimeout(() => setIsLoading(true), 200);
-    };
+      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current)
+      loadingTimerRef.current = setTimeout(() => setIsLoading(true), 200)
+    }
     const onStopLoading = () => {
-      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-      setIsLoading(false);
-      syncUrl();
-    };
+      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current)
+      setIsLoading(false)
+      syncUrl()
+    }
 
     const onNewWindow = (event: Event) => {
-      const detail = (event as CustomEvent<{ url: string; disposition: string }>).detail;
-      if (detail?.disposition === 'new-window' || detail?.disposition === 'foreground-tab' || detail?.disposition === 'background-tab') {
-        event.preventDefault();
-        const w = webviewRef.current;
-        if (typeof w?.loadURL === 'function' && detail.url) {
-          w.loadURL(detail.url);
+      const detail = (event as CustomEvent<{ url: string; disposition: string }>).detail
+      if (
+        detail?.disposition === "new-window" ||
+        detail?.disposition === "foreground-tab" ||
+        detail?.disposition === "background-tab"
+      ) {
+        event.preventDefault()
+        const w = webviewRef.current
+        if (typeof w?.loadURL === "function" && detail.url) {
+          w.loadURL(detail.url)
         }
       }
-    };
+    }
 
     const installSameWebviewNavigation = () => {
       try {
-        webview.executeJavaScript?.(DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT, true).catch(() => {});
-      } catch { /* webview not ready */ }
-    };
+        webview.executeJavaScript?.(DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT, true).catch(() => {})
+      } catch {
+        /* webview not ready */
+      }
+    }
 
-    webview.addEventListener('did-navigate', onNavigate);
-    webview.addEventListener('did-navigate-in-page', onNavigate);
-    webview.addEventListener('did-start-loading', onStartLoading);
-    webview.addEventListener('did-stop-loading', onStopLoading);
-    webview.addEventListener('new-window', onNewWindow);
-    webview.addEventListener('dom-ready', installSameWebviewNavigation);
+    webview.addEventListener("did-navigate", onNavigate)
+    webview.addEventListener("did-navigate-in-page", onNavigate)
+    webview.addEventListener("did-start-loading", onStartLoading)
+    webview.addEventListener("did-stop-loading", onStopLoading)
+    webview.addEventListener("new-window", onNewWindow)
+    webview.addEventListener("dom-ready", installSameWebviewNavigation)
 
     // Check current loading state imperatively — we may have missed the event
     try {
       if (!webview.isLoading()) {
-        setIsLoading(false);
-        syncUrl();
+        setIsLoading(false)
+        syncUrl()
       }
-    } catch { /* webview not ready */ }
-    installSameWebviewNavigation();
+    } catch {
+      /* webview not ready */
+    }
+    installSameWebviewNavigation()
 
     return () => {
-      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-      webview.removeEventListener('did-navigate', onNavigate);
-      webview.removeEventListener('did-navigate-in-page', onNavigate);
-      webview.removeEventListener('did-start-loading', onStartLoading);
-      webview.removeEventListener('did-stop-loading', onStopLoading);
-      webview.removeEventListener('new-window', onNewWindow);
-      webview.removeEventListener('dom-ready', installSameWebviewNavigation);
-    };
-  }, [persistUrl]);
+      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current)
+      webview.removeEventListener("did-navigate", onNavigate)
+      webview.removeEventListener("did-navigate-in-page", onNavigate)
+      webview.removeEventListener("did-start-loading", onStartLoading)
+      webview.removeEventListener("did-stop-loading", onStopLoading)
+      webview.removeEventListener("new-window", onNewWindow)
+      webview.removeEventListener("dom-ready", installSameWebviewNavigation)
+    }
+  }, [persistUrl])
 
   // Safety timeout: hide loading overlay after 30s even if events fire late
   React.useEffect(() => {
-    const safety = setTimeout(() => setIsLoading(false), 30_000);
-    return () => clearTimeout(safety);
-  }, []);
+    const safety = setTimeout(() => setIsLoading(false), 30_000)
+    return () => clearTimeout(safety)
+  }, [])
 
   // Escape key cancels inspect mode
   React.useEffect(() => {
-    if (!isInspecting) return;
+    if (!isInspecting) return
     const handler = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setIsInspecting(false);
-      const webview = webviewRef.current;
-      try { webview?.executeJavaScript?.(DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT).catch(() => {}); } catch { /* webview not ready */ }
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
-  }, [isInspecting]);
+      if (event.key !== "Escape") return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      setIsInspecting(false)
+      const webview = webviewRef.current
+      try {
+        webview?.executeJavaScript?.(DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT).catch(() => {})
+      } catch {
+        /* webview not ready */
+      }
+    }
+    window.addEventListener("keydown", handler, true)
+    return () => window.removeEventListener("keydown", handler, true)
+  }, [isInspecting])
 
   // Cancel inspect on unmount
   React.useEffect(() => {
-    const webview = webviewRef.current;
+    const webview = webviewRef.current
     return () => {
       try {
-        const url = webview?.getURL?.();
-        if (url && url !== 'about:blank') {
-          setContextPanelTabTargetPath(directory, tabID, url);
+        const url = webview?.getURL?.()
+        if (url && url !== "about:blank") {
+          setContextPanelTabTargetPath(directory, tabID, url)
         }
-      } catch { /* webview not ready */ }
-      try { webview?.executeJavaScript?.(DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT).catch(() => {}); } catch { /* webview not ready */ }
-    };
-  }, [directory, tabID, setContextPanelTabTargetPath]);
+      } catch {
+        /* webview not ready */
+      }
+      try {
+        webview?.executeJavaScript?.(DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT).catch(() => {})
+      } catch {
+        /* webview not ready */
+      }
+    }
+  }, [directory, tabID, setContextPanelTabTargetPath])
 
   const loadUrl = React.useCallback((value: string) => {
-    const webview = webviewRef.current;
-    if (typeof webview?.loadURL !== 'function') return;
-    const nextUrl = normalizeBrowserUrl(value);
-    try { webview.loadURL(nextUrl); } catch { /* webview may not be ready */ }
-  }, []);
+    const webview = webviewRef.current
+    if (typeof webview?.loadURL !== "function") return
+    const nextUrl = normalizeBrowserUrl(value)
+    try {
+      webview.loadURL(nextUrl)
+    } catch {
+      /* webview may not be ready */
+    }
+  }, [])
 
   const handleInspect = React.useCallback(() => {
-    const webview = webviewRef.current;
-    if (!webview) return;
+    const webview = webviewRef.current
+    if (!webview) return
 
     if (isInspecting) {
-      setIsInspecting(false);
-      try { webview.executeJavaScript?.(DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT).catch(() => {}); } catch { /* webview not ready */ }
-      return;
+      setIsInspecting(false)
+      try {
+        webview.executeJavaScript?.(DESKTOP_BROWSER_CANCEL_INSPECT_SCRIPT).catch(() => {})
+      } catch {
+        /* webview not ready */
+      }
+      return
     }
 
-    setIsInspecting(true);
-    webview.executeJavaScript?.(DESKTOP_BROWSER_INSPECT_SCRIPT, true)
+    setIsInspecting(true)
+    webview
+      .executeJavaScript?.(DESKTOP_BROWSER_INSPECT_SCRIPT, true)
       .then(async (target: unknown) => {
-        setIsInspecting(false);
-        if (!target || !isPreviewElementMetadata(target)) return;
+        setIsInspecting(false)
+        if (!target || !isPreviewElementMetadata(target)) return
 
-        const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
+        const sessionKey = currentSessionId ?? (newSessionDraftOpen ? "draft" : null)
         if (!sessionKey) {
-          toast.error(t('contextPanel.preview.inspect.attachNoSession'));
-          return;
+          toast.error(t("contextPanel.preview.inspect.attachNoSession"))
+          return
         }
 
-        const wcId = typeof webview.getWebContentsId === 'function' ? webview.getWebContentsId() : null;
-        if (wcId === null || wcId === undefined) return;
+        const wcId = typeof webview.getWebContentsId === "function" ? webview.getWebContentsId() : null
+        if (wcId === null || wcId === undefined) return
 
         const capture = await invokeDesktopCommand<{ mime: string; base64: string; width: number; height: number }>(
-          'desktop_browser_capture_page', { webContentsId: wcId }
-        );
+          "desktop_browser_capture_page",
+          { webContentsId: wcId },
+        )
 
-        const cssViewport = await webview.executeJavaScript?.(
-          '({ width: window.innerWidth, height: window.innerHeight })', true
-        ).catch(() => null) as { width: number; height: number } | null | undefined;
+        const cssViewport = (await webview
+          .executeJavaScript?.("({ width: window.innerWidth, height: window.innerHeight })", true)
+          .catch(() => null)) as { width: number; height: number } | null | undefined
 
-        const cssWidth = Number.isFinite(cssViewport?.width) ? (cssViewport as { width: number }).width : capture.width;
-        const cssHeight = Number.isFinite(cssViewport?.height) ? (cssViewport as { height: number }).height : capture.height;
+        const cssWidth = Number.isFinite(cssViewport?.width) ? (cssViewport as { width: number }).width : capture.width
+        const cssHeight = Number.isFinite(cssViewport?.height)
+          ? (cssViewport as { height: number }).height
+          : capture.height
 
-        const file = await desktopAnnotationToFile(capture.base64, capture.width, capture.height, cssWidth, cssHeight, target);
-        const screenshotAttached = Boolean(file);
+        const file = await desktopAnnotationToFile(
+          capture.base64,
+          capture.width,
+          capture.height,
+          cssWidth,
+          cssHeight,
+          target,
+        )
+        const screenshotAttached = Boolean(file)
         if (file) {
-          await addAttachedFile(file);
+          await addAttachedFile(file)
         }
 
         addInlineCommentDraft({
           sessionKey,
-          source: 'preview-annotation',
-          fileLabel: currentUrl || 'browser',
+          source: "preview-annotation",
+          fileLabel: currentUrl || "browser",
           startLine: 1,
           endLine: 1,
           code: formatPreviewAnnotationMarkdown({
@@ -1829,48 +1955,96 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
             devicePixelRatio: window.devicePixelRatio || 1,
             target,
             screenshotAttached,
-            intro: t('contextPanel.preview.inspect.attachAnnotationWithScreenshot'),
+            intro: t("contextPanel.preview.inspect.attachAnnotationWithScreenshot"),
           }),
-          language: 'markdown',
-          text: '',
-        });
-        toast.success(t('contextPanel.preview.inspect.attached'));
+          language: "markdown",
+          text: "",
+        })
+        toast.success(t("contextPanel.preview.inspect.attached"))
       })
-      .catch(() => setIsInspecting(false));
-  }, [addAttachedFile, addInlineCommentDraft, currentSessionId, currentUrl, isInspecting, newSessionDraftOpen, t]);
+      .catch(() => setIsInspecting(false))
+  }, [addAttachedFile, addInlineCommentDraft, currentSessionId, currentUrl, isInspecting, newSessionDraftOpen, t])
 
   return (
     <div className="absolute inset-0 flex flex-col bg-background">
       <div className="flex items-center gap-1 border-b border-border/40 bg-[var(--surface-background)] px-2 py-1">
-        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { try { webviewRef.current?.goBack?.(); } catch { /* webview not ready */ } }}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={() => {
+            try {
+              webviewRef.current?.goBack?.()
+            } catch {
+              /* webview not ready */
+            }
+          }}
+        >
           <Icon name="arrow-left" className="h-3.5 w-3.5" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { try { webviewRef.current?.goForward?.(); } catch { /* webview not ready */ } }}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={() => {
+            try {
+              webviewRef.current?.goForward?.()
+            } catch {
+              /* webview not ready */
+            }
+          }}
+        >
           <Icon name="arrow-right" className="h-3.5 w-3.5" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { try { webviewRef.current?.reload?.(); } catch { /* webview not ready */ } }}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={() => {
+            try {
+              webviewRef.current?.reload?.()
+            } catch {
+              /* webview not ready */
+            }
+          }}
+        >
           <Icon name="refresh" className="h-3.5 w-3.5" />
         </Button>
-        <form className="min-w-0 flex-1" onSubmit={(event) => { event.preventDefault(); loadUrl(urlInput); }}>
+        <form
+          className="min-w-0 flex-1"
+          onSubmit={(event) => {
+            event.preventDefault()
+            loadUrl(urlInput)
+          }}
+        >
           <input
             value={urlInput}
             onChange={(event) => setUrlInput(event.target.value)}
             className="h-7 w-full rounded-md border border-border/50 bg-[var(--surface-elevated)] px-2 typography-micro text-foreground outline-none focus:border-[var(--interactive-focus-ring)]"
-            aria-label={t('contextPanel.browser.addressAria')}
+            aria-label={t("contextPanel.browser.addressAria")}
           />
         </form>
         <Button
           type="button"
-          variant={isInspecting ? 'secondary' : 'ghost'}
+          variant={isInspecting ? "secondary" : "ghost"}
           size="sm"
           className="h-7 w-7 p-0"
           onClick={handleInspect}
-          title={t('contextPanel.preview.inspect.toggle')}
-          aria-label={t('contextPanel.preview.inspect.toggle')}
+          title={t("contextPanel.preview.inspect.toggle")}
+          aria-label={t("contextPanel.preview.inspect.toggle")}
         >
           <Icon name="cursor" className="h-3.5 w-3.5" />
         </Button>
-        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => void openExternalUrl(currentUrl)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={() => void openExternalUrl(currentUrl)}
+        >
           <Icon name="external-link" className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -1880,216 +2054,230 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
           src={normalizeBrowserUrl(initialUrl)}
           partition="persist:openchamber-browser"
           allowpopups
-          style={{ width: '100%', height: '100%', border: 'none' }}
+          style={{ width: "100%", height: "100%", border: "none" }}
         />
-        {(!currentUrl || currentUrl === 'about:blank') && !isLoading ? (
+        {(!currentUrl || currentUrl === "about:blank") && !isLoading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-background p-6 text-center">
             <AxCodeIcon width={140} height={140} className="opacity-20" />
-            <span className="typography-ui-header text-muted-foreground">{t('contextPanel.browser.empty')}</span>
+            <span className="typography-ui-header text-muted-foreground">{t("contextPanel.browser.empty")}</span>
           </div>
         ) : null}
         {showLoading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 typography-micro text-muted-foreground">
-            {t('common.loading')}
+            {t("common.loading")}
           </div>
         ) : null}
       </div>
     </div>
-  );
-};
+  )
+}
 
 export const ContextPanel: React.FC = () => {
-  const { t } = useI18n();
-  const effectiveDirectory = useEffectiveDirectory() ?? '';
-  const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
+  const { t } = useI18n()
+  const effectiveDirectory = useEffectiveDirectory() ?? ""
+  const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory])
 
-  const panelState = useUIStore((state) => (directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined));
-  const closeContextPanel = useUIStore((state) => state.closeContextPanel);
-  const closeContextPanelTab = useUIStore((state) => state.closeContextPanelTab);
-  const toggleContextPanelExpanded = useUIStore((state) => state.toggleContextPanelExpanded);
-  const setContextPanelWidth = useUIStore((state) => state.setContextPanelWidth);
-  const setActiveContextPanelTab = useUIStore((state) => state.setActiveContextPanelTab);
-  const reorderContextPanelTabs = useUIStore((state) => state.reorderContextPanelTabs);
-  const setSelectedFilePath = useFilesViewTabsStore((state) => state.setSelectedPath);
-  const openContextPreview = useUIStore((state) => state.openContextPreview);
-  const { themeMode, lightThemeId, darkThemeId, currentTheme } = useThemeSystem();
+  const panelState = useUIStore((state) => (directoryKey ? state.contextPanelByDirectory[directoryKey] : undefined))
+  const closeContextPanel = useUIStore((state) => state.closeContextPanel)
+  const closeContextPanelTab = useUIStore((state) => state.closeContextPanelTab)
+  const toggleContextPanelExpanded = useUIStore((state) => state.toggleContextPanelExpanded)
+  const setContextPanelWidth = useUIStore((state) => state.setContextPanelWidth)
+  const setActiveContextPanelTab = useUIStore((state) => state.setActiveContextPanelTab)
+  const reorderContextPanelTabs = useUIStore((state) => state.reorderContextPanelTabs)
+  const setSelectedFilePath = useFilesViewTabsStore((state) => state.setSelectedPath)
+  const openContextPreview = useUIStore((state) => state.openContextPreview)
+  const { themeMode, lightThemeId, darkThemeId, currentTheme } = useThemeSystem()
 
-  const tabs = React.useMemo(() => panelState?.tabs ?? [], [panelState?.tabs]);
-  const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1] ?? null;
-  const isOpen = Boolean(panelState?.isOpen && activeTab);
-  const isExpanded = Boolean(isOpen && panelState?.expanded);
-  const width = clampWidth(panelState?.width ?? CONTEXT_PANEL_DEFAULT_WIDTH);
+  const tabs = React.useMemo(() => panelState?.tabs ?? [], [panelState?.tabs])
+  const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1] ?? null
+  const isOpen = Boolean(panelState?.isOpen && activeTab)
+  const isExpanded = Boolean(isOpen && panelState?.expanded)
+  const width = clampWidth(panelState?.width ?? CONTEXT_PANEL_DEFAULT_WIDTH)
 
-  const [isResizing, setIsResizing] = React.useState(false);
-  const [suppressWidthTransition, setSuppressWidthTransition] = React.useState(false);
-  const startXRef = React.useRef(0);
-  const startWidthRef = React.useRef(width);
-  const resizingWidthRef = React.useRef<number | null>(null);
-  const activeResizePointerIDRef = React.useRef<number | null>(null);
-  const panelRef = React.useRef<HTMLElement | null>(null);
-  const chatFrameRefs = React.useRef<Map<string, HTMLIFrameElement>>(new Map());
-  const wasOpenRef = React.useRef(false);
-  const previousIsOpenRef = React.useRef(isOpen);
-  const suppressWidthTransitionFrameRef = React.useRef<number | null>(null);
+  const [isResizing, setIsResizing] = React.useState(false)
+  const [suppressWidthTransition, setSuppressWidthTransition] = React.useState(false)
+  const startXRef = React.useRef(0)
+  const startWidthRef = React.useRef(width)
+  const resizingWidthRef = React.useRef<number | null>(null)
+  const activeResizePointerIDRef = React.useRef<number | null>(null)
+  const panelRef = React.useRef<HTMLElement | null>(null)
+  const chatFrameRefs = React.useRef<Map<string, HTMLIFrameElement>>(new Map())
+  const wasOpenRef = React.useRef(false)
+  const previousIsOpenRef = React.useRef(isOpen)
+  const suppressWidthTransitionFrameRef = React.useRef<number | null>(null)
 
   const suppressWidthTransitionForFrame = React.useCallback(() => {
-    setSuppressWidthTransition(true);
+    setSuppressWidthTransition(true)
     if (suppressWidthTransitionFrameRef.current !== null) {
-      window.cancelAnimationFrame(suppressWidthTransitionFrameRef.current);
+      window.cancelAnimationFrame(suppressWidthTransitionFrameRef.current)
     }
     suppressWidthTransitionFrameRef.current = window.requestAnimationFrame(() => {
-      suppressWidthTransitionFrameRef.current = null;
-      setSuppressWidthTransition(false);
-    });
-  }, []);
+      suppressWidthTransitionFrameRef.current = null
+      setSuppressWidthTransition(false)
+    })
+  }, [])
 
-  React.useEffect(() => () => {
-    if (suppressWidthTransitionFrameRef.current !== null) {
-      window.cancelAnimationFrame(suppressWidthTransitionFrameRef.current);
-    }
-  }, []);
+  React.useEffect(
+    () => () => {
+      if (suppressWidthTransitionFrameRef.current !== null) {
+        window.cancelAnimationFrame(suppressWidthTransitionFrameRef.current)
+      }
+    },
+    [],
+  )
 
   React.useLayoutEffect(() => {
-    const wasOpen = previousIsOpenRef.current;
-    previousIsOpenRef.current = isOpen;
+    const wasOpen = previousIsOpenRef.current
+    previousIsOpenRef.current = isOpen
 
     if (!isOpen) {
-      setSuppressWidthTransition(false);
-      return;
+      setSuppressWidthTransition(false)
+      return
     }
 
     if (wasOpen) {
-      return;
+      return
     }
 
-    suppressWidthTransitionForFrame();
-  }, [isOpen, suppressWidthTransitionForFrame]);
+    suppressWidthTransitionForFrame()
+  }, [isOpen, suppressWidthTransitionForFrame])
 
   React.useEffect(() => {
     if (!isOpen || wasOpenRef.current) {
-      wasOpenRef.current = isOpen;
-      return;
+      wasOpenRef.current = isOpen
+      return
     }
 
     const frame = window.requestAnimationFrame(() => {
-      panelRef.current?.focus({ preventScroll: true });
-    });
+      panelRef.current?.focus({ preventScroll: true })
+    })
 
-    wasOpenRef.current = true;
-    return () => window.cancelAnimationFrame(frame);
-  }, [isOpen]);
+    wasOpenRef.current = true
+    return () => window.cancelAnimationFrame(frame)
+  }, [isOpen])
 
   const applyLiveWidth = React.useCallback((nextWidth: number) => {
-    const panel = panelRef.current;
+    const panel = panelRef.current
     if (!panel) {
-      return;
+      return
     }
 
-    panel.style.setProperty('--oc-context-panel-width', `${clampWidthToAvailableSpace(nextWidth, panel)}px`);
-  }, []);
+    panel.style.setProperty("--oc-context-panel-width", `${clampWidthToAvailableSpace(nextWidth, panel)}px`)
+  }, [])
 
-  const handleResizeStart = React.useCallback((event: React.PointerEvent) => {
-    if (!isOpen || isExpanded || !directoryKey) {
-      return;
-    }
+  const handleResizeStart = React.useCallback(
+    (event: React.PointerEvent) => {
+      if (!isOpen || isExpanded || !directoryKey) {
+        return
+      }
 
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // ignore; fallback listeners still handle drag
-    }
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        // ignore; fallback listeners still handle drag
+      }
 
-    activeResizePointerIDRef.current = event.pointerId;
-    setIsResizing(true);
-    startXRef.current = event.clientX;
-    startWidthRef.current = width;
-    resizingWidthRef.current = width;
-    applyLiveWidth(width);
-    event.preventDefault();
-  }, [applyLiveWidth, directoryKey, isExpanded, isOpen, width]);
+      activeResizePointerIDRef.current = event.pointerId
+      setIsResizing(true)
+      startXRef.current = event.clientX
+      startWidthRef.current = width
+      resizingWidthRef.current = width
+      applyLiveWidth(width)
+      event.preventDefault()
+    },
+    [applyLiveWidth, directoryKey, isExpanded, isOpen, width],
+  )
 
-  const handleResizeMove = React.useCallback((event: React.PointerEvent) => {
-    if (!isResizing || activeResizePointerIDRef.current !== event.pointerId) {
-      return;
-    }
+  const handleResizeMove = React.useCallback(
+    (event: React.PointerEvent) => {
+      if (!isResizing || activeResizePointerIDRef.current !== event.pointerId) {
+        return
+      }
 
-    const delta = startXRef.current - event.clientX;
-    const nextWidth = clampWidthToAvailableSpace(startWidthRef.current + delta, panelRef.current);
-    if (resizingWidthRef.current === nextWidth) {
-      return;
-    }
+      const delta = startXRef.current - event.clientX
+      const nextWidth = clampWidthToAvailableSpace(startWidthRef.current + delta, panelRef.current)
+      if (resizingWidthRef.current === nextWidth) {
+        return
+      }
 
-    resizingWidthRef.current = nextWidth;
-    applyLiveWidth(nextWidth);
-  }, [applyLiveWidth, isResizing]);
+      resizingWidthRef.current = nextWidth
+      applyLiveWidth(nextWidth)
+    },
+    [applyLiveWidth, isResizing],
+  )
 
-  const handleResizeEnd = React.useCallback((event: React.PointerEvent) => {
-    if (activeResizePointerIDRef.current !== event.pointerId || !directoryKey) {
-      return;
-    }
+  const handleResizeEnd = React.useCallback(
+    (event: React.PointerEvent) => {
+      if (activeResizePointerIDRef.current !== event.pointerId || !directoryKey) {
+        return
+      }
 
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // ignore
-    }
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      } catch {
+        // ignore
+      }
 
-    const finalWidth = clampWidthToAvailableSpace(resizingWidthRef.current ?? width, panelRef.current);
-    suppressWidthTransitionForFrame();
-    applyLiveWidth(finalWidth);
-    resizingWidthRef.current = finalWidth;
-    setContextPanelWidth(directoryKey, finalWidth);
-    setIsResizing(false);
-    activeResizePointerIDRef.current = null;
-  }, [applyLiveWidth, directoryKey, setContextPanelWidth, suppressWidthTransitionForFrame, width]);
+      const finalWidth = clampWidthToAvailableSpace(resizingWidthRef.current ?? width, panelRef.current)
+      suppressWidthTransitionForFrame()
+      applyLiveWidth(finalWidth)
+      resizingWidthRef.current = finalWidth
+      setContextPanelWidth(directoryKey, finalWidth)
+      setIsResizing(false)
+      activeResizePointerIDRef.current = null
+    },
+    [applyLiveWidth, directoryKey, setContextPanelWidth, suppressWidthTransitionForFrame, width],
+  )
 
   React.useEffect(() => {
     if (!isResizing) {
-      resizingWidthRef.current = null;
+      resizingWidthRef.current = null
     }
-  }, [isResizing]);
+  }, [isResizing])
 
   const handleClose = React.useCallback(() => {
     if (!directoryKey) {
-      return;
+      return
     }
-    closeContextPanel(directoryKey);
-  }, [closeContextPanel, directoryKey]);
+    closeContextPanel(directoryKey)
+  }, [closeContextPanel, directoryKey])
 
   const handleToggleExpanded = React.useCallback(() => {
     if (!directoryKey) {
-      return;
+      return
     }
-    toggleContextPanelExpanded(directoryKey);
-  }, [directoryKey, toggleContextPanelExpanded]);
+    toggleContextPanelExpanded(directoryKey)
+  }, [directoryKey, toggleContextPanelExpanded])
 
-  const handlePanelKeyDownCapture = React.useCallback((event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Escape') {
-      return;
-    }
+  const handlePanelKeyDownCapture = React.useCallback(
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      if (event.key !== "Escape") {
+        return
+      }
 
-    event.preventDefault();
-    event.stopPropagation();
-    handleClose();
-  }, [handleClose]);
+      event.preventDefault()
+      event.stopPropagation()
+      handleClose()
+    },
+    [handleClose],
+  )
 
   React.useEffect(() => {
     if (!directoryKey || !activeTab) {
-      return;
+      return
     }
 
-    if (activeTab.mode === 'file' && activeTab.targetPath) {
-      setSelectedFilePath(directoryKey, activeTab.targetPath);
-      return;
+    if (activeTab.mode === "file" && activeTab.targetPath) {
+      setSelectedFilePath(directoryKey, activeTab.targetPath)
+      return
     }
+  }, [activeTab, directoryKey, setSelectedFilePath])
 
-  }, [activeTab, directoryKey, setSelectedFilePath]);
-
-  const activeChatTabID = activeTab?.mode === 'chat' ? activeTab.id : null;
+  const activeChatTabID = activeTab?.mode === "chat" ? activeTab.id : null
 
   const postThemeSyncToEmbeddedChat = React.useCallback(() => {
-    if (typeof window === 'undefined') {
-      return;
+    if (typeof window === "undefined") {
+      return
     }
 
     const payload = {
@@ -2097,22 +2285,24 @@ export const ContextPanel: React.FC = () => {
       lightThemeId,
       darkThemeId,
       currentTheme,
-    };
+    }
 
     for (const frame of chatFrameRefs.current.values()) {
-      const frameWindow = frame.contentWindow;
+      const frameWindow = frame.contentWindow
       if (!frameWindow) {
-        continue;
+        continue
       }
 
-      const directThemeSync = (frameWindow as unknown as {
-        __openchamberApplyThemeSync?: (themePayload: typeof payload) => void;
-      }).__openchamberApplyThemeSync;
+      const directThemeSync = (
+        frameWindow as unknown as {
+          __openchamberApplyThemeSync?: (themePayload: typeof payload) => void
+        }
+      ).__openchamberApplyThemeSync
 
-      if (typeof directThemeSync === 'function') {
+      if (typeof directThemeSync === "function") {
         try {
-          directThemeSync(payload);
-          continue;
+          directThemeSync(payload)
+          continue
         } catch {
           // fallback to postMessage below
         }
@@ -2120,34 +2310,36 @@ export const ContextPanel: React.FC = () => {
 
       frameWindow.postMessage(
         {
-          type: 'openchamber:theme-sync',
+          type: "openchamber:theme-sync",
           payload,
         },
         window.location.origin,
-      );
+      )
     }
-  }, [currentTheme, darkThemeId, lightThemeId, themeMode]);
+  }, [currentTheme, darkThemeId, lightThemeId, themeMode])
 
   const postEmbeddedVisibilityToChats = React.useCallback(() => {
-    if (typeof window === 'undefined') {
-      return;
+    if (typeof window === "undefined") {
+      return
     }
 
     for (const [tabID, frame] of chatFrameRefs.current.entries()) {
-      const frameWindow = frame.contentWindow;
+      const frameWindow = frame.contentWindow
       if (!frameWindow) {
-        continue;
+        continue
       }
 
-      const payload = { visible: activeChatTabID === tabID };
-      const directVisibilitySync = (frameWindow as unknown as {
-        __openchamberSetEmbeddedVisibility?: (visibilityPayload: typeof payload) => void;
-      }).__openchamberSetEmbeddedVisibility;
+      const payload = { visible: activeChatTabID === tabID }
+      const directVisibilitySync = (
+        frameWindow as unknown as {
+          __openchamberSetEmbeddedVisibility?: (visibilityPayload: typeof payload) => void
+        }
+      ).__openchamberSetEmbeddedVisibility
 
-      if (typeof directVisibilitySync === 'function') {
+      if (typeof directVisibilitySync === "function") {
         try {
-          directVisibilitySync(payload);
-          continue;
+          directVisibilitySync(payload)
+          continue
         } catch {
           // fallback to postMessage below
         }
@@ -2155,39 +2347,43 @@ export const ContextPanel: React.FC = () => {
 
       frameWindow.postMessage(
         {
-          type: 'openchamber:embedded-visibility',
+          type: "openchamber:embedded-visibility",
           payload,
         },
         window.location.origin,
-      );
+      )
     }
-  }, [activeChatTabID]);
+  }, [activeChatTabID])
 
   React.useLayoutEffect(() => {
-    const hasAnyChatTab = tabs.some((tab) => tab.mode === 'chat');
+    const hasAnyChatTab = tabs.some((tab) => tab.mode === "chat")
     if (!hasAnyChatTab) {
-      return;
+      return
     }
 
-    postThemeSyncToEmbeddedChat();
-    postEmbeddedVisibilityToChats();
-  }, [darkThemeId, lightThemeId, postEmbeddedVisibilityToChats, postThemeSyncToEmbeddedChat, tabs, themeMode]);
+    postThemeSyncToEmbeddedChat()
+    postEmbeddedVisibilityToChats()
+  }, [darkThemeId, lightThemeId, postEmbeddedVisibilityToChats, postThemeSyncToEmbeddedChat, tabs, themeMode])
 
-  const tabItems = React.useMemo(() => tabs.map((tab) => {
-    const rawLabel = getTabLabel(tab, t);
-    const label = truncateTabLabel(rawLabel, CONTEXT_TAB_LABEL_MAX_CHARS);
-    const tabPathLabel = getRelativePathLabel(tab.targetPath, effectiveDirectory);
-    return {
-      id: tab.id,
-      label,
-      icon: getTabIcon(tab),
-      title: tabPathLabel ? `${rawLabel}: ${tabPathLabel}` : rawLabel,
-      closeLabel: t('contextPanel.tab.closeTabAria', { label }),
-    };
-  }), [effectiveDirectory, t, tabs]);
+  const tabItems = React.useMemo(
+    () =>
+      tabs.map((tab) => {
+        const rawLabel = getTabLabel(tab, t)
+        const label = truncateTabLabel(rawLabel, CONTEXT_TAB_LABEL_MAX_CHARS)
+        const tabPathLabel = getRelativePathLabel(tab.targetPath, effectiveDirectory)
+        return {
+          id: tab.id,
+          label,
+          icon: getTabIcon(tab),
+          title: tabPathLabel ? `${rawLabel}: ${tabPathLabel}` : rawLabel,
+          closeLabel: t("contextPanel.tab.closeTabAria", { label }),
+        }
+      }),
+    [effectiveDirectory, t, tabs],
+  )
 
-  const activeNonChatContent = activeTab?.mode === 'diff'
-    ? (
+  const activeNonChatContent =
+    activeTab?.mode === "diff" ? (
       <React.Suspense fallback={null}>
         <DiffView
           key={activeTab.id}
@@ -2196,40 +2392,35 @@ export const ContextPanel: React.FC = () => {
           hideFileSelector
           pinSelectedFileHeaderToTopOnNavigate
           showOpenInEditorAction
-          diffScope={activeTab.stagedDiff ? 'staged' : 'working'}
+          diffScope={activeTab.stagedDiff ? "staged" : "working"}
           targetFilePath={activeTab.targetPath}
         />
       </React.Suspense>
+    ) : activeTab?.mode === "context" ? (
+      <ContextPanelContent />
+    ) : activeTab?.mode === "plan" ? (
+      <React.Suspense fallback={null}>
+        <PlanView targetPath={activeTab.targetPath} />
+      </React.Suspense>
+    ) : activeTab?.mode === "preview" ? (
+      <PreviewPane
+        rawUrl={activeTab.targetPath ?? ""}
+        onNavigate={(url) => openContextPreview(effectiveDirectory, url)}
+      />
+    ) : (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <Icon name="global" className="h-12 w-12 text-muted-foreground/50" />
+        <div className="typography-ui-header text-foreground">{t("contextPanel.preview.title")}</div>
+        <div className="max-w-sm typography-micro text-muted-foreground">{t("contextPanel.preview.description")}</div>
+      </div>
     )
-    : activeTab?.mode === 'context'
-        ? <ContextPanelContent />
-        : activeTab?.mode === 'plan'
-            ? <React.Suspense fallback={null}><PlanView targetPath={activeTab.targetPath} /></React.Suspense>
-            : activeTab?.mode === 'preview'
-                ? <PreviewPane rawUrl={activeTab.targetPath ?? ''} onNavigate={(url) => openContextPreview(effectiveDirectory, url)} />
-                : (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-                    <Icon name="global" className="h-12 w-12 text-muted-foreground/50" />
-                    <div className="typography-ui-header text-foreground">{t('contextPanel.preview.title')}</div>
-                    <div className="max-w-sm typography-micro text-muted-foreground">{t('contextPanel.preview.description')}</div>
-                  </div>
-                );
 
-  const chatTabs = React.useMemo(
-    () => tabs.filter((tab) => tab.mode === 'chat'),
-    [tabs],
-  );
-  const browserTabs = React.useMemo(
-    () => tabs.filter((tab) => tab.mode === 'browser'),
-    [tabs],
-  );
-  const BrowserPane = isElectronBrowserRuntime() ? DesktopBrowserPane : IframeBrowserPane;
-  const hasFileTabs = React.useMemo(
-    () => tabs.some((tab) => tab.mode === 'file'),
-    [tabs],
-  );
+  const chatTabs = React.useMemo(() => tabs.filter((tab) => tab.mode === "chat"), [tabs])
+  const browserTabs = React.useMemo(() => tabs.filter((tab) => tab.mode === "browser"), [tabs])
+  const BrowserPane = isElectronBrowserRuntime() ? DesktopBrowserPane : IframeBrowserPane
+  const hasFileTabs = React.useMemo(() => tabs.some((tab) => tab.mode === "file"), [tabs])
 
-  const isFileTabActive = activeTab?.mode === 'file';
+  const isFileTabActive = activeTab?.mode === "file"
 
   const header = (
     <header className="flex h-10 items-stretch border-b border-transparent">
@@ -2238,21 +2429,21 @@ export const ContextPanel: React.FC = () => {
         activeId={activeTab?.id ?? null}
         onSelect={(tabID) => {
           if (!directoryKey) {
-            return;
+            return
           }
-          setActiveContextPanelTab(directoryKey, tabID);
+          setActiveContextPanelTab(directoryKey, tabID)
         }}
         onClose={(tabID) => {
           if (!directoryKey) {
-            return;
+            return
           }
-          closeContextPanelTab(directoryKey, tabID);
+          closeContextPanelTab(directoryKey, tabID)
         }}
         onReorder={(activeTabID, overTabID) => {
           if (!directoryKey) {
-            return;
+            return
           }
-          reorderContextPanelTabs(directoryKey, activeTabID, overTabID);
+          reorderContextPanelTabs(directoryKey, activeTabID, overTabID)
         }}
         layoutMode="scrollable"
         variant="default"
@@ -2264,10 +2455,14 @@ export const ContextPanel: React.FC = () => {
           size="sm"
           onClick={handleToggleExpanded}
           className="h-7 w-7 p-0"
-          title={isExpanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')}
-          aria-label={isExpanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')}
+          title={isExpanded ? t("contextPanel.actions.collapsePanel") : t("contextPanel.actions.expandPanel")}
+          aria-label={isExpanded ? t("contextPanel.actions.collapsePanel") : t("contextPanel.actions.expandPanel")}
         >
-          {isExpanded ? <Icon name="fullscreen-exit" className="h-3.5 w-3.5" /> : <Icon name="fullscreen" className="h-3.5 w-3.5" />}
+          {isExpanded ? (
+            <Icon name="fullscreen-exit" className="h-3.5 w-3.5" />
+          ) : (
+            <Icon name="fullscreen" className="h-3.5 w-3.5" />
+          )}
         </Button>
         <Button
           type="button"
@@ -2275,38 +2470,38 @@ export const ContextPanel: React.FC = () => {
           size="sm"
           onClick={handleClose}
           className="h-7 w-7 p-0"
-          title={t('contextPanel.actions.closePanel')}
-          aria-label={t('contextPanel.actions.closePanel')}
+          title={t("contextPanel.actions.closePanel")}
+          aria-label={t("contextPanel.actions.closePanel")}
         >
           <Icon name="close" className="h-3.5 w-3.5" />
         </Button>
       </div>
     </header>
-  );
+  )
 
   const panelStyle: React.CSSProperties = !isOpen
     ? {
-        ['--oc-context-panel-width' as string]: `${isResizing ? (resizingWidthRef.current ?? width) : width}px`,
+        ["--oc-context-panel-width" as string]: `${isResizing ? (resizingWidthRef.current ?? width) : width}px`,
         width: 0,
         minWidth: 0,
         maxWidth: 0,
         opacity: 0,
-        overflow: 'hidden',
-        visibility: 'hidden',
+        overflow: "hidden",
+        visibility: "hidden",
       }
     : isExpanded
       ? {
-          ['--oc-context-panel-width' as string]: '100%',
-          width: '100%',
-          minWidth: '100%',
-          maxWidth: '100%',
+          ["--oc-context-panel-width" as string]: "100%",
+          width: "100%",
+          minWidth: "100%",
+          maxWidth: "100%",
         }
       : {
-          width: 'min(var(--oc-context-panel-width), 100%)',
+          width: "min(var(--oc-context-panel-width), 100%)",
           minWidth: `min(${CONTEXT_PANEL_MIN_WIDTH}px, 100%)`,
-          maxWidth: '100%',
-          ['--oc-context-panel-width' as string]: `${isResizing ? (resizingWidthRef.current ?? width) : width}px`,
-        };
+          maxWidth: "100%",
+          ["--oc-context-panel-width" as string]: `${isResizing ? (resizingWidthRef.current ?? width) : width}px`,
+        }
 
   return (
     <aside
@@ -2315,13 +2510,13 @@ export const ContextPanel: React.FC = () => {
       tabIndex={-1}
       inert={!isOpen || undefined}
       className={cn(
-        'flex min-h-0 flex-col overflow-hidden bg-background',
-        !isExpanded && 'border-l border-border/40',
-        isExpanded
-          ? 'absolute inset-0 z-20 min-w-0'
-          : 'relative h-full flex-shrink-0',
-        !isOpen && 'pointer-events-none',
-        isResizing || !isOpen || suppressWidthTransition ? 'transition-none' : 'transition-[width] duration-200 ease-in-out'
+        "flex min-h-0 flex-col overflow-hidden bg-background",
+        !isExpanded && "border-l border-border/40",
+        isExpanded ? "absolute inset-0 z-20 min-w-0" : "relative h-full flex-shrink-0",
+        !isOpen && "pointer-events-none",
+        isResizing || !isOpen || suppressWidthTransition
+          ? "transition-none"
+          : "transition-[width] duration-200 ease-in-out",
       )}
       onKeyDownCapture={handlePanelKeyDownCapture}
       style={panelStyle}
@@ -2329,8 +2524,8 @@ export const ContextPanel: React.FC = () => {
       {!isExpanded && (
         <div
           className={cn(
-            'absolute left-0 top-0 z-20 h-full w-[3px] cursor-col-resize transition-colors hover:bg-[var(--interactive-border)]/80',
-            isResizing && 'bg-[var(--interactive-border)]'
+            "absolute left-0 top-0 z-20 h-full w-[3px] cursor-col-resize transition-colors hover:bg-[var(--interactive-border)]/80",
+            isResizing && "bg-[var(--interactive-border)]",
           )}
           onPointerDown={handleResizeStart}
           onPointerMove={handleResizeMove}
@@ -2338,27 +2533,27 @@ export const ContextPanel: React.FC = () => {
           onPointerCancel={handleResizeEnd}
           role="separator"
           aria-orientation="vertical"
-          aria-label={t('contextPanel.actions.resizePanelAria')}
+          aria-label={t("contextPanel.actions.resizePanelAria")}
         />
       )}
       {header}
-      <div className={cn('relative min-h-0 flex-1 overflow-hidden', isResizing && 'pointer-events-none')}>
+      <div className={cn("relative min-h-0 flex-1 overflow-hidden", isResizing && "pointer-events-none")}>
         {hasFileTabs ? (
-          <div className={cn('absolute inset-0', isFileTabActive ? 'block' : 'hidden')}>
+          <div className={cn("absolute inset-0", isFileTabActive ? "block" : "hidden")}>
             <React.Suspense fallback={null}>
               <FilesView mode="editor-only" />
             </React.Suspense>
           </div>
         ) : null}
         {chatTabs.map((tab) => {
-          const sessionID = getSessionIDFromDedupeKey(tab.dedupeKey);
+          const sessionID = getSessionIDFromDedupeKey(tab.dedupeKey)
           if (!sessionID) {
-            return null;
+            return null
           }
 
-          const src = buildEmbeddedSessionChatURL(sessionID, directoryKey || null, tab.readOnly);
+          const src = buildEmbeddedSessionChatURL(sessionID, directoryKey || null, tab.readOnly)
           if (!src) {
-            return null;
+            return null
           }
 
           return (
@@ -2366,37 +2561,31 @@ export const ContextPanel: React.FC = () => {
               key={tab.id}
               ref={(node) => {
                 if (!node) {
-                  chatFrameRefs.current.delete(tab.id);
-                  return;
+                  chatFrameRefs.current.delete(tab.id)
+                  return
                 }
-                chatFrameRefs.current.set(tab.id, node);
+                chatFrameRefs.current.set(tab.id, node)
               }}
               src={src}
-              title={t('contextPanel.iframe.sessionChatTitle', { sessionID })}
+              title={t("contextPanel.iframe.sessionChatTitle", { sessionID })}
               className={cn(
-                'absolute inset-0 h-full w-full border-0 bg-background',
-                activeChatTabID === tab.id ? 'block' : 'hidden'
+                "absolute inset-0 h-full w-full border-0 bg-background",
+                activeChatTabID === tab.id ? "block" : "hidden",
               )}
               onLoad={() => {
-                postThemeSyncToEmbeddedChat();
-                postEmbeddedVisibilityToChats();
+                postThemeSyncToEmbeddedChat()
+                postEmbeddedVisibilityToChats()
               }}
             />
-          );
+          )
         })}
         {browserTabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={cn(
-              'absolute inset-0',
-              activeTab?.id !== tab.id && 'hidden'
-            )}
-          >
-            <BrowserPane initialUrl={tab.targetPath ?? ''} directory={directoryKey} tabID={tab.id} />
+          <div key={tab.id} className={cn("absolute inset-0", activeTab?.id !== tab.id && "hidden")}>
+            <BrowserPane initialUrl={tab.targetPath ?? ""} directory={directoryKey} tabID={tab.id} />
           </div>
         ))}
-        {activeTab?.mode !== 'chat' && !isFileTabActive && activeTab?.mode !== 'browser' ? activeNonChatContent : null}
+        {activeTab?.mode !== "chat" && !isFileTabActive && activeTab?.mode !== "browser" ? activeNonChatContent : null}
       </div>
     </aside>
-  );
-};
+  )
+}

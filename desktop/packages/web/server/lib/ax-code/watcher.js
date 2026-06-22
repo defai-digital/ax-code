@@ -1,4 +1,4 @@
-import { createUpstreamSseReader } from '../event-stream/upstream-reader.js';
+import { createUpstreamSseReader } from "../event-stream/upstream-reader.js"
 
 export const createAxCodeWatcherRuntime = (deps) => {
   const {
@@ -10,106 +10,108 @@ export const createAxCodeWatcherRuntime = (deps) => {
     upstreamStallTimeoutMs,
     upstreamReconnectDelayMs = 1000,
     globalEventHub = null,
-  } = deps;
+  } = deps
 
-  let abortController = null;
-  let reader = null;
-  let unsubscribeEvent = null;
-  let unsubscribeStatus = null;
+  let abortController = null
+  let reader = null
+  let unsubscribeEvent = null
+  let unsubscribeStatus = null
 
   const unwrapGlobalEventPayload = (eventData) => {
-    if (!eventData || typeof eventData !== 'object') {
-      return null;
+    if (!eventData || typeof eventData !== "object") {
+      return null
     }
 
-    if (eventData.payload && typeof eventData.payload === 'object') {
-      return eventData.payload;
+    if (eventData.payload && typeof eventData.payload === "object") {
+      return eventData.payload
     }
 
-    return eventData;
-  };
+    return eventData
+  }
 
   const start = async () => {
     if (abortController) {
-      return;
+      return
     }
 
-    await waitForAxCodePort();
+    await waitForAxCodePort()
 
-    abortController = new AbortController();
-    const signal = abortController.signal;
+    abortController = new AbortController()
+    const signal = abortController.signal
 
     if (globalEventHub) {
       unsubscribeEvent = globalEventHub.subscribeEvent((event) => {
-        const payload = unwrapGlobalEventPayload(event.payload);
-        if (!payload || typeof payload !== 'object') {
-          return;
+        const payload = unwrapGlobalEventPayload(event.payload)
+        if (!payload || typeof payload !== "object") {
+          return
         }
-        onPayload(payload);
-      });
+        onPayload(payload)
+      })
       unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
         if (signal.aborted) {
-          return;
+          return
         }
-        if (status.type === 'connect') {
-          console.log('[PushWatcher] connected');
-          return;
+        if (status.type === "connect") {
+          console.log("[PushWatcher] connected")
+          return
         }
-        if (status.type === 'error' || status.type === 'initial-error') {
-          console.warn('[PushWatcher] disconnected', status.error?.error?.message ?? status.error?.message ?? status.error);
+        if (status.type === "error" || status.type === "initial-error") {
+          console.warn(
+            "[PushWatcher] disconnected",
+            status.error?.error?.message ?? status.error?.message ?? status.error,
+          )
         }
-      });
-      globalEventHub.start();
-      return;
+      })
+      globalEventHub.start()
+      return
     }
 
     reader = createUpstreamSseReader({
       signal,
-      buildUrl: () => buildAxCodeUrl('/global/event', ''),
+      buildUrl: () => buildAxCodeUrl("/global/event", ""),
       getHeaders: getAxCodeAuthHeaders,
       fetchImpl,
       stallTimeoutMs: upstreamStallTimeoutMs,
       reconnectDelayMs: upstreamReconnectDelayMs,
       onConnect() {
-        console.log('[PushWatcher] connected');
+        console.log("[PushWatcher] connected")
       },
       onEvent(event) {
-        const payload = unwrapGlobalEventPayload(event.payload);
-        if (!payload || typeof payload !== 'object') {
-          return;
+        const payload = unwrapGlobalEventPayload(event.payload)
+        if (!payload || typeof payload !== "object") {
+          return
         }
-        onPayload(payload);
+        onPayload(payload)
       },
       onError(error) {
         if (signal.aborted) {
-          return;
+          return
         }
-        console.warn('[PushWatcher] disconnected', error?.error?.message ?? error?.message ?? error);
+        console.warn("[PushWatcher] disconnected", error?.error?.message ?? error?.message ?? error)
       },
-    });
+    })
 
-    void reader.start();
-  };
+    void reader.start()
+  }
 
   const stop = () => {
     if (!abortController) {
-      return;
+      return
     }
     try {
-      abortController.abort();
-      reader?.stop();
-      unsubscribeEvent?.();
-      unsubscribeStatus?.();
-    } catch {
-    }
-    reader = null;
-    unsubscribeEvent = null;
-    unsubscribeStatus = null;
-    abortController = null;
-  };
+      abortController.abort()
+      reader?.stop()
+      unsubscribeEvent?.()
+      unsubscribeStatus?.()
+    } catch {}
+    reader = null
+    unsubscribeEvent = null
+    unsubscribeStatus = null
+    abortController = null
+  }
 
   return {
     start,
     stop,
-  };
-};
+  }
+}

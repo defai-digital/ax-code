@@ -6,12 +6,7 @@
     "author": "AX Code",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "warm",
-      "earthy",
-      "brand"
-    ]
+    "tags": ["light", "warm", "earthy", "brand"]
   },
   "colors": {
     "primary": {

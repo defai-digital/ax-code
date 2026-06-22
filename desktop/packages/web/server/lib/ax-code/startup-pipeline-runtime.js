@@ -1,9 +1,5 @@
 export const createStartupPipelineRuntime = (dependencies) => {
-  const {
-    createTerminalRuntime,
-    createMessageStreamWsRuntime,
-    createServerStartupRuntime,
-  } = dependencies;
+  const { createTerminalRuntime, createMessageStreamWsRuntime, createServerStartupRuntime } = dependencies
 
   const run = async (options) => {
     const {
@@ -41,7 +37,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       host,
       port,
       attachSignals,
-    } = options;
+    } = options
 
     const terminalRuntime = createTerminalRuntime({
       app,
@@ -59,7 +55,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS: terminalHeartbeatIntervalMs,
       TERMINAL_INPUT_WS_REBIND_WINDOW_MS: terminalRebindWindowMs,
       TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW: terminalMaxRebindsPerWindow,
-    });
+    })
 
     const messageStreamRuntime = createMessageStreamWsRuntime({
       server,
@@ -73,13 +69,13 @@ export const createStartupPipelineRuntime = (dependencies) => {
       wsClients: messageStreamWsClients,
       triggerHealthCheck,
       upstreamStallTimeoutMs,
-    });
+    })
 
-    setupProxy(app);
-    scheduleAxCodeApiDetection();
-    void bootstrapAxCodeAtStartup();
+    setupProxy(app)
+    scheduleAxCodeApiDetection()
+    void bootstrapAxCodeAtStartup()
 
-    staticRoutesRuntime.registerStaticRoutes(app);
+    staticRoutesRuntime.registerStaticRoutes(app)
 
     const serverStartupRuntime = createServerStartupRuntime({
       process,
@@ -88,24 +84,24 @@ export const createStartupPipelineRuntime = (dependencies) => {
       getSignalsAttached,
       setSignalsAttached,
       syncToHmrState,
-    });
+    })
 
-    const bindHost = serverStartupRuntime.resolveBindHost(host);
+    const bindHost = serverStartupRuntime.resolveBindHost(host)
     const startupResult = await serverStartupRuntime.startListening({
       port,
       bindHost,
-    });
+    })
 
-    serverStartupRuntime.attachProcessHandlers({ attachSignals });
+    serverStartupRuntime.attachProcessHandlers({ attachSignals })
 
     return {
       terminalRuntime,
       messageStreamRuntime,
       activePort: startupResult.activePort,
-    };
-  };
+    }
+  }
 
   return {
     run,
-  };
-};
+  }
+}

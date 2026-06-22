@@ -5,6 +5,6 @@
  * @module quota/utils
  */
 
-export * from './auth.js';
-export * from './transformers.js';
-export * from './formatters.js';
+export * from "./auth.js"
+export * from "./transformers.js"
+export * from "./formatters.js"

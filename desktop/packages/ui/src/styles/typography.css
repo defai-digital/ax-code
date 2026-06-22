@@ -84,7 +84,7 @@
     transform: scale(0.95);
   }
 
-   /* Heading typography - all use markdown size, differentiated by weight/color */
+  /* Heading typography - all use markdown size, differentiated by weight/color */
 
   .typography-h1 {
     font-size: var(--text-markdown);

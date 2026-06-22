@@ -25,10 +25,10 @@ pnpm install
 
 ### Web
 
-| Script | Description | Ports |
-|--------|-------------|-------|
-| `pnpm run dev:web:full` | Build watcher + Express server. No HMR — manual refresh after changes. | `3001` (server + static) |
-| `pnpm run dev:web:hmr` | Vite dev server + Express API. **Open the Vite URL for HMR**, not the backend. | `5180` (Vite HMR), `3902` (API) |
+| Script                  | Description                                                                    | Ports                           |
+| ----------------------- | ------------------------------------------------------------------------------ | ------------------------------- |
+| `pnpm run dev:web:full` | Build watcher + Express server. No HMR — manual refresh after changes.         | `3001` (server + static)        |
+| `pnpm run dev:web:hmr`  | Vite dev server + Express API. **Open the Vite URL for HMR**, not the backend. | `5180` (Vite HMR), `3902` (API) |
 
 Both are configurable via env vars: `AX_CODE_DESKTOP_PORT`, `AX_CODE_DESKTOP_HMR_UI_PORT`, `AX_CODE_DESKTOP_HMR_API_PORT`.
 

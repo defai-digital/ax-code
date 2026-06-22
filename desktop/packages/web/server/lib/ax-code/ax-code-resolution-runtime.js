@@ -7,18 +7,18 @@ export const createAxCodeResolutionRuntime = (dependencies) => {
     resolveManagedAxCodeLaunchSpec,
     getResolvedState,
     setResolvedAxCodeBinarySource,
-  } = dependencies;
+  } = dependencies
 
   const getAxCodeResolutionSnapshot = async (settings) => {
-    const configured = typeof settings?.axCodeBinary === 'string' ? settings.axCodeBinary : null;
+    const configured = typeof settings?.axCodeBinary === "string" ? settings.axCodeBinary : null
 
-    const { resolvedAxCodeBinarySource: previousSource } = getResolvedState();
-    const detectedNow = resolveAxCodeCliPath();
-    const { resolvedAxCodeBinarySource: rawDetectedSourceNow } = getResolvedState();
-    setResolvedAxCodeBinarySource(previousSource);
+    const { resolvedAxCodeBinarySource: previousSource } = getResolvedState()
+    const detectedNow = resolveAxCodeCliPath()
+    const { resolvedAxCodeBinarySource: rawDetectedSourceNow } = getResolvedState()
+    setResolvedAxCodeBinarySource(previousSource)
 
-    await applyAxCodeBinaryFromSettings();
-    ensureAxCodeCliEnv();
+    await applyAxCodeBinaryFromSettings()
+    ensureAxCodeCliEnv()
 
     const {
       resolvedAxCodeBinary,
@@ -29,22 +29,20 @@ export const createAxCodeResolutionRuntime = (dependencies) => {
       resolvedWslDistro,
       resolvedNodeBinary,
       resolvedBunBinary,
-    } = getResolvedState();
+    } = getResolvedState()
 
-    const resolved = resolvedAxCodeBinary || null;
-    const source = resolvedAxCodeBinarySource || null;
+    const resolved = resolvedAxCodeBinary || null
+    const source = resolvedAxCodeBinarySource || null
     const detectedSourceNow =
       detectedNow &&
       resolved &&
       detectedNow === resolved &&
-      rawDetectedSourceNow === 'env' &&
+      rawDetectedSourceNow === "env" &&
       source &&
-      source !== 'env'
+      source !== "env"
         ? source
-        : rawDetectedSourceNow;
-    const launchSpec = resolved && !useWslForAxCode
-      ? resolveManagedAxCodeLaunchSpec(resolved)
-      : null;
+        : rawDetectedSourceNow
+    const launchSpec = resolved && !useWslForAxCode ? resolveManagedAxCodeLaunchSpec(resolved) : null
 
     return {
       configured,
@@ -62,10 +60,10 @@ export const createAxCodeResolutionRuntime = (dependencies) => {
       wslDistro: resolvedWslDistro || null,
       node: resolvedNodeBinary || null,
       bun: resolvedBunBinary || null,
-    };
-  };
+    }
+  }
 
   return {
     getAxCodeResolutionSnapshot,
-  };
-};
+  }
+}

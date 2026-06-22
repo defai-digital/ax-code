@@ -21,7 +21,7 @@
     --text-markdown: 0.9375rem;
     --text-code: 0.8125rem;
     --text-ui-header: 0.9375rem;
-    --text-ui-label: 0.8750rem;
+    --text-ui-label: 0.875rem;
     --text-meta: 0.875rem;
     --text-micro: 0.875rem;
 
@@ -121,7 +121,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     font-weight: var(--ui-regular-font-weight, 400);
   }
 
@@ -143,13 +143,13 @@
   }
 
   .font-sans {
-    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
+    font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
   }
 
   .font-mono,
   code,
   pre {
-    font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'Liberation Mono', Menlo, monospace) !important;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, "Liberation Mono", Menlo, monospace) !important;
   }
 
   /* Restore default list styling inside markdown content - override Tailwind preflight */
@@ -183,12 +183,16 @@
   }
 
   /* Remove focus rings globally (except inputs/textareas/dropdowns/selects) */
-  *:focus:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not([data-slot="dropdown-menu-sub-content"]):not([data-slot="select-content"]) {
+  *:focus:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not(
+      [data-slot="dropdown-menu-sub-content"]
+    ):not([data-slot="select-content"]) {
     outline: none !important;
     box-shadow: none !important;
   }
 
-  *:focus-visible:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not([data-slot="dropdown-menu-sub-content"]):not([data-slot="select-content"]) {
+  *:focus-visible:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not(
+      [data-slot="dropdown-menu-sub-content"]
+    ):not([data-slot="select-content"]) {
     outline: none !important;
     box-shadow: none !important;
   }

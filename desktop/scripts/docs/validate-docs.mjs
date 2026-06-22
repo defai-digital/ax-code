@@ -101,9 +101,7 @@ async function run() {
 
   const sidebarRaw = await readFile(sidebarPath, "utf8")
   const sidebar = JSON.parse(sidebarRaw)
-  const links = (sidebar.sections ?? [])
-    .flatMap((section) => section.items ?? [])
-    .map((item) => item.link)
+  const links = (sidebar.sections ?? []).flatMap((section) => section.items ?? []).map((item) => item.link)
 
   for (const link of links) {
     if (!routeSet.has(link)) {

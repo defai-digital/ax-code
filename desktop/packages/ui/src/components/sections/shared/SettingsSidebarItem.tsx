@@ -1,41 +1,36 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Icon } from "@/components/icon/Icon";
-import type { IconName } from "@/components/icon/icons";
-import { cn } from '@/lib/utils';
+import React from "react"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Icon } from "@/components/icon/Icon"
+import type { IconName } from "@/components/icon/icons"
+import { cn } from "@/lib/utils"
 
 export interface SettingsSidebarItemAction {
   /** Label shown in dropdown menu */
-  label: string;
+  label: string
   /** Icon component to show before label */
-  icon?: IconName;
+  icon?: IconName
   /** Callback when action is clicked */
-  onClick: () => void;
+  onClick: () => void
   /** If true, uses destructive styling (red text) */
-  destructive?: boolean;
+  destructive?: boolean
 }
 
 interface SettingsSidebarItemProps {
   /** Primary title text */
-  title: React.ReactNode;
+  title: React.ReactNode
   /** Secondary metadata text (shown below title) */
-  metadata?: React.ReactNode;
+  metadata?: React.ReactNode
   /** Whether this item is currently selected */
-  selected?: boolean;
+  selected?: boolean
   /** Callback when item is clicked */
-  onSelect: () => void;
+  onSelect: () => void
   /** Optional icon to show before title */
-  icon?: React.ReactNode;
+  icon?: React.ReactNode
   /** Actions shown in dropdown menu. If empty/undefined, no dropdown is shown. */
-  actions?: SettingsSidebarItemAction[];
+  actions?: SettingsSidebarItemAction[]
   /** Additional className for the outer container */
-  className?: string;
+  className?: string
 }
 
 /**
@@ -64,16 +59,14 @@ export const SettingsSidebarItem: React.FC<SettingsSidebarItemProps> = ({
   actions,
   className,
 }) => {
-  const hasActions = actions && actions.length > 0;
+  const hasActions = actions && actions.length > 0
 
   return (
     <div
       className={cn(
-        'group relative flex items-center rounded-md px-1.5 py-0.5 transition-all duration-200',
-        selected
-          ? 'bg-interactive-selection'
-          : 'hover:bg-interactive-hover',
-        className
+        "group relative flex items-center rounded-md px-1.5 py-0.5 transition-all duration-200",
+        selected ? "bg-interactive-selection" : "hover:bg-interactive-hover",
+        className,
       )}
     >
       <div className="flex min-w-0 flex-1 items-center">
@@ -84,15 +77,11 @@ export const SettingsSidebarItem: React.FC<SettingsSidebarItemProps> = ({
         >
           <div className="flex items-center gap-1.5">
             {icon}
-            <span className="typography-ui-label font-normal truncate text-foreground">
-              {title}
-            </span>
+            <span className="typography-ui-label font-normal truncate text-foreground">{title}</span>
           </div>
 
           {metadata && (
-            <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
-              {metadata}
-            </div>
+            <div className="typography-micro text-muted-foreground/60 truncate leading-tight">{metadata}</div>
           )}
         </button>
 
@@ -109,27 +98,25 @@ export const SettingsSidebarItem: React.FC<SettingsSidebarItemProps> = ({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-fit min-w-20">
               {actions.map((action) => {
-                const iconName = action.icon;
+                const iconName = action.icon
                 return (
                   <DropdownMenuItem
                     key={action.label}
                     onClick={(e) => {
-                      e.stopPropagation();
-                      action.onClick();
+                      e.stopPropagation()
+                      action.onClick()
                     }}
-                    className={cn(
-                      action.destructive && 'text-destructive focus:text-destructive'
-                    )}
+                    className={cn(action.destructive && "text-destructive focus:text-destructive")}
                   >
                     {iconName && <Icon name={iconName} className="h-4 w-4 mr-px" />}
                     {action.label}
                   </DropdownMenuItem>
-                );
+                )
               })}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
       </div>
     </div>
-  );
-};
+  )
+}

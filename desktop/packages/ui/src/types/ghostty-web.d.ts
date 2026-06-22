@@ -1,11 +1,11 @@
-export {};
+export {}
 
-declare module 'ghostty-web' {
+declare module "ghostty-web" {
   export interface ITerminalOptions {
-    lineHeight?: number;
+    lineHeight?: number
   }
 
   export interface RendererOptions {
-    lineHeight?: number;
+    lineHeight?: number
   }
 }

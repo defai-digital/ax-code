@@ -1,98 +1,101 @@
-import React from 'react';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { Button } from '@/components/ui/button';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
-import { cn } from '@/lib/utils';
-import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
-import { Icon } from "@/components/icon/Icon";
-import { useI18n } from '@/lib/i18n';
-import type { ProviderSources } from './types';
-import { fetchProviderSources, getCurrentDirectory } from '@/lib/ax-code/providerApi';
+import React from "react"
+import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
+import { ProviderLogo } from "@/components/ui/ProviderLogo"
+import { Button } from "@/components/ui/button"
+import { useConfigStore } from "@/stores/useConfigStore"
+import { useProjectsStore } from "@/stores/useProjectsStore"
+import { cn } from "@/lib/utils"
+import { SettingsProjectSelector } from "@/components/sections/shared/SettingsProjectSelector"
+import { Icon } from "@/components/icon/Icon"
+import { useI18n } from "@/lib/i18n"
+import type { ProviderSources } from "./types"
+import { fetchProviderSources, getCurrentDirectory } from "@/lib/ax-code/providerApi"
 
-const ADD_PROVIDER_ID = '__add_provider__';
+const ADD_PROVIDER_ID = "__add_provider__"
 
 interface ProvidersSidebarProps {
-  onItemSelect?: () => void;
+  onItemSelect?: () => void
 }
 
 export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect }) => {
-  const { t } = useI18n();
-  const providers = useConfigStore((state) => state.providers);
-  const providersLoading = useConfigStore((state) => state.providersLoading);
-  const providersError = useConfigStore((state) => state.providersError);
-  const loadProviders = useConfigStore((state) => state.loadProviders);
-  const selectedProviderId = useConfigStore((state) => state.selectedProviderId);
-  const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
-  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
-  const [sourcesByProvider, setSourcesByProvider] = React.useState<Record<string, ProviderSources>>({});
+  const { t } = useI18n()
+  const providers = useConfigStore((state) => state.providers)
+  const providersLoading = useConfigStore((state) => state.providersLoading)
+  const providersError = useConfigStore((state) => state.providersError)
+  const loadProviders = useConfigStore((state) => state.loadProviders)
+  const selectedProviderId = useConfigStore((state) => state.selectedProviderId)
+  const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider)
+  const activeProjectId = useProjectsStore((s) => s.activeProjectId)
+  const [sourcesByProvider, setSourcesByProvider] = React.useState<Record<string, ProviderSources>>({})
   const directory = React.useMemo(() => {
     // tie refresh to active project changes (directory is stored in the client)
-    void activeProjectId;
-    return getCurrentDirectory();
-  }, [activeProjectId]);
+    void activeProjectId
+    return getCurrentDirectory()
+  }, [activeProjectId])
 
   React.useEffect(() => {
     if (providers.length === 0) {
-      setSourcesByProvider({});
-      return;
+      setSourcesByProvider({})
+      return
     }
 
-    let cancelled = false;
+    let cancelled = false
 
     const loadAllSources = async () => {
       const tasks = providers.map(async (provider) => {
         try {
-          const sources = await fetchProviderSources(provider.id, directory);
+          const sources = await fetchProviderSources(provider.id, directory)
           if (!sources || cancelled) {
-            return;
+            return
           }
           setSourcesByProvider((prev) => ({
             ...prev,
             [provider.id]: sources,
-          }));
+          }))
         } catch {
           // ignore
         }
-      });
+      })
 
-      await Promise.all(tasks);
-    };
+      await Promise.all(tasks)
+    }
 
-    void loadAllSources();
+    void loadAllSources()
 
     return () => {
-      cancelled = true;
-    };
-  }, [directory, providers]);
+      cancelled = true
+    }
+  }, [directory, providers])
 
-  const bgClass = 'bg-background';
+  const bgClass = "bg-background"
 
   const projectProviders = React.useMemo(() => {
-    return providers.filter((p) => Boolean(sourcesByProvider[p.id]?.project?.exists));
-  }, [providers, sourcesByProvider]);
+    return providers.filter((p) => Boolean(sourcesByProvider[p.id]?.project?.exists))
+  }, [providers, sourcesByProvider])
 
   const userProviders = React.useMemo(() => {
-    return providers.filter((p) => !sourcesByProvider[p.id]?.project?.exists);
-  }, [providers, sourcesByProvider]);
+    return providers.filter((p) => !sourcesByProvider[p.id]?.project?.exists)
+  }, [providers, sourcesByProvider])
 
   return (
-    <div className={cn('flex h-full flex-col', bgClass)}>
+    <div className={cn("flex h-full flex-col", bgClass)}>
       <div className="border-b px-3 pt-4 pb-3">
-        <h2 className="text-base font-semibold text-foreground mb-3">{t('settings.providers.sidebar.title')}</h2>
+        <h2 className="text-base font-semibold text-foreground mb-3">{t("settings.providers.sidebar.title")}</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('settings.providers.sidebar.total', { count: providers.length })}</span>
-          <Button size="sm"
+          <span className="typography-meta text-muted-foreground">
+            {t("settings.providers.sidebar.total", { count: providers.length })}
+          </span>
+          <Button
+            size="sm"
             variant="ghost"
             className="h-7 w-7 px-0 -my-1 text-muted-foreground"
             onClick={() => {
-              setSelectedProvider(ADD_PROVIDER_ID);
-              onItemSelect?.();
+              setSelectedProvider(ADD_PROVIDER_ID)
+              onItemSelect?.()
             }}
-            aria-label={t('settings.providers.sidebar.actions.connectProviderAria')}
-            title={t('settings.providers.sidebar.actions.connectProviderTitle')}
+            aria-label={t("settings.providers.sidebar.actions.connectProviderAria")}
+            title={t("settings.providers.sidebar.actions.connectProviderTitle")}
           >
             <Icon name="add" className="h-3.5 w-3.5" />
           </Button>
@@ -103,8 +106,8 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
         {providersError && providers.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <Icon name="error-warning" className="mx-auto mb-3 h-10 w-10 opacity-60" />
-            <p className="typography-ui-label font-medium">{t('settings.providers.sidebar.error.title')}</p>
-            <p className="typography-meta mt-1 opacity-75">{t('settings.providers.sidebar.error.description')}</p>
+            <p className="typography-ui-label font-medium">{t("settings.providers.sidebar.error.title")}</p>
+            <p className="typography-meta mt-1 opacity-75">{t("settings.providers.sidebar.error.description")}</p>
             <Button
               size="sm"
               variant="outline"
@@ -112,26 +115,28 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
               onClick={() => void loadProviders({ directory })}
               disabled={providersLoading}
             >
-              {providersLoading ? t('settings.providers.sidebar.error.retrying') : t('settings.providers.sidebar.error.retry')}
+              {providersLoading
+                ? t("settings.providers.sidebar.error.retrying")
+                : t("settings.providers.sidebar.error.retry")}
             </Button>
           </div>
         ) : providersLoading && providers.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <Icon name="loader" className="mx-auto mb-3 h-10 w-10 animate-spin opacity-50" />
-            <p className="typography-ui-label font-medium">{t('settings.providers.sidebar.loading.title')}</p>
+            <p className="typography-ui-label font-medium">{t("settings.providers.sidebar.loading.title")}</p>
           </div>
         ) : providers.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <Icon name="stack" className="mx-auto mb-3 h-10 w-10 opacity-50" />
-            <p className="typography-ui-label font-medium">{t('settings.providers.sidebar.empty.title')}</p>
-            <p className="typography-meta mt-1 opacity-75">{t('settings.providers.sidebar.empty.description')}</p>
+            <p className="typography-ui-label font-medium">{t("settings.providers.sidebar.empty.title")}</p>
+            <p className="typography-meta mt-1 opacity-75">{t("settings.providers.sidebar.empty.description")}</p>
           </div>
         ) : (
           <>
             {userProviders.length > 0 && (
               <>
                 <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {t('settings.providers.sidebar.section.userProviders')}
+                  {t("settings.providers.sidebar.section.userProviders")}
                 </div>
                 {userProviders.map((provider) => (
                   <ProviderListItem
@@ -139,8 +144,8 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
                     provider={provider}
                     selectedProviderId={selectedProviderId}
                     onSelect={() => {
-                      setSelectedProvider(provider.id);
-                      onItemSelect?.();
+                      setSelectedProvider(provider.id)
+                      onItemSelect?.()
                     }}
                   />
                 ))}
@@ -149,8 +154,13 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
 
             {projectProviders.length > 0 && (
               <>
-                <div className={cn('px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', userProviders.length > 0 ? 'pt-3' : 'pt-2')}>
-                  {t('settings.providers.sidebar.section.projectProviders')}
+                <div
+                  className={cn(
+                    "px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+                    userProviders.length > 0 ? "pt-3" : "pt-2",
+                  )}
+                >
+                  {t("settings.providers.sidebar.section.projectProviders")}
                 </div>
                 {projectProviders.map((provider) => (
                   <ProviderListItem
@@ -158,8 +168,8 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
                     provider={provider}
                     selectedProviderId={selectedProviderId}
                     onSelect={() => {
-                      setSelectedProvider(provider.id);
-                      onItemSelect?.();
+                      setSelectedProvider(provider.id)
+                      onItemSelect?.()
                     }}
                   />
                 ))}
@@ -169,23 +179,23 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
         )}
       </ScrollableOverlay>
     </div>
-  );
-};
+  )
+}
 
 const ProviderListItem: React.FC<{
-  provider: { id: string; name?: string; models?: unknown[] };
-  selectedProviderId: string;
-  onSelect: () => void;
+  provider: { id: string; name?: string; models?: unknown[] }
+  selectedProviderId: string
+  onSelect: () => void
 }> = ({ provider, selectedProviderId, onSelect }) => {
-  const modelCount = Array.isArray(provider.models) ? provider.models.length : 0;
-  const isSelected = provider.id === selectedProviderId;
+  const modelCount = Array.isArray(provider.models) ? provider.models.length : 0
+  const isSelected = provider.id === selectedProviderId
 
   return (
     <div
       key={provider.id}
       className={cn(
-        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
-        isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
+        "group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200",
+        isSelected ? "bg-interactive-selection" : "hover:bg-interactive-hover",
       )}
     >
       <button
@@ -198,10 +208,8 @@ const ProviderListItem: React.FC<{
         <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
           {provider.name || provider.id}
         </span>
-        <span className="typography-micro text-muted-foreground/60 flex-shrink-0">
-          {modelCount}
-        </span>
+        <span className="typography-micro text-muted-foreground/60 flex-shrink-0">{modelCount}</span>
       </button>
     </div>
-  );
-};
+  )
+}

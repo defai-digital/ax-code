@@ -1,38 +1,33 @@
-import type { MainTab } from '@/stores/useUIStore';
-import {
-  type RouteState,
-  VALID_TABS,
-  VALID_SETTINGS_SECTIONS,
-  ROUTE_PARAMS,
-} from './types';
+import type { MainTab } from "@/stores/useUIStore"
+import { type RouteState, VALID_TABS, VALID_SETTINGS_SECTIONS, ROUTE_PARAMS } from "./types"
 
 /**
  * Parse the current URL search parameters into a RouteState.
  * Returns null values for any parameter that is missing or invalid.
  */
 export function parseRoute(searchParams?: URLSearchParams): RouteState {
-  const params = searchParams ?? getSearchParams();
+  const params = searchParams ?? getSearchParams()
 
   return {
     sessionId: parseSessionId(params),
     tab: parseTab(params),
     settingsPath: parseSettingsPath(params),
     diffFile: parseDiffFile(params),
-  };
+  }
 }
 
 /**
  * Safely get URLSearchParams from the current location.
  */
 function getSearchParams(): URLSearchParams {
-  if (typeof window === 'undefined') {
-    return new URLSearchParams();
+  if (typeof window === "undefined") {
+    return new URLSearchParams()
   }
 
   try {
-    return new URLSearchParams(window.location.search);
+    return new URLSearchParams(window.location.search)
   } catch {
-    return new URLSearchParams();
+    return new URLSearchParams()
   }
 }
 
@@ -41,11 +36,11 @@ function getSearchParams(): URLSearchParams {
  * Returns null if missing or empty.
  */
 function parseSessionId(params: URLSearchParams): string | null {
-  const value = params.get(ROUTE_PARAMS.SESSION);
+  const value = params.get(ROUTE_PARAMS.SESSION)
   if (!value || value.trim().length === 0) {
-    return null;
+    return null
   }
-  return value.trim();
+  return value.trim()
 }
 
 /**
@@ -53,17 +48,17 @@ function parseSessionId(params: URLSearchParams): string | null {
  * Returns null if missing or invalid.
  */
 function parseTab(params: URLSearchParams): MainTab | null {
-  const value = params.get(ROUTE_PARAMS.TAB);
+  const value = params.get(ROUTE_PARAMS.TAB)
   if (!value) {
-    return null;
+    return null
   }
 
-  const normalized = value.toLowerCase().trim() as MainTab;
+  const normalized = value.toLowerCase().trim() as MainTab
   if (VALID_TABS.includes(normalized)) {
-    return normalized;
+    return normalized
   }
 
-  return null;
+  return null
 }
 
 /**
@@ -71,28 +66,28 @@ function parseTab(params: URLSearchParams): MainTab | null {
  * Returns null if missing/empty.
  */
 function parseSettingsPath(params: URLSearchParams): string | null {
-  const value = params.get(ROUTE_PARAMS.SETTINGS);
+  const value = params.get(ROUTE_PARAMS.SETTINGS)
   if (!value) {
-    return null;
+    return null
   }
 
-  const normalized = value.toLowerCase().trim();
+  const normalized = value.toLowerCase().trim()
 
   if (normalized.length === 0) {
-    return null;
+    return null
   }
 
   // Handle common aliases
-  if (normalized === 'openchamber' || normalized === 'general' || normalized === 'preferences') {
-    return 'home';
+  if (normalized === "openchamber" || normalized === "general" || normalized === "preferences") {
+    return "home"
   }
 
   // Keep legacy section ids as-is (mapping happens at apply time).
   if ((VALID_SETTINGS_SECTIONS as readonly string[]).includes(normalized)) {
-    return normalized;
+    return normalized
   }
 
-  return normalized;
+  return normalized
 }
 
 /**
@@ -100,17 +95,17 @@ function parseSettingsPath(params: URLSearchParams): string | null {
  * Returns null if missing or empty.
  */
 function parseDiffFile(params: URLSearchParams): string | null {
-  const value = params.get(ROUTE_PARAMS.FILE);
+  const value = params.get(ROUTE_PARAMS.FILE)
   if (!value || value.trim().length === 0) {
-    return null;
+    return null
   }
 
   // URL decode the file path
   try {
-    return decodeURIComponent(value.trim());
+    return decodeURIComponent(value.trim())
   } catch {
     // If decoding fails, return the raw value
-    return value.trim();
+    return value.trim()
   }
 }
 
@@ -118,19 +113,19 @@ function parseDiffFile(params: URLSearchParams): string | null {
  * Check if the current URL has any route parameters.
  */
 export function hasRouteParams(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
+  if (typeof window === "undefined") {
+    return false
   }
 
   try {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(window.location.search)
     return (
       params.has(ROUTE_PARAMS.SESSION) ||
       params.has(ROUTE_PARAMS.TAB) ||
       params.has(ROUTE_PARAMS.SETTINGS) ||
       params.has(ROUTE_PARAMS.FILE)
-    );
+    )
   } catch {
-    return false;
+    return false
   }
 }

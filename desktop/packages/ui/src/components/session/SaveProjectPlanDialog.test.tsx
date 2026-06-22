@@ -1,24 +1,24 @@
-import React from 'react';
-import { describe, expect, test, vi } from 'vitest';
-import { renderToStaticMarkup } from 'react-dom/server';
+import React from "react"
+import { describe, expect, test, vi } from "vitest"
+import { renderToStaticMarkup } from "react-dom/server"
 
-import { I18nProvider } from '@/lib/i18n';
+import { I18nProvider } from "@/lib/i18n"
 
-type MockDialogProps = React.PropsWithChildren<{ open?: boolean; className?: string }>;
+type MockDialogProps = React.PropsWithChildren<{ open?: boolean; className?: string }>
 
-vi.doMock('@/components/ui/dialog', () => ({
+vi.doMock("@/components/ui/dialog", () => ({
   Dialog: ({ children, open = true }: MockDialogProps) => (open ? <>{children}</> : null),
   DialogContent: ({ children }: MockDialogProps) => <div>{children}</div>,
   DialogDescription: ({ children }: MockDialogProps) => <p>{children}</p>,
   DialogFooter: ({ children }: MockDialogProps) => <div>{children}</div>,
   DialogHeader: ({ children }: MockDialogProps) => <div>{children}</div>,
   DialogTitle: ({ children }: MockDialogProps) => <h2>{children}</h2>,
-}));
+}))
 
-const { SaveProjectPlanDialog } = await import('./SaveProjectPlanDialog');
+const { SaveProjectPlanDialog } = await import("./SaveProjectPlanDialog")
 
-describe('SaveProjectPlanDialog', () => {
-  test('associates the title label with the title input', () => {
+describe("SaveProjectPlanDialog", () => {
+  test("associates the title label with the title input", () => {
     const markup = renderToStaticMarkup(
       <I18nProvider>
         <SaveProjectPlanDialog
@@ -29,14 +29,14 @@ describe('SaveProjectPlanDialog', () => {
           onSave={() => {}}
         />
       </I18nProvider>,
-    );
+    )
 
-    const labelMatch = markup.match(/<label[^>]*for="([^"]+)"[^>]*>/);
+    const labelMatch = markup.match(/<label[^>]*for="([^"]+)"[^>]*>/)
     if (!labelMatch) {
-      throw new Error('Expected a label associated with the title input');
+      throw new Error("Expected a label associated with the title input")
     }
 
-    const [, titleInputId] = labelMatch;
-    expect(markup).toContain(`id="${titleInputId}"`);
-  });
-});
+    const [, titleInputId] = labelMatch
+    expect(markup).toContain(`id="${titleInputId}"`)
+  })
+})

@@ -1,5 +1,8 @@
 import dns from "dns/promises"
+import http from "node:http"
+import https from "node:https"
 import net from "net"
+import { Readable } from "node:stream"
 import { withTimeout } from "./timeout"
 
 // SSRF guard. Resolves a URL's hostname and rejects if any resolved
@@ -159,6 +162,89 @@ export namespace Ssrf {
     return hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname
   }
 
+  function responseHeaders(headers: http.IncomingHttpHeaders): Headers {
+    const result = new Headers()
+    for (const [key, value] of Object.entries(headers)) {
+      if (value === undefined) continue
+      if (Array.isArray(value)) {
+        for (const item of value) result.append(key, item)
+      } else {
+        result.set(key, value)
+      }
+    }
+    return result
+  }
+
+  function requestBody(init: PinnedFetchInit | undefined): BodyInit | undefined {
+    return init?.body === null ? undefined : init?.body
+  }
+
+  async function nodePinnedHttpsFetch(input: {
+    originalUrl: URL
+    resolvedAddress: string
+    headers: Headers
+    init: PinnedFetchInit | undefined
+    hostname: string
+  }): Promise<Response> {
+    const method = input.init?.method ?? "GET"
+    const body = requestBody(input.init)
+    const requestHeaders = Object.fromEntries(input.headers.entries())
+
+    return new Promise<Response>((resolve, reject) => {
+      const req = https.request(
+        {
+          protocol: input.originalUrl.protocol,
+          host: input.resolvedAddress,
+          hostname: input.resolvedAddress,
+          port: input.originalUrl.port || 443,
+          method,
+          path: `${input.originalUrl.pathname}${input.originalUrl.search}`,
+          headers: requestHeaders,
+          servername: input.hostname,
+        },
+        (res) => {
+          const webBody = Readable.toWeb(res) as ReadableStream<Uint8Array>
+          resolve(
+            new Response(webBody, {
+              status: res.statusCode ?? 0,
+              statusText: res.statusMessage,
+              headers: responseHeaders(res.headers),
+            }),
+          )
+        },
+      )
+
+      req.on("error", reject)
+      input.init?.signal?.addEventListener(
+        "abort",
+        () => {
+          req.destroy(input.init?.signal?.reason)
+          reject(input.init?.signal?.reason ?? new DOMException("The operation was aborted", "AbortError"))
+        },
+        { once: true },
+      )
+
+      if (body === undefined || method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD") {
+        req.end()
+        return
+      }
+      if (typeof body === "string" || body instanceof Uint8Array) {
+        req.end(body)
+        return
+      }
+      if (body instanceof ArrayBuffer) {
+        req.end(new Uint8Array(body))
+        return
+      }
+      if (body instanceof URLSearchParams) {
+        req.end(body.toString())
+        return
+      }
+      reject(new TypeError("ssrf: unsupported HTTPS pinned fetch body type"))
+      req.destroy()
+    })
+  }
+
   /**
    * Reject if the URL's scheme is anything other than http/https, or
    * if any address it resolves to is in a private / reserved range.
@@ -265,13 +351,20 @@ export namespace Ssrf {
     }
 
     const { label: _, ...fetchInit } = init ?? {}
+    if (parsed.protocol === "https:" && !fetchFn) {
+      return nodePinnedHttpsFetch({
+        originalUrl: parsed,
+        resolvedAddress: resolved.address,
+        headers,
+        init: fetchInit,
+        hostname,
+      })
+    }
+
     return (fetchFn ?? globalThis.fetch)(pinnedUrl.toString(), {
       ...fetchInit,
       headers,
       redirect: "manual",
-      // Bun supports `tls.serverName` for SNI override when connecting
-      // to an IP that differs from the Host header
-      ...(parsed.protocol === "https:" ? { tls: { serverName: hostname } } : {}),
     } as RequestInit)
   }
 

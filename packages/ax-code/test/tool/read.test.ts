@@ -420,12 +420,7 @@ describe("tool.read truncation", () => {
         const read = await ReadTool.init()
         const filePath = path.join(tmp.path, "numbers.txt")
 
-        for (const input of [
-          { offset: "1e3" },
-          { offset: "0x10" },
-          { limit: "1e3" },
-          { limit: "0x10" },
-        ]) {
+        for (const input of [{ offset: "1e3" }, { offset: "0x10" }, { limit: "1e3" }, { limit: "0x10" }]) {
           await expect(read.execute({ filePath, ...input } as any, ctx)).rejects.toThrow("invalid arguments")
         }
       },

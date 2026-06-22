@@ -162,9 +162,9 @@ title: Install
 description: ...
 ---
 
-import { Image } from "astro:assets";
-import desktopLight from "./images/desktop-light.png";
-import desktopDark from "./images/desktop-dark.png";
+import { Image } from "astro:assets"
+import desktopLight from "./images/desktop-light.png"
+import desktopDark from "./images/desktop-dark.png"
 
 <Image src={desktopLight} alt="Desktop app" class="oc-light-only" />
 <Image src={desktopDark} alt="Desktop app" class="oc-dark-only" />

@@ -28,6 +28,7 @@ import {
 } from "../../component/prompt/follow-up-queue-store"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
+import { sidebarLocalInferenceView } from "./sidebar-local-inference-view-model"
 import { Locale } from "@/util/locale"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
@@ -218,6 +219,14 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     const sid = props.sessionID as Parameters<typeof EventQuery.bySessionWithTimestamp>[0]
     const rows = EventQuery.bySessionWithTimestamp(sid)
     return items(parts, rows, sync.data.agent).slice(0, 10)
+  })
+  const localInference = createMemo(() => {
+    props.statusTick?.()
+    return sidebarLocalInferenceView({
+      messages: messages(),
+      partsByMessage: sync.data.part,
+      now: Date.now(),
+    })
   })
 
   const dre = createMemo(() => {
@@ -886,6 +895,19 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
           </scrollbox>
 
           <box flexShrink={0} gap={1} paddingTop={1}>
+            <Show when={localInference()}>
+              {(metrics) => (
+                <box gap={0}>
+                  <text fg={theme.text}>
+                    <b>Local inference</b>{" "}
+                    <span style={{ fg: theme.textMuted }}>{metrics().modelID}</span>
+                  </text>
+                  <text fg={theme.textMuted} wrapMode="none">
+                    prefill {metrics().prefillRate ?? "--"} · decode {metrics().decodeRate ?? "--"}
+                  </text>
+                </box>
+              )}
+            </Show>
             <Show when={!hasProviders() && !gettingStartedDismissed()}>
               <box
                 backgroundColor={theme.backgroundElement}

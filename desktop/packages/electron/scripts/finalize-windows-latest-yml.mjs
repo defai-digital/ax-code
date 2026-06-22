@@ -19,46 +19,43 @@
  * The pure helpers are exported for unit testing; the file IO only runs when the
  * script is invoked directly (e.g. `node finalize-windows-latest-yml.mjs`).
  */
-import fs from 'fs'
-import path from 'path'
-import os from 'os'
-import { pathToFileURL } from 'url'
+import fs from "fs"
+import path from "path"
+import os from "os"
+import { pathToFileURL } from "url"
 
 // download-artifact@v4 without merge-multiple creates a subdir named after the
 // artifact: latest-yml-<target>/latest.yml
-export const PER_ARCH_ARTIFACT_DIRS = [
-  'latest-yml-x86_64-pc-windows-msvc',
-  'latest-yml-aarch64-pc-windows-msvc',
-]
+export const PER_ARCH_ARTIFACT_DIRS = ["latest-yml-x86_64-pc-windows-msvc", "latest-yml-aarch64-pc-windows-msvc"]
 
 // electron-updater YAML is simple enough to parse without a YAML library:
 // each file entry is an indented object inside a "files:" block.
 export function parseLatestYml(text) {
-  const lines = text.split('\n')
+  const lines = text.split("\n")
   const result = { files: [] }
   let currentFile = null
 
   for (const raw of lines) {
     const line = raw.trimEnd()
-    if (line.startsWith('version:')) {
-      result.version = line.split(':')[1].trim().replace(/['"]/g, '')
-    } else if (line.startsWith('releaseDate:')) {
-      result.releaseDate = line.split(':').slice(1).join(':').trim().replace(/['"]/g, '')
-    } else if (line.startsWith('files:')) {
+    if (line.startsWith("version:")) {
+      result.version = line.split(":")[1].trim().replace(/['"]/g, "")
+    } else if (line.startsWith("releaseDate:")) {
+      result.releaseDate = line.split(":").slice(1).join(":").trim().replace(/['"]/g, "")
+    } else if (line.startsWith("files:")) {
       // start of files array
     } else if (/^  - url:/.test(line)) {
       if (currentFile) result.files.push(currentFile)
-      currentFile = { url: line.replace(/^  - url:/, '').trim() }
+      currentFile = { url: line.replace(/^  - url:/, "").trim() }
     } else if (/^    sha512:/.test(line) && currentFile) {
-      currentFile.sha512 = line.replace(/^    sha512:/, '').trim()
+      currentFile.sha512 = line.replace(/^    sha512:/, "").trim()
     } else if (/^    size:/.test(line) && currentFile) {
-      currentFile.size = Number(line.replace(/^    size:/, '').trim())
+      currentFile.size = Number(line.replace(/^    size:/, "").trim())
     } else if (/^    blockMapSize:/.test(line) && currentFile) {
-      currentFile.blockMapSize = Number(line.replace(/^    blockMapSize:/, '').trim())
-    } else if (line.startsWith('path:')) {
-      result.path = line.split(':')[1].trim().replace(/['"]/g, '')
-    } else if (line.startsWith('sha512:')) {
-      result.sha512 = line.split(':').slice(1).join(':').trim()
+      currentFile.blockMapSize = Number(line.replace(/^    blockMapSize:/, "").trim())
+    } else if (line.startsWith("path:")) {
+      result.path = line.split(":")[1].trim().replace(/['"]/g, "")
+    } else if (line.startsWith("sha512:")) {
+      result.sha512 = line.split(":").slice(1).join(":").trim()
     }
   }
   if (currentFile) result.files.push(currentFile)
@@ -66,7 +63,7 @@ export function parseLatestYml(text) {
 }
 
 export function emitYml(obj) {
-  const lines = [`version: ${obj.version}`, 'files:']
+  const lines = [`version: ${obj.version}`, "files:"]
   for (const f of obj.files) {
     lines.push(`  - url: ${f.url}`)
     lines.push(`    sha512: ${f.sha512}`)
@@ -78,7 +75,7 @@ export function emitYml(obj) {
   lines.push(`path: ${canonical.url}`)
   lines.push(`sha512: ${canonical.sha512}`)
   lines.push(`releaseDate: '${new Date().toISOString()}'`)
-  return lines.join('\n') + '\n'
+  return lines.join("\n") + "\n"
 }
 
 /**
@@ -104,29 +101,31 @@ function main() {
   const latestYmlDir = process.env.LATEST_YML_DIR
   const version = process.env.AX_CODE_DESKTOP_VERSION
 
-  if (!latestYmlDir) throw new Error('LATEST_YML_DIR is not set')
-  if (!version) throw new Error('AX_CODE_DESKTOP_VERSION is not set')
+  if (!latestYmlDir) throw new Error("LATEST_YML_DIR is not set")
+  if (!version) throw new Error("AX_CODE_DESKTOP_VERSION is not set")
 
   const texts = []
   let found = 0
   for (const dir of PER_ARCH_ARTIFACT_DIRS) {
-    const file = path.join(latestYmlDir, dir, 'latest.yml')
+    const file = path.join(latestYmlDir, dir, "latest.yml")
     if (!fs.existsSync(file)) {
       console.warn(`[finalize-windows-latest-yml] missing (skipped): ${file}`)
       continue
     }
     found += 1
-    texts.push(fs.readFileSync(file, 'utf8'))
+    texts.push(fs.readFileSync(file, "utf8"))
   }
 
   if (found === 0) throw new Error(`No Windows latest.yml found under ${latestYmlDir}`)
 
   const merged = mergeLatestYmls(texts, version)
-  if (merged.files.length === 0) throw new Error('Windows latest.yml files contained no file entries')
+  if (merged.files.length === 0) throw new Error("Windows latest.yml files contained no file entries")
 
-  const outPath = path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), 'latest.yml')
+  const outPath = path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), "latest.yml")
   fs.writeFileSync(outPath, emitYml(merged))
-  console.log(`[finalize-windows-latest-yml] wrote ${outPath} (${merged.files.length} file entries from ${found} arch manifest(s))`)
+  console.log(
+    `[finalize-windows-latest-yml] wrote ${outPath} (${merged.files.length} file entries from ${found} arch manifest(s))`,
+  )
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href

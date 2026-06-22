@@ -1,4 +1,4 @@
-import type { SVGProps } from 'react';
+import type { SVGProps } from "react"
 
 export function ArrowsMerge(props: SVGProps<SVGSVGElement>) {
   return (
@@ -15,5 +15,5 @@ export function ArrowsMerge(props: SVGProps<SVGSVGElement>) {
         transform="rotate(180 128 128)"
       />
     </svg>
-  );
+  )
 }

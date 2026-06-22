@@ -1,23 +1,23 @@
-'use strict'
+"use strict"
 
-const fs = require('fs')
-const path = require('path')
-const crypto = require('crypto')
+const fs = require("fs")
+const path = require("path")
+const crypto = require("crypto")
 
-const REDACTED = '[redacted]'
+const REDACTED = "[redacted]"
 const REDACT_KEY_RE = /authorization|cookie|password|secret|token|key/i
 
 function isPlainObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
+  return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
 function sanitizeDetails(value, depth = 0) {
   if (value === null || value === undefined) return value
-  if (depth > 3) return '[truncated]'
-  if (typeof value === 'string') {
+  if (depth > 3) return "[truncated]"
+  if (typeof value === "string") {
     return value.length > 240 ? `${value.slice(0, 240)}...` : value
   }
-  if (typeof value === 'number' || typeof value === 'boolean') return value
+  if (typeof value === "number" || typeof value === "boolean") return value
   if (Array.isArray(value)) {
     return value.slice(0, 20).map((entry) => sanitizeDetails(entry, depth + 1))
   }
@@ -33,7 +33,7 @@ function sanitizeDetails(value, depth = 0) {
 function createStartupDiagnostics(options = {}) {
   const bootId = options.bootId || crypto.randomUUID()
   const startedAtEpochMs = Date.now()
-  const source = options.source || 'electron-main'
+  const source = options.source || "electron-main"
   const logPath = options.logPath
   const maxEvents = options.maxEvents || 256
   const events = []
@@ -44,18 +44,18 @@ function createStartupDiagnostics(options = {}) {
     try {
       fs.mkdirSync(path.dirname(logPath), { recursive: true })
       fs.appendFile(logPath, `[startup] ${JSON.stringify(event)}\n`, () => {})
-    } catch {
-    }
+    } catch {}
   }
 
   function normalizeEvent(name, details = {}, eventOptions = {}) {
-    if (typeof name !== 'string' || name.trim().length === 0) return null
+    if (typeof name !== "string" || name.trim().length === 0) return null
     const atEpochMs = Number.isFinite(eventOptions.atEpochMs) ? eventOptions.atEpochMs : Date.now()
     return {
       name: name.trim(),
-      source: typeof eventOptions.source === 'string' && eventOptions.source.trim().length > 0
-        ? eventOptions.source.trim()
-        : source,
+      source:
+        typeof eventOptions.source === "string" && eventOptions.source.trim().length > 0
+          ? eventOptions.source.trim()
+          : source,
       atEpochMs,
       sinceStartMs: Math.max(0, Math.round(atEpochMs - startedAtEpochMs)),
       details: sanitizeDetails(details),

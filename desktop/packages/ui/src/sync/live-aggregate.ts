@@ -1,42 +1,42 @@
-import type { SessionStatus } from '@ax-code/sdk/v2/client'
-import type { Session } from '@ax-code/sdk/v2'
-import { Binary } from './binary'
-import type { State } from './types'
+import type { SessionStatus } from "@ax-code/sdk/v2/client"
+import type { Session } from "@ax-code/sdk/v2"
+import { Binary } from "./binary"
+import type { State } from "./types"
 
-type LiveStateSlice = Pick<State, 'session' | 'session_status'>
+type LiveStateSlice = Pick<State, "session" | "session_status">
 
 const getSessionUpdatedAt = (session: Session): number => {
   const updatedAt = session.time?.updated
-  if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
+  if (typeof updatedAt === "number" && Number.isFinite(updatedAt)) {
     return updatedAt
   }
 
   const createdAt = session.time?.created
-  return typeof createdAt === 'number' && Number.isFinite(createdAt) ? createdAt : 0
+  return typeof createdAt === "number" && Number.isFinite(createdAt) ? createdAt : 0
 }
 
 const getSessionSignature = (session: Session): string => {
-  const directory = (session as Session & { directory?: string | null }).directory ?? ''
-  const parentID = (session as Session & { parentID?: string | null }).parentID ?? ''
+  const directory = (session as Session & { directory?: string | null }).directory ?? ""
+  const parentID = (session as Session & { parentID?: string | null }).parentID ?? ""
   return [
     session.id,
-    session.title ?? '',
+    session.title ?? "",
     session.time?.created ?? 0,
     session.time?.updated ?? 0,
     session.time?.archived ?? 0,
     directory,
     parentID,
-    session.share?.url ?? '',
-  ].join('|')
+    session.share?.url ?? "",
+  ].join("|")
 }
 
 const getStatusPriority = (status: SessionStatus | undefined): number => {
   switch (status?.type) {
-    case 'retry':
+    case "retry":
       return 4
-    case 'busy':
+    case "busy":
       return 3
-    case 'idle':
+    case "idle":
       return 1
     default:
       return 0
@@ -45,19 +45,21 @@ const getStatusPriority = (status: SessionStatus | undefined): number => {
 
 const getStatusMessage = (status: SessionStatus | undefined): string | null => {
   const message = (status as { message?: unknown } | undefined)?.message
-  return typeof message === 'string' ? message : null
+  return typeof message === "string" ? message : null
 }
 
-const getStatusNumberField = (status: SessionStatus | undefined, field: 'attempt' | 'next'): number | null => {
+const getStatusNumberField = (status: SessionStatus | undefined, field: "attempt" | "next"): number | null => {
   const value = (status as Record<string, unknown> | undefined)?.[field]
-  return typeof value === 'number' ? value : null
+  return typeof value === "number" ? value : null
 }
 
 const areStatusesEquivalent = (left: SessionStatus | undefined, right: SessionStatus | undefined): boolean => {
-  return left?.type === right?.type
-    && getStatusMessage(left) === getStatusMessage(right)
-    && getStatusNumberField(left, 'attempt') === getStatusNumberField(right, 'attempt')
-    && getStatusNumberField(left, 'next') === getStatusNumberField(right, 'next')
+  return (
+    left?.type === right?.type &&
+    getStatusMessage(left) === getStatusMessage(right) &&
+    getStatusNumberField(left, "attempt") === getStatusNumberField(right, "attempt") &&
+    getStatusNumberField(left, "next") === getStatusNumberField(right, "next")
+  )
 }
 
 type StatusCandidate = {

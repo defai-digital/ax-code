@@ -351,7 +351,7 @@ describe("release check (full checks)", () => {
     const capture = path.join(repo, "pnpm-args.txt")
     await mkdir(binDir)
     const pnpm = path.join(binDir, "pnpm")
-    await writeFile(pnpm, ['#!/bin/sh', 'printf "%s\\n" "$@" > "$PNPM_CAPTURE"', "exit 0", ""].join("\n"))
+    await writeFile(pnpm, ["#!/bin/sh", 'printf "%s\\n" "$@" > "$PNPM_CAPTURE"', "exit 0", ""].join("\n"))
     await chmod(pnpm, 0o755)
 
     const originalPath = process.env.PATH
@@ -400,7 +400,7 @@ describe("release check (full checks)", () => {
     const capture = path.join(repo, "pnpm-test-args.txt")
     await mkdir(binDir)
     const pnpm = path.join(binDir, "pnpm")
-    await writeFile(pnpm, ['#!/bin/sh', 'printf "%s\\n" "$@" > "$PNPM_CAPTURE"', "exit 0", ""].join("\n"))
+    await writeFile(pnpm, ["#!/bin/sh", 'printf "%s\\n" "$@" > "$PNPM_CAPTURE"', "exit 0", ""].join("\n"))
     await chmod(pnpm, 0o755)
 
     const originalPath = process.env.PATH

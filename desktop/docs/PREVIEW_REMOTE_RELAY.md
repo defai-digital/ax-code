@@ -11,10 +11,10 @@ The current preview implementation (`packages/web/server/lib/preview/proxy-runti
 AX Code Desktop server process and forwards requests to a **loopback** target
 (`localhost`, `127.0.0.1`, `::1`, `0.0.0.0`). It works for these topologies:
 
-| Topology                                                                 | Works today? |
-| ------------------------------------------------------------------------ | ------------ |
-| Web UI in browser, AX Code Desktop server on same host as dev server         | yes          |
-| Electron desktop, dev server on same host                                | yes          |
+| Topology                                                                                   | Works today? |
+| ------------------------------------------------------------------------------------------ | ------------ |
+| Web UI in browser, AX Code Desktop server on same host as dev server                       | yes          |
+| Electron desktop, dev server on same host                                                  | yes          |
 | **Remote AX Code Desktop** (cloud / shared / tunneled), dev server on user's local machine | **no**       |
 
 The blocked case is real: a user runs `ax-code-desktop serve` on a remote box (or a
@@ -171,21 +171,21 @@ header followed by an opaque body. Designed to be implementable in Node without 
 
 Operations:
 
-| op   | name              | direction      | metadata                                                            | body                                |
-| ---- | ----------------- | -------------- | ------------------------------------------------------------------- | ----------------------------------- |
-| 0x01 | hello             | agent → server | `{ agentVersion, hostnameHint, allowedTargets: [{origin}] }`        | empty                               |
-| 0x02 | hello-ack         | server → agent | `{ ok, serverVersion }` or `{ ok: false, reason }`                  | empty                               |
-| 0x10 | http-request      | server → agent | `{ streamId, method, path, headers, originHint }`                   | request body bytes                  |
-| 0x11 | http-response-head| agent → server | `{ streamId, status, headers }`                                     | empty                               |
-| 0x12 | http-response-data| agent → server | `{ streamId, fin: bool }`                                           | response body chunk                 |
-| 0x13 | http-error        | agent → server | `{ streamId, code, message }`                                       | empty                               |
-| 0x20 | ws-open           | server → agent | `{ streamId, path, headers, subprotocols }`                         | empty                               |
-| 0x21 | ws-open-ack       | agent → server | `{ streamId, ok, status?, subprotocol? }`                           | empty                               |
-| 0x22 | ws-frame          | both           | `{ streamId, opcode: 'text'|'binary', fin: bool }`                  | frame payload                       |
-| 0x23 | ws-close          | both           | `{ streamId, code?, reason? }`                                      | empty                               |
-| 0x30 | cancel            | server → agent | `{ streamId }`                                                      | empty                               |
-| 0xFE | ping              | both           | `{ ts }`                                                            | empty                               |
-| 0xFF | disconnect        | server → agent | `{ reason }`                                                        | empty                               |
+| op   | name               | direction      | metadata                                                     | body                   |
+| ---- | ------------------ | -------------- | ------------------------------------------------------------ | ---------------------- | ------------- |
+| 0x01 | hello              | agent → server | `{ agentVersion, hostnameHint, allowedTargets: [{origin}] }` | empty                  |
+| 0x02 | hello-ack          | server → agent | `{ ok, serverVersion }` or `{ ok: false, reason }`           | empty                  |
+| 0x10 | http-request       | server → agent | `{ streamId, method, path, headers, originHint }`            | request body bytes     |
+| 0x11 | http-response-head | agent → server | `{ streamId, status, headers }`                              | empty                  |
+| 0x12 | http-response-data | agent → server | `{ streamId, fin: bool }`                                    | response body chunk    |
+| 0x13 | http-error         | agent → server | `{ streamId, code, message }`                                | empty                  |
+| 0x20 | ws-open            | server → agent | `{ streamId, path, headers, subprotocols }`                  | empty                  |
+| 0x21 | ws-open-ack        | agent → server | `{ streamId, ok, status?, subprotocol? }`                    | empty                  |
+| 0x22 | ws-frame           | both           | `{ streamId, opcode: 'text'                                  | 'binary', fin: bool }` | frame payload |
+| 0x23 | ws-close           | both           | `{ streamId, code?, reason? }`                               | empty                  |
+| 0x30 | cancel             | server → agent | `{ streamId }`                                               | empty                  |
+| 0xFE | ping               | both           | `{ ts }`                                                     | empty                  |
+| 0xFF | disconnect         | server → agent | `{ reason }`                                                 | empty                  |
 
 Notes:
 
@@ -244,15 +244,15 @@ Out-of-scope hardening to revisit later:
 
 ## Failure modes
 
-| Failure                                | Behaviour                                                                                                      |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Agent never connected                  | `POST /api/preview/targets/remote` returns 409 with `{ error: 'No agent connected' }`. UI shows empty state.   |
-| Agent disconnected mid-request         | Server cancels the stream, returns 502 to the browser, evicts the target. Existing overlay handles it.         |
-| Dev server down on user's laptop       | Agent forwards the connection refusal as `http-error`; server emits 502. Existing overlay handles it.          |
-| Slow agent / dev server                | Streamed response keeps flowing; no buffering on the server. WebSocket flow control gates the data rate.       |
-| Server restarted                       | Agent reconnects with stored `agentSecret`. Browser-side cache 404s on next request and re-registers.          |
-| Enrollment token expired               | `POST /api/preview/agent/enroll` returns 401 with a clear error; UI prompts to mint a new one.                 |
-| Two agents registered for same user    | Allowed. The browser-side flow always picks the most recently active agent for a given upstream URL.           |
+| Failure                             | Behaviour                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Agent never connected               | `POST /api/preview/targets/remote` returns 409 with `{ error: 'No agent connected' }`. UI shows empty state. |
+| Agent disconnected mid-request      | Server cancels the stream, returns 502 to the browser, evicts the target. Existing overlay handles it.       |
+| Dev server down on user's laptop    | Agent forwards the connection refusal as `http-error`; server emits 502. Existing overlay handles it.        |
+| Slow agent / dev server             | Streamed response keeps flowing; no buffering on the server. WebSocket flow control gates the data rate.     |
+| Server restarted                    | Agent reconnects with stored `agentSecret`. Browser-side cache 404s on next request and re-registers.        |
+| Enrollment token expired            | `POST /api/preview/agent/enroll` returns 401 with a clear error; UI prompts to mint a new one.               |
+| Two agents registered for same user | Allowed. The browser-side flow always picks the most recently active agent for a given upstream URL.         |
 
 ## Open questions
 
@@ -277,7 +277,7 @@ These need a decision before implementation, not before the doc lands.
    pressure for us but adds a heavy dep. Bias: custom frames; revisit only
    if we hit a back-pressure or multiplexing bug we cannot solve cleanly.
 6. **Compression.** The current loopback path forces `accept-encoding:
-   identity` to keep the proxy simple. The remote path probably wants
+identity` to keep the proxy simple. The remote path probably wants
    gzip/br between the agent and the server to save bandwidth on slow
    links — but the dev server may not be configured for it. Decide once we
    measure.

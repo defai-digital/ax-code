@@ -21,6 +21,26 @@ describe("cycle-detection", () => {
     expect(detectCycle([e("a", "x"), e("a", "x"), e("a", "y")])).toBeNull()
   })
 
+  test("k=1 distinguishes output fingerprint when present", () => {
+    const changedOutput = [
+      { tool: "list", input: '{"path":"."}', output: "a" },
+      { tool: "list", input: '{"path":"."}', output: "a" },
+      { tool: "list", input: '{"path":"."}', output: "b" },
+    ] satisfies RingEntry[]
+    expect(detectCycle(changedOutput, undefined, { compareOutput: true })).toBeNull()
+    expect(
+      detectCycle(
+        [
+          { tool: "list", input: '{"path":"."}', output: "a" },
+          { tool: "list", input: '{"path":"."}', output: "a" },
+          { tool: "list", input: '{"path":"."}', output: "a" },
+        ],
+        undefined,
+        { compareOutput: true },
+      ),
+    ).toBe(1)
+  })
+
   test("k=2 detects A,B,A,B with two repeats", () => {
     expect(detectCycle([e("a"), e("b"), e("a"), e("b")])).toBe(2)
   })

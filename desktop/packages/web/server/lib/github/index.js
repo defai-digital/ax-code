@@ -7,18 +7,10 @@ export {
   getGitHubClientId,
   getGitHubScopes,
   GITHUB_AUTH_FILE,
-} from './auth.js';
+} from "./auth.js"
 
-export {
-  startDeviceFlow,
-  exchangeDeviceCode,
-} from './device-flow.js';
+export { startDeviceFlow, exchangeDeviceCode } from "./device-flow.js"
 
-export {
-  getOctokitOrNull,
-} from './octokit.js';
+export { getOctokitOrNull } from "./octokit.js"
 
-export {
-  parseGitHubRemoteUrl,
-  resolveGitHubRepoFromDirectory,
-} from './repo/index.js';
+export { parseGitHubRemoteUrl, resolveGitHubRepoFromDirectory } from "./repo/index.js"

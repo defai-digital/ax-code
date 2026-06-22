@@ -1,126 +1,124 @@
 export const createRequestSecurityRuntime = (deps) => {
-  const { readSettingsFromDiskMigrated } = deps;
+  const { readSettingsFromDiskMigrated } = deps
 
   const addHostOriginCandidates = (origins, protocol, host) => {
-    let parsed = null;
+    let parsed = null
     try {
-      parsed = new URL(`${protocol}://${host}`);
+      parsed = new URL(`${protocol}://${host}`)
     } catch {
-      return;
+      return
     }
 
-    origins.add(parsed.origin);
+    origins.add(parsed.origin)
 
-    const normalizedHost = parsed.hostname.toLowerCase();
-    const portSuffix = parsed.port ? `:${parsed.port}` : '';
-    if (normalizedHost === 'localhost') {
-      origins.add(`${parsed.protocol}//127.0.0.1${portSuffix}`);
-      origins.add(`${parsed.protocol}//[::1]${portSuffix}`);
-    } else if (normalizedHost === '127.0.0.1' || normalizedHost === '[::1]') {
-      origins.add(`${parsed.protocol}//localhost${portSuffix}`);
+    const normalizedHost = parsed.hostname.toLowerCase()
+    const portSuffix = parsed.port ? `:${parsed.port}` : ""
+    if (normalizedHost === "localhost") {
+      origins.add(`${parsed.protocol}//127.0.0.1${portSuffix}`)
+      origins.add(`${parsed.protocol}//[::1]${portSuffix}`)
+    } else if (normalizedHost === "127.0.0.1" || normalizedHost === "[::1]") {
+      origins.add(`${parsed.protocol}//localhost${portSuffix}`)
     }
-  };
+  }
 
   const getUiSessionTokenFromRequest = (req) => {
-    const cookieHeader = req?.headers?.cookie;
-    if (!cookieHeader || typeof cookieHeader !== 'string') {
-      return null;
+    const cookieHeader = req?.headers?.cookie
+    if (!cookieHeader || typeof cookieHeader !== "string") {
+      return null
     }
-    const segments = cookieHeader.split(';');
+    const segments = cookieHeader.split(";")
     for (const segment of segments) {
-      const [rawName, ...rest] = segment.split('=');
-      const name = rawName?.trim();
-      if (!name) continue;
-      if (name !== 'oc_ui_session') continue;
-      const value = rest.join('=').trim();
+      const [rawName, ...rest] = segment.split("=")
+      const name = rawName?.trim()
+      if (!name) continue
+      if (name !== "oc_ui_session") continue
+      const value = rest.join("=").trim()
       try {
-        return decodeURIComponent(value || '');
+        return decodeURIComponent(value || "")
       } catch {
-        return value || null;
+        return value || null
       }
     }
-    return null;
-  };
+    return null
+  }
 
   const rejectWebSocketUpgrade = (socket, statusCode, reason) => {
     if (!socket || socket.destroyed) {
-      return;
+      return
     }
 
-    const message = typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : 'Bad Request';
-    const body = Buffer.from(message, 'utf8');
-    const statusText = {
-      400: 'Bad Request',
-      401: 'Unauthorized',
-      403: 'Forbidden',
-      404: 'Not Found',
-      500: 'Internal Server Error',
-    }[statusCode] || 'Bad Request';
+    const message = typeof reason === "string" && reason.trim().length > 0 ? reason.trim() : "Bad Request"
+    const body = Buffer.from(message, "utf8")
+    const statusText =
+      {
+        400: "Bad Request",
+        401: "Unauthorized",
+        403: "Forbidden",
+        404: "Not Found",
+        500: "Internal Server Error",
+      }[statusCode] || "Bad Request"
 
     try {
       socket.write(
         `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
-        'Connection: close\r\n' +
-        'Content-Type: text/plain; charset=utf-8\r\n' +
-        `Content-Length: ${body.length}\r\n\r\n`
-      );
-      socket.write(body);
-    } catch {
-    }
+          "Connection: close\r\n" +
+          "Content-Type: text/plain; charset=utf-8\r\n" +
+          `Content-Length: ${body.length}\r\n\r\n`,
+      )
+      socket.write(body)
+    } catch {}
 
     try {
-      socket.destroy();
-    } catch {
-    }
-  };
+      socket.destroy()
+    } catch {}
+  }
 
   const getRequestOriginCandidates = async (req) => {
-    const origins = new Set();
-    const forwardedProto = typeof req.headers['x-forwarded-proto'] === 'string'
-      ? req.headers['x-forwarded-proto'].split(',')[0].trim().toLowerCase()
-      : '';
-    const protocol = forwardedProto || (req.socket?.encrypted ? 'https' : 'http');
+    const origins = new Set()
+    const forwardedProto =
+      typeof req.headers["x-forwarded-proto"] === "string"
+        ? req.headers["x-forwarded-proto"].split(",")[0].trim().toLowerCase()
+        : ""
+    const protocol = forwardedProto || (req.socket?.encrypted ? "https" : "http")
 
-    const forwardedHost = typeof req.headers['x-forwarded-host'] === 'string'
-      ? req.headers['x-forwarded-host'].split(',')[0].trim()
-      : '';
-    const host = forwardedHost || (typeof req.headers.host === 'string' ? req.headers.host.trim() : '');
+    const forwardedHost =
+      typeof req.headers["x-forwarded-host"] === "string" ? req.headers["x-forwarded-host"].split(",")[0].trim() : ""
+    const host = forwardedHost || (typeof req.headers.host === "string" ? req.headers.host.trim() : "")
 
     if (host) {
-      addHostOriginCandidates(origins, protocol, host);
+      addHostOriginCandidates(origins, protocol, host)
     }
 
     try {
-      const settings = await readSettingsFromDiskMigrated();
-      if (typeof settings?.publicOrigin === 'string' && settings.publicOrigin.trim().length > 0) {
-        origins.add(new URL(settings.publicOrigin.trim()).origin);
+      const settings = await readSettingsFromDiskMigrated()
+      if (typeof settings?.publicOrigin === "string" && settings.publicOrigin.trim().length > 0) {
+        origins.add(new URL(settings.publicOrigin.trim()).origin)
       }
-    } catch {
-    }
+    } catch {}
 
-    return origins;
-  };
+    return origins
+  }
 
   const isRequestOriginAllowed = async (req) => {
-    const originHeader = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : '';
+    const originHeader = typeof req.headers.origin === "string" ? req.headers.origin.trim() : ""
     if (!originHeader) {
-      return false;
+      return false
     }
 
-    let normalizedOrigin = '';
+    let normalizedOrigin = ""
     try {
-      normalizedOrigin = new URL(originHeader).origin;
+      normalizedOrigin = new URL(originHeader).origin
     } catch {
-      return false;
+      return false
     }
 
-    const allowedOrigins = await getRequestOriginCandidates(req);
-    return allowedOrigins.has(normalizedOrigin);
-  };
+    const allowedOrigins = await getRequestOriginCandidates(req)
+    return allowedOrigins.has(normalizedOrigin)
+  }
 
   return {
     getUiSessionTokenFromRequest,
     rejectWebSocketUpgrade,
     isRequestOriginAllowed,
-  };
-};
+  }
+}

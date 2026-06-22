@@ -1,109 +1,109 @@
-import type { Session } from '@ax-code/sdk/v2';
-import type { SessionStatus } from '@ax-code/sdk/v2/client';
+import type { Session } from "@ax-code/sdk/v2"
+import type { SessionStatus } from "@ax-code/sdk/v2/client"
 
-export const ACTIVE_NOW_STORAGE_KEY = 'oc.sessions.activeNow';
-export const ACTIVE_NOW_MAX_AGE_MS = 36 * 60 * 60 * 1000;
+export const ACTIVE_NOW_STORAGE_KEY = "oc.sessions.activeNow"
+export const ACTIVE_NOW_MAX_AGE_MS = 36 * 60 * 60 * 1000
 
 export type ActiveNowEntry = {
-  sessionId: string;
-};
+  sessionId: string
+}
 
 const isSubtaskSession = (session: Session): boolean => {
-  return Boolean((session as Session & { parentID?: string | null }).parentID);
-};
+  return Boolean((session as Session & { parentID?: string | null }).parentID)
+}
 
 const isArchivedSession = (session: Session): boolean => {
-  return Boolean(session.time?.archived);
-};
+  return Boolean(session.time?.archived)
+}
 
 const getSessionUpdatedAt = (session: Session): number => {
-  const updated = session.time?.updated;
-  const created = session.time?.created;
-  if (typeof updated === 'number' && Number.isFinite(updated)) {
-    return updated;
+  const updated = session.time?.updated
+  const created = session.time?.created
+  if (typeof updated === "number" && Number.isFinite(updated)) {
+    return updated
   }
-  if (typeof created === 'number' && Number.isFinite(created)) {
-    return created;
+  if (typeof created === "number" && Number.isFinite(created)) {
+    return created
   }
-  return 0;
-};
+  return 0
+}
 
 export const readActiveNowEntries = (storage: Storage): ActiveNowEntry[] => {
   try {
-    const raw = storage.getItem(ACTIVE_NOW_STORAGE_KEY);
+    const raw = storage.getItem(ACTIVE_NOW_STORAGE_KEY)
     if (!raw) {
-      return [];
+      return []
     }
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) {
-      return [];
+      return []
     }
-    const seen = new Set<string>();
-    const next: ActiveNowEntry[] = [];
+    const seen = new Set<string>()
+    const next: ActiveNowEntry[] = []
     parsed.forEach((item) => {
-      const sessionId = typeof item === 'string'
-        ? item
-        : (item && typeof item === 'object' && 'sessionId' in item && typeof item.sessionId === 'string' ? item.sessionId : null);
+      const sessionId =
+        typeof item === "string"
+          ? item
+          : item && typeof item === "object" && "sessionId" in item && typeof item.sessionId === "string"
+            ? item.sessionId
+            : null
       if (!sessionId || seen.has(sessionId)) {
-        return;
+        return
       }
-      seen.add(sessionId);
-      next.push({ sessionId });
-    });
-    return next;
+      seen.add(sessionId)
+      next.push({ sessionId })
+    })
+    return next
   } catch {
-    return [];
+    return []
   }
-};
+}
 
 export const persistActiveNowEntries = (storage: Storage, entries: ActiveNowEntry[]): void => {
   try {
-    storage.setItem(ACTIVE_NOW_STORAGE_KEY, JSON.stringify(entries));
+    storage.setItem(ACTIVE_NOW_STORAGE_KEY, JSON.stringify(entries))
   } catch {
     // ignored
   }
-};
+}
 
 export const pruneActiveNowEntries = (
   entries: ActiveNowEntry[],
   sessionsById: Map<string, Session>,
   now = Date.now(),
 ): ActiveNowEntry[] => {
-  const minUpdatedAt = now - ACTIVE_NOW_MAX_AGE_MS;
+  const minUpdatedAt = now - ACTIVE_NOW_MAX_AGE_MS
   return entries.filter((entry) => {
-    const session = sessionsById.get(entry.sessionId);
+    const session = sessionsById.get(entry.sessionId)
     if (!session) {
-      return true;
+      return true
     }
     if (isArchivedSession(session)) {
-      return false;
+      return false
     }
-    return getSessionUpdatedAt(session) >= minUpdatedAt;
-  });
-};
+    return getSessionUpdatedAt(session) >= minUpdatedAt
+  })
+}
 
 export const addActiveNowSession = (entries: ActiveNowEntry[], sessionId: string): ActiveNowEntry[] => {
   if (!sessionId || entries.some((entry) => entry.sessionId === sessionId)) {
-    return entries;
+    return entries
   }
-  return [{ sessionId }, ...entries];
-};
+  return [{ sessionId }, ...entries]
+}
 
 export const sortSessionsByUpdated = (sessions: Session[]): Session[] => {
-  return [...sessions].sort((a, b) => getSessionUpdatedAt(b) - getSessionUpdatedAt(a));
-};
+  return [...sessions].sort((a, b) => getSessionUpdatedAt(b) - getSessionUpdatedAt(a))
+}
 
-export const deriveActiveNowSessions = (
-  entries: ActiveNowEntry[],
-  sessionsById: Map<string, Session>,
-): Session[] => {
+export const deriveActiveNowSessions = (entries: ActiveNowEntry[], sessionsById: Map<string, Session>): Session[] => {
   const sessions = entries
     .map((entry) => sessionsById.get(entry.sessionId) ?? null)
     .filter((session): session is Session => Boolean(session))
     .filter((session) => !isArchivedSession(session))
-    .filter((session) => !isSubtaskSession(session));
-  return sortSessionsByUpdated(sessions);
-};
+    .filter((session) => !isSubtaskSession(session))
+  return sortSessionsByUpdated(sessions)
+}
 
 export const deriveLiveActiveNowSessions = (
   sessions: Session[],
@@ -111,14 +111,14 @@ export const deriveLiveActiveNowSessions = (
 ): Session[] => {
   const activeSessions = sessions.filter((session) => {
     if (isArchivedSession(session) || isSubtaskSession(session)) {
-      return false;
+      return false
     }
 
-    const status = statuses[session.id];
-    return status?.type === 'busy' || status?.type === 'retry';
-  });
+    const status = statuses[session.id]
+    return status?.type === "busy" || status?.type === "retry"
+  })
 
-  return sortSessionsByUpdated(activeSessions);
-};
+  return sortSessionsByUpdated(activeSessions)
+}
 
-export const getSessionUpdatedAtMs = getSessionUpdatedAt;
+export const getSessionUpdatedAtMs = getSessionUpdatedAt

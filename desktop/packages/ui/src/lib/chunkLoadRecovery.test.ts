@@ -1,51 +1,54 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from "vitest"
 
-import { importWithChunkRecovery } from './chunkLoadRecovery';
+import { importWithChunkRecovery } from "./chunkLoadRecovery"
 
-describe('importWithChunkRecovery', () => {
-  test('schedules recovery reload when stored reload marker is corrupt', async () => {
-    const globalWithWindow = globalThis as unknown as { window?: unknown };
-    const previousWindow = globalWithWindow.window;
-    let storedMarker: string | null = null;
-    let reloadCount = 0;
+describe("importWithChunkRecovery", () => {
+  test("schedules recovery reload when stored reload marker is corrupt", async () => {
+    const globalWithWindow = globalThis as unknown as { window?: unknown }
+    const previousWindow = globalWithWindow.window
+    let storedMarker: string | null = null
+    let reloadCount = 0
 
     globalWithWindow.window = {
       sessionStorage: {
-        getItem: () => '{not json',
+        getItem: () => "{not json",
         setItem: (_key: string, value: string) => {
-          storedMarker = value;
+          storedMarker = value
         },
       },
       setTimeout: (callback: () => void) => {
-        callback();
-        return 0;
+        callback()
+        return 0
       },
       location: {
         reload: () => {
-          reloadCount += 1;
+          reloadCount += 1
         },
       },
-    };
+    }
 
     try {
-      let caught: unknown;
+      let caught: unknown
       try {
-        await importWithChunkRecovery(async () => {
-          throw new Error('Failed to fetch dynamically imported module');
-        }, { retries: 0 });
+        await importWithChunkRecovery(
+          async () => {
+            throw new Error("Failed to fetch dynamically imported module")
+          },
+          { retries: 0 },
+        )
       } catch (error) {
-        caught = error;
+        caught = error
       }
 
-      expect(caught).toBeInstanceOf(Error);
-      expect(storedMarker).not.toBeNull();
-      expect(reloadCount).toBe(1);
+      expect(caught).toBeInstanceOf(Error)
+      expect(storedMarker).not.toBeNull()
+      expect(reloadCount).toBe(1)
     } finally {
       if (previousWindow === undefined) {
-        delete globalWithWindow.window;
+        delete globalWithWindow.window
       } else {
-        globalWithWindow.window = previousWindow;
+        globalWithWindow.window = previousWindow
       }
     }
-  });
-});
+  })
+})

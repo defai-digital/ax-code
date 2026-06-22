@@ -1,9 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { Buffer } from "node:buffer"
-import {
-  decodeIpcFrames,
-  encodeIpcMessage,
-} from "../src/headless/ipc-protocol.js"
+import { decodeIpcFrames, encodeIpcMessage } from "../src/headless/ipc-protocol.js"
 
 describe("ipc protocol codec", () => {
   test("encodes and decodes a request frame", () => {

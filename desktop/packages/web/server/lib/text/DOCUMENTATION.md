@@ -1,20 +1,24 @@
 # Text Module Documentation
 
 ## Purpose
+
 This module provides shared text transformation helpers that are not owned by a single product surface. It previously proxied model-backed summarization through the ax-code.ai Zen provider; that provider is no longer available for this use, so summarization now returns local sanitized/distilled fallback text only.
 
 ## Entrypoints and structure
+
 - `packages/web/server/lib/text/summarization.js`: Shared summarize stub + sanitize helpers. It performs no external model calls.
 
 ## Public exports
 
 ### Summarization (summarization.js)
+
 - `summarizeText({ text, threshold, maxLength, zenModel, mode })`: Retired summarization entrypoint retained as an API-compatible stub. `zenModel` is ignored.
 - `sanitizeForSummary(text)`: Sanitizes text for compact plain-text summary output.
 - `sanitizeForNotification(text)`: Sanitizes text for compact notification output.
 - `sanitizeForNote(text)`: Sanitizes text for short note/distillation output.
 
 ## Modes
+
 - `summary`: Compact plain-text summary.
 - `notification`: Short plain-text summary for notification bodies.
 - `note`: Distilled short project-memory note.
@@ -22,7 +26,9 @@ This module provides shared text transformation helpers that are not owned by a 
 ## Response contract
 
 ### `summarizeText`
+
 Returns object with:
+
 - `summary`: Local sanitized/distilled fallback text.
 - `summarized`: Always `false` while the model provider is unavailable.
 - `reason`: Skip reason, usually `Model summarization provider unavailable` for text above threshold.
@@ -30,6 +36,7 @@ Returns object with:
 - `summaryLength`: Optional final summary length.
 
 ## Notes for contributors
+
 - Keep this module neutral. Do not couple it to surface-specific naming or routing.
 - Add new mode semantics here when multiple product surfaces need the same text pipeline.
 - Prefer mode-specific prompt and sanitize behavior over creating duplicated summarizers in unrelated modules.

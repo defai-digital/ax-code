@@ -1,9 +1,11 @@
 # Notifications Module Documentation
 
 ## Purpose
+
 This module provides notification message preparation utilities for the web server runtime, including text truncation and plain-text normalization for system notifications.
 
 ## Entrypoints and structure
+
 - `packages/web/server/lib/notifications/index.js`: public entrypoint imported by `packages/web/server/index.js`.
 - `packages/web/server/lib/notifications/routes.js`: route registration for notification stream and session status/attention endpoints.
 - `packages/web/server/lib/notifications/emitter-runtime.js`: desktop/stdout + UI SSE notification emission runtime.
@@ -15,10 +17,12 @@ This module provides notification message preparation utilities for the web serv
 ## Public exports
 
 ### Notifications API (re-exported from message.js)
+
 - `truncateNotificationText(text, maxLength)`: Truncates text to specified max length, appending `...` if truncated.
 - `prepareNotificationLastMessage({ message, settings })`: Prepares the last message for notification display by normalizing and truncating text.
 
 ### Route registration API (routes.js)
+
 - `registerNotificationRoutes(app, dependencies)`: Registers notification-owned endpoints:
   - `GET /api/notifications/stream`
   - `GET /api/session-activity`
@@ -32,6 +36,7 @@ This module provides notification message preparation utilities for the web serv
   - `POST /api/sessions/:id/message-sent`
 
 ### Trigger runtime API (runtime.js)
+
 - `createNotificationTriggerRuntime(dependencies)`: creates runtime-owned debounced trigger handling for AX Code events.
 - Returned API:
   - `maybeDispatchNotificationForTrigger(payload)`
@@ -42,6 +47,7 @@ This module provides notification message preparation utilities for the web serv
   - native notification fanout and UI notification stream fanout
 
 ### Emitter runtime API (emitter-runtime.js)
+
 - `createNotificationEmitterRuntime(dependencies)`: creates runtime for unified notification emission channels.
 - Returned API:
   - `writeSseEvent(res, payload)`
@@ -49,6 +55,7 @@ This module provides notification message preparation utilities for the web serv
   - `broadcastUiNotification(payload)`
 
 ### Template runtime API (template-runtime.js)
+
 - `createNotificationTemplateRuntime(dependencies)`: creates shared notification/template runtime. Model-backed summarization was retired after the Zen provider became unavailable.
 - Returned API:
   - `resolveNotificationTemplate(template, variables)`
@@ -66,6 +73,7 @@ This module provides notification message preparation utilities for the web serv
 ## Constants
 
 ### Default values
+
 - `DEFAULT_NOTIFICATION_MESSAGE_MAX_LENGTH`: 250 (default max length for notification text).
 
 ## Settings object format
@@ -75,11 +83,13 @@ The `settings` parameter for `prepareNotificationLastMessage` supports `maxLastM
 ## Response contracts
 
 ### `truncateNotificationText`
+
 - Returns empty string for non-string input.
 - Returns original text if under max length.
 - Returns `${text.slice(0, maxLength)}...` for truncated text.
 
 ### `prepareNotificationLastMessage`
+
 - Returns empty string for empty/null message.
 - Returns truncated original message. Model-backed notification summarization is retired.
 - Normalizes markdown-like formatting to plain text before truncation.
@@ -88,6 +98,7 @@ The `settings` parameter for `prepareNotificationLastMessage` supports `maxLastM
 ## Notes for contributors
 
 ### Adding new notification helpers
+
 1. Add new helper functions to `packages/web/server/lib/notifications/message.js`.
 2. Export functions that are intended for public use.
 3. Follow existing patterns for input validation (e.g., type checking for strings).
@@ -95,10 +106,12 @@ The `settings` parameter for `prepareNotificationLastMessage` supports `maxLastM
 5. Add corresponding unit tests in `packages/web/server/lib/notifications/message.test.js`.
 
 ### Error handling
+
 - `prepareNotificationLastMessage` does not call model summarization.
 - Invalid numeric parameters default to safe fallback values.
 - Non-string inputs are handled gracefully (return empty string).
 
 ### Testing
+
 - Run `bun run type-check`, `bun run lint`, and `bun run build` before finalizing changes.
 - Unit tests should cover truncation behavior and edge cases (empty strings, invalid inputs).

@@ -7,13 +7,13 @@ be fixed.
 
 ## Ownership map
 
-| Area | Owns | Should not own |
-| --- | --- | --- |
-| `packages/electron` | Window lifecycle, auto-update, packaged resources, utility-process startup, desktop security policy | AX Code runtime behavior, provider logic, search logic, project indexing |
-| `packages/web/server` | Local desktop control plane: loopback HTTP server, auth bridge, static app hosting, local file/git/terminal adapters, AX Code process lifecycle | UI presentation, SDK-private internals, duplicated AX Code runtime semantics |
-| `packages/web/src` | Browser entrypoints and web runtime adapters that install `RuntimeAPIs` for the UI | Deep UI internals, desktop shell behavior |
-| `packages/ui` | Presentation, state, typed UI API contracts, SDK-facing client facade | Local process lifecycle, Electron APIs, Tauri APIs, server-only dependencies |
-| workspace `@ax-code/sdk` / installed `ax-code` | Sessions, models/providers, skills/plugins, search/indexing, runtime API contracts | Desktop windowing or packaging |
+| Area                                           | Owns                                                                                                                                            | Should not own                                                               |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `packages/electron`                            | Window lifecycle, auto-update, packaged resources, utility-process startup, desktop security policy                                             | AX Code runtime behavior, provider logic, search logic, project indexing     |
+| `packages/web/server`                          | Local desktop control plane: loopback HTTP server, auth bridge, static app hosting, local file/git/terminal adapters, AX Code process lifecycle | UI presentation, SDK-private internals, duplicated AX Code runtime semantics |
+| `packages/web/src`                             | Browser entrypoints and web runtime adapters that install `RuntimeAPIs` for the UI                                                              | Deep UI internals, desktop shell behavior                                    |
+| `packages/ui`                                  | Presentation, state, typed UI API contracts, SDK-facing client facade                                                                           | Local process lifecycle, Electron APIs, Tauri APIs, server-only dependencies |
+| workspace `@ax-code/sdk` / installed `ax-code` | Sessions, models/providers, skills/plugins, search/indexing, runtime API contracts                                                              | Desktop windowing or packaging                                               |
 
 ## Import rules
 

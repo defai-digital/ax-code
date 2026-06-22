@@ -1,1 +1,1 @@
-export type IconName = keyof typeof import("./sprite").iconSpriteData;
+export type IconName = keyof typeof import("./sprite").iconSpriteData

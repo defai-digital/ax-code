@@ -1,4 +1,4 @@
-import path from 'path';
+import path from "path"
 
 /**
  * @typedef {Object} ParsedNpmSpec
@@ -26,33 +26,33 @@ import path from 'path';
  * @returns {ParsedNpmSpec | MalformedSpec}
  */
 export function parseNpmSpec(spec) {
-  if (typeof spec !== 'string') {
-    return { malformed: true, raw: String(spec) };
+  if (typeof spec !== "string") {
+    return { malformed: true, raw: String(spec) }
   }
 
-  if (spec.startsWith('@')) {
+  if (spec.startsWith("@")) {
     // scoped: '@scope/name' or '@scope/name@version'
-    const slashIdx = spec.indexOf('/');
-    if (slashIdx < 2) return { malformed: true, raw: spec }; // '@' or '@/foo'
-    const afterSlash = spec.slice(slashIdx + 1);
-    if (afterSlash === '') return { malformed: true, raw: spec }; // '@scope/'
-    const atIdx = afterSlash.indexOf('@');
-    if (atIdx === -1) return { name: spec, version: null };
-    const namePart = spec.slice(0, slashIdx + 1 + atIdx); // '@scope/name'
-    const versionPart = afterSlash.slice(atIdx + 1);
-    if (versionPart === '') return { malformed: true, raw: spec }; // '@scope/foo@'
-    return { name: namePart, version: versionPart };
+    const slashIdx = spec.indexOf("/")
+    if (slashIdx < 2) return { malformed: true, raw: spec } // '@' or '@/foo'
+    const afterSlash = spec.slice(slashIdx + 1)
+    if (afterSlash === "") return { malformed: true, raw: spec } // '@scope/'
+    const atIdx = afterSlash.indexOf("@")
+    if (atIdx === -1) return { name: spec, version: null }
+    const namePart = spec.slice(0, slashIdx + 1 + atIdx) // '@scope/name'
+    const versionPart = afterSlash.slice(atIdx + 1)
+    if (versionPart === "") return { malformed: true, raw: spec } // '@scope/foo@'
+    return { name: namePart, version: versionPart }
   }
 
   // unscoped
-  if (spec === '') return { malformed: true, raw: spec };
-  const atIdx = spec.indexOf('@');
-  if (atIdx === -1) return { name: spec, version: null };
-  if (atIdx === 0) return { malformed: true, raw: spec }; // bare '@'
-  const namePart = spec.slice(0, atIdx);
-  const versionPart = spec.slice(atIdx + 1);
-  if (versionPart === '') return { malformed: true, raw: spec }; // 'foo@'
-  return { name: namePart, version: versionPart };
+  if (spec === "") return { malformed: true, raw: spec }
+  const atIdx = spec.indexOf("@")
+  if (atIdx === -1) return { name: spec, version: null }
+  if (atIdx === 0) return { malformed: true, raw: spec } // bare '@'
+  const namePart = spec.slice(0, atIdx)
+  const versionPart = spec.slice(atIdx + 1)
+  if (versionPart === "") return { malformed: true, raw: spec } // 'foo@'
+  return { name: namePart, version: versionPart }
 }
 
 /**
@@ -63,7 +63,7 @@ export function parseNpmSpec(spec) {
  * @returns {boolean}
  */
 export function isExactSemver(version) {
-  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
+  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)
 }
 
 /**
@@ -74,11 +74,13 @@ export function isExactSemver(version) {
  * @returns {boolean}
  */
 export function isPathSpec(spec) {
-  return spec.startsWith('/')
-    || spec.startsWith('./')
-    || spec.startsWith('../')
-    || spec.startsWith('~')
-    || path.win32.isAbsolute(spec);
+  return (
+    spec.startsWith("/") ||
+    spec.startsWith("./") ||
+    spec.startsWith("../") ||
+    spec.startsWith("~") ||
+    path.win32.isAbsolute(spec)
+  )
 }
 
 /**
@@ -91,17 +93,17 @@ export function isPathSpec(spec) {
  * @returns {ParsedPathSpec}
  */
 export function parsePathSpec(spec, { homedir, cwd }) {
-  if (spec === '~') {
-    return { absolutePath: path.resolve(homedir) };
+  if (spec === "~") {
+    return { absolutePath: path.resolve(homedir) }
   }
-  if (spec.startsWith('~/')) {
-    return { absolutePath: path.resolve(homedir, spec.slice(2)) };
+  if (spec.startsWith("~/")) {
+    return { absolutePath: path.resolve(homedir, spec.slice(2)) }
   }
-  if (spec.startsWith('./') || spec.startsWith('../')) {
-    return { absolutePath: path.resolve(cwd, spec) };
+  if (spec.startsWith("./") || spec.startsWith("../")) {
+    return { absolutePath: path.resolve(cwd, spec) }
   }
   if (path.win32.isAbsolute(spec)) {
-    return { absolutePath: spec };
+    return { absolutePath: spec }
   }
-  return { absolutePath: path.resolve(spec) };
+  return { absolutePath: path.resolve(spec) }
 }

@@ -1,236 +1,239 @@
-import React from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Radio } from '@/components/ui/radio';
-import { Icon } from "@/components/icon/Icon";
+import React from "react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Radio } from "@/components/ui/radio"
+import { Icon } from "@/components/icon/Icon"
 
-import { cn } from '@/lib/utils';
-import { isIMECompositionEvent } from '@/lib/ime';
-import { copyTextToClipboard } from '@/lib/clipboard';
-import { toast } from '@/components/ui';
-import type { QuestionRequest } from '@/types/question';
-import { useUIStore } from '@/stores/useUIStore';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessions } from '@/sync/sync-context';
-import * as sessionActions from '@/sync/session-actions';
-import { useI18n } from '@/lib/i18n';
-import { serializeQuestionAsJson, serializeQuestionAsMarkdown } from './questionSerializers';
+import { cn } from "@/lib/utils"
+import { isIMECompositionEvent } from "@/lib/ime"
+import { copyTextToClipboard } from "@/lib/clipboard"
+import { toast } from "@/components/ui"
+import type { QuestionRequest } from "@/types/question"
+import { useUIStore } from "@/stores/useUIStore"
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { useSessions } from "@/sync/sync-context"
+import * as sessionActions from "@/sync/session-actions"
+import { useI18n } from "@/lib/i18n"
+import { serializeQuestionAsJson, serializeQuestionAsMarkdown } from "./questionSerializers"
 
 interface QuestionCardProps {
-  question: QuestionRequest;
+  question: QuestionRequest
 }
 
-type QuestionTabKey = string;
-const SUMMARY_TAB = 'summary';
+type QuestionTabKey = string
+const SUMMARY_TAB = "summary"
 
 export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
-  const { t } = useI18n();
-  const respondToQuestion = sessionActions.respondToQuestion;
-    const rejectQuestion = sessionActions.rejectQuestion;;
-  const isMobile = useUIStore((state) => state.isMobile);
-  const sessions = useSessions();
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const { t } = useI18n()
+  const respondToQuestion = sessionActions.respondToQuestion
+  const rejectQuestion = sessionActions.rejectQuestion
+  const isMobile = useUIStore((state) => state.isMobile)
+  const sessions = useSessions()
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
   const isFromSubagent = React.useMemo(() => {
-    if (!currentSessionId || question.sessionID === currentSessionId) return false;
-    const sourceSession = sessions.find((session) => session.id === question.sessionID);
-    return Boolean(sourceSession?.parentID && sourceSession.parentID === currentSessionId);
-  }, [question.sessionID, currentSessionId, sessions]);
-  const [activeTab, setActiveTab] = React.useState<QuestionTabKey>('0');
-  const [isResponding, setIsResponding] = React.useState(false);
-  const [hasResponded, setHasResponded] = React.useState(false);
+    if (!currentSessionId || question.sessionID === currentSessionId) return false
+    const sourceSession = sessions.find((session) => session.id === question.sessionID)
+    return Boolean(sourceSession?.parentID && sourceSession.parentID === currentSessionId)
+  }, [question.sessionID, currentSessionId, sessions])
+  const [activeTab, setActiveTab] = React.useState<QuestionTabKey>("0")
+  const [isResponding, setIsResponding] = React.useState(false)
+  const [hasResponded, setHasResponded] = React.useState(false)
 
-  const [selectedOptions, setSelectedOptions] = React.useState<Record<number, string[]>>({});
-  const [customMode, setCustomMode] = React.useState<Record<number, boolean>>({});
-  const [customText, setCustomText] = React.useState<Record<number, string>>({});
+  const [selectedOptions, setSelectedOptions] = React.useState<Record<number, string[]>>({})
+  const [customMode, setCustomMode] = React.useState<Record<number, boolean>>({})
+  const [customText, setCustomText] = React.useState<Record<number, string>>({})
 
-  const questions = React.useMemo(() => question.questions ?? [], [question.questions]);
-  const isSummaryTab = activeTab === SUMMARY_TAB;
-  const activeIndex = isSummaryTab ? -1 : Math.max(0, Math.min(questions.length - 1, Number(activeTab) || 0));
-  const activeQuestion = isSummaryTab ? null : questions[activeIndex];
+  const questions = React.useMemo(() => question.questions ?? [], [question.questions])
+  const isSummaryTab = activeTab === SUMMARY_TAB
+  const activeIndex = isSummaryTab ? -1 : Math.max(0, Math.min(questions.length - 1, Number(activeTab) || 0))
+  const activeQuestion = isSummaryTab ? null : questions[activeIndex]
   const activeHeader = React.useMemo(() => {
-    if (isSummaryTab) return null;
-    const header = activeQuestion?.header?.trim();
-    return header && header.length > 0 ? header : null;
-  }, [activeQuestion?.header, isSummaryTab]);
+    if (isSummaryTab) return null
+    const header = activeQuestion?.header?.trim()
+    return header && header.length > 0 ? header : null
+  }, [activeQuestion?.header, isSummaryTab])
 
   React.useEffect(() => {
-    setActiveTab('0');
-    setSelectedOptions({});
-    setCustomMode({});
-    setCustomText({});
-    setHasResponded(false);
-  }, [question.id]);
+    setActiveTab("0")
+    setSelectedOptions({})
+    setCustomMode({})
+    setCustomText({})
+    setHasResponded(false)
+  }, [question.id])
 
   const tabs = React.useMemo(() => {
     const questionTabs = questions.map((q, index) => ({
       value: String(index),
       label: q.header?.trim() || `Q${index + 1}`,
-    }));
+    }))
     // Add summary tab when multiple questions
     if (questions.length > 1) {
-      questionTabs.push({ value: SUMMARY_TAB, label: t('chat.questionCard.summaryTab') });
+      questionTabs.push({ value: SUMMARY_TAB, label: t("chat.questionCard.summaryTab") })
     }
-    return questionTabs;
-  }, [questions, t]);
+    return questionTabs
+  }, [questions, t])
 
   // Helper to get answer display for a question index
-  const getAnswerDisplay = React.useCallback((index: number): string => {
-    const isCustom = Boolean(customMode[index]);
-    if (isCustom) {
-      const value = (customText[index] ?? '').trim();
-      return value || t('chat.questionCard.noAnswer');
-    }
-    const answers = selectedOptions[index] ?? [];
-    return answers.length > 0 ? answers.join(', ') : t('chat.questionCard.noAnswer');
-  }, [customMode, customText, selectedOptions, t]);
+  const getAnswerDisplay = React.useCallback(
+    (index: number): string => {
+      const isCustom = Boolean(customMode[index])
+      if (isCustom) {
+        const value = (customText[index] ?? "").trim()
+        return value || t("chat.questionCard.noAnswer")
+      }
+      const answers = selectedOptions[index] ?? []
+      return answers.length > 0 ? answers.join(", ") : t("chat.questionCard.noAnswer")
+    },
+    [customMode, customText, selectedOptions, t],
+  )
 
-  const isMultiple = Boolean(activeQuestion?.multiple);
-  const selectedForActive = selectedOptions[activeIndex] ?? [];
-  const isCustomActive = Boolean(customMode[activeIndex]);
+  const isMultiple = Boolean(activeQuestion?.multiple)
+  const selectedForActive = selectedOptions[activeIndex] ?? []
+  const isCustomActive = Boolean(customMode[activeIndex])
 
   const unansweredIndexes = React.useMemo(() => {
-    const pending: number[] = [];
+    const pending: number[] = []
     for (let index = 0; index < questions.length; index += 1) {
-      const isCustom = Boolean(customMode[index]);
+      const isCustom = Boolean(customMode[index])
       if (isCustom) {
-        const value = (customText[index] ?? '').trim();
-        if (!value) pending.push(index);
-        continue;
+        const value = (customText[index] ?? "").trim()
+        if (!value) pending.push(index)
+        continue
       }
 
-      const answers = selectedOptions[index] ?? [];
+      const answers = selectedOptions[index] ?? []
       if (answers.length === 0) {
-        pending.push(index);
+        pending.push(index)
       }
     }
-    return pending;
-  }, [customMode, customText, questions.length, selectedOptions]);
+    return pending
+  }, [customMode, customText, questions.length, selectedOptions])
 
   const requiredSatisfied = React.useMemo(() => {
-    if (questions.length === 0) return false;
-    return unansweredIndexes.length === 0;
-  }, [questions.length, unansweredIndexes.length]);
+    if (questions.length === 0) return false
+    return unansweredIndexes.length === 0
+  }, [questions.length, unansweredIndexes.length])
 
   const handleNextUnanswered = React.useCallback(() => {
-    if (questions.length === 0 || unansweredIndexes.length === 0) return;
+    if (questions.length === 0 || unansweredIndexes.length === 0) return
 
-    const start = isSummaryTab ? -1 : activeIndex;
+    const start = isSummaryTab ? -1 : activeIndex
     for (let offset = 1; offset <= questions.length; offset += 1) {
-      const candidate = (start + offset + questions.length) % questions.length;
+      const candidate = (start + offset + questions.length) % questions.length
       if (unansweredIndexes.includes(candidate)) {
-        setActiveTab(String(candidate));
-        return;
+        setActiveTab(String(candidate))
+        return
       }
     }
 
-    setActiveTab(String(unansweredIndexes[0]));
-  }, [activeIndex, isSummaryTab, questions.length, unansweredIndexes]);
+    setActiveTab(String(unansweredIndexes[0]))
+  }, [activeIndex, isSummaryTab, questions.length, unansweredIndexes])
 
   const buildAnswersPayload = React.useCallback((): string[][] => {
-    const answers: string[][] = [];
+    const answers: string[][] = []
 
     for (let index = 0; index < questions.length; index += 1) {
-      const isCustom = Boolean(customMode[index]);
+      const isCustom = Boolean(customMode[index])
       if (isCustom) {
-        const value = (customText[index] ?? '').trim();
-        answers.push(value ? [value] : []);
-        continue;
+        const value = (customText[index] ?? "").trim()
+        answers.push(value ? [value] : [])
+        continue
       }
 
-      answers.push(selectedOptions[index] ?? []);
+      answers.push(selectedOptions[index] ?? [])
     }
 
-    return answers;
-  }, [customMode, customText, questions.length, selectedOptions]);
+    return answers
+  }, [customMode, customText, questions.length, selectedOptions])
 
   const handleToggleOption = React.useCallback(
     (label: string) => {
-      if (!activeQuestion) return;
+      if (!activeQuestion) return
 
-      setCustomMode((prev) => ({ ...prev, [activeIndex]: false }));
+      setCustomMode((prev) => ({ ...prev, [activeIndex]: false }))
 
       setSelectedOptions((prev) => {
-        const current = prev[activeIndex] ?? [];
+        const current = prev[activeIndex] ?? []
         if (isMultiple) {
-          const exists = current.includes(label);
-          const next = exists ? current.filter((item) => item !== label) : [...current, label];
-          return { ...prev, [activeIndex]: next };
+          const exists = current.includes(label)
+          const next = exists ? current.filter((item) => item !== label) : [...current, label]
+          return { ...prev, [activeIndex]: next }
         }
-        return { ...prev, [activeIndex]: [label] };
-      });
+        return { ...prev, [activeIndex]: [label] }
+      })
     },
-    [activeIndex, activeQuestion, isMultiple]
-  );
+    [activeIndex, activeQuestion, isMultiple],
+  )
 
   const handleSelectCustom = React.useCallback(() => {
-    setCustomMode((prev) => ({ ...prev, [activeIndex]: true }));
-    setSelectedOptions((prev) => ({ ...prev, [activeIndex]: [] }));
-  }, [activeIndex]);
+    setCustomMode((prev) => ({ ...prev, [activeIndex]: true }))
+    setSelectedOptions((prev) => ({ ...prev, [activeIndex]: [] }))
+  }, [activeIndex])
 
   const handleConfirm = React.useCallback(async () => {
-    if (!requiredSatisfied) return;
+    if (!requiredSatisfied) return
 
-    setIsResponding(true);
+    setIsResponding(true)
     try {
-      const answers = buildAnswersPayload();
-      await respondToQuestion(question.sessionID, question.id, answers);
-      setHasResponded(true);
+      const answers = buildAnswersPayload()
+      await respondToQuestion(question.sessionID, question.id, answers)
+      setHasResponded(true)
     } catch {
       // ignored
     } finally {
-      setIsResponding(false);
+      setIsResponding(false)
     }
-  }, [buildAnswersPayload, question.id, question.sessionID, requiredSatisfied, respondToQuestion]);
+  }, [buildAnswersPayload, question.id, question.sessionID, requiredSatisfied, respondToQuestion])
 
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (isIMECompositionEvent(e)) return;
+      if (isIMECompositionEvent(e)) return
 
-      if (e.key === 'Enter' && !e.shiftKey && (!isMobile || e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
+      if (e.key === "Enter" && !e.shiftKey && (!isMobile || e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
         if (requiredSatisfied) {
-          handleConfirm();
+          handleConfirm()
         } else {
-          handleNextUnanswered();
+          handleNextUnanswered()
         }
       }
     },
-    [handleConfirm, handleNextUnanswered, isMobile, requiredSatisfied]
-  );
+    [handleConfirm, handleNextUnanswered, isMobile, requiredSatisfied],
+  )
 
   const handleDismiss = React.useCallback(async () => {
-    setIsResponding(true);
+    setIsResponding(true)
     try {
-      await rejectQuestion(question.sessionID, question.id);
-      setHasResponded(true);
+      await rejectQuestion(question.sessionID, question.id)
+      setHasResponded(true)
     } catch {
       // ignored
     } finally {
-      setIsResponding(false);
+      setIsResponding(false)
     }
-  }, [question.id, question.sessionID, rejectQuestion]);
+  }, [question.id, question.sessionID, rejectQuestion])
 
   const handleCopyMarkdown = React.useCallback(async () => {
-    const text = serializeQuestionAsMarkdown(question);
-    const result = await copyTextToClipboard(text);
+    const text = serializeQuestionAsMarkdown(question)
+    const result = await copyTextToClipboard(text)
     if (result.ok) {
-      toast.success(t('chat.questionCard.copiedMarkdown'));
-      return;
+      toast.success(t("chat.questionCard.copiedMarkdown"))
+      return
     }
-    toast.error(t('chat.questionCard.copyFailed'));
-  }, [question, t]);
+    toast.error(t("chat.questionCard.copyFailed"))
+  }, [question, t])
 
   const handleCopyJson = React.useCallback(async () => {
-    const text = serializeQuestionAsJson(question);
-    const result = await copyTextToClipboard(text);
+    const text = serializeQuestionAsJson(question)
+    const result = await copyTextToClipboard(text)
     if (result.ok) {
-      toast.success(t('chat.questionCard.copiedJson'));
-      return;
+      toast.success(t("chat.questionCard.copiedJson"))
+      return
     }
-    toast.error(t('chat.questionCard.copyFailed'));
-  }, [question, t]);
+    toast.error(t("chat.questionCard.copyFailed"))
+  }, [question, t])
 
   if (hasResponded || questions.length === 0) {
-    return null;
+    return null
   }
 
   return (
@@ -241,10 +244,12 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
           <div className="px-2 py-1.5 border-b border-border/20">
             <div className="flex items-center gap-2">
               <Icon name="question" className="h-3.5 w-3.5 text-primary" />
-              <span className="typography-meta font-medium text-muted-foreground">{t('chat.questionCard.inputNeeded')}</span>
+              <span className="typography-meta font-medium text-muted-foreground">
+                {t("chat.questionCard.inputNeeded")}
+              </span>
               {isFromSubagent ? (
                 <span className="typography-micro text-muted-foreground px-1.5 py-0.5 rounded bg-foreground/5">
-                  {t('chat.questionCard.fromSubagent')}
+                  {t("chat.questionCard.fromSubagent")}
                 </span>
               ) : null}
               {activeHeader ? (
@@ -252,12 +257,12 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                   {activeHeader}
                 </span>
               ) : null}
-              <div className={cn('flex items-center gap-0.5', activeHeader ? null : 'ml-auto')}>
+              <div className={cn("flex items-center gap-0.5", activeHeader ? null : "ml-auto")}>
                 <button
                   type="button"
                   onClick={handleCopyMarkdown}
-                  title={t('chat.questionCard.copyMarkdown')}
-                  aria-label={t('chat.questionCard.copyMarkdown')}
+                  title={t("chat.questionCard.copyMarkdown")}
+                  aria-label={t("chat.questionCard.copyMarkdown")}
                   className="flex items-center justify-center h-5 w-5 rounded text-muted-foreground hover:text-foreground hover:bg-interactive-hover/30 transition-colors"
                 >
                   <Icon name="file-text" className="h-3 w-3" />
@@ -265,8 +270,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                 <button
                   type="button"
                   onClick={handleCopyJson}
-                  title={t('chat.questionCard.copyJson')}
-                  aria-label={t('chat.questionCard.copyJson')}
+                  title={t("chat.questionCard.copyJson")}
+                  aria-label={t("chat.questionCard.copyJson")}
                   className="flex items-center justify-center h-5 w-5 rounded text-muted-foreground hover:text-foreground hover:bg-interactive-hover/30 transition-colors"
                 >
                   <Icon name="code-box" className="h-3 w-3" />
@@ -280,30 +285,30 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
             {tabs.length > 1 ? (
               <div className="flex items-center gap-1 mb-2 flex-wrap">
                 {tabs.map((tab) => {
-                  const isActive = activeTab === tab.value;
-                  const isSummary = tab.value === SUMMARY_TAB;
-                  const tabIndex = isSummary ? -1 : Number(tab.value);
-                  const isAnswered = !isSummary && Number.isFinite(tabIndex) && !unansweredIndexes.includes(tabIndex);
+                  const isActive = activeTab === tab.value
+                  const isSummary = tab.value === SUMMARY_TAB
+                  const tabIndex = isSummary ? -1 : Number(tab.value)
+                  const isAnswered = !isSummary && Number.isFinite(tabIndex) && !unansweredIndexes.includes(tabIndex)
                   return (
                     <button
                       key={tab.value}
                       type="button"
                       onClick={() => setActiveTab(tab.value)}
                       className={cn(
-                        'px-2 py-0.5 typography-meta font-medium rounded transition-colors flex items-center gap-1',
+                        "px-2 py-0.5 typography-meta font-medium rounded transition-colors flex items-center gap-1",
                         isActive
-                          ? 'bg-interactive-selection/40 text-foreground'
+                          ? "bg-interactive-selection/40 text-foreground"
                           : isSummary
-                            ? 'text-muted-foreground hover:text-foreground hover:bg-interactive-hover/20'
+                            ? "text-muted-foreground hover:text-foreground hover:bg-interactive-hover/20"
                             : isAnswered
-                              ? 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-interactive-hover/20'
-                              : 'text-foreground/85 hover:text-foreground hover:bg-interactive-hover/20'
+                              ? "text-muted-foreground/60 hover:text-muted-foreground hover:bg-interactive-hover/20"
+                              : "text-foreground/85 hover:text-foreground hover:bg-interactive-hover/20",
                       )}
                     >
                       {isSummary ? <Icon name="list-check-3" className="h-3 w-3" /> : null}
                       {tab.label}
                     </button>
-                  );
+                  )
                 })}
               </div>
             ) : null}
@@ -312,8 +317,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
             {isSummaryTab ? (
               <div className="space-y-2">
                 {questions.map((q, index) => {
-                  const answer = getAnswerDisplay(index);
-                  const hasAnswer = answer !== t('chat.questionCard.noAnswer');
+                  const answer = getAnswerDisplay(index)
+                  const hasAnswer = answer !== t("chat.questionCard.noAnswer")
                   return (
                     <button
                       key={index}
@@ -321,15 +326,19 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                       onClick={() => setActiveTab(String(index))}
                       className="w-full text-left rounded px-1.5 py-1 hover:bg-interactive-hover/20 transition-colors"
                     >
-                      <div className="typography-micro text-muted-foreground">{q.header || t('chat.questionCard.questionFallback', { index: index + 1 })}</div>
-                      <div className={cn(
-                        'typography-meta',
-                        hasAnswer ? 'text-foreground' : 'text-muted-foreground/50 italic'
-                      )}>
+                      <div className="typography-micro text-muted-foreground">
+                        {q.header || t("chat.questionCard.questionFallback", { index: index + 1 })}
+                      </div>
+                      <div
+                        className={cn(
+                          "typography-meta",
+                          hasAnswer ? "text-foreground" : "text-muted-foreground/50 italic",
+                        )}
+                      >
                         {answer}
                       </div>
                     </button>
-                  );
+                  )
                 })}
               </div>
             ) : activeQuestion ? (
@@ -337,13 +346,15 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                 <div className="typography-meta font-medium text-foreground mb-1.5">{activeQuestion.question}</div>
 
                 {isMultiple ? (
-                  <div className="typography-micro text-muted-foreground mb-1.5">{t('chat.questionCard.selectMultiple')}</div>
+                  <div className="typography-micro text-muted-foreground mb-1.5">
+                    {t("chat.questionCard.selectMultiple")}
+                  </div>
                 ) : null}
 
                 <div className="space-y-0.5">
                   {activeQuestion.options.map((option, index) => {
-                    const selected = selectedForActive.includes(option.label);
-                    const recommended = /\(recommended\)/i.test(option.label);
+                    const selected = selectedForActive.includes(option.label)
+                    const recommended = /\(recommended\)/i.test(option.label)
 
                     return (
                       <button
@@ -352,10 +363,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                         onClick={() => handleToggleOption(option.label)}
                         disabled={isResponding}
                         className={cn(
-                          'w-full px-1.5 py-1 text-left rounded transition-colors',
-                          'hover:bg-interactive-hover/30',
-                          selected ? 'bg-interactive-selection/20' : null,
-                          isResponding ? 'opacity-60 cursor-not-allowed' : null
+                          "w-full px-1.5 py-1 text-left rounded transition-colors",
+                          "hover:bg-interactive-hover/30",
+                          selected ? "bg-interactive-selection/20" : null,
+                          isResponding ? "opacity-60 cursor-not-allowed" : null,
                         )}
                       >
                         <div className="flex items-start gap-2">
@@ -377,23 +388,29 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <span className={cn(
-                                'typography-meta break-all',
-                                selected ? 'text-foreground font-medium' : 'text-foreground/80'
-                              )}>
+                              <span
+                                className={cn(
+                                  "typography-meta break-all",
+                                  selected ? "text-foreground font-medium" : "text-foreground/80",
+                                )}
+                              >
                                 {option.label}
                               </span>
                               {recommended ? (
-                                <span className="typography-micro text-primary/80">{t('chat.questionCard.recommended')}</span>
+                                <span className="typography-micro text-primary/80">
+                                  {t("chat.questionCard.recommended")}
+                                </span>
                               ) : null}
                             </div>
                             {option.description ? (
-                              <div className="typography-micro text-muted-foreground break-words">{option.description}</div>
+                              <div className="typography-micro text-muted-foreground break-words">
+                                {option.description}
+                              </div>
                             ) : null}
                           </div>
                         </div>
                       </button>
-                    );
+                    )
                   })}
 
                   {/* Custom answer option */}
@@ -402,22 +419,24 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                     onClick={handleSelectCustom}
                     disabled={isResponding}
                     className={cn(
-                      'w-full px-1.5 py-1 text-left rounded transition-colors',
-                      'hover:bg-interactive-hover/30',
-                      isCustomActive ? 'bg-interactive-selection/20' : null,
-                      isResponding ? 'opacity-60 cursor-not-allowed' : null
+                      "w-full px-1.5 py-1 text-left rounded transition-colors",
+                      "hover:bg-interactive-hover/30",
+                      isCustomActive ? "bg-interactive-selection/20" : null,
+                      isResponding ? "opacity-60 cursor-not-allowed" : null,
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      <Icon name="edit" className={cn(
-                        'h-3.5 w-3.5',
-                        isCustomActive ? 'text-primary' : 'text-muted-foreground/50'
-                      )} />
-                      <span className={cn(
-                        'typography-meta',
-                        isCustomActive ? 'text-foreground font-medium' : 'text-muted-foreground'
-                      )}>
-                        {t('chat.questionCard.other')}
+                      <Icon
+                        name="edit"
+                        className={cn("h-3.5 w-3.5", isCustomActive ? "text-primary" : "text-muted-foreground/50")}
+                      />
+                      <span
+                        className={cn(
+                          "typography-meta",
+                          isCustomActive ? "text-foreground font-medium" : "text-muted-foreground",
+                        )}
+                      >
+                        {t("chat.questionCard.other")}
                       </span>
                     </div>
                   </button>
@@ -427,24 +446,24 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                       <textarea
                         ref={(el) => {
                           if (el) {
-                            el.style.height = 'auto';
-                            const lineHeight = 20; // approx typography-meta line height
-                            const minHeight = lineHeight * 2;
-                            const maxHeight = lineHeight * 4;
-                            el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
+                            el.style.height = "auto"
+                            const lineHeight = 20 // approx typography-meta line height
+                            const minHeight = lineHeight * 2
+                            const maxHeight = lineHeight * 4
+                            el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`
                           }
                         }}
-                        value={customText[activeIndex] ?? ''}
+                        value={customText[activeIndex] ?? ""}
                         onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => {
-                          const el = event.target;
-                          el.style.height = 'auto';
-                          const lineHeight = 20;
-                          const minHeight = lineHeight * 2;
-                          const maxHeight = lineHeight * 4;
-                          el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
-                          setCustomText((prev) => ({ ...prev, [activeIndex]: el.value }));
+                          const el = event.target
+                          el.style.height = "auto"
+                          const lineHeight = 20
+                          const minHeight = lineHeight * 2
+                          const maxHeight = lineHeight * 4
+                          el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`
+                          setCustomText((prev) => ({ ...prev, [activeIndex]: el.value }))
                         }}
-                        placeholder={t('chat.questionCard.yourAnswer')}
+                        placeholder={t("chat.questionCard.yourAnswer")}
                         disabled={isResponding}
                         rows={2}
                         onKeyDown={handleKeyDown}
@@ -465,13 +484,17 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
               onClick={requiredSatisfied ? handleConfirm : handleNextUnanswered}
               disabled={isResponding}
               className={cn(
-                'flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded transition-colors',
-                'bg-[rgb(var(--status-success)/0.1)] text-[var(--status-success)] hover:bg-[rgb(var(--status-success)/0.2)]',
-                'disabled:opacity-50 disabled:cursor-not-allowed'
+                "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded transition-colors",
+                "bg-[rgb(var(--status-success)/0.1)] text-[var(--status-success)] hover:bg-[rgb(var(--status-success)/0.2)]",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
               )}
             >
-              {requiredSatisfied ? <Icon name="check" className="h-3 w-3" /> : <Icon name="arrow-right-s" className="h-3 w-3" />}
-              {requiredSatisfied ? t('chat.questionCard.submit') : t('chat.questionCard.next')}
+              {requiredSatisfied ? (
+                <Icon name="check" className="h-3 w-3" />
+              ) : (
+                <Icon name="arrow-right-s" className="h-3 w-3" />
+              )}
+              {requiredSatisfied ? t("chat.questionCard.submit") : t("chat.questionCard.next")}
             </button>
 
             <button
@@ -479,13 +502,13 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
               onClick={handleDismiss}
               disabled={isResponding}
               className={cn(
-                'flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded transition-colors',
-                'bg-[rgb(var(--status-error)/0.1)] text-[var(--status-error)] hover:bg-[rgb(var(--status-error)/0.2)]',
-                'disabled:opacity-50 disabled:cursor-not-allowed'
+                "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded transition-colors",
+                "bg-[rgb(var(--status-error)/0.1)] text-[var(--status-error)] hover:bg-[rgb(var(--status-error)/0.2)]",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
               )}
             >
               <Icon name="close" className="h-3 w-3" />
-              {t('chat.questionCard.dismiss')}
+              {t("chat.questionCard.dismiss")}
             </button>
 
             {isResponding ? (
@@ -497,5 +520,5 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

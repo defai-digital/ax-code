@@ -1,4 +1,3 @@
-
 import childProcess from "child_process"
 import { whichSync } from "./which"
 import crypto from "crypto"

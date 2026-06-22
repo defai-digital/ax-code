@@ -1,58 +1,53 @@
-import React from 'react';
-import type { Part } from '@ax-code/sdk/v2';
-import type { ContentChangeReason } from '@/hooks/useChatAutoFollow';
-import { useUIStore } from '@/stores/useUIStore';
-import { ReasoningTimelineBlock } from './ReasoningPart';
-import { extractTextOrContent, type TimedTextContentPart } from '../partUtils';
+import React from "react"
+import type { Part } from "@ax-code/sdk/v2"
+import type { ContentChangeReason } from "@/hooks/useChatAutoFollow"
+import { useUIStore } from "@/stores/useUIStore"
+import { ReasoningTimelineBlock } from "./ReasoningPart"
+import { extractTextOrContent, type TimedTextContentPart } from "../partUtils"
 
 const cleanJustificationText = (text: string): string => {
-    if (typeof text !== 'string' || text.trim().length === 0) {
-        return '';
-    }
+  if (typeof text !== "string" || text.trim().length === 0) {
+    return ""
+  }
 
-    return text
-        .split('\n')
-        .map((line: string) => line.replace(/^>\s?/, '').trimEnd())
-        .filter((line: string) => line.trim().length > 0)
-        .join('\n')
-        .trim();
-};
-
-interface JustificationBlockProps {
-    part: Part;
-    messageId: string;
-    onContentChange?: (reason?: ContentChangeReason) => void;
-    actions?: React.ReactNode;
+  return text
+    .split("\n")
+    .map((line: string) => line.replace(/^>\s?/, "").trimEnd())
+    .filter((line: string) => line.trim().length > 0)
+    .join("\n")
+    .trim()
 }
 
-const JustificationBlock: React.FC<JustificationBlockProps> = ({
-    part,
-    messageId,
-    onContentChange,
-    actions,
-}) => {
-    const chatRenderMode = useUIStore((state) => state.chatRenderMode);
-    const partWithText = part as TimedTextContentPart;
-    const rawText = extractTextOrContent(part);
-    const textContent = React.useMemo(() => cleanJustificationText(rawText), [rawText]);
-    const time = partWithText.time;
+interface JustificationBlockProps {
+  part: Part
+  messageId: string
+  onContentChange?: (reason?: ContentChangeReason) => void
+  actions?: React.ReactNode
+}
 
-    // Don't render if there's no text content
-    if (!textContent || textContent.trim().length === 0) {
-        return null;
-    }
+const JustificationBlock: React.FC<JustificationBlockProps> = ({ part, messageId, onContentChange, actions }) => {
+  const chatRenderMode = useUIStore((state) => state.chatRenderMode)
+  const partWithText = part as TimedTextContentPart
+  const rawText = extractTextOrContent(part)
+  const textContent = React.useMemo(() => cleanJustificationText(rawText), [rawText])
+  const time = partWithText.time
 
-    return (
-        <ReasoningTimelineBlock
-            text={textContent}
-            variant="justification"
-            onContentChange={onContentChange}
-            blockId={part.id || `${messageId}-justification`}
-            time={time}
-            showDuration={chatRenderMode !== 'sorted'}
-            actions={actions}
-        />
-    );
-};
+  // Don't render if there's no text content
+  if (!textContent || textContent.trim().length === 0) {
+    return null
+  }
 
-export default React.memo(JustificationBlock);
+  return (
+    <ReasoningTimelineBlock
+      text={textContent}
+      variant="justification"
+      onContentChange={onContentChange}
+      blockId={part.id || `${messageId}-justification`}
+      time={time}
+      showDuration={chatRenderMode !== "sorted"}
+      actions={actions}
+    />
+  )
+}
+
+export default React.memo(JustificationBlock)

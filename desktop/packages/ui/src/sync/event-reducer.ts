@@ -116,7 +116,11 @@ function shouldPreserveExistingPart(previous: Part, next: Part): boolean {
 
   const previousStatus = getToolStatus(previous)
   const nextStatus = getToolStatus(next)
-  if (previousStatus && FINAL_TOOL_STATUSES.has(previousStatus) && (!nextStatus || !FINAL_TOOL_STATUSES.has(nextStatus))) {
+  if (
+    previousStatus &&
+    FINAL_TOOL_STATUSES.has(previousStatus) &&
+    (!nextStatus || !FINAL_TOOL_STATUSES.has(nextStatus))
+  ) {
     return true
   }
 
@@ -133,10 +137,12 @@ function areSessionStatusesEqual(left: SessionStatus | undefined, right: Session
   if (left === right) return true
   if (!left || left.type !== right.type) return false
   if (left.type === "retry") {
-    return right.type === "retry"
-      && left.attempt === right.attempt
-      && left.message === right.message
-      && left.next === right.next
+    return (
+      right.type === "retry" &&
+      left.attempt === right.attempt &&
+      left.message === right.message &&
+      left.next === right.next
+    )
   }
   return true
 }
@@ -150,8 +156,11 @@ export function areMessagesEqual(left: Message, right: Message): boolean {
 }
 
 function areMessageTimeEqual(left: Message, right: Message): boolean {
-  return left.time?.created === right.time?.created
-    && (left as { time?: { completed?: number } }).time?.completed === (right as { time?: { completed?: number } }).time?.completed
+  return (
+    left.time?.created === right.time?.created &&
+    (left as { time?: { completed?: number } }).time?.completed ===
+      (right as { time?: { completed?: number } }).time?.completed
+  )
 }
 
 function areKnownMessageKeysEqual(left: Message, right: Message): boolean {
@@ -161,30 +170,40 @@ function areKnownMessageKeysEqual(left: Message, right: Message): boolean {
   return areAssistantMessagesEqual(left, right as Extract<Message, { role: "assistant" }>)
 }
 
-function areUserMessagesEqual(left: Extract<Message, { role: "user" }>, right: Extract<Message, { role: "user" }>): boolean {
-  return left.agent === right.agent
-    && left.system === right.system
-    && left.variant === right.variant
-    && areModelRefsEqual(left.model, right.model)
-    && areOutputFormatsEqual(left.format, right.format)
-    && areUserSummariesEqual(left.summary, right.summary)
-    && areStringBooleanRecordsEqual(left.tools, right.tools)
-    && areIsolationEqual(left.isolation, right.isolation)
+function areUserMessagesEqual(
+  left: Extract<Message, { role: "user" }>,
+  right: Extract<Message, { role: "user" }>,
+): boolean {
+  return (
+    left.agent === right.agent &&
+    left.system === right.system &&
+    left.variant === right.variant &&
+    areModelRefsEqual(left.model, right.model) &&
+    areOutputFormatsEqual(left.format, right.format) &&
+    areUserSummariesEqual(left.summary, right.summary) &&
+    areStringBooleanRecordsEqual(left.tools, right.tools) &&
+    areIsolationEqual(left.isolation, right.isolation)
+  )
 }
 
-function areAssistantMessagesEqual(left: Extract<Message, { role: "assistant" }>, right: Extract<Message, { role: "assistant" }>): boolean {
-  return left.parentID === right.parentID
-    && left.modelID === right.modelID
-    && left.providerID === right.providerID
-    && left.mode === right.mode
-    && left.agent === right.agent
-    && left.summary === right.summary
-    && left.variant === right.variant
-    && left.finish === right.finish
-    && left.structured === right.structured
-    && arePathRefsEqual(left.path, right.path)
-    && areTokenUsageEqual(left.tokens, right.tokens)
-    && areMessageErrorsEqual(left.error, right.error)
+function areAssistantMessagesEqual(
+  left: Extract<Message, { role: "assistant" }>,
+  right: Extract<Message, { role: "assistant" }>,
+): boolean {
+  return (
+    left.parentID === right.parentID &&
+    left.modelID === right.modelID &&
+    left.providerID === right.providerID &&
+    left.mode === right.mode &&
+    left.agent === right.agent &&
+    left.summary === right.summary &&
+    left.variant === right.variant &&
+    left.finish === right.finish &&
+    left.structured === right.structured &&
+    arePathRefsEqual(left.path, right.path) &&
+    areTokenUsageEqual(left.tokens, right.tokens) &&
+    areMessageErrorsEqual(left.error, right.error)
+  )
 }
 
 function areModelRefsEqual(
@@ -211,12 +230,14 @@ function areTokenUsageEqual(
 ): boolean {
   if (left === right) return true
   if (!left || !right) return false
-  return left.total === right.total
-    && left.input === right.input
-    && left.output === right.output
-    && left.reasoning === right.reasoning
-    && left.cache?.read === right.cache?.read
-    && left.cache?.write === right.cache?.write
+  return (
+    left.total === right.total &&
+    left.input === right.input &&
+    left.output === right.output &&
+    left.reasoning === right.reasoning &&
+    left.cache?.read === right.cache?.read &&
+    left.cache?.write === right.cache?.write
+  )
 }
 
 function areMessageErrorsEqual(
@@ -243,9 +264,7 @@ function areUserSummariesEqual(
 ): boolean {
   if (left === right) return true
   if (!left || !right) return false
-  return left.title === right.title
-    && left.body === right.body
-    && left.diffs === right.diffs
+  return left.title === right.title && left.body === right.body && left.diffs === right.diffs
 }
 
 function areIsolationEqual(
@@ -257,7 +276,10 @@ function areIsolationEqual(
   return left.mode === right.mode && left.network === right.network
 }
 
-function areStringBooleanRecordsEqual(left: Record<string, boolean> | undefined, right: Record<string, boolean> | undefined): boolean {
+function areStringBooleanRecordsEqual(
+  left: Record<string, boolean> | undefined,
+  right: Record<string, boolean> | undefined,
+): boolean {
   if (left === right) return true
   if (!left || !right) return false
   const leftKeys = Object.keys(left)
@@ -269,7 +291,10 @@ function areStringBooleanRecordsEqual(left: Record<string, boolean> | undefined,
   return true
 }
 
-function areFlatRecordsEqual(left: Record<string, unknown> | undefined, right: Record<string, unknown> | undefined): boolean {
+function areFlatRecordsEqual(
+  left: Record<string, unknown> | undefined,
+  right: Record<string, unknown> | undefined,
+): boolean {
   if (left === right) return true
   if (!left || !right) return false
   const leftKeys = Object.keys(left)
@@ -300,22 +325,27 @@ function areUnknownMessageKeysEqual(left: Message, right: Message): boolean {
 // Global events
 // ---------------------------------------------------------------------------
 
-export type GlobalEventResult = {
-  type: "refresh"
-} | {
-  type: "project"
-  project: Project
-} | null
+export type GlobalEventResult =
+  | {
+      type: "refresh"
+    }
+  | {
+      type: "project"
+      project: Project
+    }
+  | null
 
-export type DirectoryEventResult = boolean | {
-  changed: boolean
-  materialization: {
-    type: "incomplete-session-snapshot"
-    sessionID?: string
-    messageID: string
-    partID?: string
-  }
-}
+export type DirectoryEventResult =
+  | boolean
+  | {
+      changed: boolean
+      materialization: {
+        type: "incomplete-session-snapshot"
+        sessionID?: string
+        messageID: string
+        partID?: string
+      }
+    }
 
 function hasMessage(draft: State, sessionID: string | undefined, messageID: string): boolean {
   if (!sessionID) return false
@@ -464,7 +494,13 @@ export function applyDirectoryEvent(
         // Skip message replacement if unchanged — preserves reference, avoids re-render
         const existing = messages[result.index]
         if (areMessagesEqual(existing, info)) {
-          syncDebug.reducer.messageUpdatedUnchanged(info.sessionID, info.id, info.role, (info as { finish?: unknown }).finish, (info.time as { completed?: number })?.completed)
+          syncDebug.reducer.messageUpdatedUnchanged(
+            info.sessionID,
+            info.id,
+            info.role,
+            (info as { finish?: unknown }).finish,
+            (info.time as { completed?: number })?.completed,
+          )
           return false
         }
         const next = [...messages]
@@ -508,9 +544,9 @@ export function applyDirectoryEvent(
         draft.part[messageID] = [part]
         return missingOwningMessage
           ? {
-            changed: true,
-            materialization: { type: "incomplete-session-snapshot", sessionID, messageID, partID: part.id },
-          }
+              changed: true,
+              materialization: { type: "incomplete-session-snapshot", sessionID, messageID, partID: part.id },
+            }
           : true
       }
       const next = [...parts]
@@ -521,18 +557,18 @@ export function applyDirectoryEvent(
           return false
         }
         const dedupeFields = getUpdatedDeltaFields(previous, part)
-        next[result.index] = dedupeFields.length > 0
-          ? { ...part, __dedupeNextDeltaFields: dedupeFields } as unknown as Part
-          : part
+        next[result.index] =
+          dedupeFields.length > 0 ? ({ ...part, __dedupeNextDeltaFields: dedupeFields } as unknown as Part) : part
       } else {
         // Replace optimistic part (no sessionID) with server part of same type.
         // Gate: only scan if the first part lacks sessionID (optimistic parts are
         // always inserted first). Assistant messages never have optimistic parts,
         // so this check is effectively free during streaming.
         const hasOptimistic = next.length > 0 && !(next[0] as { sessionID?: string }).sessionID
-        const optimisticIdx = hasOptimistic && (part.type === "text" || part.type === "file")
-          ? next.findIndex((p) => p.type === part.type && !(p as { sessionID?: string }).sessionID)
-          : -1
+        const optimisticIdx =
+          hasOptimistic && (part.type === "text" || part.type === "file")
+            ? next.findIndex((p) => p.type === part.type && !(p as { sessionID?: string }).sessionID)
+            : -1
         if (optimisticIdx >= 0) {
           next.splice(optimisticIdx, 1)
         }
@@ -542,9 +578,9 @@ export function applyDirectoryEvent(
       draft.part[messageID] = next
       return missingOwningMessage
         ? {
-          changed: true,
-          materialization: { type: "incomplete-session-snapshot", sessionID, messageID, partID: part.id },
-        }
+            changed: true,
+            materialization: { type: "incomplete-session-snapshot", sessionID, messageID, partID: part.id },
+          }
         : true
     }
 
@@ -597,7 +633,9 @@ export function applyDirectoryEvent(
       const next = [...parts]
       next[result.index] = {
         ...existing,
-        [props.field]: shouldDedupe ? appendNonOverlappingDelta(existingValue, props.delta) : (existingValue ?? "") + props.delta,
+        [props.field]: shouldDedupe
+          ? appendNonOverlappingDelta(existingValue, props.delta)
+          : (existingValue ?? "") + props.delta,
         __dedupeNextDeltaFields: dedupeFields.filter((field) => field !== props.field),
       } as unknown as Part
       draft.part[props.messageID] = next

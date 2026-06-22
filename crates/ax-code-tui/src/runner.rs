@@ -188,7 +188,21 @@ impl Runner {
             match route {
                 LaunchRoute::Session { session_id } => {
                     app.session_id = Some(session_id.clone());
-                    app.set_status(format!("Attached to session: {}", session_id));
+                    let mut transcript_loaded = true;
+                    match client.session_transcript_events(session_id).await {
+                        Ok(events) => {
+                            for event in events {
+                                app.handle_event(event);
+                            }
+                        }
+                        Err(e) => {
+                            transcript_loaded = false;
+                            app.set_status(format!("Attached, but transcript load failed: {}", e));
+                        }
+                    }
+                    if transcript_loaded {
+                        app.set_status(format!("Attached to session: {}", session_id));
+                    }
                 }
                 LaunchRoute::NewSession { prompt } => match client.create_session().await {
                     Ok(session_id) => {
@@ -290,7 +304,19 @@ impl Runner {
                         }
                     }
                     InputAction::SwitchSession { session_id } => {
-                        app.set_status(format!("Switched to session: {}", session_id));
+                        if let Some(ref client) = client {
+                            match client.session_transcript_events(&session_id).await {
+                                Ok(events) => {
+                                    for event in events {
+                                        app.handle_event(event);
+                                    }
+                                    app.set_status(format!("Switched to session: {}", session_id));
+                                }
+                                Err(e) => {
+                                    app.set_status(format!("Session switch failed: {}", e));
+                                }
+                            }
+                        }
                     }
                 }
             }

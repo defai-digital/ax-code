@@ -1,11 +1,11 @@
-import React from 'react';
+import React from "react"
 
 type Args = {
-  isSessionSearchOpen: boolean;
-  setIsSessionSearchOpen: (open: boolean) => void;
-  sessionSearchInputRef: React.RefObject<HTMLInputElement | null>;
-  sessionSearchContainerRef: React.RefObject<HTMLDivElement | null>;
-};
+  isSessionSearchOpen: boolean
+  setIsSessionSearchOpen: (open: boolean) => void
+  sessionSearchInputRef: React.RefObject<HTMLInputElement | null>
+  sessionSearchContainerRef: React.RefObject<HTMLDivElement | null>
+}
 
 export const useSessionSearchEffects = ({
   isSessionSearchOpen,
@@ -14,29 +14,29 @@ export const useSessionSearchEffects = ({
   sessionSearchContainerRef,
 }: Args): void => {
   React.useEffect(() => {
-    if (!isSessionSearchOpen || typeof window === 'undefined') {
-      return;
+    if (!isSessionSearchOpen || typeof window === "undefined") {
+      return
     }
     const raf = window.requestAnimationFrame(() => {
-      sessionSearchInputRef.current?.focus();
-      sessionSearchInputRef.current?.select();
-    });
-    return () => window.cancelAnimationFrame(raf);
-  }, [isSessionSearchOpen, sessionSearchInputRef]);
+      sessionSearchInputRef.current?.focus()
+      sessionSearchInputRef.current?.select()
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [isSessionSearchOpen, sessionSearchInputRef])
 
   React.useEffect(() => {
-    if (!isSessionSearchOpen || typeof document === 'undefined') {
-      return;
+    if (!isSessionSearchOpen || typeof document === "undefined") {
+      return
     }
     const handlePointerDown = (event: MouseEvent) => {
       if (!sessionSearchContainerRef.current) {
-        return;
+        return
       }
       if (!sessionSearchContainerRef.current.contains(event.target as Node)) {
-        setIsSessionSearchOpen(false);
+        setIsSessionSearchOpen(false)
       }
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [isSessionSearchOpen, setIsSessionSearchOpen, sessionSearchContainerRef]);
-};
+    }
+    document.addEventListener("mousedown", handlePointerDown)
+    return () => document.removeEventListener("mousedown", handlePointerDown)
+  }, [isSessionSearchOpen, setIsSessionSearchOpen, sessionSearchContainerRef])
+}

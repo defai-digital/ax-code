@@ -22,5 +22,5 @@ export {
   fetchMinimaxCnCodingPlanQuota,
   fetchOllamaCloudQuota,
   fetchZhipuaiQuota,
-  fetchWaferQuota
-} from './providers/index.js';
+  fetchWaferQuota,
+} from "./providers/index.js"

@@ -1,191 +1,190 @@
 export const streamDebugEnabled = (): boolean => {
-    if (typeof window === 'undefined') return false;
-    try {
-        return window.localStorage.getItem('openchamber_stream_debug') === '1';
-    } catch {
-        return false;
-    }
-};
+  if (typeof window === "undefined") return false
+  try {
+    return window.localStorage.getItem("openchamber_stream_debug") === "1"
+  } catch {
+    return false
+  }
+}
 
-const STREAM_PERF_STORAGE_KEY = 'openchamber_stream_perf';
+const STREAM_PERF_STORAGE_KEY = "openchamber_stream_perf"
 
 export type PerfCounter = {
-    count: number;
-    total: number;
-    max: number;
-    last: number;
-};
+  count: number
+  total: number
+  max: number
+  last: number
+}
 
 export type StreamPerfState = {
-    counters: Map<string, PerfCounter>;
-    startedAt: number;
-    lastUpdatedAt: number;
-};
+  counters: Map<string, PerfCounter>
+  startedAt: number
+  lastUpdatedAt: number
+}
 
 export type StreamPerfEntry = {
-    metric: string;
-    count: number;
-    avg: number;
-    max: number;
-    total: number;
-    last: number;
-};
+  metric: string
+  count: number
+  avg: number
+  max: number
+  total: number
+  last: number
+}
 
 export type StreamPerfSnapshot = {
-    enabled: boolean;
-    startedAt: number | null;
-    lastUpdatedAt: number | null;
-    durationMs: number;
-    entries: StreamPerfEntry[];
-};
+  enabled: boolean
+  startedAt: number | null
+  lastUpdatedAt: number | null
+  durationMs: number
+  entries: StreamPerfEntry[]
+}
 
 export const streamPerfEnabled = (): boolean => {
-    if (typeof window === 'undefined') return false;
-    try {
-        return window.localStorage.getItem(STREAM_PERF_STORAGE_KEY) === '1';
-    } catch {
-        return false;
-    }
-};
+  if (typeof window === "undefined") return false
+  try {
+    return window.localStorage.getItem(STREAM_PERF_STORAGE_KEY) === "1"
+  } catch {
+    return false
+  }
+}
 
 const nowMs = (): number => {
-    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
-        return performance.now();
-    }
-    return Date.now();
-};
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now()
+  }
+  return Date.now()
+}
 
 const ensureStreamPerfState = (): StreamPerfState | null => {
-    if (!streamPerfEnabled() || typeof window === 'undefined') {
-        return null;
-    }
+  if (!streamPerfEnabled() || typeof window === "undefined") {
+    return null
+  }
 
-    if (!window.__openchamberStreamPerfState) {
-        const startedAt = Date.now();
-        window.__openchamberStreamPerfState = {
-            counters: new Map<string, PerfCounter>(),
-            startedAt,
-            lastUpdatedAt: startedAt,
-        };
+  if (!window.__openchamberStreamPerfState) {
+    const startedAt = Date.now()
+    window.__openchamberStreamPerfState = {
+      counters: new Map<string, PerfCounter>(),
+      startedAt,
+      lastUpdatedAt: startedAt,
     }
+  }
 
-    return window.__openchamberStreamPerfState;
-};
+  return window.__openchamberStreamPerfState
+}
 
 const normalizePerfEntries = (counters: Map<string, PerfCounter>): StreamPerfEntry[] => {
-    return Array.from(counters.entries())
-        .map(([metric, bucket]) => ({
-            metric,
-            count: bucket.count,
-            avg: bucket.count > 0 ? Number((bucket.total / bucket.count).toFixed(3)) : 0,
-            max: Number(bucket.max.toFixed(3)),
-            total: Number(bucket.total.toFixed(3)),
-            last: Number(bucket.last.toFixed(3)),
-        }))
-        .sort((a, b) => b.total - a.total || b.count - a.count);
-};
+  return Array.from(counters.entries())
+    .map(([metric, bucket]) => ({
+      metric,
+      count: bucket.count,
+      avg: bucket.count > 0 ? Number((bucket.total / bucket.count).toFixed(3)) : 0,
+      max: Number(bucket.max.toFixed(3)),
+      total: Number(bucket.total.toFixed(3)),
+      last: Number(bucket.last.toFixed(3)),
+    }))
+    .sort((a, b) => b.total - a.total || b.count - a.count)
+}
 
 const updatePerfCounter = (metric: string, amount: number): void => {
-    const state = ensureStreamPerfState();
-    if (!state) {
-        return;
-    }
+  const state = ensureStreamPerfState()
+  if (!state) {
+    return
+  }
 
-    const bucket = state.counters.get(metric) ?? { count: 0, total: 0, max: 0, last: 0 };
-    bucket.count += 1;
-    bucket.total += amount;
-    bucket.max = Math.max(bucket.max, amount);
-    bucket.last = amount;
-    state.counters.set(metric, bucket);
-    state.lastUpdatedAt = Date.now();
-};
+  const bucket = state.counters.get(metric) ?? { count: 0, total: 0, max: 0, last: 0 }
+  bucket.count += 1
+  bucket.total += amount
+  bucket.max = Math.max(bucket.max, amount)
+  bucket.last = amount
+  state.counters.set(metric, bucket)
+  state.lastUpdatedAt = Date.now()
+}
 
 export const setStreamPerfEnabled = (enabled: boolean): void => {
-    if (typeof window === 'undefined') {
-        return;
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    if (enabled) {
+      window.localStorage.setItem(STREAM_PERF_STORAGE_KEY, "1")
+      window.__openchamberStreamPerfState = {
+        counters: new Map<string, PerfCounter>(),
+        startedAt: Date.now(),
+        lastUpdatedAt: Date.now(),
+      }
+      return
     }
 
-    try {
-        if (enabled) {
-            window.localStorage.setItem(STREAM_PERF_STORAGE_KEY, '1');
-            window.__openchamberStreamPerfState = {
-                counters: new Map<string, PerfCounter>(),
-                startedAt: Date.now(),
-                lastUpdatedAt: Date.now(),
-            };
-            return;
-        }
-
-        window.localStorage.removeItem(STREAM_PERF_STORAGE_KEY);
-        delete window.__openchamberStreamPerfState;
-    } catch {
-        // ignore storage failures in debug helper
-    }
-};
+    window.localStorage.removeItem(STREAM_PERF_STORAGE_KEY)
+    delete window.__openchamberStreamPerfState
+  } catch {
+    // ignore storage failures in debug helper
+  }
+}
 
 export const resetStreamPerf = (): void => {
-    if (typeof window === 'undefined') {
-        return;
-    }
+  if (typeof window === "undefined") {
+    return
+  }
 
-    if (streamPerfEnabled()) {
-        window.__openchamberStreamPerfState = {
-            counters: new Map<string, PerfCounter>(),
-            startedAt: Date.now(),
-            lastUpdatedAt: Date.now(),
-        };
+  if (streamPerfEnabled()) {
+    window.__openchamberStreamPerfState = {
+      counters: new Map<string, PerfCounter>(),
+      startedAt: Date.now(),
+      lastUpdatedAt: Date.now(),
     }
-
-};
+  }
+}
 
 export const getStreamPerfSnapshot = (): StreamPerfSnapshot => {
-    if (typeof window === 'undefined') {
-        return {
-            enabled: false,
-            startedAt: null,
-            lastUpdatedAt: null,
-            durationMs: 0,
-            entries: [],
-        };
-    }
-
-    const state = window.__openchamberStreamPerfState;
-    if (!streamPerfEnabled() || !state) {
-        return {
-            enabled: false,
-            startedAt: null,
-            lastUpdatedAt: null,
-            durationMs: 0,
-            entries: [],
-        };
-    }
-
+  if (typeof window === "undefined") {
     return {
-        enabled: true,
-        startedAt: state.startedAt,
-        lastUpdatedAt: state.lastUpdatedAt,
-        durationMs: Math.max(0, Date.now() - state.startedAt),
-        entries: normalizePerfEntries(state.counters),
-    };
-};
+      enabled: false,
+      startedAt: null,
+      lastUpdatedAt: null,
+      durationMs: 0,
+      entries: [],
+    }
+  }
+
+  const state = window.__openchamberStreamPerfState
+  if (!streamPerfEnabled() || !state) {
+    return {
+      enabled: false,
+      startedAt: null,
+      lastUpdatedAt: null,
+      durationMs: 0,
+      entries: [],
+    }
+  }
+
+  return {
+    enabled: true,
+    startedAt: state.startedAt,
+    lastUpdatedAt: state.lastUpdatedAt,
+    durationMs: Math.max(0, Date.now() - state.startedAt),
+    entries: normalizePerfEntries(state.counters),
+  }
+}
 
 export const streamPerfCount = (metric: string, count = 1): void => {
-    updatePerfCounter(metric, count);
-};
+  updatePerfCounter(metric, count)
+}
 
 export const streamPerfObserve = (metric: string, value: number): void => {
-    updatePerfCounter(metric, value);
-};
+  updatePerfCounter(metric, value)
+}
 
 export const streamPerfMeasure = <T>(metric: string, fn: () => T): T => {
-    if (!streamPerfEnabled()) {
-        return fn();
-    }
+  if (!streamPerfEnabled()) {
+    return fn()
+  }
 
-    const start = nowMs();
-    try {
-        return fn();
-    } finally {
-        updatePerfCounter(metric, nowMs() - start);
-    }
-};
+  const start = nowMs()
+  try {
+    return fn()
+  } finally {
+    updatePerfCounter(metric, nowMs() - start)
+  }
+}

@@ -31,9 +31,9 @@ describe("server route validation", () => {
       directory: root,
       fn: async () => {
         const session = await Session.create({})
-        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockRejectedValue(
-          new Error("prompt failed with sk-test-token"),
-        )
+        const promptSpy = vi
+          .spyOn(SessionPrompt, "prompt")
+          .mockRejectedValue(new Error("prompt failed with sk-test-token"))
 
         try {
           const res = await Server.Default().request(`/session/${session.id}/message`, {

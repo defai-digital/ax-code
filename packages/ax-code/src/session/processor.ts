@@ -11,7 +11,7 @@ import { Plugin } from "@/plugin"
 import { Flag } from "@/flag/flag"
 import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
 import { BlastRadius } from "./blast-radius"
-import { detectCycle } from "./cycle-detection"
+import { detectCycle, type RingEntry } from "./cycle-detection"
 import type { Provider } from "@/provider/provider"
 import { LLM } from "./llm"
 import { Config } from "@/config/config"
@@ -145,7 +145,7 @@ export namespace SessionProcessor {
       }
       return visit(obj, 0)
     }
-    const recentToolRing: { tool: string; input: string }[] = []
+    const recentToolRing: RingEntry[] = []
     const doomLoopWarnings: Record<string, string> = {}
     // Window large enough to evaluate the longest cycle length plus headroom.
     const recentToolRingLimit = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
@@ -154,12 +154,14 @@ export namespace SessionProcessor {
       tool: string
       eventInput: unknown
       fallbackInput: unknown
+      output?: unknown
     }) => {
       recentToolRing.push({
         tool: input.tool,
         input:
           toolInputCache[input.toolCallId] ??
           (input.eventInput ? safeStringify(input.eventInput) : safeStringify(input.fallbackInput)),
+        output: input.output === undefined ? undefined : canonicalize(input.output),
       })
       if (recentToolRing.length > recentToolRingLimit) recentToolRing.shift()
       delete toolcalls[input.toolCallId]
@@ -593,8 +595,21 @@ export namespace SessionProcessor {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const toolEndTime = Date.now()
-                    const doomLoopWarning = doomLoopWarnings[value.toolCallId]
                     const storedInput = value.input === undefined ? match.state.input : jsonSafeInput(value.input)
+                    const completedInput = canonicalize(storedInput)
+                    const completedOutput = canonicalize(value.output.output)
+                    const completedCycleLen = detectCycle(
+                      [...recentToolRing, { tool: match.tool, input: completedInput, output: completedOutput }],
+                      AUTONOMOUS_MAX_CYCLE_LEN,
+                      { compareOutput: true },
+                    )
+                    const completedLoopWarning =
+                      completedCycleLen === null
+                        ? undefined
+                        : completedCycleLen === 1
+                          ? "Doom-loop detection saw this tool call repeat with the same input and output. Change strategy instead of repeating the same call."
+                          : `Doom-loop detection saw this tool call form part of a repeating ${completedCycleLen}-step input/output cycle. Break the cycle and change strategy instead of repeating the same sequence of calls.`
+                    const doomLoopWarning = doomLoopWarnings[value.toolCallId] ?? completedLoopWarning
                     const output =
                       doomLoopWarning && typeof value.output.output === "string"
                         ? `${sanitizeForXmlTag(value.output.output)}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
@@ -643,6 +658,7 @@ export namespace SessionProcessor {
                       tool: match.tool,
                       eventInput: value.input,
                       fallbackInput: match.state.input,
+                      output: value.output.output,
                     })
                   }
                   break
@@ -760,6 +776,7 @@ export namespace SessionProcessor {
                       tool: match.tool,
                       eventInput: value.input,
                       fallbackInput: match.state.input,
+                      output: errorMsg,
                     })
                   }
                   break

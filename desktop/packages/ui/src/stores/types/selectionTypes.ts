@@ -1,9 +1,9 @@
 export type SessionModelSelection = {
-  providerId: string;
-  modelId: string;
-};
+  providerId: string
+  modelId: string
+}
 
 export type LastUsedProviderSelection = {
-  providerID: string;
-  modelID: string;
-};
+  providerID: string
+  modelID: string
+}

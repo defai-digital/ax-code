@@ -5,12 +5,7 @@
     "description": "A color scheme inspired by Japanese art and ink painting - dark variant",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [
-      "dark",
-      "japanese",
-      "ink",
-      "elegant"
-    ]
+    "tags": ["dark", "japanese", "ink", "elegant"]
   },
   "colors": {
     "primary": {

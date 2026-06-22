@@ -41,18 +41,21 @@ function log(cat: SyncDebugCategory, ...args: unknown[]): void {
 export const syncDebug = {
   pipeline: {
     /** Event coalesced (replaced an earlier event in the queue). */
-    coalesced: (eventType: string, coalesceKey: string) =>
-      log("pipeline", "coalesced", eventType, coalesceKey),
+    coalesced: (eventType: string, coalesceKey: string) => log("pipeline", "coalesced", eventType, coalesceKey),
 
     /** Flush batch dispatched. */
-    flush: (count: number) =>
-      log("pipeline", "flush", `${count} events`),
+    flush: (count: number) => log("pipeline", "flush", `${count} events`),
   },
 
   reducer: {
     /** message.updated skipped because role/finish/completed matched existing. */
-    messageUpdatedUnchanged: (sessionID: string, messageID: string, role: string, finish: unknown, completed: unknown) =>
-      log("reducer", "message.updated UNCHANGED (skipped)", { sessionID, messageID, role, finish, completed }),
+    messageUpdatedUnchanged: (
+      sessionID: string,
+      messageID: string,
+      role: string,
+      finish: unknown,
+      completed: unknown,
+    ) => log("reducer", "message.updated UNCHANGED (skipped)", { sessionID, messageID, role, finish, completed }),
 
     /** message.part.updated arrived but no parts array exists for this messageID. */
     partUpdatedNoExistingParts: (messageID: string, partID: string, partType: string) =>

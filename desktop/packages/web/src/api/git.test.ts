@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from "vitest"
 
-vi.mock('@openchamber/ui/api/gitApiHttp', () => ({
+vi.mock("@openchamber/ui/api/gitApiHttp", () => ({
   checkIsGitRepository: vi.fn(),
   getGitStatus: vi.fn(),
   getGitDiff: vi.fn(),
@@ -59,14 +59,14 @@ vi.mock('@openchamber/ui/api/gitApiHttp', () => ({
   stash: vi.fn(),
   stashPop: vi.fn(),
   getConflictDetails: vi.fn(),
-}));
+}))
 
-describe('createWebGitAPI', () => {
-  it('exposes bulk stage and unstage methods', async () => {
-    const { createWebGitAPI } = await import('./git');
-    const api = createWebGitAPI();
+describe("createWebGitAPI", () => {
+  it("exposes bulk stage and unstage methods", async () => {
+    const { createWebGitAPI } = await import("./git")
+    const api = createWebGitAPI()
 
-    expect(typeof api.stageGitFiles).toBe('function');
-    expect(typeof api.unstageGitFiles).toBe('function');
-  });
-});
+    expect(typeof api.stageGitFiles).toBe("function")
+    expect(typeof api.unstageGitFiles).toBe("function")
+  })
+})

@@ -1,51 +1,51 @@
-import { resolveGitHubRepoFromDirectory } from './index.js';
+import { resolveGitHubRepoFromDirectory } from "./index.js"
 
-const REPO_METADATA_TTL_MS = 5 * 60_000;
-const REPO_METADATA_CACHE_MAX_ENTRIES = 200;
-const repoMetadataCache = new Map();
+const REPO_METADATA_TTL_MS = 5 * 60_000
+const REPO_METADATA_CACHE_MAX_ENTRIES = 200
+const repoMetadataCache = new Map()
 
 const setRepoMetadataCache = (repoKey, data) => {
   if (repoMetadataCache.size >= REPO_METADATA_CACHE_MAX_ENTRIES && !repoMetadataCache.has(repoKey)) {
-    const oldest = repoMetadataCache.entries().next().value;
+    const oldest = repoMetadataCache.entries().next().value
     if (oldest) {
-      repoMetadataCache.delete(oldest[0]);
+      repoMetadataCache.delete(oldest[0])
     }
   }
-  repoMetadataCache.set(repoKey, { data, fetchedAt: Date.now() });
-};
+  repoMetadataCache.set(repoKey, { data, fetchedAt: Date.now() })
+}
 
 const normalizeRepoKey = (owner, repo) => {
-  const o = typeof owner === 'string' ? owner.trim().toLowerCase() : '';
-  const r = typeof repo === 'string' ? repo.trim().toLowerCase() : '';
-  if (!o || !r) return '';
-  return `${o}/${r}`;
-};
+  const o = typeof owner === "string" ? owner.trim().toLowerCase() : ""
+  const r = typeof repo === "string" ? repo.trim().toLowerCase() : ""
+  if (!o || !r) return ""
+  return `${o}/${r}`
+}
 
 const getRepoMetadata = async (octokit, repo) => {
-  const repoKey = normalizeRepoKey(repo?.owner, repo?.repo);
-  if (!repoKey) return null;
+  const repoKey = normalizeRepoKey(repo?.owner, repo?.repo)
+  if (!repoKey) return null
 
-  const cached = repoMetadataCache.get(repoKey);
+  const cached = repoMetadataCache.get(repoKey)
   if (cached && Date.now() - cached.fetchedAt < REPO_METADATA_TTL_MS) {
-    return cached.data;
+    return cached.data
   }
 
   try {
     const response = await octokit.rest.repos.get({
       owner: repo.owner,
       repo: repo.repo,
-    });
-    const data = response?.data ?? null;
-    setRepoMetadataCache(repoKey, data);
-    return data;
+    })
+    const data = response?.data ?? null
+    setRepoMetadataCache(repoKey, data)
+    return data
   } catch (error) {
     if (error?.status === 403 || error?.status === 404) {
-      setRepoMetadataCache(repoKey, null);
-      return null;
+      setRepoMetadataCache(repoKey, null)
+      return null
     }
-    throw error;
+    throw error
   }
-};
+}
 
 /**
  * Resolve the repo network for a directory. If the origin repo is a fork,
@@ -57,46 +57,46 @@ const getRepoMetadata = async (octokit, repo) => {
  * @returns {Promise<Array<{ owner: string, repo: string, url: string, source: string }> | null>}
  *   Array of repos to query (origin first, then upstream), or null if not a fork.
  */
-export async function resolveRepoNetwork(octokit, directory, remoteName = 'origin') {
-  const { repo } = await resolveGitHubRepoFromDirectory(directory, remoteName).catch(() => ({ repo: null }));
-  if (!repo) return null;
+export async function resolveRepoNetwork(octokit, directory, remoteName = "origin") {
+  const { repo } = await resolveGitHubRepoFromDirectory(directory, remoteName).catch(() => ({ repo: null }))
+  if (!repo) return null
 
-  const metadata = await getRepoMetadata(octokit, repo);
-  if (!metadata) return [{ ...repo, source: 'origin' }];
+  const metadata = await getRepoMetadata(octokit, repo)
+  if (!metadata) return [{ ...repo, source: "origin" }]
 
-  const result = [{ ...repo, source: 'origin' }];
-  const seenKeys = new Set([normalizeRepoKey(repo.owner, repo.repo)]);
+  const result = [{ ...repo, source: "origin" }]
+  const seenKeys = new Set([normalizeRepoKey(repo.owner, repo.repo)])
 
-  const parent = metadata?.parent;
+  const parent = metadata?.parent
   if (parent?.owner?.login && parent?.name) {
-    const key = normalizeRepoKey(parent.owner.login, parent.name);
+    const key = normalizeRepoKey(parent.owner.login, parent.name)
     if (!seenKeys.has(key)) {
-      seenKeys.add(key);
+      seenKeys.add(key)
       result.push({
         owner: parent.owner.login,
         repo: parent.name,
         url: parent.html_url || `https://github.com/${parent.owner.login}/${parent.name}`,
-        source: 'upstream',
-      });
+        source: "upstream",
+      })
     }
   }
 
-  const source = metadata?.source;
+  const source = metadata?.source
   if (source?.owner?.login && source?.name) {
-    const key = normalizeRepoKey(source.owner.login, source.name);
+    const key = normalizeRepoKey(source.owner.login, source.name)
     if (!seenKeys.has(key)) {
-      seenKeys.add(key);
+      seenKeys.add(key)
       result.push({
         owner: source.owner.login,
         repo: source.name,
         url: source.html_url || `https://github.com/${source.owner.login}/${source.name}`,
-        source: 'upstream',
-      });
+        source: "upstream",
+      })
     }
   }
 
   // If no parent/source found, repo is not a fork
-  if (result.length === 1) return null;
+  if (result.length === 1) return null
 
-  return result;
+  return result
 }

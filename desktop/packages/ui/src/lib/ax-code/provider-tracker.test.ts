@@ -1,9 +1,5 @@
-import { describe, expect, test } from "vitest";
-import {
-  recordProviderError,
-  recordProviderSuccess,
-  isCircuitOpen,
-} from "./provider-tracker"
+import { describe, expect, test } from "vitest"
+import { recordProviderError, recordProviderSuccess, isCircuitOpen } from "./provider-tracker"
 
 describe("provider-tracker circuit breaker", () => {
   test("a proven success closes an open circuit immediately", () => {

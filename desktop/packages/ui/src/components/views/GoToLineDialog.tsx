@@ -1,196 +1,193 @@
-import React from 'react';
+import React from "react"
 
-import { EditorSelection } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorSelection } from "@codemirror/state"
+import { EditorView } from "@codemirror/view"
 
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { useI18n } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { useI18n } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 
 type GoToLineDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  view: EditorView | null;
-  variant?: 'overlay' | 'inline';
-};
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  view: EditorView | null
+  variant?: "overlay" | "inline"
+}
 
 type CursorSnapshot = {
-  character: number;
-  lineNumber: number;
-  selection: EditorSelection;
-};
+  character: number
+  lineNumber: number
+  selection: EditorSelection
+}
 
 const resolveLineNumber = (rawValue: string, view: EditorView | null): number | null => {
   if (!view) {
-    return null;
+    return null
   }
 
-  const parsed = Number.parseInt(rawValue.trim(), 10);
+  const parsed = Number.parseInt(rawValue.trim(), 10)
   if (!Number.isFinite(parsed) || parsed < 1) {
-    return null;
+    return null
   }
 
-  return Math.min(parsed, view.state.doc.lines);
-};
+  return Math.min(parsed, view.state.doc.lines)
+}
 
 const getCursorSnapshot = (view: EditorView, selection: EditorSelection): CursorSnapshot => {
-  const line = view.state.doc.lineAt(selection.main.head);
+  const line = view.state.doc.lineAt(selection.main.head)
   return {
     lineNumber: line.number,
     character: selection.main.head - line.from + 1,
     selection,
-  };
-};
+  }
+}
 
 const moveSelectionToLine = (view: EditorView, lineNumber: number, preferredCharacter: number) => {
-  const line = view.state.doc.line(lineNumber);
-  const nextCharacter = Math.max(1, Math.min(preferredCharacter, line.length + 1));
-  const position = line.from + nextCharacter - 1;
+  const line = view.state.doc.line(lineNumber)
+  const nextCharacter = Math.max(1, Math.min(preferredCharacter, line.length + 1))
+  const position = line.from + nextCharacter - 1
 
   view.dispatch({
     selection: EditorSelection.cursor(position),
-    effects: EditorView.scrollIntoView(position, { y: 'center' }),
-  });
-};
+    effects: EditorView.scrollIntoView(position, { y: "center" }),
+  })
+}
 
-export function GoToLineDialog({ open, onOpenChange, view, variant = 'overlay' }: GoToLineDialogProps) {
-  const { t } = useI18n();
-  const [inputValue, setInputValue] = React.useState('');
-  const initialCursorRef = React.useRef<CursorSnapshot | null>(null);
-  const committedRef = React.useRef(false);
-  const panelRef = React.useRef<HTMLDivElement | null>(null);
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
+export function GoToLineDialog({ open, onOpenChange, view, variant = "overlay" }: GoToLineDialogProps) {
+  const { t } = useI18n()
+  const [inputValue, setInputValue] = React.useState("")
+  const initialCursorRef = React.useRef<CursorSnapshot | null>(null)
+  const committedRef = React.useRef(false)
+  const panelRef = React.useRef<HTMLDivElement | null>(null)
+  const inputRef = React.useRef<HTMLInputElement | null>(null)
 
-  const lineNumber = React.useMemo(
-    () => resolveLineNumber(inputValue, view),
-    [inputValue, view],
-  );
+  const lineNumber = React.useMemo(() => resolveLineNumber(inputValue, view), [inputValue, view])
 
   React.useEffect(() => {
     if (!open || !view) {
-      return;
+      return
     }
 
-    committedRef.current = false;
-    initialCursorRef.current = getCursorSnapshot(view, view.state.selection);
-    setInputValue('');
-  }, [open, view]);
+    committedRef.current = false
+    initialCursorRef.current = getCursorSnapshot(view, view.state.selection)
+    setInputValue("")
+  }, [open, view])
 
   React.useEffect(() => {
     if (!open) {
-      return;
+      return
     }
 
     window.requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
-  }, [open]);
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    })
+  }, [open])
 
   React.useEffect(() => {
     if (!open || !view || !initialCursorRef.current) {
-      return;
+      return
     }
 
     if (lineNumber === null) {
-      const { selection } = initialCursorRef.current;
+      const { selection } = initialCursorRef.current
       view.dispatch({
         selection,
-        effects: EditorView.scrollIntoView(selection.main.from, { y: 'center' }),
-      });
-      return;
+        effects: EditorView.scrollIntoView(selection.main.from, { y: "center" }),
+      })
+      return
     }
 
-    moveSelectionToLine(view, lineNumber, initialCursorRef.current.character);
-  }, [lineNumber, open, view]);
+    moveSelectionToLine(view, lineNumber, initialCursorRef.current.character)
+  }, [lineNumber, open, view])
 
   const restoreInitialSelection = React.useCallback(() => {
     if (!view || committedRef.current || !initialCursorRef.current) {
-      return;
+      return
     }
 
-    const { selection } = initialCursorRef.current;
+    const { selection } = initialCursorRef.current
     view.dispatch({
       selection,
-      effects: EditorView.scrollIntoView(selection.main.from, { y: 'center' }),
-    });
-  }, [view]);
+      effects: EditorView.scrollIntoView(selection.main.from, { y: "center" }),
+    })
+  }, [view])
 
-  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
-    if (!nextOpen) {
-      restoreInitialSelection();
-    }
-    onOpenChange(nextOpen);
-  }, [onOpenChange, restoreInitialSelection]);
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (!nextOpen) {
+        restoreInitialSelection()
+      }
+      onOpenChange(nextOpen)
+    },
+    [onOpenChange, restoreInitialSelection],
+  )
 
   const handleSubmit = React.useCallback(() => {
     if (!view || lineNumber === null || !initialCursorRef.current) {
-      return;
+      return
     }
 
-    committedRef.current = true;
-    moveSelectionToLine(view, lineNumber, initialCursorRef.current.character);
-    onOpenChange(false);
-    view.focus();
-  }, [lineNumber, onOpenChange, view]);
+    committedRef.current = true
+    moveSelectionToLine(view, lineNumber, initialCursorRef.current.character)
+    onOpenChange(false)
+    view.focus()
+  }, [lineNumber, onOpenChange, view])
 
   React.useEffect(() => {
     if (!open) {
-      return;
+      return
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      const panel = panelRef.current;
-      const target = event.target;
+      const panel = panelRef.current
+      const target = event.target
       if (!panel || !(target instanceof Node) || panel.contains(target)) {
-        return;
+        return
       }
-      handleOpenChange(false);
-    };
+      handleOpenChange(false)
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') {
-        return;
+      if (event.key !== "Escape") {
+        return
       }
-      event.preventDefault();
-      handleOpenChange(false);
-    };
+      event.preventDefault()
+      handleOpenChange(false)
+    }
 
-    document.addEventListener('pointerdown', handlePointerDown, true);
-    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener("pointerdown", handlePointerDown, true)
+    document.addEventListener("keydown", handleKeyDown, true)
     return () => {
-      document.removeEventListener('pointerdown', handlePointerDown, true);
-      document.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [handleOpenChange, open, variant]);
+      document.removeEventListener("pointerdown", handlePointerDown, true)
+      document.removeEventListener("keydown", handleKeyDown, true)
+    }
+  }, [handleOpenChange, open, variant])
 
   const helperText = React.useMemo(() => {
     if (!view) {
-      return t('goToLineDialog.helper.editorUnavailable');
+      return t("goToLineDialog.helper.editorUnavailable")
     }
 
     if (lineNumber === null) {
-      const snapshot = initialCursorRef.current ?? getCursorSnapshot(view, view.state.selection);
-      return t('goToLineDialog.helper.currentLineRange', {
+      const snapshot = initialCursorRef.current ?? getCursorSnapshot(view, view.state.selection)
+      return t("goToLineDialog.helper.currentLineRange", {
         current: snapshot.lineNumber,
         max: view.state.doc.lines,
-      });
+      })
     }
 
-    return t('goToLineDialog.helper.goToLine', { line: lineNumber });
-  }, [lineNumber, t, view]);
+    return t("goToLineDialog.helper.goToLine", { line: lineNumber })
+  }, [lineNumber, t, view])
 
-  if (variant === 'inline') {
+  if (variant === "inline") {
     if (!open) {
-      return null;
+      return null
     }
 
     return (
-      <div
-        ref={panelRef}
-        className="ml-1 flex h-6 items-center gap-1"
-      >
+      <div ref={panelRef} className="ml-1 flex h-6 items-center gap-1">
         <Input
           ref={inputRef}
           type="number"
@@ -200,12 +197,12 @@ export function GoToLineDialog({ open, onOpenChange, view, variant = 'overlay' }
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              handleSubmit();
+            if (event.key === "Enter") {
+              event.preventDefault()
+              handleSubmit()
             }
           }}
-          placeholder={t('goToLineDialog.field.linePlaceholderShort')}
+          placeholder={t("goToLineDialog.field.linePlaceholderShort")}
           className="h-6 w-20 rounded-md border-border/70 bg-transparent px-2 typography-meta"
         />
         <Button
@@ -215,18 +212,18 @@ export function GoToLineDialog({ open, onOpenChange, view, variant = 'overlay' }
           disabled={!view || lineNumber === null}
           className="h-6 px-2"
         >
-          {t('goToLineDialog.actions.go')}
+          {t("goToLineDialog.actions.go")}
         </Button>
       </div>
-    );
+    )
   }
 
   return (
     <div
       ref={panelRef}
       className={cn(
-        'absolute left-3 top-3 z-40 w-[min(32rem,calc(100%-1.5rem))] rounded-xl border border-[var(--interactive-border)] bg-[color:color-mix(in_srgb,var(--surface-elevated)_94%,transparent)] p-2.5 shadow-lg backdrop-blur-sm transition-all',
-        open ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0',
+        "absolute left-3 top-3 z-40 w-[min(32rem,calc(100%-1.5rem))] rounded-xl border border-[var(--interactive-border)] bg-[color:color-mix(in_srgb,var(--surface-elevated)_94%,transparent)] p-2.5 shadow-lg backdrop-blur-sm transition-all",
+        open ? "pointer-events-auto translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0",
       )}
     >
       <div className="min-w-0">
@@ -239,12 +236,12 @@ export function GoToLineDialog({ open, onOpenChange, view, variant = 'overlay' }
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              handleSubmit();
+            if (event.key === "Enter") {
+              event.preventDefault()
+              handleSubmit()
             }
           }}
-          placeholder={t('goToLineDialog.field.linePlaceholder')}
+          placeholder={t("goToLineDialog.field.linePlaceholder")}
           className="h-8 w-full rounded-md border-border/70 bg-background/60 typography-ui-label"
         />
         <div className="mt-2 rounded-md bg-primary/15 px-3 py-1.5 typography-ui-label text-foreground/95">
@@ -252,5 +249,5 @@ export function GoToLineDialog({ open, onOpenChange, view, variant = 'overlay' }
         </div>
       </div>
     </div>
-  );
+  )
 }

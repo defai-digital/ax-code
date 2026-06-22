@@ -5,12 +5,7 @@
     "description": "An inky color scheme for prose and code - light variant",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "warm",
-      "natural",
-      "paper"
-    ]
+    "tags": ["light", "warm", "natural", "paper"]
   },
   "colors": {
     "primary": {

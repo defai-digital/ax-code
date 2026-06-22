@@ -344,10 +344,7 @@ function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
     refreshTick,
     createAbortableResourceFetcher<number, WorkflowRunArtifact[]>(async (_tick, signal, info) => {
       try {
-        const result = await sdk.client.workflowRun.artifacts(
-          { runID: props.runID, includePayload: true },
-          { signal },
-        )
+        const result = await sdk.client.workflowRun.artifacts({ runID: props.runID, includePayload: true }, { signal })
         if (result.error) {
           toast.show({
             message: workflowErrorMessage(result.error, "Failed to load workflow artifact"),

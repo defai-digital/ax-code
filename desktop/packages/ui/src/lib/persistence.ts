@@ -1,126 +1,126 @@
-import type { DesktopSettings } from '@/lib/desktop';
-import { createProjectIdFromPath } from '@/lib/projectId';
-import { useUIStore } from '@/stores/useUIStore';
-import { isMonoFontOption, isUiFontOption } from '@/lib/fontOptions';
-import { useMessageQueueStore } from '@/stores/messageQueueStore';
-import { setDirectoryShowHidden } from '@/lib/directoryShowHidden';
-import { setFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
-import { loadAppearancePreferences, applyAppearancePreferences } from '@/lib/appearancePersistence';
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { sanitizeStarterRefs } from '@/lib/draftStarters';
-import { API_ENDPOINTS, HTTP_DEFAULTS } from './http';
+import type { DesktopSettings } from "@/lib/desktop"
+import { createProjectIdFromPath } from "@/lib/projectId"
+import { useUIStore } from "@/stores/useUIStore"
+import { isMonoFontOption, isUiFontOption } from "@/lib/fontOptions"
+import { useMessageQueueStore } from "@/stores/messageQueueStore"
+import { setDirectoryShowHidden } from "@/lib/directoryShowHidden"
+import { setFilesViewShowGitignored } from "@/lib/filesViewShowGitignored"
+import { loadAppearancePreferences, applyAppearancePreferences } from "@/lib/appearancePersistence"
+import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
+import { sanitizeStarterRefs } from "@/lib/draftStarters"
+import { API_ENDPOINTS, HTTP_DEFAULTS } from "./http"
 
 const persistToLocalStorage = (settings: DesktopSettings) => {
-  if (typeof window === 'undefined') {
-    return;
+  if (typeof window === "undefined") {
+    return
   }
 
   if (settings.themeId) {
-    localStorage.setItem('selectedThemeId', settings.themeId);
+    localStorage.setItem("selectedThemeId", settings.themeId)
   }
   if (settings.themeVariant) {
-    localStorage.setItem('selectedThemeVariant', settings.themeVariant);
+    localStorage.setItem("selectedThemeVariant", settings.themeVariant)
   }
   if (settings.lightThemeId) {
-    localStorage.setItem('lightThemeId', settings.lightThemeId);
+    localStorage.setItem("lightThemeId", settings.lightThemeId)
   }
   if (settings.darkThemeId) {
-    localStorage.setItem('darkThemeId', settings.darkThemeId);
+    localStorage.setItem("darkThemeId", settings.darkThemeId)
   }
-  if (typeof settings.useSystemTheme === 'boolean') {
-    localStorage.setItem('useSystemTheme', String(settings.useSystemTheme));
+  if (typeof settings.useSystemTheme === "boolean") {
+    localStorage.setItem("useSystemTheme", String(settings.useSystemTheme))
   }
   if (settings.lastDirectory) {
-    localStorage.setItem('lastDirectory', settings.lastDirectory);
+    localStorage.setItem("lastDirectory", settings.lastDirectory)
   }
   if (settings.homeDirectory) {
-    localStorage.setItem('homeDirectory', settings.homeDirectory);
+    localStorage.setItem("homeDirectory", settings.homeDirectory)
     // Electron's preload exposes __AX_CODE_DESKTOP_HOME__ as a read-only
     // contextBridge property; assignment throws TypeError there. Plain web
     // runtime may still expose a writable value. Swallow the
     // error in Electron — preload already seeded the value correctly.
     try {
-      window.__AX_CODE_DESKTOP_HOME__ = settings.homeDirectory;
+      window.__AX_CODE_DESKTOP_HOME__ = settings.homeDirectory
     } catch {
       /* read-only contextBridge property — leave preload-seeded value */
     }
   }
   if (Array.isArray(settings.projects) && settings.projects.length > 0) {
-    localStorage.setItem('projects', JSON.stringify(settings.projects));
+    localStorage.setItem("projects", JSON.stringify(settings.projects))
   } else {
-    localStorage.removeItem('projects');
+    localStorage.removeItem("projects")
   }
   if (settings.activeProjectId) {
-    localStorage.setItem('activeProjectId', settings.activeProjectId);
+    localStorage.setItem("activeProjectId", settings.activeProjectId)
   } else {
-    localStorage.removeItem('activeProjectId');
+    localStorage.removeItem("activeProjectId")
   }
   if (Array.isArray(settings.pinnedDirectories) && settings.pinnedDirectories.length > 0) {
-    localStorage.setItem('pinnedDirectories', JSON.stringify(settings.pinnedDirectories));
+    localStorage.setItem("pinnedDirectories", JSON.stringify(settings.pinnedDirectories))
   } else {
-    localStorage.removeItem('pinnedDirectories');
+    localStorage.removeItem("pinnedDirectories")
   }
 
   if (Array.isArray(settings.projects) && settings.projects.length > 0) {
     const collapsed = settings.projects
       .filter((project) => (project as unknown as { sidebarCollapsed?: boolean }).sidebarCollapsed === true)
       .map((project) => project.id)
-      .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      .filter((id): id is string => typeof id === "string" && id.length > 0)
     if (collapsed.length > 0) {
-      localStorage.setItem('oc.sessions.projectCollapse', JSON.stringify(collapsed));
+      localStorage.setItem("oc.sessions.projectCollapse", JSON.stringify(collapsed))
     } else {
-      localStorage.removeItem('oc.sessions.projectCollapse');
+      localStorage.removeItem("oc.sessions.projectCollapse")
     }
   }
-  if (typeof settings.gitmojiEnabled === 'boolean') {
-    localStorage.setItem('gitmojiEnabled', String(settings.gitmojiEnabled));
+  if (typeof settings.gitmojiEnabled === "boolean") {
+    localStorage.setItem("gitmojiEnabled", String(settings.gitmojiEnabled))
   } else {
-    localStorage.removeItem('gitmojiEnabled');
+    localStorage.removeItem("gitmojiEnabled")
   }
-  if (typeof settings.directoryShowHidden === 'boolean') {
-    localStorage.setItem('directoryTreeShowHidden', settings.directoryShowHidden ? 'true' : 'false');
+  if (typeof settings.directoryShowHidden === "boolean") {
+    localStorage.setItem("directoryTreeShowHidden", settings.directoryShowHidden ? "true" : "false")
   }
-  if (typeof settings.filesViewShowGitignored === 'boolean') {
-    localStorage.setItem('filesViewShowGitignored', settings.filesViewShowGitignored ? 'true' : 'false');
+  if (typeof settings.filesViewShowGitignored === "boolean") {
+    localStorage.setItem("filesViewShowGitignored", settings.filesViewShowGitignored ? "true" : "false")
   }
-  if (typeof settings.openInAppId === 'string' && settings.openInAppId.length > 0) {
-    localStorage.setItem('openInAppId', settings.openInAppId);
+  if (typeof settings.openInAppId === "string" && settings.openInAppId.length > 0) {
+    localStorage.setItem("openInAppId", settings.openInAppId)
   }
-};
+}
 
 const dispatchSettingsSynced = (settings: DesktopSettings): void => {
-  if (typeof window === 'undefined') {
-    return;
+  if (typeof window === "undefined") {
+    return
   }
-  window.dispatchEvent(new CustomEvent<DesktopSettings>('openchamber:settings-synced', { detail: settings }));
-};
+  window.dispatchEvent(new CustomEvent<DesktopSettings>("openchamber:settings-synced", { detail: settings }))
+}
 
 type PersistApi = {
-  hasHydrated?: () => boolean;
-  onFinishHydration?: (callback: () => void) => (() => void) | undefined;
-};
+  hasHydrated?: () => boolean
+  onFinishHydration?: (callback: () => void) => (() => void) | undefined
+}
 
-const sanitizeSkillCatalogs = (value: unknown): DesktopSettings['skillCatalogs'] | undefined => {
+const sanitizeSkillCatalogs = (value: unknown): DesktopSettings["skillCatalogs"] | undefined => {
   if (!Array.isArray(value)) {
-    return undefined;
+    return undefined
   }
 
-  const result: NonNullable<DesktopSettings['skillCatalogs']> = [];
-  const seen = new Set<string>();
+  const result: NonNullable<DesktopSettings["skillCatalogs"]> = []
+  const seen = new Set<string>()
 
   for (const entry of value) {
-    if (!entry || typeof entry !== 'object') continue;
-    const candidate = entry as Record<string, unknown>;
+    if (!entry || typeof entry !== "object") continue
+    const candidate = entry as Record<string, unknown>
 
-    const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
-    const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
-    const source = typeof candidate.source === 'string' ? candidate.source.trim() : '';
-    const subpath = typeof candidate.subpath === 'string' ? candidate.subpath.trim() : '';
-    const gitIdentityId = typeof candidate.gitIdentityId === 'string' ? candidate.gitIdentityId.trim() : '';
+    const id = typeof candidate.id === "string" ? candidate.id.trim() : ""
+    const label = typeof candidate.label === "string" ? candidate.label.trim() : ""
+    const source = typeof candidate.source === "string" ? candidate.source.trim() : ""
+    const subpath = typeof candidate.subpath === "string" ? candidate.subpath.trim() : ""
+    const gitIdentityId = typeof candidate.gitIdentityId === "string" ? candidate.gitIdentityId.trim() : ""
 
-    if (!id || !label || !source) continue;
-    if (seen.has(id)) continue;
-    seen.add(id);
+    if (!id || !label || !source) continue
+    if (seen.has(id)) continue
+    seen.add(id)
 
     result.push({
       id,
@@ -128,790 +128,888 @@ const sanitizeSkillCatalogs = (value: unknown): DesktopSettings['skillCatalogs']
       source,
       ...(subpath ? { subpath } : {}),
       ...(gitIdentityId ? { gitIdentityId } : {}),
-    });
+    })
   }
 
-  return result;
-};
+  return result
+}
 
-const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/;
+const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/
 
 const normalizeIconBackground = (value: unknown): string | null => {
-  if (typeof value !== 'string') {
-    return null;
+  if (typeof value !== "string") {
+    return null
   }
-  const trimmed = value.trim();
+  const trimmed = value.trim()
   if (!trimmed) {
-    return null;
+    return null
   }
-  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null;
-};
+  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null
+}
 
-const sanitizeProjects = (value: unknown): DesktopSettings['projects'] | undefined => {
+const sanitizeProjects = (value: unknown): DesktopSettings["projects"] | undefined => {
   if (!Array.isArray(value)) {
-    return undefined;
+    return undefined
   }
 
-  const result: NonNullable<DesktopSettings['projects']> = [];
-  const seenIds = new Set<string>();
-  const seenPaths = new Set<string>();
+  const result: NonNullable<DesktopSettings["projects"]> = []
+  const seenIds = new Set<string>()
+  const seenPaths = new Set<string>()
 
   for (const entry of value) {
-    if (!entry || typeof entry !== 'object') continue;
-    const candidate = entry as Record<string, unknown>;
+    if (!entry || typeof entry !== "object") continue
+    const candidate = entry as Record<string, unknown>
 
-    const rawPath = typeof candidate.path === 'string' ? candidate.path.trim() : '';
-    if (!rawPath) continue;
+    const rawPath = typeof candidate.path === "string" ? candidate.path.trim() : ""
+    if (!rawPath) continue
 
-    const normalizedPath = rawPath === '/' ? rawPath : rawPath.replace(/\\/g, '/').replace(/\/+$/, '');
-    if (!normalizedPath) continue;
+    const normalizedPath = rawPath === "/" ? rawPath : rawPath.replace(/\\/g, "/").replace(/\/+$/, "")
+    if (!normalizedPath) continue
 
-    const id = createProjectIdFromPath(normalizedPath);
-    if (!id) continue;
+    const id = createProjectIdFromPath(normalizedPath)
+    if (!id) continue
 
-    if (seenIds.has(id) || seenPaths.has(normalizedPath)) continue;
-    seenIds.add(id);
-    seenPaths.add(normalizedPath);
+    if (seenIds.has(id) || seenPaths.has(normalizedPath)) continue
+    seenIds.add(id)
+    seenPaths.add(normalizedPath)
 
-    const project: NonNullable<DesktopSettings['projects']>[number] = {
+    const project: NonNullable<DesktopSettings["projects"]>[number] = {
       id,
       path: normalizedPath,
-    };
-
-    if (typeof candidate.label === 'string' && candidate.label.trim().length > 0) {
-      project.label = candidate.label.trim();
     }
-    if (typeof candidate.icon === 'string' && candidate.icon.trim().length > 0) {
-      project.icon = candidate.icon.trim();
+
+    if (typeof candidate.label === "string" && candidate.label.trim().length > 0) {
+      project.label = candidate.label.trim()
+    }
+    if (typeof candidate.icon === "string" && candidate.icon.trim().length > 0) {
+      project.icon = candidate.icon.trim()
     }
     if (candidate.iconImage === null) {
-      (project as unknown as Record<string, unknown>).iconImage = null;
-    } else if (candidate.iconImage && typeof candidate.iconImage === 'object') {
-      const iconImage = candidate.iconImage as Record<string, unknown>;
-      const mime = typeof iconImage.mime === 'string' ? iconImage.mime.trim() : '';
-      const updatedAt = typeof iconImage.updatedAt === 'number' && Number.isFinite(iconImage.updatedAt)
-        ? Math.max(0, Math.round(iconImage.updatedAt))
-        : 0;
-      const source = iconImage.source === 'custom' || iconImage.source === 'auto'
-        ? iconImage.source
-        : null;
+      ;(project as unknown as Record<string, unknown>).iconImage = null
+    } else if (candidate.iconImage && typeof candidate.iconImage === "object") {
+      const iconImage = candidate.iconImage as Record<string, unknown>
+      const mime = typeof iconImage.mime === "string" ? iconImage.mime.trim() : ""
+      const updatedAt =
+        typeof iconImage.updatedAt === "number" && Number.isFinite(iconImage.updatedAt)
+          ? Math.max(0, Math.round(iconImage.updatedAt))
+          : 0
+      const source = iconImage.source === "custom" || iconImage.source === "auto" ? iconImage.source : null
       if (mime && updatedAt > 0 && source) {
-        (project as unknown as Record<string, unknown>).iconImage = { mime, updatedAt, source };
+        ;(project as unknown as Record<string, unknown>).iconImage = { mime, updatedAt, source }
       }
     }
-    if (typeof candidate.color === 'string' && candidate.color.trim().length > 0) {
-      project.color = candidate.color.trim();
+    if (typeof candidate.color === "string" && candidate.color.trim().length > 0) {
+      project.color = candidate.color.trim()
     }
     if (candidate.iconBackground === null) {
-      (project as unknown as Record<string, unknown>).iconBackground = null;
+      ;(project as unknown as Record<string, unknown>).iconBackground = null
     } else {
-      const iconBackground = normalizeIconBackground(candidate.iconBackground);
+      const iconBackground = normalizeIconBackground(candidate.iconBackground)
       if (iconBackground) {
-        (project as unknown as Record<string, unknown>).iconBackground = iconBackground;
+        ;(project as unknown as Record<string, unknown>).iconBackground = iconBackground
       }
     }
-    if (typeof candidate.addedAt === 'number' && Number.isFinite(candidate.addedAt) && candidate.addedAt >= 0) {
-      project.addedAt = candidate.addedAt;
+    if (typeof candidate.addedAt === "number" && Number.isFinite(candidate.addedAt) && candidate.addedAt >= 0) {
+      project.addedAt = candidate.addedAt
     }
     if (
-      typeof candidate.lastOpenedAt === 'number' &&
+      typeof candidate.lastOpenedAt === "number" &&
       Number.isFinite(candidate.lastOpenedAt) &&
       candidate.lastOpenedAt >= 0
     ) {
-      project.lastOpenedAt = candidate.lastOpenedAt;
+      project.lastOpenedAt = candidate.lastOpenedAt
     }
-    if (typeof candidate.sidebarCollapsed === 'boolean') {
-      (project as unknown as Record<string, unknown>).sidebarCollapsed = candidate.sidebarCollapsed;
+    if (typeof candidate.sidebarCollapsed === "boolean") {
+      ;(project as unknown as Record<string, unknown>).sidebarCollapsed = candidate.sidebarCollapsed
     }
-    result.push(project);
+    result.push(project)
   }
 
-  return result.length > 0 ? result : undefined;
-};
+  return result.length > 0 ? result : undefined
+}
 
-const sanitizeModelRefs = (value: unknown, limit: number): Array<{ providerID: string; modelID: string }> | undefined => {
+const sanitizeModelRefs = (
+  value: unknown,
+  limit: number,
+): Array<{ providerID: string; modelID: string }> | undefined => {
   if (!Array.isArray(value)) {
-    return undefined;
+    return undefined
   }
 
-  const result: Array<{ providerID: string; modelID: string }> = [];
-  const seen = new Set<string>();
+  const result: Array<{ providerID: string; modelID: string }> = []
+  const seen = new Set<string>()
 
   for (const entry of value) {
-    if (!entry || typeof entry !== 'object') continue;
-    const candidate = entry as Record<string, unknown>;
-    const providerID = typeof candidate.providerID === 'string' ? candidate.providerID.trim() : '';
-    const modelID = typeof candidate.modelID === 'string' ? candidate.modelID.trim() : '';
-    if (!providerID || !modelID) continue;
-    const key = `${providerID}/${modelID}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push({ providerID, modelID });
-    if (result.length >= limit) break;
+    if (!entry || typeof entry !== "object") continue
+    const candidate = entry as Record<string, unknown>
+    const providerID = typeof candidate.providerID === "string" ? candidate.providerID.trim() : ""
+    const modelID = typeof candidate.modelID === "string" ? candidate.modelID.trim() : ""
+    if (!providerID || !modelID) continue
+    const key = `${providerID}/${modelID}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push({ providerID, modelID })
+    if (result.length >= limit) break
   }
 
-  return result;
-};
+  return result
+}
 
 const getPersistApi = (): PersistApi | undefined => {
-  const candidate = (useUIStore as unknown as { persist?: PersistApi }).persist;
-  if (candidate && typeof candidate === 'object') {
-    return candidate;
+  const candidate = (useUIStore as unknown as { persist?: PersistApi }).persist
+  if (candidate && typeof candidate === "object") {
+    return candidate
   }
-  return undefined;
-};
+  return undefined
+}
 
-const getRuntimeSettingsAPI = () => getRegisteredRuntimeAPIs()?.settings ?? null;
+const getRuntimeSettingsAPI = () => getRegisteredRuntimeAPIs()?.settings ?? null
 
 const applyDesktopUiPreferences = (settings: DesktopSettings) => {
-  const store = useUIStore.getState();
-  const configStore = typeof window !== 'undefined'
-    ? window.__zustand_config_store__?.getState?.() ?? null
-    : null;
-  const queueStore = useMessageQueueStore.getState();
+  const store = useUIStore.getState()
+  const configStore = typeof window !== "undefined" ? (window.__zustand_config_store__?.getState?.() ?? null) : null
+  const queueStore = useMessageQueueStore.getState()
 
-  if (typeof settings.showReasoningTraces === 'boolean' && settings.showReasoningTraces !== store.showReasoningTraces) {
-    store.setShowReasoningTraces(settings.showReasoningTraces);
-  }
-  if (typeof settings.collapsibleThinkingBlocks === 'boolean' && settings.collapsibleThinkingBlocks !== store.collapsibleThinkingBlocks) {
-    store.setCollapsibleThinkingBlocks(settings.collapsibleThinkingBlocks);
-  }
-  if (typeof settings.autoDeleteEnabled === 'boolean' && settings.autoDeleteEnabled !== store.autoDeleteEnabled) {
-    store.setAutoDeleteEnabled(settings.autoDeleteEnabled);
-  }
-  if (typeof settings.autoDeleteAfterDays === 'number' && Number.isFinite(settings.autoDeleteAfterDays)) {
-    const normalized = Math.max(1, Math.min(365, settings.autoDeleteAfterDays));
-    if (normalized !== store.autoDeleteAfterDays) {
-      store.setAutoDeleteAfterDays(normalized);
-    }
-  }
-  if (settings.sessionRetentionAction === 'archive' || settings.sessionRetentionAction === 'delete') {
-    if (settings.sessionRetentionAction !== store.sessionRetentionAction) {
-      store.setSessionRetentionAction(settings.sessionRetentionAction);
-    }
-  }
-
-  if (typeof settings.queueModeEnabled === 'boolean' && settings.queueModeEnabled !== queueStore.queueModeEnabled) {
-    queueStore.setQueueMode(settings.queueModeEnabled);
-  }
-
-  if (typeof settings.showDeletionDialog === 'boolean' && settings.showDeletionDialog !== store.showDeletionDialog) {
-    store.setShowDeletionDialog(settings.showDeletionDialog);
-  }
-  if (typeof settings.nativeNotificationsEnabled === 'boolean' && settings.nativeNotificationsEnabled !== store.nativeNotificationsEnabled) {
-    store.setNativeNotificationsEnabled(settings.nativeNotificationsEnabled);
-  }
-  if (typeof settings.notificationMode === 'string' && (settings.notificationMode === 'always' || settings.notificationMode === 'hidden-only')) {
-    if (settings.notificationMode !== store.notificationMode) {
-      store.setNotificationMode(settings.notificationMode);
-    }
-  }
-  if (typeof settings.notifyOnSubtasks === 'boolean' && settings.notifyOnSubtasks !== store.notifyOnSubtasks) {
-    store.setNotifyOnSubtasks(settings.notifyOnSubtasks);
-  }
-  if (typeof settings.notifyOnCompletion === 'boolean' && settings.notifyOnCompletion !== store.notifyOnCompletion) {
-    store.setNotifyOnCompletion(settings.notifyOnCompletion);
-  }
-  if (typeof settings.notifyOnError === 'boolean' && settings.notifyOnError !== store.notifyOnError) {
-    store.setNotifyOnError(settings.notifyOnError);
-  }
-  if (typeof settings.notifyOnQuestion === 'boolean' && settings.notifyOnQuestion !== store.notifyOnQuestion) {
-    store.setNotifyOnQuestion(settings.notifyOnQuestion);
-  }
-  if (settings.notificationTemplates && typeof settings.notificationTemplates === 'object') {
-    store.setNotificationTemplates(settings.notificationTemplates);
-  }
-  if (typeof settings.summarizeLastMessage === 'boolean' && settings.summarizeLastMessage !== store.summarizeLastMessage) {
-    store.setSummarizeLastMessage(settings.summarizeLastMessage);
-  }
-  if (typeof settings.summaryThreshold === 'number' && Number.isFinite(settings.summaryThreshold)) {
-    store.setSummaryThreshold(settings.summaryThreshold);
-  }
-  if (typeof settings.summaryLength === 'number' && Number.isFinite(settings.summaryLength)) {
-    store.setSummaryLength(settings.summaryLength);
-  }
-  if (typeof settings.maxLastMessageLength === 'number' && Number.isFinite(settings.maxLastMessageLength)) {
-    store.setMaxLastMessageLength(settings.maxLastMessageLength);
-  }
-  if (typeof settings.inputSpellcheckEnabled === 'boolean' && settings.inputSpellcheckEnabled !== store.inputSpellcheckEnabled) {
-    store.setInputSpellcheckEnabled(settings.inputSpellcheckEnabled);
-  }
-  if (typeof settings.showToolFileIcons === 'boolean' && settings.showToolFileIcons !== store.showToolFileIcons) {
-    store.setShowToolFileIcons(settings.showToolFileIcons);
-  }
-  if (typeof settings.showExpandedBashTools === 'boolean' && settings.showExpandedBashTools !== store.showExpandedBashTools) {
-    store.setShowExpandedBashTools(settings.showExpandedBashTools);
-  }
-  if (typeof settings.showExpandedEditTools === 'boolean' && settings.showExpandedEditTools !== store.showExpandedEditTools) {
-    store.setShowExpandedEditTools(settings.showExpandedEditTools);
-  }
-  if (typeof settings.showTurnChangedFiles === 'boolean' && settings.showTurnChangedFiles !== store.showTurnChangedFiles) {
-    store.setShowTurnChangedFiles(settings.showTurnChangedFiles);
-  }
-  if (typeof settings.timeFormatPreference === 'string'
-    && (settings.timeFormatPreference === 'auto' || settings.timeFormatPreference === '12h' || settings.timeFormatPreference === '24h')) {
-    if (settings.timeFormatPreference !== store.timeFormatPreference) {
-      store.setTimeFormatPreference(settings.timeFormatPreference);
-    }
-  }
-  if (typeof settings.weekStartPreference === 'string'
-    && (settings.weekStartPreference === 'auto' || settings.weekStartPreference === 'sunday' || settings.weekStartPreference === 'monday')) {
-    if (settings.weekStartPreference !== store.weekStartPreference) {
-      store.setWeekStartPreference(settings.weekStartPreference);
-    }
-  }
-  if (typeof settings.chatRenderMode === 'string'
-    && (settings.chatRenderMode === 'sorted' || settings.chatRenderMode === 'live')) {
-    if (settings.chatRenderMode !== store.chatRenderMode) {
-      store.setChatRenderMode(settings.chatRenderMode);
-    }
-  }
-  if (typeof settings.activityRenderMode === 'string'
-    && (settings.activityRenderMode === 'collapsed' || settings.activityRenderMode === 'summary')) {
-    if (settings.activityRenderMode !== store.activityRenderMode) {
-      store.setActivityRenderMode(settings.activityRenderMode);
-    }
-  }
-  if (typeof settings.mermaidRenderingMode === 'string'
-    && (settings.mermaidRenderingMode === 'svg' || settings.mermaidRenderingMode === 'ascii')) {
-    if (settings.mermaidRenderingMode !== store.mermaidRenderingMode) {
-      store.setMermaidRenderingMode(settings.mermaidRenderingMode);
-    }
-  }
-  if (typeof settings.userMessageRenderingMode === 'string'
-    && (settings.userMessageRenderingMode === 'markdown' || settings.userMessageRenderingMode === 'plain')) {
-    if (settings.userMessageRenderingMode !== store.userMessageRenderingMode) {
-      store.setUserMessageRenderingMode(settings.userMessageRenderingMode);
-    }
-  }
-  if (typeof settings.messageStreamTransport === 'string'
-    && (settings.messageStreamTransport === 'auto' || settings.messageStreamTransport === 'ws' || settings.messageStreamTransport === 'sse')) {
-    if (configStore && settings.messageStreamTransport !== configStore.settingsMessageStreamTransport) {
-      configStore.setSettingsMessageStreamTransport(settings.messageStreamTransport);
-    }
-  }
-  if (typeof settings.stickyUserHeader === 'boolean' && settings.stickyUserHeader !== store.stickyUserHeader) {
-    store.setStickyUserHeader(settings.stickyUserHeader);
-  }
-  if (typeof settings.wideChatLayoutEnabled === 'boolean' && settings.wideChatLayoutEnabled !== store.wideChatLayoutEnabled) {
-    store.setWideChatLayoutEnabled(settings.wideChatLayoutEnabled);
+  if (typeof settings.showReasoningTraces === "boolean" && settings.showReasoningTraces !== store.showReasoningTraces) {
+    store.setShowReasoningTraces(settings.showReasoningTraces)
   }
   if (
-    typeof settings.showSplitAssistantMessageActions === 'boolean'
-    && settings.showSplitAssistantMessageActions !== store.showSplitAssistantMessageActions
+    typeof settings.collapsibleThinkingBlocks === "boolean" &&
+    settings.collapsibleThinkingBlocks !== store.collapsibleThinkingBlocks
   ) {
-    store.setShowSplitAssistantMessageActions(settings.showSplitAssistantMessageActions);
+    store.setCollapsibleThinkingBlocks(settings.collapsibleThinkingBlocks)
   }
-  if (typeof settings.fontSize === 'number' && Number.isFinite(settings.fontSize) && settings.fontSize !== store.fontSize) {
-    store.setFontSize(settings.fontSize);
+  if (typeof settings.autoDeleteEnabled === "boolean" && settings.autoDeleteEnabled !== store.autoDeleteEnabled) {
+    store.setAutoDeleteEnabled(settings.autoDeleteEnabled)
   }
-  if (Array.isArray(settings.draftStarters)) {
-    const nextStarters = sanitizeStarterRefs(settings.draftStarters);
-    if (JSON.stringify(store.globalDraftStarters) !== JSON.stringify(nextStarters)) {
-      store.setGlobalDraftStarters(nextStarters);
+  if (typeof settings.autoDeleteAfterDays === "number" && Number.isFinite(settings.autoDeleteAfterDays)) {
+    const normalized = Math.max(1, Math.min(365, settings.autoDeleteAfterDays))
+    if (normalized !== store.autoDeleteAfterDays) {
+      store.setAutoDeleteAfterDays(normalized)
     }
   }
-  if (typeof settings.terminalFontSize === 'number' && Number.isFinite(settings.terminalFontSize) && settings.terminalFontSize !== store.terminalFontSize) {
-    store.setTerminalFontSize(settings.terminalFontSize);
+  if (settings.sessionRetentionAction === "archive" || settings.sessionRetentionAction === "delete") {
+    if (settings.sessionRetentionAction !== store.sessionRetentionAction) {
+      store.setSessionRetentionAction(settings.sessionRetentionAction)
+    }
+  }
+
+  if (typeof settings.queueModeEnabled === "boolean" && settings.queueModeEnabled !== queueStore.queueModeEnabled) {
+    queueStore.setQueueMode(settings.queueModeEnabled)
+  }
+
+  if (typeof settings.showDeletionDialog === "boolean" && settings.showDeletionDialog !== store.showDeletionDialog) {
+    store.setShowDeletionDialog(settings.showDeletionDialog)
+  }
+  if (
+    typeof settings.nativeNotificationsEnabled === "boolean" &&
+    settings.nativeNotificationsEnabled !== store.nativeNotificationsEnabled
+  ) {
+    store.setNativeNotificationsEnabled(settings.nativeNotificationsEnabled)
+  }
+  if (
+    typeof settings.notificationMode === "string" &&
+    (settings.notificationMode === "always" || settings.notificationMode === "hidden-only")
+  ) {
+    if (settings.notificationMode !== store.notificationMode) {
+      store.setNotificationMode(settings.notificationMode)
+    }
+  }
+  if (typeof settings.notifyOnSubtasks === "boolean" && settings.notifyOnSubtasks !== store.notifyOnSubtasks) {
+    store.setNotifyOnSubtasks(settings.notifyOnSubtasks)
+  }
+  if (typeof settings.notifyOnCompletion === "boolean" && settings.notifyOnCompletion !== store.notifyOnCompletion) {
+    store.setNotifyOnCompletion(settings.notifyOnCompletion)
+  }
+  if (typeof settings.notifyOnError === "boolean" && settings.notifyOnError !== store.notifyOnError) {
+    store.setNotifyOnError(settings.notifyOnError)
+  }
+  if (typeof settings.notifyOnQuestion === "boolean" && settings.notifyOnQuestion !== store.notifyOnQuestion) {
+    store.setNotifyOnQuestion(settings.notifyOnQuestion)
+  }
+  if (settings.notificationTemplates && typeof settings.notificationTemplates === "object") {
+    store.setNotificationTemplates(settings.notificationTemplates)
+  }
+  if (
+    typeof settings.summarizeLastMessage === "boolean" &&
+    settings.summarizeLastMessage !== store.summarizeLastMessage
+  ) {
+    store.setSummarizeLastMessage(settings.summarizeLastMessage)
+  }
+  if (typeof settings.summaryThreshold === "number" && Number.isFinite(settings.summaryThreshold)) {
+    store.setSummaryThreshold(settings.summaryThreshold)
+  }
+  if (typeof settings.summaryLength === "number" && Number.isFinite(settings.summaryLength)) {
+    store.setSummaryLength(settings.summaryLength)
+  }
+  if (typeof settings.maxLastMessageLength === "number" && Number.isFinite(settings.maxLastMessageLength)) {
+    store.setMaxLastMessageLength(settings.maxLastMessageLength)
+  }
+  if (
+    typeof settings.inputSpellcheckEnabled === "boolean" &&
+    settings.inputSpellcheckEnabled !== store.inputSpellcheckEnabled
+  ) {
+    store.setInputSpellcheckEnabled(settings.inputSpellcheckEnabled)
+  }
+  if (typeof settings.showToolFileIcons === "boolean" && settings.showToolFileIcons !== store.showToolFileIcons) {
+    store.setShowToolFileIcons(settings.showToolFileIcons)
+  }
+  if (
+    typeof settings.showExpandedBashTools === "boolean" &&
+    settings.showExpandedBashTools !== store.showExpandedBashTools
+  ) {
+    store.setShowExpandedBashTools(settings.showExpandedBashTools)
+  }
+  if (
+    typeof settings.showExpandedEditTools === "boolean" &&
+    settings.showExpandedEditTools !== store.showExpandedEditTools
+  ) {
+    store.setShowExpandedEditTools(settings.showExpandedEditTools)
+  }
+  if (
+    typeof settings.showTurnChangedFiles === "boolean" &&
+    settings.showTurnChangedFiles !== store.showTurnChangedFiles
+  ) {
+    store.setShowTurnChangedFiles(settings.showTurnChangedFiles)
+  }
+  if (
+    typeof settings.timeFormatPreference === "string" &&
+    (settings.timeFormatPreference === "auto" ||
+      settings.timeFormatPreference === "12h" ||
+      settings.timeFormatPreference === "24h")
+  ) {
+    if (settings.timeFormatPreference !== store.timeFormatPreference) {
+      store.setTimeFormatPreference(settings.timeFormatPreference)
+    }
+  }
+  if (
+    typeof settings.weekStartPreference === "string" &&
+    (settings.weekStartPreference === "auto" ||
+      settings.weekStartPreference === "sunday" ||
+      settings.weekStartPreference === "monday")
+  ) {
+    if (settings.weekStartPreference !== store.weekStartPreference) {
+      store.setWeekStartPreference(settings.weekStartPreference)
+    }
+  }
+  if (
+    typeof settings.chatRenderMode === "string" &&
+    (settings.chatRenderMode === "sorted" || settings.chatRenderMode === "live")
+  ) {
+    if (settings.chatRenderMode !== store.chatRenderMode) {
+      store.setChatRenderMode(settings.chatRenderMode)
+    }
+  }
+  if (
+    typeof settings.activityRenderMode === "string" &&
+    (settings.activityRenderMode === "collapsed" || settings.activityRenderMode === "summary")
+  ) {
+    if (settings.activityRenderMode !== store.activityRenderMode) {
+      store.setActivityRenderMode(settings.activityRenderMode)
+    }
+  }
+  if (
+    typeof settings.mermaidRenderingMode === "string" &&
+    (settings.mermaidRenderingMode === "svg" || settings.mermaidRenderingMode === "ascii")
+  ) {
+    if (settings.mermaidRenderingMode !== store.mermaidRenderingMode) {
+      store.setMermaidRenderingMode(settings.mermaidRenderingMode)
+    }
+  }
+  if (
+    typeof settings.userMessageRenderingMode === "string" &&
+    (settings.userMessageRenderingMode === "markdown" || settings.userMessageRenderingMode === "plain")
+  ) {
+    if (settings.userMessageRenderingMode !== store.userMessageRenderingMode) {
+      store.setUserMessageRenderingMode(settings.userMessageRenderingMode)
+    }
+  }
+  if (
+    typeof settings.messageStreamTransport === "string" &&
+    (settings.messageStreamTransport === "auto" ||
+      settings.messageStreamTransport === "ws" ||
+      settings.messageStreamTransport === "sse")
+  ) {
+    if (configStore && settings.messageStreamTransport !== configStore.settingsMessageStreamTransport) {
+      configStore.setSettingsMessageStreamTransport(settings.messageStreamTransport)
+    }
+  }
+  if (typeof settings.stickyUserHeader === "boolean" && settings.stickyUserHeader !== store.stickyUserHeader) {
+    store.setStickyUserHeader(settings.stickyUserHeader)
+  }
+  if (
+    typeof settings.wideChatLayoutEnabled === "boolean" &&
+    settings.wideChatLayoutEnabled !== store.wideChatLayoutEnabled
+  ) {
+    store.setWideChatLayoutEnabled(settings.wideChatLayoutEnabled)
+  }
+  if (
+    typeof settings.showSplitAssistantMessageActions === "boolean" &&
+    settings.showSplitAssistantMessageActions !== store.showSplitAssistantMessageActions
+  ) {
+    store.setShowSplitAssistantMessageActions(settings.showSplitAssistantMessageActions)
+  }
+  if (
+    typeof settings.fontSize === "number" &&
+    Number.isFinite(settings.fontSize) &&
+    settings.fontSize !== store.fontSize
+  ) {
+    store.setFontSize(settings.fontSize)
+  }
+  if (Array.isArray(settings.draftStarters)) {
+    const nextStarters = sanitizeStarterRefs(settings.draftStarters)
+    if (JSON.stringify(store.globalDraftStarters) !== JSON.stringify(nextStarters)) {
+      store.setGlobalDraftStarters(nextStarters)
+    }
+  }
+  if (
+    typeof settings.terminalFontSize === "number" &&
+    Number.isFinite(settings.terminalFontSize) &&
+    settings.terminalFontSize !== store.terminalFontSize
+  ) {
+    store.setTerminalFontSize(settings.terminalFontSize)
   }
   if (isUiFontOption(settings.uiFont) && settings.uiFont !== store.uiFont) {
-    store.setUiFont(settings.uiFont);
+    store.setUiFont(settings.uiFont)
   }
   if (isMonoFontOption(settings.monoFont) && settings.monoFont !== store.monoFont) {
-    store.setMonoFont(settings.monoFont);
+    store.setMonoFont(settings.monoFont)
   }
-  if (typeof settings.padding === 'number' && Number.isFinite(settings.padding) && settings.padding !== store.padding) {
-    store.setPadding(settings.padding);
+  if (typeof settings.padding === "number" && Number.isFinite(settings.padding) && settings.padding !== store.padding) {
+    store.setPadding(settings.padding)
   }
-  if (typeof settings.cornerRadius === 'number' && Number.isFinite(settings.cornerRadius) && settings.cornerRadius !== store.cornerRadius) {
-    store.setCornerRadius(settings.cornerRadius);
+  if (
+    typeof settings.cornerRadius === "number" &&
+    Number.isFinite(settings.cornerRadius) &&
+    settings.cornerRadius !== store.cornerRadius
+  ) {
+    store.setCornerRadius(settings.cornerRadius)
   }
-  if (typeof settings.inputBarOffset === 'number' && Number.isFinite(settings.inputBarOffset) && settings.inputBarOffset !== store.inputBarOffset) {
-    store.setInputBarOffset(settings.inputBarOffset);
+  if (
+    typeof settings.inputBarOffset === "number" &&
+    Number.isFinite(settings.inputBarOffset) &&
+    settings.inputBarOffset !== store.inputBarOffset
+  ) {
+    store.setInputBarOffset(settings.inputBarOffset)
   }
   if (Array.isArray(settings.favoriteModels)) {
-    const current = store.favoriteModels;
-    const next = settings.favoriteModels;
+    const current = store.favoriteModels
+    const next = settings.favoriteModels
     const same =
       current.length === next.length &&
-      current.every((item, idx) => item.providerID === next[idx]?.providerID && item.modelID === next[idx]?.modelID);
+      current.every((item, idx) => item.providerID === next[idx]?.providerID && item.modelID === next[idx]?.modelID)
     if (!same) {
-      useUIStore.setState({ favoriteModels: next });
+      useUIStore.setState({ favoriteModels: next })
     }
   }
 
   if (Array.isArray(settings.recentModels)) {
-    const current = store.recentModels;
-    const next = settings.recentModels;
+    const current = store.recentModels
+    const next = settings.recentModels
     const same =
       current.length === next.length &&
-      current.every((item, idx) => item.providerID === next[idx]?.providerID && item.modelID === next[idx]?.modelID);
+      current.every((item, idx) => item.providerID === next[idx]?.providerID && item.modelID === next[idx]?.modelID)
     if (!same) {
-      useUIStore.setState({ recentModels: next });
+      useUIStore.setState({ recentModels: next })
     }
   }
-  if (typeof settings.diffLayoutPreference === 'string'
-    && (settings.diffLayoutPreference === 'dynamic' || settings.diffLayoutPreference === 'inline' || settings.diffLayoutPreference === 'side-by-side')) {
+  if (
+    typeof settings.diffLayoutPreference === "string" &&
+    (settings.diffLayoutPreference === "dynamic" ||
+      settings.diffLayoutPreference === "inline" ||
+      settings.diffLayoutPreference === "side-by-side")
+  ) {
     if (settings.diffLayoutPreference !== store.diffLayoutPreference) {
-      store.setDiffLayoutPreference(settings.diffLayoutPreference);
+      store.setDiffLayoutPreference(settings.diffLayoutPreference)
     }
   }
-  if (typeof settings.diffViewMode === 'string'
-    && (settings.diffViewMode === 'single' || settings.diffViewMode === 'stacked')) {
+  if (
+    typeof settings.diffViewMode === "string" &&
+    (settings.diffViewMode === "single" || settings.diffViewMode === "stacked")
+  ) {
     if (settings.diffViewMode !== store.diffViewMode) {
-      store.setDiffViewMode(settings.diffViewMode);
+      store.setDiffViewMode(settings.diffViewMode)
     }
   }
-  if (typeof settings.gitChangesViewMode === 'string'
-    && (settings.gitChangesViewMode === 'flat' || settings.gitChangesViewMode === 'tree')) {
+  if (
+    typeof settings.gitChangesViewMode === "string" &&
+    (settings.gitChangesViewMode === "flat" || settings.gitChangesViewMode === "tree")
+  ) {
     if (settings.gitChangesViewMode !== store.gitChangesViewMode) {
-      store.setGitChangesViewMode(settings.gitChangesViewMode);
+      store.setGitChangesViewMode(settings.gitChangesViewMode)
     }
   }
-  if (typeof settings.directoryShowHidden === 'boolean') {
-    setDirectoryShowHidden(settings.directoryShowHidden, { persist: false });
+  if (typeof settings.directoryShowHidden === "boolean") {
+    setDirectoryShowHidden(settings.directoryShowHidden, { persist: false })
   }
-  if (typeof settings.filesViewShowGitignored === 'boolean') {
-    setFilesViewShowGitignored(settings.filesViewShowGitignored, { persist: false });
+  if (typeof settings.filesViewShowGitignored === "boolean") {
+    setFilesViewShowGitignored(settings.filesViewShowGitignored, { persist: false })
   }
-};
+}
 
 const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
-  if (!payload || typeof payload !== 'object') {
-    return null;
+  if (!payload || typeof payload !== "object") {
+    return null
   }
 
-  const candidate = payload as Record<string, unknown>;
-  const result: DesktopSettings = {};
+  const candidate = payload as Record<string, unknown>
+  const result: DesktopSettings = {}
 
-  if (typeof candidate.themeId === 'string' && candidate.themeId.length > 0) {
-    result.themeId = candidate.themeId;
+  if (typeof candidate.themeId === "string" && candidate.themeId.length > 0) {
+    result.themeId = candidate.themeId
   }
   if (candidate.useSystemTheme === true || candidate.useSystemTheme === false) {
-    result.useSystemTheme = candidate.useSystemTheme;
+    result.useSystemTheme = candidate.useSystemTheme
   }
-  if (typeof candidate.themeVariant === 'string' && (candidate.themeVariant === 'light' || candidate.themeVariant === 'dark')) {
-    result.themeVariant = candidate.themeVariant;
+  if (
+    typeof candidate.themeVariant === "string" &&
+    (candidate.themeVariant === "light" || candidate.themeVariant === "dark")
+  ) {
+    result.themeVariant = candidate.themeVariant
   }
-  if (typeof candidate.lightThemeId === 'string' && candidate.lightThemeId.length > 0) {
-    result.lightThemeId = candidate.lightThemeId;
+  if (typeof candidate.lightThemeId === "string" && candidate.lightThemeId.length > 0) {
+    result.lightThemeId = candidate.lightThemeId
   }
-  if (typeof candidate.darkThemeId === 'string' && candidate.darkThemeId.length > 0) {
-    result.darkThemeId = candidate.darkThemeId;
+  if (typeof candidate.darkThemeId === "string" && candidate.darkThemeId.length > 0) {
+    result.darkThemeId = candidate.darkThemeId
   }
-  if (typeof candidate.lastDirectory === 'string' && candidate.lastDirectory.length > 0) {
-    result.lastDirectory = candidate.lastDirectory;
+  if (typeof candidate.lastDirectory === "string" && candidate.lastDirectory.length > 0) {
+    result.lastDirectory = candidate.lastDirectory
   }
-  if (typeof candidate.homeDirectory === 'string' && candidate.homeDirectory.length > 0) {
-    result.homeDirectory = candidate.homeDirectory;
-  }
-
-  if (typeof candidate.axCodeBinary === 'string') {
-    const trimmed = candidate.axCodeBinary.trim();
-    result.axCodeBinary = trimmed.length > 0 ? trimmed : undefined;
-  }
-  if (typeof candidate.desktopLanAccessEnabled === 'boolean') {
-    result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
+  if (typeof candidate.homeDirectory === "string" && candidate.homeDirectory.length > 0) {
+    result.homeDirectory = candidate.homeDirectory
   }
 
-  const projects = sanitizeProjects(candidate.projects);
+  if (typeof candidate.axCodeBinary === "string") {
+    const trimmed = candidate.axCodeBinary.trim()
+    result.axCodeBinary = trimmed.length > 0 ? trimmed : undefined
+  }
+  if (typeof candidate.desktopLanAccessEnabled === "boolean") {
+    result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled
+  }
+
+  const projects = sanitizeProjects(candidate.projects)
   if (projects) {
-    result.projects = projects;
+    result.projects = projects
   }
-  if (typeof candidate.activeProjectId === 'string' && candidate.activeProjectId.length > 0) {
-    result.activeProjectId = candidate.activeProjectId;
+  if (typeof candidate.activeProjectId === "string" && candidate.activeProjectId.length > 0) {
+    result.activeProjectId = candidate.activeProjectId
   }
 
   if (Array.isArray(candidate.approvedDirectories)) {
     result.approvedDirectories = candidate.approvedDirectories.filter(
-      (entry): entry is string => typeof entry === 'string' && entry.length > 0
-    );
+      (entry): entry is string => typeof entry === "string" && entry.length > 0,
+    )
   }
   if (Array.isArray(candidate.securityScopedBookmarks)) {
     result.securityScopedBookmarks = candidate.securityScopedBookmarks.filter(
-      (entry): entry is string => typeof entry === 'string' && entry.length > 0
-    );
+      (entry): entry is string => typeof entry === "string" && entry.length > 0,
+    )
   }
   if (Array.isArray(candidate.pinnedDirectories)) {
     result.pinnedDirectories = Array.from(
       new Set(
-        candidate.pinnedDirectories.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
-      )
-    );
+        candidate.pinnedDirectories.filter((entry): entry is string => typeof entry === "string" && entry.length > 0),
+      ),
+    )
   }
   if (Array.isArray(candidate.draftStarters)) {
-    result.draftStarters = sanitizeStarterRefs(candidate.draftStarters);
+    result.draftStarters = sanitizeStarterRefs(candidate.draftStarters)
   }
-  if (typeof candidate.showReasoningTraces === 'boolean') {
-    result.showReasoningTraces = candidate.showReasoningTraces;
+  if (typeof candidate.showReasoningTraces === "boolean") {
+    result.showReasoningTraces = candidate.showReasoningTraces
   }
-  if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
-    result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks;
+  if (typeof candidate.collapsibleThinkingBlocks === "boolean") {
+    result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks
   }
-  if (typeof candidate.autoDeleteEnabled === 'boolean') {
-    result.autoDeleteEnabled = candidate.autoDeleteEnabled;
+  if (typeof candidate.autoDeleteEnabled === "boolean") {
+    result.autoDeleteEnabled = candidate.autoDeleteEnabled
   }
-  if (typeof candidate.autoDeleteAfterDays === 'number' && Number.isFinite(candidate.autoDeleteAfterDays)) {
-    result.autoDeleteAfterDays = candidate.autoDeleteAfterDays;
+  if (typeof candidate.autoDeleteAfterDays === "number" && Number.isFinite(candidate.autoDeleteAfterDays)) {
+    result.autoDeleteAfterDays = candidate.autoDeleteAfterDays
   }
-  if (candidate.sessionRetentionAction === 'archive' || candidate.sessionRetentionAction === 'delete') {
-    result.sessionRetentionAction = candidate.sessionRetentionAction;
+  if (candidate.sessionRetentionAction === "archive" || candidate.sessionRetentionAction === "delete") {
+    result.sessionRetentionAction = candidate.sessionRetentionAction
   }
-  if (typeof candidate.defaultModel === 'string' && candidate.defaultModel.length > 0) {
-    result.defaultModel = candidate.defaultModel;
+  if (typeof candidate.defaultModel === "string" && candidate.defaultModel.length > 0) {
+    result.defaultModel = candidate.defaultModel
   }
-  if (typeof candidate.defaultVariant === 'string' && candidate.defaultVariant.length > 0) {
-    result.defaultVariant = candidate.defaultVariant;
+  if (typeof candidate.defaultVariant === "string" && candidate.defaultVariant.length > 0) {
+    result.defaultVariant = candidate.defaultVariant
   }
-  if (typeof candidate.defaultAgent === 'string' && candidate.defaultAgent.length > 0) {
-    result.defaultAgent = candidate.defaultAgent;
+  if (typeof candidate.defaultAgent === "string" && candidate.defaultAgent.length > 0) {
+    result.defaultAgent = candidate.defaultAgent
   }
-  if (typeof candidate.autoCreateWorktree === 'boolean') {
-    result.autoCreateWorktree = candidate.autoCreateWorktree;
+  if (typeof candidate.autoCreateWorktree === "boolean") {
+    result.autoCreateWorktree = candidate.autoCreateWorktree
   }
-  if (typeof candidate.gitmojiEnabled === 'boolean') {
-    result.gitmojiEnabled = candidate.gitmojiEnabled;
+  if (typeof candidate.gitmojiEnabled === "boolean") {
+    result.gitmojiEnabled = candidate.gitmojiEnabled
   }
-  if (typeof candidate.queueModeEnabled === 'boolean') {
-    result.queueModeEnabled = candidate.queueModeEnabled;
+  if (typeof candidate.queueModeEnabled === "boolean") {
+    result.queueModeEnabled = candidate.queueModeEnabled
   }
-  if (typeof candidate.showDeletionDialog === 'boolean') {
-    result.showDeletionDialog = candidate.showDeletionDialog;
+  if (typeof candidate.showDeletionDialog === "boolean") {
+    result.showDeletionDialog = candidate.showDeletionDialog
   }
-  if (typeof candidate.nativeNotificationsEnabled === 'boolean') {
-    result.nativeNotificationsEnabled = candidate.nativeNotificationsEnabled;
+  if (typeof candidate.nativeNotificationsEnabled === "boolean") {
+    result.nativeNotificationsEnabled = candidate.nativeNotificationsEnabled
   }
-  if (typeof candidate.notificationMode === 'string' && (candidate.notificationMode === 'always' || candidate.notificationMode === 'hidden-only')) {
-    result.notificationMode = candidate.notificationMode;
+  if (
+    typeof candidate.notificationMode === "string" &&
+    (candidate.notificationMode === "always" || candidate.notificationMode === "hidden-only")
+  ) {
+    result.notificationMode = candidate.notificationMode
   }
-  if (typeof candidate.notifyOnSubtasks === 'boolean') {
-    result.notifyOnSubtasks = candidate.notifyOnSubtasks;
+  if (typeof candidate.notifyOnSubtasks === "boolean") {
+    result.notifyOnSubtasks = candidate.notifyOnSubtasks
   }
-  if (typeof candidate.notifyOnCompletion === 'boolean') {
-    result.notifyOnCompletion = candidate.notifyOnCompletion;
+  if (typeof candidate.notifyOnCompletion === "boolean") {
+    result.notifyOnCompletion = candidate.notifyOnCompletion
   }
-  if (typeof candidate.notifyOnError === 'boolean') {
-    result.notifyOnError = candidate.notifyOnError;
+  if (typeof candidate.notifyOnError === "boolean") {
+    result.notifyOnError = candidate.notifyOnError
   }
-  if (typeof candidate.notifyOnQuestion === 'boolean') {
-    result.notifyOnQuestion = candidate.notifyOnQuestion;
+  if (typeof candidate.notifyOnQuestion === "boolean") {
+    result.notifyOnQuestion = candidate.notifyOnQuestion
   }
-  if (candidate.notificationTemplates && typeof candidate.notificationTemplates === 'object') {
-    const templates = candidate.notificationTemplates as Record<string, unknown>;
+  if (candidate.notificationTemplates && typeof candidate.notificationTemplates === "object") {
+    const templates = candidate.notificationTemplates as Record<string, unknown>
     const validateTemplate = (key: string): { title: string; message: string } | undefined => {
-      const value = templates[key];
-      if (!value || typeof value !== 'object') return undefined;
-      const obj = value as Record<string, unknown>;
-      const title = typeof obj.title === 'string' ? obj.title : '';
-      const message = typeof obj.message === 'string' ? obj.message : '';
-      return { title, message };
-    };
-    const completion = validateTemplate('completion');
-    const error = validateTemplate('error');
-    const question = validateTemplate('question');
-    const subtask = validateTemplate('subtask');
+      const value = templates[key]
+      if (!value || typeof value !== "object") return undefined
+      const obj = value as Record<string, unknown>
+      const title = typeof obj.title === "string" ? obj.title : ""
+      const message = typeof obj.message === "string" ? obj.message : ""
+      return { title, message }
+    }
+    const completion = validateTemplate("completion")
+    const error = validateTemplate("error")
+    const question = validateTemplate("question")
+    const subtask = validateTemplate("subtask")
     if (completion || error || question || subtask) {
       result.notificationTemplates = {
-        completion: completion ?? { title: 'Task Complete', message: 'Your task has finished.' },
-        error: error ?? { title: 'Error Occurred', message: 'An error occurred while processing your task.' },
-        question: question ?? { title: 'Input Needed', message: 'Please provide input to continue.' },
-        subtask: subtask ?? { title: 'Subtask Complete', message: 'A subtask has finished.' },
-      };
+        completion: completion ?? { title: "Task Complete", message: "Your task has finished." },
+        error: error ?? { title: "Error Occurred", message: "An error occurred while processing your task." },
+        question: question ?? { title: "Input Needed", message: "Please provide input to continue." },
+        subtask: subtask ?? { title: "Subtask Complete", message: "A subtask has finished." },
+      }
     }
   }
-  if (typeof candidate.summarizeLastMessage === 'boolean') {
-    result.summarizeLastMessage = candidate.summarizeLastMessage;
+  if (typeof candidate.summarizeLastMessage === "boolean") {
+    result.summarizeLastMessage = candidate.summarizeLastMessage
   }
-  if (typeof candidate.summaryThreshold === 'number' && Number.isFinite(candidate.summaryThreshold)) {
-    result.summaryThreshold = Math.max(0, Math.round(candidate.summaryThreshold));
+  if (typeof candidate.summaryThreshold === "number" && Number.isFinite(candidate.summaryThreshold)) {
+    result.summaryThreshold = Math.max(0, Math.round(candidate.summaryThreshold))
   }
-  if (typeof candidate.summaryLength === 'number' && Number.isFinite(candidate.summaryLength)) {
-    result.summaryLength = Math.max(10, Math.round(candidate.summaryLength));
+  if (typeof candidate.summaryLength === "number" && Number.isFinite(candidate.summaryLength)) {
+    result.summaryLength = Math.max(10, Math.round(candidate.summaryLength))
   }
-  if (typeof candidate.maxLastMessageLength === 'number' && Number.isFinite(candidate.maxLastMessageLength)) {
-    result.maxLastMessageLength = Math.max(10, Math.round(candidate.maxLastMessageLength));
+  if (typeof candidate.maxLastMessageLength === "number" && Number.isFinite(candidate.maxLastMessageLength)) {
+    result.maxLastMessageLength = Math.max(10, Math.round(candidate.maxLastMessageLength))
   }
-  if (typeof candidate.usageAutoRefresh === 'boolean') {
-    result.usageAutoRefresh = candidate.usageAutoRefresh;
+  if (typeof candidate.usageAutoRefresh === "boolean") {
+    result.usageAutoRefresh = candidate.usageAutoRefresh
   }
-  if (typeof candidate.usageRefreshIntervalMs === 'number' && Number.isFinite(candidate.usageRefreshIntervalMs)) {
-    result.usageRefreshIntervalMs = candidate.usageRefreshIntervalMs;
+  if (typeof candidate.usageRefreshIntervalMs === "number" && Number.isFinite(candidate.usageRefreshIntervalMs)) {
+    result.usageRefreshIntervalMs = candidate.usageRefreshIntervalMs
   }
-  if (candidate.usageDisplayMode === 'usage' || candidate.usageDisplayMode === 'remaining') {
-    result.usageDisplayMode = candidate.usageDisplayMode;
+  if (candidate.usageDisplayMode === "usage" || candidate.usageDisplayMode === "remaining") {
+    result.usageDisplayMode = candidate.usageDisplayMode
   }
-  if (typeof candidate.usageShowPredValues === 'boolean') {
-    result.usageShowPredValues = candidate.usageShowPredValues;
+  if (typeof candidate.usageShowPredValues === "boolean") {
+    result.usageShowPredValues = candidate.usageShowPredValues
   }
   if (Array.isArray(candidate.usageDropdownProviders)) {
     result.usageDropdownProviders = candidate.usageDropdownProviders.filter(
-      (entry): entry is string => typeof entry === 'string' && entry.length > 0
-    );
+      (entry): entry is string => typeof entry === "string" && entry.length > 0,
+    )
   }
 
   // Parse usageSelectedModels (Record<string, string[]>)
-  if (candidate.usageSelectedModels && typeof candidate.usageSelectedModels === 'object') {
-    const selectedModels: Record<string, string[]> = {};
+  if (candidate.usageSelectedModels && typeof candidate.usageSelectedModels === "object") {
+    const selectedModels: Record<string, string[]> = {}
     for (const [providerId, models] of Object.entries(candidate.usageSelectedModels)) {
       if (Array.isArray(models)) {
-        selectedModels[providerId] = models.filter((m): m is string => typeof m === 'string');
+        selectedModels[providerId] = models.filter((m): m is string => typeof m === "string")
       }
     }
     if (Object.keys(selectedModels).length > 0) {
-      result.usageSelectedModels = selectedModels;
+      result.usageSelectedModels = selectedModels
     }
   }
 
   // Parse usageCollapsedFamilies (Record<string, string[]>)
-  if (candidate.usageCollapsedFamilies && typeof candidate.usageCollapsedFamilies === 'object') {
-    const collapsedFamilies: Record<string, string[]> = {};
+  if (candidate.usageCollapsedFamilies && typeof candidate.usageCollapsedFamilies === "object") {
+    const collapsedFamilies: Record<string, string[]> = {}
     for (const [providerId, families] of Object.entries(candidate.usageCollapsedFamilies)) {
       if (Array.isArray(families)) {
-        collapsedFamilies[providerId] = families.filter((f): f is string => typeof f === 'string');
+        collapsedFamilies[providerId] = families.filter((f): f is string => typeof f === "string")
       }
     }
     if (Object.keys(collapsedFamilies).length > 0) {
-      result.usageCollapsedFamilies = collapsedFamilies;
+      result.usageCollapsedFamilies = collapsedFamilies
     }
   }
 
   // Parse usageExpandedFamilies (Record<string, string[]>) - inverted collapsed logic for header dropdown
-  if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === 'object') {
-    const expandedFamilies: Record<string, string[]> = {};
+  if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === "object") {
+    const expandedFamilies: Record<string, string[]> = {}
     for (const [providerId, families] of Object.entries(candidate.usageExpandedFamilies)) {
       if (Array.isArray(families)) {
-        expandedFamilies[providerId] = families.filter((f): f is string => typeof f === 'string');
+        expandedFamilies[providerId] = families.filter((f): f is string => typeof f === "string")
       }
     }
     if (Object.keys(expandedFamilies).length > 0) {
-      result.usageExpandedFamilies = expandedFamilies;
+      result.usageExpandedFamilies = expandedFamilies
     }
   }
 
   // Parse usageModelGroups - custom model groups configuration per provider
-  if (candidate.usageModelGroups && typeof candidate.usageModelGroups === 'object') {
-    const modelGroups: Record<string, {
-      customGroups?: Array<{id: string; label: string; models: string[]; order: number}>;
-      modelAssignments?: Record<string, string>;
-      renamedGroups?: Record<string, string>;
-    }> = {};
+  if (candidate.usageModelGroups && typeof candidate.usageModelGroups === "object") {
+    const modelGroups: Record<
+      string,
+      {
+        customGroups?: Array<{ id: string; label: string; models: string[]; order: number }>
+        modelAssignments?: Record<string, string>
+        renamedGroups?: Record<string, string>
+      }
+    > = {}
     for (const [providerId, config] of Object.entries(candidate.usageModelGroups)) {
-      if (config && typeof config === 'object') {
-        const typedConfig = config as Record<string, unknown>;
+      if (config && typeof config === "object") {
+        const typedConfig = config as Record<string, unknown>
         const providerConfig: {
-          customGroups?: Array<{id: string; label: string; models: string[]; order: number}>;
-          modelAssignments?: Record<string, string>;
-          renamedGroups?: Record<string, string>;
-        } = {};
+          customGroups?: Array<{ id: string; label: string; models: string[]; order: number }>
+          modelAssignments?: Record<string, string>
+          renamedGroups?: Record<string, string>
+        } = {}
 
         // Parse customGroups
         if (Array.isArray(typedConfig.customGroups)) {
           providerConfig.customGroups = typedConfig.customGroups
-            .filter((g): g is Record<string, unknown> => g && typeof g === 'object')
+            .filter((g): g is Record<string, unknown> => g && typeof g === "object")
             .map((g) => ({
-              id: String(g.id ?? ''),
-              label: String(g.label ?? ''),
-              models: Array.isArray(g.models)
-                ? g.models.filter((m): m is string => typeof m === 'string')
-                : [],
-              order: typeof g.order === 'number' ? g.order : 0,
-            }));
+              id: String(g.id ?? ""),
+              label: String(g.label ?? ""),
+              models: Array.isArray(g.models) ? g.models.filter((m): m is string => typeof m === "string") : [],
+              order: typeof g.order === "number" ? g.order : 0,
+            }))
         }
 
         // Parse modelAssignments
-        if (typedConfig.modelAssignments && typeof typedConfig.modelAssignments === 'object') {
+        if (typedConfig.modelAssignments && typeof typedConfig.modelAssignments === "object") {
           providerConfig.modelAssignments = Object.fromEntries(
             Object.entries(typedConfig.modelAssignments as Record<string, unknown>)
-              .filter(([, v]) => typeof v === 'string')
-              .map(([k, v]) => [k, String(v)])
-          );
+              .filter(([, v]) => typeof v === "string")
+              .map(([k, v]) => [k, String(v)]),
+          )
         }
 
         // Parse renamedGroups
-        if (typedConfig.renamedGroups && typeof typedConfig.renamedGroups === 'object') {
+        if (typedConfig.renamedGroups && typeof typedConfig.renamedGroups === "object") {
           providerConfig.renamedGroups = Object.fromEntries(
             Object.entries(typedConfig.renamedGroups as Record<string, unknown>)
-              .filter(([, v]) => typeof v === 'string')
-              .map(([k, v]) => [k, String(v)])
-          );
+              .filter(([, v]) => typeof v === "string")
+              .map(([k, v]) => [k, String(v)]),
+          )
         }
 
         if (Object.keys(providerConfig).length > 0) {
-          modelGroups[providerId] = providerConfig;
+          modelGroups[providerId] = providerConfig
         }
       }
     }
     if (Object.keys(modelGroups).length > 0) {
-      result.usageModelGroups = modelGroups;
+      result.usageModelGroups = modelGroups
     }
   }
 
-  if (typeof candidate.inputSpellcheckEnabled === 'boolean') {
-    result.inputSpellcheckEnabled = candidate.inputSpellcheckEnabled;
+  if (typeof candidate.inputSpellcheckEnabled === "boolean") {
+    result.inputSpellcheckEnabled = candidate.inputSpellcheckEnabled
   }
-  if (typeof candidate.showToolFileIcons === 'boolean') {
-    result.showToolFileIcons = candidate.showToolFileIcons;
+  if (typeof candidate.showToolFileIcons === "boolean") {
+    result.showToolFileIcons = candidate.showToolFileIcons
   }
-  if (typeof candidate.showExpandedBashTools === 'boolean') {
-    result.showExpandedBashTools = candidate.showExpandedBashTools;
+  if (typeof candidate.showExpandedBashTools === "boolean") {
+    result.showExpandedBashTools = candidate.showExpandedBashTools
   }
-  if (typeof candidate.showExpandedEditTools === 'boolean') {
-    result.showExpandedEditTools = candidate.showExpandedEditTools;
+  if (typeof candidate.showExpandedEditTools === "boolean") {
+    result.showExpandedEditTools = candidate.showExpandedEditTools
   }
-  if (typeof candidate.showTurnChangedFiles === 'boolean') {
-    result.showTurnChangedFiles = candidate.showTurnChangedFiles;
+  if (typeof candidate.showTurnChangedFiles === "boolean") {
+    result.showTurnChangedFiles = candidate.showTurnChangedFiles
   }
-  if (typeof candidate.timeFormatPreference === 'string'
-    && (candidate.timeFormatPreference === 'auto' || candidate.timeFormatPreference === '12h' || candidate.timeFormatPreference === '24h')) {
-    result.timeFormatPreference = candidate.timeFormatPreference;
+  if (
+    typeof candidate.timeFormatPreference === "string" &&
+    (candidate.timeFormatPreference === "auto" ||
+      candidate.timeFormatPreference === "12h" ||
+      candidate.timeFormatPreference === "24h")
+  ) {
+    result.timeFormatPreference = candidate.timeFormatPreference
   }
-  if (typeof candidate.weekStartPreference === 'string'
-    && (candidate.weekStartPreference === 'auto' || candidate.weekStartPreference === 'sunday' || candidate.weekStartPreference === 'monday')) {
-    result.weekStartPreference = candidate.weekStartPreference;
+  if (
+    typeof candidate.weekStartPreference === "string" &&
+    (candidate.weekStartPreference === "auto" ||
+      candidate.weekStartPreference === "sunday" ||
+      candidate.weekStartPreference === "monday")
+  ) {
+    result.weekStartPreference = candidate.weekStartPreference
   }
-  if (typeof candidate.chatRenderMode === 'string'
-    && (candidate.chatRenderMode === 'sorted' || candidate.chatRenderMode === 'live')) {
-    result.chatRenderMode = candidate.chatRenderMode;
+  if (
+    typeof candidate.chatRenderMode === "string" &&
+    (candidate.chatRenderMode === "sorted" || candidate.chatRenderMode === "live")
+  ) {
+    result.chatRenderMode = candidate.chatRenderMode
   }
-  if (typeof candidate.messageStreamTransport === 'string'
-    && (candidate.messageStreamTransport === 'auto' || candidate.messageStreamTransport === 'ws' || candidate.messageStreamTransport === 'sse')) {
-    result.messageStreamTransport = candidate.messageStreamTransport;
+  if (
+    typeof candidate.messageStreamTransport === "string" &&
+    (candidate.messageStreamTransport === "auto" ||
+      candidate.messageStreamTransport === "ws" ||
+      candidate.messageStreamTransport === "sse")
+  ) {
+    result.messageStreamTransport = candidate.messageStreamTransport
   }
-  if (typeof candidate.activityRenderMode === 'string'
-    && (candidate.activityRenderMode === 'collapsed' || candidate.activityRenderMode === 'summary')) {
-    result.activityRenderMode = candidate.activityRenderMode;
+  if (
+    typeof candidate.activityRenderMode === "string" &&
+    (candidate.activityRenderMode === "collapsed" || candidate.activityRenderMode === "summary")
+  ) {
+    result.activityRenderMode = candidate.activityRenderMode
   }
-  if (typeof candidate.mermaidRenderingMode === 'string'
-    && (candidate.mermaidRenderingMode === 'svg' || candidate.mermaidRenderingMode === 'ascii')) {
-    result.mermaidRenderingMode = candidate.mermaidRenderingMode;
+  if (
+    typeof candidate.mermaidRenderingMode === "string" &&
+    (candidate.mermaidRenderingMode === "svg" || candidate.mermaidRenderingMode === "ascii")
+  ) {
+    result.mermaidRenderingMode = candidate.mermaidRenderingMode
   }
-  if (typeof candidate.userMessageRenderingMode === 'string'
-    && (candidate.userMessageRenderingMode === 'markdown' || candidate.userMessageRenderingMode === 'plain')) {
-    result.userMessageRenderingMode = candidate.userMessageRenderingMode;
+  if (
+    typeof candidate.userMessageRenderingMode === "string" &&
+    (candidate.userMessageRenderingMode === "markdown" || candidate.userMessageRenderingMode === "plain")
+  ) {
+    result.userMessageRenderingMode = candidate.userMessageRenderingMode
   }
-  if (typeof candidate.stickyUserHeader === 'boolean') {
-    result.stickyUserHeader = candidate.stickyUserHeader;
+  if (typeof candidate.stickyUserHeader === "boolean") {
+    result.stickyUserHeader = candidate.stickyUserHeader
   }
-  if (typeof candidate.wideChatLayoutEnabled === 'boolean') {
-    result.wideChatLayoutEnabled = candidate.wideChatLayoutEnabled;
+  if (typeof candidate.wideChatLayoutEnabled === "boolean") {
+    result.wideChatLayoutEnabled = candidate.wideChatLayoutEnabled
   }
-  if (typeof candidate.showSplitAssistantMessageActions === 'boolean') {
-    result.showSplitAssistantMessageActions = candidate.showSplitAssistantMessageActions;
+  if (typeof candidate.showSplitAssistantMessageActions === "boolean") {
+    result.showSplitAssistantMessageActions = candidate.showSplitAssistantMessageActions
   }
-  if (typeof candidate.fontSize === 'number' && Number.isFinite(candidate.fontSize)) {
-    result.fontSize = candidate.fontSize;
+  if (typeof candidate.fontSize === "number" && Number.isFinite(candidate.fontSize)) {
+    result.fontSize = candidate.fontSize
   }
-  if (typeof candidate.terminalFontSize === 'number' && Number.isFinite(candidate.terminalFontSize)) {
-    result.terminalFontSize = candidate.terminalFontSize;
+  if (typeof candidate.terminalFontSize === "number" && Number.isFinite(candidate.terminalFontSize)) {
+    result.terminalFontSize = candidate.terminalFontSize
   }
   if (isUiFontOption(candidate.uiFont)) {
-    result.uiFont = candidate.uiFont;
+    result.uiFont = candidate.uiFont
   }
   if (isMonoFontOption(candidate.monoFont)) {
-    result.monoFont = candidate.monoFont;
+    result.monoFont = candidate.monoFont
   }
-  if (typeof candidate.padding === 'number' && Number.isFinite(candidate.padding)) {
-    result.padding = candidate.padding;
+  if (typeof candidate.padding === "number" && Number.isFinite(candidate.padding)) {
+    result.padding = candidate.padding
   }
-  if (typeof candidate.cornerRadius === 'number' && Number.isFinite(candidate.cornerRadius)) {
-    result.cornerRadius = candidate.cornerRadius;
+  if (typeof candidate.cornerRadius === "number" && Number.isFinite(candidate.cornerRadius)) {
+    result.cornerRadius = candidate.cornerRadius
   }
-  if (typeof candidate.inputBarOffset === 'number' && Number.isFinite(candidate.inputBarOffset)) {
-    result.inputBarOffset = candidate.inputBarOffset;
+  if (typeof candidate.inputBarOffset === "number" && Number.isFinite(candidate.inputBarOffset)) {
+    result.inputBarOffset = candidate.inputBarOffset
   }
-  const favoriteModels = sanitizeModelRefs(candidate.favoriteModels, 64);
+  const favoriteModels = sanitizeModelRefs(candidate.favoriteModels, 64)
   if (favoriteModels) {
-    result.favoriteModels = favoriteModels;
+    result.favoriteModels = favoriteModels
   }
 
-  const recentModels = sanitizeModelRefs(candidate.recentModels, 16);
+  const recentModels = sanitizeModelRefs(candidate.recentModels, 16)
   if (recentModels) {
-    result.recentModels = recentModels;
+    result.recentModels = recentModels
   }
   if (
-    typeof candidate.diffLayoutPreference === 'string'
-    && (candidate.diffLayoutPreference === 'dynamic'
-      || candidate.diffLayoutPreference === 'inline'
-      || candidate.diffLayoutPreference === 'side-by-side')
+    typeof candidate.diffLayoutPreference === "string" &&
+    (candidate.diffLayoutPreference === "dynamic" ||
+      candidate.diffLayoutPreference === "inline" ||
+      candidate.diffLayoutPreference === "side-by-side")
   ) {
-    result.diffLayoutPreference = candidate.diffLayoutPreference;
+    result.diffLayoutPreference = candidate.diffLayoutPreference
   }
   if (
-    typeof candidate.diffViewMode === 'string'
-    && (candidate.diffViewMode === 'single' || candidate.diffViewMode === 'stacked')
+    typeof candidate.diffViewMode === "string" &&
+    (candidate.diffViewMode === "single" || candidate.diffViewMode === "stacked")
   ) {
-    result.diffViewMode = candidate.diffViewMode;
+    result.diffViewMode = candidate.diffViewMode
   }
   if (
-    typeof candidate.gitChangesViewMode === 'string'
-    && (candidate.gitChangesViewMode === 'flat' || candidate.gitChangesViewMode === 'tree')
+    typeof candidate.gitChangesViewMode === "string" &&
+    (candidate.gitChangesViewMode === "flat" || candidate.gitChangesViewMode === "tree")
   ) {
-    result.gitChangesViewMode = candidate.gitChangesViewMode;
+    result.gitChangesViewMode = candidate.gitChangesViewMode
   }
-  if (typeof candidate.directoryShowHidden === 'boolean') {
-    result.directoryShowHidden = candidate.directoryShowHidden;
+  if (typeof candidate.directoryShowHidden === "boolean") {
+    result.directoryShowHidden = candidate.directoryShowHidden
   }
-  if (typeof candidate.filesViewShowGitignored === 'boolean') {
-    result.filesViewShowGitignored = candidate.filesViewShowGitignored;
+  if (typeof candidate.filesViewShowGitignored === "boolean") {
+    result.filesViewShowGitignored = candidate.filesViewShowGitignored
   }
-  if (typeof candidate.openInAppId === 'string' && candidate.openInAppId.length > 0) {
-    result.openInAppId = candidate.openInAppId;
+  if (typeof candidate.openInAppId === "string" && candidate.openInAppId.length > 0) {
+    result.openInAppId = candidate.openInAppId
   }
-  const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
+  const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs)
   if (skillCatalogs) {
-    result.skillCatalogs = skillCatalogs;
+    result.skillCatalogs = skillCatalogs
   }
 
-  if (typeof candidate.globalBehaviorPrompt === 'string') {
-    result.globalBehaviorPrompt = candidate.globalBehaviorPrompt;
+  if (typeof candidate.globalBehaviorPrompt === "string") {
+    result.globalBehaviorPrompt = candidate.globalBehaviorPrompt
   }
-  if (typeof candidate.responseStyleEnabled === 'boolean') {
-    result.responseStyleEnabled = candidate.responseStyleEnabled;
+  if (typeof candidate.responseStyleEnabled === "boolean") {
+    result.responseStyleEnabled = candidate.responseStyleEnabled
   }
   if (
-    typeof candidate.responseStylePreset === 'string'
-    && (candidate.responseStylePreset === 'concise'
-      || candidate.responseStylePreset === 'detailed'
-      || candidate.responseStylePreset === 'mentor'
-      || candidate.responseStylePreset === 'pushback'
-      || candidate.responseStylePreset === 'noFiller'
-      || candidate.responseStylePreset === 'matchEnergy'
-      || candidate.responseStylePreset === 'warmPeer'
-      || candidate.responseStylePreset === 'custom')
+    typeof candidate.responseStylePreset === "string" &&
+    (candidate.responseStylePreset === "concise" ||
+      candidate.responseStylePreset === "detailed" ||
+      candidate.responseStylePreset === "mentor" ||
+      candidate.responseStylePreset === "pushback" ||
+      candidate.responseStylePreset === "noFiller" ||
+      candidate.responseStylePreset === "matchEnergy" ||
+      candidate.responseStylePreset === "warmPeer" ||
+      candidate.responseStylePreset === "custom")
   ) {
-    result.responseStylePreset = candidate.responseStylePreset;
+    result.responseStylePreset = candidate.responseStylePreset
   }
-  if (typeof candidate.responseStyleCustomInstructions === 'string') {
-    result.responseStyleCustomInstructions = candidate.responseStyleCustomInstructions;
+  if (typeof candidate.responseStyleCustomInstructions === "string") {
+    result.responseStyleCustomInstructions = candidate.responseStyleCustomInstructions
   }
 
-  return result;
-};
+  return result
+}
 
 // Short-lived cache + in-flight dedup for settings fetches to avoid repeated GET calls during startup
-let _settingsCache: { value: DesktopSettings | null; at: number } | null = null;
-let _settingsInflight: Promise<DesktopSettings | null> | null = null;
-const SETTINGS_CACHE_TTL = 2_000; // 2 seconds — covers the startup burst
+let _settingsCache: { value: DesktopSettings | null; at: number } | null = null
+let _settingsInflight: Promise<DesktopSettings | null> | null = null
+const SETTINGS_CACHE_TTL = 2_000 // 2 seconds — covers the startup burst
 
 const fetchWebSettings = async (): Promise<DesktopSettings | null> => {
   // Return cached if fresh
   if (_settingsCache && Date.now() - _settingsCache.at < SETTINGS_CACHE_TTL) {
-    return _settingsCache.value;
+    return _settingsCache.value
   }
 
   // Dedup concurrent calls
-  if (_settingsInflight) return _settingsInflight;
+  if (_settingsInflight) return _settingsInflight
 
   _settingsInflight = (async (): Promise<DesktopSettings | null> => {
-    const runtimeSettings = getRuntimeSettingsAPI();
+    const runtimeSettings = getRuntimeSettingsAPI()
     if (runtimeSettings) {
       try {
-        const result = await runtimeSettings.load();
-        const settings = sanitizeWebSettings(result.settings);
-        _settingsCache = { value: settings, at: Date.now() };
-        return settings;
+        const result = await runtimeSettings.load()
+        const settings = sanitizeWebSettings(result.settings)
+        _settingsCache = { value: settings, at: Date.now() }
+        return settings
       } catch (error) {
-        console.warn('Failed to load shared settings from runtime settings API:', error);
+        console.warn("Failed to load shared settings from runtime settings API:", error)
       }
     }
 
@@ -919,114 +1017,116 @@ const fetchWebSettings = async (): Promise<DesktopSettings | null> => {
       const response = await fetch(API_ENDPOINTS.config.settings, {
         method: HTTP_DEFAULTS.method.get,
         headers: HTTP_DEFAULTS.headers.acceptJson,
-      });
+      })
       if (!response.ok) {
-        return null;
+        return null
       }
-      const data = await response.json().catch(() => null);
-      const settings = sanitizeWebSettings(data);
-      _settingsCache = { value: settings, at: Date.now() };
-      return settings;
+      const data = await response.json().catch(() => null)
+      const settings = sanitizeWebSettings(data)
+      _settingsCache = { value: settings, at: Date.now() }
+      return settings
     } catch (error) {
-      console.warn('Failed to load shared settings from server:', error);
-      return null;
+      console.warn("Failed to load shared settings from server:", error)
+      return null
     }
-  })().finally(() => { _settingsInflight = null; });
+  })().finally(() => {
+    _settingsInflight = null
+  })
 
-  return _settingsInflight;
-};
+  return _settingsInflight
+}
 
 /** Invalidate cached settings (call after a successful PUT) */
 export const invalidateSettingsCache = (): void => {
-  _settingsCache = null;
-};
+  _settingsCache = null
+}
 
 export const syncDesktopSettings = async (): Promise<void> => {
-  if (typeof window === 'undefined') {
-    return;
+  if (typeof window === "undefined") {
+    return
   }
 
-  const persistApi = getPersistApi();
+  const persistApi = getPersistApi()
 
   // Wait for Zustand persist hydration before applying server settings.
   // Otherwise `set()`-calls race with hydration: we set X, then hydration
   // reads localStorage and overwrites back to the persisted value.
   const waitForHydration = (): Promise<void> => {
     if (!persistApi?.hasHydrated || persistApi.hasHydrated()) {
-      return Promise.resolve();
+      return Promise.resolve()
     }
     if (!persistApi.onFinishHydration) {
-      return Promise.resolve();
+      return Promise.resolve()
     }
     return new Promise<void>((resolve) => {
-      let settled = false;
+      let settled = false
       const finish = () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      };
+        if (settled) return
+        settled = true
+        resolve()
+      }
       const unsubscribe = persistApi.onFinishHydration!(() => {
-        unsubscribe?.();
-        finish();
-      });
+        unsubscribe?.()
+        finish()
+      })
       // Guard: hydration may have flipped to true between the hasHydrated
       // check and the onFinishHydration subscription — resolve immediately.
-      if (persistApi.hasHydrated?.()) finish();
-    });
-  };
+      if (persistApi.hasHydrated?.()) finish()
+    })
+  }
 
   // Each step is wrapped in try/catch so a failure in one side-effect (e.g.
   // a TypeError from writing to a contextBridge-protected global) doesn't
   // prevent server settings from reaching the Zustand store.
   const applySettings = async (settings: DesktopSettings) => {
     try {
-      persistToLocalStorage(settings);
+      persistToLocalStorage(settings)
     } catch (error) {
-      console.warn('persistToLocalStorage failed:', error);
+      console.warn("persistToLocalStorage failed:", error)
     }
-    await waitForHydration();
+    await waitForHydration()
     try {
-      applyDesktopUiPreferences(settings);
+      applyDesktopUiPreferences(settings)
     } catch (error) {
-      console.warn('applyDesktopUiPreferences failed:', error);
+      console.warn("applyDesktopUiPreferences failed:", error)
     }
 
-    dispatchSettingsSynced(settings);
-  };
+    dispatchSettingsSynced(settings)
+  }
 
   try {
-    const webSettings = await fetchWebSettings();
+    const webSettings = await fetchWebSettings()
     if (webSettings) {
-      await applySettings(webSettings);
+      await applySettings(webSettings)
     }
   } catch (error) {
-    console.warn('Failed to synchronise settings:', error);
+    console.warn("Failed to synchronise settings:", error)
   }
-};
+}
 
 // Coalesce rapid updateDesktopSettings calls into a single PUT
-let _pendingSettingsChanges: Partial<DesktopSettings> | null = null;
-let _settingsFlushTimer: ReturnType<typeof setTimeout> | null = null;
-const SETTINGS_DEBOUNCE_MS = 200;
+let _pendingSettingsChanges: Partial<DesktopSettings> | null = null
+let _settingsFlushTimer: ReturnType<typeof setTimeout> | null = null
+const SETTINGS_DEBOUNCE_MS = 200
 
 const _flushSettingsUpdate = async (): Promise<void> => {
-  const changes = _pendingSettingsChanges;
-  _pendingSettingsChanges = null;
-  _settingsFlushTimer = null;
-  if (!changes || Object.keys(changes).length === 0) return;
+  const changes = _pendingSettingsChanges
+  _pendingSettingsChanges = null
+  _settingsFlushTimer = null
+  if (!changes || Object.keys(changes).length === 0) return
 
-  const runtimeSettings = getRuntimeSettingsAPI();
+  const runtimeSettings = getRuntimeSettingsAPI()
   if (runtimeSettings) {
     try {
-      const updated = await runtimeSettings.save(changes);
+      const updated = await runtimeSettings.save(changes)
       if (updated) {
-        persistToLocalStorage(updated);
-        applyDesktopUiPreferences(updated);
-        dispatchSettingsSynced(updated);
+        persistToLocalStorage(updated)
+        applyDesktopUiPreferences(updated)
+        dispatchSettingsSynced(updated)
       }
-      return;
+      return
     } catch (error) {
-      console.warn('Failed to update settings via runtime settings API:', error);
+      console.warn("Failed to update settings via runtime settings API:", error)
     }
   }
 
@@ -1035,67 +1135,67 @@ const _flushSettingsUpdate = async (): Promise<void> => {
       method: HTTP_DEFAULTS.method.put,
       headers: HTTP_DEFAULTS.headers.acceptAndContentTypeJson,
       body: JSON.stringify(changes),
-    });
+    })
 
     if (!response.ok) {
-      console.warn('Failed to update shared settings via API:', response.status, response.statusText);
-      return;
+      console.warn("Failed to update shared settings via API:", response.status, response.statusText)
+      return
     }
 
-    const updated = (await response.json().catch(() => null)) as DesktopSettings | null;
+    const updated = (await response.json().catch(() => null)) as DesktopSettings | null
     if (updated) {
-      persistToLocalStorage(updated);
-      applyDesktopUiPreferences(updated);
-      dispatchSettingsSynced(updated);
+      persistToLocalStorage(updated)
+      applyDesktopUiPreferences(updated)
+      dispatchSettingsSynced(updated)
       // Invalidate GET cache so next read sees the fresh data
-      _settingsCache = null;
+      _settingsCache = null
     }
   } catch (error) {
-    console.warn('Failed to update shared settings via API:', error);
+    console.warn("Failed to update shared settings via API:", error)
   }
-};
+}
 
 export const updateDesktopSettings = async (changes: Partial<DesktopSettings>): Promise<void> => {
-  if (typeof window === 'undefined') {
-    return;
+  if (typeof window === "undefined") {
+    return
   }
 
-  _pendingSettingsChanges = { ...(_pendingSettingsChanges ?? {}), ...changes };
+  _pendingSettingsChanges = { ...(_pendingSettingsChanges ?? {}), ...changes }
 
   if (_settingsFlushTimer) {
-    clearTimeout(_settingsFlushTimer);
+    clearTimeout(_settingsFlushTimer)
   }
-  _settingsFlushTimer = setTimeout(() => void _flushSettingsUpdate(), SETTINGS_DEBOUNCE_MS);
-};
+  _settingsFlushTimer = setTimeout(() => void _flushSettingsUpdate(), SETTINGS_DEBOUNCE_MS)
+}
 
 export const initializeAppearancePreferences = async (): Promise<void> => {
-  if (typeof window === 'undefined') {
-    return;
+  if (typeof window === "undefined") {
+    return
   }
 
-  const persistApi = getPersistApi();
+  const persistApi = getPersistApi()
 
   try {
-    const appearance = await loadAppearancePreferences();
+    const appearance = await loadAppearancePreferences()
     if (!appearance) {
-      return;
+      return
     }
 
-    const applyAppearance = () => applyAppearancePreferences(appearance);
+    const applyAppearance = () => applyAppearancePreferences(appearance)
 
     if (persistApi?.hasHydrated?.()) {
-      applyAppearance();
-      return;
+      applyAppearance()
+      return
     }
 
-    applyAppearance();
+    applyAppearance()
     if (persistApi?.onFinishHydration) {
       const unsubscribe = persistApi.onFinishHydration(() => {
-        unsubscribe?.();
-        applyAppearance();
-      });
+        unsubscribe?.()
+        applyAppearance()
+      })
     }
   } catch (error) {
-    console.warn('Failed to load appearance preferences:', error);
+    console.warn("Failed to load appearance preferences:", error)
   }
-};
+}

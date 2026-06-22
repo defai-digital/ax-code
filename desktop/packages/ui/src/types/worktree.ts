@@ -1,50 +1,49 @@
 export interface WorktreeMetadata {
-
   /**
    * Worktree origin.
    * - sdk: created/managed by AX Code SDK worktrees
    */
-  source?: 'sdk';
+  source?: "sdk"
 
-  path: string;
+  path: string
 
-  projectDirectory: string;
+  projectDirectory: string
 
-  branch: string;
+  branch: string
 
-  label: string;
+  label: string
 
   /** SDK worktree name (slug), if available. */
-  name?: string;
+  name?: string
 
-  kind?: 'pr' | 'standard';
+  kind?: "pr" | "standard"
 
   /**
    * Branch/ref this worktree was created from (intended integration target).
    * For SDK worktrees this is typically the user-selected base branch.
    */
-  createdFromBranch?: string;
+  createdFromBranch?: string
 
-  relativePath?: string;
+  relativePath?: string
 
   status?: {
-    isDirty: boolean;
-    ahead?: number;
-    behind?: number;
-    upstream?: string | null;
-  };
+    isDirty: boolean
+    ahead?: number
+    behind?: number
+    upstream?: string | null
+  }
 
   // --- Phase 1: canonical worktree attachment fields ---
 
   /** Canonical root path for the worktree (same as path for secondary worktrees). */
-  worktreeRoot?: string;
+  worktreeRoot?: string
 
   /** Operational status of this worktree. */
-  worktreeStatus?: 'ready' | 'missing' | 'invalid' | 'not-a-repo';
+  worktreeStatus?: "ready" | "missing" | "invalid" | "not-a-repo"
 
   /** Git HEAD state classification. */
-  headState?: 'branch' | 'detached' | 'unborn';
+  headState?: "branch" | "detached" | "unborn"
 
   /** How this worktree was attached to a session. */
-  worktreeSource?: 'existing' | 'created-for-session';
+  worktreeSource?: "existing" | "created-for-session"
 }

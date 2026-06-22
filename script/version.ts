@@ -22,7 +22,16 @@ if (!Script.preview) {
   const dir = process.env.RUNNER_TEMP ?? "/tmp"
   const notesFile = `${dir}/ax-code-release-notes.txt`
   await fs.writeFile(notesFile, body)
-  sh("gh", ["release", "create", `v${Script.version}`, "-d", "--title", `v${Script.version}`, "--notes-file", notesFile])
+  sh("gh", [
+    "release",
+    "create",
+    `v${Script.version}`,
+    "-d",
+    "--title",
+    `v${Script.version}`,
+    "--notes-file",
+    notesFile,
+  ])
   const release = JSON.parse(
     shOut("gh", ["release", "view", `v${Script.version}`, "--json", "tagName,databaseId"]),
   ) as { tagName: string; databaseId: number }

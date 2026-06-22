@@ -5,10 +5,7 @@
     "description": "Dracula",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [
-      "dark",
-      "palette"
-    ]
+    "tags": ["dark", "palette"]
   },
   "colors": {
     "primary": {

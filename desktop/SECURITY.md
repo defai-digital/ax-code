@@ -7,6 +7,7 @@ If you discover a security vulnerability in AX Code Desktop, please report it re
 **Email:** [techsupport@defai.digital](mailto:techsupport@defai.digital)
 
 Please include:
+
 - Description of the vulnerability
 - Steps to reproduce
 - Affected version(s)
@@ -19,6 +20,7 @@ I'll acknowledge receipt within 48 hours and aim to provide a fix or mitigation 
 ## Scope
 
 AX Code Desktop handles sensitive context including:
+
 - UI authentication (password-protected sessions, JWT tokens)
 - Cloudflare tunnel access (remote connectivity)
 - Terminal access (PTY sessions)

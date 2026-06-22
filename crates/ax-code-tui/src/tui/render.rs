@@ -4,12 +4,41 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
+    symbols,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 
 use super::app::{App, AppMode, SessionStatus};
 use crate::events::MessageRole;
+
+const ASCII_BORDER: symbols::border::Set = symbols::border::Set {
+    top_left: "+",
+    top_right: "+",
+    bottom_left: "+",
+    bottom_right: "+",
+    vertical_left: "|",
+    vertical_right: "|",
+    horizontal_top: "-",
+    horizontal_bottom: "-",
+};
+
+fn use_ascii_borders() -> bool {
+    cfg!(windows) || std::env::var("AX_CODE_TUI_ASCII_BORDERS").is_ok_and(|value| value != "0")
+}
+
+fn bordered_block() -> Block<'static> {
+    let block = Block::default().borders(Borders::ALL);
+    if use_ascii_borders() {
+        block.border_set(ASCII_BORDER)
+    } else {
+        block
+    }
+}
+
+fn glyph(unicode: &'static str, ascii: &'static str) -> &'static str {
+    if use_ascii_borders() { ascii } else { unicode }
+}
 
 /// Render the TUI to the given frame.
 pub fn render(frame: &mut Frame, app: &App) {
@@ -89,8 +118,8 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     // Status indicator
     let status_indicator = match app.session_status {
         SessionStatus::Idle => "",
-        SessionStatus::Running => " ●",
-        SessionStatus::Aborted => " ○",
+        SessionStatus::Running => glyph(" ●", " *"),
+        SessionStatus::Aborted => glyph(" ○", " o"),
     };
 
     let status_color = match app.session_status {
@@ -118,8 +147,7 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(tool_info, Style::default().fg(Color::Yellow)),
     ]);
 
-    let header = Paragraph::new(header_line)
-        .block(Block::default().borders(Borders::ALL).title(" Session "));
+    let header = Paragraph::new(header_line).block(bordered_block().title(" Session "));
 
     frame.render_widget(header, area);
 }
@@ -158,7 +186,11 @@ fn render_transcript(frame: &mut Frame, app: &App, area: Rect) {
             };
 
             // Show streaming indicator for partial messages
-            let streaming_indicator = if msg.is_streaming { " ●" } else { "" };
+            let streaming_indicator = if msg.is_streaming {
+                glyph(" ●", " *")
+            } else {
+                ""
+            };
 
             let line = Line::from(vec![
                 Span::styled(role_prefix, role_style),
@@ -171,7 +203,7 @@ fn render_transcript(frame: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let transcript = List::new(messages)
-        .block(Block::default().borders(Borders::ALL).title(" Transcript "))
+        .block(bordered_block().title(" Transcript "))
         .style(Style::default().fg(Color::White));
 
     frame.render_widget(transcript, area);
@@ -187,7 +219,7 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
 
     let prompt = Paragraph::new(app.prompt.as_str())
         .style(input_style)
-        .block(Block::default().borders(Borders::ALL).title(" Prompt "));
+        .block(bordered_block().title(" Prompt "));
 
     frame.render_widget(prompt, area);
 
@@ -226,8 +258,7 @@ fn render_permission_modal(frame: &mut Frame, app: &App, area: Rect) {
         let modal = Paragraph::new(text)
             .style(Style::default().fg(Color::Yellow))
             .block(
-                Block::default()
-                    .borders(Borders::ALL)
+                bordered_block()
                     .title(" Permission ")
                     .style(Style::default().fg(Color::Yellow)),
             )
@@ -249,7 +280,11 @@ fn render_question_modal(frame: &mut Frame, app: &App, area: Rect) {
             .iter()
             .enumerate()
             .map(|(i, opt)| {
-                let prefix = if i == req.selected { "▶ " } else { "  " };
+                let prefix = if i == req.selected {
+                    glyph("▶ ", "> ")
+                } else {
+                    "  "
+                };
                 let style = if i == req.selected {
                     Style::default()
                         .fg(Color::Cyan)
@@ -274,8 +309,7 @@ fn render_question_modal(frame: &mut Frame, app: &App, area: Rect) {
 
         let list = List::new(items)
             .block(
-                Block::default()
-                    .borders(Borders::ALL)
+                bordered_block()
                     .title(format!(" {}{} ", req.question, progress))
                     .style(Style::default().fg(Color::Cyan)),
             )
@@ -291,8 +325,11 @@ fn render_question_modal(frame: &mut Frame, app: &App, area: Rect) {
             width: modal_area.width,
             height: 1,
         };
-        let footer = Paragraph::new(" [↑↓] Navigate  [Enter/1-9] Select  [Esc] Cancel ")
-            .style(Style::default().fg(Color::Black).bg(Color::Gray));
+        let footer = Paragraph::new(format!(
+            " [{}] Navigate  [Enter/1-9] Select  [Esc] Cancel ",
+            glyph("↑↓", "Up/Down")
+        ))
+        .style(Style::default().fg(Color::Black).bg(Color::Gray));
         frame.render_widget(footer, footer_area);
     }
 }
@@ -307,7 +344,11 @@ fn render_session_list(frame: &mut Frame, app: &App, area: Rect) {
             let is_current = app.session_id.as_ref() == Some(&session.id);
             let is_selected = i == app.selected_session_index;
 
-            let prefix = if is_current { "▶ " } else { "  " };
+            let prefix = if is_current {
+                glyph("▶ ", "> ")
+            } else {
+                "  "
+            };
             let title = session.title.as_deref().unwrap_or("Untitled");
             let id_short = short_id(&session.id);
 
@@ -330,8 +371,7 @@ fn render_session_list(frame: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
+        bordered_block()
             .title(" Sessions ")
             .style(Style::default().fg(Color::Cyan)),
     );
@@ -349,8 +389,7 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
         let empty_msg = Paragraph::new("No completed tool calls")
             .style(Style::default().fg(Color::DarkGray))
             .block(
-                Block::default()
-                    .borders(Borders::ALL)
+                bordered_block()
                     .title(" Tool Results ")
                     .style(Style::default().fg(Color::Magenta)),
             );
@@ -375,9 +414,9 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
             let is_selected = i == app.selected_tool_index;
 
             let status_icon = match tool.status {
-                ToolCallStatus::Running => "●",
-                ToolCallStatus::Completed => "✓",
-                ToolCallStatus::Failed => "✗",
+                ToolCallStatus::Running => glyph("●", "*"),
+                ToolCallStatus::Completed => glyph("✓", "v"),
+                ToolCallStatus::Failed => glyph("✗", "x"),
             };
 
             let status_color = match tool.status {
@@ -406,8 +445,7 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
         .collect();
 
     let tool_list = List::new(tool_items).block(
-        Block::default()
-            .borders(Borders::ALL)
+        bordered_block()
             .title(" Tools ")
             .style(Style::default().fg(Color::Magenta)),
     );
@@ -436,8 +474,7 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
             " [Enter] Expand "
         };
 
-        let result_block = Block::default()
-            .borders(Borders::ALL)
+        let result_block = bordered_block()
             .title(format!(" {} Result ", tool.tool_name))
             .style(Style::default().fg(Color::Magenta));
 
@@ -456,8 +493,12 @@ fn render_tool_panel(frame: &mut Frame, app: &App, area: Rect) {
                 width: panel_chunks[1].width,
                 height: 1,
             };
-            let hint = Paragraph::new(format!(" [↑↓] Navigate{}[t] Close ", expand_hint))
-                .style(Style::default().fg(Color::Black).bg(Color::Gray));
+            let hint = Paragraph::new(format!(
+                " [{}] Navigate{}[t] Close ",
+                glyph("↑↓", "Up/Down"),
+                expand_hint
+            ))
+            .style(Style::default().fg(Color::Black).bg(Color::Gray));
             frame.render_widget(hint, hint_area);
         }
     }

@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs"
+import path from "path"
 import {
   AGENT_SCOPE,
   ensureProjectConfigPath as ensureSharedProjectConfigPath,
@@ -9,10 +9,10 @@ import {
   readConfigFile,
   resolveAxCodeConfigDir,
   writeConfig,
-} from './shared.js';
-import { isPathSpec } from './plugin-spec.js';
+} from "./shared.js"
+import { isPathSpec } from "./plugin-spec.js"
 
-const PLUGIN_FILE_NAME_PATTERN = /^[a-z0-9][a-z0-9-_.]*\.(js|ts|mjs|cjs)$/;
+const PLUGIN_FILE_NAME_PATTERN = /^[a-z0-9][a-z0-9-_.]*\.(js|ts|mjs|cjs)$/
 
 /**
  * @typedef {'user' | 'project'} PluginScope
@@ -34,58 +34,58 @@ const PLUGIN_FILE_NAME_PATTERN = /^[a-z0-9][a-z0-9-_.]*\.(js|ts|mjs|cjs)$/;
  */
 
 function codedError(message, code) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
+  const error = new Error(message)
+  error.code = code
+  return error
 }
 
 function validateScope(scope) {
   if (scope !== AGENT_SCOPE.USER && scope !== AGENT_SCOPE.PROJECT) {
-    throw codedError('Plugin scope must be user or project', 'INVALID_SCOPE');
+    throw codedError("Plugin scope must be user or project", "INVALID_SCOPE")
   }
 }
 
 function validatePluginSpec(spec) {
-  if (typeof spec !== 'string' || !spec.trim()) {
-    throw codedError('Plugin spec must be a non-empty string', 'INVALID_SPEC');
+  if (typeof spec !== "string" || !spec.trim()) {
+    throw codedError("Plugin spec must be a non-empty string", "INVALID_SPEC")
   }
-  if (spec.includes('\0')) {
-    throw codedError('Plugin spec cannot contain null bytes', 'INVALID_SPEC');
+  if (spec.includes("\0")) {
+    throw codedError("Plugin spec cannot contain null bytes", "INVALID_SPEC")
   }
-  return spec.trim();
+  return spec.trim()
 }
 
 function isRecord(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
 function hasOptions(options) {
-  return isRecord(options) && Object.keys(options).length > 0;
+  return isRecord(options) && Object.keys(options).length > 0
 }
 
 function parsedKindForSpec(spec) {
   // Path indicators must include Windows paths; scoped npm packages also contain '/'.
   // Do NOT use `includes(path.sep)` — scoped npm packages legitimately contain '/' (e.g. `@ax-code/some-plugin`).
-  return isPathSpec(spec) ? 'path' : 'npm';
+  return isPathSpec(spec) ? "path" : "npm"
 }
 
 function getActiveAxCodeConfigDir() {
-  return resolveAxCodeConfigDir(getActiveCustomConfigPath());
+  return resolveAxCodeConfigDir(getActiveCustomConfigPath())
 }
 
 function getActiveUserConfigPaths() {
-  return getUserConfigPaths(getActiveAxCodeConfigDir());
+  return getUserConfigPaths(getActiveAxCodeConfigDir())
 }
 
 function getActiveCustomConfigPath() {
-  return process.env.AX_CODE_CONFIG ? path.resolve(process.env.AX_CODE_CONFIG) : null;
+  return process.env.AX_CODE_CONFIG ? path.resolve(process.env.AX_CODE_CONFIG) : null
 }
 
 function readPluginConfigLayers(workingDirectory) {
-  const customPath = getActiveCustomConfigPath();
-  const userPaths = getActiveUserConfigPaths();
-  const userPath = getPrimaryUserConfigPath(userPaths, userPaths[0]);
-  const projectPath = getProjectConfigPath(workingDirectory);
+  const customPath = getActiveCustomConfigPath()
+  const userPaths = getActiveUserConfigPaths()
+  const userPath = getPrimaryUserConfigPath(userPaths, userPaths[0])
+  const projectPath = getProjectConfigPath(workingDirectory)
   return {
     userConfig: readConfigFile(userPath),
     projectConfig: readConfigFile(projectPath),
@@ -95,259 +95,269 @@ function readPluginConfigLayers(workingDirectory) {
       projectPath,
       customPath,
     },
-  };
+  }
 }
 
 function validateFileName(fileName) {
-  if (typeof fileName !== 'string' || !fileName) {
-    throw codedError('Plugin file name is required', 'INVALID_FILENAME');
+  if (typeof fileName !== "string" || !fileName) {
+    throw codedError("Plugin file name is required", "INVALID_FILENAME")
   }
-  if (fileName.includes('/') || fileName.includes('\\') || fileName.includes('..') || !PLUGIN_FILE_NAME_PATTERN.test(fileName)) {
-    throw codedError('Plugin file name must match /^[a-z0-9][a-z0-9-_.]*\\.(js|ts|mjs|cjs)$/ and cannot contain path traversal', 'INVALID_FILENAME');
+  if (
+    fileName.includes("/") ||
+    fileName.includes("\\") ||
+    fileName.includes("..") ||
+    !PLUGIN_FILE_NAME_PATTERN.test(fileName)
+  ) {
+    throw codedError(
+      "Plugin file name must match /^[a-z0-9][a-z0-9-_.]*\\.(js|ts|mjs|cjs)$/ and cannot contain path traversal",
+      "INVALID_FILENAME",
+    )
   }
-  return fileName;
+  return fileName
 }
 
 function ensureProjectConfigPath(workingDirectory) {
   if (!workingDirectory) {
-    throw codedError('Project scope requires working directory', 'INVALID_SCOPE');
+    throw codedError("Project scope requires working directory", "INVALID_SCOPE")
   }
-  return ensureSharedProjectConfigPath(workingDirectory);
+  return ensureSharedProjectConfigPath(workingDirectory)
 }
 
 function configSources(layers) {
-  const sources = [];
+  const sources = []
   if (layers.paths.customPath) {
-    sources.push({ config: layers.customConfig, filePath: layers.paths.customPath, scope: AGENT_SCOPE.USER });
+    sources.push({ config: layers.customConfig, filePath: layers.paths.customPath, scope: AGENT_SCOPE.USER })
   } else {
-    sources.push({ config: layers.userConfig, filePath: layers.paths.userPath, scope: AGENT_SCOPE.USER });
+    sources.push({ config: layers.userConfig, filePath: layers.paths.userPath, scope: AGENT_SCOPE.USER })
   }
   if (layers.paths.projectPath) {
-    sources.push({ config: layers.projectConfig, filePath: layers.paths.projectPath, scope: AGENT_SCOPE.PROJECT });
+    sources.push({ config: layers.projectConfig, filePath: layers.paths.projectPath, scope: AGENT_SCOPE.PROJECT })
   }
-  return sources;
+  return sources
 }
 
 function splitScopedValue(value) {
-  const separator = value.indexOf(':');
+  const separator = value.indexOf(":")
   if (separator === -1) {
-    throw codedError('Plugin id value must include scope', 'INVALID_SPEC');
+    throw codedError("Plugin id value must include scope", "INVALID_SPEC")
   }
   return {
     scope: value.slice(0, separator),
     value: value.slice(separator + 1),
-  };
+  }
 }
 
 function getPluginTarget(id, workingDirectory) {
-  const decoded = decodePluginId(id);
-  if (decoded.prefix !== 'config') {
-    throw codedError('Plugin entry id must use config prefix', 'INVALID_SPEC');
+  const decoded = decodePluginId(id)
+  if (decoded.prefix !== "config") {
+    throw codedError("Plugin entry id must use config prefix", "INVALID_SPEC")
   }
-  const { scope, value: spec } = splitScopedValue(decoded.value);
-  validateScope(scope);
-  const layers = readPluginConfigLayers(workingDirectory);
-  const source = configSources(layers).find((candidate) => candidate.scope === scope);
-  const plugin = Array.isArray(source?.config?.plugin) ? source.config.plugin : [];
-  const index = plugin.findIndex((raw) => parsePluginRaw(raw).spec === spec);
+  const { scope, value: spec } = splitScopedValue(decoded.value)
+  validateScope(scope)
+  const layers = readPluginConfigLayers(workingDirectory)
+  const source = configSources(layers).find((candidate) => candidate.scope === scope)
+  const plugin = Array.isArray(source?.config?.plugin) ? source.config.plugin : []
+  const index = plugin.findIndex((raw) => parsePluginRaw(raw).spec === spec)
   if (!source || index === -1) {
-    return null;
+    return null
   }
-  return { source, plugin, index };
+  return { source, plugin, index }
 }
 
 function pluginDirForScope(scope, workingDirectory) {
-  validateScope(scope);
+  validateScope(scope)
   if (scope === AGENT_SCOPE.PROJECT) {
     if (!workingDirectory) {
-      throw codedError('Project scope requires working directory', 'INVALID_SCOPE');
+      throw codedError("Project scope requires working directory", "INVALID_SCOPE")
     }
-    return path.join(workingDirectory, '.ax-code', 'plugins');
+    return path.join(workingDirectory, ".ax-code", "plugins")
   }
-  return path.join(getActiveAxCodeConfigDir(), 'plugins');
+  return path.join(getActiveAxCodeConfigDir(), "plugins")
 }
 
 function fileTargetFromId(id, workingDirectory) {
-  const decoded = decodePluginId(id);
-  if (decoded.prefix !== 'file') {
-    throw codedError('Plugin file id must use file prefix', 'INVALID_FILENAME');
+  const decoded = decodePluginId(id)
+  if (decoded.prefix !== "file") {
+    throw codedError("Plugin file id must use file prefix", "INVALID_FILENAME")
   }
-  const { scope, value: fileName } = splitScopedValue(decoded.value);
-  validateScope(scope);
-  validateFileName(fileName);
+  const { scope, value: fileName } = splitScopedValue(decoded.value)
+  validateScope(scope)
+  validateFileName(fileName)
   return {
     fileName,
     scope,
     absolutePath: path.join(pluginDirForScope(scope, workingDirectory), fileName),
-  };
+  }
 }
 
 function encodePluginId(prefix, value) {
-  return Buffer.from(`${prefix}:${value}`).toString('base64url');
+  return Buffer.from(`${prefix}:${value}`).toString("base64url")
 }
 
 function decodePluginId(id) {
-  const decoded = Buffer.from(id, 'base64url').toString('utf8');
-  const separator = decoded.indexOf(':');
+  const decoded = Buffer.from(id, "base64url").toString("utf8")
+  const separator = decoded.indexOf(":")
   if (separator === -1) {
-    throw codedError('Invalid plugin id', 'INVALID_SPEC');
+    throw codedError("Invalid plugin id", "INVALID_SPEC")
   }
-  return { prefix: decoded.slice(0, separator), value: decoded.slice(separator + 1) };
+  return { prefix: decoded.slice(0, separator), value: decoded.slice(separator + 1) }
 }
 
 function parsePluginRaw(raw) {
-  if (typeof raw === 'string') {
-    return { spec: validatePluginSpec(raw) };
+  if (typeof raw === "string") {
+    return { spec: validatePluginSpec(raw) }
   }
   if (Array.isArray(raw) && raw.length === 2 && isRecord(raw[1])) {
-    return { spec: validatePluginSpec(raw[0]), options: { ...raw[1] } };
+    return { spec: validatePluginSpec(raw[0]), options: { ...raw[1] } }
   }
-  throw codedError('Plugin spec must be a string or [string, object]', 'INVALID_SPEC');
+  throw codedError("Plugin spec must be a string or [string, object]", "INVALID_SPEC")
 }
 
 function serializePluginEntry(entry) {
-  const spec = validatePluginSpec(entry?.spec);
+  const spec = validatePluginSpec(entry?.spec)
   if (hasOptions(entry?.options)) {
-    return [spec, { ...entry.options }];
+    return [spec, { ...entry.options }]
   }
-  return spec;
+  return spec
 }
 
 function listPluginEntries(workingDirectory) {
-  const layers = readPluginConfigLayers(workingDirectory);
+  const layers = readPluginConfigLayers(workingDirectory)
   return configSources(layers).flatMap((source) => {
     if (!Array.isArray(source.config?.plugin)) {
-      return [];
+      return []
     }
     return source.config.plugin.map((raw) => {
-      const parsed = parsePluginRaw(raw);
+      const parsed = parsePluginRaw(raw)
       return {
-        id: encodePluginId('config', `${source.scope}:${parsed.spec}`),
+        id: encodePluginId("config", `${source.scope}:${parsed.spec}`),
         spec: parsed.spec,
         ...(parsed.options !== undefined ? { options: parsed.options } : {}),
         scope: source.scope,
-        kind: 'config',
+        kind: "config",
         parsedKind: parsedKindForSpec(parsed.spec),
         sourcePath: source.filePath,
-      };
-    });
-  });
+      }
+    })
+  })
 }
 
 function getPluginEntry(id, workingDirectory) {
-  return listPluginEntries(workingDirectory).find((entry) => entry.id === id) || null;
+  return listPluginEntries(workingDirectory).find((entry) => entry.id === id) || null
 }
 
 function createPluginEntry(entry, workingDirectory) {
-  const spec = validatePluginSpec(entry?.spec);
-  const scope = entry?.scope || AGENT_SCOPE.USER;
-  validateScope(scope);
+  const spec = validatePluginSpec(entry?.spec)
+  const scope = entry?.scope || AGENT_SCOPE.USER
+  validateScope(scope)
 
-  const layers = readPluginConfigLayers(workingDirectory);
-  const existing = configSources(layers).find((source) => (
-    source.scope === scope
-    && Array.isArray(source.config?.plugin)
-    && source.config.plugin.some((raw) => parsePluginRaw(raw).spec === spec)
-  ));
+  const layers = readPluginConfigLayers(workingDirectory)
+  const existing = configSources(layers).find(
+    (source) =>
+      source.scope === scope &&
+      Array.isArray(source.config?.plugin) &&
+      source.config.plugin.some((raw) => parsePluginRaw(raw).spec === spec),
+  )
   if (existing) {
-    throw codedError(`Plugin "${spec}" already exists`, 'ENTRY_EXISTS');
+    throw codedError(`Plugin "${spec}" already exists`, "ENTRY_EXISTS")
   }
 
-  const userPaths = getActiveUserConfigPaths();
-  let targetPath = getPrimaryUserConfigPath(userPaths, userPaths[0]);
-  let config = {};
+  const userPaths = getActiveUserConfigPaths()
+  let targetPath = getPrimaryUserConfigPath(userPaths, userPaths[0])
+  let config = {}
   if (scope === AGENT_SCOPE.PROJECT) {
-    targetPath = ensureProjectConfigPath(workingDirectory);
-    config = fs.existsSync(targetPath) ? readConfigFile(targetPath) : {};
+    targetPath = ensureProjectConfigPath(workingDirectory)
+    config = fs.existsSync(targetPath) ? readConfigFile(targetPath) : {}
   } else {
-    targetPath = layers.paths.customPath || layers.paths.userPath;
-    config = layers.paths.customPath ? layers.customConfig : layers.userConfig;
+    targetPath = layers.paths.customPath || layers.paths.userPath
+    config = layers.paths.customPath ? layers.customConfig : layers.userConfig
   }
 
   if (!Array.isArray(config.plugin)) {
-    config.plugin = [];
+    config.plugin = []
   }
-  config.plugin.push(serializePluginEntry({ spec, options: entry.options }));
-  writeConfig(config, targetPath);
+  config.plugin.push(serializePluginEntry({ spec, options: entry.options }))
+  writeConfig(config, targetPath)
 }
 
 function updatePluginEntry(id, updates, workingDirectory) {
-  const target = getPluginTarget(id, workingDirectory);
+  const target = getPluginTarget(id, workingDirectory)
   if (!target) {
-    throw codedError('Plugin entry not found', 'NOT_FOUND');
+    throw codedError("Plugin entry not found", "NOT_FOUND")
   }
-  const existing = parsePluginRaw(target.plugin[target.index]);
-  const nextSpec = updates?.spec === undefined ? existing.spec : validatePluginSpec(updates.spec);
-  const nextOptions = updates?.options === undefined ? existing.options : updates.options;
-  target.plugin[target.index] = serializePluginEntry({ spec: nextSpec, options: nextOptions });
-  writeConfig(target.source.config, target.source.filePath);
+  const existing = parsePluginRaw(target.plugin[target.index])
+  const nextSpec = updates?.spec === undefined ? existing.spec : validatePluginSpec(updates.spec)
+  const nextOptions = updates?.options === undefined ? existing.options : updates.options
+  target.plugin[target.index] = serializePluginEntry({ spec: nextSpec, options: nextOptions })
+  writeConfig(target.source.config, target.source.filePath)
 }
 
 function deletePluginEntry(id, workingDirectory) {
-  const target = getPluginTarget(id, workingDirectory);
+  const target = getPluginTarget(id, workingDirectory)
   if (!target) {
-    throw codedError('Plugin entry not found', 'NOT_FOUND');
+    throw codedError("Plugin entry not found", "NOT_FOUND")
   }
-  target.plugin.splice(target.index, 1);
+  target.plugin.splice(target.index, 1)
   if (target.plugin.length === 0) {
-    delete target.source.config.plugin;
+    delete target.source.config.plugin
   }
-  writeConfig(target.source.config, target.source.filePath);
+  writeConfig(target.source.config, target.source.filePath)
 }
 
 function listPluginDirFiles(workingDirectory) {
-  const scopes = [AGENT_SCOPE.USER];
+  const scopes = [AGENT_SCOPE.USER]
   if (workingDirectory) {
-    scopes.push(AGENT_SCOPE.PROJECT);
+    scopes.push(AGENT_SCOPE.PROJECT)
   }
   return scopes.flatMap((scope) => {
-    const dir = pluginDirForScope(scope, workingDirectory);
+    const dir = pluginDirForScope(scope, workingDirectory)
     if (!fs.existsSync(dir)) {
-      return [];
+      return []
     }
-    return fs.readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && PLUGIN_FILE_NAME_PATTERN.test(entry.name) && !entry.name.includes('..'))
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && PLUGIN_FILE_NAME_PATTERN.test(entry.name) && !entry.name.includes(".."))
       .map((entry) => ({
-        id: encodePluginId('file', `${scope}:${entry.name}`),
+        id: encodePluginId("file", `${scope}:${entry.name}`),
         fileName: entry.name,
         scope,
-        kind: 'file',
+        kind: "file",
         absolutePath: path.join(dir, entry.name),
-      }));
-  });
+      }))
+  })
 }
 
 function readPluginDirFile(id, workingDirectory) {
-  const target = fileTargetFromId(id, workingDirectory);
+  const target = fileTargetFromId(id, workingDirectory)
   if (!fs.existsSync(target.absolutePath)) {
-    return null;
+    return null
   }
   return {
     fileName: target.fileName,
     scope: target.scope,
-    content: fs.readFileSync(target.absolutePath, 'utf8'),
-  };
+    content: fs.readFileSync(target.absolutePath, "utf8"),
+  }
 }
 
 function writePluginDirFile(file, workingDirectory, opts = {}) {
-  const fileName = validateFileName(file?.fileName);
-  const scope = file?.scope || AGENT_SCOPE.USER;
-  validateScope(scope);
-  const dir = pluginDirForScope(scope, workingDirectory);
-  const absolutePath = path.join(dir, fileName);
+  const fileName = validateFileName(file?.fileName)
+  const scope = file?.scope || AGENT_SCOPE.USER
+  validateScope(scope)
+  const dir = pluginDirForScope(scope, workingDirectory)
+  const absolutePath = path.join(dir, fileName)
   if (!opts.overwrite && fs.existsSync(absolutePath)) {
-    throw codedError(`Plugin file "${fileName}" already exists`, 'FILE_EXISTS');
+    throw codedError(`Plugin file "${fileName}" already exists`, "FILE_EXISTS")
   }
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(absolutePath, file?.content ?? '', 'utf8');
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(absolutePath, file?.content ?? "", "utf8")
 }
 
 function deletePluginDirFile(id, workingDirectory) {
-  const target = fileTargetFromId(id, workingDirectory);
+  const target = fileTargetFromId(id, workingDirectory)
   if (!fs.existsSync(target.absolutePath)) {
-    throw codedError(`Plugin file "${target.fileName}" not found`, 'NOT_FOUND');
+    throw codedError(`Plugin file "${target.fileName}" not found`, "NOT_FOUND")
   }
-  fs.unlinkSync(target.absolutePath);
+  fs.unlinkSync(target.absolutePath)
 }
 
 export {
@@ -364,4 +374,4 @@ export {
   decodePluginId,
   parsePluginRaw,
   serializePluginEntry,
-};
+}

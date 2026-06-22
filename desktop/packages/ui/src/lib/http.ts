@@ -1,15 +1,15 @@
 export const API_PATHS = {
-  base: '/api',
-  auth: '/api/auth',
-  config: '/api/config',
-  fs: '/api/fs',
-  git: '/api/git',
-  openchamber: '/api/openchamber',
-  passkeys: '/api/passkeys',
-  preview: '/api/preview',
-  projects: '/api/projects',
-  terminal: '/api/terminal',
-} as const;
+  base: "/api",
+  auth: "/api/auth",
+  config: "/api/config",
+  fs: "/api/fs",
+  git: "/api/git",
+  openchamber: "/api/openchamber",
+  passkeys: "/api/passkeys",
+  preview: "/api/preview",
+  projects: "/api/projects",
+  terminal: "/api/terminal",
+} as const
 
 export const API_ENDPOINTS = {
   config: {
@@ -43,9 +43,9 @@ export const API_ENDPOINTS = {
     base: API_PATHS.config,
   },
   debug: {
-    globalHealth: '/global/health',
+    globalHealth: "/global/health",
     health: `${API_PATHS.base}/health`,
-    rootHealth: '/health',
+    rootHealth: "/health",
     path: `${API_PATHS.base}/path`,
     projectCurrent: `${API_PATHS.base}/project/current`,
     config: `${API_PATHS.base}/config`,
@@ -182,49 +182,49 @@ export const API_ENDPOINTS = {
     upgrade: `${API_PATHS.base}/ax-code/upgrade`,
     upgradeStatus: `${API_PATHS.base}/ax-code/upgrade-status`,
   },
-} as const;
+} as const
 
 export const replacePathParams = (template: string, params: Record<string, string>): string => {
   return Object.entries(params).reduce((next, [key, value]) => {
-    return next.replace(`:${key}`, encodeURIComponent(value));
-  }, template);
-};
+    return next.replace(`:${key}`, encodeURIComponent(value))
+  }, template)
+}
 
 export const HTTP_DEFAULTS = {
   method: {
-    get: 'GET',
-    post: 'POST',
-    put: 'PUT',
-    delete: 'DELETE',
-    patch: 'PATCH',
+    get: "GET",
+    post: "POST",
+    put: "PUT",
+    delete: "DELETE",
+    patch: "PATCH",
   },
   headers: {
     acceptJson: {
-      Accept: 'application/json',
+      Accept: "application/json",
     },
     contentTypeJson: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     acceptAndContentTypeJson: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
     },
     textPlain: {
-      'Content-Type': 'text/plain',
+      "Content-Type": "text/plain",
     },
     cacheControlNoCache: {
-      'Cache-Control': 'no-cache',
+      "Cache-Control": "no-cache",
     },
   },
   cache: {
-    noStore: 'no-store',
-    noCache: 'no-cache',
-    default: 'default',
+    noStore: "no-store",
+    noCache: "no-cache",
+    default: "default",
   },
   query: {
-    true: 'true',
-    false: 'false',
-    one: '1',
+    true: "true",
+    false: "false",
+    one: "1",
   },
   apiPath: {
     base: API_PATHS.base,
@@ -232,4 +232,4 @@ export const HTTP_DEFAULTS = {
     terminal: API_PATHS.terminal,
     git: API_PATHS.git,
   },
-} as const;
+} as const

@@ -1,51 +1,51 @@
-import { useUIStore } from '@/stores/useUIStore';
-import { updateDesktopSettings } from '@/lib/persistence';
-import type { DesktopSettings } from '@/lib/desktop';
-import type { MonoFontOption, UiFontOption } from '@/lib/fontOptions';
+import { useUIStore } from "@/stores/useUIStore"
+import { updateDesktopSettings } from "@/lib/persistence"
+import type { DesktopSettings } from "@/lib/desktop"
+import type { MonoFontOption, UiFontOption } from "@/lib/fontOptions"
 
 type AppearanceSlice = {
-  showReasoningTraces: boolean;
-  collapsibleThinkingBlocks: boolean;
-  showDeletionDialog: boolean;
-  nativeNotificationsEnabled: boolean;
-  notificationMode: 'always' | 'hidden-only';
-  notifyOnSubtasks: boolean;
-  notifyOnCompletion: boolean;
-  notifyOnError: boolean;
-  notifyOnQuestion: boolean;
+  showReasoningTraces: boolean
+  collapsibleThinkingBlocks: boolean
+  showDeletionDialog: boolean
+  nativeNotificationsEnabled: boolean
+  notificationMode: "always" | "hidden-only"
+  notifyOnSubtasks: boolean
+  notifyOnCompletion: boolean
+  notifyOnError: boolean
+  notifyOnQuestion: boolean
   notificationTemplates: {
-    completion: { title: string; message: string };
-    error: { title: string; message: string };
-    question: { title: string; message: string };
-    subtask: { title: string; message: string };
-  };
-  summarizeLastMessage: boolean;
-  summaryThreshold: number;
-  summaryLength: number;
-  maxLastMessageLength: number;
-  autoDeleteEnabled: boolean;
-  autoDeleteAfterDays: number;
-  sessionRetentionAction: 'archive' | 'delete';
-  fontSize: number;
-  terminalFontSize: number;
-  uiFont: UiFontOption;
-  monoFont: MonoFontOption;
-  padding: number;
-  cornerRadius: number;
-  inputBarOffset: number;
-  diffLayoutPreference: 'dynamic' | 'inline' | 'side-by-side';
-  diffViewMode: 'single' | 'stacked';
-  gitChangesViewMode: 'flat' | 'tree';
-};
+    completion: { title: string; message: string }
+    error: { title: string; message: string }
+    question: { title: string; message: string }
+    subtask: { title: string; message: string }
+  }
+  summarizeLastMessage: boolean
+  summaryThreshold: number
+  summaryLength: number
+  maxLastMessageLength: number
+  autoDeleteEnabled: boolean
+  autoDeleteAfterDays: number
+  sessionRetentionAction: "archive" | "delete"
+  fontSize: number
+  terminalFontSize: number
+  uiFont: UiFontOption
+  monoFont: MonoFontOption
+  padding: number
+  cornerRadius: number
+  inputBarOffset: number
+  diffLayoutPreference: "dynamic" | "inline" | "side-by-side"
+  diffViewMode: "single" | "stacked"
+  gitChangesViewMode: "flat" | "tree"
+}
 
-let initialized = false;
+let initialized = false
 
 export const startAppearanceAutoSave = (): void => {
-  if (initialized || typeof window === 'undefined') {
-    return;
+  if (initialized || typeof window === "undefined") {
+    return
   }
 
-  initialized = true;
+  initialized = true
 
   let previous: AppearanceSlice = {
     showReasoningTraces: useUIStore.getState().showReasoningTraces,
@@ -75,27 +75,27 @@ export const startAppearanceAutoSave = (): void => {
     diffLayoutPreference: useUIStore.getState().diffLayoutPreference,
     diffViewMode: useUIStore.getState().diffViewMode,
     gitChangesViewMode: useUIStore.getState().gitChangesViewMode,
-  };
+  }
 
-  let pending: Partial<DesktopSettings> | null = null;
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pending: Partial<DesktopSettings> | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
 
   const flush = () => {
-    const payload = pending;
-    pending = null;
-    timer = null;
+    const payload = pending
+    pending = null
+    timer = null
     if (payload && Object.keys(payload).length > 0) {
-      void updateDesktopSettings(payload);
+      void updateDesktopSettings(payload)
     }
-  };
+  }
 
   const schedule = (changes: Partial<DesktopSettings>) => {
-    pending = { ...(pending ?? {}), ...changes };
+    pending = { ...(pending ?? {}), ...changes }
     if (timer) {
-      return;
+      return
     }
-    timer = setTimeout(flush, 150);
-  };
+    timer = setTimeout(flush, 150)
+  }
 
   useUIStore.subscribe((state) => {
     const current: AppearanceSlice = {
@@ -126,97 +126,96 @@ export const startAppearanceAutoSave = (): void => {
       diffLayoutPreference: state.diffLayoutPreference,
       diffViewMode: state.diffViewMode,
       gitChangesViewMode: state.gitChangesViewMode,
-    };
+    }
 
-    const diff: Partial<DesktopSettings> = {};
+    const diff: Partial<DesktopSettings> = {}
 
     if (current.showReasoningTraces !== previous.showReasoningTraces) {
-      diff.showReasoningTraces = current.showReasoningTraces;
+      diff.showReasoningTraces = current.showReasoningTraces
     }
     if (current.collapsibleThinkingBlocks !== previous.collapsibleThinkingBlocks) {
-      diff.collapsibleThinkingBlocks = current.collapsibleThinkingBlocks;
+      diff.collapsibleThinkingBlocks = current.collapsibleThinkingBlocks
     }
     if (current.showDeletionDialog !== previous.showDeletionDialog) {
-      diff.showDeletionDialog = current.showDeletionDialog;
+      diff.showDeletionDialog = current.showDeletionDialog
     }
     if (current.nativeNotificationsEnabled !== previous.nativeNotificationsEnabled) {
-      diff.nativeNotificationsEnabled = current.nativeNotificationsEnabled;
+      diff.nativeNotificationsEnabled = current.nativeNotificationsEnabled
     }
     if (current.notificationMode !== previous.notificationMode) {
-      diff.notificationMode = current.notificationMode;
+      diff.notificationMode = current.notificationMode
     }
     if (current.notifyOnSubtasks !== previous.notifyOnSubtasks) {
-      diff.notifyOnSubtasks = current.notifyOnSubtasks;
+      diff.notifyOnSubtasks = current.notifyOnSubtasks
     }
     if (current.notifyOnCompletion !== previous.notifyOnCompletion) {
-      diff.notifyOnCompletion = current.notifyOnCompletion;
+      diff.notifyOnCompletion = current.notifyOnCompletion
     }
     if (current.notifyOnError !== previous.notifyOnError) {
-      diff.notifyOnError = current.notifyOnError;
+      diff.notifyOnError = current.notifyOnError
     }
     if (current.notifyOnQuestion !== previous.notifyOnQuestion) {
-      diff.notifyOnQuestion = current.notifyOnQuestion;
+      diff.notifyOnQuestion = current.notifyOnQuestion
     }
     if (JSON.stringify(current.notificationTemplates) !== JSON.stringify(previous.notificationTemplates)) {
-      diff.notificationTemplates = current.notificationTemplates;
+      diff.notificationTemplates = current.notificationTemplates
     }
     if (current.summarizeLastMessage !== previous.summarizeLastMessage) {
-      diff.summarizeLastMessage = current.summarizeLastMessage;
+      diff.summarizeLastMessage = current.summarizeLastMessage
     }
     if (current.summaryThreshold !== previous.summaryThreshold) {
-      diff.summaryThreshold = current.summaryThreshold;
+      diff.summaryThreshold = current.summaryThreshold
     }
     if (current.summaryLength !== previous.summaryLength) {
-      diff.summaryLength = current.summaryLength;
+      diff.summaryLength = current.summaryLength
     }
     if (current.maxLastMessageLength !== previous.maxLastMessageLength) {
-      diff.maxLastMessageLength = current.maxLastMessageLength;
+      diff.maxLastMessageLength = current.maxLastMessageLength
     }
     if (current.autoDeleteEnabled !== previous.autoDeleteEnabled) {
-      diff.autoDeleteEnabled = current.autoDeleteEnabled;
+      diff.autoDeleteEnabled = current.autoDeleteEnabled
     }
     if (current.autoDeleteAfterDays !== previous.autoDeleteAfterDays) {
-      diff.autoDeleteAfterDays = current.autoDeleteAfterDays;
+      diff.autoDeleteAfterDays = current.autoDeleteAfterDays
     }
     if (current.sessionRetentionAction !== previous.sessionRetentionAction) {
-      diff.sessionRetentionAction = current.sessionRetentionAction;
+      diff.sessionRetentionAction = current.sessionRetentionAction
     }
     if (current.fontSize !== previous.fontSize) {
-      diff.fontSize = current.fontSize;
+      diff.fontSize = current.fontSize
     }
     if (current.terminalFontSize !== previous.terminalFontSize) {
-      diff.terminalFontSize = current.terminalFontSize;
+      diff.terminalFontSize = current.terminalFontSize
     }
     if (current.uiFont !== previous.uiFont) {
-      diff.uiFont = current.uiFont;
+      diff.uiFont = current.uiFont
     }
     if (current.monoFont !== previous.monoFont) {
-      diff.monoFont = current.monoFont;
+      diff.monoFont = current.monoFont
     }
     if (current.padding !== previous.padding) {
-      diff.padding = current.padding;
+      diff.padding = current.padding
     }
     if (current.cornerRadius !== previous.cornerRadius) {
-      diff.cornerRadius = current.cornerRadius;
+      diff.cornerRadius = current.cornerRadius
     }
     if (current.inputBarOffset !== previous.inputBarOffset) {
-      diff.inputBarOffset = current.inputBarOffset;
+      diff.inputBarOffset = current.inputBarOffset
     }
     if (current.diffLayoutPreference !== previous.diffLayoutPreference) {
-      diff.diffLayoutPreference = current.diffLayoutPreference;
+      diff.diffLayoutPreference = current.diffLayoutPreference
     }
     if (current.diffViewMode !== previous.diffViewMode) {
-      diff.diffViewMode = current.diffViewMode;
+      diff.diffViewMode = current.diffViewMode
     }
     if (current.gitChangesViewMode !== previous.gitChangesViewMode) {
-      diff.gitChangesViewMode = current.gitChangesViewMode;
+      diff.gitChangesViewMode = current.gitChangesViewMode
     }
 
-    previous = current;
+    previous = current
 
     if (Object.keys(diff).length > 0) {
-      schedule(diff);
+      schedule(diff)
     }
-  });
-
-};
+  })
+}

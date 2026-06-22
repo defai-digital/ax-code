@@ -17,13 +17,9 @@ function runGit(args) {
 }
 
 function main() {
-  const trackedFiles = runGit(["ls-files"])
-    .split("\n")
-    .filter(Boolean)
+  const trackedFiles = runGit(["ls-files"]).split("\n").filter(Boolean)
 
-  const violations = trackedFiles.filter((file) =>
-    protectedPrefixes.some((prefix) => file.startsWith(prefix)),
-  )
+  const violations = trackedFiles.filter((file) => protectedPrefixes.some((prefix) => file.startsWith(prefix)))
 
   if (violations.length > 0) {
     console.error("Internal-only files are tracked and would be included in source releases:")

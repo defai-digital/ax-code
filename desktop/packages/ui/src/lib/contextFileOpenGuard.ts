@@ -1,71 +1,72 @@
-import type { FilesAPI } from '@/lib/api/types';
-import { MAX_OPEN_FILE_LINES, countLinesWithLimit } from '@/lib/fileOpenLimits';
-import { API_ENDPOINTS, HTTP_DEFAULTS } from './http';
+import type { FilesAPI } from "@/lib/api/types"
+import { MAX_OPEN_FILE_LINES, countLinesWithLimit } from "@/lib/fileOpenLimits"
+import { API_ENDPOINTS, HTTP_DEFAULTS } from "./http"
 
-export type ContextFileOpenFailureReason = 'too-large' | 'missing' | 'unreadable';
+export type ContextFileOpenFailureReason = "too-large" | "missing" | "unreadable"
 
-export type ContextFileOpenValidationResult =
-  | { ok: true }
-  | { ok: false; reason: ContextFileOpenFailureReason };
+export type ContextFileOpenValidationResult = { ok: true } | { ok: false; reason: ContextFileOpenFailureReason }
 
 const classifyReadError = (error: unknown): ContextFileOpenFailureReason => {
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  const normalized = message.toLowerCase();
+  const message = error instanceof Error ? error.message : String(error ?? "")
+  const normalized = message.toLowerCase()
 
   if (
-    normalized.includes('file not found')
-    || normalized.includes('not found')
-    || normalized.includes('enoent')
-    || normalized.includes('no such file')
-    || normalized.includes('does not exist')
+    normalized.includes("file not found") ||
+    normalized.includes("not found") ||
+    normalized.includes("enoent") ||
+    normalized.includes("no such file") ||
+    normalized.includes("does not exist")
   ) {
-    return 'missing';
+    return "missing"
   }
 
-  return 'unreadable';
-};
+  return "unreadable"
+}
 
 const readFileContent = async (files: FilesAPI, path: string): Promise<string> => {
   if (files.readFile) {
-    const result = await files.readFile(path, { allowOutsideWorkspace: true, optional: true });
-    return result.content ?? '';
+    const result = await files.readFile(path, { allowOutsideWorkspace: true, optional: true })
+    return result.content ?? ""
   }
 
-  const params = new URLSearchParams({ path, allowOutsideWorkspace: 'true', optional: 'true' });
+  const params = new URLSearchParams({ path, allowOutsideWorkspace: "true", optional: "true" })
   const response = await fetch(`${API_ENDPOINTS.fs.read}?${params.toString()}`, {
     // Avoid conditional requests (304 + empty body).
     cache: HTTP_DEFAULTS.cache.noStore,
-  });
+  })
   if (!response.ok) {
-    const errorPayload = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error((errorPayload as { error?: string }).error || 'Failed to read file');
+    const errorPayload = await response.json().catch(() => ({ error: response.statusText }))
+    throw new Error((errorPayload as { error?: string }).error || "Failed to read file")
   }
 
-  return response.text();
-};
+  return response.text()
+}
 
-export const validateContextFileOpen = async (files: FilesAPI, path: string): Promise<ContextFileOpenValidationResult> => {
+export const validateContextFileOpen = async (
+  files: FilesAPI,
+  path: string,
+): Promise<ContextFileOpenValidationResult> => {
   try {
-    const content = await readFileContent(files, path);
-    const lineCount = countLinesWithLimit(content, MAX_OPEN_FILE_LINES);
+    const content = await readFileContent(files, path)
+    const lineCount = countLinesWithLimit(content, MAX_OPEN_FILE_LINES)
     if (lineCount > MAX_OPEN_FILE_LINES) {
-      return { ok: false, reason: 'too-large' };
+      return { ok: false, reason: "too-large" }
     }
 
-    return { ok: true };
+    return { ok: true }
   } catch (error) {
-    return { ok: false, reason: classifyReadError(error) };
+    return { ok: false, reason: classifyReadError(error) }
   }
-};
+}
 
 export const getContextFileOpenFailureMessage = (reason: ContextFileOpenFailureReason): string => {
-  if (reason === 'too-large') {
-    return `File is too large to open (>${MAX_OPEN_FILE_LINES.toLocaleString()} lines)`;
+  if (reason === "too-large") {
+    return `File is too large to open (>${MAX_OPEN_FILE_LINES.toLocaleString()} lines)`
   }
 
-  if (reason === 'missing') {
-    return 'File not found';
+  if (reason === "missing") {
+    return "File not found"
   }
 
-  return 'Failed to open file';
-};
+  return "Failed to open file"
+}

@@ -21,9 +21,9 @@ import { API_ENDPOINTS } from "@/lib/http"
 const MODELS_DEV_API_URL = "https://models.dev/api.json"
 const MODELS_DEV_PROXY_URL = API_ENDPOINTS.openchamber.modelsMetadata
 
-const FALLBACK_PROVIDER_ID = "ax-code"
+const FALLBACK_PROVIDER_ID = "opencode"
 const FALLBACK_MODEL_ID = "big-pickle"
-const GIT_UTILITY_PROVIDER_ID = "zen"
+const GIT_UTILITY_PROVIDER_ID = "opencode"
 const GIT_UTILITY_PREFERRED_MODEL_ID = "big-pickle"
 
 interface OpenChamberDefaults {

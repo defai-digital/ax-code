@@ -1,21 +1,21 @@
-import React from "react";
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { cn } from "@/lib/utils";
-import { useDirectorySync } from "@/sync/sync-context";
-import type { Todo } from "@ax-code/sdk/v2/client";
+import React from "react"
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { cn } from "@/lib/utils"
+import { useDirectorySync } from "@/sync/sync-context"
+import type { Todo } from "@ax-code/sdk/v2/client"
 
 // Compat aliases for old TodoItem shape
-type TodoItem = Todo & { id?: string };
-type TodoStatus = string;
-type TodoPriority = string;
-import { useUIStore } from "@/stores/useUIStore";
-import { useTodosPersistStore } from "@/stores/useTodosPersistStore";
-import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Icon } from "@/components/icon/Icon";
-import { useI18n } from "@/lib/i18n";
+type TodoItem = Todo & { id?: string }
+type TodoStatus = string
+type TodoPriority = string
+import { useUIStore } from "@/stores/useUIStore"
+import { useTodosPersistStore } from "@/stores/useTodosPersistStore"
+import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Icon } from "@/components/icon/Icon"
+import { useI18n } from "@/lib/i18n"
 
-const STATUS_ROW_CONTAINER_STYLE = { containerType: "inline-size" as const, containerName: "status-row" };
+const STATUS_ROW_CONTAINER_STYLE = { containerType: "inline-size" as const, containerName: "status-row" }
 
 const statusConfig: Record<TodoStatus, { textClassName: string }> = {
   in_progress: {
@@ -30,51 +30,51 @@ const statusConfig: Record<TodoStatus, { textClassName: string }> = {
   cancelled: {
     textClassName: "text-muted-foreground line-through",
   },
-};
+}
 
 const priorityClassName: Record<TodoPriority, string> = {
   high: "text-[var(--status-warning)]",
   medium: "text-muted-foreground",
   low: "text-muted-foreground/70",
-};
+}
 
 const priorityIcon: Record<TodoPriority, React.ReactNode> = {
-  high: <Icon name="arrow-up-double" className="h-3.5 w-3.5"  aria-hidden="true"/>,
-  medium: <Icon name="arrow-up-s" className="h-3.5 w-3.5"  aria-hidden="true"/>,
-  low: <Icon name="arrow-down-s" className="h-3.5 w-3.5"  aria-hidden="true"/>,
-};
+  high: <Icon name="arrow-up-double" className="h-3.5 w-3.5" aria-hidden="true" />,
+  medium: <Icon name="arrow-up-s" className="h-3.5 w-3.5" aria-hidden="true" />,
+  low: <Icon name="arrow-down-s" className="h-3.5 w-3.5" aria-hidden="true" />,
+}
 
 const statusLabelKey: Record<TodoStatus, string> = {
   in_progress: "chat.statusRow.todo.status.inProgress",
   pending: "chat.statusRow.todo.status.pending",
   completed: "chat.statusRow.todo.status.completed",
   cancelled: "chat.statusRow.todo.status.cancelled",
-};
+}
 
 const priorityLabelKey: Record<TodoPriority, string> = {
   high: "chat.statusRow.todo.priority.high",
   medium: "chat.statusRow.todo.priority.medium",
   low: "chat.statusRow.todo.priority.low",
-};
+}
 
 interface TodoItemRowProps {
-  todo: TodoItem;
+  todo: TodoItem
 }
 
 const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo }) => {
-  const { t } = useI18n();
-  const config = statusConfig[todo.status] || statusConfig.pending;
-  const statusKey = statusLabelKey[todo.status] ?? statusLabelKey.pending;
-  const priorityKey = priorityLabelKey[todo.priority] ?? priorityLabelKey.medium;
+  const { t } = useI18n()
+  const config = statusConfig[todo.status] || statusConfig.pending
+  const statusKey = statusLabelKey[todo.status] ?? statusLabelKey.pending
+  const priorityKey = priorityLabelKey[todo.priority] ?? priorityLabelKey.medium
 
   const statusIcon =
     todo.status === "in_progress" ? (
-      <Icon name="record-circle" className="h-3.5 w-3.5 text-[var(--status-info)]"  aria-hidden="true"/>
+      <Icon name="record-circle" className="h-3.5 w-3.5 text-[var(--status-info)]" aria-hidden="true" />
     ) : todo.status === "completed" ? (
-      <Icon name="checkbox-circle" className="h-3.5 w-3.5 text-[var(--status-success)]"  aria-hidden="true"/>
+      <Icon name="checkbox-circle" className="h-3.5 w-3.5 text-[var(--status-success)]" aria-hidden="true" />
     ) : (
-      <Icon name="time" className="h-3.5 w-3.5 text-muted-foreground"  aria-hidden="true"/>
-    );
+      <Icon name="time" className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+    )
 
   return (
     <div className="flex items-center min-w-0 py-0.5 gap-2">
@@ -86,20 +86,13 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo }) => {
           {t(statusKey as never)}
         </TooltipContent>
       </Tooltip>
-      <span
-        className={cn(
-          "flex-1 typography-ui-label",
-          config.textClassName
-        )}
-      >
-        {todo.content}
-      </span>
+      <span className={cn("flex-1 typography-ui-label", config.textClassName)}>{todo.content}</span>
       <Tooltip>
         <TooltipTrigger asChild>
           <span
             className={cn(
               "typography-meta flex items-center justify-center flex-shrink-0 leading-none",
-              priorityClassName[todo.priority] ?? priorityClassName.medium
+              priorityClassName[todo.priority] ?? priorityClassName.medium,
             )}
           >
             {priorityIcon[todo.priority] ?? priorityIcon.medium}
@@ -110,29 +103,29 @@ const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo }) => {
         </TooltipContent>
       </Tooltip>
     </div>
-  );
-};
+  )
+}
 
-const EMPTY_TODOS: TodoItem[] = [];
+const EMPTY_TODOS: TodoItem[] = []
 
 interface StatusRowProps {
   // Working state
-  isWorking?: boolean;
-  statusText?: string | null;
-  isGenericStatus?: boolean;
-  isWaitingForPermission?: boolean;
-  wasAborted?: boolean;
-  abortActive?: boolean;
-  retryInfo?: { attempt?: number; next?: number } | null;
+  isWorking?: boolean
+  statusText?: string | null
+  isGenericStatus?: boolean
+  isWaitingForPermission?: boolean
+  wasAborted?: boolean
+  abortActive?: boolean
+  retryInfo?: { attempt?: number; next?: number } | null
   // Abort state for compact layouts.
-  showAbort?: boolean;
-  onAbort?: () => void;
+  showAbort?: boolean
+  onAbort?: () => void
   // Abort status display
-  showAbortStatus?: boolean;
-  showAssistantStatus?: boolean;
-  showTodos?: boolean;
-  agentName?: string;
-  leftAccessory?: React.ReactNode;
+  showAbortStatus?: boolean
+  showAssistantStatus?: boolean
+  showTodos?: boolean
+  agentName?: string
+  leftAccessory?: React.ReactNode
 }
 
 export const StatusRow: React.FC<StatusRowProps> = ({
@@ -151,104 +144,99 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   agentName,
   leftAccessory,
 }) => {
-  const { t } = useI18n();
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const { t } = useI18n()
+  const [isExpanded, setIsExpanded] = React.useState(false)
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
   const liveTodos = useDirectorySync(
     React.useCallback(
       (state) => {
-        if (!showTodos || !currentSessionId) return EMPTY_TODOS;
-        return state.todo[currentSessionId] ?? EMPTY_TODOS;
+        if (!showTodos || !currentSessionId) return EMPTY_TODOS
+        return state.todo[currentSessionId] ?? EMPTY_TODOS
       },
       [currentSessionId, showTodos],
     ),
-  );
+  )
   const persistedSessionTodos = useTodosPersistStore(
     React.useCallback(
       (state) => (showTodos && currentSessionId ? state.sessions[currentSessionId]?.todos : undefined),
       [currentSessionId, showTodos],
     ),
-  );
+  )
   const todos: TodoItem[] = React.useMemo(() => {
-    if (!currentSessionId) return EMPTY_TODOS;
-    if (liveTodos.length > 0) return liveTodos;
-    return persistedSessionTodos ?? EMPTY_TODOS;
-  }, [liveTodos, persistedSessionTodos, currentSessionId]);
-  const isMobile = useUIStore((state) => state.isMobile);
-  const isCompact = isMobile;
+    if (!currentSessionId) return EMPTY_TODOS
+    if (liveTodos.length > 0) return liveTodos
+    return persistedSessionTodos ?? EMPTY_TODOS
+  }, [liveTodos, persistedSessionTodos, currentSessionId])
+  const isMobile = useUIStore((state) => state.isMobile)
+  const isCompact = isMobile
 
   // Filter out cancelled todos for display and keep original order.
   // This prevents items from jumping around when status changes.
   const visibleTodos = React.useMemo(() => {
-    return todos.filter((todo) => todo.status !== "cancelled");
-  }, [todos]);
+    return todos.filter((todo) => todo.status !== "cancelled")
+  }, [todos])
 
   // Find the current active todo (first in_progress, or first pending)
   const activeTodo = React.useMemo(() => {
     return (
-      visibleTodos.find((t) => t.status === "in_progress") ||
-      visibleTodos.find((t) => t.status === "pending") ||
-      null
-    );
-  }, [visibleTodos]);
+      visibleTodos.find((t) => t.status === "in_progress") || visibleTodos.find((t) => t.status === "pending") || null
+    )
+  }, [visibleTodos])
 
   // Calculate progress
   const progress = React.useMemo(() => {
-    const total = todos.filter((t) => t.status !== "cancelled").length;
-    const completed = todos.filter((t) => t.status === "completed").length;
-    return { completed, total };
-  }, [todos]);
+    const total = todos.filter((t) => t.status !== "cancelled").length
+    const completed = todos.filter((t) => t.status === "completed").length
+    return { completed, total }
+  }, [todos])
 
   const statusSummary = React.useMemo(() => {
-    const active = visibleTodos.filter((t) => t.status === "in_progress").length;
-    const left = visibleTodos.filter((t) => t.status === "in_progress" || t.status === "pending").length;
-    return { active, left };
-  }, [visibleTodos]);
+    const active = visibleTodos.filter((t) => t.status === "in_progress").length
+    const left = visibleTodos.filter((t) => t.status === "in_progress" || t.status === "pending").length
+    return { active, left }
+  }, [visibleTodos])
 
-  const hasTodoContent = showTodos && statusSummary.left > 0;
-  const hasAssistantContent = showAssistantStatus && (
-    isWorking ||
-    Boolean(wasAborted) ||
-    Boolean(showAbortStatus)
-  );
-  const hasLeftAccessory = Boolean(leftAccessory);
+  const hasTodoContent = showTodos && statusSummary.left > 0
+  const hasAssistantContent = showAssistantStatus && (isWorking || Boolean(wasAborted) || Boolean(showAbortStatus))
+  const hasLeftAccessory = Boolean(leftAccessory)
   // Original logic from ChatInput
-  const shouldRenderPlaceholder = !showAbortStatus && (wasAborted || !abortActive);
+  const shouldRenderPlaceholder = !showAbortStatus && (wasAborted || !abortActive)
 
-  const hasContent = hasAssistantContent || hasTodoContent || hasLeftAccessory;
+  const hasContent = hasAssistantContent || hasTodoContent || hasLeftAccessory
 
   // Close popover when clicking outside
-  const popoverRef = React.useRef<HTMLDivElement>(null);
+  const popoverRef = React.useRef<HTMLDivElement>(null)
   React.useEffect(() => {
-    if (!isExpanded) return;
+    if (!isExpanded) return
 
     const handleClickOutside = (event: MouseEvent) => {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setIsExpanded(false);
+        setIsExpanded(false)
       }
-    };
+    }
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isExpanded]);
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [isExpanded])
 
-  const toggleExpanded = () => setIsExpanded((prev) => !prev);
-  const todoSummaryLabel = t('chat.statusRow.summary.activeLeft', {
+  const toggleExpanded = () => setIsExpanded((prev) => !prev)
+  const todoSummaryLabel = t("chat.statusRow.summary.activeLeft", {
     active: statusSummary.active,
     left: statusSummary.left,
-  });
+  })
 
   // Abort button for compact layouts.
-  const abortButton = showAbort && onAbort ? (
-    <button
-      type="button"
-      onClick={onAbort}
-      className="flex items-center justify-center h-[1.2rem] w-[1.2rem] text-[var(--status-error)] transition-opacity hover:opacity-80 focus-visible:outline-none flex-shrink-0"
-      aria-label={t('chat.statusRow.actions.stopGeneratingAria')}
-    >
-      <Icon name="close-circle" aria-hidden="true"/>
-    </button>
-  ) : null;
+  const abortButton =
+    showAbort && onAbort ? (
+      <button
+        type="button"
+        onClick={onAbort}
+        className="flex items-center justify-center h-[1.2rem] w-[1.2rem] text-[var(--status-error)] transition-opacity hover:opacity-80 focus-visible:outline-none flex-shrink-0"
+        aria-label={t("chat.statusRow.actions.stopGeneratingAria")}
+      >
+        <Icon name="close-circle" aria-hidden="true" />
+      </button>
+    ) : null
 
   // Todo trigger button
   const todoTrigger = hasTodoContent ? (
@@ -265,7 +253,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           {activeTodo.content}
         </span>
       ) : (
-        <span className="typography-ui-label">{t('chat.statusRow.tasksTitle')}</span>
+        <span className="typography-ui-label">{t("chat.statusRow.tasksTitle")}</span>
       )}
       <span className="typography-meta flex items-center gap-1 tabular-nums" aria-hidden="true">
         <span className="flex items-center gap-0.5">
@@ -284,11 +272,11 @@ export const StatusRow: React.FC<StatusRowProps> = ({
         <Icon name="arrow-down-s" className="h-3.5 w-3.5" />
       )}
     </button>
-  ) : null;
+  ) : null
 
   // Don't render if nothing to show
   if (!hasContent) {
-    return null;
+    return null
   }
 
   return (
@@ -304,12 +292,14 @@ export const StatusRow: React.FC<StatusRowProps> = ({
         )}
       >
         {/* Left: Abort status | Working placeholder | leftAccessory */}
-        <div className={cn("flex-1 flex items-center min-w-0 gap-2", hasLeftAccessory ? "pl-1.5" : "overflow-x-hidden")}>
+        <div
+          className={cn("flex-1 flex items-center min-w-0 gap-2", hasLeftAccessory ? "pl-1.5" : "overflow-x-hidden")}
+        >
           {showAssistantStatus && showAbortStatus ? (
             <div className="flex h-full items-center text-[var(--status-error)] pl-0.5">
               <span className="flex items-center gap-1.5 typography-ui-label">
-                <Icon name="close-circle" aria-hidden="true"/>
-                {t('chat.statusRow.aborted')}
+                <Icon name="close-circle" aria-hidden="true" />
+                {t("chat.statusRow.aborted")}
               </span>
             </div>
           ) : showAssistantStatus && shouldRenderPlaceholder ? (
@@ -328,7 +318,10 @@ export const StatusRow: React.FC<StatusRowProps> = ({
         </div>
 
         {/* Right: Abort (mobile only) + Todo */}
-        <div className={cn("relative flex items-center gap-2 flex-shrink-0", hasLeftAccessory ? "pr-1.5" : "-mr-3")} ref={popoverRef}>
+        <div
+          className={cn("relative flex items-center gap-2 flex-shrink-0", hasLeftAccessory ? "pr-1.5" : "-mr-3")}
+          ref={popoverRef}
+        >
           {abortButton}
           {todoTrigger}
 
@@ -346,12 +339,12 @@ export const StatusRow: React.FC<StatusRowProps> = ({
                 "shadow-[inset_0_1px_0_0_rgba(255,255,255,0.8),inset_0_0_0_1px_rgba(0,0,0,0.04),0_0_0_1px_rgba(0,0,0,0.10),0_1px_2px_-0.5px_rgba(0,0,0,0.08),0_4px_8px_-2px_rgba(0,0,0,0.08),0_12px_20px_-4px_rgba(0,0,0,0.08)]",
                 "dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),inset_0_0_0_1px_rgba(255,255,255,0.08),0_0_0_1px_rgba(0,0,0,0.36),0_1px_1px_-0.5px_rgba(0,0,0,0.22),0_3px_3px_-1.5px_rgba(0,0,0,0.20),0_6px_6px_-3px_rgba(0,0,0,0.16)]",
                 "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
-                "duration-150"
+                "duration-150",
               )}
             >
               {/* Header */}
               <div className="flex items-center gap-1.5 px-2 py-1 typography-ui-label font-medium text-muted-foreground">
-                <span>{t('chat.statusRow.tasksTitle')}</span>
+                <span>{t("chat.statusRow.tasksTitle")}</span>
                 <span className="typography-meta tabular-nums">
                   {progress.completed}/{progress.total}
                 </span>
@@ -368,5 +361,5 @@ export const StatusRow: React.FC<StatusRowProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}

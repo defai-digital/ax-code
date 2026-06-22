@@ -1,4 +1,4 @@
-import { createRealpathCache } from '../path-realpath-cache.js';
+import { createRealpathCache } from "../path-realpath-cache.js"
 
 export const createProjectDirectoryRuntime = (dependencies) => {
   const {
@@ -8,66 +8,65 @@ export const createProjectDirectoryRuntime = (dependencies) => {
     readSettingsFromDiskMigrated,
     getReadSettingsFromDiskMigrated,
     sanitizeProjects,
-  } = dependencies;
+  } = dependencies
   const realpathCache = createRealpathCache({
     realpath: fsPromises.realpath.bind(fsPromises),
-  });
+  })
 
   const resolveDirectoryCandidate = (value) => {
-    if (typeof value !== 'string') {
-      return null;
+    if (typeof value !== "string") {
+      return null
     }
-    const trimmed = value.trim();
+    const trimmed = value.trim()
     if (!trimmed) {
-      return null;
+      return null
     }
-    const normalized = normalizeDirectoryPath(trimmed);
-    return path.resolve(normalized);
-  };
+    const normalized = normalizeDirectoryPath(trimmed)
+    return path.resolve(normalized)
+  }
 
   const validateDirectoryPath = async (candidate) => {
-    const resolved = resolveDirectoryCandidate(candidate);
+    const resolved = resolveDirectoryCandidate(candidate)
     if (!resolved) {
-      return { ok: false, error: 'Directory parameter is required' };
+      return { ok: false, error: "Directory parameter is required" }
     }
     try {
-      const stats = await fsPromises.stat(resolved);
+      const stats = await fsPromises.stat(resolved)
       if (!stats.isDirectory()) {
-        return { ok: false, error: 'Specified path is not a directory' };
+        return { ok: false, error: "Specified path is not a directory" }
       }
-      const realPath = await realpathCache.resolve(resolved);
-      return { ok: true, directory: realPath };
+      const realPath = await realpathCache.resolve(resolved)
+      return { ok: true, directory: realPath }
     } catch (error) {
-      const err = error;
-      if (err && typeof err === 'object' && err.code === 'ENOENT') {
-        return { ok: false, error: 'Directory not found' };
+      const err = error
+      if (err && typeof err === "object" && err.code === "ENOENT") {
+        return { ok: false, error: "Directory not found" }
       }
-      if (err && typeof err === 'object' && err.code === 'EACCES') {
-        return { ok: false, error: 'Access to directory denied' };
+      if (err && typeof err === "object" && err.code === "EACCES") {
+        return { ok: false, error: "Access to directory denied" }
       }
-      return { ok: false, error: 'Failed to validate directory' };
+      return { ok: false, error: "Failed to validate directory" }
     }
-  };
+  }
 
   const resolveProjectDirectory = async (req) => {
-    const headerDirectory = typeof req.get === 'function' ? req.get('x-ax-code-directory') : null;
-    const queryDirectory = Array.isArray(req.query?.directory)
-      ? req.query.directory[0]
-      : req.query?.directory;
-    const requested = headerDirectory || queryDirectory || null;
+    const headerDirectory = typeof req.get === "function" ? req.get("x-ax-code-directory") : null
+    const queryDirectory = Array.isArray(req.query?.directory) ? req.query.directory[0] : req.query?.directory
+    const requested = headerDirectory || queryDirectory || null
 
     if (requested) {
-      const validated = await validateDirectoryPath(requested);
+      const validated = await validateDirectoryPath(requested)
       if (!validated.ok) {
-        return { directory: null, error: validated.error };
+        return { directory: null, error: validated.error }
       }
-      return { directory: validated.directory, error: null };
+      return { directory: validated.directory, error: null }
     }
 
-    const readSettings = typeof getReadSettingsFromDiskMigrated === 'function'
-      ? getReadSettingsFromDiskMigrated()
-      : readSettingsFromDiskMigrated;
-    const settings = await readSettings();
+    const readSettings =
+      typeof getReadSettingsFromDiskMigrated === "function"
+        ? getReadSettingsFromDiskMigrated()
+        : readSettingsFromDiskMigrated
+    const settings = await readSettings()
 
     // `lastDirectory` reflects the directory the UI is currently browsing —
     // useDirectoryStore.setDirectory() persists it on every navigation.
@@ -76,55 +75,53 @@ export const createProjectDirectoryRuntime = (dependencies) => {
     // `go to parent`, directory picker, or a deep link), leaving
     // activeProjectId stale. Fetches scoped to the stale project would 400
     // with "Path is outside of active workspace".
-    if (typeof settings.lastDirectory === 'string' && settings.lastDirectory.trim()) {
-      const validated = await validateDirectoryPath(settings.lastDirectory);
+    if (typeof settings.lastDirectory === "string" && settings.lastDirectory.trim()) {
+      const validated = await validateDirectoryPath(settings.lastDirectory)
       if (validated.ok) {
-        return { directory: validated.directory, error: null };
+        return { directory: validated.directory, error: null }
       }
     }
 
-    const projects = sanitizeProjects(settings.projects) || [];
+    const projects = sanitizeProjects(settings.projects) || []
     if (projects.length === 0) {
-      return { directory: null, error: 'Directory parameter or active project is required' };
+      return { directory: null, error: "Directory parameter or active project is required" }
     }
 
-    const activeId = typeof settings.activeProjectId === 'string' ? settings.activeProjectId : '';
-    const active = projects.find((project) => project.id === activeId) || projects[0];
+    const activeId = typeof settings.activeProjectId === "string" ? settings.activeProjectId : ""
+    const active = projects.find((project) => project.id === activeId) || projects[0]
     if (!active || !active.path) {
-      return { directory: null, error: 'Directory parameter or active project is required' };
+      return { directory: null, error: "Directory parameter or active project is required" }
     }
 
-    const validated = await validateDirectoryPath(active.path);
+    const validated = await validateDirectoryPath(active.path)
     if (!validated.ok) {
-      return { directory: null, error: validated.error };
+      return { directory: null, error: validated.error }
     }
 
-    return { directory: validated.directory, error: null };
-  };
+    return { directory: validated.directory, error: null }
+  }
 
   const resolveOptionalProjectDirectory = async (req) => {
-    const headerDirectory = typeof req.get === 'function' ? req.get('x-ax-code-directory') : null;
-    const queryDirectory = Array.isArray(req.query?.directory)
-      ? req.query.directory[0]
-      : req.query?.directory;
-    const requested = headerDirectory || queryDirectory || null;
+    const headerDirectory = typeof req.get === "function" ? req.get("x-ax-code-directory") : null
+    const queryDirectory = Array.isArray(req.query?.directory) ? req.query.directory[0] : req.query?.directory
+    const requested = headerDirectory || queryDirectory || null
 
     if (!requested) {
-      return { directory: null, error: null };
+      return { directory: null, error: null }
     }
 
-    const validated = await validateDirectoryPath(requested);
+    const validated = await validateDirectoryPath(requested)
     if (!validated.ok) {
-      return { directory: null, error: validated.error };
+      return { directory: null, error: validated.error }
     }
 
-    return { directory: validated.directory, error: null };
-  };
+    return { directory: validated.directory, error: null }
+  }
 
   return {
     resolveDirectoryCandidate,
     validateDirectoryPath,
     resolveProjectDirectory,
     resolveOptionalProjectDirectory,
-  };
-};
+  }
+}

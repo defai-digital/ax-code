@@ -46,7 +46,11 @@ export async function git(args: string[], opts: { cwd: string; env?: Record<stri
       }))
 
   let result = await run()
-  for (let attempt = 0; attempt < 5 && result.exitCode !== 0 && LOCK_CONTENTION.test(result.stderr.toString()); attempt++) {
+  for (
+    let attempt = 0;
+    attempt < 5 && result.exitCode !== 0 && LOCK_CONTENTION.test(result.stderr.toString());
+    attempt++
+  ) {
     await sleep(50 * (attempt + 1))
     result = await run()
   }

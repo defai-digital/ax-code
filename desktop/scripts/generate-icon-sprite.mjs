@@ -38,9 +38,7 @@ for (let i = 0; i < varPositions.length; i++) {
   const current = varPositions[i]
   const next = varPositions[i + 1]
   // End at the )), just before the next variable definition
-  const end = next
-    ? source.indexOf("))," + next.varName + "=(", current.start)
-    : source.length
+  const end = next ? source.indexOf("))," + next.varName + "=(", current.start) : source.length
   if (end < 0 || end < current.start) continue
   const segment = source.slice(current.start, end)
   const pathRegex = /\w+\.createElement\("path",[{]d:"([^"]*)"/g
@@ -135,7 +133,9 @@ function findAllSourceFiles(dir) {
       } else if (/\.(tsx?)$/.test(entry) && full !== outPath) {
         results.push(full)
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   return results
 }
@@ -220,7 +220,7 @@ function findMatchingBrace(content, openBraceIndex) {
       continue
     }
 
-    if (char === "\"" || char === "'" || char === "`") {
+    if (char === '"' || char === "'" || char === "`") {
       quote = char
       continue
     }
@@ -345,9 +345,7 @@ for (const iconName of [...usedIcons].sort()) {
   }
 
   // Build SVG content from paths
-  const svgContent = paths
-    .map((d) => `<path d="${d}" fill="currentColor"/>`)
-    .join("")
+  const svgContent = paths.map((d) => `<path d="${d}" fill="currentColor"/>`).join("")
 
   iconEntries.push({ name: iconName, content: svgContent })
 }

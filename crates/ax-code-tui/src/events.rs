@@ -159,6 +159,14 @@ pub enum RuntimeEvent {
     #[serde(rename = "server.heartbeat")]
     ServerHeartbeat,
 
+    /// Event stream temporarily disconnected; client is reconnecting.
+    #[serde(rename = "server.reconnecting")]
+    ServerReconnecting { retry_ms: u64 },
+
+    /// Event stream disconnected and reconnect attempts were exhausted.
+    #[serde(rename = "server.disconnected")]
+    ServerDisconnected,
+
     /// Server instance disposed.
     #[serde(rename = "server.instance.disposed")]
     ServerInstanceDisposed,

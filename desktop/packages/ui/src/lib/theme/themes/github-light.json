@@ -6,12 +6,7 @@
     "author": "AX Code",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "ax-code",
-      "ported",
-      "github"
-    ]
+    "tags": ["light", "ax-code", "ported", "github"]
   },
   "colors": {
     "primary": {
@@ -379,13 +374,7 @@
       "rowSelected": "#deebfe"
     },
     "charts": {
-      "series": [
-        "#0969da",
-        "#bc4c00",
-        "#1a7f37",
-        "#9a6700",
-        "#cf222e"
-      ]
+      "series": ["#0969da", "#bc4c00", "#1a7f37", "#9a6700", "#cf222e"]
     },
     "a11y": {
       "focusRing": "#0d69d9",

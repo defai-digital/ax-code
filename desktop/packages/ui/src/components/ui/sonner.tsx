@@ -11,8 +11,7 @@ const SHADOW_LIGHT =
   "inset 0 1px 0 0 rgba(255,255,255,0.8), inset 0 0 0 1px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.10), 0 1px 2px -0.5px rgba(0,0,0,0.08), 0 4px 8px -2px rgba(0,0,0,0.08), 0 12px 20px -4px rgba(0,0,0,0.08)"
 
 function useIsDarkTheme() {
-  const getIsDark = () =>
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  const getIsDark = () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
   const [isDark, setIsDark] = React.useState(getIsDark)
 
   React.useEffect(() => {
@@ -44,9 +43,7 @@ function usePinnedToastStyles(shadow: string) {
     }
 
     const applyToAll = () => {
-      document
-        .querySelectorAll<HTMLElement>("[data-sonner-toast]")
-        .forEach(apply)
+      document.querySelectorAll<HTMLElement>("[data-sonner-toast]").forEach(apply)
     }
 
     applyToAll()
@@ -56,9 +53,7 @@ function usePinnedToastStyles(shadow: string) {
         m.addedNodes.forEach((node) => {
           if (!(node instanceof HTMLElement)) return
           if (node.matches?.("[data-sonner-toast]")) apply(node)
-          node
-            .querySelectorAll?.<HTMLElement>("[data-sonner-toast]")
-            .forEach(apply)
+          node.querySelectorAll?.<HTMLElement>("[data-sonner-toast]").forEach(apply)
         })
       }
       // Re-pin in case sonner mutates style.cssText on interactions.
@@ -88,8 +83,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       closeButton={false}
       toastOptions={{
         classNames: {
-          toast:
-            "group/toast toast !rounded-[var(--radius-xl)] !border-0 !px-3.5 !py-3 !gap-2.5 !text-foreground",
+          toast: "group/toast toast !rounded-[var(--radius-xl)] !border-0 !px-3.5 !py-3 !gap-2.5 !text-foreground",
           title: "typography-ui-label !font-medium !text-foreground",
           description: "typography-meta !text-muted-foreground !mt-0.5",
           actionButton:

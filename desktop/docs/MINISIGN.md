@@ -111,7 +111,7 @@ desktop/scripts/minisign-artifacts.sh --pinned-public-key 'RWS...'
 
 ### Verify without a public key file
 
-To sign and verify when only the public key *string* is available (no `.pub`
+To sign and verify when only the public key _string_ is available (no `.pub`
 file on disk), pass it explicitly. Pin enforcement then compares the string
 directly, and verification uses `minisign -P`:
 

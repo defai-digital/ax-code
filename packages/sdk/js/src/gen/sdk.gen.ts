@@ -29,6 +29,7 @@ import type {
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
+  DebugEngineCorrelatedDiagnosticsResponses,
   DebugEnginePendingPlansResponses,
   EventSubscribeResponses,
   EventTuiCommandExecute,
@@ -6569,6 +6570,25 @@ export class DebugEngine extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<DebugEnginePendingPlansResponses, unknown, ThrowOnError>({
       url: "/debug-engine/pending-plans",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get correlated diagnostics for a file
+   *
+   * Return DRE cross-file root-cause correlations for a given file. Each entry maps an LSP error to a possible root-cause location in another file, with a confidence level and a symbol chain linking the error back to its origin. Returns an empty array when the DRE flag is off or no correlations are cached.
+   */
+  public correlatedDiagnostics<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<DebugEngineCorrelatedDiagnosticsResponses, unknown, ThrowOnError>({
+      url: "/debug-engine/correlated-diagnostics",
       ...options,
       ...params,
     })

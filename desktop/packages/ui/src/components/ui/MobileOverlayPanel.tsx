@@ -1,32 +1,32 @@
-import React from 'react';
-import { createPortal } from 'react-dom';
-import { cn } from '@/lib/utils';
-import { ScrollableOverlay } from './ScrollableOverlay';
-import { Icon } from "@/components/icon/Icon";
+import React from "react"
+import { createPortal } from "react-dom"
+import { cn } from "@/lib/utils"
+import { ScrollableOverlay } from "./ScrollableOverlay"
+import { Icon } from "@/components/icon/Icon"
 
 interface MobileOverlayPanelProps {
-  open: boolean;
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-  className?: string;
-  contentMaxHeightClassName?: string;
-  renderHeader?: (closeButton: React.ReactNode) => React.ReactNode;
+  open: boolean
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+  footer?: React.ReactNode
+  className?: string
+  contentMaxHeightClassName?: string
+  renderHeader?: (closeButton: React.ReactNode) => React.ReactNode
 }
 
-const OVERLAY_ROOT_ID = 'mobile-overlay-root';
+const OVERLAY_ROOT_ID = "mobile-overlay-root"
 
 const ensureOverlayRoot = () => {
-  if (typeof document === 'undefined') return null;
-  let root = document.getElementById(OVERLAY_ROOT_ID);
+  if (typeof document === "undefined") return null
+  let root = document.getElementById(OVERLAY_ROOT_ID)
   if (!root) {
-    root = document.createElement('div');
-    root.id = OVERLAY_ROOT_ID;
-    document.body.appendChild(root);
+    root = document.createElement("div")
+    root.id = OVERLAY_ROOT_ID
+    document.body.appendChild(root)
   }
-  return root;
-};
+  return root
+}
 
 export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   open,
@@ -38,35 +38,35 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   contentMaxHeightClassName,
   renderHeader,
 }) => {
-  const overlayRootRef = React.useRef<HTMLElement | null>(null);
+  const overlayRootRef = React.useRef<HTMLElement | null>(null)
 
-  if (typeof document !== 'undefined' && !overlayRootRef.current) {
-    overlayRootRef.current = ensureOverlayRoot();
+  if (typeof document !== "undefined" && !overlayRootRef.current) {
+    overlayRootRef.current = ensureOverlayRoot()
   }
 
   React.useEffect(() => {
     if (!open) {
-      return;
+      return
     }
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
+      if (event.key === "Escape") {
+        onClose()
       }
-    };
-    document.addEventListener('keydown', handleKeyDown);
+    }
+    document.addEventListener("keydown", handleKeyDown)
     return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open, onClose]);
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [open, onClose])
 
   if (!open || !overlayRootRef.current) {
-    return null;
+    return null
   }
 
-  const contentMaxHeight = contentMaxHeightClassName ?? 'max-h-[min(70vh,520px)]';
+  const contentMaxHeight = contentMaxHeightClassName ?? "max-h-[min(70vh,520px)]"
 
   const content = (
     <div
@@ -75,14 +75,14 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
       aria-modal="true"
       onClick={onClose}
     >
-        <div
-          className={cn(
-            'mt-auto flex max-h-[calc(100dvh-0.75rem)] min-h-0 w-full flex-col rounded-t-xl border border-border/50 bg-background shadow-none surface-overlay-panel',
-            'mx-auto max-w-lg',
-            className
-          )}
-          onClick={(event) => event.stopPropagation()}
-        >
+      <div
+        className={cn(
+          "mt-auto flex max-h-[calc(100dvh-0.75rem)] min-h-0 w-full flex-col rounded-t-xl border border-border/50 bg-background shadow-none surface-overlay-panel",
+          "mx-auto max-w-lg",
+          className,
+        )}
+        onClick={(event) => event.stopPropagation()}
+      >
         {(() => {
           const closeButton = (
             <button
@@ -92,10 +92,10 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             >
               <Icon name="close" className="h-4 w-4" />
             </button>
-          );
+          )
 
           if (renderHeader) {
-            return renderHeader(closeButton);
+            return renderHeader(closeButton)
           }
 
           return (
@@ -103,9 +103,12 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
               <h2 className="typography-ui-label font-semibold text-foreground">{title}</h2>
               {closeButton}
             </div>
-          );
+          )
         })()}
-        <ScrollableOverlay outerClassName={cn('min-h-0 flex-1', contentMaxHeight)} className="px-2 py-2 surface-overlay-scroll">
+        <ScrollableOverlay
+          outerClassName={cn("min-h-0 flex-1", contentMaxHeight)}
+          className="px-2 py-2 surface-overlay-scroll"
+        >
           {children}
         </ScrollableOverlay>
         {footer ? (
@@ -115,7 +118,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
         ) : null}
       </div>
     </div>
-  );
+  )
 
-  return createPortal(content, overlayRootRef.current);
-};
+  return createPortal(content, overlayRootRef.current)
+}

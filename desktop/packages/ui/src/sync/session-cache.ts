@@ -1,11 +1,4 @@
-import type {
-  Message,
-  Part,
-  PermissionRequest,
-  QuestionRequest,
-  SessionStatus,
-  Todo,
-} from "@ax-code/sdk/v2/client"
+import type { Message, Part, PermissionRequest, QuestionRequest, SessionStatus, Todo } from "@ax-code/sdk/v2/client"
 import type { FileDiff } from "./types"
 
 type SessionCache = {
@@ -42,8 +35,8 @@ export function getProtectedSessionCacheIds(store: SessionCache): Set<string> {
   for (const [sessionID, messages] of Object.entries(store.message ?? {})) {
     const lastMessage = messages?.[messages.length - 1]
     if (
-      lastMessage?.role === "assistant"
-      && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== "number"
+      lastMessage?.role === "assistant" &&
+      typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== "number"
     ) {
       protectedIds.add(sessionID)
     }
@@ -69,8 +62,7 @@ export function dropSessionCaches(store: SessionCache, sessionIDs: Iterable<stri
 
   for (const key of Object.keys(store.part ?? {})) {
     const parts = store.part[key]
-    if (!parts?.some((part) => stale.has((part as { sessionID?: string })?.sessionID ?? "")))
-      continue
+    if (!parts?.some((part) => stale.has((part as { sessionID?: string })?.sessionID ?? ""))) continue
     delete store.part[key]
   }
 

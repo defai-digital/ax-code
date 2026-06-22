@@ -1,1 +1,1 @@
-export type MiniChatMode = 'session' | 'draft';
+export type MiniChatMode = "session" | "draft"

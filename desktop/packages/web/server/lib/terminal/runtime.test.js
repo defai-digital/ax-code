@@ -1,23 +1,23 @@
-import { EventEmitter } from 'node:events';
-import fs from 'node:fs';
-import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { EventEmitter } from "node:events"
+import fs from "node:fs"
+import path from "node:path"
+import { describe, expect, it } from "vitest"
 
-import { createTerminalRuntime } from './runtime.js';
+import { createTerminalRuntime } from "./runtime.js"
 
 function createResponse() {
   return {
     statusCode: 200,
     body: null,
     status(code) {
-      this.statusCode = code;
-      return this;
+      this.statusCode = code
+      return this
     },
     json(payload) {
-      this.body = payload;
-      return this;
+      this.body = payload
+      return this
     },
-  };
+  }
 }
 
 function createRuntime(server, overrides = {}) {
@@ -25,7 +25,7 @@ function createRuntime(server, overrides = {}) {
     post() {},
     get() {},
     delete() {},
-  };
+  }
 
   return createTerminalRuntime({
     app,
@@ -34,7 +34,7 @@ function createRuntime(server, overrides = {}) {
     fs,
     path,
     uiAuthController: null,
-    buildAugmentedPath: () => process.env.PATH || '',
+    buildAugmentedPath: () => process.env.PATH || "",
     searchPathFor: () => null,
     isExecutable: () => false,
     isRequestOriginAllowed: async () => true,
@@ -43,59 +43,59 @@ function createRuntime(server, overrides = {}) {
     TERMINAL_INPUT_WS_REBIND_WINDOW_MS: 1_000,
     TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW: 3,
     ...overrides,
-  });
+  })
 }
 
-describe('terminal runtime', () => {
-  it('rejects terminal working directories that are not approved', async () => {
-    const postRoutes = new Map();
+describe("terminal runtime", () => {
+  it("rejects terminal working directories that are not approved", async () => {
+    const postRoutes = new Map()
     const app = {
       post(route, ...handlers) {
-        postRoutes.set(route, handlers.at(-1));
+        postRoutes.set(route, handlers.at(-1))
       },
       get() {},
       delete() {},
-    };
-    const server = new EventEmitter();
+    }
+    const server = new EventEmitter()
     const runtime = createRuntime(server, {
       app,
       fs: {
         promises: {
           stat: async () => {
-            throw new Error('stat should not run before cwd authorization');
+            throw new Error("stat should not run before cwd authorization")
           },
         },
       },
-      validateCwd: async () => ({ ok: false, error: 'Path is outside of approved directories' }),
+      validateCwd: async () => ({ ok: false, error: "Path is outside of approved directories" }),
       uiAuthController: { enabled: false },
-      buildAugmentedPath: () => '',
+      buildAugmentedPath: () => "",
       TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS: 1000,
       TERMINAL_INPUT_WS_REBIND_WINDOW_MS: 1000,
-    });
+    })
 
     try {
-      const createRoute = postRoutes.get('/api/terminal/create');
-      const res = createResponse();
+      const createRoute = postRoutes.get("/api/terminal/create")
+      const res = createResponse()
 
-      await createRoute({ body: { cwd: '/tmp/not-approved' } }, res);
+      await createRoute({ body: { cwd: "/tmp/not-approved" } }, res)
 
-      expect(res.statusCode).toBe(403);
-      expect(res.body).toEqual({ error: 'Path is outside of approved directories' });
+      expect(res.statusCode).toBe(403)
+      expect(res.body).toEqual({ error: "Path is outside of approved directories" })
     } finally {
-      await runtime.shutdown();
+      await runtime.shutdown()
     }
-  });
+  })
 
-  it('rejects regular files as terminal working directories', async () => {
-    const postRoutes = new Map();
+  it("rejects regular files as terminal working directories", async () => {
+    const postRoutes = new Map()
     const app = {
       post(route, ...handlers) {
-        postRoutes.set(route, handlers.at(-1));
+        postRoutes.set(route, handlers.at(-1))
       },
       get() {},
       delete() {},
-    };
-    const server = new EventEmitter();
+    }
+    const server = new EventEmitter()
     const runtime = createRuntime(server, {
       app,
       fs: {
@@ -104,32 +104,32 @@ describe('terminal runtime', () => {
         },
       },
       uiAuthController: { enabled: false },
-      buildAugmentedPath: () => '',
+      buildAugmentedPath: () => "",
       TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS: 1000,
       TERMINAL_INPUT_WS_REBIND_WINDOW_MS: 1000,
-    });
+    })
 
     try {
-      const createRoute = postRoutes.get('/api/terminal/create');
-      const res = createResponse();
+      const createRoute = postRoutes.get("/api/terminal/create")
+      const res = createResponse()
 
-      await createRoute({ body: { cwd: '/tmp/not-a-directory' } }, res);
+      await createRoute({ body: { cwd: "/tmp/not-a-directory" } }, res)
 
-      expect(res.statusCode).toBe(400);
-      expect(res.body).toEqual({ error: 'Invalid working directory' });
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toEqual({ error: "Invalid working directory" })
     } finally {
-      await runtime.shutdown();
+      await runtime.shutdown()
     }
-  });
+  })
 
-  it('removes its websocket upgrade listener on shutdown', async () => {
-    const server = new EventEmitter();
-    const runtime = createRuntime(server);
+  it("removes its websocket upgrade listener on shutdown", async () => {
+    const server = new EventEmitter()
+    const runtime = createRuntime(server)
 
-    expect(server.listenerCount('upgrade')).toBe(1);
+    expect(server.listenerCount("upgrade")).toBe(1)
 
-    await runtime.shutdown();
+    await runtime.shutdown()
 
-    expect(server.listenerCount('upgrade')).toBe(0);
-  });
-});
+    expect(server.listenerCount("upgrade")).toBe(0)
+  })
+})

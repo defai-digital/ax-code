@@ -1,54 +1,57 @@
-import React, { useMemo, useEffect, useRef, useState } from 'react';
-import type { SupportedLanguages } from '@pierre/diffs';
-import type { WorkerPoolManager } from '@pierre/diffs/worker';
+import React, { useMemo, useEffect, useRef, useState } from "react"
+import type { SupportedLanguages } from "@pierre/diffs"
+import type { WorkerPoolManager } from "@pierre/diffs/worker"
 
-import { useOptionalThemeSystem } from './useThemeSystem';
-import { workerFactory } from '@/lib/diff/workerFactory';
-import { getDefaultTheme } from '@/lib/theme/themes';
+import { useOptionalThemeSystem } from "./useThemeSystem"
+import { workerFactory } from "@/lib/diff/workerFactory"
+import { getDefaultTheme } from "@/lib/theme/themes"
 // NOTE: keep provider lightweight; avoid main-thread diff parsing here.
 
 // Preload common languages for faster initial diff rendering
 const PRELOAD_LANGS: SupportedLanguages[] = [
   // Keep small; workers load others on-demand.
-  'typescript',
-  'javascript',
-  'tsx',
-  'jsx',
-  'json',
-  'markdown',
-];
+  "typescript",
+  "javascript",
+  "tsx",
+  "jsx",
+  "json",
+  "markdown",
+]
 
 interface DiffWorkerProviderProps {
-  children: React.ReactNode;
+  children: React.ReactNode
 }
 
-type WorkerPoolStyle = 'unified' | 'split';
+type WorkerPoolStyle = "unified" | "split"
 
-const WORKER_POOL_CONFIG: Record<WorkerPoolStyle, { poolSize: number; totalASTLRUCacheSize: number; lineDiffType: 'none' | 'word-alt' }> = {
+const WORKER_POOL_CONFIG: Record<
+  WorkerPoolStyle,
+  { poolSize: number; totalASTLRUCacheSize: number; lineDiffType: "none" | "word-alt" }
+> = {
   unified: {
     poolSize: 1,
     totalASTLRUCacheSize: 24,
-    lineDiffType: 'none',
+    lineDiffType: "none",
   },
   split: {
     poolSize: 2,
     totalASTLRUCacheSize: 56,
-    lineDiffType: 'word-alt',
+    lineDiffType: "word-alt",
   },
-};
+}
 
-let unifiedWorkerPool: WorkerPoolManager | undefined;
-let splitWorkerPool: WorkerPoolManager | undefined;
-let unifiedWorkerPoolPromise: Promise<WorkerPoolManager | undefined> | undefined;
-let splitWorkerPoolPromise: Promise<WorkerPoolManager | undefined> | undefined;
+let unifiedWorkerPool: WorkerPoolManager | undefined
+let splitWorkerPool: WorkerPoolManager | undefined
+let unifiedWorkerPoolPromise: Promise<WorkerPoolManager | undefined> | undefined
+let splitWorkerPoolPromise: Promise<WorkerPoolManager | undefined> | undefined
 
 const createWorkerPool = async (style: WorkerPoolStyle): Promise<WorkerPoolManager | undefined> => {
-  if (typeof window === 'undefined') {
-    return undefined;
+  if (typeof window === "undefined") {
+    return undefined
   }
 
-  const { WorkerPoolManager: WorkerPoolManagerConstructor } = await import('@pierre/diffs/worker');
-  const config = WORKER_POOL_CONFIG[style];
+  const { WorkerPoolManager: WorkerPoolManagerConstructor } = await import("@pierre/diffs/worker")
+  const config = WORKER_POOL_CONFIG[style]
   const pool = new WorkerPoolManagerConstructor(
     {
       workerFactory,
@@ -57,61 +60,61 @@ const createWorkerPool = async (style: WorkerPoolStyle): Promise<WorkerPoolManag
     },
     {
       theme: {
-        light: 'pierre-light',
-        dark: 'pierre-dark',
+        light: "pierre-light",
+        dark: "pierre-dark",
       },
       langs: PRELOAD_LANGS,
       lineDiffType: config.lineDiffType,
-      preferredHighlighter: 'shiki-wasm',
-    }
-  );
-  void pool.initialize();
-  return pool;
-};
+      preferredHighlighter: "shiki-wasm",
+    },
+  )
+  void pool.initialize()
+  return pool
+}
 
 const getExistingWorkerPool = (style: WorkerPoolStyle): WorkerPoolManager | undefined => {
-  return style === 'split' ? splitWorkerPool : unifiedWorkerPool;
-};
+  return style === "split" ? splitWorkerPool : unifiedWorkerPool
+}
 
 const ensureWorkerPool = (style: WorkerPoolStyle): Promise<WorkerPoolManager | undefined> => {
-  if (typeof window === 'undefined') {
-    return Promise.resolve(undefined);
+  if (typeof window === "undefined") {
+    return Promise.resolve(undefined)
   }
 
-  if (style === 'split') {
+  if (style === "split") {
     if (splitWorkerPool) {
-      return Promise.resolve(splitWorkerPool);
+      return Promise.resolve(splitWorkerPool)
     }
-    splitWorkerPoolPromise ??= createWorkerPool('split')
+    splitWorkerPoolPromise ??= createWorkerPool("split")
       .then((pool) => {
-        splitWorkerPool = pool;
-        return pool;
+        splitWorkerPool = pool
+        return pool
       })
       .catch((error) => {
         // Clear the cached promise so a later call can retry instead of
         // permanently resolving to a rejected import.
-        splitWorkerPoolPromise = undefined;
-        console.warn('[DiffWorkerProvider] Failed to create split worker pool:', error);
-        return undefined;
-      });
-    return splitWorkerPoolPromise;
+        splitWorkerPoolPromise = undefined
+        console.warn("[DiffWorkerProvider] Failed to create split worker pool:", error)
+        return undefined
+      })
+    return splitWorkerPoolPromise
   }
 
   if (unifiedWorkerPool) {
-    return Promise.resolve(unifiedWorkerPool);
+    return Promise.resolve(unifiedWorkerPool)
   }
-  unifiedWorkerPoolPromise ??= createWorkerPool('unified')
+  unifiedWorkerPoolPromise ??= createWorkerPool("unified")
     .then((pool) => {
-      unifiedWorkerPool = pool;
-      return pool;
+      unifiedWorkerPool = pool
+      return pool
     })
     .catch((error) => {
-      unifiedWorkerPoolPromise = undefined;
-      console.warn('[DiffWorkerProvider] Failed to create unified worker pool:', error);
-      return undefined;
-    });
-  return unifiedWorkerPoolPromise;
-};
+      unifiedWorkerPoolPromise = undefined
+      console.warn("[DiffWorkerProvider] Failed to create unified worker pool:", error)
+      return undefined
+    })
+  return unifiedWorkerPoolPromise
+}
 
 const syncPoolRenderTheme = (renderTheme: { light: string; dark: string }) => {
   // Only sync pools that already exist — never create them here.
@@ -119,24 +122,24 @@ const syncPoolRenderTheme = (renderTheme: { light: string; dark: string }) => {
     void unifiedWorkerPool.setRenderOptions({
       theme: renderTheme,
       lineDiffType: WORKER_POOL_CONFIG.unified.lineDiffType,
-    });
+    })
   }
   if (splitWorkerPool) {
     void splitWorkerPool.setRenderOptions({
       theme: renderTheme,
       lineDiffType: WORKER_POOL_CONFIG.split.lineDiffType,
-    });
+    })
   }
-};
+}
 
 const WorkerPoolWarmup: React.FC<{
-  children: React.ReactNode;
-  renderTheme: { light: string; dark: string };
+  children: React.ReactNode
+  renderTheme: { light: string; dark: string }
 }> = ({ children, renderTheme }) => {
-  const renderThemeRef = useRef(renderTheme);
+  const renderThemeRef = useRef(renderTheme)
   useEffect(() => {
-    renderThemeRef.current = renderTheme;
-  }, [renderTheme]);
+    renderThemeRef.current = renderTheme
+  }, [renderTheme])
 
   // Defer worker-pool creation off the cold-start critical path. Creating a pool
   // loads the Shiki highlighter + preload languages inside the worker (a separate,
@@ -145,69 +148,65 @@ const WorkerPoolWarmup: React.FC<{
   // user opens a diff before then, useWorkerPool creates the pool on demand and
   // PierreDiffViewer passes its own per-diff theme, so nothing is lost by waiting.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    let cancelled = false;
+    if (typeof window === "undefined") return
+    let cancelled = false
     const warm = () => {
-      if (cancelled) return;
-      void Promise.all([ensureWorkerPool('unified'), ensureWorkerPool('split')]).then(() => {
-        syncPoolRenderTheme(renderThemeRef.current);
-      });
-    };
-
-    const idle = window.requestIdleCallback;
-    if (typeof idle === 'function') {
-      const handle = idle(warm, { timeout: 2000 });
-      return () => {
-        cancelled = true;
-        window.cancelIdleCallback?.(handle);
-      };
+      if (cancelled) return
+      void Promise.all([ensureWorkerPool("unified"), ensureWorkerPool("split")]).then(() => {
+        syncPoolRenderTheme(renderThemeRef.current)
+      })
     }
-    const handle = window.setTimeout(warm, 1000);
+
+    const idle = window.requestIdleCallback
+    if (typeof idle === "function") {
+      const handle = idle(warm, { timeout: 2000 })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback?.(handle)
+      }
+    }
+    const handle = window.setTimeout(warm, 1000)
     return () => {
-      cancelled = true;
-      window.clearTimeout(handle);
-    };
-  }, []);
+      cancelled = true
+      window.clearTimeout(handle)
+    }
+  }, [])
 
   // Keep already-warmed pools in sync with theme changes.
   useEffect(() => {
-    syncPoolRenderTheme(renderTheme);
-  }, [renderTheme]);
+    syncPoolRenderTheme(renderTheme)
+  }, [renderTheme])
 
-  return <>{children}</>;
-};
+  return <>{children}</>
+}
 
 export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children }) => {
-  const themeSystem = useOptionalThemeSystem();
+  const themeSystem = useOptionalThemeSystem()
 
-  const fallbackLight = getDefaultTheme(false);
-  const fallbackDark = getDefaultTheme(true);
+  const fallbackLight = getDefaultTheme(false)
+  const fallbackDark = getDefaultTheme(true)
 
-  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLight.metadata.id;
-  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDark.metadata.id;
+  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLight.metadata.id
+  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDark.metadata.id
 
-  const lightTheme =
-    themeSystem?.availableThemes.find((theme) => theme.metadata.id === lightThemeId) ??
-    fallbackLight;
-  const darkTheme =
-    themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ??
-    fallbackDark;
+  const lightTheme = themeSystem?.availableThemes.find((theme) => theme.metadata.id === lightThemeId) ?? fallbackLight
+  const darkTheme = themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ?? fallbackDark
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
 
-    void import('@/lib/shiki/appThemeRegistry').then(({ ensurePierreThemeRegistered }) => {
+    void import("@/lib/shiki/appThemeRegistry").then(({ ensurePierreThemeRegistered }) => {
       if (cancelled) {
-        return;
+        return
       }
-      ensurePierreThemeRegistered(lightTheme);
-      ensurePierreThemeRegistered(darkTheme);
-    });
+      ensurePierreThemeRegistered(lightTheme)
+      ensurePierreThemeRegistered(darkTheme)
+    })
 
     return () => {
-      cancelled = true;
-    };
-  }, [darkTheme, lightTheme]);
+      cancelled = true
+    }
+  }, [darkTheme, lightTheme])
 
   const renderTheme = useMemo(
     () => ({
@@ -215,32 +214,28 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
       dark: darkTheme.metadata.id,
     }),
     [darkTheme.metadata.id, lightTheme.metadata.id],
-  );
+  )
 
-  return (
-    <WorkerPoolWarmup renderTheme={renderTheme}>
-      {children}
-    </WorkerPoolWarmup>
-  );
-};
+  return <WorkerPoolWarmup renderTheme={renderTheme}>{children}</WorkerPoolWarmup>
+}
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const useWorkerPool = (style: WorkerPoolStyle = 'unified'): WorkerPoolManager | undefined => {
-  const [pool, setPool] = useState<WorkerPoolManager | undefined>(() => getExistingWorkerPool(style));
+export const useWorkerPool = (style: WorkerPoolStyle = "unified"): WorkerPoolManager | undefined => {
+  const [pool, setPool] = useState<WorkerPoolManager | undefined>(() => getExistingWorkerPool(style))
 
   useEffect(() => {
-    let cancelled = false;
-    setPool(getExistingWorkerPool(style));
+    let cancelled = false
+    setPool(getExistingWorkerPool(style))
     void ensureWorkerPool(style).then((nextPool) => {
       if (!cancelled) {
-        setPool(nextPool);
+        setPool(nextPool)
       }
-    });
+    })
 
     return () => {
-      cancelled = true;
-    };
-  }, [style]);
+      cancelled = true
+    }
+  }, [style])
 
-  return pool;
-};
+  return pool
+}

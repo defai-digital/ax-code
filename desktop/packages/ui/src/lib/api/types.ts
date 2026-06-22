@@ -1,1184 +1,1230 @@
-import type { WorktreeMetadata } from '@/types/worktree';
-import type { DraftStarterRef } from '@/lib/draftStarters';
+import type { WorktreeMetadata } from "@/types/worktree"
+import type { DraftStarterRef } from "@/lib/draftStarters"
 
-export type RuntimePlatform = 'web' | 'desktop';
+export type RuntimePlatform = "web" | "desktop"
 
 export interface RuntimeDescriptor {
-  platform: RuntimePlatform;
+  platform: RuntimePlatform
 
-  isDesktop: boolean;
+  isDesktop: boolean
 
-  label?: string;
+  label?: string
 }
 
 export interface ApiError {
-  message: string;
-  code?: string;
-  cause?: unknown;
+  message: string
+  code?: string
+  cause?: unknown
 }
 
 export interface Subscription {
-
-  close: () => void;
+  close: () => void
 }
 
 export interface RetryPolicy {
-  maxRetries: number;
-  initialDelayMs: number;
-  maxDelayMs: number;
+  maxRetries: number
+  initialDelayMs: number
+  maxDelayMs: number
 }
 
 export interface TerminalWebSocketDescriptor {
-  path: string;
-  v?: number;
-  enc?: string;
+  path: string
+  v?: number
+  enc?: string
 }
 
 export interface TerminalTransportCapability {
-  preferred?: 'ws' | 'http' | 'sse';
-  transports?: Array<'ws' | 'http' | 'sse'>;
-  ws?: TerminalWebSocketDescriptor;
+  preferred?: "ws" | "http" | "sse"
+  transports?: Array<"ws" | "http" | "sse">
+  ws?: TerminalWebSocketDescriptor
 }
 
 export interface TerminalSession {
-  sessionId: string;
-  cols: number;
-  rows: number;
+  sessionId: string
+  cols: number
+  rows: number
   capabilities?: {
-    input?: TerminalTransportCapability;
-    stream?: TerminalTransportCapability;
-  };
+    input?: TerminalTransportCapability
+    stream?: TerminalTransportCapability
+  }
 }
 
 export interface TerminalStreamEvent {
-  type: 'connected' | 'data' | 'exit' | 'reconnecting';
-  data?: string;
-  exitCode?: number;
-  signal?: number | null;
-  attempt?: number;
-  maxAttempts?: number;
+  type: "connected" | "data" | "exit" | "reconnecting"
+  data?: string
+  exitCode?: number
+  signal?: number | null
+  attempt?: number
+  maxAttempts?: number
 
-  runtime?: 'node' | 'bun';
-  ptyBackend?: string;
+  runtime?: "node" | "bun"
+  ptyBackend?: string
 }
 
 export interface CreateTerminalOptions {
-  cwd: string;
-  cols?: number;
-  rows?: number;
+  cwd: string
+  cols?: number
+  rows?: number
 }
 
 export interface TerminalStreamOptions {
-  retry?: Partial<RetryPolicy>;
-  connectionTimeoutMs?: number;
+  retry?: Partial<RetryPolicy>
+  connectionTimeoutMs?: number
 }
 
 export interface ResizeTerminalPayload {
-  sessionId: string;
-  cols: number;
-  rows: number;
+  sessionId: string
+  cols: number
+  rows: number
 }
 
 export interface TerminalHandlers {
-  onEvent: (event: TerminalStreamEvent) => void;
-  onError?: (error: Error, fatal?: boolean) => void;
+  onEvent: (event: TerminalStreamEvent) => void
+  onError?: (error: Error, fatal?: boolean) => void
 }
 
 export interface ForceKillOptions {
-  sessionId?: string;
-  cwd?: string;
+  sessionId?: string
+  cwd?: string
 }
 
 export interface TerminalAPI {
-  createSession(options: CreateTerminalOptions): Promise<TerminalSession>;
-  connect(sessionId: string, handlers: TerminalHandlers, options?: TerminalStreamOptions): Subscription;
-  sendInput(sessionId: string, input: string): Promise<void>;
-  resize(payload: ResizeTerminalPayload): Promise<void>;
-  close(sessionId: string): Promise<void>;
-  restartSession?(currentSessionId: string, options: CreateTerminalOptions): Promise<TerminalSession>;
-  forceKill?(options: ForceKillOptions): Promise<void>;
+  createSession(options: CreateTerminalOptions): Promise<TerminalSession>
+  connect(sessionId: string, handlers: TerminalHandlers, options?: TerminalStreamOptions): Subscription
+  sendInput(sessionId: string, input: string): Promise<void>
+  resize(payload: ResizeTerminalPayload): Promise<void>
+  close(sessionId: string): Promise<void>
+  restartSession?(currentSessionId: string, options: CreateTerminalOptions): Promise<TerminalSession>
+  forceKill?(options: ForceKillOptions): Promise<void>
 }
 
 export interface GitStatusFile {
-  path: string;
-  index: string;
-  working_dir: string;
+  path: string
+  index: string
+  working_dir: string
 }
 
 export interface GitMergeInProgress {
   /** Short SHA of MERGE_HEAD */
-  head: string;
+  head: string
   /** First line of MERGE_MSG */
-  message: string;
+  message: string
 }
 
 export interface GitRebaseInProgress {
   /** Branch name being rebased */
-  headName: string;
+  headName: string
   /** Short SHA of the onto commit */
-  onto: string;
+  onto: string
 }
 
 export interface GitRemoteComparison {
-  remote: string;
-  branch: string;
-  ahead: number;
-  behind: number;
+  remote: string
+  branch: string
+  ahead: number
+  behind: number
 }
 
 export interface GitStatus {
-  current: string;
-  tracking: string | null;
-  ahead: number;
-  behind: number;
-  upstreamComparison?: GitRemoteComparison | null;
-  files: GitStatusFile[];
-  isClean: boolean;
-  diffStats?: Record<string, { insertions: number; deletions: number }>;
+  current: string
+  tracking: string | null
+  ahead: number
+  behind: number
+  upstreamComparison?: GitRemoteComparison | null
+  files: GitStatusFile[]
+  isClean: boolean
+  diffStats?: Record<string, { insertions: number; deletions: number }>
   /** Present when a merge is in progress with conflicts */
-  mergeInProgress?: GitMergeInProgress | null;
+  mergeInProgress?: GitMergeInProgress | null
   /** Present when a rebase is in progress */
-  rebaseInProgress?: GitRebaseInProgress | null;
+  rebaseInProgress?: GitRebaseInProgress | null
   /** Phase 1: reason for attention-required state */
-  attentionReason?: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'bisect' | null;
+  attentionReason?: "merge" | "rebase" | "cherry-pick" | "revert" | "bisect" | null
 }
 
 export interface GitDiffResponse {
-  diff: string;
+  diff: string
 }
 
 export interface GetGitDiffOptions {
-  path: string;
-  staged?: boolean;
-  contextLines?: number;
+  path: string
+  staged?: boolean
+  contextLines?: number
 }
 
 export interface GitFileDiffResponse {
-  original: string;
-  modified: string;
-  path: string;
-  isBinary?: boolean;
+  original: string
+  modified: string
+  path: string
+  isBinary?: boolean
 }
 
 export interface GetGitFileDiffOptions {
-  path: string;
-  staged?: boolean;
+  path: string
+  staged?: boolean
 }
 
 export interface GitBranchDetails {
-  current: boolean;
-  name: string;
-  commit: string;
-  label: string;
-  tracking?: string;
-  ahead?: number;
-  behind?: number;
+  current: boolean
+  name: string
+  commit: string
+  label: string
+  tracking?: string
+  ahead?: number
+  behind?: number
 }
 
 export interface GitBranch {
-  all: string[];
-  current: string;
-  branches: Record<string, GitBranchDetails>;
+  all: string[]
+  current: string
+  branches: Record<string, GitBranchDetails>
 }
 
 export interface GitCommitSummary {
-  changes: number;
-  insertions: number;
-  deletions: number;
+  changes: number
+  insertions: number
+  deletions: number
 }
 
 export interface GitCommitResult {
-  success: boolean;
-  commit: string;
-  branch: string;
-  summary: GitCommitSummary;
+  success: boolean
+  commit: string
+  branch: string
+  summary: GitCommitSummary
 }
 
 export interface GitPushResult {
-  success: boolean;
+  success: boolean
   pushed: Array<{
-    local: string;
-    remote: string;
-  }>;
-  repo: string;
-  ref: unknown;
+    local: string
+    remote: string
+  }>
+  repo: string
+  ref: unknown
 }
 
 export interface GitPullResult {
-  success: boolean;
-  summary: GitCommitSummary;
-  files: string[];
-  insertions: number;
-  deletions: number;
+  success: boolean
+  summary: GitCommitSummary
+  files: string[]
+  insertions: number
+  deletions: number
 }
 
 export interface GitPullOptions {
-  remote?: string;
-  branch?: string;
-  rebase?: boolean;
+  remote?: string
+  branch?: string
+  rebase?: boolean
 }
 
 export interface GitStashEntry {
-  ref: string;
-  message: string;
-  relativeTime: string;
-  hash: string;
+  ref: string
+  message: string
+  relativeTime: string
+  hash: string
 }
 
 export interface GitRemote {
-  name: string;
-  fetchUrl: string;
-  pushUrl: string;
+  name: string
+  fetchUrl: string
+  pushUrl: string
 }
 
 export interface GitMergeResult {
-  success: boolean;
-  conflict?: boolean;
-  conflictFiles?: string[];
+  success: boolean
+  conflict?: boolean
+  conflictFiles?: string[]
 }
 
 export interface CheckoutCommitResponse {
-  success: boolean;
+  success: boolean
 }
 
 export interface CherryPickRequest {
-  hash: string;
+  hash: string
 }
 export interface CherryPickResponse {
-  success: boolean;
-  conflict?: boolean;
-  conflictFiles?: string[];
+  success: boolean
+  conflict?: boolean
+  conflictFiles?: string[]
 }
 
 export interface RevertCommitRequest {
-  hash: string;
+  hash: string
 }
 export interface RevertCommitResponse {
-  success: boolean;
-  conflict?: boolean;
-  conflictFiles?: string[];
+  success: boolean
+  conflict?: boolean
+  conflictFiles?: string[]
 }
 
 export interface ResetToCommitRequest {
-  hash: string;
-  mode: 'soft' | 'mixed' | 'hard';
-  force?: boolean;
+  hash: string
+  mode: "soft" | "mixed" | "hard"
+  force?: boolean
 }
 export interface ResetToCommitResponse {
-  success: boolean;
+  success: boolean
 }
 
 export interface GitRebaseResult {
-  success: boolean;
-  conflict?: boolean;
-  conflictFiles?: string[];
+  success: boolean
+  conflict?: boolean
+  conflictFiles?: string[]
 }
 
 export interface MergeConflictDetails {
   /** Git status --porcelain output showing current state */
-  statusPorcelain: string;
+  statusPorcelain: string
   /** List of unmerged file paths */
-  unmergedFiles: string[];
+  unmergedFiles: string[]
   /** Git diff output showing current conflict state */
-  diff: string;
+  diff: string
   /** Information about MERGE_HEAD or REBASE_HEAD */
-  headInfo: string;
+  headInfo: string
   /** The operation type: 'merge' or 'rebase' */
-  operation: 'merge' | 'rebase';
+  operation: "merge" | "rebase"
 }
 
-export type GitIdentityAuthType = 'ssh' | 'token';
+export type GitIdentityAuthType = "ssh" | "token"
 
 export interface GitIdentityProfile {
-  id: string;
-  name: string;
-  userName: string;
-  userEmail: string;
-  authType?: GitIdentityAuthType;
-  sshKey?: string | null;
-  host?: string | null;
-  color?: string | null;
-  icon?: string | null;
+  id: string
+  name: string
+  userName: string
+  userEmail: string
+  authType?: GitIdentityAuthType
+  sshKey?: string | null
+  host?: string | null
+  color?: string | null
+  icon?: string | null
 }
 
 export interface DiscoveredGitCredential {
-  host: string;
-  username: string;
+  host: string
+  username: string
 }
 
 export interface GitIdentitySummary {
-  userName: string | null;
-  userEmail: string | null;
-  sshCommand: string | null;
+  userName: string | null
+  userEmail: string | null
+  sshCommand: string | null
 }
 
 export interface GitLogEntry {
-  hash: string;
-  date: string;
-  message: string;
-  refs: string;
-  body: string;
-  author_name: string;
-  author_email: string;
-  filesChanged: number;
-  insertions: number;
-  deletions: number;
-  parents: string[];
+  hash: string
+  date: string
+  message: string
+  refs: string
+  body: string
+  author_name: string
+  author_email: string
+  filesChanged: number
+  insertions: number
+  deletions: number
+  parents: string[]
 }
 
 export interface GitLogResponse {
-  all: GitLogEntry[];
-  latest: GitLogEntry | null;
-  total: number;
+  all: GitLogEntry[]
+  latest: GitLogEntry | null
+  total: number
 }
 
 export interface CommitFileEntry {
-  path: string;
-  insertions: number;
-  deletions: number;
-  isBinary: boolean;
-  changeType: 'A' | 'M' | 'D' | 'R' | 'C' | string;
+  path: string
+  insertions: number
+  deletions: number
+  isBinary: boolean
+  changeType: "A" | "M" | "D" | "R" | "C" | string
 }
 
 export interface GitCommitFilesResponse {
-  files: CommitFileEntry[];
+  files: CommitFileEntry[]
 }
 
 export interface CommitFileDiffResponse {
-  original: string;
-  modified: string;
-  isBinary: boolean;
+  original: string
+  modified: string
+  isBinary: boolean
 }
 
 export interface GitWorktreeInfo {
-  head: string;
-  name: string;
-  branch: string;
-  path: string;
+  head: string
+  name: string
+  branch: string
+  path: string
 }
 
 export interface GitWorktreeValidationError {
-  code: string;
-  message: string;
+  code: string
+  message: string
 }
 
 export interface GitWorktreeValidationResult {
-  ok: boolean;
-  errors: GitWorktreeValidationError[];
+  ok: boolean
+  errors: GitWorktreeValidationError[]
   resolved?: {
-    mode?: 'new' | 'existing';
-    localBranch?: string | null;
-  };
+    mode?: "new" | "existing"
+    localBranch?: string | null
+  }
 }
 
 export interface GitWorktreeBootstrapStatus {
-  status: 'pending' | 'ready' | 'failed';
-  error: string | null;
-  updatedAt: number;
+  status: "pending" | "ready" | "failed"
+  error: string | null
+  updatedAt: number
 }
 
 export interface CreateGitWorktreePayload {
-  mode?: 'new' | 'existing';
+  mode?: "new" | "existing"
   /** Worktree folder name (falls back to AX Code name generation when omitted). */
-  worktreeName?: string;
+  worktreeName?: string
   /** Backward-compatible alias for worktreeName. */
-  name?: string;
+  name?: string
   /** New local branch name for mode=new. */
-  branchName?: string;
+  branchName?: string
   /** Existing local/remote branch for mode=existing. */
-  existingBranch?: string;
+  existingBranch?: string
   /** Start ref for mode=new (local/remote branch or commit SHA). */
-  startRef?: string;
+  startRef?: string
   /** Additional startup script to run after project startup script. */
-  startCommand?: string;
+  startCommand?: string
   /** Configure upstream tracking for the created/attached local branch. */
-  setUpstream?: boolean;
-  upstreamRemote?: string;
-  upstreamBranch?: string;
+  setUpstream?: boolean
+  upstreamRemote?: string
+  upstreamBranch?: string
   /** Optional remote provisioning (used for fork PR workflows). */
-  ensureRemoteName?: string;
-  ensureRemoteUrl?: string;
+  ensureRemoteName?: string
+  ensureRemoteUrl?: string
 }
 
 export interface GitWorktreeCreateResult {
-  head: string;
-  name: string;
-  branch: string;
-  path: string;
+  head: string
+  name: string
+  branch: string
+  path: string
 }
 
 export interface RemoveGitWorktreePayload {
-  directory: string;
-  deleteLocalBranch?: boolean;
+  directory: string
+  deleteLocalBranch?: boolean
 }
 
 export interface GitDeleteBranchPayload {
-  branch: string;
-  force?: boolean;
+  branch: string
+  force?: boolean
 }
 
 export interface GitDeleteRemoteBranchPayload {
-  branch: string;
-  remote?: string;
+  branch: string
+  remote?: string
 }
 
 export interface GitRemoveRemotePayload {
-  remote: string;
+  remote: string
 }
 
 export interface CreateGitCommitOptions {
-  addAll?: boolean;
-  files?: string[];
-  stageFiles?: string[];
+  addAll?: boolean
+  files?: string[]
+  stageFiles?: string[]
 }
 
 export interface GitLogOptions {
-  maxCount?: number;
-  from?: string;
-  to?: string;
-  file?: string;
-  all?: boolean;
+  maxCount?: number
+  from?: string
+  to?: string
+  file?: string
+  all?: boolean
 }
 
 export interface GeneratedCommitMessage {
-  subject: string;
-  highlights: string[];
+  subject: string
+  highlights: string[]
 }
 
 export interface GeneratedPullRequestDescription {
-  title: string;
-  body: string;
+  title: string
+  body: string
 }
 
 export interface GitWorktreeAPI {
-  list(directory: string): Promise<GitWorktreeInfo[]>;
-  validate?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>;
-  bootstrapStatus?(directory: string): Promise<GitWorktreeBootstrapStatus>;
-  preview?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
-  create?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
-  remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
+  list(directory: string): Promise<GitWorktreeInfo[]>
+  validate?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>
+  bootstrapStatus?(directory: string): Promise<GitWorktreeBootstrapStatus>
+  preview?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>
+  create?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>
+  remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>
 }
 
 export interface GitAPI {
-  checkIsGitRepository(directory: string): Promise<boolean>;
-  getGitStatus(directory: string, options?: { mode?: 'light' }): Promise<GitStatus>;
-  getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitDiffResponse>;
-  getGitFileDiff(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
-  revertGitFile(directory: string, filePath: string, options?: { scope?: 'all' | 'working' }): Promise<void>;
-  stageGitFile(directory: string, filePath: string): Promise<void>;
-  stageGitFiles?(directory: string, filePaths: string[]): Promise<void>;
-  unstageGitFile(directory: string, filePath: string): Promise<void>;
-  unstageGitFiles?(directory: string, filePaths: string[]): Promise<void>;
-  isLinkedWorktree(directory: string): Promise<boolean>;
-  getGitBranches(directory: string): Promise<GitBranch>;
-  deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
-  deleteRemoteBranch(directory: string, payload: GitDeleteRemoteBranchPayload): Promise<{ success: boolean }>;
-  removeRemote(directory: string, payload: GitRemoveRemotePayload): Promise<{ success: boolean }>;
-  generateCommitMessage(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string }): Promise<{ message: GeneratedCommitMessage }>;
+  checkIsGitRepository(directory: string): Promise<boolean>
+  getGitStatus(directory: string, options?: { mode?: "light" }): Promise<GitStatus>
+  getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitDiffResponse>
+  getGitFileDiff(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>
+  revertGitFile(directory: string, filePath: string, options?: { scope?: "all" | "working" }): Promise<void>
+  stageGitFile(directory: string, filePath: string): Promise<void>
+  stageGitFiles?(directory: string, filePaths: string[]): Promise<void>
+  unstageGitFile(directory: string, filePath: string): Promise<void>
+  unstageGitFiles?(directory: string, filePaths: string[]): Promise<void>
+  isLinkedWorktree(directory: string): Promise<boolean>
+  getGitBranches(directory: string): Promise<GitBranch>
+  deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>
+  deleteRemoteBranch(directory: string, payload: GitDeleteRemoteBranchPayload): Promise<{ success: boolean }>
+  removeRemote(directory: string, payload: GitRemoveRemotePayload): Promise<{ success: boolean }>
+  generateCommitMessage(
+    directory: string,
+    files: string[],
+    options?: { zenModel?: string; providerId?: string; modelId?: string },
+  ): Promise<{ message: GeneratedCommitMessage }>
   generatePullRequestDescription(
     directory: string,
-    payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string }
-  ): Promise<GeneratedPullRequestDescription>;
-  listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
-  validateGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>;
-  getGitWorktreeBootstrapStatus?(directory: string): Promise<GitWorktreeBootstrapStatus>;
-  previewGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
-  createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
-  deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
-  createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
-  gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
-  gitPull(directory: string, options?: GitPullOptions): Promise<GitPullResult>;
-  gitFetch(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
-  listGitStashes(directory: string): Promise<{ stashes: GitStashEntry[] }>;
-  countGitStashFiles(directory: string, refs: string[]): Promise<{ counts: Record<string, number> }>;
-  stashGitChanges(directory: string, options?: { message?: string }): Promise<{ success: boolean; created: boolean; message: string; output: string }>;
-  applyGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>;
-  popGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>;
-  dropGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>;
-  checkoutBranch(directory: string, branch: string): Promise<{ success: boolean; branch: string }>;
-  createBranch(directory: string, name: string, startPoint?: string): Promise<{ success: boolean; branch: string }>;
-  renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }>;
-  getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
-  getCommitFiles(directory: string, hash: string): Promise<GitCommitFilesResponse>;
-  getCommitFileDiff?(directory: string, hash: string, filePath: string, isBinary: boolean): Promise<CommitFileDiffResponse>;
-  getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null>;
-  hasLocalIdentity?(directory: string): Promise<boolean>;
-  setGitIdentity(directory: string, profileId: string): Promise<{ success: boolean; profile: GitIdentityProfile }>;
-  getGitIdentities(): Promise<GitIdentityProfile[]>;
-  createGitIdentity(profile: GitIdentityProfile): Promise<GitIdentityProfile>;
-  updateGitIdentity(id: string, updates: GitIdentityProfile): Promise<GitIdentityProfile>;
-  deleteGitIdentity(id: string): Promise<void>;
-  discoverGitCredentials?(): Promise<DiscoveredGitCredential[]>;
-  getGlobalGitIdentity?(): Promise<GitIdentitySummary | null>;
-  getRemoteUrl?(directory: string, remote?: string): Promise<string | null>;
-  getRemotes(directory: string): Promise<GitRemote[]>;
-  rebase(directory: string, options: { onto: string }): Promise<GitRebaseResult>;
-  abortRebase(directory: string): Promise<{ success: boolean }>;
-  continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
-  merge(directory: string, options: { branch: string }): Promise<GitMergeResult>;
-  abortMerge(directory: string): Promise<{ success: boolean }>;
-  continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
-  checkoutCommit(directory: string, hash: string): Promise<CheckoutCommitResponse>;
-  cherryPick(directory: string, hash: string): Promise<CherryPickResponse>;
-  revertCommit(directory: string, hash: string): Promise<RevertCommitResponse>;
-  resetToCommit(directory: string, hash: string, mode: 'soft' | 'mixed' | 'hard', force?: boolean): Promise<ResetToCommitResponse>;
-  stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
-  stashPop(directory: string): Promise<{ success: boolean }>;
-  getConflictDetails(directory: string): Promise<MergeConflictDetails>;
+    payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string },
+  ): Promise<GeneratedPullRequestDescription>
+  listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>
+  validateGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>
+  getGitWorktreeBootstrapStatus?(directory: string): Promise<GitWorktreeBootstrapStatus>
+  previewGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>
+  createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>
+  deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>
+  createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>
+  gitPush(
+    directory: string,
+    options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> },
+  ): Promise<GitPushResult>
+  gitPull(directory: string, options?: GitPullOptions): Promise<GitPullResult>
+  gitFetch(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>
+  listGitStashes(directory: string): Promise<{ stashes: GitStashEntry[] }>
+  countGitStashFiles(directory: string, refs: string[]): Promise<{ counts: Record<string, number> }>
+  stashGitChanges(
+    directory: string,
+    options?: { message?: string },
+  ): Promise<{ success: boolean; created: boolean; message: string; output: string }>
+  applyGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>
+  popGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>
+  dropGitStash(directory: string, options: { ref: string }): Promise<{ success: boolean; ref: string }>
+  checkoutBranch(directory: string, branch: string): Promise<{ success: boolean; branch: string }>
+  createBranch(directory: string, name: string, startPoint?: string): Promise<{ success: boolean; branch: string }>
+  renameBranch(directory: string, oldName: string, newName: string): Promise<{ success: boolean; branch: string }>
+  getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>
+  getCommitFiles(directory: string, hash: string): Promise<GitCommitFilesResponse>
+  getCommitFileDiff?(
+    directory: string,
+    hash: string,
+    filePath: string,
+    isBinary: boolean,
+  ): Promise<CommitFileDiffResponse>
+  getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null>
+  hasLocalIdentity?(directory: string): Promise<boolean>
+  setGitIdentity(directory: string, profileId: string): Promise<{ success: boolean; profile: GitIdentityProfile }>
+  getGitIdentities(): Promise<GitIdentityProfile[]>
+  createGitIdentity(profile: GitIdentityProfile): Promise<GitIdentityProfile>
+  updateGitIdentity(id: string, updates: GitIdentityProfile): Promise<GitIdentityProfile>
+  deleteGitIdentity(id: string): Promise<void>
+  discoverGitCredentials?(): Promise<DiscoveredGitCredential[]>
+  getGlobalGitIdentity?(): Promise<GitIdentitySummary | null>
+  getRemoteUrl?(directory: string, remote?: string): Promise<string | null>
+  getRemotes(directory: string): Promise<GitRemote[]>
+  rebase(directory: string, options: { onto: string }): Promise<GitRebaseResult>
+  abortRebase(directory: string): Promise<{ success: boolean }>
+  continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>
+  merge(directory: string, options: { branch: string }): Promise<GitMergeResult>
+  abortMerge(directory: string): Promise<{ success: boolean }>
+  continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>
+  checkoutCommit(directory: string, hash: string): Promise<CheckoutCommitResponse>
+  cherryPick(directory: string, hash: string): Promise<CherryPickResponse>
+  revertCommit(directory: string, hash: string): Promise<RevertCommitResponse>
+  resetToCommit(
+    directory: string,
+    hash: string,
+    mode: "soft" | "mixed" | "hard",
+    force?: boolean,
+  ): Promise<ResetToCommitResponse>
+  stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>
+  stashPop(directory: string): Promise<{ success: boolean }>
+  getConflictDetails(directory: string): Promise<MergeConflictDetails>
   /** Phase 1: validate that a cwd is inside a worktreeRoot */
-  validateWorktreeDirectory?(directory: string, worktreeRoot: string): Promise<{
-    valid: boolean;
-    insideWorktreeRoot: boolean;
-    resolvedWorktreeRoot: string | null;
-    resolvedCwd: string | null;
-  }>;
+  validateWorktreeDirectory?(
+    directory: string,
+    worktreeRoot: string,
+  ): Promise<{
+    valid: boolean
+    insideWorktreeRoot: boolean
+    resolvedWorktreeRoot: string | null
+    resolvedCwd: string | null
+  }>
   /** Phase 1: canonicalize a directory to full worktree state */
   canonicalizeWorktreeState?(directory: string): Promise<{
-    worktreeRoot: string | null;
-    cwd: string | null;
-    branch: string | null;
-    headState: 'branch' | 'detached' | 'unborn';
-    worktreeStatus: 'ready' | 'missing' | 'invalid' | 'not-a-repo';
-    legacy: boolean;
-    degraded: boolean;
-    attentionReason?: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'bisect' | null;
-  }>;
-  worktree?: GitWorktreeAPI;
+    worktreeRoot: string | null
+    cwd: string | null
+    branch: string | null
+    headState: "branch" | "detached" | "unborn"
+    worktreeStatus: "ready" | "missing" | "invalid" | "not-a-repo"
+    legacy: boolean
+    degraded: boolean
+    attentionReason?: "merge" | "rebase" | "cherry-pick" | "revert" | "bisect" | null
+  }>
+  worktree?: GitWorktreeAPI
 }
 
 export interface FileListEntry {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  size?: number;
-  modifiedTime?: number;
+  name: string
+  path: string
+  isDirectory: boolean
+  size?: number
+  modifiedTime?: number
 }
 
 export interface DirectoryListResult {
-  directory: string;
-  entries: FileListEntry[];
+  directory: string
+  entries: FileListEntry[]
 }
 
 export interface FileSearchQuery {
-  directory: string;
-  query: string;
-  maxResults?: number;
-  includeHidden?: boolean;
-  respectGitignore?: boolean;
+  directory: string
+  query: string
+  maxResults?: number
+  includeHidden?: boolean
+  respectGitignore?: boolean
 }
 
 export interface FileSearchResult {
-  path: string;
-  score?: number;
-  preview?: string[];
+  path: string
+  score?: number
+  preview?: string[]
 }
 
 export interface CommandExecResult {
-  command: string;
-  success: boolean;
-  exitCode?: number;
-  stdout?: string;
-  stderr?: string;
-  error?: string;
+  command: string
+  success: boolean
+  exitCode?: number
+  stdout?: string
+  stderr?: string
+  error?: string
 }
 
 export interface ListDirectoryOptions {
-  respectGitignore?: boolean;
+  respectGitignore?: boolean
 }
 
 export interface FileReadOptions {
-  allowOutsideWorkspace?: boolean;
-  optional?: boolean;
+  allowOutsideWorkspace?: boolean
+  optional?: boolean
 }
 
 export interface FilesAPI {
-  listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult>;
-  search(payload: FileSearchQuery): Promise<FileSearchResult[]>;
-  createDirectory(path: string): Promise<{ success: boolean; path: string }>;
-  statFile?(path: string, options?: FileReadOptions): Promise<{ path: string; isFile: boolean; size: number; mtimeMs?: number }>;
-  readFile?(path: string, options?: FileReadOptions): Promise<{ content: string; path: string }>;
-  readFileBinary?(path: string, options?: FileReadOptions): Promise<{ dataUrl: string; path: string }>;
-  writeFile?(path: string, content: string): Promise<{ success: boolean; path: string }>;
-  delete?(path: string): Promise<{ success: boolean }>;
-  rename?(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }>;
-  revealPath?(path: string): Promise<{ success: boolean }>;
-  execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>;
-  downloadFile?(path: string): Promise<void>;
+  listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult>
+  search(payload: FileSearchQuery): Promise<FileSearchResult[]>
+  createDirectory(path: string): Promise<{ success: boolean; path: string }>
+  statFile?(
+    path: string,
+    options?: FileReadOptions,
+  ): Promise<{ path: string; isFile: boolean; size: number; mtimeMs?: number }>
+  readFile?(path: string, options?: FileReadOptions): Promise<{ content: string; path: string }>
+  readFileBinary?(path: string, options?: FileReadOptions): Promise<{ dataUrl: string; path: string }>
+  writeFile?(path: string, content: string): Promise<{ success: boolean; path: string }>
+  delete?(path: string): Promise<{ success: boolean }>
+  rename?(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }>
+  revealPath?(path: string): Promise<{ success: boolean }>
+  execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>
+  downloadFile?(path: string): Promise<void>
 }
 
 export interface ProjectEntry {
-  id: string;
-  path: string;
-  label?: string;
-  icon?: string | null;
+  id: string
+  path: string
+  label?: string
+  icon?: string | null
   iconImage?: {
-    mime: string;
-    updatedAt: number;
-    source: 'custom' | 'auto';
-  } | null;
-  iconBackground?: string | null;
-  color?: string | null;
-  addedAt?: number;
-  lastOpenedAt?: number;
-  sidebarCollapsed?: boolean;
+    mime: string
+    updatedAt: number
+    source: "custom" | "auto"
+  } | null
+  iconBackground?: string | null
+  color?: string | null
+  addedAt?: number
+  lastOpenedAt?: number
+  sidebarCollapsed?: boolean
 }
 
 export interface SettingsPayload {
-  themeId?: string;
-  useSystemTheme?: boolean;
-  themeVariant?: 'light' | 'dark';
-  lightThemeId?: string;
-  darkThemeId?: string;
-  lastDirectory?: string;
-  homeDirectory?: string;
-  axCodeBinary?: string;
-  projects?: ProjectEntry[];
-  activeProjectId?: string;
-  approvedDirectories?: string[];
-  securityScopedBookmarks?: string[];
-  pinnedDirectories?: string[];
-  showReasoningTraces?: boolean;
-  collapsibleThinkingBlocks?: boolean;
-  showDeletionDialog?: boolean;
-  nativeNotificationsEnabled?: boolean;
-  notificationMode?: 'always' | 'hidden-only';
-  autoDeleteEnabled?: boolean;
-  autoDeleteAfterDays?: number;
-  sessionRetentionAction?: 'archive' | 'delete';
-  queueModeEnabled?: boolean;
-  gitmojiEnabled?: boolean;
-  inputSpellcheckEnabled?: boolean;
-  showToolFileIcons?: boolean;
-  showExpandedBashTools?: boolean;
-  showExpandedEditTools?: boolean;
-  chatRenderMode?: 'sorted' | 'live';
-  messageStreamTransport?: 'auto' | 'ws' | 'sse';
-  activityRenderMode?: 'collapsed' | 'summary';
-  mermaidRenderingMode?: 'svg' | 'ascii';
-  showSplitAssistantMessageActions?: boolean;
-  fontSize?: number;
-  terminalFontSize?: number;
-  uiFont?: string;
-  monoFont?: string;
-  padding?: number;
-  cornerRadius?: number;
-  inputBarOffset?: number;
-  diffLayoutPreference?: 'dynamic' | 'inline' | 'side-by-side';
-  diffViewMode?: 'single' | 'stacked';
-  gitChangesViewMode?: 'flat' | 'tree';
-  directoryShowHidden?: boolean;
-  filesViewShowGitignored?: boolean;
-  openInAppId?: string;
-  gitProviderId?: string;
-  gitModelId?: string;
-  draftStarters?: DraftStarterRef[];
+  themeId?: string
+  useSystemTheme?: boolean
+  themeVariant?: "light" | "dark"
+  lightThemeId?: string
+  darkThemeId?: string
+  lastDirectory?: string
+  homeDirectory?: string
+  axCodeBinary?: string
+  projects?: ProjectEntry[]
+  activeProjectId?: string
+  approvedDirectories?: string[]
+  securityScopedBookmarks?: string[]
+  pinnedDirectories?: string[]
+  showReasoningTraces?: boolean
+  collapsibleThinkingBlocks?: boolean
+  showDeletionDialog?: boolean
+  nativeNotificationsEnabled?: boolean
+  notificationMode?: "always" | "hidden-only"
+  autoDeleteEnabled?: boolean
+  autoDeleteAfterDays?: number
+  sessionRetentionAction?: "archive" | "delete"
+  queueModeEnabled?: boolean
+  gitmojiEnabled?: boolean
+  inputSpellcheckEnabled?: boolean
+  showToolFileIcons?: boolean
+  showExpandedBashTools?: boolean
+  showExpandedEditTools?: boolean
+  chatRenderMode?: "sorted" | "live"
+  messageStreamTransport?: "auto" | "ws" | "sse"
+  activityRenderMode?: "collapsed" | "summary"
+  mermaidRenderingMode?: "svg" | "ascii"
+  showSplitAssistantMessageActions?: boolean
+  fontSize?: number
+  terminalFontSize?: number
+  uiFont?: string
+  monoFont?: string
+  padding?: number
+  cornerRadius?: number
+  inputBarOffset?: number
+  diffLayoutPreference?: "dynamic" | "inline" | "side-by-side"
+  diffViewMode?: "single" | "stacked"
+  gitChangesViewMode?: "flat" | "tree"
+  directoryShowHidden?: boolean
+  filesViewShowGitignored?: boolean
+  openInAppId?: string
+  gitProviderId?: string
+  gitModelId?: string
+  draftStarters?: DraftStarterRef[]
 
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 export interface SettingsLoadResult {
-  settings: SettingsPayload;
-  source: 'desktop' | 'web';
+  settings: SettingsPayload
+  source: "desktop" | "web"
 }
 
 export interface SettingsAPI {
-  load(): Promise<SettingsLoadResult>;
-  save(changes: Partial<SettingsPayload>): Promise<SettingsPayload>;
+  load(): Promise<SettingsLoadResult>
+  save(changes: Partial<SettingsPayload>): Promise<SettingsPayload>
 
-  restartAxCode?: () => Promise<{ restarted: boolean }>;
+  restartAxCode?: () => Promise<{ restarted: boolean }>
 }
 
 export interface DirectoryPermissionRequest {
-  path: string;
+  path: string
 }
 
 export interface DirectoryPermissionResult {
-  success: boolean;
-  path?: string;
-  error?: string;
+  success: boolean
+  path?: string
+  error?: string
 }
 
 export interface StartAccessingResult {
-  success: boolean;
-  error?: string;
+  success: boolean
+  error?: string
 }
 
 export interface PermissionsAPI {
-  requestDirectoryAccess(request: DirectoryPermissionRequest): Promise<DirectoryPermissionResult>;
-  startAccessingDirectory(path: string): Promise<StartAccessingResult>;
-  stopAccessingDirectory(path: string): Promise<StartAccessingResult>;
+  requestDirectoryAccess(request: DirectoryPermissionRequest): Promise<DirectoryPermissionResult>
+  startAccessingDirectory(path: string): Promise<StartAccessingResult>
+  stopAccessingDirectory(path: string): Promise<StartAccessingResult>
 }
 
 export interface NotificationPayload {
-  title?: string;
-  body?: string;
+  title?: string
+  body?: string
 
-  tag?: string;
+  tag?: string
 }
 
 export interface NotificationsAPI {
-  notifyAgentCompletion(payload?: NotificationPayload): Promise<boolean>;
-  canNotify?: () => boolean | Promise<boolean>;
+  notifyAgentCompletion(payload?: NotificationPayload): Promise<boolean>
+  canNotify?: () => boolean | Promise<boolean>
 }
 
 export interface DiagnosticsAPI {
-  downloadLogs(): Promise<{ fileName: string; content: string }>;
+  downloadLogs(): Promise<{ fileName: string; content: string }>
 }
 
 export interface ToolsAPI {
-
-  getAvailableTools(): Promise<string[]>;
+  getAvailableTools(): Promise<string[]>
 }
 
 export interface EditorAPI {
-  openFile(path: string, line?: number, column?: number): Promise<void>;
+  openFile(path: string, line?: number, column?: number): Promise<void>
   openDiff(
     original: string,
     modified: string,
     label?: string,
     options?: { line?: number; patch?: string },
-  ): Promise<void>;
+  ): Promise<void>
 }
 
 export type GitHubUserSummary = {
-  login: string;
-  id?: number;
-  avatarUrl?: string;
-  name?: string;
-  email?: string;
-};
+  login: string
+  id?: number
+  avatarUrl?: string
+  name?: string
+  email?: string
+}
 
 export type GitHubRepoRef = {
-  owner: string;
-  repo: string;
-  url: string;
-};
+  owner: string
+  repo: string
+  url: string
+}
 
 export type GitHubChecksSummary = {
-  state: 'success' | 'failure' | 'pending' | 'unknown';
-  total: number;
-  success: number;
-  failure: number;
-  pending: number;
-};
+  state: "success" | "failure" | "pending" | "unknown"
+  total: number
+  success: number
+  failure: number
+  pending: number
+}
 
 export type GitHubCheckRun = {
-  id?: number;
-  name: string;
+  id?: number
+  name: string
   app?: {
-    name?: string;
-    slug?: string;
-  };
-  status?: string;
-  conclusion?: string | null;
-  detailsUrl?: string;
+    name?: string
+    slug?: string
+  }
+  status?: string
+  conclusion?: string | null
+  detailsUrl?: string
   output?: {
-    title?: string;
-    summary?: string;
-    text?: string;
-  };
+    title?: string
+    summary?: string
+    text?: string
+  }
   job?: {
-    runId?: number;
-    jobId?: number;
-    url?: string;
-    name?: string;
-    conclusion?: string | null;
+    runId?: number
+    jobId?: number
+    url?: string
+    name?: string
+    conclusion?: string | null
     steps?: Array<{
-      name: string;
-      status?: string;
-      conclusion?: string | null;
-      number?: number;
-      startedAt?: string;
-      completedAt?: string;
-    }>;
-  };
+      name: string
+      status?: string
+      conclusion?: string | null
+      number?: number
+      startedAt?: string
+      completedAt?: string
+    }>
+  }
   annotations?: Array<{
-    path?: string;
-    startLine?: number;
-    endLine?: number;
-    level?: string;
-    message: string;
-    title?: string;
-    rawDetails?: string;
-  }>;
-};
+    path?: string
+    startLine?: number
+    endLine?: number
+    level?: string
+    message: string
+    title?: string
+    rawDetails?: string
+  }>
+}
 
 export type GitHubPullRequest = {
-  number: number;
-  title: string;
-  body?: string;
-  url: string;
-  state: 'open' | 'closed' | 'merged';
-  draft: boolean;
-  base: string;
-  head: string;
-  headSha?: string;
-  mergeable?: boolean | null;
-  mergeableState?: string | null;
-};
+  number: number
+  title: string
+  body?: string
+  url: string
+  state: "open" | "closed" | "merged"
+  draft: boolean
+  base: string
+  head: string
+  headSha?: string
+  mergeable?: boolean | null
+  mergeableState?: string | null
+}
 
 export type GitHubPullRequestHeadRepo = {
-  owner: string;
-  repo: string;
-  url: string;
-  cloneUrl?: string;
-  sshUrl?: string;
-};
+  owner: string
+  repo: string
+  url: string
+  cloneUrl?: string
+  sshUrl?: string
+}
 
 export type GitHubPullRequestSummary = GitHubPullRequest & {
-  author?: GitHubUserSummary | null;
-  body?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  headLabel?: string;
-  headRepo?: GitHubPullRequestHeadRepo | null;
-  sourceRepo?: (GitHubRepoSelector & { source: string }) | null;
-};
+  author?: GitHubUserSummary | null
+  body?: string
+  createdAt?: string
+  updatedAt?: string
+  headLabel?: string
+  headRepo?: GitHubPullRequestHeadRepo | null
+  sourceRepo?: (GitHubRepoSelector & { source: string }) | null
+}
 
 export type GitHubPullRequestFile = {
-  filename: string;
-  status?: string;
-  additions?: number;
-  deletions?: number;
-  changes?: number;
-  patch?: string;
-};
+  filename: string
+  status?: string
+  additions?: number
+  deletions?: number
+  changes?: number
+  patch?: string
+}
 
 export type GitHubPullRequestReviewComment = {
-  id: number;
-  url: string;
-  body: string;
-  author?: GitHubUserSummary | null;
-  path?: string;
-  line?: number | null;
-  position?: number | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
+  id: number
+  url: string
+  body: string
+  author?: GitHubUserSummary | null
+  path?: string
+  line?: number | null
+  position?: number | null
+  createdAt?: string
+  updatedAt?: string
+}
 
 export type GitHubPullRequestsListResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  prs?: GitHubPullRequestSummary[];
-  page?: number;
-  hasMore?: boolean;
-};
+  connected: boolean
+  repo?: GitHubRepoRef | null
+  prs?: GitHubPullRequestSummary[]
+  page?: number
+  hasMore?: boolean
+}
 
 export type GitHubPullRequestContextResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  pr?: GitHubPullRequestSummary | null;
-  issueComments?: GitHubIssueComment[];
-  reviewComments?: GitHubPullRequestReviewComment[];
-  files?: GitHubPullRequestFile[];
-  diff?: string;
-  checks?: GitHubChecksSummary | null;
-  checkRuns?: GitHubCheckRun[];
-};
+  connected: boolean
+  repo?: GitHubRepoRef | null
+  pr?: GitHubPullRequestSummary | null
+  issueComments?: GitHubIssueComment[]
+  reviewComments?: GitHubPullRequestReviewComment[]
+  files?: GitHubPullRequestFile[]
+  diff?: string
+  checks?: GitHubChecksSummary | null
+  checkRuns?: GitHubCheckRun[]
+}
 
 export type GitHubPullRequestStatus = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  branch?: string;
-  pr?: GitHubPullRequest | null;
-  checks?: GitHubChecksSummary | null;
-  canMerge?: boolean;
-  defaultBranch?: string | null;
-  resolvedRemoteName?: string | null;
-};
+  connected: boolean
+  repo?: GitHubRepoRef | null
+  branch?: string
+  pr?: GitHubPullRequest | null
+  checks?: GitHubChecksSummary | null
+  canMerge?: boolean
+  defaultBranch?: string | null
+  resolvedRemoteName?: string | null
+}
 
 export type GitHubPullRequestCreateInput = {
-  directory: string;
-  title: string;
-  head: string;
-  base: string;
-  body?: string;
-  draft?: boolean;
+  directory: string
+  title: string
+  head: string
+  base: string
+  body?: string
+  draft?: boolean
   /** Remote to create the PR against (target repo, e.g., 'upstream' for forks) */
-  remote?: string;
+  remote?: string
   /** Remote where the head branch lives (source repo, e.g., 'origin' for forks) */
-  headRemote?: string;
+  headRemote?: string
   /** Explicit target repo (alternative to remote, for auto-detected upstream) */
-  targetRepo?: { owner: string; repo: string };
-};
+  targetRepo?: { owner: string; repo: string }
+}
 
 export type GitHubPullRequestUpdateInput = {
-  directory: string;
-  number: number;
-  title: string;
-  body?: string;
-};
+  directory: string
+  number: number
+  title: string
+  body?: string
+}
 
 export type GitHubPullRequestMergeInput = {
-  directory: string;
-  number: number;
-  method: 'merge' | 'squash' | 'rebase';
-};
+  directory: string
+  number: number
+  method: "merge" | "squash" | "rebase"
+}
 
 export type GitHubPullRequestReadyInput = {
-  directory: string;
-  number: number;
-};
+  directory: string
+  number: number
+}
 
 export type GitHubPullRequestReadyResult = {
-  ready: boolean;
-};
+  ready: boolean
+}
 
 export type GitHubPullRequestMergeResult = {
-  merged: boolean;
-  message?: string;
-};
+  merged: boolean
+  message?: string
+}
 
 export type GitHubIssueLabel = {
-  name: string;
-  color?: string;
-};
+  name: string
+  color?: string
+}
 
 export type GitHubRepoSelector = {
-  owner: string;
-  repo: string;
-};
+  owner: string
+  repo: string
+}
 
 export type GitHubIssueSummary = {
-  number: number;
-  title: string;
-  url: string;
-  state: 'open' | 'closed';
-  author?: GitHubUserSummary | null;
-  labels?: GitHubIssueLabel[];
-  sourceRepo?: (GitHubRepoSelector & { source: string }) | null;
-};
+  number: number
+  title: string
+  url: string
+  state: "open" | "closed"
+  author?: GitHubUserSummary | null
+  labels?: GitHubIssueLabel[]
+  sourceRepo?: (GitHubRepoSelector & { source: string }) | null
+}
 
 export type GitHubIssue = GitHubIssueSummary & {
-  body?: string;
-  assignees?: GitHubUserSummary[];
-  createdAt?: string;
-  updatedAt?: string;
-};
+  body?: string
+  assignees?: GitHubUserSummary[]
+  createdAt?: string
+  updatedAt?: string
+}
 
 export type GitHubIssueComment = {
-  id: number;
-  url: string;
-  body: string;
-  author?: GitHubUserSummary | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
+  id: number
+  url: string
+  body: string
+  author?: GitHubUserSummary | null
+  createdAt?: string
+  updatedAt?: string
+}
 
 export type GitHubIssuesListResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  issues?: GitHubIssueSummary[];
-  page?: number;
-  hasMore?: boolean;
-};
+  connected: boolean
+  repo?: GitHubRepoRef | null
+  issues?: GitHubIssueSummary[]
+  page?: number
+  hasMore?: boolean
+}
 
 export type GitHubRepoUpstreamResult = {
-  connected: boolean;
-  isFork: boolean;
-  upstream: { owner: string; repo: string; url: string; defaultBranch: string; defaultBranchSha: string | null; remoteName: string | null } | null;
-};
+  connected: boolean
+  isFork: boolean
+  upstream: {
+    owner: string
+    repo: string
+    url: string
+    defaultBranch: string
+    defaultBranchSha: string | null
+    remoteName: string | null
+  } | null
+}
 
 export type GitHubIssueGetResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  issue?: GitHubIssue | null;
-};
+  connected: boolean
+  repo?: GitHubRepoRef | null
+  issue?: GitHubIssue | null
+}
 
 export type GitHubIssueCommentsResult = {
-  connected: boolean;
-  repo?: GitHubRepoRef | null;
-  comments?: GitHubIssueComment[];
-};
+  connected: boolean
+  repo?: GitHubRepoRef | null
+  comments?: GitHubIssueComment[]
+}
 
 export type GitHubAuthStatus = {
-  connected: boolean;
-  user?: GitHubUserSummary | null;
-  scope?: string;
-  accounts?: GitHubAuthAccount[];
-};
+  connected: boolean
+  user?: GitHubUserSummary | null
+  scope?: string
+  accounts?: GitHubAuthAccount[]
+}
 
 export type GitHubAuthAccount = {
-  id: string;
-  user: GitHubUserSummary;
-  scope?: string;
-  current?: boolean;
-};
+  id: string
+  user: GitHubUserSummary
+  scope?: string
+  current?: boolean
+}
 
 export type GitHubDeviceFlowStart = {
-  deviceCode: string;
-  userCode: string;
-  verificationUri: string;
-  verificationUriComplete?: string;
-  expiresIn: number;
-  interval: number;
-  scope?: string;
-};
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  verificationUriComplete?: string
+  expiresIn: number
+  interval: number
+  scope?: string
+}
 
 export type GitHubDeviceFlowComplete =
   | { connected: true; user: GitHubUserSummary; scope?: string }
-  | { connected: false; status?: string; error?: string };
+  | { connected: false; status?: string; error?: string }
 
 export interface GitHubAPI {
-  authStatus(): Promise<GitHubAuthStatus>;
-  authStart(): Promise<GitHubDeviceFlowStart>;
-  authComplete(deviceCode: string): Promise<GitHubDeviceFlowComplete>;
-  authDisconnect(): Promise<{ removed: boolean }>;
-  authActivate(accountId: string): Promise<GitHubAuthStatus>;
-  me?(): Promise<GitHubUserSummary>;
+  authStatus(): Promise<GitHubAuthStatus>
+  authStart(): Promise<GitHubDeviceFlowStart>
+  authComplete(deviceCode: string): Promise<GitHubDeviceFlowComplete>
+  authDisconnect(): Promise<{ removed: boolean }>
+  authActivate(accountId: string): Promise<GitHubAuthStatus>
+  me?(): Promise<GitHubUserSummary>
 
-  prStatus(directory: string, branch: string, remote?: string, options?: { force?: boolean }): Promise<GitHubPullRequestStatus>;
-  prCreate(payload: GitHubPullRequestCreateInput): Promise<GitHubPullRequest>;
-  prUpdate(payload: GitHubPullRequestUpdateInput): Promise<GitHubPullRequest>;
-  prMerge(payload: GitHubPullRequestMergeInput): Promise<GitHubPullRequestMergeResult>;
-  prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult>;
+  prStatus(
+    directory: string,
+    branch: string,
+    remote?: string,
+    options?: { force?: boolean },
+  ): Promise<GitHubPullRequestStatus>
+  prCreate(payload: GitHubPullRequestCreateInput): Promise<GitHubPullRequest>
+  prUpdate(payload: GitHubPullRequestUpdateInput): Promise<GitHubPullRequest>
+  prMerge(payload: GitHubPullRequestMergeInput): Promise<GitHubPullRequestMergeResult>
+  prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult>
 
-  prsList(directory: string, options?: { page?: number }): Promise<GitHubPullRequestsListResult>;
+  prsList(directory: string, options?: { page?: number }): Promise<GitHubPullRequestsListResult>
   prContext(
     directory: string,
     number: number,
-    options?: { includeDiff?: boolean; includeCheckDetails?: boolean; sourceRepo?: GitHubRepoSelector | null }
-  ): Promise<GitHubPullRequestContextResult>;
+    options?: { includeDiff?: boolean; includeCheckDetails?: boolean; sourceRepo?: GitHubRepoSelector | null },
+  ): Promise<GitHubPullRequestContextResult>
 
-  issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult>;
-  issueGet(directory: string, number: number, options?: { sourceRepo?: GitHubRepoSelector | null }): Promise<GitHubIssueGetResult>;
-  issueComments(directory: string, number: number, options?: { sourceRepo?: GitHubRepoSelector | null }): Promise<GitHubIssueCommentsResult>;
-  repoUpstream(directory: string): Promise<GitHubRepoUpstreamResult>;
-  repoBranches(owner: string, repo: string): Promise<string[]>;
+  issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult>
+  issueGet(
+    directory: string,
+    number: number,
+    options?: { sourceRepo?: GitHubRepoSelector | null },
+  ): Promise<GitHubIssueGetResult>
+  issueComments(
+    directory: string,
+    number: number,
+    options?: { sourceRepo?: GitHubRepoSelector | null },
+  ): Promise<GitHubIssueCommentsResult>
+  repoUpstream(directory: string): Promise<GitHubRepoUpstreamResult>
+  repoBranches(owner: string, repo: string): Promise<string[]>
 }
 
 export interface RuntimeAPIs {
-  runtime: RuntimeDescriptor;
-  terminal: TerminalAPI;
-  git: GitAPI;
-  files: FilesAPI;
-  settings: SettingsAPI;
-  permissions: PermissionsAPI;
-  notifications: NotificationsAPI;
-  github?: GitHubAPI;
-  diagnostics?: DiagnosticsAPI;
-  tools: ToolsAPI;
-  editor?: EditorAPI;
-  worktrees?: WorktreeMetadata[];
+  runtime: RuntimeDescriptor
+  terminal: TerminalAPI
+  git: GitAPI
+  files: FilesAPI
+  settings: SettingsAPI
+  permissions: PermissionsAPI
+  notifications: NotificationsAPI
+  github?: GitHubAPI
+  diagnostics?: DiagnosticsAPI
+  tools: ToolsAPI
+  editor?: EditorAPI
+  worktrees?: WorktreeMetadata[]
 }
 
-export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;
+export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue
 
 // ============== Skills Catalog Types ==============
 
-export type SkillsCatalogSourceId = string;
+export type SkillsCatalogSourceId = string
 
-export type SkillsCatalogSourceType = 'github' | 'clawdhub';
+export type SkillsCatalogSourceType = "github" | "clawdhub"
 
 export interface SkillsCatalogSource {
-  id: SkillsCatalogSourceId;
-  label: string;
-  description?: string;
-  source: string;
-  defaultSubpath?: string;
-  sourceType?: SkillsCatalogSourceType;
+  id: SkillsCatalogSourceId
+  label: string
+  description?: string
+  source: string
+  defaultSubpath?: string
+  sourceType?: SkillsCatalogSourceType
 }
 
 export interface SkillsCatalogItemInstalledBadge {
-  isInstalled: boolean;
-  scope?: 'user' | 'project';
-  source?: 'ax-code' | 'agents' | 'claude';
+  isInstalled: boolean
+  scope?: "user" | "project"
+  source?: "ax-code" | "agents" | "claude"
 }
 
 export interface ClawdHubSkillMetadata {
-  slug: string;
-  version: string;
-  displayName?: string;
-  owner?: string;
-  downloads?: number;
-  stars?: number;
-  versionsCount?: number;
-  createdAt?: number;
-  updatedAt?: number;
+  slug: string
+  version: string
+  displayName?: string
+  owner?: string
+  downloads?: number
+  stars?: number
+  versionsCount?: number
+  createdAt?: number
+  updatedAt?: number
 }
 
 export interface SkillsCatalogItem {
-  sourceId: SkillsCatalogSourceId;
-  repoSource: string;
-  repoSubpath?: string;
-  gitIdentityId?: string;
-  skillDir: string;
-  skillName: string;
-  frontmatterName?: string;
-  description?: string;
-  installable: boolean;
-  warnings?: string[];
-  installed?: SkillsCatalogItemInstalledBadge;
+  sourceId: SkillsCatalogSourceId
+  repoSource: string
+  repoSubpath?: string
+  gitIdentityId?: string
+  skillDir: string
+  skillName: string
+  frontmatterName?: string
+  description?: string
+  installable: boolean
+  warnings?: string[]
+  installed?: SkillsCatalogItemInstalledBadge
   /** ClawdHub-specific metadata (present only for ClawdHub sources) */
-  clawdhub?: ClawdHubSkillMetadata;
+  clawdhub?: ClawdHubSkillMetadata
 }
 
 export interface SkillsCatalogResponse {
-  ok: boolean;
-  sources?: SkillsCatalogSource[];
-  itemsBySource?: Record<SkillsCatalogSourceId, SkillsCatalogItem[]>;
-  pageInfoBySource?: Record<SkillsCatalogSourceId, { nextCursor?: string | null }>;
-  error?: { kind: string; message: string };
+  ok: boolean
+  sources?: SkillsCatalogSource[]
+  itemsBySource?: Record<SkillsCatalogSourceId, SkillsCatalogItem[]>
+  pageInfoBySource?: Record<SkillsCatalogSourceId, { nextCursor?: string | null }>
+  error?: { kind: string; message: string }
 }
 
 export interface SkillsCatalogSourceResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  nextCursor?: string | null;
-  error?: { kind: string; message: string };
+  ok: boolean
+  items?: SkillsCatalogItem[]
+  nextCursor?: string | null
+  error?: { kind: string; message: string }
 }
 
 export interface SkillsRepoScanRequest {
-  source: string;
-  subpath?: string;
-  gitIdentityId?: string;
+  source: string
+  subpath?: string
+  gitIdentityId?: string
 }
 
 export type SkillsRepoScanError =
-  | { kind: 'authRequired'; message: string; sshOnly: true; identities?: Array<{ id: string; name: string }> }
-  | { kind: 'invalidSource'; message: string }
-  | { kind: 'gitUnavailable'; message: string }
-  | { kind: 'networkError'; message: string }
-  | { kind: 'unknown'; message: string };
+  | { kind: "authRequired"; message: string; sshOnly: true; identities?: Array<{ id: string; name: string }> }
+  | { kind: "invalidSource"; message: string }
+  | { kind: "gitUnavailable"; message: string }
+  | { kind: "networkError"; message: string }
+  | { kind: "unknown"; message: string }
 
 export interface SkillsRepoScanResponse {
-  ok: boolean;
-  items?: SkillsCatalogItem[];
-  error?: SkillsRepoScanError;
+  ok: boolean
+  items?: SkillsCatalogItem[]
+  error?: SkillsRepoScanError
 }
 
 export interface SkillsInstallSelection {
-  skillDir: string;
+  skillDir: string
   /** ClawdHub-specific metadata for installation */
   clawdhub?: {
-    slug: string;
-    version: string;
-  };
+    slug: string
+    version: string
+  }
 }
 
 export interface SkillsInstallRequest {
-  source: string;
-  subpath?: string;
-  gitIdentityId?: string;
-  scope: 'user' | 'project';
-  targetSource?: 'ax-code' | 'agents';
-  selections: SkillsInstallSelection[];
-  conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
-  conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
+  source: string
+  subpath?: string
+  gitIdentityId?: string
+  scope: "user" | "project"
+  targetSource?: "ax-code" | "agents"
+  selections: SkillsInstallSelection[]
+  conflictPolicy?: "prompt" | "skipAll" | "overwriteAll"
+  conflictDecisions?: Record<string, "skip" | "overwrite">
 }
 
-export type SkillsInstallError = SkillsRepoScanError | {
-  kind: 'conflicts';
-  message: string;
-  conflicts: Array<{ skillName: string; scope: 'user' | 'project'; source?: 'ax-code' | 'agents' }>;
-};
+export type SkillsInstallError =
+  | SkillsRepoScanError
+  | {
+      kind: "conflicts"
+      message: string
+      conflicts: Array<{ skillName: string; scope: "user" | "project"; source?: "ax-code" | "agents" }>
+    }
 
 export interface SkillsInstallResponse {
-  ok: boolean;
-  installed?: Array<{ skillName: string; scope: 'user' | 'project'; source?: 'ax-code' | 'agents' }>;
-  skipped?: Array<{ skillName: string; reason: string }>;
-  error?: SkillsInstallError;
-  requiresReload?: boolean;
-  message?: string;
-  reloadDelayMs?: number;
+  ok: boolean
+  installed?: Array<{ skillName: string; scope: "user" | "project"; source?: "ax-code" | "agents" }>
+  skipped?: Array<{ skillName: string; reason: string }>
+  error?: SkillsInstallError
+  requiresReload?: boolean
+  message?: string
+  reloadDelayMs?: number
 }

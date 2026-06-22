@@ -1,108 +1,112 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import {
-  createSnippet,
-  deleteSnippet,
-  expandSnippets,
-  getSnippet,
-  listSnippets,
-  updateSnippet,
-} from './snippets.js';
+import { afterEach, beforeEach, describe, expect, test } from "vitest"
+import fs from "fs"
+import os from "os"
+import path from "path"
+import { createSnippet, deleteSnippet, expandSnippets, getSnippet, listSnippets, updateSnippet } from "./snippets.js"
 
-let projectDir;
+let projectDir
 
 function writeSnippet(relativePath, content) {
-  const filePath = path.join(projectDir, relativePath);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, content, 'utf8');
+  const filePath = path.join(projectDir, relativePath)
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+  fs.writeFileSync(filePath, content, "utf8")
 }
 
-describe('snippets', () => {
+describe("snippets", () => {
   beforeEach(() => {
-    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-snippets-'));
-  });
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "openchamber-snippets-"))
+  })
 
   afterEach(() => {
-    fs.rmSync(projectDir, { recursive: true, force: true });
-  });
+    fs.rmSync(projectDir, { recursive: true, force: true })
+  })
 
-  test('loads project snippets with aliases and description', () => {
-    writeSnippet('.ax-code/snippet/review.md', '---\naliases: [rev]\ndescription: Review helper\n---\nReview carefully.');
+  test("loads project snippets with aliases and description", () => {
+    writeSnippet(
+      ".ax-code/snippet/review.md",
+      "---\naliases: [rev]\ndescription: Review helper\n---\nReview carefully.",
+    )
 
     expect(listSnippets(projectDir)).toContainEqual(
-      expect.objectContaining({ name: 'review', aliases: ['rev'], description: 'Review helper', source: 'project' }),
-    );
-    expect(getSnippet('rev', projectDir)).toEqual(expect.objectContaining({ name: 'review' }));
-  });
+      expect.objectContaining({ name: "review", aliases: ["rev"], description: "Review helper", source: "project" }),
+    )
+    expect(getSnippet("rev", projectDir)).toEqual(expect.objectContaining({ name: "review" }))
+  })
 
-  test('snippet directory wins over snippets directory', () => {
-    writeSnippet('.ax-code/snippets/same.md', 'Old');
-    writeSnippet('.ax-code/snippet/same.md', 'New');
+  test("snippet directory wins over snippets directory", () => {
+    writeSnippet(".ax-code/snippets/same.md", "Old")
+    writeSnippet(".ax-code/snippet/same.md", "New")
 
-    expect(getSnippet('same', projectDir)?.content).toBe('New');
-  });
+    expect(getSnippet("same", projectDir)?.content).toBe("New")
+  })
 
-  test('canonical snippet names take precedence over colliding aliases', () => {
-    writeSnippet('.ax-code/snippets/review.md', 'Review by name');
-    writeSnippet('.ax-code/snippet/helper.md', '---\naliases: [review, help]\n---\nReview by alias');
+  test("canonical snippet names take precedence over colliding aliases", () => {
+    writeSnippet(".ax-code/snippets/review.md", "Review by name")
+    writeSnippet(".ax-code/snippet/helper.md", "---\naliases: [review, help]\n---\nReview by alias")
 
-    expect(getSnippet('review', projectDir)).toEqual(expect.objectContaining({ name: 'review', content: 'Review by name' }));
-    expect(getSnippet('help', projectDir)).toEqual(expect.objectContaining({ name: 'helper', content: 'Review by alias' }));
-    expect(expandSnippets('Use #review and #help', projectDir)).toBe('Use Review by name and Review by alias');
-  });
+    expect(getSnippet("review", projectDir)).toEqual(
+      expect.objectContaining({ name: "review", content: "Review by name" }),
+    )
+    expect(getSnippet("help", projectDir)).toEqual(
+      expect.objectContaining({ name: "helper", content: "Review by alias" }),
+    )
+    expect(expandSnippets("Use #review and #help", projectDir)).toBe("Use Review by name and Review by alias")
+  })
 
-  test('canonical snippet names override earlier same-directory aliases', () => {
-    writeSnippet('.ax-code/snippet/alias-first.md', '---\naliases: [review, assist]\n---\nReview by alias');
-    writeSnippet('.ax-code/snippet/review.md', 'Review by name');
+  test("canonical snippet names override earlier same-directory aliases", () => {
+    writeSnippet(".ax-code/snippet/alias-first.md", "---\naliases: [review, assist]\n---\nReview by alias")
+    writeSnippet(".ax-code/snippet/review.md", "Review by name")
 
-    const snippetDir = path.join(projectDir, '.ax-code', 'snippet');
-    const originalReaddirSync = fs.readdirSync;
+    const snippetDir = path.join(projectDir, ".ax-code", "snippet")
+    const originalReaddirSync = fs.readdirSync
     fs.readdirSync = function readdirSync(dir, ...args) {
-      if (dir === snippetDir) return ['alias-first.md', 'review.md'];
-      return originalReaddirSync.call(fs, dir, ...args);
-    };
+      if (dir === snippetDir) return ["alias-first.md", "review.md"]
+      return originalReaddirSync.call(fs, dir, ...args)
+    }
 
     try {
-      expect(getSnippet('review', projectDir)).toEqual(expect.objectContaining({ name: 'review', content: 'Review by name' }));
-      expect(getSnippet('assist', projectDir)).toEqual(expect.objectContaining({ name: 'alias-first', content: 'Review by alias' }));
-      expect(expandSnippets('Use #review and #assist', projectDir)).toBe('Use Review by name and Review by alias');
+      expect(getSnippet("review", projectDir)).toEqual(
+        expect.objectContaining({ name: "review", content: "Review by name" }),
+      )
+      expect(getSnippet("assist", projectDir)).toEqual(
+        expect.objectContaining({ name: "alias-first", content: "Review by alias" }),
+      )
+      expect(expandSnippets("Use #review and #assist", projectDir)).toBe("Use Review by name and Review by alias")
     } finally {
-      fs.readdirSync = originalReaddirSync;
+      fs.readdirSync = originalReaddirSync
     }
-  });
+  })
 
-  test('creates updates and deletes snippets', () => {
-    expect(createSnippet('custom-one', { content: 'Body', aliases: ['co'] }, projectDir, 'project')).toEqual(
-      expect.objectContaining({ name: 'custom-one', content: 'Body', aliases: ['co'] }),
-    );
-    expect(updateSnippet('custom-one', { content: 'Updated' }, projectDir)).toEqual(
-      expect.objectContaining({ name: 'custom-one', content: 'Updated', aliases: ['co'] }),
-    );
-    deleteSnippet('custom-one', projectDir);
-    expect(getSnippet('custom-one', projectDir)).toBeNull();
-  });
+  test("creates updates and deletes snippets", () => {
+    expect(createSnippet("custom-one", { content: "Body", aliases: ["co"] }, projectDir, "project")).toEqual(
+      expect.objectContaining({ name: "custom-one", content: "Body", aliases: ["co"] }),
+    )
+    expect(updateSnippet("custom-one", { content: "Updated" }, projectDir)).toEqual(
+      expect.objectContaining({ name: "custom-one", content: "Updated", aliases: ["co"] }),
+    )
+    deleteSnippet("custom-one", projectDir)
+    expect(getSnippet("custom-one", projectDir)).toBeNull()
+  })
 
-  test('writes project snippets to an existing plural directory when singular is absent', () => {
-    fs.mkdirSync(path.join(projectDir, '.ax-code', 'snippets'), { recursive: true });
+  test("writes project snippets to an existing plural directory when singular is absent", () => {
+    fs.mkdirSync(path.join(projectDir, ".ax-code", "snippets"), { recursive: true })
 
-    expect(createSnippet('plural-only', { content: 'Body' }, projectDir, 'project')).toEqual(
-      expect.objectContaining({ name: 'plural-only', content: 'Body' }),
-    );
+    expect(createSnippet("plural-only", { content: "Body" }, projectDir, "project")).toEqual(
+      expect.objectContaining({ name: "plural-only", content: "Body" }),
+    )
 
-    expect(fs.existsSync(path.join(projectDir, '.ax-code', 'snippets', 'plural-only.md'))).toBe(true);
-    expect(fs.existsSync(path.join(projectDir, '.ax-code', 'snippet', 'plural-only.md'))).toBe(false);
-  });
+    expect(fs.existsSync(path.join(projectDir, ".ax-code", "snippets", "plural-only.md"))).toBe(true)
+    expect(fs.existsSync(path.join(projectDir, ".ax-code", "snippet", "plural-only.md"))).toBe(false)
+  })
 
-  test('expands snippets recursively with prepend and append blocks', () => {
-    writeSnippet('.ax-code/snippet/base.md', 'Base text');
-    writeSnippet('.ax-code/snippet/review.md', '<prepend>Before</prepend>Review #base<append>After</append>');
+  test("expands snippets recursively with prepend and append blocks", () => {
+    writeSnippet(".ax-code/snippet/base.md", "Base text")
+    writeSnippet(".ax-code/snippet/review.md", "<prepend>Before</prepend>Review #base<append>After</append>")
 
-    expect(expandSnippets('Please #review', projectDir)).toBe('Before\n\nPlease Review Base text\n\nAfter');
-  });
+    expect(expandSnippets("Please #review", projectDir)).toBe("Before\n\nPlease Review Base text\n\nAfter")
+  })
 
-  test('rejects invalid snippet names', () => {
-    expect(() => createSnippet('../bad', { content: '' }, projectDir, 'project')).toThrow('Snippet name');
-  });
-});
+  test("rejects invalid snippet names", () => {
+    expect(() => createSnippet("../bad", { content: "" }, projectDir, "project")).toThrow("Snippet name")
+  })
+})

@@ -1,137 +1,128 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const gitLibraries = {
   stageFiles: vi.fn(),
   unstageFiles: vi.fn(),
-};
+}
 
-vi.doMock('./index.js', () => ({
+vi.doMock("./index.js", () => ({
   stageFiles: gitLibraries.stageFiles,
   unstageFiles: gitLibraries.unstageFiles,
-}));
+}))
 
-const { registerGitRoutes } = await import('./routes.js');
+const { registerGitRoutes } = await import("./routes.js")
 
 const createRouteRegistry = () => {
-  const routes = new Map();
+  const routes = new Map()
 
   return {
     app: {
       get(routePath, handler) {
-        routes.set(`GET ${routePath}`, handler);
+        routes.set(`GET ${routePath}`, handler)
       },
       post(routePath, handler) {
-        routes.set(`POST ${routePath}`, handler);
+        routes.set(`POST ${routePath}`, handler)
       },
       put(routePath, handler) {
-        routes.set(`PUT ${routePath}`, handler);
+        routes.set(`PUT ${routePath}`, handler)
       },
       delete(routePath, handler) {
-        routes.set(`DELETE ${routePath}`, handler);
+        routes.set(`DELETE ${routePath}`, handler)
       },
     },
     getRoute(method, routePath) {
-      return routes.get(`${method} ${routePath}`);
+      return routes.get(`${method} ${routePath}`)
     },
-  };
-};
+  }
+}
 
 const createMockResponse = () => {
-  let statusCode = 200;
-  let body = null;
+  let statusCode = 200
+  let body = null
 
   return {
     status(code) {
-      statusCode = code;
-      return this;
+      statusCode = code
+      return this
     },
     json(payload) {
-      body = payload;
-      return this;
+      body = payload
+      return this
     },
     get statusCode() {
-      return statusCode;
+      return statusCode
     },
     get body() {
-      return body;
+      return body
     },
-  };
-};
+  }
+}
 
-describe('git routes index mutations', () => {
+describe("git routes index mutations", () => {
   beforeEach(() => {
-    gitLibraries.stageFiles.mockReset();
-    gitLibraries.unstageFiles.mockReset();
-  });
+    gitLibraries.stageFiles.mockReset()
+    gitLibraries.unstageFiles.mockReset()
+  })
 
-  it('accepts legacy stage path payloads', async () => {
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app);
-    const response = createMockResponse();
+  it("accepts legacy stage path payloads", async () => {
+    const { app, getRoute } = createRouteRegistry()
+    registerGitRoutes(app)
+    const response = createMockResponse()
 
-    await getRoute('POST', '/api/git/stage')(
-      { query: { directory: '/repo' }, body: { path: 'a.ts' } },
+    await getRoute("POST", "/api/git/stage")({ query: { directory: "/repo" }, body: { path: "a.ts" } }, response)
+
+    expect(response.statusCode).toBe(200)
+    expect(gitLibraries.stageFiles).toHaveBeenCalledWith("/repo", ["a.ts"])
+  })
+
+  it("accepts bulk stage paths payloads", async () => {
+    const { app, getRoute } = createRouteRegistry()
+    registerGitRoutes(app)
+    const response = createMockResponse()
+
+    await getRoute("POST", "/api/git/stage")(
+      { query: { directory: "/repo" }, body: { paths: ["a.ts", "b.ts"] } },
       response,
-    );
+    )
 
-    expect(response.statusCode).toBe(200);
-    expect(gitLibraries.stageFiles).toHaveBeenCalledWith('/repo', ['a.ts']);
-  });
+    expect(response.statusCode).toBe(200)
+    expect(gitLibraries.stageFiles).toHaveBeenCalledWith("/repo", ["a.ts", "b.ts"])
+  })
 
-  it('accepts bulk stage paths payloads', async () => {
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app);
-    const response = createMockResponse();
+  it("accepts legacy unstage path payloads", async () => {
+    const { app, getRoute } = createRouteRegistry()
+    registerGitRoutes(app)
+    const response = createMockResponse()
 
-    await getRoute('POST', '/api/git/stage')(
-      { query: { directory: '/repo' }, body: { paths: ['a.ts', 'b.ts'] } },
+    await getRoute("POST", "/api/git/unstage")({ query: { directory: "/repo" }, body: { path: "a.ts" } }, response)
+
+    expect(response.statusCode).toBe(200)
+    expect(gitLibraries.unstageFiles).toHaveBeenCalledWith("/repo", ["a.ts"])
+  })
+
+  it("accepts bulk unstage paths payloads", async () => {
+    const { app, getRoute } = createRouteRegistry()
+    registerGitRoutes(app)
+    const response = createMockResponse()
+
+    await getRoute("POST", "/api/git/unstage")(
+      { query: { directory: "/repo" }, body: { paths: ["a.ts", "b.ts"] } },
       response,
-    );
+    )
 
-    expect(response.statusCode).toBe(200);
-    expect(gitLibraries.stageFiles).toHaveBeenCalledWith('/repo', ['a.ts', 'b.ts']);
-  });
+    expect(response.statusCode).toBe(200)
+    expect(gitLibraries.unstageFiles).toHaveBeenCalledWith("/repo", ["a.ts", "b.ts"])
+  })
 
-  it('accepts legacy unstage path payloads', async () => {
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app);
-    const response = createMockResponse();
+  it("rejects invalid path payloads before calling git", async () => {
+    const { app, getRoute } = createRouteRegistry()
+    registerGitRoutes(app)
+    const response = createMockResponse()
 
-    await getRoute('POST', '/api/git/unstage')(
-      { query: { directory: '/repo' }, body: { path: 'a.ts' } },
-      response,
-    );
+    await getRoute("POST", "/api/git/stage")({ query: { directory: "/repo" }, body: { paths: [" ", null] } }, response)
 
-    expect(response.statusCode).toBe(200);
-    expect(gitLibraries.unstageFiles).toHaveBeenCalledWith('/repo', ['a.ts']);
-  });
-
-  it('accepts bulk unstage paths payloads', async () => {
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app);
-    const response = createMockResponse();
-
-    await getRoute('POST', '/api/git/unstage')(
-      { query: { directory: '/repo' }, body: { paths: ['a.ts', 'b.ts'] } },
-      response,
-    );
-
-    expect(response.statusCode).toBe(200);
-    expect(gitLibraries.unstageFiles).toHaveBeenCalledWith('/repo', ['a.ts', 'b.ts']);
-  });
-
-  it('rejects invalid path payloads before calling git', async () => {
-    const { app, getRoute } = createRouteRegistry();
-    registerGitRoutes(app);
-    const response = createMockResponse();
-
-    await getRoute('POST', '/api/git/stage')(
-      { query: { directory: '/repo' }, body: { paths: [' ', null] } },
-      response,
-    );
-
-    expect(response.statusCode).toBe(400);
-    expect(response.body).toEqual({ error: 'path parameter is required' });
-    expect(gitLibraries.stageFiles).not.toHaveBeenCalled();
-  });
-});
+    expect(response.statusCode).toBe(400)
+    expect(response.body).toEqual({ error: "path parameter is required" })
+    expect(gitLibraries.stageFiles).not.toHaveBeenCalled()
+  })
+})

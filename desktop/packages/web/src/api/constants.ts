@@ -1,9 +1,9 @@
-import { API_ENDPOINTS as UI_API_ENDPOINTS, API_PATHS } from '@openchamber/ui/api/endpoints';
+import { API_ENDPOINTS as UI_API_ENDPOINTS, API_PATHS } from "@openchamber/ui/api/endpoints"
 
 // Endpoint values are derived from the master catalog in
 // packages/ui/src/lib/http.ts (via the @openchamber/ui public API surface) so
 // each path is defined exactly once. Only the grouping below is web-specific.
-export const API_BASE_PATH = API_PATHS.base;
+export const API_BASE_PATH = API_PATHS.base
 
 export const API_ENDPOINTS = {
   config: {
@@ -27,36 +27,36 @@ export const API_ENDPOINTS = {
   notifications: {
     stream: UI_API_ENDPOINTS.notifications.stream,
   },
-} as const;
+} as const
 
 export const HTTP_QUERY_STRINGS = {
-  true: 'true',
-  false: 'false',
-  one: '1',
-} as const;
+  true: "true",
+  false: "false",
+  one: "1",
+} as const
 
 export const HTTP_DEFAULTS = {
   method: {
-    get: 'GET',
-    post: 'POST',
-    put: 'PUT',
-    delete: 'DELETE',
+    get: "GET",
+    post: "POST",
+    put: "PUT",
+    delete: "DELETE",
   },
   headers: {
     acceptJson: {
-      Accept: 'application/json',
+      Accept: "application/json",
     },
     contentTypeJson: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     acceptAndContentTypeJson: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
     },
   },
   runtime: {
-    web: 'web',
-    desktop: 'desktop',
+    web: "web",
+    desktop: "desktop",
   },
   terminal: {
     defaultRetryMaxRetries: 3,
@@ -65,18 +65,18 @@ export const HTTP_DEFAULTS = {
     defaultConnectionTimeoutMs: 10000,
   },
   cache: {
-    noStore: 'no-store',
-    default: 'default',
+    noStore: "no-store",
+    default: "default",
   },
-} as const;
+} as const
 
 export const buildQueryUrl = (path: string, params?: URLSearchParams | string): string => {
   if (!params) {
-    return path;
+    return path
   }
-  const query = typeof params === 'string' ? params : params.toString();
+  const query = typeof params === "string" ? params : params.toString()
   if (!query) {
-    return path;
+    return path
   }
-  return `${path}?${query}`;
-};
+  return `${path}?${query}`
+}

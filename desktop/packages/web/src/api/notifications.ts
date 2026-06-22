@@ -1,79 +1,79 @@
-import type { NotificationPayload, NotificationsAPI } from '@openchamber/ui/api/types';
+import type { NotificationPayload, NotificationsAPI } from "@openchamber/ui/api/types"
 
-const FALLBACK_NOTIFICATION_TITLE = 'AX Code Desktop' as const;
+const FALLBACK_NOTIFICATION_TITLE = "AX Code Desktop" as const
 
 const notifyWithWebAPI = async (payload?: NotificationPayload): Promise<boolean> => {
-  if (typeof Notification === 'undefined') {
-    console.info('Notifications not supported in this environment', payload);
-    return false;
+  if (typeof Notification === "undefined") {
+    console.info("Notifications not supported in this environment", payload)
+    return false
   }
 
-  if (Notification.permission === 'default') {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      console.warn('Notification permission not granted');
-      return false;
+  if (Notification.permission === "default") {
+    const permission = await Notification.requestPermission()
+    if (permission !== "granted") {
+      console.warn("Notification permission not granted")
+      return false
     }
   }
 
-  if (Notification.permission !== 'granted') {
-    console.warn('Notification permission not granted');
-    return false;
+  if (Notification.permission !== "granted") {
+    console.warn("Notification permission not granted")
+    return false
   }
 
   try {
     new Notification(payload?.title ?? FALLBACK_NOTIFICATION_TITLE, {
       body: payload?.body,
       tag: payload?.tag,
-    });
-    return true;
+    })
+    return true
   } catch (error) {
-    console.warn('Failed to send notification', error);
-    return false;
+    console.warn("Failed to send notification", error)
+    return false
   }
-};
+}
 
 const notifyWithTauri = async (payload?: NotificationPayload): Promise<boolean> => {
-  if (typeof window === 'undefined') {
-    return false;
+  if (typeof window === "undefined") {
+    return false
   }
 
-  const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+  const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__
   if (!tauri?.core?.invoke) {
-    return false;
+    return false
   }
 
   try {
-    await tauri.core.invoke('desktop_notify', {
+    await tauri.core.invoke("desktop_notify", {
       payload: {
         title: payload?.title,
         body: payload?.body,
         tag: payload?.tag,
       },
-    });
-    return true;
+    })
+    return true
   } catch (error) {
-    console.warn('Failed to send native notification (tauri)', error);
-    return false;
+    console.warn("Failed to send native notification (tauri)", error)
+    return false
   }
-};
+}
 
 export const createWebNotificationsAPI = (): NotificationsAPI => ({
   async notifyAgentCompletion(payload?: NotificationPayload): Promise<boolean> {
-    return (await notifyWithTauri(payload)) || (await notifyWithWebAPI(payload));
+    return (await notifyWithTauri(payload)) || (await notifyWithWebAPI(payload))
   },
   canNotify: () => {
-    if (typeof window !== 'undefined') {
-      const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    if (typeof window !== "undefined") {
+      const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__
       if (tauri?.core?.invoke) {
-        return true;
+        return true
       }
     }
-    return typeof Notification !== 'undefined' ? Notification.permission === 'granted' : false;
+    return typeof Notification !== "undefined" ? Notification.permission === "granted" : false
   },
-});
+})
 type TauriGlobal = {
   core?: {
-    invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
-  };
-};
+    invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>
+  }
+}

@@ -1,4 +1,4 @@
-'use strict'
+"use strict"
 
 // Runs inside an Electron utilityProcess, forked by the main process. Hosting the
 // web/API server here keeps its CPU/IO (git scans, SQLite, file reads, SSE) off
@@ -12,7 +12,7 @@
 
 // Bundled server (dist/server.js produced by bundle-main.mjs). Kept as an
 // external require so esbuild does not inline the 5 MB server into this entry.
-const { startWebUiServer } = require('./server.js')
+const { startWebUiServer } = require("./server.js")
 
 let serverHandle = null
 let stopping = false
@@ -28,18 +28,17 @@ function parseStartupSnapshot() {
 }
 
 async function boot() {
-  const configuredPort = Number.parseInt(process.env.AX_CODE_DESKTOP_ELECTRON_SERVER_PORT || '', 10)
+  const configuredPort = Number.parseInt(process.env.AX_CODE_DESKTOP_ELECTRON_SERVER_PORT || "", 10)
   serverHandle = await startWebUiServer({
     port: Number.isFinite(configuredPort) && configuredPort > 0 ? configuredPort : 0,
     startupDiagnosticsSnapshot: parseStartupSnapshot(),
     onStartupDiagnostic: (event) => {
       try {
-        process.parentPort.postMessage({ type: 'startup-event', event })
-      } catch {
-      }
+        process.parentPort.postMessage({ type: "startup-event", event })
+      } catch {}
     },
   })
-  process.parentPort.postMessage({ type: 'ready', port: serverHandle.getPort() })
+  process.parentPort.postMessage({ type: "ready", port: serverHandle.getPort() })
 }
 
 async function stop() {
@@ -55,19 +54,19 @@ async function stop() {
   }
 }
 
-process.parentPort.on('message', (event) => {
-  if (event?.data?.type === 'stop') {
+process.parentPort.on("message", (event) => {
+  if (event?.data?.type === "stop") {
     void stop()
     return
   }
-  if (event?.data?.type === 'desktop-startup-event') {
+  if (event?.data?.type === "desktop-startup-event") {
     serverHandle?.recordDesktopStartupEvent?.(event.data.event)
   }
 })
 
 boot().catch((err) => {
   try {
-    process.parentPort.postMessage({ type: 'error', message: err instanceof Error ? err.message : String(err) })
+    process.parentPort.postMessage({ type: "error", message: err instanceof Error ? err.message : String(err) })
   } catch {
     // parentPort may be gone; fall through to exit.
   }

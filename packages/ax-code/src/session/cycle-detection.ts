@@ -3,6 +3,7 @@ import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/sessi
 export interface RingEntry {
   tool: string
   input: string
+  output?: string
 }
 
 /**
@@ -17,8 +18,15 @@ export interface RingEntry {
 export function detectCycle(
   entries: ReadonlyArray<RingEntry>,
   maxCycleLen: number = AUTONOMOUS_MAX_CYCLE_LEN,
+  options: { compareOutput?: boolean } = {},
 ): number | null {
-  const eq = (i: number, j: number) => entries[i]!.tool === entries[j]!.tool && entries[i]!.input === entries[j]!.input
+  const eq = (i: number, j: number) => {
+    const left = entries[i]!
+    const right = entries[j]!
+    if (left.tool !== right.tool || left.input !== right.input) return false
+    if (options.compareOutput && left.output !== undefined && right.output !== undefined) return left.output === right.output
+    return true
+  }
   for (let k = 1; k <= maxCycleLen; k++) {
     const repeats = k === 1 ? DOOM_LOOP_THRESHOLD : 2
     const need = k * repeats

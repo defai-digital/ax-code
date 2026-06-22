@@ -1,5 +1,5 @@
-import React from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import React from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
 import {
   parseJsonToTree,
@@ -8,81 +8,81 @@ import {
   getExpandableIdsAboveDepth,
   type JsonTreeNode,
   type FlatJsonNode,
-} from '@/lib/jsonTreeUtils';
-import { Icon } from "@/components/icon/Icon";
+} from "@/lib/jsonTreeUtils"
+import { Icon } from "@/components/icon/Icon"
 
 interface JsonTreeViewerProps {
-  data: unknown;
-  className?: string;
-  maxHeight?: string;
-  initiallyExpandedDepth?: number;
-  onCopyPath?: (path: string) => void;
+  data: unknown
+  className?: string
+  maxHeight?: string
+  initiallyExpandedDepth?: number
+  onCopyPath?: (path: string) => void
 }
 
 const RAINBOW_COLORS = [
-  'var(--syntax-key)',
-  'color-mix(in oklch, var(--syntax-key) 85%, var(--syntax-string))',
-  'color-mix(in oklch, var(--syntax-key) 70%, var(--syntax-number))',
-  'color-mix(in oklch, var(--syntax-key) 55%, var(--syntax-function))',
-  'color-mix(in oklch, var(--syntax-key) 40%, var(--syntax-type))',
-  'color-mix(in oklch, var(--syntax-key) 30%, var(--syntax-keyword))',
-];
+  "var(--syntax-key)",
+  "color-mix(in oklch, var(--syntax-key) 85%, var(--syntax-string))",
+  "color-mix(in oklch, var(--syntax-key) 70%, var(--syntax-number))",
+  "color-mix(in oklch, var(--syntax-key) 55%, var(--syntax-function))",
+  "color-mix(in oklch, var(--syntax-key) 40%, var(--syntax-type))",
+  "color-mix(in oklch, var(--syntax-key) 30%, var(--syntax-keyword))",
+]
 
 function getKeyColor(depth: number): string {
-  return RAINBOW_COLORS[depth % RAINBOW_COLORS.length];
+  return RAINBOW_COLORS[depth % RAINBOW_COLORS.length]
 }
 
 function getValueColor(node: JsonTreeNode): string {
   switch (node.type) {
-    case 'string':
-      return 'var(--syntax-string)';
-    case 'number':
-      return 'var(--syntax-number)';
-    case 'boolean':
-      return 'var(--syntax-keyword)';
-    case 'null':
-      return 'var(--syntax-comment)';
+    case "string":
+      return "var(--syntax-string)"
+    case "number":
+      return "var(--syntax-number)"
+    case "boolean":
+      return "var(--syntax-keyword)"
+    case "null":
+      return "var(--syntax-comment)"
     default:
-      return 'var(--surface-foreground)';
+      return "var(--surface-foreground)"
   }
 }
 
 function formatValuePreview(node: JsonTreeNode): string {
   switch (node.type) {
-    case 'string': {
-      const str = node.value as string;
-      if (str.length > 60) return `"${str.slice(0, 57)}..."`;
-      return `"${str}"`;
+    case "string": {
+      const str = node.value as string
+      if (str.length > 60) return `"${str.slice(0, 57)}..."`
+      return `"${str}"`
     }
-    case 'number':
-    case 'boolean':
-      return String(node.value);
-    case 'null':
-      return 'null';
-    case 'object':
-      return `{${node.childCount ?? 0} ${node.childCount === 1 ? 'item' : 'items'}}`;
-    case 'array':
-      return `[${node.childCount ?? 0}]`;
+    case "number":
+    case "boolean":
+      return String(node.value)
+    case "null":
+      return "null"
+    case "object":
+      return `{${node.childCount ?? 0} ${node.childCount === 1 ? "item" : "items"}}`
+    case "array":
+      return `[${node.childCount ?? 0}]`
     default:
-      return String(node.value);
+      return String(node.value)
   }
 }
 
 function getCollapsedPreview(node: JsonTreeNode): string {
-  if (node.type === 'object') {
-    const keys = node.children?.map((c) => c.key).slice(0, 3) ?? [];
-    const suffix = (node.childCount ?? 0) > 3 ? ', ...' : '';
-    return `{ ${keys.map((k) => `"${k}": ...`).join(', ')}${suffix} }`;
+  if (node.type === "object") {
+    const keys = node.children?.map((c) => c.key).slice(0, 3) ?? []
+    const suffix = (node.childCount ?? 0) > 3 ? ", ..." : ""
+    return `{ ${keys.map((k) => `"${k}": ...`).join(", ")}${suffix} }`
   }
-  if (node.type === 'array') {
-    const count = node.childCount ?? 0;
+  if (node.type === "array") {
+    const count = node.childCount ?? 0
     if (count <= 3) {
-      const items = node.children?.map((c) => formatValuePreview(c)).join(', ') ?? '';
-      return `[${items}]`;
+      const items = node.children?.map((c) => formatValuePreview(c)).join(", ") ?? ""
+      return `[${items}]`
     }
-    return `[${count} items]`;
+    return `[${count} items]`
   }
-  return formatValuePreview(node);
+  return formatValuePreview(node)
 }
 
 const JsonRow = React.memo(
@@ -91,30 +91,30 @@ const JsonRow = React.memo(
     onToggle,
     onCopyPath,
   }: {
-    flatNode: FlatJsonNode;
-    onToggle: (id: string) => void;
-    onCopyPath?: (path: string) => void;
+    flatNode: FlatJsonNode
+    onToggle: (id: string) => void
+    onCopyPath?: (path: string) => void
   }) => {
-    const { node, isExpanded } = flatNode;
-    const indent = node.depth * 20;
+    const { node, isExpanded } = flatNode
+    const indent = node.depth * 20
 
     const handleToggle = React.useCallback(() => {
-      onToggle(node.id);
-    }, [onToggle, node.id]);
+      onToggle(node.id)
+    }, [onToggle, node.id])
 
     const handleContextMenu = React.useCallback(
       (e: React.MouseEvent) => {
         if (onCopyPath) {
-          e.preventDefault();
-          onCopyPath(node.id);
+          e.preventDefault()
+          onCopyPath(node.id)
         }
       },
       [onCopyPath, node.id],
-    );
+    )
 
-    const keyColor = getKeyColor(node.depth);
-    const valueColor = getValueColor(node);
-    const isCollapsible = node.isExpandable && node.children && node.children.length > 0;
+    const keyColor = getKeyColor(node.depth)
+    const valueColor = getValueColor(node)
+    const isCollapsible = node.isExpandable && node.children && node.children.length > 0
 
     return (
       <div
@@ -138,12 +138,9 @@ const JsonRow = React.memo(
           <span className="mr-1 w-4" />
         )}
 
-        {node.key !== 'root' && (
+        {node.key !== "root" && (
           <>
-            <span
-              className="mr-1 font-semibold"
-              style={{ color: keyColor }}
-            >
+            <span className="mr-1 font-semibold" style={{ color: keyColor }}>
               {/^\d+$/.test(node.key) ? node.key : `"${node.key}"`}
             </span>
             <span className="mr-1 text-[var(--surface-foreground)]">:</span>
@@ -152,57 +149,47 @@ const JsonRow = React.memo(
 
         {node.isExpandable ? (
           isExpanded ? (
-            <span className="text-[var(--surface-foreground)]">
-              {node.type === 'object' ? '{' : '['}
-            </span>
+            <span className="text-[var(--surface-foreground)]">{node.type === "object" ? "{" : "["}</span>
           ) : (
-            <span style={{ color: 'var(--surface-mutedForeground)' }}>
-              {getCollapsedPreview(node)}
-            </span>
+            <span style={{ color: "var(--surface-mutedForeground)" }}>{getCollapsedPreview(node)}</span>
           )
         ) : (
           <span style={{ color: valueColor }}>{formatValuePreview(node)}</span>
         )}
       </div>
-    );
+    )
   },
-);
+)
 
-JsonRow.displayName = 'JsonRow';
+JsonRow.displayName = "JsonRow"
 
-const VIRTUALIZE_THRESHOLD = 200;
-const ROW_HEIGHT = 22;
+const VIRTUALIZE_THRESHOLD = 200
+const ROW_HEIGHT = 22
 
 const JsonTreeViewer = React.forwardRef<{ expandAll: () => void; collapseAll: () => void }, JsonTreeViewerProps>(
-  function JsonTreeViewer(
-    { data, className, maxHeight = '100%', initiallyExpandedDepth = 2, onCopyPath },
-    ref,
-  ) {
+  function JsonTreeViewer({ data, className, maxHeight = "100%", initiallyExpandedDepth = 2, onCopyPath }, ref) {
     const jsonString = React.useMemo(() => {
       try {
-        return JSON.stringify(data);
+        return JSON.stringify(data)
       } catch {
-        return null;
+        return null
       }
-    }, [data]);
+    }, [data])
 
     const treeRoot = React.useMemo(() => {
-      if (!jsonString) return null;
-      return parseJsonToTree(jsonString);
-    }, [jsonString]);
+      if (!jsonString) return null
+      return parseJsonToTree(jsonString)
+    }, [jsonString])
 
     const [collapsedPaths, setCollapsedPaths] = React.useState<Set<string>>(() => {
-      if (!treeRoot) return new Set();
-      return new Set(getExpandableIdsAboveDepth(treeRoot, initiallyExpandedDepth));
-    });
+      if (!treeRoot) return new Set()
+      return new Set(getExpandableIdsAboveDepth(treeRoot, initiallyExpandedDepth))
+    })
 
-    const flatNodes = React.useMemo(
-      () => flattenTree(treeRoot, collapsedPaths),
-      [treeRoot, collapsedPaths],
-    );
+    const flatNodes = React.useMemo(() => flattenTree(treeRoot, collapsedPaths), [treeRoot, collapsedPaths])
 
-    const shouldVirtualize = flatNodes.length > VIRTUALIZE_THRESHOLD;
-    const parentRef = React.useRef<HTMLDivElement>(null);
+    const shouldVirtualize = flatNodes.length > VIRTUALIZE_THRESHOLD
+    const parentRef = React.useRef<HTMLDivElement>(null)
 
     const virtualizer = useVirtualizer({
       count: flatNodes.length,
@@ -210,95 +197,78 @@ const JsonTreeViewer = React.forwardRef<{ expandAll: () => void; collapseAll: ()
       estimateSize: () => ROW_HEIGHT,
       overscan: 20,
       enabled: shouldVirtualize,
-    });
+    })
 
     const handleToggle = React.useCallback((id: string) => {
       setCollapsedPaths((prev) => {
-        const next = new Set(prev);
+        const next = new Set(prev)
         if (next.has(id)) {
-          next.delete(id);
+          next.delete(id)
         } else {
-          next.add(id);
+          next.add(id)
         }
-        return next;
-      });
-    }, []);
+        return next
+      })
+    }, [])
 
     const expandAll = React.useCallback(() => {
-      setCollapsedPaths(new Set());
-    }, []);
+      setCollapsedPaths(new Set())
+    }, [])
 
     const collapseAll = React.useCallback(() => {
-      if (!treeRoot) return;
-      setCollapsedPaths(new Set(getAllExpandableIds(treeRoot)));
-    }, [treeRoot]);
+      if (!treeRoot) return
+      setCollapsedPaths(new Set(getAllExpandableIds(treeRoot)))
+    }, [treeRoot])
 
-    React.useImperativeHandle(ref, () => ({ expandAll, collapseAll }), [expandAll, collapseAll]);
+    React.useImperativeHandle(ref, () => ({ expandAll, collapseAll }), [expandAll, collapseAll])
 
     if (!treeRoot) {
-      return null;
+      return null
     }
 
     if (shouldVirtualize) {
       return (
-        <div
-          ref={parentRef}
-          className={className}
-          style={{ maxHeight, overflow: 'auto' }}
-        >
+        <div ref={parentRef} className={className} style={{ maxHeight, overflow: "auto" }}>
           <div
             style={{
               height: `${virtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
+              width: "100%",
+              position: "relative",
             }}
           >
             {virtualizer.getVirtualItems().map((virtualRow) => {
-              const flatNode = flatNodes[virtualRow.index];
-              if (!flatNode) return null;
+              const flatNode = flatNodes[virtualRow.index]
+              if (!flatNode) return null
               return (
                 <div
                   key={flatNode.node.id}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     top: 0,
                     left: 0,
-                    width: '100%',
+                    width: "100%",
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
-                  <JsonRow
-                    flatNode={flatNode}
-                    onToggle={handleToggle}
-                    onCopyPath={onCopyPath}
-                  />
+                  <JsonRow flatNode={flatNode} onToggle={handleToggle} onCopyPath={onCopyPath} />
                 </div>
-              );
+              )
             })}
           </div>
         </div>
-      );
+      )
     }
 
     return (
-      <div
-        ref={parentRef}
-        className={className}
-        style={{ maxHeight, overflow: 'auto' }}
-      >
+      <div ref={parentRef} className={className} style={{ maxHeight, overflow: "auto" }}>
         {flatNodes.map((flatNode) => (
-          <JsonRow
-            key={flatNode.node.id}
-            flatNode={flatNode}
-            onToggle={handleToggle}
-            onCopyPath={onCopyPath}
-          />
+          <JsonRow key={flatNode.node.id} flatNode={flatNode} onToggle={handleToggle} onCopyPath={onCopyPath} />
         ))}
       </div>
-    );
+    )
   },
-);
+)
 
-export { JsonTreeViewer };
-export type { JsonTreeViewerProps };
+export { JsonTreeViewer }
+export type { JsonTreeViewerProps }

@@ -4,29 +4,15 @@
  * Provides skill scanning, installation, and caching from GitHub repositories and ClawdHub.
  */
 
-export {
-  CURATED_SKILLS_SOURCES,
-  getCuratedSkillsSources,
-} from './curated-sources.js';
+export { CURATED_SKILLS_SOURCES, getCuratedSkillsSources } from "./curated-sources.js"
 
-export {
-  getCacheKey,
-  getCachedScan,
-  setCachedScan,
-  clearCache,
-} from './cache.js';
+export { getCacheKey, getCachedScan, setCachedScan, clearCache } from "./cache.js"
 
-export {
-  parseSkillRepoSource,
-} from './source.js';
+export { parseSkillRepoSource } from "./source.js"
 
-export {
-  scanSkillsRepository,
-} from './scan.js';
+export { scanSkillsRepository } from "./scan.js"
 
-export {
-  installSkillsFromRepository,
-} from './install.js';
+export { installSkillsFromRepository } from "./install.js"
 
 export {
   scanClawdHub,
@@ -39,4 +25,4 @@ export {
   isClawdHubSource,
   CLAWDHUB_SOURCE_ID,
   CLAWDHUB_SOURCE_STRING,
-} from './clawdhub/index.js';
+} from "./clawdhub/index.js"

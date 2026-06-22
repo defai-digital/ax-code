@@ -1,103 +1,103 @@
-import React from 'react';
-import type { Session } from '@ax-code/sdk/v2';
-import { dedupeSessionsById, isSessionRelatedToProject, normalizePath } from '../utils';
-import type { WorktreeMeta } from '../types';
+import React from "react"
+import type { Session } from "@ax-code/sdk/v2"
+import { dedupeSessionsById, isSessionRelatedToProject, normalizePath } from "../utils"
+import type { WorktreeMeta } from "../types"
 
 type Args = {
-  sessions: Session[];
-  archivedSessions: Session[];
-  availableWorktreesByProject: Map<string, WorktreeMeta[]>;
-};
+  sessions: Session[]
+  archivedSessions: Session[]
+  availableWorktreesByProject: Map<string, WorktreeMeta[]>
+}
 
 export const useProjectSessionLists = (args: Args) => {
-  const {
-    sessions,
-    archivedSessions,
-    availableWorktreesByProject,
-  } = args;
+  const { sessions, archivedSessions, availableWorktreesByProject } = args
 
   const sessionsByDirectory = React.useMemo(() => {
-    const next = new Map<string, Session[]>();
+    const next = new Map<string, Session[]>()
     sessions.forEach((session) => {
-      const directory = normalizePath((session as Session & { directory?: string | null }).directory ?? null)
-        ?? normalizePath((session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null);
+      const directory =
+        normalizePath((session as Session & { directory?: string | null }).directory ?? null) ??
+        normalizePath(
+          (session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null,
+        )
       if (!directory) {
-        return;
+        return
       }
 
-      const collection = next.get(directory) ?? [];
-      collection.push(session);
-      next.set(directory, collection);
-    });
-    return next;
-  }, [sessions]);
+      const collection = next.get(directory) ?? []
+      collection.push(session)
+      next.set(directory, collection)
+    })
+    return next
+  }, [sessions])
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
-      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? [];
+      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? []
       const directories = [
         project.normalizedPath,
         ...worktreesForProject
           .map((meta) => normalizePath(meta.path) ?? meta.path)
           .filter((value): value is string => Boolean(value)),
-      ];
+      ]
 
-      const seen = new Set<string>();
-      const collected: Session[] = [];
+      const seen = new Set<string>()
+      const collected: Session[] = []
 
       directories.forEach((directory) => {
-        const sessionsForDirectory = sessionsByDirectory.get(directory) ?? [];
+        const sessionsForDirectory = sessionsByDirectory.get(directory) ?? []
         sessionsForDirectory.forEach((session) => {
           if (seen.has(session.id)) {
-            return;
+            return
           }
-          seen.add(session.id);
-          collected.push(session);
-        });
-      });
+          seen.add(session.id)
+          collected.push(session)
+        })
+      })
 
-      return collected;
+      return collected
     },
     [availableWorktreesByProject, sessionsByDirectory],
-  );
+  )
 
   const getArchivedSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
-      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? [];
+      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? []
       const validDirectories = new Set<string>([
         project.normalizedPath,
         ...worktreesForProject
           .map((meta) => normalizePath(meta.path) ?? meta.path)
           .filter((value): value is string => Boolean(value)),
-      ]);
+      ])
 
-      const collect = (input: Session[]): Session[] => input.filter((session) =>
-        isSessionRelatedToProject(session, project.normalizedPath, validDirectories),
-      );
+      const collect = (input: Session[]): Session[] =>
+        input.filter((session) => isSessionRelatedToProject(session, project.normalizedPath, validDirectories))
 
-      const archived = collect(archivedSessions);
+      const archived = collect(archivedSessions)
       const unassignedLive = sessions.filter((session) => {
         if (session.time?.archived) {
-          return false;
+          return false
         }
-        const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+        const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null)
         if (sessionDirectory) {
-          return false;
+          return false
         }
-        const projectWorktree = normalizePath((session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null);
+        const projectWorktree = normalizePath(
+          (session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null,
+        )
         if (!projectWorktree) {
-          return false;
+          return false
         }
-        return projectWorktree === project.normalizedPath || projectWorktree.startsWith(`${project.normalizedPath}/`);
-      });
+        return projectWorktree === project.normalizedPath || projectWorktree.startsWith(`${project.normalizedPath}/`)
+      })
 
-      return dedupeSessionsById([...archived, ...unassignedLive]);
+      return dedupeSessionsById([...archived, ...unassignedLive])
     },
     [archivedSessions, availableWorktreesByProject, sessions],
-  );
+  )
 
   return {
     getSessionsForProject,
     getArchivedSessionsForProject,
-  };
-};
+  }
+}

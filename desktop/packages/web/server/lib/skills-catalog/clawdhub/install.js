@@ -1,23 +1,17 @@
 /**
  * ClawdHub skill installation
- * 
+ *
  * Downloads skills from ClawdHub as ZIP files and extracts them
  * to the appropriate skill directory.
  */
 
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import AdmZip from 'adm-zip';
+import fs from "fs"
+import os from "os"
+import path from "path"
+import AdmZip from "adm-zip"
 
-import { downloadClawdHubSkill, fetchClawdHubSkillInfo } from './api.js';
-import {
-  ensureDir,
-  getTargetSkillDir,
-  normalizeUserSkillDir,
-  safeRm,
-  validateSkillName,
-} from '../shared.js';
+import { downloadClawdHubSkill, fetchClawdHubSkillInfo } from "./api.js"
+import { ensureDir, getTargetSkillDir, normalizeUserSkillDir, safeRm, validateSkillName } from "../shared.js"
 
 /**
  * Install skills from ClawdHub registry
@@ -40,56 +34,56 @@ export async function installSkillsFromClawdHub({
   conflictPolicy,
   conflictDecisions,
 } = {}) {
-  if (scope !== 'user' && scope !== 'project') {
-    return { ok: false, error: { kind: 'invalidSource', message: 'Invalid scope' } };
+  if (scope !== "user" && scope !== "project") {
+    return { ok: false, error: { kind: "invalidSource", message: "Invalid scope" } }
   }
 
-  if (targetSource !== undefined && targetSource !== 'ax-code' && targetSource !== 'agents') {
-    return { ok: false, error: { kind: 'invalidSource', message: 'Invalid target source' } };
+  if (targetSource !== undefined && targetSource !== "ax-code" && targetSource !== "agents") {
+    return { ok: false, error: { kind: "invalidSource", message: "Invalid target source" } }
   }
 
   if (!userSkillDir) {
-    return { ok: false, error: { kind: 'unknown', message: 'userSkillDir is required' } };
+    return { ok: false, error: { kind: "unknown", message: "userSkillDir is required" } }
   }
 
-  const normalizedUserSkillDir = normalizeUserSkillDir(userSkillDir);
+  const normalizedUserSkillDir = normalizeUserSkillDir(userSkillDir)
   if (normalizedUserSkillDir) {
-    userSkillDir = normalizedUserSkillDir;
+    userSkillDir = normalizedUserSkillDir
   }
 
-  if (scope === 'project' && !workingDirectory) {
-    return { ok: false, error: { kind: 'invalidSource', message: 'Project installs require a directory parameter' } };
+  if (scope === "project" && !workingDirectory) {
+    return { ok: false, error: { kind: "invalidSource", message: "Project installs require a directory parameter" } }
   }
 
-  const requestedSkills = Array.isArray(selections) ? selections : [];
+  const requestedSkills = Array.isArray(selections) ? selections : []
   if (requestedSkills.length === 0) {
-    return { ok: false, error: { kind: 'invalidSource', message: 'No skills selected for installation' } };
+    return { ok: false, error: { kind: "invalidSource", message: "No skills selected for installation" } }
   }
 
   // Build installation plans
   const skillPlans = requestedSkills.map((sel) => {
-    const slug = sel.clawdhub?.slug || sel.skillDir;
-    const version = sel.clawdhub?.version || 'latest';
+    const slug = sel.clawdhub?.slug || sel.skillDir
+    const version = sel.clawdhub?.version || "latest"
     return {
       slug,
       version,
       installable: validateSkillName(slug),
-    };
-  });
+    }
+  })
 
   // Check for conflicts before downloading
-  const conflicts = [];
+  const conflicts = []
   for (const plan of skillPlans) {
     if (!plan.installable) {
-      continue;
+      continue
     }
 
-    const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.slug });
+    const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.slug })
     if (fs.existsSync(targetDir)) {
-      const decision = conflictDecisions?.[plan.slug];
-      const hasAutoPolicy = conflictPolicy === 'skipAll' || conflictPolicy === 'overwriteAll';
+      const decision = conflictDecisions?.[plan.slug]
+      const hasAutoPolicy = conflictPolicy === "skipAll" || conflictPolicy === "overwriteAll"
       if (!decision && !hasAutoPolicy) {
-        conflicts.push({ skillName: plan.slug, scope, source: targetSource === 'agents' ? 'agents' : 'ax-code' });
+        conflicts.push({ skillName: plan.slug, scope, source: targetSource === "agents" ? "agents" : "ax-code" })
       }
     }
   }
@@ -98,96 +92,96 @@ export async function installSkillsFromClawdHub({
     return {
       ok: false,
       error: {
-        kind: 'conflicts',
-        message: 'Some skills already exist in the selected scope',
+        kind: "conflicts",
+        message: "Some skills already exist in the selected scope",
         conflicts,
       },
-    };
+    }
   }
 
-  const installed = [];
-  const skipped = [];
+  const installed = []
+  const skipped = []
 
   for (const plan of skillPlans) {
     if (!plan.installable) {
-      skipped.push({ skillName: plan.slug, reason: 'Invalid skill name' });
-      continue;
+      skipped.push({ skillName: plan.slug, reason: "Invalid skill name" })
+      continue
     }
 
     try {
       // Resolve 'latest' version if needed
-      let resolvedVersion = plan.version;
-      if (resolvedVersion === 'latest') {
+      let resolvedVersion = plan.version
+      if (resolvedVersion === "latest") {
         try {
-          const info = await fetchClawdHubSkillInfo(plan.slug);
-          const latest = info.skill?.tags?.latest || info.latestVersion?.version || null;
+          const info = await fetchClawdHubSkillInfo(plan.slug)
+          const latest = info.skill?.tags?.latest || info.latestVersion?.version || null
           if (latest) {
-            resolvedVersion = latest;
+            resolvedVersion = latest
           }
         } catch {
           // ignore
         }
 
-        if (resolvedVersion === 'latest') {
-          skipped.push({ skillName: plan.slug, reason: 'Unable to resolve latest version' });
-          continue;
+        if (resolvedVersion === "latest") {
+          skipped.push({ skillName: plan.slug, reason: "Unable to resolve latest version" })
+          continue
         }
       }
 
-      const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.slug });
-      const exists = fs.existsSync(targetDir);
+      const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.slug })
+      const exists = fs.existsSync(targetDir)
 
       // Determine conflict resolution
-      let decision = conflictDecisions?.[plan.slug] || null;
+      let decision = conflictDecisions?.[plan.slug] || null
       if (!decision) {
-        if (exists && conflictPolicy === 'skipAll') decision = 'skip';
-        if (exists && conflictPolicy === 'overwriteAll') decision = 'overwrite';
-        if (!exists) decision = 'overwrite'; // No conflict, proceed
+        if (exists && conflictPolicy === "skipAll") decision = "skip"
+        if (exists && conflictPolicy === "overwriteAll") decision = "overwrite"
+        if (!exists) decision = "overwrite" // No conflict, proceed
       }
 
-      if (exists && decision === 'skip') {
-        skipped.push({ skillName: plan.slug, reason: 'Already installed (skipped)' });
-        continue;
+      if (exists && decision === "skip") {
+        skipped.push({ skillName: plan.slug, reason: "Already installed (skipped)" })
+        continue
       }
 
-      if (exists && decision === 'overwrite') {
-        await safeRm(targetDir);
+      if (exists && decision === "overwrite") {
+        await safeRm(targetDir)
       }
 
       // Download the skill ZIP
-      const zipBuffer = await downloadClawdHubSkill(plan.slug, resolvedVersion);
+      const zipBuffer = await downloadClawdHubSkill(plan.slug, resolvedVersion)
 
       // Extract to a temp directory first for validation
-      const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `clawdhub-${plan.slug}-`));
-      
+      const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `clawdhub-${plan.slug}-`))
+
       try {
-        const zip = new AdmZip(Buffer.from(zipBuffer));
-        zip.extractAllTo(tempDir, true);
+        const zip = new AdmZip(Buffer.from(zipBuffer))
+        zip.extractAllTo(tempDir, true)
 
         // Verify SKILL.md exists
-        const skillMdPath = path.join(tempDir, 'SKILL.md');
+        const skillMdPath = path.join(tempDir, "SKILL.md")
         if (!fs.existsSync(skillMdPath)) {
-          skipped.push({ skillName: plan.slug, reason: 'SKILL.md not found in downloaded package' });
-          continue;
+          skipped.push({ skillName: plan.slug, reason: "SKILL.md not found in downloaded package" })
+          continue
         }
 
         // Move to target directory
-        await ensureDir(path.dirname(targetDir));
-        await fs.promises.rename(tempDir, targetDir);
+        await ensureDir(path.dirname(targetDir))
+        await fs.promises.rename(tempDir, targetDir)
 
-        installed.push({ skillName: plan.slug, scope, source: targetSource === 'agents' ? 'agents' : 'ax-code' });
+        installed.push({ skillName: plan.slug, scope, source: targetSource === "agents" ? "agents" : "ax-code" })
       } catch (extractError) {
-        await safeRm(tempDir);
-        throw extractError;
+        await safeRm(tempDir)
+        throw extractError
       }
     } catch (error) {
-      console.error(`Failed to install ClawdHub skill "${plan.slug}":`, error);
+      console.error(`Failed to install ClawdHub skill "${plan.slug}":`, error)
       skipped.push({
         skillName: plan.slug,
-        reason: error instanceof Error ? error.message : 'Failed to download or extract skill',
-      });
+        reason: error instanceof Error ? error.message : "Failed to download or extract skill",
+      })
     }
   }
 
-  return { ok: true, installed, skipped };
+  return { ok: true, installed, skipped }
 }

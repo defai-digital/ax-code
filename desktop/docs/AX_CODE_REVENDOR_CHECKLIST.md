@@ -37,8 +37,8 @@ contracts change:
    shapes, raise the minimum and note why in the constant's comment.
 
 6. **Run the full gate from the monorepo root.** `pnpm run
-   check:desktop-boundaries && pnpm run desktop:test && pnpm run
-   desktop:typecheck && pnpm run desktop:build`.
+check:desktop-boundaries && pnpm run desktop:test && pnpm run
+desktop:typecheck && pnpm run desktop:build`.
 
 Upstream integration context (transport choice, pending upstream feature
 requests) lives in `docs/AX_CODE_INTEGRATION.md`.

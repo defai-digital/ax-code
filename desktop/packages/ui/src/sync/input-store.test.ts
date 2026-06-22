@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest"
 import { useInputStore } from "./input-store"
 
 class MockFileReader {
@@ -53,19 +53,26 @@ describe("input-store attachments", () => {
     useInputStore.getState().setAttachedFiles([])
   })
 
-  testWithMockFileReader("does not attach a local file that finishes reading after attachments are cleared", async () => {
-    const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
-    expect(pendingReaders).toHaveLength(1)
+  testWithMockFileReader(
+    "does not attach a local file that finishes reading after attachments are cleared",
+    async () => {
+      const addPromise = useInputStore
+        .getState()
+        .addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
+      expect(pendingReaders).toHaveLength(1)
 
-    useInputStore.getState().clearAttachedFiles()
-    resolveReader(pendingReaders[0], "data:text/plain;base64,aGVsbG8=")
-    await addPromise
+      useInputStore.getState().clearAttachedFiles()
+      resolveReader(pendingReaders[0], "data:text/plain;base64,aGVsbG8=")
+      await addPromise
 
-    expect(useInputStore.getState().attachedFiles).toEqual([])
-  })
+      expect(useInputStore.getState().attachedFiles).toEqual([])
+    },
+  )
 
   testWithMockFileReader("does not attach a local file after attached files are replaced", async () => {
-    const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
+    const addPromise = useInputStore
+      .getState()
+      .addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(1)
 
     useInputStore.getState().setAttachedFiles([])
@@ -76,19 +83,23 @@ describe("input-store attachments", () => {
   })
 
   testWithMockFileReader("does not attach a local file after attached files are restored", async () => {
-    const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
+    const addPromise = useInputStore
+      .getState()
+      .addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(1)
 
     const restored = new File(["restored"], "restored.txt", { type: "text/plain" })
-    useInputStore.getState().setAttachedFiles([{
-      id: "restored",
-      file: restored,
-      dataUrl: "data:text/plain;base64,cmVzdG9yZWQ=",
-      mimeType: "text/plain",
-      filename: "restored.txt",
-      size: restored.size,
-      source: "local",
-    }])
+    useInputStore.getState().setAttachedFiles([
+      {
+        id: "restored",
+        file: restored,
+        dataUrl: "data:text/plain;base64,cmVzdG9yZWQ=",
+        mimeType: "text/plain",
+        filename: "restored.txt",
+        size: restored.size,
+        source: "local",
+      },
+    ])
     resolveReader(pendingReaders[0], "data:text/plain;base64,aGVsbG8=")
     await addPromise
 
@@ -96,7 +107,9 @@ describe("input-store attachments", () => {
   })
 
   test("does not leave local file reads pending after a reader error", async () => {
-    const addPromise = useInputStore.getState().addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
+    const addPromise = useInputStore
+      .getState()
+      .addAttachedFile(new File(["hello"], "hello.txt", { type: "text/plain" }))
     expect(pendingReaders).toHaveLength(1)
 
     rejectReader(pendingReaders[0])

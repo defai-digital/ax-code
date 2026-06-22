@@ -1,32 +1,30 @@
-import { registerFsRoutes } from '../fs/routes.js';
-import { registerQuotaRoutes } from '../quota/routes.js';
-import { registerGitHubRoutes } from '../github/routes.js';
-import { registerGitRoutes } from '../git/routes.js';
-import { registerMagicPromptRoutes } from '../magic-prompts/routes.js';
-import { registerSessionFoldersRoutes } from '../session-folders/routes.js';
-import { registerConfigEntityRoutes } from './config-entity-routes.js';
-import { registerSettingsUtilityRoutes } from './core-routes.js';
-import { registerProjectIconRoutes } from './project-icon-routes.js';
-import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
-import { registerSkillRoutes } from './skill-routes.js';
-import { registerPluginRoutes } from './plugin-routes.js';
-import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
-import { parseNpmSpec, parsePathSpec, isExactSemver } from './plugin-spec.js';
-import { registerAxCodeRoutes } from './routes.js';
-import { createBackgroundAxCodeReloader } from './background-reload.js';
+import { registerFsRoutes } from "../fs/routes.js"
+import { registerQuotaRoutes } from "../quota/routes.js"
+import { registerGitHubRoutes } from "../github/routes.js"
+import { registerGitRoutes } from "../git/routes.js"
+import { registerMagicPromptRoutes } from "../magic-prompts/routes.js"
+import { registerSessionFoldersRoutes } from "../session-folders/routes.js"
+import { registerConfigEntityRoutes } from "./config-entity-routes.js"
+import { registerSettingsUtilityRoutes } from "./core-routes.js"
+import { registerProjectIconRoutes } from "./project-icon-routes.js"
+import { registerScheduledTaskRoutes } from "../scheduled-tasks/routes.js"
+import { registerSkillRoutes } from "./skill-routes.js"
+import { registerPluginRoutes } from "./plugin-routes.js"
+import { getNpmInfo, clearCache as clearNpmCache } from "./npm-registry.js"
+import { parseNpmSpec, parsePathSpec, isExactSemver } from "./plugin-spec.js"
+import { registerAxCodeRoutes } from "./routes.js"
+import { createBackgroundAxCodeReloader } from "./background-reload.js"
 
 export const createFeatureRoutesRuntime = (dependencies) => {
-  const {
-    clientReloadDelayMs,
-  } = dependencies;
+  const { clientReloadDelayMs } = dependencies
 
-  let quotaProviders = null;
+  let quotaProviders = null
   const getQuotaProviders = async () => {
     if (!quotaProviders) {
-      quotaProviders = await import('../quota/index.js');
+      quotaProviders = await import("../quota/index.js")
     }
-    return quotaProviders;
-  };
+    return quotaProviders
+  }
 
   const registerRoutes = async (app, routeDependencies) => {
     const {
@@ -62,20 +60,20 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       scheduledTasksRuntime,
       getOpenChamberEventClients,
       writeSseEvent,
-    } = routeDependencies;
+    } = routeDependencies
 
-    const { getProviderSources, removeProviderConfig } = await import('./index.js');
+    const { getProviderSources, removeProviderConfig } = await import("./index.js")
     const backgroundAxCodeReloader = createBackgroundAxCodeReloader({
       refreshAxCodeAfterConfigChange,
       clientReloadDelayMs,
-    });
+    })
 
     registerSettingsUtilityRoutes(app, {
       readCustomThemesFromDisk,
       refreshAxCodeAfterConfigChange,
       clientReloadDelayMs,
       backgroundAxCodeReloader,
-    });
+    })
 
     registerAxCodeRoutes(app, {
       crypto,
@@ -94,7 +92,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       backgroundAxCodeReloader,
       buildAxCodeUrl,
       getAxCodeAuthHeaders,
-    });
+    })
 
     registerProjectIconRoutes(app, {
       fsPromises,
@@ -107,7 +105,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       createFsSearchRuntime,
       spawn,
       resolveGitBinaryForSpawn,
-    });
+    })
 
     registerScheduledTaskRoutes(app, {
       readSettingsFromDiskMigrated,
@@ -116,7 +114,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       scheduledTasksRuntime,
       getOpenChamberEventClients,
       writeSseEvent,
-    });
+    })
 
     const {
       getAgentSources,
@@ -150,7 +148,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       deletePluginDirFile,
       encodePluginId,
       decodePluginId,
-    } = await import('./index.js');
+    } = await import("./index.js")
 
     registerConfigEntityRoutes(app, {
       resolveProjectDirectory,
@@ -177,7 +175,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       updateSnippet,
       deleteSnippet,
       expandSnippets,
-    });
+    })
 
     registerPluginRoutes(app, {
       resolveOptionalProjectDirectory,
@@ -198,7 +196,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       parseNpmSpec,
       parsePathSpec,
       isExactSemver,
-    });
+    })
 
     const {
       getSkillSources,
@@ -212,7 +210,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       deleteSkillSupportingFile,
       SKILL_SCOPE,
       SKILL_DIR,
-    } = await import('./index.js');
+    } = await import("./index.js")
 
     const {
       getCuratedSkillsSources,
@@ -225,8 +223,8 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       scanClawdHubPage,
       installSkillsFromClawdHub,
       isClawdHubSource,
-    } = await import('../skills-catalog/index.js');
-    const { getProfiles, getProfile } = await import('../git/index.js');
+    } = await import("../skills-catalog/index.js")
+    const { getProfiles, getProfile } = await import("../git/index.js")
 
     registerSkillRoutes(app, {
       fs,
@@ -265,21 +263,21 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       isClawdHubSource,
       getProfiles,
       getProfile,
-    });
+    })
 
-    registerQuotaRoutes(app, { getQuotaProviders });
-    registerGitHubRoutes(app);
-    registerGitRoutes(app);
+    registerQuotaRoutes(app, { getQuotaProviders })
+    registerGitHubRoutes(app)
+    registerGitRoutes(app)
     registerMagicPromptRoutes(app, {
       fsPromises,
       path,
       openchamberDataDir,
-    });
+    })
     registerSessionFoldersRoutes(app, {
       fsPromises,
       path,
       openchamberDataDir,
-    });
+    })
     registerFsRoutes(app, {
       os,
       path,
@@ -292,10 +290,10 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       buildAugmentedPath,
       resolveGitBinaryForSpawn,
       openchamberUserConfigRoot,
-    });
-  };
+    })
+  }
 
   return {
     registerRoutes,
-  };
-};
+  }
+}
