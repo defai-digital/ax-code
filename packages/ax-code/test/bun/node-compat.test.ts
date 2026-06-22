@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from "vitest"
+import path from "path"
 import { Env } from "../../src/util/env"
+import { tmpdir } from "../fixture/fixture"
 
 // The Bun→Node compat shim is installed globally by test/support/vitest.setup.ts.
-const Bun = (globalThis as unknown as { Bun: { $: any } }).Bun
 
 describe("node-compat Bun.$ shell", () => {
   const SECRET = "PLUGIN_LEAK_API_KEY"
@@ -38,5 +39,32 @@ describe("node-compat Bun.$ shell", () => {
       await Bun.$`${process.execPath} -e ${"process.stdout.write(process.argv.slice(1).join(String.fromCharCode(10)))"} ${args}`.quiet()
     const printed = res.stdout.toString().split("\n")
     expect(printed).toEqual(args)
+  })
+
+  test("Glob.scan accepts a string cwd like Bun", async () => {
+    await using dir = await tmpdir({
+      init: async (root) => {
+        await Bun.write(path.join(root, "src", "app.ts"), "export const app = true\n")
+        await Bun.write(path.join(root, "outside.ts"), "export const outside = true\n")
+      },
+    })
+
+    const files = await Array.fromAsync(new Bun.Glob("**/*.ts").scan(path.join(dir.path, "src")))
+
+    expect(files).toEqual(["app.ts"])
+  })
+
+  test("Glob.scanSync honors absolute and dot options", async () => {
+    await using dir = await tmpdir({
+      init: async (root) => {
+        await Bun.write(path.join(root, "visible.ts"), "export const visible = true\n")
+        await Bun.write(path.join(root, ".hidden.ts"), "export const hidden = true\n")
+      },
+    })
+
+    const glob = new Bun.Glob("*.ts")
+    expect(Array.from(glob.scanSync({ cwd: dir.path }))).toEqual(["visible.ts"])
+    expect(Array.from(glob.scanSync({ cwd: dir.path, dot: true })).sort()).toEqual([".hidden.ts", "visible.ts"])
+    expect(Array.from(glob.scanSync({ cwd: dir.path, absolute: true }))).toEqual([path.join(dir.path, "visible.ts")])
   })
 })

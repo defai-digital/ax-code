@@ -166,8 +166,13 @@ function hash(input: string | Uint8Array | ArrayBuffer) {
 export class Glob {
   constructor(private readonly pattern: string) {}
 
-  async *scan(input: { cwd?: string; absolute?: boolean } = {}) {
-    const cwd = input.cwd ?? process.cwd()
+  private options(input: { cwd?: string; absolute?: boolean; dot?: boolean } | string = {}) {
+    return typeof input === "string" ? { cwd: input } : input
+  }
+
+  async *scan(input: { cwd?: string; absolute?: boolean; dot?: boolean } | string = {}) {
+    const options = this.options(input)
+    const cwd = options.cwd ?? process.cwd()
     const stack = [cwd]
     while (stack.length > 0) {
       const current = stack.pop()
@@ -180,14 +185,15 @@ export class Glob {
           continue
         }
         const relative = path.relative(cwd, full).split(path.sep).join("/")
-        if (!minimatch(relative, this.pattern, { dot: true })) continue
-        yield input.absolute ? full : relative
+        if (!minimatch(relative, this.pattern, { dot: options.dot ?? false })) continue
+        yield options.absolute ? full : relative
       }
     }
   }
 
-  *scanSync(input: { cwd?: string; absolute?: boolean } = {}) {
-    const cwd = input.cwd ?? process.cwd()
+  *scanSync(input: { cwd?: string; absolute?: boolean; dot?: boolean } | string = {}) {
+    const options = this.options(input)
+    const cwd = options.cwd ?? process.cwd()
     const stack = [cwd]
     while (stack.length > 0) {
       const current = stack.pop()
@@ -205,8 +211,8 @@ export class Glob {
           continue
         }
         const relative = path.relative(cwd, full).split(path.sep).join("/")
-        if (!minimatch(relative, this.pattern, { dot: true })) continue
-        yield input.absolute ? full : relative
+        if (!minimatch(relative, this.pattern, { dot: options.dot ?? false })) continue
+        yield options.absolute ? full : relative
       }
     }
   }
