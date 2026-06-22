@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest"
+import { describe, test, expect, afterEach, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { FileTime } from "../../src/file/time"
@@ -154,6 +154,28 @@ describe("file/time", () => {
           await expect(FileTime.assert(sessionID, filepath)).rejects.toThrow("modified since it was last read")
         },
       })
+    })
+
+    test("detects unsafe bigint size changes without rounding", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "huge.bin")
+      const fixed = new Date(1_000)
+      const statSpy = vi
+        .spyOn(Filesystem, "stat")
+        .mockReturnValueOnce({ mtime: fixed, ctime: fixed, size: 9_007_199_254_740_992n } as any)
+        .mockReturnValueOnce({ mtime: fixed, ctime: fixed, size: 9_007_199_254_740_993n } as any)
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await FileTime.read(sessionID, filepath)
+            await expect(FileTime.assert(sessionID, filepath)).rejects.toThrow("modified since it was last read")
+          },
+        })
+      } finally {
+        statSpy.mockRestore()
+      }
     })
 
     test("includes timestamps in error message", async () => {

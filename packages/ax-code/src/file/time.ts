@@ -11,7 +11,7 @@ export namespace FileTime {
     readonly read: Date
     readonly mtime: number | undefined
     readonly ctime: number | undefined
-    readonly size: number | undefined
+    readonly size: number | string | undefined
   }
 
   interface State {
@@ -26,7 +26,7 @@ export namespace FileTime {
 
   function stamp(file: string): Stamp {
     const stat = Filesystem.stat(file)
-    const size = typeof stat?.size === "bigint" ? Number(stat.size) : stat?.size
+    const size = typeof stat?.size === "bigint" ? stat.size.toString() : stat?.size
     return {
       read: new Date(),
       mtime: stat?.mtime?.getTime(),
