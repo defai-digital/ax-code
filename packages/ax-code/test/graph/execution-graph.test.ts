@@ -127,4 +127,46 @@ describe("ExecutionGraph.build", () => {
       },
     })
   })
+
+  test("normalizes malformed string fields in legacy replay events", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "session.start",
+          sessionID: sid,
+          agent: 123,
+          model: "test/model",
+          directory: tmp.path,
+        } as any)
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: 456,
+          callID: { bad: true },
+          input: {},
+        } as any)
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: sid,
+          fromAgent: false,
+          toAgent: 789,
+          confidence: 0.5,
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const graph = ExecutionGraph.build(sid)
+        expect(() => ExecutionGraph.Graph.parse(graph)).not.toThrow()
+        expect(graph.metadata.agents).toEqual(["unknown"])
+        expect(graph.metadata.tools).toEqual(["unknown"])
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
 })

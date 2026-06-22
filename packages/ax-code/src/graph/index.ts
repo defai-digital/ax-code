@@ -94,6 +94,10 @@ export namespace ExecutionGraph {
     return typeof value === "number" && Number.isFinite(value) ? value : 0
   }
 
+  function stringValue(value: unknown, fallback = "unknown") {
+    return typeof value === "string" && value.length > 0 ? value : fallback
+  }
+
   function eventTokens(value: unknown): Tokens {
     if (!value || typeof value !== "object") return { input: 0, output: 0 }
     const tokens = value as { input?: unknown; output?: unknown }
@@ -143,7 +147,7 @@ export namespace ExecutionGraph {
 
       switch (e.type) {
         case "session.start": {
-          const agent = e.agent as string
+          const agent = stringValue(e.agent)
           agents.add(agent)
           node = {
             id: "session-start",
@@ -190,8 +194,8 @@ export namespace ExecutionGraph {
         }
 
         case "tool.call": {
-          const tool = e.tool as string
-          const callID = e.callID as string
+          const tool = stringValue(e.tool)
+          const callID = stringValue(e.callID, `unknown-${i}`)
           const input = (e.input ?? {}) as Record<string, unknown>
           const target = extractTarget(tool, input)
           tools.add(tool)
@@ -208,9 +212,9 @@ export namespace ExecutionGraph {
         }
 
         case "tool.result": {
-          const callID = e.callID as string
-          const tool = e.tool as string
-          const status = e.status as "completed" | "error"
+          const callID = stringValue(e.callID, `unknown-${i}`)
+          const tool = stringValue(e.tool)
+          const status = e.status === "error" ? "error" : "completed"
           const dur = finiteNumber(e.durationMs)
           node = {
             id: `result-${callID}`,
@@ -247,8 +251,8 @@ export namespace ExecutionGraph {
         }
 
         case "agent.route": {
-          const from = e.fromAgent as string
-          const to = e.toAgent as string
+          const from = stringValue(e.fromAgent)
+          const to = stringValue(e.toAgent)
           const conf = finiteNumber(e.confidence)
           agents.add(from)
           agents.add(to)
