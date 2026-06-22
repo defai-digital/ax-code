@@ -170,6 +170,14 @@ describe("FileWatcher native event decoding", () => {
 
     await expect(FileWatcher.snapshotPollTree(path.join(tmp.path, "missing"), [])).resolves.toEqual(new Map())
   })
+
+  test("poll snapshots treat paths below replaced directories as empty", async () => {
+    await using tmp = await tmpdir()
+    const replaced = path.join(tmp.path, "replaced")
+    await fs.writeFile(replaced, "not a directory")
+
+    await expect(FileWatcher.snapshotPollTree(path.join(replaced, "child"), [])).resolves.toEqual(new Map())
+  })
 })
 
 describeWatcher("FileWatcher", () => {

@@ -116,7 +116,8 @@ export namespace FileWatcher {
   }
 
   function isMissingPathError(error: unknown) {
-    return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
+    const code = (error as NodeJS.ErrnoException | undefined)?.code
+    return code === "ENOENT" || code === "ENOTDIR"
   }
 
   export async function snapshotPollTree(
