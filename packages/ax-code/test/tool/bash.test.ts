@@ -1095,6 +1095,19 @@ describe("tool.bash browser-open interception", () => {
     })
   })
 
+  test("intercepts indented open targeting a local HTML file", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute({ command: "  open index.html", description: "Open indented HTML file" }, ctx)
+        expect(result.output).toContain("[Browser open intercepted]")
+        expect(result.output).toContain("index.html")
+      },
+    })
+  })
+
   test("intercepts xdg-open targeting a local HTML file", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

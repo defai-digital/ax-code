@@ -61,8 +61,9 @@ const BROWSER_OPEN_ARG_RE = /"[^"]*"|'[^']*'|[^\s]+/g
  * for OAuth flows, DRE graph, MCP auth, or non-local targets.
  */
 function isBrowserOpenToLocal(command: string): string | null {
-  if (!BROWSER_OPEN_RE.test(command)) return null
-  const args = command.replace(BROWSER_OPEN_RE, "").trim().match(BROWSER_OPEN_ARG_RE) ?? []
+  const normalized = command.trimStart()
+  if (!BROWSER_OPEN_RE.test(normalized)) return null
+  const args = normalized.replace(BROWSER_OPEN_RE, "").trim().match(BROWSER_OPEN_ARG_RE) ?? []
   const target = stripShellQuotes(args[args.length - 1] ?? "")
   if (!LOCAL_HTML_PATH_RE.test(target) && !isLocalBrowserUrl(target)) return null
   if (BROWSER_INTENT_PASSTHROUGH_RE.test(target)) return null
