@@ -135,8 +135,8 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       while (parent) {
         ensureNotAborted()
         const current: Awaited<ReturnType<typeof Session.get>> | undefined = await Session.get(parent).catch((e) => {
-          log.warn("failed to look up parent session for depth check", { parent, error: e })
-          return undefined
+          if (NotFoundError.isInstance(e)) return undefined
+          throw e
         })
         ensureNotAborted()
         if (!current?.parentID) break
