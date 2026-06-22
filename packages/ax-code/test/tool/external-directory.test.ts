@@ -221,6 +221,20 @@ describe("tool.assertSymlinkInsideProject", () => {
     })
   })
 
+  test("allows missing nested paths when a parent path component is a file", async () => {
+    await using project = await tmpdir()
+    await fs.writeFile(path.join(project.path, "parent.txt"), "content")
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await expect(
+          assertSymlinkInsideProject(path.join(project.path, "parent.txt", "child", "file.txt")),
+        ).resolves.toBeUndefined()
+      },
+    })
+  })
+
   test("rejects missing paths under symlinked ancestor directories that escape the project", async () => {
     await using project = await tmpdir()
     await using outside = await tmpdir()

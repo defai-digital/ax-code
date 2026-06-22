@@ -72,7 +72,7 @@ export async function assertSymlinkInsideProject(target: string): Promise<void> 
   let ancestor = path.dirname(targetPath)
   while (ancestor !== projectRoot && Filesystem.contains(projectRoot, ancestor)) {
     const stat = await fs.lstat(ancestor).catch((err: NodeJS.ErrnoException) => {
-      if (err?.code === "ENOENT") return null
+      if (err?.code === "ENOENT" || err?.code === "ENOTDIR") return null
       throw err
     })
     if (!stat) {
