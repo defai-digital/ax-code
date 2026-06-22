@@ -108,7 +108,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               return true
             })
             .catch((error: unknown) => {
-              if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return false
+              const code = Filesystem.errnoCode(error)
+              if (code === "ENOENT") return false
+              if (code === "ENOTDIR") {
+                throw new Error(`apply_patch verification failed: parent path is not a directory: ${filePath}`)
+              }
               throw error
             })
           let oldContent = ""
@@ -184,7 +188,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                 .stat(movePath)
                 .then((stats) => !stats.isDirectory())
                 .catch((error: unknown) => {
-                  if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return false
+                  const code = Filesystem.errnoCode(error)
+                  if (code === "ENOENT") return false
+                  if (code === "ENOTDIR") {
+                    throw new Error(`apply_patch verification failed: parent path is not a directory: ${movePath}`)
+                  }
                   throw error
                 })
             : undefined

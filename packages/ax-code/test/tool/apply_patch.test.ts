@@ -519,6 +519,21 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("rejects add when a parent path component is a file", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        await fs.writeFile(path.join(fixture.path, "parent.txt"), "content", "utf-8")
+        const patchText = "*** Begin Patch\n*** Add File: parent.txt/child.txt\n+new content\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow("parent path is not a directory")
+      },
+    })
+  })
+
   test("rejects update when target file is missing", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
