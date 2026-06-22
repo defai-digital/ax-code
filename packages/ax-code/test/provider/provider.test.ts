@@ -834,6 +834,66 @@ test("defaultModel skips recent models that are not selectable for agent tool us
   }
 })
 
+test("defaultModel skips configured providers with no selectable models", async () => {
+  const statePath = path.join(Global.Path.state, "model.json")
+  const previousState = await Bun.file(statePath)
+    .text()
+    .catch(() => undefined)
+
+  await Bun.write(statePath, JSON.stringify({ recent: [] }))
+
+  try {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          "text-only-provider": {
+            name: "Text Only Provider",
+            npm: "@ai-sdk/openai-compatible",
+            options: {
+              apiKey: "test-key",
+              baseURL: "https://text-only.example/v1",
+            },
+            models: {
+              "text-only": {
+                name: "Text Only",
+                tool_call: false,
+                limit: { context: 128000, output: 4096 },
+              },
+            },
+          },
+          "tool-provider": {
+            name: "Tool Provider",
+            npm: "@ai-sdk/openai-compatible",
+            options: {
+              apiKey: "test-key",
+              baseURL: "https://tool.example/v1",
+            },
+            models: {
+              "tool-model": {
+                name: "Tool Model",
+                tool_call: true,
+                limit: { context: 128000, output: 4096 },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.defaultModel()
+        expect(String(model.providerID)).toBe("tool-provider")
+        expect(String(model.modelID)).toBe("tool-model")
+      },
+    })
+  } finally {
+    if (previousState === undefined) await fs.rm(statePath, { force: true })
+    else await Bun.write(statePath, previousState)
+  }
+})
+
 test("defaultModel treats a missing recent-model store as empty state", async () => {
   const statePath = path.join(Global.Path.state, "model.json")
   const readJson = Filesystem.readJson

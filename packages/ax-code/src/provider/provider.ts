@@ -1188,12 +1188,12 @@ export namespace Provider {
       return { providerID: entry.providerID, modelID: entry.modelID }
     }
 
-    const provider = Object.values(providers).find((p) => !cfg.provider || Object.keys(cfg.provider).includes(p.id))
-    if (provider) {
+    for (const provider of Object.values(providers)) {
+      if (cfg.provider && !Object.keys(cfg.provider).includes(provider.id)) continue
       const [model] = sort(
         Object.values(provider.models).filter((item) => modelSelectableForProvider(provider.id, item)),
       )
-      if (!model) throw new Error("no models found")
+      if (!model) continue
       return {
         providerID: provider.id,
         modelID: model.id,
@@ -1202,20 +1202,25 @@ export namespace Provider {
 
     const disabled = new Set(cfg.disabled_providers ?? [])
     const enabled = cfg.enabled_providers ? new Set(cfg.enabled_providers) : undefined
-    const fallback = Object.values(await ModelsDev.get()).find((item) => {
+    const fallbacks = Object.values(await ModelsDev.get()).filter((item) => {
       const id = ProviderID.make(item.id)
       if (enabled && !enabled.has(id)) return false
       if (disabled.has(id)) return false
       if (cfg.provider && !Object.keys(cfg.provider).includes(item.id)) return false
       return true
     })
-    if (!fallback) throw new Error("no providers found")
-    const [model] = sort(Object.values(fallback.models).filter((item) => modelSelectableForProvider(fallback.id, item)))
-    if (!model) throw new Error("no models found")
-    return {
-      providerID: ProviderID.make(fallback.id),
-      modelID: ModelID.make(model.id),
+    if (fallbacks.length === 0) throw new Error("no providers found")
+    for (const fallback of fallbacks) {
+      const [model] = sort(
+        Object.values(fallback.models).filter((item) => modelSelectableForProvider(fallback.id, item)),
+      )
+      if (!model) continue
+      return {
+        providerID: ProviderID.make(fallback.id),
+        modelID: ModelID.make(model.id),
+      }
     }
+    throw new Error("no models found")
   }
 
   export function parseModel(model: string | { providerID?: unknown; modelID?: unknown; id?: unknown }) {
