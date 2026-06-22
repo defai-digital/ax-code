@@ -36,7 +36,7 @@ import {
   WorkflowRun as WorkflowRunState,
   WorkflowRunEventRecord,
 } from "@/workflow/state"
-import type { SessionID } from "@/session/schema"
+import { SessionID } from "@/session/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { OptionalQueryNumber, QueryBoolean } from "./query"
@@ -51,7 +51,7 @@ const WORKFLOW_RUN_ID_PARAM = z.object({ runID: WorkflowRunID.zod })
 const WORKFLOW_TEMPLATE_ID_PARAM = z.object({ templateID: WorkflowTemplateIDSchema })
 
 const WorkflowRunListQuery = z.object({
-  parentSessionID: z.string().min(1).optional(),
+  parentSessionID: SessionID.zod.optional(),
   status: WorkflowRunState.Status.optional(),
   limit: OptionalQueryNumber(z.number().int().positive().max(500)),
 })
@@ -62,7 +62,7 @@ const WorkflowRunDashboardQuery = WorkflowRunListQuery.extend({
 
 const WorkflowRunCreateBody = z
   .object({
-    parentSessionID: z.string().min(1).optional(),
+    parentSessionID: SessionID.zod.optional(),
     sourceTemplateID: z.string().trim().min(1).optional(),
     sourceTaskID: z.string().trim().min(1).optional(),
     templateID: WorkflowTemplateIDSchema.optional(),
@@ -105,7 +105,7 @@ const WorkflowTemplateSaveFromRunBody = z.object({
 
 const WorkflowRoutineRunBody = z.object({
   route: z.string().trim().min(1),
-  parentSessionID: z.string().min(1).optional(),
+  parentSessionID: SessionID.zod.optional(),
   modelPolicy: WorkflowModelPolicyOverride.optional(),
   inputValues: WorkflowInputValues,
   startOptions: WorkflowScheduler.StartOptions.partial().optional(),
@@ -190,7 +190,7 @@ export const WorkflowRunRoutes = lazy(() =>
         return c.json(
           await WorkflowRun.list({
             ...query,
-            parentSessionID: query.parentSessionID as SessionID | undefined,
+            parentSessionID: query.parentSessionID,
           }),
         )
       },
@@ -216,7 +216,7 @@ export const WorkflowRunRoutes = lazy(() =>
           return c.json(
             await WorkflowTemplate.createRun({
               templateID: body.templateID as WorkflowTemplate.ID,
-              parentSessionID: body.parentSessionID as SessionID | undefined,
+              parentSessionID: body.parentSessionID,
               sourceTaskID: body.sourceTaskID,
               modelPolicy: body.modelPolicy,
               inputValues: body.inputValues,
@@ -225,7 +225,7 @@ export const WorkflowRunRoutes = lazy(() =>
         }
         return c.json(
           await WorkflowRun.create({
-            parentSessionID: body.parentSessionID as SessionID | undefined,
+            parentSessionID: body.parentSessionID,
             sourceTemplateID: body.sourceTemplateID,
             sourceTaskID: body.sourceTaskID,
             spec: applyWorkflowModelPolicyOverride(body.spec!, body.modelPolicy),
@@ -252,7 +252,7 @@ export const WorkflowRunRoutes = lazy(() =>
       async (c) => {
         const query = c.req.valid("query")
         const runs = await WorkflowRun.list({
-          parentSessionID: query.parentSessionID as SessionID | undefined,
+          parentSessionID: query.parentSessionID,
           status: query.status,
           limit: query.limit,
         })

@@ -150,6 +150,23 @@ describe("workflow routes", () => {
       const malformedRun = await app.request(`/workflow-runs/not-a-run-id?${directoryQuery}`)
       expect(malformedRun.status).toBe(400)
 
+      const malformedParentFilter = await app.request(
+        `/workflow-runs?${directoryQuery}&parentSessionID=not-a-session-id`,
+      )
+      expect(malformedParentFilter.status).toBe(400)
+
+      const malformedDashboardParentFilter = await app.request(
+        `/workflow-runs/dashboard?${directoryQuery}&parentSessionID=not-a-session-id`,
+      )
+      expect(malformedDashboardParentFilter.status).toBe(400)
+
+      const malformedParentCreate = await app.request(`/workflow-runs?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "builtin:noop-dry-run", parentSessionID: "not-a-session-id" }),
+      })
+      expect(malformedParentCreate.status).toBe(400)
+
       const createResponse = await app.request(`/workflow-runs?${directoryQuery}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
