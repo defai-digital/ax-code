@@ -1,5 +1,4 @@
 import { batch, type Accessor, type Setter } from "solid-js"
-import path from "path"
 import type { CliRenderer, ScrollBoxRenderable } from "@opentui/core"
 import type { Part } from "@ax-code/sdk/v2"
 import type { DialogContext } from "@tui/ui/dialog"
@@ -8,7 +7,7 @@ import { Editor } from "../../util/editor"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript, type MessageWithParts, type SessionInfo } from "../../util/transcript"
 import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./display"
-import { transcriptFilename } from "./display-command-helpers"
+import { resolveTranscriptExportPath, transcriptFilename } from "./display-command-helpers"
 import { Filesystem } from "@/util/filesystem"
 import { DreGraphServer } from "@/cli/cmd/dre-graph-server"
 import open from "open"
@@ -27,20 +26,6 @@ type Model = {
 
 type Toast = {
   show: (input: { message: string; variant: "success" | "error" | "warning"; duration?: number }) => void
-}
-
-function resolveTranscriptExportPath(filename: string) {
-  const trimmed = filename.trim()
-  if (!trimmed) throw new Error("Export filename is required")
-  if (path.isAbsolute(trimmed)) throw new Error("Export filename must be relative to the current workspace")
-
-  const cwd = process.cwd()
-  const resolved = path.resolve(cwd, trimmed)
-  const relative = path.relative(cwd, resolved)
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error("Export filename must stay inside the current workspace")
-  }
-  return resolved
 }
 
 export function displayCommands(input: {
