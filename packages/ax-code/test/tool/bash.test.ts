@@ -504,6 +504,70 @@ describe("tool.bash truncation", () => {
     }
   })
 
+  test("input redirect is not treated as an autonomous write", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, ".env"), "SECRET=ok\n")
+      },
+    })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_input_redirect")
+      BlastRadius.reset(sessionID)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            const result = await bash.execute(
+              {
+                command: "cat < .env",
+                description: "Read dotenv via input redirect",
+              },
+              { ...ctx, sessionID },
+            )
+
+            expect(result.metadata.exit).toBe(0)
+            expect(result.output).toContain("SECRET=ok")
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
+  test("inner shell write redirect counts against autonomous blast radius", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_inner_redirect_write")
+      BlastRadius.reset(sessionID)
+      try {
+        BlastRadius.applyConfigCaps(sessionID, { files: 0 })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+
+            await expect(
+              bash.execute(
+                {
+                  command: `sh -c ${shellQuote("printf x > inner.txt")}`,
+                  description: "Write via inner shell redirect",
+                },
+                { ...ctx, sessionID },
+              ),
+            ).rejects.toMatchObject({
+              data: { message: expect.stringContaining("Autonomous file-change cap reached") },
+            })
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
   test("truncates output exceeding line limit", async () => {
     await Instance.provide({
       directory: projectRoot,

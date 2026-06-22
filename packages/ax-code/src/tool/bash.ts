@@ -54,6 +54,7 @@ const LOCAL_HTML_PATH_RE = /^(?!https?:\/\/).*\.html?(?:\s*$|#|\?)/i
 // These are allowed through even when targeting localhost/local files.
 const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|dre-graph|mcp)/i
 const BROWSER_OPEN_ARG_RE = /"[^"]*"|'[^']*'|[^\s]+/g
+const WRITE_REDIRECT_OPERATORS = new Set([">", ">>", ">|", "&>", "&>>", "<>"])
 
 /**
  * Returns the target argument if the command is a browser-open call targeting
@@ -78,6 +79,14 @@ function isLocalBrowserUrl(target: string) {
   } catch {
     return false
   }
+}
+
+function isWriteFileRedirect(redirect: { childCount: number; child(index: number): { type: string } | null }) {
+  for (let i = 0; i < redirect.childCount; i++) {
+    const child = redirect.child(i)
+    if (child && WRITE_REDIRECT_OPERATORS.has(child.type)) return true
+  }
+  return false
 }
 
 const log = Log.create({ service: "bash-tool" })
@@ -486,6 +495,7 @@ export const BashTool = Tool.define("bash", async () => {
                   const normalized =
                     process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
                   resolvedPaths.add(normalized)
+                  if (isWriteFileRedirect(innerRedirect)) redirectWritePaths.add(normalized)
                   if (!Instance.containsPath(normalized)) {
                     const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
                     directories.add(dir)
@@ -542,10 +552,10 @@ export const BashTool = Tool.define("bash", async () => {
         if (command.length) foundCommands = true
       }
 
-      // Redirection targets (`> /etc/x`, `tee /etc/x`-style file_redirect)
-      // must be sandboxed: in workspace-write mode the model could
-      // otherwise overwrite arbitrary files outside the workspace through
-      // a stdout redirect that the per-command path scan ignored.
+      // Redirection targets must be sandboxed: in workspace-write mode the
+      // model could otherwise read/write arbitrary files outside the workspace
+      // through redirect syntax that the per-command path scan ignored. Only
+      // write redirects are counted against autonomous blast-radius caps.
       for (const redirect of tree.rootNode.descendantsOfType("file_redirect")) {
         if (!redirect) continue
         for (let i = 0; i < redirect.childCount; i++) {
@@ -561,7 +571,7 @@ export const BashTool = Tool.define("bash", async () => {
           const normalized =
             process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
           resolvedPaths.add(normalized)
-          redirectWritePaths.add(normalized)
+          if (isWriteFileRedirect(redirect)) redirectWritePaths.add(normalized)
           if (!Instance.containsPath(normalized)) {
             const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
             directories.add(dir)
