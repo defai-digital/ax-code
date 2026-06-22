@@ -413,18 +413,59 @@ export namespace File {
 
   async function scanDirectories() {
     const dirs = new Set<string>()
-    let ignored = (_: string) => false
-    if (Instance.project.vcs === "git") {
+    type IgnoreContext = { base: string; matcher: ReturnType<typeof ignore> }
+    const isOutsideRelativePath = (relative: string) =>
+      relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
+
+    const readIgnoreContext = async (base: string): Promise<IgnoreContext | undefined> => {
       const ig = ignore()
-      const gitignore = path.join(Instance.project.worktree, ".gitignore")
-      if (await Filesystem.exists(gitignore)) ig.add(await Filesystem.readText(gitignore))
-      const ignoreFile = path.join(Instance.project.worktree, ".ignore")
-      if (await Filesystem.exists(ignoreFile)) ig.add(await Filesystem.readText(ignoreFile))
-      ignored = ig.ignores.bind(ig)
+      const gitignore = path.join(base, ".gitignore")
+      let hasPatterns = false
+      if (await Filesystem.exists(gitignore)) {
+        ig.add(await Filesystem.readText(gitignore))
+        hasPatterns = true
+      }
+      const ignoreFile = path.join(base, ".ignore")
+      if (await Filesystem.exists(ignoreFile)) {
+        ig.add(await Filesystem.readText(ignoreFile))
+        hasPatterns = true
+      }
+      if (!hasPatterns) return undefined
+      return { base, matcher: ig }
     }
 
-    const visit = async (relative: string) => {
+    const isIgnored = (absolute: string, contexts: IgnoreContext[]) => {
+      for (const context of contexts) {
+        const relative = path.relative(context.base, absolute)
+        if (!relative || isOutsideRelativePath(relative)) continue
+        const candidate = relative.split(path.sep).join("/") + "/"
+        if (context.matcher.ignores(candidate)) return true
+      }
+      return false
+    }
+
+    const initialIgnoreContexts = async () => {
+      if (Instance.project.vcs !== "git") return [] as IgnoreContext[]
+      const bases: string[] = []
+      const relativeFromWorktree = path.relative(Instance.project.worktree, Instance.directory)
+      if (!isOutsideRelativePath(relativeFromWorktree)) {
+        let current = Instance.project.worktree
+        bases.push(current)
+        for (const segment of relativeFromWorktree.split(path.sep).filter(Boolean)) {
+          current = path.join(current, segment)
+          bases.push(current)
+        }
+      } else {
+        bases.push(Instance.directory)
+      }
+      const contexts = await Promise.all(bases.map(readIgnoreContext))
+      return contexts.filter((context): context is IgnoreContext => context !== undefined)
+    }
+
+    const visit = async (relative: string, parentContexts: IgnoreContext[]) => {
       const absolute = path.join(Instance.directory, relative)
+      const localContext = Instance.project.vcs === "git" ? await readIgnoreContext(absolute) : undefined
+      const contexts = localContext ? [...parentContexts, localContext] : parentContexts
       const entries = await fs.promises
         .readdir(absolute, { withFileTypes: true })
         .catch((error: NodeJS.ErrnoException) => {
@@ -435,14 +476,15 @@ export namespace File {
         if (!entry.isDirectory()) continue
         if (entry.name === ".git") continue
         const dir = path.join(relative, entry.name).split(path.sep).join("/")
+        const dirAbsolute = path.join(Instance.directory, dir)
+        if (isIgnored(dirAbsolute, contexts)) continue
         const key = `${dir}/`
-        if (ignored(key)) continue
         dirs.add(key)
-        await visit(dir)
+        await visit(dir, contexts)
       }
     }
 
-    await visit("")
+    await visit("", await initialIgnoreContexts())
     return Array.from(dirs).toSorted()
   }
 

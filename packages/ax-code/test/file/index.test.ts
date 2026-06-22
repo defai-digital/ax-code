@@ -897,6 +897,21 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("directory search respects nested ignore files", async () => {
+      await using tmp = await setupSearchableRepo()
+      await fs.writeFile(path.join(tmp.path, "src", ".gitignore"), "ignored-empty/\n", "utf-8")
+      await fs.mkdir(path.join(tmp.path, "src", "ignored-empty"))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await File.init()
+
+          expect(await File.search({ query: "ignored-empty", type: "directory" })).toEqual([])
+        },
+      })
+    })
+
     test("respects limit", async () => {
       await using tmp = await setupSearchableRepo()
 
