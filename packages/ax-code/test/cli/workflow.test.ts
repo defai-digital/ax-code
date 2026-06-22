@@ -8,7 +8,9 @@ import {
   formatWorkflowRunList,
   formatWorkflowRoutineList,
   formatWorkflowTemplateList,
+  parseWorkflowPhaseID,
   parseWorkflowInputArguments,
+  parseWorkflowRunID,
 } from "../../src/cli/cmd/workflow"
 import { getWorkflowEvalCase, type WorkflowEvalCaseRunSummary } from "../../src/workflow/eval-corpus"
 import { getParsedWorkflowFixtureSpec } from "../../src/workflow/fixtures"
@@ -442,6 +444,13 @@ describe("workflow command helpers", () => {
 
     expect(parseWorkflowInputArguments(undefined)).toBeUndefined()
     expect(() => parseWorkflowInputArguments(["missing-separator"])).toThrow("key=value")
+  })
+
+  test("validates workflow CLI identifiers before execution", () => {
+    expect(parseWorkflowRunID("wfr_01")).toBe("wfr_01")
+    expect(parseWorkflowPhaseID("wfp_01")).toBe("wfp_01")
+    expect(() => parseWorkflowRunID("not-a-run")).toThrow()
+    expect(() => parseWorkflowPhaseID("wfr_01")).toThrow()
   })
 })
 

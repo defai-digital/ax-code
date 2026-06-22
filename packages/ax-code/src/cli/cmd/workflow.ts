@@ -11,7 +11,12 @@ import { isWorkflowRuntimeEnabled } from "../../workflow/spec"
 import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
 import { WorkflowTemplate } from "../../workflow/template"
 import type { SessionID } from "../../session/schema"
-import type { WorkflowArtifactRecord, WorkflowPhaseID, WorkflowRunDetail, WorkflowRunID } from "../../workflow/state"
+import {
+  WorkflowPhaseID,
+  WorkflowRunID,
+  type WorkflowArtifactRecord,
+  type WorkflowRunDetail,
+} from "../../workflow/state"
 import { summarizeWorkflowRunDetail, type WorkflowRunProjection } from "../../workflow/projection"
 import {
   evaluateWorkflowEvalCaseRun,
@@ -420,7 +425,7 @@ const WorkflowEvalCaseRunCommand = cmd({
   async handler(args) {
     await withWorkflowRuntime(async () => {
       const options = args as unknown as EvalCaseOptions
-      const detail = await WorkflowRun.getDetail(options.runID as WorkflowRunID)
+      const detail = await WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
       const result = evaluateWorkflowEvalCaseRun({
         run: detail,
         caseID: (options.caseId ?? "verified-bug-sweep-seeded") as WorkflowEvalCaseID,
@@ -760,6 +765,14 @@ export function parseWorkflowInputArguments(input: unknown): Record<string, unkn
   return result
 }
 
+export function parseWorkflowRunID(value: string): WorkflowRunID {
+  return WorkflowRunID.zod.parse(value)
+}
+
+export function parseWorkflowPhaseID(value: string): WorkflowPhaseID {
+  return WorkflowPhaseID.zod.parse(value)
+}
+
 function parseWorkflowInputValue(value: string): unknown {
   if (value === "") return ""
   try {
@@ -783,7 +796,7 @@ const WorkflowRunStatusCommand = cmd({
   async handler(args) {
     await withWorkflowRuntime(async () => {
       const options = args as unknown as RunIDOptions
-      const detail = await WorkflowRun.getDetail(options.runID as WorkflowRunID)
+      const detail = await WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
       if (options.json) {
         writeJson(detail)
         return
@@ -825,7 +838,7 @@ const WorkflowRunArtifactsCommand = cmd({
   async handler(args) {
     await withWorkflowRuntime(async () => {
       const options = args as unknown as ArtifactOptions
-      const detail = await WorkflowRun.getDetail(options.runID as WorkflowRunID)
+      const detail = await WorkflowRun.getDetail(parseWorkflowRunID(options.runID))
       const artifacts = detail.artifacts
         .filter((artifact) => (options.phaseId ? artifact.phaseID === options.phaseId : true))
         .filter((artifact) => (options.childId ? artifact.childID === options.childId : true))
@@ -862,7 +875,7 @@ const WorkflowRunSaveTemplateCommand = cmd({
     await withWorkflowRuntime(async () => {
       const options = args as unknown as SaveTemplateOptions
       const template = await WorkflowTemplate.saveFromRun({
-        runID: options.runID as WorkflowRunID,
+        runID: parseWorkflowRunID(options.runID),
         scope: options.scope,
       })
       if (options.json) {
@@ -895,9 +908,10 @@ const WorkflowRunRetryCommand = cmd({
   async handler(args) {
     await withWorkflowRuntime(async () => {
       const options = args as unknown as RetryOptions
+      const runID = parseWorkflowRunID(options.runID)
       const detail = options.phaseId
-        ? await WorkflowScheduler.retryPhase(options.runID as WorkflowRunID, options.phaseId as WorkflowPhaseID)
-        : await WorkflowScheduler.retry(options.runID as WorkflowRunID)
+        ? await WorkflowScheduler.retryPhase(runID, parseWorkflowPhaseID(options.phaseId))
+        : await WorkflowScheduler.retry(runID)
       if (options.json) {
         writeJson(detail)
         return
@@ -952,7 +966,7 @@ function controlCommand(
     async handler(args) {
       await withWorkflowRuntime(async () => {
         const options = args as unknown as RunIDOptions
-        const detail = await run(options.runID as WorkflowRunID)
+        const detail = await run(parseWorkflowRunID(options.runID))
         if (options.json) {
           writeJson(detail)
           return
