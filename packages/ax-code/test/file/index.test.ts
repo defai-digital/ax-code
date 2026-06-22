@@ -708,6 +708,25 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("marks files ignored by nested gitignore files", async () => {
+      await using tmp = await tmpdir({ git: true })
+      await fs.mkdir(path.join(tmp.path, "src"))
+      await fs.writeFile(path.join(tmp.path, "src", ".gitignore"), "ignored.txt\n", "utf-8")
+      await fs.writeFile(path.join(tmp.path, "src", "ignored.txt"), "ignored", "utf-8")
+      await fs.writeFile(path.join(tmp.path, "src", "visible.txt"), "visible", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const nodes = await File.list("src")
+          const ignoredNode = nodes.find((n) => n.name === "ignored.txt")
+          const visibleNode = nodes.find((n) => n.name === "visible.txt")
+          expect(ignoredNode?.ignored).toBe(true)
+          expect(visibleNode?.ignored).toBe(false)
+        },
+      })
+    })
+
     test("lists subdirectory contents", async () => {
       await using tmp = await tmpdir({ git: true })
       await fs.mkdir(path.join(tmp.path, "sub"))
