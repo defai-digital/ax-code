@@ -7,10 +7,6 @@ import { ConfigMarkdown } from "../config/markdown"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 
-function errorCode(error: unknown) {
-  return error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined
-}
-
 export async function resolvePromptParts(template: string): Promise<any[]> {
   const parts: any[] = [
     {
@@ -28,8 +24,7 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
       ? path.resolve(os.homedir(), name.slice(2))
       : path.resolve(Instance.worktree, name)
     const checkedPath = await fs.realpath(filepath).catch((error) => {
-      const code = errorCode(error)
-      if (code !== "ENOENT") throw error
+      if (!Filesystem.isMissingPathError(error)) throw error
       return undefined
     })
     if (!checkedPath) {
@@ -52,8 +47,7 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
     }
 
     const stats = await fs.stat(checkedPath).catch((error) => {
-      const code = errorCode(error)
-      if (code !== "ENOENT") throw error
+      if (!Filesystem.isMissingPathError(error)) throw error
       return undefined
     })
     if (!stats) continue

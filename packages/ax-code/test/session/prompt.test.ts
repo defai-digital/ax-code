@@ -521,6 +521,23 @@ describe("session.prompt special characters", () => {
     await fs.unlink(outside).catch(() => {})
   })
 
+  test("ignores @file references whose parent component is a file", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "parent.txt"), "not a directory\n")
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parts = await resolvePromptParts("Read @parent.txt/child.txt")
+        expect(parts.filter((part) => part.type === "file")).toHaveLength(0)
+      },
+    })
+  })
+
   test("resolves @~/file references that stay within the home directory", async () => {
     await using tmp = await tmpdir({ git: true })
     const fakeHome = path.join(tmp.path, "home")
