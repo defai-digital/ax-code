@@ -475,13 +475,15 @@ export namespace CodeGraphQuery {
   // ─── Recently-updated nodes (for staleness checks) ──────────────────
 
   export function recentNodes(projectID: ProjectID, limit: number): NodeRow[] {
+    const normalizedLimit = normalizeQueryLimit(limit)
+    if (normalizedLimit === undefined || normalizedLimit === 0) return []
     return Database.use((db) =>
       db
         .select()
         .from(CodeNodeTable)
         .where(eq(CodeNodeTable.project_id, projectID))
         .orderBy(desc(CodeNodeTable.time_updated))
-        .limit(limit)
+        .limit(normalizedLimit)
         .all(),
     )
   }

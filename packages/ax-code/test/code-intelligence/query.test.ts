@@ -454,6 +454,24 @@ describe("CodeGraphQuery cursor", () => {
 })
 
 describe("CodeGraphQuery regression fixes", () => {
+  test("recentNodes treats non-positive limits as no results", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        CodeGraphQuery.insertNode(makeNode({ project_id: projectID, name: "recent" }))
+
+        expect(CodeGraphQuery.recentNodes(projectID, 0)).toEqual([])
+        expect(CodeGraphQuery.recentNodes(projectID, -1)).toEqual([])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
   test("getNode filters by project_id at the SQL layer", async () => {
     await using tmpA = await tmpdir({ git: true })
     await using tmpB = await tmpdir({ git: true })
