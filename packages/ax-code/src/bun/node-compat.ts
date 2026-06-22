@@ -39,8 +39,15 @@ function file(input: string | URL): BunFileLike {
 
 async function write(target: string | URL, content: string | Uint8Array | ArrayBuffer) {
   const resolved = normalizePath(target)
+  const bytes =
+    typeof content === "string"
+      ? Buffer.byteLength(content)
+      : content instanceof ArrayBuffer
+        ? content.byteLength
+        : content.byteLength
   await fs.promises.mkdir(path.dirname(resolved), { recursive: true })
   await fs.promises.writeFile(resolved, content instanceof ArrayBuffer ? new Uint8Array(content) : content)
+  return bytes
 }
 
 // Minimal stand-in for Bun's `$` shell. Supports the surface ax-code uses:

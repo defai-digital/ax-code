@@ -41,6 +41,13 @@ describe("node-compat Bun.$ shell", () => {
     expect(printed).toEqual(args)
   })
 
+  test("Bun.write resolves to the number of bytes written", async () => {
+    await using dir = await tmpdir()
+
+    await expect(Bun.write(path.join(dir.path, "text.txt"), "λ")).resolves.toBe(Buffer.byteLength("λ"))
+    await expect(Bun.write(path.join(dir.path, "bytes.bin"), new Uint8Array([0, 1, 2, 3]))).resolves.toBe(4)
+  })
+
   test("Glob.scan accepts a string cwd like Bun", async () => {
     await using dir = await tmpdir({
       init: async (root) => {
