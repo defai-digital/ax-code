@@ -163,6 +163,12 @@ export const ReadTool = Tool.define("read", {
         const limit = params.limit ?? DEFAULT_READ_LIMIT
         const offset = params.offset ?? 1
         const start = offset - 1
+        if (entries.length < offset && !(entries.length === 0 && offset === 1)) {
+          throw readError(
+            "ReadOffsetOutOfRangeError",
+            `Offset ${offset} is out of range for this directory (${entries.length} entries)`,
+          )
+        }
         const sliced = entries.slice(start, start + limit)
         const truncated = start + sliced.length < entries.length
 
