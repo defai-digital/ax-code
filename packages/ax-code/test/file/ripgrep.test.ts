@@ -111,6 +111,22 @@ describe("file.ripgrep", () => {
     expect(hits).toEqual([])
   })
 
+  test("search treats zero limit as no results", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "match.ts"), "const value = 'needle'\n")
+      },
+    })
+
+    const hits = await Ripgrep.search({
+      cwd: tmp.path,
+      pattern: "needle",
+      limit: 0,
+    })
+
+    expect(hits).toEqual([])
+  })
+
   test("files() surfaces inaccessible cwd instead of reporting it missing", async () => {
     if (process.platform === "win32") return
 

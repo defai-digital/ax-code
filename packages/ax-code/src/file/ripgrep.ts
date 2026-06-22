@@ -460,6 +460,8 @@ export namespace Ripgrep {
     limit?: number
     follow?: boolean
   }) {
+    const limit = normalizeLimit(input.limit)
+    if (limit === 0) return []
     const args = [`${await filepath()}`, "--json", "--hidden", "--glob=!.git/*"]
     if (input.follow) args.push("--follow")
 
@@ -469,8 +471,8 @@ export namespace Ripgrep {
       }
     }
 
-    if (input.limit) {
-      args.push(`--max-count=${input.limit}`)
+    if (limit !== undefined) {
+      args.push(`--max-count=${limit}`)
     }
 
     args.push("--")
@@ -498,5 +500,11 @@ export namespace Ripgrep {
       if (parsed?.type === "match") matches.push(parsed.data)
     }
     return matches
+  }
+
+  function normalizeLimit(limit: number | undefined) {
+    if (limit === undefined) return undefined
+    if (!Number.isFinite(limit)) return 0
+    return Math.max(0, Math.floor(limit))
   }
 }
