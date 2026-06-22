@@ -51,6 +51,15 @@ describe("resolveNetworkOptions explicit-flag detection", () => {
     expect(result.port).toBe(9999)
   })
 
+  test("--no-mdns wins over configured mdns", async () => {
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({ server: { mdns: true } } as any)
+    process.argv = ["bun", "ax-code", "serve", "--no-mdns"]
+
+    const result = await resolveNetworkOptions(defaults({ mdns: false }))
+
+    expect(result.mdns).toBe(false)
+  })
+
   test("equals form --hostname=X wins over a configured hostname", async () => {
     configSpy = vi.spyOn(Config, "global").mockResolvedValue({ server: { hostname: "10.0.0.1" } } as any)
     process.argv = ["bun", "ax-code", "serve", "--hostname=0.0.0.0"]

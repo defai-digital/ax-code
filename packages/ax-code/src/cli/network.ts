@@ -43,10 +43,16 @@ export async function resolveNetworkOptions(args: NetworkOptions) {
   // Detect both the space form (`--port 80`) and the equals form (`--port=80`).
   // `process.argv.includes(flag)` only matches the space form, so an explicit
   // `--port=80` was treated as unset and silently overridden by config/defaults.
-  const flagExplicitlySet = (flag: string) => process.argv.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
+  const flagExplicitlySet = (flag: string, options?: { boolean?: boolean }) =>
+    process.argv.some((arg) => {
+      if (arg === flag || arg.startsWith(`${flag}=`)) return true
+      if (!options?.boolean) return false
+      const negated = `--no-${flag.slice(2)}`
+      return arg === negated
+    })
   const portExplicitlySet = flagExplicitlySet("--port")
   const hostnameExplicitlySet = flagExplicitlySet("--hostname")
-  const mdnsExplicitlySet = flagExplicitlySet("--mdns")
+  const mdnsExplicitlySet = flagExplicitlySet("--mdns", { boolean: true })
   const mdnsDomainExplicitlySet = flagExplicitlySet("--mdns-domain")
 
   const mdns = mdnsExplicitlySet ? args.mdns : (config?.server?.mdns ?? args.mdns)
