@@ -1244,11 +1244,11 @@ export namespace ProbabilisticRollout {
     const falseNegativeIncrease = numberDelta(candidate.falseNegativeRate, baseline.falseNegativeRate)
     const calibrationErrorIncrease = numberDelta(candidate.calibrationError, baseline.calibrationError)
 
-    const maxPrecisionDrop = options?.maxPrecisionDrop ?? 0.02
-    const maxRecallDrop = options?.maxRecallDrop ?? 0.02
-    const maxFalsePositiveRateIncrease = options?.maxFalsePositiveRateIncrease ?? 0.01
-    const maxFalseNegativeRateIncrease = options?.maxFalseNegativeRateIncrease ?? 0.01
-    const maxCalibrationErrorIncrease = options?.maxCalibrationErrorIncrease ?? 0.02
+    const maxPrecisionDrop = finiteOption(options?.maxPrecisionDrop, 0.02)
+    const maxRecallDrop = finiteOption(options?.maxRecallDrop, 0.02)
+    const maxFalsePositiveRateIncrease = finiteOption(options?.maxFalsePositiveRateIncrease, 0.01)
+    const maxFalseNegativeRateIncrease = finiteOption(options?.maxFalseNegativeRateIncrease, 0.01)
+    const maxCalibrationErrorIncrease = finiteOption(options?.maxCalibrationErrorIncrease, 0.02)
 
     gates.push({
       name: "dataset-consistency",

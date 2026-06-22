@@ -1243,6 +1243,48 @@ describe("ProbabilisticRollout.summarizeCalibration", () => {
     expect(summary.bins).toHaveLength(5)
   })
 
+  test("normalizes non-finite calibration comparison thresholds", () => {
+    const baseline = ProbabilisticRollout.CalibrationSummary.parse({
+      schemaVersion: 1,
+      kind: "ax-code-quality-calibration-summary",
+      source: "baseline",
+      threshold: 0.5,
+      abstainBelow: null,
+      totalItems: 2,
+      scoredItems: 2,
+      missingPredictionItems: 0,
+      labeledItems: 2,
+      consideredItems: 2,
+      abstainedItems: 0,
+      positives: 2,
+      negatives: 0,
+      precision: 1,
+      recall: 1,
+      falsePositiveRate: null,
+      falseNegativeRate: 0,
+      precisionAt1: 1,
+      precisionAt3: 1,
+      calibrationError: 0.1,
+      bins: [],
+    })
+    const candidate = ProbabilisticRollout.CalibrationSummary.parse({
+      ...baseline,
+      source: "candidate",
+      precision: 0.5,
+      calibrationError: 0.5,
+    })
+
+    const comparison = ProbabilisticRollout.compareCalibrationSummaries(baseline, candidate, {
+      maxPrecisionDrop: Number.NaN,
+      maxCalibrationErrorIncrease: Number.NaN,
+    })
+
+    expect(() => ProbabilisticRollout.CalibrationComparison.parse(comparison)).not.toThrow()
+    expect(comparison.overallStatus).toBe("fail")
+    expect(comparison.gates.find((gate) => gate.name === "precision-regression")?.status).toBe("fail")
+    expect(comparison.gates.find((gate) => gate.name === "calibration-error")?.status).toBe("warn")
+  })
+
   test("compares baseline and candidate summaries and produces shadow records", () => {
     const items: ProbabilisticRollout.ReplayItem[] = [
       {
