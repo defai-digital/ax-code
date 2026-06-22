@@ -835,6 +835,21 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("empty query without type returns files and directories", async () => {
+      await using tmp = await setupSearchableRepo()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await File.init()
+
+          const result = await File.search({ query: "" })
+          expect(result).toContain("index.ts")
+          expect(result).toContain("src/")
+        },
+      })
+    })
+
     test("search works before explicit init", async () => {
       await using tmp = await setupSearchableRepo()
 

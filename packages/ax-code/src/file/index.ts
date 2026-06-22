@@ -742,7 +742,8 @@ export namespace File {
 
     if (!query) {
       if (kind === "file") return cache.files.slice(0, limit)
-      return sortHiddenLast(cache.dirs.toSorted(), preferHidden).slice(0, limit)
+      const entries = kind === "directory" ? cache.dirs.toSorted() : [...cache.files, ...cache.dirs].toSorted()
+      return sortHiddenLast(entries, preferHidden).slice(0, limit)
     }
 
     const items = kind === "file" ? cache.files : kind === "directory" ? cache.dirs : [...cache.files, ...cache.dirs]
