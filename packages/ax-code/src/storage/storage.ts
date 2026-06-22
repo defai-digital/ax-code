@@ -140,6 +140,25 @@ export namespace Storage {
     },
   ]
 
+  export type MigrationMarkerParseResult = {
+    value: number
+    status: "ok" | "not_numeric" | "out_of_range"
+  }
+
+  export function parseMigrationMarker(value: string, max = MIGRATIONS.length): MigrationMarkerParseResult {
+    const trimmed = value.trim()
+    if (!/^\d+$/.test(trimmed)) return { value: 0, status: "not_numeric" }
+
+    const parsed = Number(trimmed)
+    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max) {
+      return {
+        value: Math.max(0, Math.min(Number.isFinite(parsed) ? parsed : max, max)),
+        status: "out_of_range",
+      }
+    }
+    return { value: parsed, status: "ok" }
+  }
+
   const state = lazy(async () => {
     const dir = path.join(Global.Path.data, "storage")
     // Distinguish "first run" (ENOENT) from "corrupt marker" (any other
@@ -152,16 +171,15 @@ export namespace Storage {
     // an out-of-bounds index access at the loop below.
     const migration = await Filesystem.readJson<string>(path.join(dir, "migration"))
       .then((x) => {
-        const n = parseInt(x, 10)
-        if (Number.isNaN(n)) {
+        const parsed = parseMigrationMarker(x)
+        if (parsed.status === "not_numeric") {
           log.warn("storage migration marker not numeric, defaulting to 0", { value: x })
-          return 0
+          return parsed.value
         }
-        if (n < 0 || n > MIGRATIONS.length) {
-          log.warn("storage migration marker out of range, clamping", { value: n, max: MIGRATIONS.length })
-          return Math.max(0, Math.min(n, MIGRATIONS.length))
+        if (parsed.status === "out_of_range") {
+          log.warn("storage migration marker out of range, clamping", { value: x, max: MIGRATIONS.length })
         }
-        return n
+        return parsed.value
       })
       .catch((err) => {
         if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return 0
