@@ -265,6 +265,10 @@ export const TuiRoutes = lazy(() =>
           log.warn("unknown tui event type", { type: evt.type })
           return invalidRequest(c, { message: "Unknown TUI event type", details: { resource: "tuiEvent" } })
         }
+        if (evt.type === TuiEvent.SessionSelect.type) {
+          const properties = TuiEvent.SessionSelect.properties.parse(evt.properties)
+          await requireCurrentProjectSession(properties.sessionID)
+        }
         await Bus.publish(def, evt.properties)
         return c.json(true)
       },

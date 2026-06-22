@@ -81,6 +81,17 @@ describe("tui.selectSession endpoint", () => {
           })
 
           expect(response.status).toBe(409)
+
+          const publishResponse = await app.request("/tui/publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "tui.session.select",
+              properties: { sessionID: otherSessionID },
+            }),
+          })
+
+          expect(publishResponse.status).toBe(409)
         },
       })
     } finally {
