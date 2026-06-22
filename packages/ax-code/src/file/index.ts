@@ -394,14 +394,56 @@ export namespace File {
           if (dir === ".") break
           if (dir === current) break
           current = dir
-          if (seen.has(dir)) continue
-          seen.add(dir)
-          next.dirs.push(dir + "/")
+          const key = `${dir}/`
+          if (seen.has(key)) continue
+          seen.add(key)
+          next.dirs.push(key)
         }
+      }
+      const listedDirs = await scanDirectories()
+      for (const dir of listedDirs) {
+        if (seen.has(dir)) continue
+        seen.add(dir)
+        next.dirs.push(dir)
       }
     }
 
     ;(await state()).cache = next
+  }
+
+  async function scanDirectories() {
+    const dirs = new Set<string>()
+    let ignored = (_: string) => false
+    if (Instance.project.vcs === "git") {
+      const ig = ignore()
+      const gitignore = path.join(Instance.project.worktree, ".gitignore")
+      if (await Filesystem.exists(gitignore)) ig.add(await Filesystem.readText(gitignore))
+      const ignoreFile = path.join(Instance.project.worktree, ".ignore")
+      if (await Filesystem.exists(ignoreFile)) ig.add(await Filesystem.readText(ignoreFile))
+      ignored = ig.ignores.bind(ig)
+    }
+
+    const visit = async (relative: string) => {
+      const absolute = path.join(Instance.directory, relative)
+      const entries = await fs.promises
+        .readdir(absolute, { withFileTypes: true })
+        .catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT" || error.code === "ENOTDIR" || error.code === "EACCES") return [] as fs.Dirent[]
+          throw error
+        })
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        if (entry.name === ".git") continue
+        const dir = path.join(relative, entry.name).split(path.sep).join("/")
+        const key = `${dir}/`
+        if (ignored(key)) continue
+        dirs.add(key)
+        await visit(dir)
+      }
+    }
+
+    await visit("")
+    return Array.from(dirs).toSorted()
   }
 
   async function ensure() {

@@ -883,6 +883,20 @@ describe("file/index Filesystem patterns", () => {
       })
     })
 
+    test("directory search includes empty directories", async () => {
+      await using tmp = await setupSearchableRepo()
+      await fs.mkdir(path.join(tmp.path, "empty-dir"))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await File.init()
+
+          expect(await File.search({ query: "empty", type: "directory" })).toContain("empty-dir/")
+        },
+      })
+    })
+
     test("respects limit", async () => {
       await using tmp = await setupSearchableRepo()
 
