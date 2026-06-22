@@ -1185,6 +1185,64 @@ describe("ProbabilisticRollout.summarizeCalibration", () => {
     expect(report).toContain("- precision@3: 0.6667")
   })
 
+  test("normalizes non-finite calibration options", () => {
+    const items: ProbabilisticRollout.ReplayItem[] = [
+      {
+        schemaVersion: 1,
+        kind: "ax-code-quality-replay-item",
+        workflow: "review",
+        artifactKind: "review_finding",
+        artifactID: "a",
+        sessionID: "ses_1",
+        projectID: "proj_1",
+        title: "A",
+        createdAt: "2026-04-20T00:00:00.000Z",
+        baseline: { source: "Risk.assess", confidence: 0.9, score: 80, readiness: "ready", rank: null },
+        context: {
+          directory: "/repo",
+          graphCommitSha: "abc",
+          touchedFiles: ["src/a.ts"],
+          diffSummary: { files: 1, additions: 10, deletions: 2 },
+          eventCount: 5,
+          toolCount: 1,
+        },
+        evidence: { toolSummaries: [] },
+      },
+    ]
+
+    const labels: ProbabilisticRollout.Label[] = [
+      {
+        labelID: "lbl_a",
+        artifactID: "a",
+        artifactKind: "review_finding",
+        workflow: "review",
+        projectID: "proj_1",
+        sessionID: "ses_1",
+        labeledAt: "2026-04-20T00:00:00.000Z",
+        labelSource: "human",
+        labelVersion: 1,
+        outcome: "accepted",
+      },
+    ]
+
+    const records = ProbabilisticRollout.calibrationRecords(items, labels, {
+      threshold: Number.NaN,
+      abstainBelow: Number.POSITIVE_INFINITY,
+    })
+    const summary = ProbabilisticRollout.summarizeCalibration(items, labels, {
+      threshold: Number.NaN,
+      abstainBelow: Number.POSITIVE_INFINITY,
+      bins: Number.NaN,
+    })
+
+    expect(records[0]?.predictedPositive).toBe(true)
+    expect(records[0]?.abstained).toBe(false)
+    expect(() => ProbabilisticRollout.CalibrationSummary.parse(summary)).not.toThrow()
+    expect(summary.threshold).toBe(0.5)
+    expect(summary.abstainBelow).toBeNull()
+    expect(summary.bins).toHaveLength(5)
+  })
+
   test("compares baseline and candidate summaries and produces shadow records", () => {
     const items: ProbabilisticRollout.ReplayItem[] = [
       {

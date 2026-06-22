@@ -988,13 +988,25 @@ export namespace ProbabilisticRollout {
     return label.outcome !== "unresolved"
   }
 
+  function finiteOption(value: number | undefined, fallback: number) {
+    return typeof value === "number" && Number.isFinite(value) ? value : fallback
+  }
+
+  function finiteOptionalOption(value: number | undefined) {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined
+  }
+
+  function positiveIntegerOption(value: number | undefined, fallback: number) {
+    return Math.max(1, Math.floor(finiteOption(value, fallback)))
+  }
+
   export function calibrationRecords(
     items: ReplayItem[],
     labels: Label[],
     options?: { threshold?: number; abstainBelow?: number; predictions?: Prediction[] },
   ): CalibrationRecord[] {
-    const threshold = options?.threshold ?? 0.5
-    const abstainBelow = options?.abstainBelow
+    const threshold = finiteOption(options?.threshold, 0.5)
+    const abstainBelow = finiteOptionalOption(options?.abstainBelow)
     const predictions = predictionMap(options?.predictions)
     const labelMap = new Map(labels.map((label) => [label.artifactID, label]))
     const records: CalibrationRecord[] = []
@@ -1105,8 +1117,9 @@ export namespace ProbabilisticRollout {
     labels: Label[],
     options?: { threshold?: number; abstainBelow?: number; bins?: number; predictions?: Prediction[]; source?: string },
   ): CalibrationSummary {
-    const threshold = options?.threshold ?? 0.5
-    const abstainBelow = options?.abstainBelow ?? null
+    const threshold = finiteOption(options?.threshold, 0.5)
+    const abstainBelow = finiteOptionalOption(options?.abstainBelow) ?? null
+    const binCount = positiveIntegerOption(options?.bins, 5)
     const predictions = predictionMap(options?.predictions)
     const records = calibrationRecords(items, labels, {
       threshold,
@@ -1130,7 +1143,7 @@ export namespace ProbabilisticRollout {
     const fp = considered.filter((record) => record.predictedPositive && !record.actualPositive).length
     const tn = considered.filter((record) => !record.predictedPositive && !record.actualPositive).length
     const fn = considered.filter((record) => !record.predictedPositive && record.actualPositive).length
-    const bins = calibrationBins(records, options?.bins ?? 5)
+    const bins = calibrationBins(records, binCount)
     const calibrationError =
       records.length === 0
         ? null
