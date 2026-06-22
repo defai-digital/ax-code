@@ -186,6 +186,44 @@ describe("headless projection", () => {
     expect(state.part).toEqual({})
   })
 
+  test("falls back to the default projection cap when the configured cap is not finite", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    for (let index = 0; index < 101; index++) {
+      const id = String(index).padStart(3, "0")
+      applyHeadlessProjectionEvent(
+        state,
+        {
+          type: "message.updated",
+          properties: {
+            info: {
+              id: `msg_${id}`,
+              sessionID: "ses_1",
+            },
+          },
+        },
+        {
+          maxSessionMessages: Number.NaN,
+        },
+      )
+      applyHeadlessProjectionEvent(state, {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: `part_${id}`,
+            messageID: `msg_${id}`,
+            type: "text",
+            text: id,
+          },
+        },
+      })
+    }
+
+    expect(state.message.ses_1).toHaveLength(100)
+    expect(state.message.ses_1[0]).toEqual({ id: "msg_001", sessionID: "ses_1" })
+    expect(state.part.msg_000).toBeUndefined()
+  })
+
   test("maps runtime events to runtime probe keys without TUI-specific handlers", () => {
     expect(runtimeProbeKeysForEvent({ type: "mcp.tools.changed" })).toEqual(["mcp"])
     expect(runtimeProbeKeysForEvent({ type: "lsp.updated" })).toEqual(["lsp", "debug-engine"])

@@ -2,6 +2,8 @@ import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { Binary } from "@ax-code/util/binary"
 import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event"
 
+const DEFAULT_MAX_SESSION_MESSAGES = 100
+
 export interface HeadlessProjectionState<
   TSession extends { id: string },
   TTodo,
@@ -366,7 +368,7 @@ function upsertMessage<
 >(
   state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
   message: TMessage,
-  maxSessionMessages = 100,
+  maxSessionMessages = DEFAULT_MAX_SESSION_MESSAGES,
 ) {
   const list = state.message[message.sessionID] ?? []
   upsertByID(list, message)
@@ -430,7 +432,8 @@ function removeByID<T extends { id: string }>(list: T[], id: string) {
 }
 
 function shiftOverflow<T>(list: T[], maxSize: number) {
-  const limit = Math.max(0, Math.floor(maxSize))
+  const finiteMaxSize = Number.isFinite(maxSize) ? maxSize : DEFAULT_MAX_SESSION_MESSAGES
+  const limit = Math.max(0, Math.floor(finiteMaxSize))
   if (list.length <= limit) return []
   return list.splice(0, list.length - limit)
 }
