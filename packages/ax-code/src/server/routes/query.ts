@@ -13,6 +13,7 @@ export const QueryBoolean = z.preprocess((value) => {
 export { JsonBoolean }
 
 function normalizeQueryNumberValue(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value)) return Number.NaN
   if (typeof value !== "string") return value
   const trimmed = value.trim()
   if (trimmed === "") return undefined

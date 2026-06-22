@@ -25,4 +25,11 @@ describe("JsonNumber", () => {
     expect(schema.safeParse("-9007199254740993").success).toBe(false)
     expect(schema.safeParse("9007199254740992.5").success).toBe(false)
   })
+
+  test("rejects unsafe integer numbers", () => {
+    const schema = JsonNumber(z.number())
+
+    expect(schema.safeParse(Number.MAX_SAFE_INTEGER + 1).success).toBe(false)
+    expect(schema.safeParse(Number.MIN_SAFE_INTEGER - 1).success).toBe(false)
+  })
 })

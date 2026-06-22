@@ -17,6 +17,7 @@ export const JsonBoolean = z.preprocess((value) => {
 }, z.boolean())
 
 function normalizeJsonNumberValue(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value)) return Number.NaN
   if (typeof value !== "string") return value
   const trimmed = value.trim()
   if (trimmed === "") return value

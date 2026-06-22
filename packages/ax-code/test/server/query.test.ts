@@ -38,4 +38,11 @@ describe("query number helpers", () => {
     expect(optional.safeParse("-9007199254740993").success).toBe(false)
     expect(optional.safeParse("9007199254740992.5").success).toBe(false)
   })
+
+  test("reject unsafe integer numbers", () => {
+    const optional = OptionalQueryNumber(z.number())
+
+    expect(optional.safeParse(Number.MAX_SAFE_INTEGER + 1).success).toBe(false)
+    expect(optional.safeParse(Number.MIN_SAFE_INTEGER - 1).success).toBe(false)
+  })
 })
