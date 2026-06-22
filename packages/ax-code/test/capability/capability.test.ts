@@ -151,3 +151,27 @@ test("catalog warns when agent config still uses deprecated tools", async () => 
     })
   })
 })
+
+test("keeps dotted project instruction paths relative in capability names", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      instructions: ["..instructions/AGENTS.md"],
+    },
+    init: async (dir) => {
+      const instructionDir = path.join(dir, "..instructions")
+      await fs.mkdir(instructionDir, { recursive: true })
+      await Bun.write(path.join(instructionDir, "AGENTS.md"), "# Dotted Instructions\n")
+    },
+  })
+
+  await withTestHome(path.join(tmp.path, "home"), async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const capabilities = await Capability.list()
+        expect(capabilities.find((item) => item.kind === "instruction" && item.name === "..instructions/AGENTS.md"))
+          .toBeDefined()
+      },
+    })
+  })
+})

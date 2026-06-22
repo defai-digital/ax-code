@@ -220,7 +220,7 @@ export namespace Capability {
 
   function instructionName(file: string) {
     const relative = path.relative(Instance.worktree, file)
-    if (!relative.startsWith("..") && !path.isAbsolute(relative)) return relative
+    if (Filesystem.contains(Instance.worktree, file)) return relative
     return path.basename(file)
   }
 }
