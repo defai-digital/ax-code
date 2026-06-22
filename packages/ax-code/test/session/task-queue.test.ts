@@ -6,6 +6,7 @@ import { Question } from "../../src/question"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { TaskQueueID } from "../../src/session/schema"
 import { TaskQueueTable } from "../../src/session/session.sql"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
@@ -227,6 +228,37 @@ describe("TaskQueue", () => {
 
         await TaskQueue.remove(first.id)
         await TaskQueue.remove(second.id)
+      },
+    })
+  })
+
+  test("list skips corrupt persisted task queue rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const valid = await TaskQueue.enqueue({ kind: "review", title: "Review branch" })
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(TaskQueueTable)
+            .values({
+              id: TaskQueueID.make("tsk_corrupt_status"),
+              project_id: Instance.project.id,
+              directory: Instance.directory,
+              kind: "review",
+              status: "not-a-status",
+              priority: 0,
+              position: 1,
+              title: "Corrupt row",
+              payload: {},
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        expect((await TaskQueue.list()).map((item) => item.id)).toEqual([valid.id])
       },
     })
   })

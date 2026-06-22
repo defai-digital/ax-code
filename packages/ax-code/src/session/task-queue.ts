@@ -222,7 +222,14 @@ export namespace TaskQueue {
         .orderBy(asc(TaskQueueTable.position), desc(TaskQueueTable.time_created), desc(TaskQueueTable.id))
         .$dynamic()
       if (parsed.limit) query = query.limit(parsed.limit)
-      return query.all().map(fromRow)
+      return query.all().flatMap((row) => {
+        try {
+          return [fromRow(row)]
+        } catch {
+          log.warn("skipping corrupt task queue row", { id: row.id })
+          return []
+        }
+      })
     })
   }
 
