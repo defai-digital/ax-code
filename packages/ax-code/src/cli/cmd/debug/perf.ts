@@ -12,7 +12,13 @@ import {
   INDEX_PREWARM_MAX_LANGUAGES,
 } from "../../../lsp/prewarm-profile"
 import { NativePerf } from "../../../perf/native"
-import { buildIndexReport, groupFilesByLanguage, isIndexableFile, probeLspServers } from "../index-graph"
+import {
+  buildIndexReport,
+  groupFilesByLanguage,
+  isIndexableFile,
+  probeLspServers,
+  validateIndexConcurrency,
+} from "../index-graph"
 import { cmd } from "../cmd"
 import { isNonEmptyRecord, recordCount } from "@/util/record"
 
@@ -404,6 +410,7 @@ const PerfIndexCommand = cmd({
         default: false,
       }),
   handler: async (args) => {
+    const concurrency = validateIndexConcurrency(args.concurrency)
     const repeat = int(args.repeat, "repeat", 1)
     const warmup = int(args.warmup, "warmup", 0)
     const limit = args.limit === undefined ? undefined : int(args.limit, "limit", 1)
@@ -451,7 +458,7 @@ const PerfIndexCommand = cmd({
             worktree: Instance.worktree,
             requested: {
               cacheMode: currentCacheMode,
-              concurrency: args.concurrency,
+              concurrency,
               limit,
               probe: args.probe,
               repeat,
@@ -473,7 +480,7 @@ const PerfIndexCommand = cmd({
         }
 
         const runArgs = {
-          concurrency: args.concurrency,
+          concurrency,
           limit,
           probe: args.probe,
           nativeProfile,
@@ -505,7 +512,7 @@ const PerfIndexCommand = cmd({
           worktree: Instance.worktree,
           requested: {
             cacheMode: currentCacheMode,
-            concurrency: args.concurrency,
+            concurrency,
             limit,
             probe: args.probe,
             repeat,

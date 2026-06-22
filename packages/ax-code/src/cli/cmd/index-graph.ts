@@ -187,6 +187,21 @@ export function buildIndexReport(input: {
   }
 }
 
+export function validateIndexConcurrency(concurrency: unknown): number {
+  if (typeof concurrency !== "number" || !Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error("--concurrency must be a positive integer")
+  }
+  return concurrency
+}
+
+export function validateIndexLimit(limit: unknown): number | undefined {
+  if (limit === undefined) return undefined
+  if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1) {
+    throw new Error("--limit must be a positive integer")
+  }
+  return limit
+}
+
 // Probe LSP availability for each language present in the project.
 // For each language with at least one file, we pick a representative
 // file and call LSP.touchFile to force the server to spawn. The observed
@@ -290,12 +305,19 @@ export const IndexCommand = cmd({
         type: "boolean",
         default: false,
       })
+      .check((argv) => {
+        validateIndexConcurrency(argv.concurrency)
+        validateIndexLimit(argv.limit)
+        return true
+      })
   },
   handler: async (args) => {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
         const projectID = Instance.project.id
+        const concurrency = validateIndexConcurrency(args.concurrency)
+        const limit = validateIndexLimit(args.limit)
         const json = args.json === true
         const out = (line = "") => {
           if (!json) UI.println(line)
@@ -320,7 +342,7 @@ export const IndexCommand = cmd({
           const abs = path.join(Instance.directory, rel)
           if (!isIndexableFile(abs)) continue
           files.push(abs)
-          if (args.limit !== undefined && files.length >= args.limit) break
+          if (limit !== undefined && files.length >= limit) break
         }
 
         out(`  files:     ${files.length} indexable`)
@@ -347,8 +369,8 @@ export const IndexCommand = cmd({
                     projectID,
                     directory: Instance.directory,
                     worktree: Instance.worktree,
-                    concurrency: args.concurrency,
-                    limit: args.limit,
+                    concurrency,
+                    limit,
                     probe: args.probe,
                     nativeProfile: args.nativeProfile,
                     files: files.length,
@@ -508,7 +530,7 @@ export const IndexCommand = cmd({
         let result: Awaited<ReturnType<typeof CodeIntelligence.indexFiles>>
         try {
           result = await CodeIntelligence.indexFiles(projectID, files, {
-            concurrency: args.concurrency,
+            concurrency,
             // Block on the cross-process lock — another ax-code
             // process may be indexing the same project right now
             // and we want to queue rather than race. 30-minute
@@ -532,7 +554,7 @@ export const IndexCommand = cmd({
             // Disabled when `--limit` is set: a truncated walk
             // would purge every file past the limit, which is
             // never what the user wants when benchmarking.
-            pruneOrphans: args.limit === undefined,
+            pruneOrphans: limit === undefined,
             pruneScopePrefix: Instance.directory,
           })
         } catch (err) {
@@ -579,8 +601,8 @@ export const IndexCommand = cmd({
                 projectID,
                 directory: Instance.directory,
                 worktree: Instance.worktree,
-                concurrency: args.concurrency,
-                limit: args.limit,
+                concurrency,
+                limit,
                 probe: args.probe,
                 nativeProfile: args.nativeProfile,
                 files: files.length,

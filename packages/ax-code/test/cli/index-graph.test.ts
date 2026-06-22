@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
-import { buildIndexReport, groupFilesByLanguage, phaseRows, probeLspServers } from "../../src/cli/cmd/index-graph"
+import {
+  buildIndexReport,
+  groupFilesByLanguage,
+  phaseRows,
+  probeLspServers,
+  validateIndexConcurrency,
+  validateIndexLimit,
+} from "../../src/cli/cmd/index-graph"
 import { LSP } from "../../src/lsp"
 import { Log } from "../../src/util/log"
 
@@ -38,6 +45,20 @@ describe("groupFilesByLanguage", () => {
 
   test("empty input returns empty map", () => {
     expect(groupFilesByLanguage([])).toEqual(new Map())
+  })
+
+  test("validates index numeric options before indexing", () => {
+    expect(validateIndexConcurrency(1)).toBe(1)
+    expect(validateIndexConcurrency(4)).toBe(4)
+    expect(validateIndexLimit(undefined)).toBeUndefined()
+    expect(validateIndexLimit(25)).toBe(25)
+
+    for (const value of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "4"]) {
+      expect(() => validateIndexConcurrency(value)).toThrow("--concurrency must be a positive integer")
+    }
+    for (const value of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "25"]) {
+      expect(() => validateIndexLimit(value)).toThrow("--limit must be a positive integer")
+    }
   })
 
   test("builds ordered phase rows with percentages", () => {
