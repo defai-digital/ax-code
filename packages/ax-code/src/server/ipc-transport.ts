@@ -1,4 +1,5 @@
 import { createServer, type Server, type Socket } from "node:net"
+import { isRecord } from "@/util/record"
 import { Log } from "@/util/log"
 import type { IpcErrorMessage, IpcMessage, IpcRequestMessage } from "./ipc-protocol"
 import { readIpcMessages, writeIpcMessage } from "./ipc-protocol"
@@ -77,9 +78,16 @@ class IpcConnection {
 
     try {
       for await (const message of readIpcMessages(this.socket)) {
-        if (message.type === "request") {
-          this.handleRequest(message).catch((error) => {
-            log.error("ipc request failed", { error, requestId: message.id })
+        const request = parseIpcRequestMessage(message)
+        if (!request.ok) {
+          log.warn("invalid ipc message ignored", { reason: request.reason })
+          if (request.id) await this.writeInvalidRequest(request.id, request.reason)
+          continue
+        }
+        const requestMessage = request.message
+        if (requestMessage) {
+          this.handleRequest(requestMessage).catch((error) => {
+            log.error("ipc request failed", { error, requestId: requestMessage.id })
           })
         }
       }
@@ -89,6 +97,16 @@ class IpcConnection {
       this.abortController.abort()
       this.socket.destroy()
     }
+  }
+
+  private async writeInvalidRequest(id: string, reason: string) {
+    const reply: IpcErrorMessage = {
+      type: "error",
+      id,
+      code: "IPC_INVALID_REQUEST",
+      message: reason,
+    }
+    await writeIpcMessage(this.socket, reply).catch(() => undefined)
   }
 
   private async handleRequest(message: IpcRequestMessage) {
@@ -181,6 +199,68 @@ class IpcConnection {
       }
     })()
   }
+}
+
+type ParsedIpcRequest =
+  | { ok: true; message?: IpcRequestMessage }
+  | { ok: false; id?: string; reason: string }
+
+function parseIpcRequestMessage(message: unknown): ParsedIpcRequest {
+  if (!isRecord(message)) return { ok: false, reason: "IPC message must be an object" }
+  const type = message.type
+  if (type !== "request") return { ok: true }
+
+  const id = typeof message.id === "string" ? message.id : undefined
+  const invalid = (reason: string): ParsedIpcRequest => (id ? { ok: false, id, reason } : { ok: false, reason })
+  if (!id) return invalid("IPC request id must be a string")
+  if (typeof message.method !== "string" || message.method.length === 0) {
+    return invalid("IPC request method must be a non-empty string")
+  }
+  if (typeof message.path !== "string" || !message.path.startsWith("/")) {
+    return invalid("IPC request path must be an absolute path")
+  }
+  const traceId = message.traceId === null ? undefined : message.traceId
+  const query = message.query === null ? undefined : message.query
+  const headers = message.headers === null ? undefined : message.headers
+  if (traceId !== undefined && typeof traceId !== "string") {
+    return invalid("IPC request traceId must be a string")
+  }
+  if (query !== undefined && !isIpcQuery(query)) {
+    return invalid("IPC request query must be a string, number, boolean, or undefined record")
+  }
+  if (headers !== undefined && !isStringRecord(headers)) {
+    return invalid("IPC request headers must be a string record")
+  }
+
+  const request: IpcRequestMessage = {
+    type: "request",
+    id,
+    method: message.method,
+    path: message.path,
+  }
+  if (traceId !== undefined) request.traceId = traceId
+  if (query !== undefined) request.query = query
+  if (Object.hasOwn(message, "body")) request.body = message.body
+  if (headers !== undefined) request.headers = headers
+
+  return { ok: true, message: request }
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string")
+}
+
+function isIpcQuery(value: unknown): value is IpcRequestMessage["query"] {
+  return (
+    isRecord(value) &&
+    Object.values(value).every(
+      (entry) =>
+        entry === undefined ||
+        typeof entry === "string" ||
+        typeof entry === "boolean" ||
+        (typeof entry === "number" && Number.isFinite(entry)),
+    )
+  )
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {

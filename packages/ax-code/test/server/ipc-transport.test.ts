@@ -3,8 +3,10 @@ import { Hono } from "hono"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { rm } from "node:fs/promises"
+import { connect, type Socket } from "node:net"
 import { createIpcTransport } from "@ax-code/sdk/headless-ipc"
 import { listenIpc } from "../../src/server/ipc-transport"
+import { readIpcMessages, writeIpcMessage, type IpcMessage } from "../../src/server/ipc-protocol"
 
 describe("ipc server transport", () => {
   let socketPath: string
@@ -171,4 +173,67 @@ describe("ipc server transport", () => {
       await transport.close?.()
     }
   })
+
+  test("rejects malformed requests without routing or closing the connection", async () => {
+    const app = new Hono()
+    const routedPaths: string[] = []
+    app.get("/global/health", (c: any) => {
+      routedPaths.push(new URL(c.req.url).pathname)
+      return c.json({ healthy: true })
+    })
+    server = await listenIpc({ socketPath, fetch: app.fetch })
+
+    const socket = await connectSocket(socketPath)
+    try {
+      const messages = readIpcMessages(socket)[Symbol.asyncIterator]()
+      await writeIpcMessage(socket, {
+        type: "request",
+        id: "bad",
+        method: "GET",
+      } as any)
+      await writeIpcMessage(socket, {
+        type: "request",
+        id: "good",
+        method: "GET",
+        path: "/global/health",
+      })
+
+      const bad = await nextIpcMessage(messages)
+      const good = await nextIpcMessage(messages)
+
+      expect(bad).toMatchObject({
+        type: "error",
+        id: "bad",
+        code: "IPC_INVALID_REQUEST",
+      })
+      expect(good).toEqual({
+        type: "response",
+        id: "good",
+        status: 200,
+        body: { healthy: true },
+      })
+      expect(routedPaths).toEqual(["/global/health"])
+    } finally {
+      socket.destroy()
+    }
+  })
 })
+
+function connectSocket(socketPath: string): Promise<Socket> {
+  return new Promise((resolve, reject) => {
+    const socket = connect(socketPath, () => {
+      socket.off("error", reject)
+      resolve(socket)
+    })
+    socket.once("error", reject)
+  })
+}
+
+async function nextIpcMessage(iterator: AsyncIterator<IpcMessage>): Promise<IpcMessage> {
+  const result = await Promise.race([
+    iterator.next(),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out waiting for IPC message")), 1_000)),
+  ])
+  if (result.done) throw new Error("IPC stream ended before the next message")
+  return result.value
+}
