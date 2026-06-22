@@ -5,11 +5,7 @@
     "description": "Converted from VS Code theme",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [
-      "dark",
-      "converted",
-      "vscode"
-    ]
+    "tags": ["dark", "converted", "vscode"]
   },
   "colors": {
     "primary": {

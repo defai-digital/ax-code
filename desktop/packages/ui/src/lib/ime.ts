@@ -1,4 +1,4 @@
-import type React from 'react';
+import type React from "react"
 
 /**
  * Detects if a keyboard event is part of IME composition.
@@ -9,6 +9,5 @@ import type React from 'react';
  * events can be ordered unexpectedly.
  */
 export const isIMECompositionEvent = (e: React.KeyboardEvent): boolean => {
-  return e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229;
-};
-
+  return e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229
+}

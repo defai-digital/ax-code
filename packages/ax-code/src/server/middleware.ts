@@ -1,8 +1,29 @@
 import type { MiddlewareHandler } from "hono"
+import { getConnInfo } from "@hono/node-server/conninfo"
 import { Log } from "@/util/log"
 import { rateLimited } from "./error"
 
 const RATE_SWEEP_INTERVAL_MS = 30_000
+
+export function resolveRateLimitClientIP(input: {
+  context: Parameters<MiddlewareHandler>[0]
+  log: Log.Logger
+  warnOnce: () => boolean
+}) {
+  try {
+    const srv = (input.context.env as any)?.server
+    const bunAddress = srv?.requestIP?.(input.context.req.raw)?.address
+    if (typeof bunAddress === "string" && bunAddress.length > 0) return bunAddress
+
+    const nodeAddress = getConnInfo(input.context).remote.address
+    if (typeof nodeAddress === "string" && nodeAddress.length > 0) return nodeAddress
+  } catch (error) {
+    if (input.warnOnce()) {
+      input.log.warn("failed to resolve client IP for rate limiting", { error })
+    }
+  }
+  return undefined
+}
 
 export function createRateLimitMiddleware(log: Log.Logger): MiddlewareHandler {
   const rate = new Map<string, { count: number; reset: number }>()
@@ -11,19 +32,16 @@ export function createRateLimitMiddleware(log: Log.Logger): MiddlewareHandler {
 
   return async (c, next) => {
     // Prefer the socket's remote address (not spoofable) over headers.
-    const socketAddr = (() => {
-      try {
-        const srv = (c.env as any)?.server
-        if (srv?.requestIP) return srv.requestIP(c.req.raw)?.address ?? null
-      } catch (error) {
-        if (!warnedRequestIpFailure) {
-          warnedRequestIpFailure = true
-          log.warn("failed to resolve client IP for rate limiting", { error })
-        }
-      }
-      return null
-    })()
-    const ip = socketAddr ?? "local"
+    const socketAddr = resolveRateLimitClientIP({
+      context: c,
+      log,
+      warnOnce: () => {
+        if (warnedRequestIpFailure) return false
+        warnedRequestIpFailure = true
+        return true
+      },
+    })
+    const ip = socketAddr ?? `unknown:${crypto.randomUUID()}`
     const key = `${ip}:${c.req.method}:${c.req.path.startsWith("/session/") ? "/session" : c.req.path}`
     const now = Date.now()
     // Periodically evict expired buckets so stale keys do not accumulate

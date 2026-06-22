@@ -1,144 +1,140 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
-import { Icon } from "@/components/icon/Icon";
-import { cn } from '@/lib/utils';
-import type { UpdateInfo, UpdateProgress } from '@/lib/desktop';
-import { copyTextToClipboard } from '@/lib/clipboard';
-import { openExternalUrl } from '@/lib/url';
-import { API_ENDPOINTS, HTTP_DEFAULTS } from '@/lib/http';
-import { useI18n } from '@/lib/i18n';
-import { normalizeReleaseNotesForMarkdown } from './updateReleaseNotes';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
+import { SimpleMarkdownRenderer } from "@/components/chat/MarkdownRenderer"
+import { Icon } from "@/components/icon/Icon"
+import { cn } from "@/lib/utils"
+import type { UpdateInfo, UpdateProgress } from "@/lib/desktop"
+import { copyTextToClipboard } from "@/lib/clipboard"
+import { openExternalUrl } from "@/lib/url"
+import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
+import { useI18n } from "@/lib/i18n"
+import { normalizeReleaseNotesForMarkdown } from "./updateReleaseNotes"
 
-type WebUpdateState = 'idle' | 'updating' | 'restarting' | 'reconnecting' | 'error';
+type WebUpdateState = "idle" | "updating" | "restarting" | "reconnecting" | "error"
 
 interface UpdateDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  info: UpdateInfo | null;
-  downloading: boolean;
-  downloaded: boolean;
-  progress: UpdateProgress | null;
-  error: string | null;
-  onDownload: () => void;
-  onRestart: () => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  info: UpdateInfo | null
+  downloading: boolean
+  downloaded: boolean
+  progress: UpdateProgress | null
+  error: string | null
+  onDownload: () => void
+  onRestart: () => void
   /** Runtime type to show different UI for desktop vs web */
-  runtimeType?: 'desktop' | 'web' | null;
+  runtimeType?: "desktop" | "web" | null
 }
 
-const GITHUB_RELEASES_URL = 'https://github.com/defai-digital/ax-code/releases';
+const GITHUB_RELEASES_URL = "https://github.com/defai-digital/ax-code/releases"
 
 type ChangelogSection = {
-  version: string;
-  date: string;
-  start: number;
-  end: number;
-  raw: string;
-};
+  version: string
+  date: string
+  start: number
+  end: number
+  raw: string
+}
 
 type ParsedChangelog =
   | {
-      kind: 'raw';
-      title: string;
-      content: string;
+      kind: "raw"
+      title: string
+      content: string
     }
   | {
-      kind: 'sections';
-      title: string;
-      sections: Array<{ version: string; dateLabel: string; content: string }>;
-    };
+      kind: "sections"
+      title: string
+      sections: Array<{ version: string; dateLabel: string; content: string }>
+    }
 
 function formatIsoDateForUI(isoDate: string): string {
-  const d = new Date(`${isoDate}T00:00:00`);
+  const d = new Date(`${isoDate}T00:00:00`)
   if (Number.isNaN(d.getTime())) {
-    return isoDate;
+    return isoDate
   }
   return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(d);
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(d)
 }
 
 function stripChangelogHeading(sectionRaw: string): string {
-  return sectionRaw.replace(/^## \[[^\]]+\] - \d{4}-\d{2}-\d{2}\s*\n?/, '').trim();
+  return sectionRaw.replace(/^## \[[^\]]+\] - \d{4}-\d{2}-\d{2}\s*\n?/, "").trim()
 }
 
 function processChangelogMentions(content: string): string {
   // Convert @username to markdown links so they can be styled via css
-  return content.replace(/(^|[^a-zA-Z0-9])@([a-zA-Z0-9-]+)/g, '$1[@$2](https://github.com/$2)');
+  return content.replace(/(^|[^a-zA-Z0-9])@([a-zA-Z0-9-]+)/g, "$1[@$2](https://github.com/$2)")
 }
 
 function compareSemverDesc(a: string, b: string): number {
-  const pa = a.split('.').map((v) => Number.parseInt(v, 10));
-  const pb = b.split('.').map((v) => Number.parseInt(v, 10));
+  const pa = a.split(".").map((v) => Number.parseInt(v, 10))
+  const pb = b.split(".").map((v) => Number.parseInt(v, 10))
   for (let i = 0; i < 3; i += 1) {
-    const da = Number.isFinite(pa[i]) ? (pa[i] as number) : 0;
-    const db = Number.isFinite(pb[i]) ? (pb[i] as number) : 0;
+    const da = Number.isFinite(pa[i]) ? (pa[i] as number) : 0
+    const db = Number.isFinite(pb[i]) ? (pb[i] as number) : 0
     if (da !== db) {
-      return db - da;
+      return db - da
     }
   }
-  return 0;
+  return 0
 }
 
 function parseChangelogSections(body: string): ChangelogSection[] {
-  const re = /^## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})\s*$/gm;
-  const matches: Array<{ version: string; date: string; start: number }> = [];
+  const re = /^## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})\s*$/gm
+  const matches: Array<{ version: string; date: string; start: number }> = []
 
-  let m: RegExpExecArray | null;
+  let m: RegExpExecArray | null
   while ((m = re.exec(body)) !== null) {
     matches.push({
-      version: m[1] ?? '',
-      date: m[2] ?? '',
+      version: m[1] ?? "",
+      date: m[2] ?? "",
       start: m.index,
-    });
+    })
   }
 
   if (matches.length === 0) {
-    return [];
+    return []
   }
 
   return matches.map((match, idx) => {
-    const end = matches[idx + 1]?.start ?? body.length;
-    const raw = body.slice(match.start, end).trim();
-    return { version: match.version, date: match.date, start: match.start, end, raw };
-  });
+    const end = matches[idx + 1]?.start ?? body.length
+    const raw = body.slice(match.start, end).trim()
+    return { version: match.version, date: match.date, start: match.start, end, raw }
+  })
 }
 
 type InstallWebUpdateResult = {
-  success: boolean;
-  error?: string;
-  autoRestart?: boolean;
-};
+  success: boolean
+  error?: string
+  autoRestart?: boolean
+}
 
-const WEB_UPDATE_POLL_INTERVAL_MS = 2000;
-const WEB_UPDATE_MAX_WAIT_MS = 10 * 60 * 1000;
+const WEB_UPDATE_POLL_INTERVAL_MS = 2000
+const WEB_UPDATE_MAX_WAIT_MS = 10 * 60 * 1000
 
 async function installWebUpdate(): Promise<InstallWebUpdateResult> {
   try {
     const response = await fetch(API_ENDPOINTS.openchamber.updateInstall, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    })
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      return { success: false, error: data.error || `Server error: ${response.status}` };
+      const data = await response.json().catch(() => ({}))
+      return { success: false, error: data.error || `Server error: ${response.status}` }
     }
 
-    const data = await response.json().catch(() => ({}));
+    const data = await response.json().catch(() => ({}))
     return {
       success: true,
       autoRestart: data.autoRestart !== false,
-    };
+    }
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : undefined };
+    return { success: false, error: error instanceof Error ? error.message : undefined }
   }
 }
 
@@ -147,10 +143,10 @@ async function isServerReachable(): Promise<boolean> {
     const response = await fetch(API_ENDPOINTS.debug.rootHealth, {
       method: HTTP_DEFAULTS.method.get,
       headers: HTTP_DEFAULTS.headers.acceptJson,
-    });
-    return response.ok;
+    })
+    return response.ok
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -162,31 +158,31 @@ async function waitForUpdateApplied(
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const response = await fetch(API_ENDPOINTS.openchamber.updateCheck, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
+        method: "GET",
+        headers: { Accept: "application/json" },
+      })
       if (response.ok) {
-        const data = await response.json().catch(() => null);
+        const data = await response.json().catch(() => null)
         if (data && data.available === false) {
-          return true;
+          return true
         }
         if (
           data &&
-          typeof data.currentVersion === 'string' &&
-          typeof previousVersion === 'string' &&
+          typeof data.currentVersion === "string" &&
+          typeof previousVersion === "string" &&
           data.currentVersion !== previousVersion
         ) {
-          return true;
+          return true
         }
-      } else if ((response.status === 401 || response.status === 403) && await isServerReachable()) {
-        return true;
+      } else if ((response.status === 401 || response.status === 403) && (await isServerReachable())) {
+        return true
       }
     } catch {
       // Server may be restarting
     }
-    await new Promise(resolve => setTimeout(resolve, intervalMs));
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
-  return false;
+  return false
 }
 
 export const UpdateDialog: React.FC<UpdateDialogProps> = ({
@@ -199,191 +195,174 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   error,
   onDownload,
   onRestart,
-  runtimeType = 'desktop',
+  runtimeType = "desktop",
 }) => {
-  const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
-  const [webUpdateState, setWebUpdateState] = useState<WebUpdateState>('idle');
-  const [webError, setWebError] = useState<string | null>(null);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { t } = useI18n()
+  const [copied, setCopied] = useState(false)
+  const [webUpdateState, setWebUpdateState] = useState<WebUpdateState>("idle")
+  const [webError, setWebError] = useState<string | null>(null)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const releaseUrl = info?.version
-    ? `${GITHUB_RELEASES_URL}/tag/v${info.version}`
-    : GITHUB_RELEASES_URL;
+  const releaseUrl = info?.version ? `${GITHUB_RELEASES_URL}/tag/v${info.version}` : GITHUB_RELEASES_URL
 
-  const progressPercent = progress?.total
-    ? Math.round((progress.downloaded / progress.total) * 100)
-    : 0;
+  const progressPercent = progress?.total ? Math.round((progress.downloaded / progress.total) * 100) : 0
 
-  const isWebRuntime = runtimeType === 'web';
-  const updateCommand = info?.updateCommand;
+  const isWebRuntime = runtimeType === "web"
+  const updateCommand = info?.updateCommand
 
   // Reset state when dialog closes; clear any pending copied timer on unmount.
   useEffect(() => {
     if (!open) {
-      setWebUpdateState('idle');
-      setWebError(null);
+      setWebUpdateState("idle")
+      setWebError(null)
     }
     return () => {
       if (copiedTimerRef.current) {
-        clearTimeout(copiedTimerRef.current);
-        copiedTimerRef.current = null;
+        clearTimeout(copiedTimerRef.current)
+        copiedTimerRef.current = null
       }
-    };
-  }, [open]);
+    }
+  }, [open])
 
   const handleCopyCommand = async () => {
     if (!updateCommand) {
-      return;
+      return
     }
     if (copiedTimerRef.current) {
-      clearTimeout(copiedTimerRef.current);
+      clearTimeout(copiedTimerRef.current)
     }
-    const result = await copyTextToClipboard(updateCommand);
+    const result = await copyTextToClipboard(updateCommand)
     if (result.ok) {
-      setCopied(true);
+      setCopied(true)
       copiedTimerRef.current = setTimeout(() => {
-        copiedTimerRef.current = null;
-        setCopied(false);
-      }, 2000);
+        copiedTimerRef.current = null
+        setCopied(false)
+      }, 2000)
     }
-  };
+  }
 
   const handleOpenExternal = useCallback(async (url: string) => {
-    await openExternalUrl(url);
-  }, []);
+    await openExternalUrl(url)
+  }, [])
   const handleWebUpdate = useCallback(async () => {
-    setWebUpdateState('updating');
-    setWebError(null);
+    setWebUpdateState("updating")
+    setWebError(null)
 
-    const result = await installWebUpdate();
+    const result = await installWebUpdate()
 
     if (!result.success) {
-      console.warn('Web update failed:', result.error);
-      setWebUpdateState('error');
-      setWebError(t('updateDialog.error.updateFailed'));
-      return;
+      console.warn("Web update failed:", result.error)
+      setWebUpdateState("error")
+      setWebError(t("updateDialog.error.updateFailed"))
+      return
     }
 
     if (result.autoRestart) {
-      setWebUpdateState('restarting');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      setWebUpdateState("restarting")
+      await new Promise((resolve) => setTimeout(resolve, 2000))
     }
 
-    setWebUpdateState('reconnecting');
+    setWebUpdateState("reconnecting")
 
-    const applied = await waitForUpdateApplied(info?.currentVersion);
+    const applied = await waitForUpdateApplied(info?.currentVersion)
 
     if (applied) {
-      window.location.reload();
+      window.location.reload()
     } else {
-      setWebUpdateState('error');
-      setWebError(t('updateDialog.error.takingLonger'));
+      setWebUpdateState("error")
+      setWebError(t("updateDialog.error.takingLonger"))
     }
-  }, [info?.currentVersion, t]);
+  }, [info?.currentVersion, t])
 
-  const isWebUpdating = webUpdateState !== 'idle' && webUpdateState !== 'error';
+  const isWebUpdating = webUpdateState !== "idle" && webUpdateState !== "error"
 
   const changelog = useMemo<ParsedChangelog | null>(() => {
     if (!info?.body) {
-      return null;
+      return null
     }
 
-    const body = normalizeReleaseNotesForMarkdown(info.body.trim());
+    const body = normalizeReleaseNotesForMarkdown(info.body.trim())
     if (!body) {
-      return null;
+      return null
     }
 
-    const sections = parseChangelogSections(body);
+    const sections = parseChangelogSections(body)
 
     if (sections.length === 0) {
       return {
-        kind: 'raw',
-        title: t('updateDialog.changelog.title'),
+        kind: "raw",
+        title: t("updateDialog.changelog.title"),
         content: processChangelogMentions(body),
-      };
+      }
     }
 
-    const sorted = [...sections].sort((a, b) => compareSemverDesc(a.version, b.version));
+    const sorted = [...sections].sort((a, b) => compareSemverDesc(a.version, b.version))
     return {
-      kind: 'sections',
-      title: t('updateDialog.changelog.title'),
+      kind: "sections",
+      title: t("updateDialog.changelog.title"),
       sections: sorted.map((section) => ({
         version: section.version,
         dateLabel: formatIsoDateForUI(section.date),
         content: processChangelogMentions(stripChangelogHeading(section.raw) || body),
       })),
-    };
-  }, [info?.body, t]);
+    }
+  }, [info?.body, t])
 
   return (
     <Dialog open={open} onOpenChange={isWebUpdating ? undefined : onOpenChange}>
       <DialogContent className="max-w-4xl p-5 bg-background border-[var(--interactive-border)]" showCloseButton={true}>
-        
         {/* Header Section */}
         <div className="flex items-center mb-1">
           <DialogTitle className="flex items-center gap-2.5">
             <Icon name="download-cloud" className="h-5 w-5 text-[var(--primary-base)]" />
             <span className="text-lg font-semibold text-foreground">
-              {webUpdateState === 'restarting' || webUpdateState === 'reconnecting'
-                ? t('updateDialog.header.updating')
-                : t('updateDialog.header.updateAvailable')}
+              {webUpdateState === "restarting" || webUpdateState === "reconnecting"
+                ? t("updateDialog.header.updating")
+                : t("updateDialog.header.updateAvailable")}
             </span>
           </DialogTitle>
 
           {/* Version Diff */}
           {(info?.currentVersion || info?.version) && (
             <div className="flex items-center gap-2 font-mono text-sm ml-3">
-              {info?.currentVersion && (
-                <span className="text-muted-foreground">{info.currentVersion}</span>
-              )}
-              {info?.currentVersion && info?.version && (
-                <span className="text-muted-foreground/50">→</span>
-              )}
-              {info?.version && (
-                <span className="text-[var(--primary-base)] font-medium">{info.version}</span>
-              )}
+              {info?.currentVersion && <span className="text-muted-foreground">{info.currentVersion}</span>}
+              {info?.currentVersion && info?.version && <span className="text-muted-foreground/50">→</span>}
+              {info?.version && <span className="text-[var(--primary-base)] font-medium">{info.version}</span>}
             </div>
           )}
         </div>
 
         {/* Content Body */}
         <div className="space-y-2">
-
           {/* Web update progress */}
           {isWebRuntime && isWebUpdating && (
             <div className="rounded-lg bg-[var(--surface-elevated)]/30 p-5 border border-[var(--surface-subtle)]">
               <div className="flex items-center gap-3">
                 <Icon name="loader" className="h-5 w-5 animate-spin text-[var(--primary-base)]" />
                 <div className="typography-ui-label text-foreground">
-                  {webUpdateState === 'updating' && t('updateDialog.status.installingUpdate')}
-                  {webUpdateState === 'restarting' && t('updateDialog.status.serverRestarting')}
-                  {webUpdateState === 'reconnecting' && t('updateDialog.status.waitingForServer')}
+                  {webUpdateState === "updating" && t("updateDialog.status.installingUpdate")}
+                  {webUpdateState === "restarting" && t("updateDialog.status.serverRestarting")}
+                  {webUpdateState === "reconnecting" && t("updateDialog.status.waitingForServer")}
                 </div>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {t('updateDialog.status.autoReloadHint')}
-              </p>
+              <p className="mt-2 text-xs text-muted-foreground">{t("updateDialog.status.autoReloadHint")}</p>
             </div>
           )}
 
           {/* Changelog Rendering */}
           {changelog && !isWebUpdating && (
             <div className="rounded-lg border border-[var(--surface-subtle)] bg-[var(--surface-elevated)]/20 overflow-hidden">
-              <ScrollableOverlay
-                className="max-h-[400px] p-0"
-                fillContainer={false}
-              >
-                {changelog.kind === 'raw' ? (
+              <ScrollableOverlay className="max-h-[400px] p-0" fillContainer={false}>
+                {changelog.kind === "raw" ? (
                   <div
                     className="p-4 typography-markdown-body text-foreground leading-relaxed break-words [&_a]:!text-[var(--primary-base)] [&_a]:!no-underline [&_a:hover]:!underline"
                     onClickCapture={(e) => {
-                      const target = e.target as HTMLElement;
-                      const a = target.closest('a');
+                      const target = e.target as HTMLElement
+                      const a = target.closest("a")
                       if (a && a.href) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        void handleOpenExternal(a.href);
+                        e.preventDefault()
+                        e.stopPropagation()
+                        void handleOpenExternal(a.href)
                       }
                     }}
                   >
@@ -397,19 +376,17 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                           <span className="typography-ui-label font-mono text-[var(--primary-base)] bg-[var(--primary-base)]/10 px-1.5 py-0.5 rounded">
                             v{section.version}
                           </span>
-                          <span className="text-sm font-medium text-muted-foreground">
-                            {section.dateLabel}
-                          </span>
+                          <span className="text-sm font-medium text-muted-foreground">{section.dateLabel}</span>
                         </div>
                         <div
                           className="typography-markdown-body text-foreground leading-relaxed break-words [&_a]:!text-[var(--primary-base)] [&_a]:!no-underline [&_a:hover]:!underline"
                           onClickCapture={(e) => {
-                            const target = e.target as HTMLElement;
-                            const a = target.closest('a');
+                            const target = e.target as HTMLElement
+                            const a = target.closest("a")
                             if (a && a.href) {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              void handleOpenExternal(a.href);
+                              e.preventDefault()
+                              e.stopPropagation()
+                              void handleOpenExternal(a.href)
                             }
                           }}
                         >
@@ -424,11 +401,11 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           )}
 
           {/* Web runtime fallback command */}
-          {isWebRuntime && webUpdateState === 'error' && updateCommand && (
+          {isWebRuntime && webUpdateState === "error" && updateCommand && (
             <div className="space-y-2 mt-4">
               <div className="flex items-center gap-2 typography-meta text-muted-foreground">
                 <Icon name="terminal" className="h-4 w-4" />
-                <span>{t('updateDialog.fallback.updateViaTerminal')}</span>
+                <span>{t("updateDialog.fallback.updateViaTerminal")}</span>
               </div>
               <div className="flex items-center gap-2 p-1 pl-3 bg-[var(--surface-elevated)]/50 rounded-md border border-[var(--surface-subtle)]">
                 <code className="flex-1 font-mono text-sm text-foreground overflow-x-auto whitespace-nowrap">
@@ -437,18 +414,14 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 <button
                   onClick={handleCopyCommand}
                   className={cn(
-                    'flex items-center justify-center p-2 rounded',
-                    'text-muted-foreground hover:text-foreground hover:bg-[var(--interactive-hover)]',
-                    'transition-colors',
-                    copied && 'text-[var(--status-success)]'
+                    "flex items-center justify-center p-2 rounded",
+                    "text-muted-foreground hover:text-foreground hover:bg-[var(--interactive-hover)]",
+                    "transition-colors",
+                    copied && "text-[var(--status-success)]",
                   )}
-                  title={copied ? t('updateDialog.actions.copied') : t('updateDialog.actions.copyCommand')}
+                  title={copied ? t("updateDialog.actions.copied") : t("updateDialog.actions.copyCommand")}
                 >
-                  {copied ? (
-                    <Icon name="check" className="h-4 w-4" />
-                  ) : (
-                    <Icon name="clipboard" className="h-4 w-4" />
-                  )}
+                  {copied ? <Icon name="check" className="h-4 w-4" /> : <Icon name="clipboard" className="h-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -458,7 +431,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           {!isWebRuntime && downloading && (
             <div className="space-y-2 mt-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{t('updateDialog.status.downloadingPayload')}</span>
+                <span className="text-muted-foreground">{t("updateDialog.status.downloadingPayload")}</span>
                 <span className="font-mono text-foreground">{progressPercent}%</span>
               </div>
               <div className="h-1.5 bg-[var(--surface-subtle)] rounded-full overflow-hidden">
@@ -498,7 +471,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
               >
                 <Icon name="download" className="h-4 w-4" />
-                {t('updateDialog.actions.downloadUpdate')}
+                {t("updateDialog.actions.downloadUpdate")}
               </button>
             )}
 
@@ -508,7 +481,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--primary-base)]/50 text-[var(--primary-foreground)] cursor-not-allowed"
               >
                 <Icon name="loader" className="h-4 w-4 animate-spin" />
-                {t('updateDialog.status.downloading')}
+                {t("updateDialog.status.downloading")}
               </button>
             )}
 
@@ -518,7 +491,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--status-success)] text-white hover:opacity-90 transition-opacity"
               >
                 <Icon name="restart" className="h-4 w-4" />
-                {t('updateDialog.actions.restartToUpdate')}
+                {t("updateDialog.actions.restartToUpdate")}
               </button>
             )}
 
@@ -529,7 +502,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity"
               >
                 <Icon name="download" className="h-4 w-4" />
-                {t('updateDialog.actions.updateNow')}
+                {t("updateDialog.actions.updateNow")}
               </button>
             )}
 
@@ -539,12 +512,12 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                 className="flex items-center justify-center gap-2 px-5 py-2 rounded-md text-sm font-medium bg-[var(--primary-base)]/50 text-[var(--primary-foreground)] cursor-not-allowed"
               >
                 <Icon name="loader" className="h-4 w-4 animate-spin" />
-                {t('updateDialog.status.updating')}
+                {t("updateDialog.status.updating")}
               </button>
             )}
           </div>
         </div>
       </DialogContent>
     </Dialog>
-  );
-};
+  )
+}

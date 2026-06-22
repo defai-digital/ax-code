@@ -5,11 +5,14 @@ import { retry } from "./retry"
 import { compareIds, sortPartsById } from "./part-ordering"
 import { SESSION_CACHE_LIMIT } from "./types"
 import { pickSessionCacheEvictions } from "./session-cache"
+import { mergeOptimisticPage, type OptimisticItem } from "./optimistic"
 import {
-  mergeOptimisticPage,
-  type OptimisticItem,
-} from "./optimistic"
-import { dropCachedSessionMessageRecordsSnapshots, useDirectoryStore, useSyncSDK, useSyncDirectory, useChildStoreManager } from "./sync-context"
+  dropCachedSessionMessageRecordsSnapshots,
+  useDirectoryStore,
+  useSyncSDK,
+  useSyncDirectory,
+  useChildStoreManager,
+} from "./sync-context"
 import { dropSessionCaches, getProtectedSessionCacheIds } from "./session-cache"
 import { stripMessageDiffSnapshots } from "./sanitize"
 import {
@@ -41,7 +44,12 @@ type SyncMeta = {
   error?: boolean
 }
 
-const getDefaultMeta = (): SyncMeta => ({ limit: INITIAL_MESSAGE_PAGE_SIZE, cursor: undefined, complete: false, loading: false })
+const getDefaultMeta = (): SyncMeta => ({
+  limit: INITIAL_MESSAGE_PAGE_SIZE,
+  cursor: undefined,
+  complete: false,
+  loading: false,
+})
 
 function getPrefetchMeta(directory: string, sessionID: string): SyncMeta | undefined {
   const info = getSessionPrefetch(directory, sessionID)
@@ -69,10 +77,7 @@ export function useSync() {
   const optimistic = useRef(new Map<string, Map<string, OptimisticItem>>())
   const meta = useRef(new Map<string, SyncMeta>())
 
-  const keyFor = useCallback(
-    (sessionID: string) => `${directory}\n${sessionID}`,
-    [directory],
-  )
+  const keyFor = useCallback((sessionID: string) => `${directory}\n${sessionID}`, [directory])
 
   const getMetaFor = useCallback(
     (sessionID: string) => {
@@ -83,7 +88,16 @@ export function useSync() {
   )
 
   const setMetaFor = useCallback(
-    (sessionID: string, patch: Partial<{ limit: number; cursor: string | undefined; complete: boolean; loading: boolean; error: boolean }>) => {
+    (
+      sessionID: string,
+      patch: Partial<{
+        limit: number
+        cursor: string | undefined
+        complete: boolean
+        loading: boolean
+        error: boolean
+      }>,
+    ) => {
       const key = keyFor(sessionID)
       const current = meta.current.get(key) ?? getPrefetchMeta(directory, sessionID) ?? getDefaultMeta()
       meta.current.set(key, { ...current, ...patch })
@@ -208,9 +222,7 @@ export function useSync() {
   // Fetch messages from API
   const fetchMessages = useCallback(
     async (sessionID: string, limit: number, before?: string) => {
-      const result = await retry(() =>
-        sdk.session.messages({ sessionID, directory, limit, before }),
-      )
+      const result = await retry(() => sdk.session.messages({ sessionID, directory, limit, before }))
       const items = (result.data ?? []).filter((x: { info?: { id?: string } }) => !!x?.info?.id)
       const session = items
         .map((x: { info: Message }) => stripMessageDiffSnapshots(x.info))
@@ -298,11 +310,14 @@ export function useSync() {
 
       // Skip if recently fetched (TTL)
       if (!force) {
-        if (shouldSkipSessionPrefetch({
-          hasMessages: cachedReady,
-          info: prefetchInfo,
-          pageSize: INITIAL_MESSAGE_PAGE_SIZE,
-        })) return
+        if (
+          shouldSkipSessionPrefetch({
+            hasMessages: cachedReady,
+            info: prefetchInfo,
+            pageSize: INITIAL_MESSAGE_PAGE_SIZE,
+          })
+        )
+          return
       }
 
       const shouldFetchSession = !hasSession || force
@@ -367,10 +382,7 @@ export function useSync() {
     [getMetaFor],
   )
 
-  const isLoading = useCallback(
-    (sessionID: string) => getMetaFor(sessionID).loading,
-    [getMetaFor],
-  )
+  const isLoading = useCallback((sessionID: string) => getMetaFor(sessionID).loading, [getMetaFor])
 
   // Optimistic add (for prompt submission)
   const optimisticAdd = useCallback(

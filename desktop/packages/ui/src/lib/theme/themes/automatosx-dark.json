@@ -5,12 +5,7 @@
     "description": "AutomatosX brand tone — near-black surfaces, green primary, purple accent",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [
-      "dark",
-      "brand",
-      "green",
-      "vercel"
-    ]
+    "tags": ["dark", "brand", "green", "vercel"]
   },
   "colors": {
     "primary": {

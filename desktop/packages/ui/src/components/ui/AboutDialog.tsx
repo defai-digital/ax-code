@@ -1,149 +1,144 @@
-import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-} from '@/components/ui/dialog';
-import { AxCodeIcon } from '@/components/ui/AxCodeIcon';
-import { debugUtils } from '@/lib/debug';
-import { cn } from '@/lib/utils';
-import { toast } from '@/components/ui';
-import { Icon } from "@/components/icon/Icon";
-import { API_ENDPOINTS } from '@/lib/http';
-import { useI18n } from '@/lib/i18n';
-import { getDesktopAppVersion } from '@/lib/desktopNative';
+import React from "react"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { AxCodeIcon } from "@/components/ui/AxCodeIcon"
+import { debugUtils } from "@/lib/debug"
+import { cn } from "@/lib/utils"
+import { toast } from "@/components/ui"
+import { Icon } from "@/components/icon/Icon"
+import { API_ENDPOINTS } from "@/lib/http"
+import { useI18n } from "@/lib/i18n"
+import { getDesktopAppVersion } from "@/lib/desktopNative"
 
 interface AboutDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-export const OPENCHAMBER_UPSTREAM_URL = 'https://github.com/btriapitsyn/openchamber';
+export const OPENCHAMBER_UPSTREAM_URL = "https://github.com/btriapitsyn/openchamber"
 
-export const AboutDialog: React.FC<AboutDialogProps> = ({
-  open,
-  onOpenChange,
-}) => {
-  const { t } = useI18n();
-  const showDiagnostics = import.meta.env.DEV;
-  const [version, setVersion] = React.useState<string | null>(null);
-  const [axCodeVersion, setAxCodeVersion] = React.useState<string | null>(null);
-  const [isCopyingDiagnostics, setIsCopyingDiagnostics] = React.useState(false);
-  const [copiedDiagnostics, setCopiedDiagnostics] = React.useState(false);
-  const [diagnosticsReport, setDiagnosticsReport] = React.useState<string | null>(null);
-  const [isPreparingDiagnostics, setIsPreparingDiagnostics] = React.useState(false);
+export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) => {
+  const { t } = useI18n()
+  const showDiagnostics = import.meta.env.DEV
+  const [version, setVersion] = React.useState<string | null>(null)
+  const [axCodeVersion, setAxCodeVersion] = React.useState<string | null>(null)
+  const [isCopyingDiagnostics, setIsCopyingDiagnostics] = React.useState(false)
+  const [copiedDiagnostics, setCopiedDiagnostics] = React.useState(false)
+  const [diagnosticsReport, setDiagnosticsReport] = React.useState<string | null>(null)
+  const [isPreparingDiagnostics, setIsPreparingDiagnostics] = React.useState(false)
 
   const handleCopyDiagnostics = React.useCallback(async () => {
-    if (!showDiagnostics) return;
-    if (isCopyingDiagnostics) return;
-    setIsCopyingDiagnostics(true);
-    setCopiedDiagnostics(false);
+    if (!showDiagnostics) return
+    if (isCopyingDiagnostics) return
+    setIsCopyingDiagnostics(true)
+    setCopiedDiagnostics(false)
     try {
       if (!diagnosticsReport) {
-        toast.error(t('aboutDialog.toast.copyFailed'), {
-          description: t('aboutDialog.toast.diagnosticsNotReady'),
-        });
-        return;
+        toast.error(t("aboutDialog.toast.copyFailed"), {
+          description: t("aboutDialog.toast.diagnosticsNotReady"),
+        })
+        return
       }
 
-      const result = await debugUtils.copyTextToClipboard(diagnosticsReport);
+      const result = await debugUtils.copyTextToClipboard(diagnosticsReport)
       if (result.ok) {
-        setCopiedDiagnostics(true);
-        toast.success(t('aboutDialog.toast.diagnosticsCopied'));
+        setCopiedDiagnostics(true)
+        toast.success(t("aboutDialog.toast.diagnosticsCopied"))
       } else {
-        toast.error(t('aboutDialog.toast.copyFailed'), {
+        toast.error(t("aboutDialog.toast.copyFailed"), {
           description: result.error,
-        });
+        })
       }
     } catch (error) {
-      toast.error(t('aboutDialog.toast.copyFailed'));
-      console.error('Failed to copy diagnostics:', error);
+      toast.error(t("aboutDialog.toast.copyFailed"))
+      console.error("Failed to copy diagnostics:", error)
     } finally {
-      setIsCopyingDiagnostics(false);
+      setIsCopyingDiagnostics(false)
     }
-  }, [diagnosticsReport, isCopyingDiagnostics, showDiagnostics, t]);
+  }, [diagnosticsReport, isCopyingDiagnostics, showDiagnostics, t])
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) return
 
     const fetchVersion = async () => {
       try {
-        const response = await fetch(API_ENDPOINTS.system.info);
+        const response = await fetch(API_ENDPOINTS.system.info)
         if (response.ok) {
-          const data = await response.json();
-          const reported = typeof data.openchamberVersion === 'string' ? data.openchamberVersion.trim() : '';
+          const data = await response.json()
+          const reported = typeof data.openchamberVersion === "string" ? data.openchamberVersion.trim() : ""
           // Ignore the server's 'unknown' sentinel so we fall through to the
           // native shell version instead of rendering "unknown".
-          if (reported && reported !== 'unknown') {
-            setVersion(reported);
-            return;
+          if (reported && reported !== "unknown") {
+            setVersion(reported)
+            return
           }
         }
       } catch {
         // Fall back to the native shell version when the web server is unavailable.
       }
 
-      setVersion(await getDesktopAppVersion());
-    };
+      setVersion(await getDesktopAppVersion())
+    }
 
-    void fetchVersion();
-  }, [open]);
+    void fetchVersion()
+  }, [open])
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) return
 
-    let cancelled = false;
+    let cancelled = false
     const fetchAxCodeVersion = async () => {
       try {
         const response = await fetch(API_ENDPOINTS.axCode.upgradeStatus, {
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) return;
-        const data = await response.json().catch(() => null) as null | { currentVersion?: unknown };
-        const currentVersion = typeof data?.currentVersion === 'string' ? data.currentVersion.trim() : '';
+          headers: { Accept: "application/json" },
+        })
+        if (!response.ok) return
+        const data = (await response.json().catch(() => null)) as null | { currentVersion?: unknown }
+        const currentVersion = typeof data?.currentVersion === "string" ? data.currentVersion.trim() : ""
         if (!cancelled && currentVersion) {
-          setAxCodeVersion(currentVersion);
+          setAxCodeVersion(currentVersion)
         }
       } catch {
         // ax-code version is best-effort in About.
       }
-    };
+    }
 
-    void fetchAxCodeVersion();
+    void fetchAxCodeVersion()
     return () => {
-      cancelled = true;
-    };
-  }, [open]);
+      cancelled = true
+    }
+  }, [open])
 
   React.useEffect(() => {
     if (!open || !showDiagnostics) {
-      setDiagnosticsReport(null);
-      setIsPreparingDiagnostics(false);
-      return;
+      setDiagnosticsReport(null)
+      setIsPreparingDiagnostics(false)
+      return
     }
 
-    let cancelled = false;
-    setIsPreparingDiagnostics(true);
-    void debugUtils.buildDiagnosticsReport()
+    let cancelled = false
+    setIsPreparingDiagnostics(true)
+    void debugUtils
+      .buildDiagnosticsReport()
       .then((report) => {
-        if (cancelled) return;
-        setDiagnosticsReport(report);
+        if (cancelled) return
+        setDiagnosticsReport(report)
       })
       .catch((error) => {
-        if (cancelled) return;
-        console.error('Failed to prepare diagnostics:', error);
-        setDiagnosticsReport(null);
+        if (cancelled) return
+        console.error("Failed to prepare diagnostics:", error)
+        setDiagnosticsReport(null)
       })
       .finally(() => {
-        if (cancelled) return;
-        setIsPreparingDiagnostics(false);
-      });
+        if (cancelled) return
+        setIsPreparingDiagnostics(false)
+      })
 
     return () => {
-      cancelled = true;
-    };
-  }, [open, showDiagnostics]);
+      cancelled = true
+    }
+  }, [open, showDiagnostics])
 
-  const displayVersion = version;
+  const displayVersion = version
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -154,15 +149,11 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">AX Code Desktop</h2>
             <div className="space-y-0.5 typography-meta text-muted-foreground">
-              {displayVersion && (
-                <p>{t('aboutDialog.openChamberVersionLabel', { version: displayVersion })}</p>
-              )}
-              {axCodeVersion && (
-                <p>{t('aboutDialog.axCodeVersionLabel', { version: axCodeVersion })}</p>
-              )}
+              {displayVersion && <p>{t("aboutDialog.openChamberVersionLabel", { version: displayVersion })}</p>}
+              {axCodeVersion && <p>{t("aboutDialog.axCodeVersionLabel", { version: axCodeVersion })}</p>}
             </div>
             <p className="typography-meta text-muted-foreground/70">
-              Forked from{' '}
+              Forked from{" "}
               <a
                 href={OPENCHAMBER_UPSTREAM_URL}
                 target="_blank"
@@ -170,7 +161,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                 className="underline underline-offset-2 hover:text-foreground transition-colors"
               >
                 OpenChamber
-              </a>{' '}
+              </a>{" "}
               by AX Engine.
             </p>
           </div>
@@ -181,20 +172,18 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                 onClick={handleCopyDiagnostics}
                 disabled={isCopyingDiagnostics || isPreparingDiagnostics || !diagnosticsReport}
                 className={cn(
-                  'typography-meta text-muted-foreground hover:text-foreground',
-                  'underline-offset-2 hover:underline',
-                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                  "typography-meta text-muted-foreground hover:text-foreground",
+                  "underline-offset-2 hover:underline",
+                  "disabled:opacity-50 disabled:cursor-not-allowed",
                 )}
               >
                 {copiedDiagnostics
-                  ? t('aboutDialog.actions.diagnosticsCopied')
+                  ? t("aboutDialog.actions.diagnosticsCopied")
                   : isPreparingDiagnostics
-                    ? t('aboutDialog.actions.preparingDiagnostics')
-                    : t('aboutDialog.actions.copyDiagnostics')}
+                    ? t("aboutDialog.actions.preparingDiagnostics")
+                    : t("aboutDialog.actions.copyDiagnostics")}
               </button>
-              <p className="typography-micro text-muted-foreground">
-                {t('aboutDialog.diagnosticsDescription')}
-              </p>
+              <p className="typography-micro text-muted-foreground">{t("aboutDialog.diagnosticsDescription")}</p>
             </div>
           )}
 
@@ -220,9 +209,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
               </a>
             </div>
           </div>
-
         </div>
       </DialogContent>
     </Dialog>
-  );
-};
+  )
+}

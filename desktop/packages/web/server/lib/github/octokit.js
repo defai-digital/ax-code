@@ -1,10 +1,10 @@
-import { Octokit } from '@octokit/rest';
-import { getGitHubAuth } from './auth.js';
+import { Octokit } from "@octokit/rest"
+import { getGitHubAuth } from "./auth.js"
 
 export function getOctokitOrNull() {
-  const auth = getGitHubAuth();
+  const auth = getGitHubAuth()
   if (!auth?.accessToken) {
-    return null;
+    return null
   }
-  return new Octokit({ auth: auth.accessToken });
+  return new Octokit({ auth: auth.accessToken })
 }

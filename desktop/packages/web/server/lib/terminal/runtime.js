@@ -1,5 +1,5 @@
-import crypto from 'node:crypto';
-import { WebSocketServer } from 'ws';
+import crypto from "node:crypto"
+import { WebSocketServer } from "ws"
 import {
   TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
   TERMINAL_INPUT_WS_PATH,
@@ -13,7 +13,7 @@ import {
   parseRequestPathname,
   pruneRebindTimestamps,
   readTerminalInputWsControlFrame,
-} from './index.js';
+} from "./index.js"
 
 export function createTerminalRuntime({
   app,
@@ -32,218 +32,217 @@ export function createTerminalRuntime({
   TERMINAL_INPUT_WS_REBIND_WINDOW_MS,
   TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW,
 }) {
-  let ptyProviderPromise = null;
+  let ptyProviderPromise = null
   const getPtyProvider = async () => {
     if (ptyProviderPromise) {
-      return ptyProviderPromise;
+      return ptyProviderPromise
     }
 
     ptyProviderPromise = (async () => {
       try {
-        const nodePty = await import('node-pty');
-        console.log('Using node-pty for terminal sessions');
-        return { spawn: nodePty.spawn, backend: 'node-pty' };
+        const nodePty = await import("node-pty")
+        console.log("Using node-pty for terminal sessions")
+        return { spawn: nodePty.spawn, backend: "node-pty" }
       } catch (error) {
-        console.error('Failed to load node-pty:', error && error.message ? error.message : error);
-        throw new Error('node-pty is not available. Run: npm rebuild node-pty');
+        console.error("Failed to load node-pty:", error && error.message ? error.message : error)
+        throw new Error("node-pty is not available. Run: npm rebuild node-pty")
       }
-    })();
+    })()
 
-    return ptyProviderPromise;
-  };
+    return ptyProviderPromise
+  }
 
   const getTerminalShellCandidates = () => {
-    if (process.platform === 'win32') {
+    if (process.platform === "win32") {
       const windowsCandidates = [
         process.env.AX_CODE_DESKTOP_TERMINAL_SHELL,
         process.env.SHELL,
         process.env.ComSpec,
-        path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-        'pwsh.exe',
-        'powershell.exe',
-        'cmd.exe',
-      ].filter(Boolean);
+        path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+        "pwsh.exe",
+        "powershell.exe",
+        "cmd.exe",
+      ].filter(Boolean)
 
-      const resolved = [];
-      const seen = new Set();
+      const resolved = []
+      const seen = new Set()
       for (const candidateRaw of windowsCandidates) {
-        const candidate = String(candidateRaw).trim();
-        if (!candidate) continue;
+        const candidate = String(candidateRaw).trim()
+        if (!candidate) continue
 
-        const lookedUp = candidate.includes('\\') || candidate.includes('/')
-          ? candidate
-          : searchPathFor(candidate);
-        const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : (isExecutable(candidate) ? candidate : null);
-        if (!executable || seen.has(executable)) continue;
-        seen.add(executable);
-        resolved.push(executable);
+        const lookedUp = candidate.includes("\\") || candidate.includes("/") ? candidate : searchPathFor(candidate)
+        const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : isExecutable(candidate) ? candidate : null
+        if (!executable || seen.has(executable)) continue
+        seen.add(executable)
+        resolved.push(executable)
       }
-      return resolved;
+      return resolved
     }
 
     const unixCandidates = [
       process.env.AX_CODE_DESKTOP_TERMINAL_SHELL,
       process.env.SHELL,
-      '/bin/zsh',
-      '/bin/bash',
-      '/bin/sh',
-      'zsh',
-      'bash',
-      'sh',
-    ].filter(Boolean);
+      "/bin/zsh",
+      "/bin/bash",
+      "/bin/sh",
+      "zsh",
+      "bash",
+      "sh",
+    ].filter(Boolean)
 
-    const resolved = [];
-    const seen = new Set();
+    const resolved = []
+    const seen = new Set()
     for (const candidateRaw of unixCandidates) {
-      const candidate = String(candidateRaw).trim();
-      if (!candidate) continue;
+      const candidate = String(candidateRaw).trim()
+      if (!candidate) continue
 
-      const lookedUp = candidate.includes('/') ? candidate : searchPathFor(candidate);
-      const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : (isExecutable(candidate) ? candidate : null);
-      if (!executable || seen.has(executable)) continue;
-      seen.add(executable);
-      resolved.push(executable);
+      const lookedUp = candidate.includes("/") ? candidate : searchPathFor(candidate)
+      const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : isExecutable(candidate) ? candidate : null
+      if (!executable || seen.has(executable)) continue
+      seen.add(executable)
+      resolved.push(executable)
     }
 
-    return resolved;
-  };
+    return resolved
+  }
 
-  const utf8LocaleFallback = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8';
-  const lcCtypeFallback = process.platform === 'darwin' ? 'UTF-8' : 'C.UTF-8';
+  const utf8LocaleFallback = process.platform === "darwin" ? "en_US.UTF-8" : "C.UTF-8"
+  const lcCtypeFallback = process.platform === "darwin" ? "UTF-8" : "C.UTF-8"
 
   const spawnTerminalPtyWithFallback = (pty, { cols, rows, cwd, env }) => {
-    const shellCandidates = getTerminalShellCandidates();
+    const shellCandidates = getTerminalShellCandidates()
     if (shellCandidates.length === 0) {
-      throw new Error('No executable shell found for terminal session');
+      throw new Error("No executable shell found for terminal session")
     }
 
-    let lastError = null;
+    let lastError = null
     for (const shell of shellCandidates) {
       try {
         const ptyOptions = {
-          name: 'xterm-256color',
+          name: "xterm-256color",
           cols: cols || 80,
           rows: rows || 24,
           cwd,
           env: {
             ...env,
-            TERM: 'xterm-256color',
-            COLORTERM: 'truecolor',
+            TERM: "xterm-256color",
+            COLORTERM: "truecolor",
             LANG: env.LANG || process.env.LANG || utf8LocaleFallback,
             LC_CTYPE: env.LC_CTYPE || process.env.LC_CTYPE || lcCtypeFallback,
           },
-        };
-
-        if (process.platform === 'win32') {
-          ptyOptions.useConpty = true;
         }
 
-        const ptyProcess = pty.spawn(shell, [], ptyOptions);
+        if (process.platform === "win32") {
+          ptyOptions.useConpty = true
+        }
 
-        return { ptyProcess, shell };
+        const ptyProcess = pty.spawn(shell, [], ptyOptions)
+
+        return { ptyProcess, shell }
       } catch (error) {
-        lastError = error;
-        console.warn(`Failed to spawn PTY using shell ${shell}:`, error && error.message ? error.message : error);
+        lastError = error
+        console.warn(`Failed to spawn PTY using shell ${shell}:`, error && error.message ? error.message : error)
       }
     }
 
-    const baseMessage = lastError && lastError.message ? lastError.message : 'PTY spawn failed';
-    throw new Error(`Failed to spawn terminal PTY with available shells (${shellCandidates.join(', ')}): ${baseMessage}`);
-  };
+    const baseMessage = lastError && lastError.message ? lastError.message : "PTY spawn failed"
+    throw new Error(
+      `Failed to spawn terminal PTY with available shells (${shellCandidates.join(", ")}): ${baseMessage}`,
+    )
+  }
 
-  const terminalSessions = new Map();
-  const terminalWsConnections = new Set();
-  const MAX_TERMINAL_SESSIONS = 20;
-  const TERMINAL_IDLE_TIMEOUT = 30 * 60 * 1000;
-  const terminalRuntimeName = 'node';
+  const terminalSessions = new Map()
+  const terminalWsConnections = new Set()
+  const MAX_TERMINAL_SESSIONS = 20
+  const TERMINAL_IDLE_TIMEOUT = 30 * 60 * 1000
+  const terminalRuntimeName = "node"
   const sanitizeTerminalEnv = (env) => {
-    const next = { ...env };
-    delete next.BASH_XTRACEFD;
-    delete next.BASH_ENV;
-    delete next.ENV;
-    delete next.AX_CODE_SERVER_PASSWORD;
-    return next;
-  };
+    const next = { ...env }
+    delete next.BASH_XTRACEFD
+    delete next.BASH_ENV
+    delete next.ENV
+    delete next.AX_CODE_SERVER_PASSWORD
+    return next
+  }
 
   const resolveAllowedCwd = async (req, cwd) => {
-    if (typeof validateCwd !== 'function') {
-      return { ok: true, cwd };
+    if (typeof validateCwd !== "function") {
+      return { ok: true, cwd }
     }
-    return validateCwd(req, cwd);
-  };
+    return validateCwd(req, cwd)
+  }
   const terminalTransportCapabilities = {
     input: {
-      preferred: 'ws',
-      transports: ['http', 'ws'],
+      preferred: "ws",
+      transports: ["http", "ws"],
       ws: {
         path: TERMINAL_INPUT_WS_PATH,
         v: 2,
-        enc: 'text+json-bin-control',
+        enc: "text+json-bin-control",
       },
     },
     stream: {
-      preferred: 'ws',
-      transports: ['sse', 'ws'],
+      preferred: "ws",
+      transports: ["sse", "ws"],
       ws: {
         path: TERMINAL_INPUT_WS_PATH,
         v: 2,
-        enc: 'text+json-bin-control',
+        enc: "text+json-bin-control",
       },
     },
-  };
+  }
 
-  const killTerminalProcess = (ptyProcess, mode = 'term') => {
-    if (!ptyProcess) return;
+  const killTerminalProcess = (ptyProcess, mode = "term") => {
+    if (!ptyProcess) return
 
     // Best-effort: try killing the process group first so child processes
     // started by shells (e.g. preview dev servers) don't orphan.
-    if (process.platform !== 'win32') {
-      const pid = ptyProcess.pid;
-      if (typeof pid === 'number' && Number.isFinite(pid) && pid > 0) {
+    if (process.platform !== "win32") {
+      const pid = ptyProcess.pid
+      if (typeof pid === "number" && Number.isFinite(pid) && pid > 0) {
         try {
-          process.kill(-pid, mode === 'kill' ? 'SIGKILL' : 'SIGTERM');
-        } catch {
-        }
+          process.kill(-pid, mode === "kill" ? "SIGKILL" : "SIGTERM")
+        } catch {}
       }
     }
 
     try {
       // node-pty accepts an optional signal string.
-      ptyProcess.kill(mode === 'kill' ? 'SIGKILL' : undefined);
-    } catch {
-    }
-  };
+      ptyProcess.kill(mode === "kill" ? "SIGKILL" : undefined)
+    } catch {}
+  }
 
   const sendTerminalInputWsControl = (socket, payload) => {
     if (!socket || socket.readyState !== 1) {
-      return;
+      return
     }
 
     try {
-      socket.send(createTerminalInputWsControlFrame(payload), { binary: true });
-    } catch {
-    }
-  };
+      socket.send(createTerminalInputWsControlFrame(payload), { binary: true })
+    } catch {}
+  }
 
   const sendTerminalOutputWsData = (socket, sessionId, replayChunk, data = replayChunk?.data) => {
     if (!socket || socket.readyState !== 1 || !replayChunk) {
-      return false;
+      return false
     }
 
     try {
-      socket.send(createTerminalInputWsControlFrame({ t: 'd', s: sessionId, i: replayChunk.id, d: data }), { binary: true });
-      return true;
+      socket.send(createTerminalInputWsControlFrame({ t: "d", s: sessionId, i: replayChunk.id, d: data }), {
+        binary: true,
+      })
+      return true
     } catch {
-      return false;
+      return false
     }
-  };
+  }
 
   let terminalInputWsServer = new WebSocketServer({
     noServer: true,
     maxPayload: TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
-  });
+  })
 
-  terminalInputWsServer.on('connection', (socket) => {
+  terminalInputWsServer.on("connection", (socket) => {
     const connectionState = {
       socket,
       boundSessionId: null,
@@ -251,286 +250,286 @@ export function createTerminalRuntime({
       rebindTimestamps: [],
       replayCursorBySession: new Map(),
       lastActivityAt: Date.now(),
-    };
+    }
 
-    terminalWsConnections.add(connectionState);
+    terminalWsConnections.add(connectionState)
 
-    sendTerminalInputWsControl(socket, { t: 'ok', v: 2 });
+    sendTerminalInputWsControl(socket, { t: "ok", v: 2 })
 
     const heartbeatInterval = setInterval(() => {
       if (socket.readyState !== 1) {
-        return;
+        return
       }
 
       try {
-        socket.ping();
-      } catch {
-      }
-    }, TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS);
+        socket.ping()
+      } catch {}
+    }, TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS)
 
-    socket.on('pong', () => {
-      connectionState.lastActivityAt = Date.now();
-    });
+    socket.on("pong", () => {
+      connectionState.lastActivityAt = Date.now()
+    })
 
-    socket.on('message', (message, isBinary) => {
-      connectionState.lastActivityAt = Date.now();
+    socket.on("message", (message, isBinary) => {
+      connectionState.lastActivityAt = Date.now()
 
       if (isBinary) {
-        const controlMessage = readTerminalInputWsControlFrame(message);
-        if (!controlMessage || typeof controlMessage.t !== 'string') {
-          connectionState.invalidFrames += 1;
+        const controlMessage = readTerminalInputWsControlFrame(message)
+        if (!controlMessage || typeof controlMessage.t !== "string") {
+          connectionState.invalidFrames += 1
           sendTerminalInputWsControl(socket, {
-            t: 'e',
-            c: 'BAD_FRAME',
+            t: "e",
+            c: "BAD_FRAME",
             f: connectionState.invalidFrames >= 10,
-          });
+          })
           if (connectionState.invalidFrames >= 10) {
-            socket.close(1008, 'protocol violation');
+            socket.close(1008, "protocol violation")
           }
-          return;
+          return
         }
 
-        if (controlMessage.t === 'p') {
-          sendTerminalInputWsControl(socket, { t: 'po', v: 2 });
-          return;
+        if (controlMessage.t === "p") {
+          sendTerminalInputWsControl(socket, { t: "po", v: 2 })
+          return
         }
 
-        if (controlMessage.t !== 'b' || typeof controlMessage.s !== 'string') {
-          connectionState.invalidFrames += 1;
+        if (controlMessage.t !== "b" || typeof controlMessage.s !== "string") {
+          connectionState.invalidFrames += 1
           sendTerminalInputWsControl(socket, {
-            t: 'e',
-            c: 'BAD_FRAME',
+            t: "e",
+            c: "BAD_FRAME",
             f: connectionState.invalidFrames >= 10,
-          });
+          })
           if (connectionState.invalidFrames >= 10) {
-            socket.close(1008, 'protocol violation');
+            socket.close(1008, "protocol violation")
           }
-          return;
+          return
         }
 
-        const now = Date.now();
+        const now = Date.now()
         connectionState.rebindTimestamps = pruneRebindTimestamps(
           connectionState.rebindTimestamps,
           now,
-          TERMINAL_INPUT_WS_REBIND_WINDOW_MS
-        );
+          TERMINAL_INPUT_WS_REBIND_WINDOW_MS,
+        )
 
         if (isRebindRateLimited(connectionState.rebindTimestamps, TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW)) {
-          sendTerminalInputWsControl(socket, { t: 'e', c: 'RATE_LIMIT', f: false });
-          return;
+          sendTerminalInputWsControl(socket, { t: "e", c: "RATE_LIMIT", f: false })
+          return
         }
 
-        const nextSessionId = controlMessage.s.trim();
-        const targetSession = terminalSessions.get(nextSessionId);
+        const nextSessionId = controlMessage.s.trim()
+        const targetSession = terminalSessions.get(nextSessionId)
         if (!targetSession) {
-          connectionState.boundSessionId = null;
-          sendTerminalInputWsControl(socket, { t: 'e', c: 'SESSION_NOT_FOUND', f: false });
-          return;
+          connectionState.boundSessionId = null
+          sendTerminalInputWsControl(socket, { t: "e", c: "SESSION_NOT_FOUND", f: false })
+          return
         }
 
         const replaySinceRaw =
-          typeof controlMessage.r === 'number' && Number.isFinite(controlMessage.r)
+          typeof controlMessage.r === "number" && Number.isFinite(controlMessage.r)
             ? Math.max(0, Math.trunc(controlMessage.r))
-            : 0;
-        const rememberedReplayCursor = connectionState.replayCursorBySession.get(nextSessionId) ?? 0;
-        const replaySince = Math.max(replaySinceRaw, rememberedReplayCursor);
+            : 0
+        const rememberedReplayCursor = connectionState.replayCursorBySession.get(nextSessionId) ?? 0
+        const replaySince = Math.max(replaySinceRaw, rememberedReplayCursor)
 
-        connectionState.rebindTimestamps.push(now);
-        connectionState.boundSessionId = nextSessionId;
+        connectionState.rebindTimestamps.push(now)
+        connectionState.boundSessionId = nextSessionId
         sendTerminalInputWsControl(socket, {
-          t: 'bok',
+          t: "bok",
           v: 2,
           s: nextSessionId,
           runtime: terminalRuntimeName,
-          ptyBackend: targetSession.ptyBackend || 'unknown',
-        });
+          ptyBackend: targetSession.ptyBackend || "unknown",
+        })
 
-        const replayChunks = listTerminalOutputReplayChunksSince(targetSession.outputReplayBuffer, replaySince);
+        const replayChunks = listTerminalOutputReplayChunksSince(targetSession.outputReplayBuffer, replaySince)
         for (const replayChunk of replayChunks) {
           if (sendTerminalOutputWsData(socket, nextSessionId, replayChunk)) {
-            connectionState.replayCursorBySession.set(nextSessionId, replayChunk.id);
-            continue;
+            connectionState.replayCursorBySession.set(nextSessionId, replayChunk.id)
+            continue
           }
-          break;
+          break
         }
-        return;
+        return
       }
 
-      const payload = normalizeTerminalInputWsMessageToText(message);
+      const payload = normalizeTerminalInputWsMessageToText(message)
       if (payload.length === 0) {
-        return;
+        return
       }
 
       if (!connectionState.boundSessionId) {
-        sendTerminalInputWsControl(socket, { t: 'e', c: 'NOT_BOUND', f: false });
-        return;
+        sendTerminalInputWsControl(socket, { t: "e", c: "NOT_BOUND", f: false })
+        return
       }
 
-      const session = terminalSessions.get(connectionState.boundSessionId);
+      const session = terminalSessions.get(connectionState.boundSessionId)
       if (!session) {
-        connectionState.boundSessionId = null;
-        sendTerminalInputWsControl(socket, { t: 'e', c: 'SESSION_NOT_FOUND', f: false });
-        return;
+        connectionState.boundSessionId = null
+        sendTerminalInputWsControl(socket, { t: "e", c: "SESSION_NOT_FOUND", f: false })
+        return
       }
 
       try {
-        session.ptyProcess.write(payload);
-        session.lastActivity = Date.now();
+        session.ptyProcess.write(payload)
+        session.lastActivity = Date.now()
       } catch {
-        sendTerminalInputWsControl(socket, { t: 'e', c: 'WRITE_FAIL', f: false });
+        sendTerminalInputWsControl(socket, { t: "e", c: "WRITE_FAIL", f: false })
       }
-    });
+    })
 
-    socket.on('close', () => {
-      clearInterval(heartbeatInterval);
-      connectionState.boundSessionId = null;
-      terminalWsConnections.delete(connectionState);
-    });
+    socket.on("close", () => {
+      clearInterval(heartbeatInterval)
+      connectionState.boundSessionId = null
+      terminalWsConnections.delete(connectionState)
+    })
 
-    socket.on('error', (error) => {
-      void error;
-    });
-  });
+    socket.on("error", (error) => {
+      void error
+    })
+  })
 
   const upgradeHandler = (req, socket, head) => {
-    const pathname = parseRequestPathname(req.url);
+    const pathname = parseRequestPathname(req.url)
     if (pathname !== TERMINAL_INPUT_WS_PATH) {
-      return;
+      return
     }
 
     const handleUpgrade = async () => {
       try {
         if (uiAuthController?.enabled) {
           // Must be awaited: this call performs async token verification.
-          const sessionToken = await uiAuthController?.ensureSessionToken?.(req, null);
+          const sessionToken = await uiAuthController?.ensureSessionToken?.(req, null)
           if (!sessionToken) {
-            rejectWebSocketUpgrade(socket, 401, 'UI authentication required');
-            return;
+            rejectWebSocketUpgrade(socket, 401, "UI authentication required")
+            return
           }
 
-          const originAllowed = await isRequestOriginAllowed(req);
+          const originAllowed = await isRequestOriginAllowed(req)
           if (!originAllowed) {
-            rejectWebSocketUpgrade(socket, 403, 'Invalid origin');
-            return;
+            rejectWebSocketUpgrade(socket, 403, "Invalid origin")
+            return
           }
         }
 
         if (!terminalInputWsServer) {
-          rejectWebSocketUpgrade(socket, 500, 'Terminal WebSocket unavailable');
-          return;
+          rejectWebSocketUpgrade(socket, 500, "Terminal WebSocket unavailable")
+          return
         }
 
         terminalInputWsServer.handleUpgrade(req, socket, head, (ws) => {
-          terminalInputWsServer.emit('connection', ws, req);
-        });
+          terminalInputWsServer.emit("connection", ws, req)
+        })
       } catch {
-        rejectWebSocketUpgrade(socket, 500, 'Upgrade failed');
+        rejectWebSocketUpgrade(socket, 500, "Upgrade failed")
       }
-    };
+    }
 
-    void handleUpgrade();
-  };
+    void handleUpgrade()
+  }
 
-  server.on('upgrade', upgradeHandler);
+  server.on("upgrade", upgradeHandler)
 
   const wireTerminalSession = (sessionId, session) => {
     session.ptyProcess.onData((data) => {
-      session.lastActivity = Date.now();
+      session.lastActivity = Date.now()
       const replayChunk = appendTerminalOutputReplayChunk(
         session.outputReplayBuffer,
         data,
-        TERMINAL_OUTPUT_REPLAY_MAX_BYTES
-      );
+        TERMINAL_OUTPUT_REPLAY_MAX_BYTES,
+      )
 
       for (const wsConnection of terminalWsConnections) {
         if (wsConnection.boundSessionId !== sessionId) {
-          continue;
+          continue
         }
 
         if (!wsConnection.socket || wsConnection.socket.readyState !== 1) {
-          continue;
+          continue
         }
 
         if (sendTerminalOutputWsData(wsConnection.socket, sessionId, replayChunk, data)) {
-          wsConnection.replayCursorBySession.set(sessionId, replayChunk.id);
+          wsConnection.replayCursorBySession.set(sessionId, replayChunk.id)
         }
       }
-    });
+    })
 
     session.ptyProcess.onExit(({ exitCode, signal }) => {
-      console.log(`Terminal session ${sessionId} exited with code ${exitCode}, signal ${signal}`);
+      console.log(`Terminal session ${sessionId} exited with code ${exitCode}, signal ${signal}`)
       for (const wsConnection of terminalWsConnections) {
         if (wsConnection.boundSessionId !== sessionId) {
-          continue;
+          continue
         }
 
-        wsConnection.boundSessionId = null;
-        wsConnection.replayCursorBySession.delete(sessionId);
+        wsConnection.boundSessionId = null
+        wsConnection.replayCursorBySession.delete(sessionId)
         sendTerminalInputWsControl(wsConnection.socket, {
-          t: 'x',
+          t: "x",
           v: 2,
           s: sessionId,
           exitCode,
           signal,
-        });
+        })
       }
 
-      terminalSessions.delete(sessionId);
-    });
-  };
+      terminalSessions.delete(sessionId)
+    })
+  }
 
-  const idleSweepInterval = setInterval(() => {
-    const now = Date.now();
-    for (const [sessionId, session] of terminalSessions.entries()) {
-      if (now - session.lastActivity > TERMINAL_IDLE_TIMEOUT) {
-        console.log(`Cleaning up idle terminal session: ${sessionId}`);
-        try {
-          killTerminalProcess(session.ptyProcess, 'term');
-        } catch (error) {
-
+  const idleSweepInterval = setInterval(
+    () => {
+      const now = Date.now()
+      for (const [sessionId, session] of terminalSessions.entries()) {
+        if (now - session.lastActivity > TERMINAL_IDLE_TIMEOUT) {
+          console.log(`Cleaning up idle terminal session: ${sessionId}`)
+          try {
+            killTerminalProcess(session.ptyProcess, "term")
+          } catch (error) {}
+          terminalSessions.delete(sessionId)
         }
-        terminalSessions.delete(sessionId);
       }
-    }
-  }, 5 * 60 * 1000);
+    },
+    5 * 60 * 1000,
+  )
 
-  app.post('/api/terminal/create', async (req, res) => {
+  app.post("/api/terminal/create", async (req, res) => {
     try {
       if (terminalSessions.size >= MAX_TERMINAL_SESSIONS) {
-        return res.status(429).json({ error: 'Maximum terminal sessions reached' });
+        return res.status(429).json({ error: "Maximum terminal sessions reached" })
       }
 
-      let { cwd, cols, rows } = req.body;
+      let { cwd, cols, rows } = req.body
       if (!cwd) {
-        return res.status(400).json({ error: 'cwd is required' });
+        return res.status(400).json({ error: "cwd is required" })
       }
 
       try {
-        const allowed = await resolveAllowedCwd(req, cwd);
+        const allowed = await resolveAllowedCwd(req, cwd)
         if (!allowed.ok) {
-          return res.status(403).json({ error: allowed.error || 'Terminal cwd is not approved' });
+          return res.status(403).json({ error: allowed.error || "Terminal cwd is not approved" })
         }
-        cwd = allowed.cwd || cwd;
-        const stats = await fs.promises.stat(cwd);
+        cwd = allowed.cwd || cwd
+        const stats = await fs.promises.stat(cwd)
         if (!stats.isDirectory()) {
-          return res.status(400).json({ error: 'Invalid working directory' });
+          return res.status(400).json({ error: "Invalid working directory" })
         }
       } catch {
-        return res.status(400).json({ error: 'Invalid working directory' });
+        return res.status(400).json({ error: "Invalid working directory" })
       }
 
-      const sessionId = crypto.randomBytes(24).toString('hex');
+      const sessionId = crypto.randomBytes(24).toString("hex")
 
-      const envPath = buildAugmentedPath();
-      const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath });
+      const envPath = buildAugmentedPath()
+      const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath })
 
-      const pty = await getPtyProvider();
+      const pty = await getPtyProvider()
       const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
         cols,
         rows,
         cwd,
         env: resolvedEnv,
-      });
+      })
 
       const session = {
         ptyProcess,
@@ -539,247 +538,243 @@ export function createTerminalRuntime({
         lastActivity: Date.now(),
         clients: new Set(),
         outputReplayBuffer: createTerminalOutputReplayBuffer(),
-      };
+      }
 
-      terminalSessions.set(sessionId, session);
-      wireTerminalSession(sessionId, session);
+      terminalSessions.set(sessionId, session)
+      wireTerminalSession(sessionId, session)
 
-      console.log(`Created terminal session: ${sessionId} in ${cwd} using shell ${shell}`);
-      res.json({ sessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalTransportCapabilities });
+      console.log(`Created terminal session: ${sessionId} in ${cwd} using shell ${shell}`)
+      res.json({ sessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalTransportCapabilities })
     } catch (error) {
-      console.error('Failed to create terminal session:', error);
-      res.status(500).json({ error: error.message || 'Failed to create terminal session' });
+      console.error("Failed to create terminal session:", error)
+      res.status(500).json({ error: error.message || "Failed to create terminal session" })
     }
-  });
+  })
 
-  app.get('/api/terminal/:sessionId/stream', (req, res) => {
-    const { sessionId } = req.params;
-    const session = terminalSessions.get(sessionId);
+  app.get("/api/terminal/:sessionId/stream", (req, res) => {
+    const { sessionId } = req.params
+    const session = terminalSessions.get(sessionId)
 
     if (!session) {
-      return res.status(404).json({ error: 'Terminal session not found' });
+      return res.status(404).json({ error: "Terminal session not found" })
     }
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader("Content-Type", "text/event-stream")
+    res.setHeader("Cache-Control", "no-cache")
+    res.setHeader("Connection", "keep-alive")
+    res.setHeader("X-Accel-Buffering", "no")
 
-    const clientId = crypto.randomBytes(12).toString('hex');
-    session.clients.add(clientId);
-    session.lastActivity = Date.now();
+    const clientId = crypto.randomBytes(12).toString("hex")
+    session.clients.add(clientId)
+    session.lastActivity = Date.now()
 
-    const ptyBackend = session.ptyBackend || 'unknown';
-    res.write(`data: ${JSON.stringify({ type: 'connected', runtime: terminalRuntimeName, ptyBackend })}\n\n`);
+    const ptyBackend = session.ptyBackend || "unknown"
+    res.write(`data: ${JSON.stringify({ type: "connected", runtime: terminalRuntimeName, ptyBackend })}\n\n`)
 
     const heartbeatInterval = setInterval(() => {
       try {
-
-        res.write(': heartbeat\n\n');
+        res.write(": heartbeat\n\n")
       } catch (error) {
-        console.error(`Heartbeat failed for client ${clientId}:`, error);
+        console.error(`Heartbeat failed for client ${clientId}:`, error)
         // Fully tear down, not just the interval: a write failure here may not
         // be accompanied by a req 'close' event, so clearing only the interval
         // would leak the pty onData/onExit disposables and the client entry.
         // cleanup() is idempotent and also clears this interval.
-        cleanup();
+        cleanup()
       }
-    }, 15000);
+    }, 15000)
 
-    let cleanedUp = false;
-    let paused = false;
-    let dataDisposable = null;
-    let exitDisposable = null;
+    let cleanedUp = false
+    let paused = false
+    let dataDisposable = null
+    let exitDisposable = null
     const cleanup = () => {
       if (cleanedUp) {
-        return;
+        return
       }
 
-      cleanedUp = true;
-      clearInterval(heartbeatInterval);
-      session.clients.delete(clientId);
+      cleanedUp = true
+      clearInterval(heartbeatInterval)
+      session.clients.delete(clientId)
 
       // If this client paused the shared pty for backpressure and then
       // disconnected before the 'drain' fired, the resume would never run and
       // the pty would stay paused forever — freezing output for every other
       // client and the replay buffer. Resume it as part of teardown.
-      if (paused && session.ptyProcess && typeof session.ptyProcess.resume === 'function') {
+      if (paused && session.ptyProcess && typeof session.ptyProcess.resume === "function") {
         try {
-          session.ptyProcess.resume();
+          session.ptyProcess.resume()
         } catch (error) {
-          console.error(`Failed to resume pty on cleanup for client ${clientId}:`, error);
+          console.error(`Failed to resume pty on cleanup for client ${clientId}:`, error)
         }
-        paused = false;
+        paused = false
       }
 
-      if (dataDisposable && typeof dataDisposable.dispose === 'function') {
-        dataDisposable.dispose();
+      if (dataDisposable && typeof dataDisposable.dispose === "function") {
+        dataDisposable.dispose()
       }
-      if (exitDisposable && typeof exitDisposable.dispose === 'function') {
-        exitDisposable.dispose();
+      if (exitDisposable && typeof exitDisposable.dispose === "function") {
+        exitDisposable.dispose()
       }
 
       try {
-        res.end();
-      } catch (error) {
+        res.end()
+      } catch (error) {}
 
-      }
-
-      console.log(`Client ${clientId} disconnected from terminal session ${sessionId}`);
-    };
+      console.log(`Client ${clientId} disconnected from terminal session ${sessionId}`)
+    }
 
     const dataHandler = (data) => {
       try {
-        session.lastActivity = Date.now();
-        const ok = res.write(`data: ${JSON.stringify({ type: 'data', data })}\n\n`);
-        if (!ok && session.ptyProcess && typeof session.ptyProcess.pause === 'function') {
-          session.ptyProcess.pause();
-          paused = true;
-          res.once('drain', () => {
-            paused = false;
-            if (session.ptyProcess && typeof session.ptyProcess.resume === 'function') {
-              session.ptyProcess.resume();
+        session.lastActivity = Date.now()
+        const ok = res.write(`data: ${JSON.stringify({ type: "data", data })}\n\n`)
+        if (!ok && session.ptyProcess && typeof session.ptyProcess.pause === "function") {
+          session.ptyProcess.pause()
+          paused = true
+          res.once("drain", () => {
+            paused = false
+            if (session.ptyProcess && typeof session.ptyProcess.resume === "function") {
+              session.ptyProcess.resume()
             }
-          });
+          })
         }
       } catch (error) {
-        console.error(`Error sending data to client ${clientId}:`, error);
-        cleanup();
+        console.error(`Error sending data to client ${clientId}:`, error)
+        cleanup()
       }
-    };
+    }
 
     const exitHandler = ({ exitCode, signal }) => {
       try {
-        res.write(`data: ${JSON.stringify({ type: 'exit', exitCode, signal })}\n\n`);
-        res.end();
-      } catch (error) {
-
-      }
-      cleanup();
-    };
-
-    dataDisposable = session.ptyProcess.onData(dataHandler);
-    if (cleanedUp && dataDisposable && typeof dataDisposable.dispose === 'function') {
-      dataDisposable.dispose();
+        res.write(`data: ${JSON.stringify({ type: "exit", exitCode, signal })}\n\n`)
+        res.end()
+      } catch (error) {}
+      cleanup()
     }
 
-    exitDisposable = session.ptyProcess.onExit(exitHandler);
-    if (cleanedUp && exitDisposable && typeof exitDisposable.dispose === 'function') {
-      exitDisposable.dispose();
+    dataDisposable = session.ptyProcess.onData(dataHandler)
+    if (cleanedUp && dataDisposable && typeof dataDisposable.dispose === "function") {
+      dataDisposable.dispose()
     }
 
-    req.on('close', cleanup);
-    req.on('error', cleanup);
+    exitDisposable = session.ptyProcess.onExit(exitHandler)
+    if (cleanedUp && exitDisposable && typeof exitDisposable.dispose === "function") {
+      exitDisposable.dispose()
+    }
 
-    console.log(`Terminal connected: session=${sessionId} client=${clientId} runtime=${terminalRuntimeName} pty=${ptyBackend}`);
-  });
+    req.on("close", cleanup)
+    req.on("error", cleanup)
 
-  app.post('/api/terminal/:sessionId/input', express.text({ type: '*/*' }), (req, res) => {
-    const { sessionId } = req.params;
-    const session = terminalSessions.get(sessionId);
+    console.log(
+      `Terminal connected: session=${sessionId} client=${clientId} runtime=${terminalRuntimeName} pty=${ptyBackend}`,
+    )
+  })
+
+  app.post("/api/terminal/:sessionId/input", express.text({ type: "*/*" }), (req, res) => {
+    const { sessionId } = req.params
+    const session = terminalSessions.get(sessionId)
 
     if (!session) {
-      return res.status(404).json({ error: 'Terminal session not found' });
+      return res.status(404).json({ error: "Terminal session not found" })
     }
 
-    const data = typeof req.body === 'string' ? req.body : '';
+    const data = typeof req.body === "string" ? req.body : ""
 
     try {
-      session.ptyProcess.write(data);
-      session.lastActivity = Date.now();
-      res.json({ success: true });
+      session.ptyProcess.write(data)
+      session.lastActivity = Date.now()
+      res.json({ success: true })
     } catch (error) {
-      console.error('Failed to write to terminal:', error);
-      res.status(500).json({ error: error.message || 'Failed to write to terminal' });
+      console.error("Failed to write to terminal:", error)
+      res.status(500).json({ error: error.message || "Failed to write to terminal" })
     }
-  });
+  })
 
-  app.post('/api/terminal/:sessionId/resize', (req, res) => {
-    const { sessionId } = req.params;
-    const session = terminalSessions.get(sessionId);
+  app.post("/api/terminal/:sessionId/resize", (req, res) => {
+    const { sessionId } = req.params
+    const session = terminalSessions.get(sessionId)
 
     if (!session) {
-      return res.status(404).json({ error: 'Terminal session not found' });
+      return res.status(404).json({ error: "Terminal session not found" })
     }
 
-    const { cols, rows } = req.body;
+    const { cols, rows } = req.body
     if (!cols || !rows) {
-      return res.status(400).json({ error: 'cols and rows are required' });
+      return res.status(400).json({ error: "cols and rows are required" })
     }
 
     try {
-      session.ptyProcess.resize(cols, rows);
-      session.lastActivity = Date.now();
-      res.json({ success: true, cols, rows });
+      session.ptyProcess.resize(cols, rows)
+      session.lastActivity = Date.now()
+      res.json({ success: true, cols, rows })
     } catch (error) {
-      console.error('Failed to resize terminal:', error);
-      res.status(500).json({ error: error.message || 'Failed to resize terminal' });
+      console.error("Failed to resize terminal:", error)
+      res.status(500).json({ error: error.message || "Failed to resize terminal" })
     }
-  });
+  })
 
-  app.delete('/api/terminal/:sessionId', (req, res) => {
-    const { sessionId } = req.params;
-    const session = terminalSessions.get(sessionId);
+  app.delete("/api/terminal/:sessionId", (req, res) => {
+    const { sessionId } = req.params
+    const session = terminalSessions.get(sessionId)
 
     if (!session) {
-      return res.status(404).json({ error: 'Terminal session not found' });
+      return res.status(404).json({ error: "Terminal session not found" })
     }
 
     try {
-      killTerminalProcess(session.ptyProcess, 'term');
-      terminalSessions.delete(sessionId);
-      console.log(`Closed terminal session: ${sessionId}`);
-      res.json({ success: true });
+      killTerminalProcess(session.ptyProcess, "term")
+      terminalSessions.delete(sessionId)
+      console.log(`Closed terminal session: ${sessionId}`)
+      res.json({ success: true })
     } catch (error) {
-      console.error('Failed to close terminal:', error);
-      res.status(500).json({ error: error.message || 'Failed to close terminal' });
+      console.error("Failed to close terminal:", error)
+      res.status(500).json({ error: error.message || "Failed to close terminal" })
     }
-  });
+  })
 
-  app.post('/api/terminal/:sessionId/restart', async (req, res) => {
-    const { sessionId } = req.params;
-    let { cwd, cols, rows } = req.body;
+  app.post("/api/terminal/:sessionId/restart", async (req, res) => {
+    const { sessionId } = req.params
+    let { cwd, cols, rows } = req.body
 
     if (!cwd) {
-      return res.status(400).json({ error: 'cwd is required' });
+      return res.status(400).json({ error: "cwd is required" })
     }
 
-    const existingSession = terminalSessions.get(sessionId);
+    const existingSession = terminalSessions.get(sessionId)
     if (existingSession) {
       try {
-        killTerminalProcess(existingSession.ptyProcess, 'term');
-      } catch (error) {
-      }
-      terminalSessions.delete(sessionId);
+        killTerminalProcess(existingSession.ptyProcess, "term")
+      } catch (error) {}
+      terminalSessions.delete(sessionId)
     }
 
     try {
       try {
-        const allowed = await resolveAllowedCwd(req, cwd);
+        const allowed = await resolveAllowedCwd(req, cwd)
         if (!allowed.ok) {
-          return res.status(403).json({ error: allowed.error || 'Terminal cwd is not approved' });
+          return res.status(403).json({ error: allowed.error || "Terminal cwd is not approved" })
         }
-        cwd = allowed.cwd || cwd;
-        const stats = await fs.promises.stat(cwd);
+        cwd = allowed.cwd || cwd
+        const stats = await fs.promises.stat(cwd)
         if (!stats.isDirectory()) {
-          return res.status(400).json({ error: 'Invalid working directory: not a directory' });
+          return res.status(400).json({ error: "Invalid working directory: not a directory" })
         }
       } catch (error) {
-        return res.status(400).json({ error: 'Invalid working directory: not accessible' });
+        return res.status(400).json({ error: "Invalid working directory: not accessible" })
       }
 
-      const newSessionId = crypto.randomBytes(24).toString('hex');
+      const newSessionId = crypto.randomBytes(24).toString("hex")
 
-      const envPath = buildAugmentedPath();
-      const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath });
+      const envPath = buildAugmentedPath()
+      const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath })
 
-      const pty = await getPtyProvider();
+      const pty = await getPtyProvider()
       const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
         cols,
         rows,
         cwd,
         env: resolvedEnv,
-      });
+      })
 
       const session = {
         ptyProcess,
@@ -788,94 +783,94 @@ export function createTerminalRuntime({
         lastActivity: Date.now(),
         clients: new Set(),
         outputReplayBuffer: createTerminalOutputReplayBuffer(),
-      };
+      }
 
-      terminalSessions.set(newSessionId, session);
-      wireTerminalSession(newSessionId, session);
+      terminalSessions.set(newSessionId, session)
+      wireTerminalSession(newSessionId, session)
 
-      console.log(`Restarted terminal session: ${sessionId} -> ${newSessionId} in ${cwd} using shell ${shell}`);
-      res.json({ sessionId: newSessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalTransportCapabilities });
+      console.log(`Restarted terminal session: ${sessionId} -> ${newSessionId} in ${cwd} using shell ${shell}`)
+      res.json({
+        sessionId: newSessionId,
+        cols: cols || 80,
+        rows: rows || 24,
+        capabilities: terminalTransportCapabilities,
+      })
     } catch (error) {
-      console.error('Failed to restart terminal session:', error);
-      res.status(500).json({ error: error.message || 'Failed to restart terminal session' });
+      console.error("Failed to restart terminal session:", error)
+      res.status(500).json({ error: error.message || "Failed to restart terminal session" })
     }
-  });
+  })
 
-  app.post('/api/terminal/force-kill', (req, res) => {
-    const { sessionId, cwd } = req.body;
-    let killedCount = 0;
+  app.post("/api/terminal/force-kill", (req, res) => {
+    const { sessionId, cwd } = req.body
+    let killedCount = 0
 
     if (sessionId) {
-      const session = terminalSessions.get(sessionId);
+      const session = terminalSessions.get(sessionId)
       if (session) {
         try {
-          killTerminalProcess(session.ptyProcess, 'kill');
-        } catch (error) {
-        }
-        terminalSessions.delete(sessionId);
-        killedCount++;
+          killTerminalProcess(session.ptyProcess, "kill")
+        } catch (error) {}
+        terminalSessions.delete(sessionId)
+        killedCount++
       }
     } else if (cwd) {
       for (const [id, session] of terminalSessions) {
         if (session.cwd === cwd) {
           try {
-            killTerminalProcess(session.ptyProcess, 'kill');
-          } catch (error) {
-          }
-          terminalSessions.delete(id);
-          killedCount++;
+            killTerminalProcess(session.ptyProcess, "kill")
+          } catch (error) {}
+          terminalSessions.delete(id)
+          killedCount++
         }
       }
     } else {
       for (const [id, session] of terminalSessions) {
         try {
-          killTerminalProcess(session.ptyProcess, 'kill');
-        } catch (error) {
-        }
-        terminalSessions.delete(id);
-        killedCount++;
+          killTerminalProcess(session.ptyProcess, "kill")
+        } catch (error) {}
+        terminalSessions.delete(id)
+        killedCount++
       }
     }
 
-    console.log(`Force killed ${killedCount} terminal session(s)`);
-    res.json({ success: true, killedCount });
-  });
+    console.log(`Force killed ${killedCount} terminal session(s)`)
+    res.json({ success: true, killedCount })
+  })
 
   const shutdown = async () => {
-    server.off('upgrade', upgradeHandler);
+    server.off("upgrade", upgradeHandler)
 
     if (idleSweepInterval) {
-      clearInterval(idleSweepInterval);
+      clearInterval(idleSweepInterval)
     }
 
     for (const [sessionId, session] of terminalSessions.entries()) {
       try {
-        killTerminalProcess(session.ptyProcess, 'kill');
-      } catch {
-      }
-      terminalSessions.delete(sessionId);
+        killTerminalProcess(session.ptyProcess, "kill")
+      } catch {}
+      terminalSessions.delete(sessionId)
     }
 
     if (!terminalInputWsServer) {
-      return;
+      return
     }
 
     try {
       for (const client of terminalInputWsServer.clients) {
         try {
-          client.terminate();
-        } catch {
-        }
+          client.terminate()
+        } catch {}
       }
 
       await new Promise((resolve) => {
-        terminalInputWsServer.close(() => resolve());
-      });
+        terminalInputWsServer.close(() => resolve())
+      })
     } catch {
     } finally {
-      terminalInputWsServer = null;
+      terminalInputWsServer = null
     }
-  };
+  }
 
-  return { shutdown };
+  return { shutdown }
 }

@@ -17,15 +17,10 @@
  * - `/?tab=diff&file=src/main.ts` - Open diff view with file
  */
 
-export type { RouteState } from './types';
-export { VALID_TABS, VALID_SETTINGS_SECTIONS, ROUTE_PARAMS } from './types';
+export type { RouteState } from "./types"
+export { VALID_TABS, VALID_SETTINGS_SECTIONS, ROUTE_PARAMS } from "./types"
 
-export { parseRoute, hasRouteParams } from './parseRoute';
+export { parseRoute, hasRouteParams } from "./parseRoute"
 
-export type { AppRouteState } from './serializeRoute';
-export {
-  serializeRoute,
-  buildURL,
-  routeMatchesURL,
-  updateBrowserURL,
-} from './serializeRoute';
+export type { AppRouteState } from "./serializeRoute"
+export { serializeRoute, buildURL, routeMatchesURL, updateBrowserURL } from "./serializeRoute"

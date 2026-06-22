@@ -88,9 +88,9 @@ describe("session.prompt-tools", () => {
     const inputSchema = z.object({ query: z.string() })
     const cacheKey = `mcp:test-tool:${Date.now()}:${Math.random()}`
     const originalSchema = ProviderTransform.schema
-    schemaSpy = vi.spyOn(ProviderTransform, "schema").mockImplementation((modelArg, schemaArg) =>
-      originalSchema(modelArg, schemaArg),
-    )
+    schemaSpy = vi
+      .spyOn(ProviderTransform, "schema")
+      .mockImplementation((modelArg, schemaArg) => originalSchema(modelArg, schemaArg))
 
     const [first, second] = await Promise.all([
       transformMcpInputSchema({ cacheKey, model, inputSchema }),

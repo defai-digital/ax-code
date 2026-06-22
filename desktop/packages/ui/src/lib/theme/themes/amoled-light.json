@@ -6,12 +6,7 @@
     "author": "AX Code",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "ax-code",
-      "ported",
-      "amoled"
-    ]
+    "tags": ["light", "ax-code", "ported", "amoled"]
   },
   "colors": {
     "primary": {
@@ -379,13 +374,7 @@
       "rowSelected": "#0a0a0a16"
     },
     "charts": {
-      "series": [
-        "#6209fd",
-        "#7fcbfd",
-        "#20e679",
-        "#fbac7c",
-        "#ea1f40"
-      ]
+      "series": ["#6209fd", "#7fcbfd", "#20e679", "#fbac7c", "#ea1f40"]
     },
     "a11y": {
       "focusRing": "#babafa",

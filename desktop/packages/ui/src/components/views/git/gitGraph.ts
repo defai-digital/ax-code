@@ -1,6 +1,6 @@
-import type { GitLogEntry } from '@/lib/api/types';
+import type { GitLogEntry } from "@/lib/api/types"
 
-export type LaneColor = string;
+export type LaneColor = string
 
 /**
  * Describes one visible line/curve in a commit row's SVG.
@@ -15,33 +15,33 @@ export type LaneColor = string;
  *  - 'merge-in'   : bezier from (fromLane-x, 0) to (dot-x, dot-y) — lane converges here
  */
 export interface ConnectorSegment {
-  fromLane: number;
-  toLane: number;
-  color: LaneColor;
-  type: 'passing' | 'commit-lane' | 'top-stub' | 'bottom-stub' | 'branch-out' | 'merge-in';
+  fromLane: number
+  toLane: number
+  color: LaneColor
+  type: "passing" | "commit-lane" | "top-stub" | "bottom-stub" | "branch-out" | "merge-in"
 }
 
 export interface LanedCommit {
-  commit: GitLogEntry;
-  lane: number;
-  color: LaneColor;
+  commit: GitLogEntry
+  lane: number
+  color: LaneColor
   /** All visible line segments in this row's height. */
-  connectors: ConnectorSegment[];
+  connectors: ConnectorSegment[]
 }
 
 const LANE_COLORS: LaneColor[] = [
-  'var(--chart-1)',
-  'var(--chart-2)',
-  'var(--chart-3)',
-  'var(--chart-4)',
-  'var(--chart-5)',
-  'var(--syntax-keyword)',
-  'var(--syntax-string)',
-  'var(--status-info)',
-];
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--syntax-keyword)",
+  "var(--syntax-string)",
+  "var(--status-info)",
+]
 
 export function laneColor(lane: number): LaneColor {
-  return LANE_COLORS[lane % LANE_COLORS.length];
+  return LANE_COLORS[lane % LANE_COLORS.length]
 }
 
 /**
@@ -54,78 +54,78 @@ export function laneColor(lane: number): LaneColor {
  * - Connectors describe ALL visible lines in each row (both above and below the dot)
  */
 export function assignLanes(commits: GitLogEntry[]): LanedCommit[] {
-  if (commits.length === 0) return [];
+  if (commits.length === 0) return []
 
   // activeLanes[i] = hash of the next commit expected on lane i, or null if free
-  const activeLanes: Array<string | null> = [];
+  const activeLanes: Array<string | null> = []
 
-  const result: LanedCommit[] = [];
+  const result: LanedCommit[] = []
 
   for (let i = 0; i < commits.length; i++) {
-    const commit = commits[i];
+    const commit = commits[i]
 
     // Find all lanes waiting for this commit
-    const waitingLanes: number[] = [];
+    const waitingLanes: number[] = []
     for (let li = 0; li < activeLanes.length; li++) {
       if (activeLanes[li] === commit.hash) {
-        waitingLanes.push(li);
+        waitingLanes.push(li)
       }
     }
 
     // Use the first waiting lane as the commit's lane
-    let assignedLane = waitingLanes.length > 0 ? waitingLanes[0] : -1;
+    let assignedLane = waitingLanes.length > 0 ? waitingLanes[0] : -1
     if (assignedLane === -1) {
       // No existing lane claimed this commit; take the first free lane
-      const freeLane = activeLanes.indexOf(null);
+      const freeLane = activeLanes.indexOf(null)
       if (freeLane !== -1) {
-        assignedLane = freeLane;
+        assignedLane = freeLane
       } else {
-        assignedLane = activeLanes.length;
-        activeLanes.push(null);
+        assignedLane = activeLanes.length
+        activeLanes.push(null)
       }
     }
 
     // Mark other waiting lanes as converging here (will emit merge-in connectors)
-    const convergingLanes = waitingLanes.slice(1);
+    const convergingLanes = waitingLanes.slice(1)
 
-    const color = laneColor(assignedLane);
-    const hasIncoming = activeLanes[assignedLane] === commit.hash;
-    const hasParent = commit.parents.length > 0;
+    const color = laneColor(assignedLane)
+    const hasIncoming = activeLanes[assignedLane] === commit.hash
+    const hasParent = commit.parents.length > 0
 
     // Update this commit's lane to point at its first parent
     if (hasParent) {
-      activeLanes[assignedLane] = commit.parents[0];
+      activeLanes[assignedLane] = commit.parents[0]
     } else {
-      activeLanes[assignedLane] = null;
+      activeLanes[assignedLane] = null
     }
 
     // Open new lanes for additional parents (merge commits)
-    const extraParentLanes: number[] = [];
+    const extraParentLanes: number[] = []
     for (let p = 1; p < commit.parents.length; p++) {
-      const parentHash = commit.parents[p];
+      const parentHash = commit.parents[p]
       // Check if another lane is already waiting for this parent
-      const existingLane = activeLanes.indexOf(parentHash);
+      const existingLane = activeLanes.indexOf(parentHash)
       if (existingLane !== -1) {
-        extraParentLanes.push(existingLane);
+        extraParentLanes.push(existingLane)
       } else {
-        const freeLane = activeLanes.indexOf(null);
-        const newLane = freeLane !== -1 ? freeLane : activeLanes.length;
-        activeLanes[newLane] = parentHash;
-        if (newLane === activeLanes.length) activeLanes.push(parentHash);
-        extraParentLanes.push(newLane);
+        const freeLane = activeLanes.indexOf(null)
+        const newLane = freeLane !== -1 ? freeLane : activeLanes.length
+        activeLanes[newLane] = parentHash
+        if (newLane === activeLanes.length) activeLanes.push(parentHash)
+        extraParentLanes.push(newLane)
       }
     }
 
     // Build connectors: ALL visible line segments in this row
-    const connectors: ConnectorSegment[] = [];
+    const connectors: ConnectorSegment[] = []
 
     // This commit's own lane segment
     if (hasIncoming && hasParent) {
-      connectors.push({ fromLane: assignedLane, toLane: assignedLane, color, type: 'commit-lane' });
+      connectors.push({ fromLane: assignedLane, toLane: assignedLane, color, type: "commit-lane" })
     } else if (hasIncoming && !hasParent) {
-      connectors.push({ fromLane: assignedLane, toLane: assignedLane, color, type: 'top-stub' });
+      connectors.push({ fromLane: assignedLane, toLane: assignedLane, color, type: "top-stub" })
     } else if (!hasIncoming && hasParent) {
-      connectors.push({ fromLane: assignedLane, toLane: assignedLane, color, type: 'bottom-stub' });
+      connectors.push({ fromLane: assignedLane, toLane: assignedLane, color, type: "bottom-stub" })
     }
     // else: orphan with no parent and no child — just the dot, no lines
 
@@ -135,10 +135,10 @@ export function assignLanes(commits: GitLogEntry[]): LanedCommit[] {
         fromLane: convergingLane,
         toLane: assignedLane,
         color: laneColor(convergingLane),
-        type: 'merge-in',
-      });
+        type: "merge-in",
+      })
       // Clear the converging lane
-      activeLanes[convergingLane] = null;
+      activeLanes[convergingLane] = null
     }
 
     // Branch-out segments for merge commit's extra parents
@@ -147,25 +147,25 @@ export function assignLanes(commits: GitLogEntry[]): LanedCommit[] {
         fromLane: assignedLane,
         toLane: extraLane,
         color: laneColor(extraLane),
-        type: 'branch-out',
-      });
+        type: "branch-out",
+      })
     }
 
     // Passing-through lanes (active but not this commit's lane or extra parent lanes)
     for (let lane = 0; lane < activeLanes.length; lane++) {
-      if (activeLanes[lane] === null) continue;
-      if (lane === assignedLane) continue;
-      if (extraParentLanes.includes(lane)) continue;
+      if (activeLanes[lane] === null) continue
+      if (lane === assignedLane) continue
+      if (extraParentLanes.includes(lane)) continue
       connectors.push({
         fromLane: lane,
         toLane: lane,
         color: laneColor(lane),
-        type: 'passing',
-      });
+        type: "passing",
+      })
     }
 
-    result.push({ commit, lane: assignedLane, color, connectors });
+    result.push({ commit, lane: assignedLane, color, connectors })
   }
 
-  return result;
+  return result
 }

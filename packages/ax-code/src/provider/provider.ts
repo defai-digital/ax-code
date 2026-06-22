@@ -1124,7 +1124,7 @@ export namespace Provider {
         priority = ["glm-5-turbo", "glm-5"]
       }
       if (providerID === ProviderID.xai) {
-        priority = ["grok-4-fast", "grok-4"]
+        priority = ["grok-4.3", "grok-code-fast-1", "grok-build-0.1"]
       }
       if (providerID.startsWith("alibaba")) {
         priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]
@@ -1136,7 +1136,7 @@ export namespace Provider {
         priority = ["gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini", "gpt-4o-mini"]
       }
       if (providerID === "anthropic" || providerID.startsWith("anthropic-")) {
-        priority = ["claude-haiku-4-5", "haiku-4", "claude-3-5-haiku"]
+        priority = ["claude-haiku-4-5", "claude-3-5-haiku"]
       }
       for (const item of priority) {
         for (const model of Object.keys(provider.models)) {

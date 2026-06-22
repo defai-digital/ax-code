@@ -1,652 +1,674 @@
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
-import { axCodeClient } from '@/lib/ax-code/client';
-import type { ProjectEntry } from '@/lib/api/types';
-import type { DesktopSettings } from '@/lib/desktop';
-import { updateDesktopSettings } from '@/lib/persistence';
-import { createProjectIdFromPath } from '@/lib/projectId';
-import { getSafeStorage } from './utils/safeStorage';
-import { useDirectoryStore } from './useDirectoryStore';
-import { streamDebugEnabled } from '@/stores/utils/streamDebug';
-import { PROJECT_COLORS } from '@/lib/projectMeta';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { API_ENDPOINTS, replacePathParams } from '@/lib/http';
+import { create } from "zustand"
+import { devtools } from "zustand/middleware"
+import { axCodeClient } from "@/lib/ax-code/client"
+import type { ProjectEntry } from "@/lib/api/types"
+import type { DesktopSettings } from "@/lib/desktop"
+import { updateDesktopSettings } from "@/lib/persistence"
+import { createProjectIdFromPath } from "@/lib/projectId"
+import { getSafeStorage } from "./utils/safeStorage"
+import { useDirectoryStore } from "./useDirectoryStore"
+import { streamDebugEnabled } from "@/stores/utils/streamDebug"
+import { PROJECT_COLORS } from "@/lib/projectMeta"
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 
 /** Pick a color key that's least used among existing projects */
 const pickAutoColor = (projects: ProjectEntry[]): string => {
-  const colorKeys = PROJECT_COLORS.map((c) => c.key);
-  const usageCounts = new Map<string, number>();
+  const colorKeys = PROJECT_COLORS.map((c) => c.key)
+  const usageCounts = new Map<string, number>()
   for (const key of colorKeys) {
-    usageCounts.set(key, 0);
+    usageCounts.set(key, 0)
   }
   for (const p of projects) {
     if (p.color && usageCounts.has(p.color)) {
-      usageCounts.set(p.color, (usageCounts.get(p.color) ?? 0) + 1);
+      usageCounts.set(p.color, (usageCounts.get(p.color) ?? 0) + 1)
     }
   }
   // Find minimum usage, then pick randomly among those with min usage
-  const minUsage = Math.min(...usageCounts.values());
-  const candidates = colorKeys.filter((k) => usageCounts.get(k) === minUsage);
-  return candidates[Math.floor(Math.random() * candidates.length)];
-};
+  const minUsage = Math.min(...usageCounts.values())
+  const candidates = colorKeys.filter((k) => usageCounts.get(k) === minUsage)
+  return candidates[Math.floor(Math.random() * candidates.length)]
+}
 
 interface ProjectPathValidationResult {
-  ok: boolean;
-  normalizedPath?: string;
-  reason?: string;
+  ok: boolean
+  normalizedPath?: string
+  reason?: string
 }
 
 interface ProjectsStore {
-  projects: ProjectEntry[];
-  activeProjectId: string | null;
+  projects: ProjectEntry[]
+  activeProjectId: string | null
 
-  addProject: (path: string, options?: { label?: string; id?: string }) => ProjectEntry | null;
-  removeProject: (id: string) => void;
-  setActiveProject: (id: string) => void;
-  setActiveProjectIdOnly: (id: string) => void;
-  renameProject: (id: string, label: string) => void;
-  updateProjectMeta: (id: string, meta: { label?: string; icon?: string | null; color?: string | null; iconBackground?: string | null }) => void;
-  uploadProjectIcon: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
-  removeProjectIcon: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  discoverProjectIcon: (id: string, options?: { force?: boolean }) => Promise<{ ok: boolean; skipped?: boolean; reason?: string; error?: string }>;
-  reorderProjects: (fromIndex: number, toIndex: number) => void;
-  validateProjectPath: (path: string) => ProjectPathValidationResult;
-  synchronizeFromSettings: (settings: DesktopSettings) => void;
-  getActiveProject: () => ProjectEntry | null;
+  addProject: (path: string, options?: { label?: string; id?: string }) => ProjectEntry | null
+  removeProject: (id: string) => void
+  setActiveProject: (id: string) => void
+  setActiveProjectIdOnly: (id: string) => void
+  renameProject: (id: string, label: string) => void
+  updateProjectMeta: (
+    id: string,
+    meta: { label?: string; icon?: string | null; color?: string | null; iconBackground?: string | null },
+  ) => void
+  uploadProjectIcon: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>
+  removeProjectIcon: (id: string) => Promise<{ ok: boolean; error?: string }>
+  discoverProjectIcon: (
+    id: string,
+    options?: { force?: boolean },
+  ) => Promise<{ ok: boolean; skipped?: boolean; reason?: string; error?: string }>
+  reorderProjects: (fromIndex: number, toIndex: number) => void
+  validateProjectPath: (path: string) => ProjectPathValidationResult
+  synchronizeFromSettings: (settings: DesktopSettings) => void
+  getActiveProject: () => ProjectEntry | null
 }
 
-const safeStorage = getSafeStorage();
-const PROJECTS_STORAGE_KEY = 'projects';
-const ACTIVE_PROJECT_STORAGE_KEY = 'activeProjectId';
+const safeStorage = getSafeStorage()
+const PROJECTS_STORAGE_KEY = "projects"
+const ACTIVE_PROJECT_STORAGE_KEY = "activeProjectId"
 
 const resolveTildePath = (value: string, homeDir?: string | null): string => {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith('~')) {
-    return trimmed;
+  const trimmed = value.trim()
+  if (!trimmed.startsWith("~")) {
+    return trimmed
   }
   if (!homeDir) {
-    return trimmed;
+    return trimmed
   }
-  if (trimmed === '~') {
-    return homeDir;
+  if (trimmed === "~") {
+    return homeDir
   }
-  if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
-    return `${homeDir}${trimmed.slice(1)}`;
+  if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
+    return `${homeDir}${trimmed.slice(1)}`
   }
-  return trimmed;
-};
+  return trimmed
+}
 
-const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/;
+const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/
 
 const normalizeIconBackground = (value: unknown): string | null => {
-  if (typeof value !== 'string') {
-    return null;
+  if (typeof value !== "string") {
+    return null
   }
-  const trimmed = value.trim();
+  const trimmed = value.trim()
   if (!trimmed) {
-    return null;
+    return null
   }
-  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null;
-};
+  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null
+}
 
 const normalizeProjectPath = (value: string): string => {
-  const trimmed = value.trim();
+  const trimmed = value.trim()
   if (!trimmed) {
-    return '';
+    return ""
   }
 
-  const homeDirectory = safeStorage.getItem('homeDirectory') || useDirectoryStore.getState().homeDirectory || '';
-  const expanded = resolveTildePath(trimmed, homeDirectory);
+  const homeDirectory = safeStorage.getItem("homeDirectory") || useDirectoryStore.getState().homeDirectory || ""
+  const expanded = resolveTildePath(trimmed, homeDirectory)
 
-  const normalized = expanded.replace(/\\/g, '/');
-  if (normalized === '/') {
-    return '/';
+  const normalized = expanded.replace(/\\/g, "/")
+  if (normalized === "/") {
+    return "/"
   }
-  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
-};
+  return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized
+}
 
 const deriveProjectLabel = (path: string): string => {
-  const normalized = normalizeProjectPath(path);
-  if (!normalized || normalized === '/') {
-    return 'Root';
+  const normalized = normalizeProjectPath(path)
+  if (!normalized || normalized === "/") {
+    return "Root"
   }
-  const segments = normalized.split('/').filter(Boolean);
-  const raw = segments[segments.length - 1] || normalized;
-  return raw.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-};
+  const segments = normalized.split("/").filter(Boolean)
+  const raw = segments[segments.length - 1] || normalized
+  return raw.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
 
-const sanitizeProjectIconImage = (value: unknown): ProjectEntry['iconImage'] | undefined => {
-  if (!value || typeof value !== 'object') {
-    return undefined;
+const sanitizeProjectIconImage = (value: unknown): ProjectEntry["iconImage"] | undefined => {
+  if (!value || typeof value !== "object") {
+    return undefined
   }
 
-  const candidate = value as Record<string, unknown>;
-  const mime = typeof candidate.mime === 'string' ? candidate.mime.trim() : '';
-  const updatedAt = typeof candidate.updatedAt === 'number' && Number.isFinite(candidate.updatedAt)
-    ? Math.max(0, Math.round(candidate.updatedAt))
-    : 0;
-  const source = candidate.source === 'custom' || candidate.source === 'auto'
-    ? candidate.source
-    : null;
+  const candidate = value as Record<string, unknown>
+  const mime = typeof candidate.mime === "string" ? candidate.mime.trim() : ""
+  const updatedAt =
+    typeof candidate.updatedAt === "number" && Number.isFinite(candidate.updatedAt)
+      ? Math.max(0, Math.round(candidate.updatedAt))
+      : 0
+  const source = candidate.source === "custom" || candidate.source === "auto" ? candidate.source : null
 
   if (!mime || !updatedAt || !source) {
-    return undefined;
+    return undefined
   }
 
-  return { mime, updatedAt, source };
-};
+  return { mime, updatedAt, source }
+}
 
-const resolveUploadMime = (file: File): 'image/png' | 'image/jpeg' | 'image/svg+xml' | null => {
-  const rawType = typeof file.type === 'string' ? file.type.trim().toLowerCase() : '';
-  if (rawType === 'image/png' || rawType === 'image/jpeg' || rawType === 'image/svg+xml') {
-    return rawType;
+const resolveUploadMime = (file: File): "image/png" | "image/jpeg" | "image/svg+xml" | null => {
+  const rawType = typeof file.type === "string" ? file.type.trim().toLowerCase() : ""
+  if (rawType === "image/png" || rawType === "image/jpeg" || rawType === "image/svg+xml") {
+    return rawType
   }
 
-  const lowerName = file.name.toLowerCase();
-  if (lowerName.endsWith('.png')) return 'image/png';
-  if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) return 'image/jpeg';
-  if (lowerName.endsWith('.svg')) return 'image/svg+xml';
+  const lowerName = file.name.toLowerCase()
+  if (lowerName.endsWith(".png")) return "image/png"
+  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return "image/jpeg"
+  if (lowerName.endsWith(".svg")) return "image/svg+xml"
 
-  return null;
-};
+  return null
+}
 
 const readFileAsDataUrl = async (file: File): Promise<string> => {
   return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
+    const reader = new FileReader()
     reader.onerror = () => {
-      reject(new Error('Failed to read icon file'));
-    };
+      reject(new Error("Failed to read icon file"))
+    }
     reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
+      const result = typeof reader.result === "string" ? reader.result : ""
       if (!result) {
-        reject(new Error('Failed to read icon file'));
-        return;
+        reject(new Error("Failed to read icon file"))
+        return
       }
-      resolve(result);
-    };
-    reader.readAsDataURL(file);
-  });
-};
+      resolve(result)
+    }
+    reader.readAsDataURL(file)
+  })
+}
 
 const sanitizeProjects = (value: unknown): ProjectEntry[] => {
   if (!Array.isArray(value)) {
-    return [];
+    return []
   }
 
-  const result: ProjectEntry[] = [];
-  const seenIds = new Set<string>();
-  const seenPaths = new Set<string>();
+  const result: ProjectEntry[] = []
+  const seenIds = new Set<string>()
+  const seenPaths = new Set<string>()
 
   for (const entry of value) {
-    if (!entry || typeof entry !== 'object') continue;
-    const candidate = entry as Record<string, unknown>;
+    if (!entry || typeof entry !== "object") continue
+    const candidate = entry as Record<string, unknown>
 
-    const rawPath = typeof candidate.path === 'string' ? candidate.path.trim() : '';
-    if (!rawPath) continue;
+    const rawPath = typeof candidate.path === "string" ? candidate.path.trim() : ""
+    if (!rawPath) continue
 
-    const normalizedPath = normalizeProjectPath(rawPath);
-    if (!normalizedPath) continue;
+    const normalizedPath = normalizeProjectPath(rawPath)
+    if (!normalizedPath) continue
 
-    const id = createProjectIdFromPath(normalizedPath);
-    if (!id) continue;
+    const id = createProjectIdFromPath(normalizedPath)
+    if (!id) continue
 
-    if (seenIds.has(id) || seenPaths.has(normalizedPath)) continue;
-    seenIds.add(id);
-    seenPaths.add(normalizedPath);
+    if (seenIds.has(id) || seenPaths.has(normalizedPath)) continue
+    seenIds.add(id)
+    seenPaths.add(normalizedPath)
 
     const project: ProjectEntry = {
       id,
       path: normalizedPath,
-    };
-
-    if (typeof candidate.label === 'string' && candidate.label.trim().length > 0) {
-      project.label = candidate.label.trim();
     }
-    if (typeof candidate.icon === 'string' && candidate.icon.trim().length > 0) {
-      project.icon = candidate.icon.trim();
+
+    if (typeof candidate.label === "string" && candidate.label.trim().length > 0) {
+      project.label = candidate.label.trim()
+    }
+    if (typeof candidate.icon === "string" && candidate.icon.trim().length > 0) {
+      project.icon = candidate.icon.trim()
     }
     if (candidate.iconImage === null) {
-      project.iconImage = null;
+      project.iconImage = null
     } else {
-      const iconImage = sanitizeProjectIconImage(candidate.iconImage);
+      const iconImage = sanitizeProjectIconImage(candidate.iconImage)
       if (iconImage) {
-        project.iconImage = iconImage;
+        project.iconImage = iconImage
       }
     }
-    if (typeof candidate.color === 'string' && candidate.color.trim().length > 0) {
-      project.color = candidate.color.trim();
+    if (typeof candidate.color === "string" && candidate.color.trim().length > 0) {
+      project.color = candidate.color.trim()
     }
     if (candidate.iconBackground === null) {
-      project.iconBackground = null;
+      project.iconBackground = null
     } else {
-      const iconBackground = normalizeIconBackground(candidate.iconBackground);
+      const iconBackground = normalizeIconBackground(candidate.iconBackground)
       if (iconBackground) {
-        project.iconBackground = iconBackground;
+        project.iconBackground = iconBackground
       }
     }
-    if (typeof candidate.addedAt === 'number' && Number.isFinite(candidate.addedAt) && candidate.addedAt >= 0) {
-      project.addedAt = candidate.addedAt;
+    if (typeof candidate.addedAt === "number" && Number.isFinite(candidate.addedAt) && candidate.addedAt >= 0) {
+      project.addedAt = candidate.addedAt
     }
-    if (typeof candidate.lastOpenedAt === 'number' && Number.isFinite(candidate.lastOpenedAt) && candidate.lastOpenedAt >= 0) {
-      project.lastOpenedAt = candidate.lastOpenedAt;
+    if (
+      typeof candidate.lastOpenedAt === "number" &&
+      Number.isFinite(candidate.lastOpenedAt) &&
+      candidate.lastOpenedAt >= 0
+    ) {
+      project.lastOpenedAt = candidate.lastOpenedAt
     }
-    if (typeof candidate.sidebarCollapsed === 'boolean') {
-      project.sidebarCollapsed = candidate.sidebarCollapsed;
+    if (typeof candidate.sidebarCollapsed === "boolean") {
+      project.sidebarCollapsed = candidate.sidebarCollapsed
     }
-    result.push(project);
+    result.push(project)
   }
 
-  return result;
-};
+  return result
+}
 
 const readPersistedProjects = (): ProjectEntry[] => {
   try {
-    const raw = safeStorage.getItem(PROJECTS_STORAGE_KEY);
+    const raw = safeStorage.getItem(PROJECTS_STORAGE_KEY)
     if (!raw) {
-      return [];
+      return []
     }
-    return sanitizeProjects(JSON.parse(raw));
+    return sanitizeProjects(JSON.parse(raw))
   } catch {
-    return [];
+    return []
   }
-};
+}
 
 const readPersistedActiveProjectId = (): string | null => {
   try {
-    const raw = safeStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY);
-    if (typeof raw === 'string' && raw.trim().length > 0) {
-      return raw.trim();
+    const raw = safeStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY)
+    if (typeof raw === "string" && raw.trim().length > 0) {
+      return raw.trim()
     }
   } catch {
-    return null;
+    return null
   }
-  return null;
-};
+  return null
+}
 
 const cacheProjects = (projects: ProjectEntry[], activeProjectId: string | null) => {
   try {
-    safeStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
+    safeStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects))
   } catch {
     // ignored
   }
 
   try {
     if (activeProjectId) {
-      safeStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, activeProjectId);
+      safeStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, activeProjectId)
     } else {
-      safeStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY);
+      safeStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY)
     }
   } catch {
     // ignored
   }
-};
+}
 
 const persistProjects = (projects: ProjectEntry[], activeProjectId: string | null) => {
-  cacheProjects(projects, activeProjectId);
-  void updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined });
-};
+  cacheProjects(projects, activeProjectId)
+  void updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined })
+}
 
-const initialProjects = readPersistedProjects();
-const persistedInitialActiveProjectId = readPersistedActiveProjectId();
+const initialProjects = readPersistedProjects()
+const persistedInitialActiveProjectId = readPersistedActiveProjectId()
 const initialActiveProjectId = initialProjects.some((project) => project.id === persistedInitialActiveProjectId)
   ? persistedInitialActiveProjectId
-  : initialProjects[0]?.id ?? null;
+  : (initialProjects[0]?.id ?? null)
 
 export const useProjectsStore = create<ProjectsStore>()(
-  devtools((set, get) => ({
-    projects: initialProjects,
-    activeProjectId: initialActiveProjectId,
+  devtools(
+    (set, get) => ({
+      projects: initialProjects,
+      activeProjectId: initialActiveProjectId,
 
-    validateProjectPath: (path: string): ProjectPathValidationResult => {
-      if (typeof path !== 'string' || path.trim().length === 0) {
-        return { ok: false, reason: 'Provide a directory path.' };
-      }
-
-      const normalized = normalizeProjectPath(path);
-      if (!normalized) {
-        return { ok: false, reason: 'Directory path cannot be empty.' };
-      }
-
-      return { ok: true, normalizedPath: normalized };
-    },
-
-    addProject: (path: string, options?: { label?: string; id?: string }) => {
-      const { validateProjectPath } = get();
-      const validation = validateProjectPath(path);
-      if (!validation.ok || !validation.normalizedPath) {
-        return null;
-      }
-
-      const normalizedPath = validation.normalizedPath;
-      const existing = get().projects.find((project) => project.path === normalizedPath);
-      if (existing) {
-        get().setActiveProject(existing.id);
-        return existing;
-      }
-
-      const now = Date.now();
-      const label = options?.label?.trim() || deriveProjectLabel(normalizedPath);
-      const id = createProjectIdFromPath(normalizedPath);
-      const entry: ProjectEntry = {
-        id,
-        path: normalizedPath,
-        label,
-        color: pickAutoColor(get().projects),
-        addedAt: now,
-        lastOpenedAt: now,
-      };
-
-      const nextProjects = [...get().projects, entry];
-      set({ projects: nextProjects });
-
-      if (streamDebugEnabled()) {
-        console.info('[ProjectsStore] Added project', entry);
-      }
-
-      get().setActiveProject(entry.id);
-      void get().discoverProjectIcon(entry.id);
-      return entry;
-    },
-
-    removeProject: (id: string) => {
-      const current = get();
-      const project = current.projects.find((p) => p.id === id);
-      const nextProjects = current.projects.filter((project) => project.id !== id);
-      let nextActiveId = current.activeProjectId;
-
-      if (current.activeProjectId === id) {
-        nextActiveId = nextProjects[0]?.id ?? null;
-      }
-
-      set({ projects: nextProjects, activeProjectId: nextActiveId });
-      persistProjects(nextProjects, nextActiveId);
-
-      // Clean up worktree entries for the removed project
-      if (project) {
-        const normalizedPath = project.path.replace(/\\/g, '/').replace(/\/+$/, '') || '/';
-        useSessionUIStore.setState((s) => {
-          const next = new Map(s.availableWorktreesByProject);
-          next.delete(normalizedPath);
-          return { availableWorktreesByProject: next };
-        });
-      }
-
-      if (nextActiveId) {
-        const nextActive = nextProjects.find((project) => project.id === nextActiveId);
-        if (nextActive) {
-          axCodeClient.setDirectory(nextActive.path);
-          useDirectoryStore.getState().setDirectory(nextActive.path, { showOverlay: false });
-        }
-      } else {
-        void useDirectoryStore.getState().goHome();
-      }
-    },
-
-    setActiveProject: (id: string) => {
-      const { projects, activeProjectId } = get();
-      if (activeProjectId === id) {
-        return;
-      }
-      const target = projects.find((project) => project.id === id);
-      if (!target) {
-        return;
-      }
-
-      const now = Date.now();
-      const nextProjects = projects.map((project) =>
-        project.id === id ? { ...project, lastOpenedAt: now } : project
-      );
-
-      set({ projects: nextProjects, activeProjectId: id });
-      persistProjects(nextProjects, id);
-
-      axCodeClient.setDirectory(target.path);
-      useDirectoryStore.getState().setDirectory(target.path, { showOverlay: false });
-    },
-
-    setActiveProjectIdOnly: (id: string) => {
-      const { projects, activeProjectId } = get();
-      if (activeProjectId === id) {
-        return;
-      }
-      const target = projects.find((project) => project.id === id);
-      if (!target) {
-        return;
-      }
-
-      const now = Date.now();
-      const nextProjects = projects.map((project) =>
-        project.id === id ? { ...project, lastOpenedAt: now } : project
-      );
-
-      set({ projects: nextProjects, activeProjectId: id });
-      persistProjects(nextProjects, id);
-    },
-
-    renameProject: (id: string, label: string) => {
-      const trimmed = label.trim();
-      if (!trimmed) {
-        return;
-      }
-
-      const { projects, activeProjectId } = get();
-      const nextProjects = projects.map((project) =>
-        project.id === id ? { ...project, label: trimmed } : project
-      );
-      set({ projects: nextProjects });
-      persistProjects(nextProjects, activeProjectId);
-    },
-
-    updateProjectMeta: (id: string, meta: { label?: string; icon?: string | null; color?: string | null; iconBackground?: string | null }) => {
-      const { projects, activeProjectId } = get();
-      const nextProjects = projects.map((project) => {
-        if (project.id !== id) return project;
-        const updated = { ...project };
-        if (meta.label !== undefined) {
-          const trimmed = meta.label.trim();
-          if (trimmed) updated.label = trimmed;
-        }
-        if (meta.icon !== undefined) updated.icon = meta.icon;
-        if (meta.color !== undefined) updated.color = meta.color;
-        if (meta.iconBackground !== undefined) {
-          updated.iconBackground = normalizeIconBackground(meta.iconBackground);
-        }
-        return updated;
-      });
-      set({ projects: nextProjects });
-      persistProjects(nextProjects, activeProjectId);
-    },
-
-    uploadProjectIcon: async (id: string, file: File) => {
-      const mime = resolveUploadMime(file);
-      if (!mime) {
-        return { ok: false, error: 'Only PNG, JPEG, and SVG are supported' };
-      }
-      if (!Number.isFinite(file.size) || file.size <= 0) {
-        return { ok: false, error: 'Icon file is empty' };
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        return { ok: false, error: 'Icon exceeds size limit (5 MB)' };
-      }
-
-      try {
-        const dataUrl = await readFileAsDataUrl(file);
-        const normalizedDataUrl = dataUrl.replace(/^data:[^;]+;/i, `data:${mime};`);
-
-        const response = await fetch(`${replacePathParams(API_ENDPOINTS.projects.icon, {
-          projectId: id,
-        })}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({ dataUrl: normalizedDataUrl }),
-        });
-
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-          return { ok: false, error: payload?.error || 'Failed to upload project icon' };
+      validateProjectPath: (path: string): ProjectPathValidationResult => {
+        if (typeof path !== "string" || path.trim().length === 0) {
+          return { ok: false, reason: "Provide a directory path." }
         }
 
-        const payload = (await response.json().catch(() => null)) as { settings?: DesktopSettings } | null;
-        if (payload?.settings) {
-          get().synchronizeFromSettings(payload.settings);
-        }
-        return { ok: true };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { ok: false, error: message || 'Failed to upload project icon' };
-      }
-    },
-
-    removeProjectIcon: async (id: string) => {
-      try {
-        const response = await fetch(`${replacePathParams(API_ENDPOINTS.projects.icon, {
-          projectId: id,
-        })}`, {
-          method: 'DELETE',
-          headers: {
-            Accept: 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-          return { ok: false, error: payload?.error || 'Failed to remove project icon' };
+        const normalized = normalizeProjectPath(path)
+        if (!normalized) {
+          return { ok: false, reason: "Directory path cannot be empty." }
         }
 
-        const payload = (await response.json().catch(() => null)) as { settings?: DesktopSettings } | null;
-        if (payload?.settings) {
-          get().synchronizeFromSettings(payload.settings);
-        }
-        return { ok: true };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { ok: false, error: message || 'Failed to remove project icon' };
-      }
-    },
+        return { ok: true, normalizedPath: normalized }
+      },
 
-    discoverProjectIcon: async (id: string, options?: { force?: boolean }) => {
-      try {
-        const response = await fetch(`${replacePathParams(API_ENDPOINTS.projects.iconDiscover, {
-          projectId: id,
-        })}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({ force: options?.force === true }),
-        });
-
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string;
-          skipped?: boolean;
-          reason?: string;
-          settings?: DesktopSettings;
-        } | null;
-
-        if (!response.ok) {
-          return { ok: false, error: payload?.error || 'Failed to discover project icon' };
+      addProject: (path: string, options?: { label?: string; id?: string }) => {
+        const { validateProjectPath } = get()
+        const validation = validateProjectPath(path)
+        if (!validation.ok || !validation.normalizedPath) {
+          return null
         }
 
-        if (payload?.settings) {
-          get().synchronizeFromSettings(payload.settings);
+        const normalizedPath = validation.normalizedPath
+        const existing = get().projects.find((project) => project.path === normalizedPath)
+        if (existing) {
+          get().setActiveProject(existing.id)
+          return existing
         }
 
-        return {
-          ok: true,
-          skipped: payload?.skipped === true,
-          reason: typeof payload?.reason === 'string' ? payload.reason : undefined,
-        };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { ok: false, error: message || 'Failed to discover project icon' };
-      }
-    },
+        const now = Date.now()
+        const label = options?.label?.trim() || deriveProjectLabel(normalizedPath)
+        const id = createProjectIdFromPath(normalizedPath)
+        const entry: ProjectEntry = {
+          id,
+          path: normalizedPath,
+          label,
+          color: pickAutoColor(get().projects),
+          addedAt: now,
+          lastOpenedAt: now,
+        }
 
-    reorderProjects: (fromIndex: number, toIndex: number) => {
-      const { projects, activeProjectId } = get();
-      if (
-        fromIndex < 0 ||
-        fromIndex >= projects.length ||
-        toIndex < 0 ||
-        toIndex >= projects.length ||
-        fromIndex === toIndex
-      ) {
-        return;
-      }
+        const nextProjects = [...get().projects, entry]
+        set({ projects: nextProjects })
 
-      const nextProjects = [...projects];
-      const [moved] = nextProjects.splice(fromIndex, 1);
-      nextProjects.splice(toIndex, 0, moved);
+        if (streamDebugEnabled()) {
+          console.info("[ProjectsStore] Added project", entry)
+        }
 
-      set({ projects: nextProjects });
-      persistProjects(nextProjects, activeProjectId);
-    },
+        get().setActiveProject(entry.id)
+        void get().discoverProjectIcon(entry.id)
+        return entry
+      },
 
-    synchronizeFromSettings: (settings: DesktopSettings) => {
-      const incomingProjects = sanitizeProjects(settings.projects ?? []);
-      const incomingActive = typeof settings.activeProjectId === 'string' && settings.activeProjectId.trim()
-        ? settings.activeProjectId.trim()
-        : null;
+      removeProject: (id: string) => {
+        const current = get()
+        const project = current.projects.find((p) => p.id === id)
+        const nextProjects = current.projects.filter((project) => project.id !== id)
+        let nextActiveId = current.activeProjectId
 
-      const current = get();
+        if (current.activeProjectId === id) {
+          nextActiveId = nextProjects[0]?.id ?? null
+        }
 
-      // Race guard: settings load can return empty projects during app
-      // rebuild/reinstall or an incomplete settings read. Don't clobber
-      // a populated cache with empty — the sidebar would go blank and
-      // localStorage would be overwritten, losing the list entirely.
-      if (incomingProjects.length === 0 && current.projects.length > 0) {
-        if (incomingActive !== current.activeProjectId) {
-          // Active project may still be valid within the cached list.
-          const activeExists = incomingActive
-            ? current.projects.some((project) => project.id === incomingActive)
-            : true;
-          if (activeExists) {
-            set({ activeProjectId: incomingActive });
-            cacheProjects(current.projects, incomingActive);
+        set({ projects: nextProjects, activeProjectId: nextActiveId })
+        persistProjects(nextProjects, nextActiveId)
+
+        // Clean up worktree entries for the removed project
+        if (project) {
+          const normalizedPath = project.path.replace(/\\/g, "/").replace(/\/+$/, "") || "/"
+          useSessionUIStore.setState((s) => {
+            const next = new Map(s.availableWorktreesByProject)
+            next.delete(normalizedPath)
+            return { availableWorktreesByProject: next }
+          })
+        }
+
+        if (nextActiveId) {
+          const nextActive = nextProjects.find((project) => project.id === nextActiveId)
+          if (nextActive) {
+            axCodeClient.setDirectory(nextActive.path)
+            useDirectoryStore.getState().setDirectory(nextActive.path, { showOverlay: false })
+          }
+        } else {
+          void useDirectoryStore.getState().goHome()
+        }
+      },
+
+      setActiveProject: (id: string) => {
+        const { projects, activeProjectId } = get()
+        if (activeProjectId === id) {
+          return
+        }
+        const target = projects.find((project) => project.id === id)
+        if (!target) {
+          return
+        }
+
+        const now = Date.now()
+        const nextProjects = projects.map((project) =>
+          project.id === id ? { ...project, lastOpenedAt: now } : project,
+        )
+
+        set({ projects: nextProjects, activeProjectId: id })
+        persistProjects(nextProjects, id)
+
+        axCodeClient.setDirectory(target.path)
+        useDirectoryStore.getState().setDirectory(target.path, { showOverlay: false })
+      },
+
+      setActiveProjectIdOnly: (id: string) => {
+        const { projects, activeProjectId } = get()
+        if (activeProjectId === id) {
+          return
+        }
+        const target = projects.find((project) => project.id === id)
+        if (!target) {
+          return
+        }
+
+        const now = Date.now()
+        const nextProjects = projects.map((project) =>
+          project.id === id ? { ...project, lastOpenedAt: now } : project,
+        )
+
+        set({ projects: nextProjects, activeProjectId: id })
+        persistProjects(nextProjects, id)
+      },
+
+      renameProject: (id: string, label: string) => {
+        const trimmed = label.trim()
+        if (!trimmed) {
+          return
+        }
+
+        const { projects, activeProjectId } = get()
+        const nextProjects = projects.map((project) => (project.id === id ? { ...project, label: trimmed } : project))
+        set({ projects: nextProjects })
+        persistProjects(nextProjects, activeProjectId)
+      },
+
+      updateProjectMeta: (
+        id: string,
+        meta: { label?: string; icon?: string | null; color?: string | null; iconBackground?: string | null },
+      ) => {
+        const { projects, activeProjectId } = get()
+        const nextProjects = projects.map((project) => {
+          if (project.id !== id) return project
+          const updated = { ...project }
+          if (meta.label !== undefined) {
+            const trimmed = meta.label.trim()
+            if (trimmed) updated.label = trimmed
+          }
+          if (meta.icon !== undefined) updated.icon = meta.icon
+          if (meta.color !== undefined) updated.color = meta.color
+          if (meta.iconBackground !== undefined) {
+            updated.iconBackground = normalizeIconBackground(meta.iconBackground)
+          }
+          return updated
+        })
+        set({ projects: nextProjects })
+        persistProjects(nextProjects, activeProjectId)
+      },
+
+      uploadProjectIcon: async (id: string, file: File) => {
+        const mime = resolveUploadMime(file)
+        if (!mime) {
+          return { ok: false, error: "Only PNG, JPEG, and SVG are supported" }
+        }
+        if (!Number.isFinite(file.size) || file.size <= 0) {
+          return { ok: false, error: "Icon file is empty" }
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          return { ok: false, error: "Icon exceeds size limit (5 MB)" }
+        }
+
+        try {
+          const dataUrl = await readFileAsDataUrl(file)
+          const normalizedDataUrl = dataUrl.replace(/^data:[^;]+;/i, `data:${mime};`)
+
+          const response = await fetch(
+            `${replacePathParams(API_ENDPOINTS.projects.icon, {
+              projectId: id,
+            })}`,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({ dataUrl: normalizedDataUrl }),
+            },
+          )
+
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as { error?: string } | null
+            return { ok: false, error: payload?.error || "Failed to upload project icon" }
+          }
+
+          const payload = (await response.json().catch(() => null)) as { settings?: DesktopSettings } | null
+          if (payload?.settings) {
+            get().synchronizeFromSettings(payload.settings)
+          }
+          return { ok: true }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { ok: false, error: message || "Failed to upload project icon" }
+        }
+      },
+
+      removeProjectIcon: async (id: string) => {
+        try {
+          const response = await fetch(
+            `${replacePathParams(API_ENDPOINTS.projects.icon, {
+              projectId: id,
+            })}`,
+            {
+              method: "DELETE",
+              headers: {
+                Accept: "application/json",
+              },
+            },
+          )
+
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as { error?: string } | null
+            return { ok: false, error: payload?.error || "Failed to remove project icon" }
+          }
+
+          const payload = (await response.json().catch(() => null)) as { settings?: DesktopSettings } | null
+          if (payload?.settings) {
+            get().synchronizeFromSettings(payload.settings)
+          }
+          return { ok: true }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { ok: false, error: message || "Failed to remove project icon" }
+        }
+      },
+
+      discoverProjectIcon: async (id: string, options?: { force?: boolean }) => {
+        try {
+          const response = await fetch(
+            `${replacePathParams(API_ENDPOINTS.projects.iconDiscover, {
+              projectId: id,
+            })}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({ force: options?.force === true }),
+            },
+          )
+
+          const payload = (await response.json().catch(() => null)) as {
+            error?: string
+            skipped?: boolean
+            reason?: string
+            settings?: DesktopSettings
+          } | null
+
+          if (!response.ok) {
+            return { ok: false, error: payload?.error || "Failed to discover project icon" }
+          }
+
+          if (payload?.settings) {
+            get().synchronizeFromSettings(payload.settings)
+          }
+
+          return {
+            ok: true,
+            skipped: payload?.skipped === true,
+            reason: typeof payload?.reason === "string" ? payload.reason : undefined,
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { ok: false, error: message || "Failed to discover project icon" }
+        }
+      },
+
+      reorderProjects: (fromIndex: number, toIndex: number) => {
+        const { projects, activeProjectId } = get()
+        if (
+          fromIndex < 0 ||
+          fromIndex >= projects.length ||
+          toIndex < 0 ||
+          toIndex >= projects.length ||
+          fromIndex === toIndex
+        ) {
+          return
+        }
+
+        const nextProjects = [...projects]
+        const [moved] = nextProjects.splice(fromIndex, 1)
+        nextProjects.splice(toIndex, 0, moved)
+
+        set({ projects: nextProjects })
+        persistProjects(nextProjects, activeProjectId)
+      },
+
+      synchronizeFromSettings: (settings: DesktopSettings) => {
+        const incomingProjects = sanitizeProjects(settings.projects ?? [])
+        const incomingActive =
+          typeof settings.activeProjectId === "string" && settings.activeProjectId.trim()
+            ? settings.activeProjectId.trim()
+            : null
+
+        const current = get()
+
+        // Race guard: settings load can return empty projects during app
+        // rebuild/reinstall or an incomplete settings read. Don't clobber
+        // a populated cache with empty — the sidebar would go blank and
+        // localStorage would be overwritten, losing the list entirely.
+        if (incomingProjects.length === 0 && current.projects.length > 0) {
+          if (incomingActive !== current.activeProjectId) {
+            // Active project may still be valid within the cached list.
+            const activeExists = incomingActive
+              ? current.projects.some((project) => project.id === incomingActive)
+              : true
+            if (activeExists) {
+              set({ activeProjectId: incomingActive })
+              cacheProjects(current.projects, incomingActive)
+            }
+          }
+          return
+        }
+
+        const projectsChanged = JSON.stringify(current.projects) !== JSON.stringify(incomingProjects)
+        const activeChanged = current.activeProjectId !== incomingActive
+
+        if (!projectsChanged && !activeChanged) {
+          return
+        }
+
+        set({ projects: incomingProjects, activeProjectId: incomingActive })
+        cacheProjects(incomingProjects, incomingActive)
+
+        if (incomingActive) {
+          const activeProject = incomingProjects.find((project) => project.id === incomingActive)
+          if (activeProject) {
+            axCodeClient.setDirectory(activeProject.path)
+            useDirectoryStore.getState().setDirectory(activeProject.path, { showOverlay: false })
           }
         }
-        return;
-      }
+      },
 
-      const projectsChanged = JSON.stringify(current.projects) !== JSON.stringify(incomingProjects);
-      const activeChanged = current.activeProjectId !== incomingActive;
-
-      if (!projectsChanged && !activeChanged) {
-        return;
-      }
-
-      set({ projects: incomingProjects, activeProjectId: incomingActive });
-      cacheProjects(incomingProjects, incomingActive);
-
-      if (incomingActive) {
-        const activeProject = incomingProjects.find((project) => project.id === incomingActive);
-        if (activeProject) {
-          axCodeClient.setDirectory(activeProject.path);
-          useDirectoryStore.getState().setDirectory(activeProject.path, { showOverlay: false });
+      getActiveProject: () => {
+        const { projects, activeProjectId } = get()
+        if (!activeProjectId) {
+          return null
         }
-      }
-    },
+        return projects.find((project) => project.id === activeProjectId) ?? null
+      },
+    }),
+    { name: "projects-store" },
+  ),
+)
 
-    getActiveProject: () => {
-      const { projects, activeProjectId } = get();
-      if (!activeProjectId) {
-        return null;
-      }
-      return projects.find((project) => project.id === activeProjectId) ?? null;
-    },
-
-  }), { name: 'projects-store' })
-);
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('openchamber:settings-synced', (event: Event) => {
-    const detail = (event as CustomEvent<DesktopSettings>).detail;
-    if (detail && typeof detail === 'object') {
-      useProjectsStore.getState().synchronizeFromSettings(detail);
+if (typeof window !== "undefined") {
+  window.addEventListener("openchamber:settings-synced", (event: Event) => {
+    const detail = (event as CustomEvent<DesktopSettings>).detail
+    if (detail && typeof detail === "object") {
+      useProjectsStore.getState().synchronizeFromSettings(detail)
     }
-  });
+  })
 }

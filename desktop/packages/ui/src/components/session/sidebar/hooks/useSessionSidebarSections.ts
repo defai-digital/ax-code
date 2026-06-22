@@ -1,31 +1,31 @@
-import React from 'react';
-import type { Session } from '@ax-code/sdk/v2';
-import type { GroupSearchData, ProjectItem, ProjectSection, SessionGroup, SessionNode } from '../types';
-import { dedupeSessionsById, normalizePath } from '../utils';
-import type { WorktreeMetadata } from '@/types/worktree';
-import type { SessionFoldersMap } from '@/stores/useSessionFoldersStore';
+import React from "react"
+import type { Session } from "@ax-code/sdk/v2"
+import type { GroupSearchData, ProjectItem, ProjectSection, SessionGroup, SessionNode } from "../types"
+import { dedupeSessionsById, normalizePath } from "../utils"
+import type { WorktreeMetadata } from "@/types/worktree"
+import type { SessionFoldersMap } from "@/stores/useSessionFoldersStore"
 
 type Args = {
-  normalizedProjects: ProjectItem[];
-  getSessionsForProject: (project: { normalizedPath: string }) => Session[];
-  getArchivedSessionsForProject: (project: { normalizedPath: string }) => Session[];
-  availableWorktreesByProject: Map<string, WorktreeMetadata[]>;
-  projectRepoStatus: Map<string, boolean | null>;
-  projectRootBranches: Map<string, string | null>;
-  lastRepoStatus: boolean;
+  normalizedProjects: ProjectItem[]
+  getSessionsForProject: (project: { normalizedPath: string }) => Session[]
+  getArchivedSessionsForProject: (project: { normalizedPath: string }) => Session[]
+  availableWorktreesByProject: Map<string, WorktreeMetadata[]>
+  projectRepoStatus: Map<string, boolean | null>
+  projectRootBranches: Map<string, string | null>
+  lastRepoStatus: boolean
   buildGroupedSessions: (
     sessions: Session[],
     projectRoot: string,
     availableWorktrees: WorktreeMetadata[],
     rootBranch: string | null,
     isRepo: boolean,
-  ) => SessionGroup[];
-  hasSessionSearchQuery: boolean;
-  normalizedSessionSearchQuery: string;
-  filterSessionNodesForSearch: (nodes: SessionNode[], query: string) => SessionNode[];
-  buildGroupSearchText: (group: SessionGroup) => string;
-  foldersMap: SessionFoldersMap;
-};
+  ) => SessionGroup[]
+  hasSessionSearchQuery: boolean
+  normalizedSessionSearchQuery: string
+  filterSessionNodesForSearch: (nodes: SessionNode[], query: string) => SessionNode[]
+  buildGroupSearchText: (group: SessionGroup) => string
+  foldersMap: SessionFoldersMap
+}
 
 export const useSessionSidebarSections = (args: Args) => {
   const {
@@ -42,27 +42,25 @@ export const useSessionSidebarSections = (args: Args) => {
     filterSessionNodesForSearch,
     buildGroupSearchText,
     foldersMap,
-  } = args;
+  } = args
 
   const projectSections = React.useMemo<ProjectSection[]>(() => {
     return normalizedProjects.map((project) => {
       const projectSessions = dedupeSessionsById([
         ...getSessionsForProject(project),
         ...getArchivedSessionsForProject(project),
-      ]);
-      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? [];
-      const isRepo = projectRepoStatus.has(project.id)
-        ? Boolean(projectRepoStatus.get(project.id))
-        : lastRepoStatus;
+      ])
+      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? []
+      const isRepo = projectRepoStatus.has(project.id) ? Boolean(projectRepoStatus.get(project.id)) : lastRepoStatus
       const groups = buildGroupedSessions(
         projectSessions,
         project.normalizedPath,
         worktreesForProject,
         projectRootBranches.get(project.id) ?? null,
         isRepo,
-      );
-      return { project, groups };
-    });
+      )
+      return { project, groups }
+    })
   }, [
     normalizedProjects,
     getSessionsForProject,
@@ -72,28 +70,31 @@ export const useSessionSidebarSections = (args: Args) => {
     lastRepoStatus,
     buildGroupedSessions,
     projectRootBranches,
-  ]);
+  ])
 
   const visibleProjectSections = React.useMemo(() => {
-    return projectSections;
-  }, [projectSections]);
+    return projectSections
+  }, [projectSections])
 
   const groupSearchDataByGroup = React.useMemo(() => {
-    const result = new WeakMap<SessionGroup, GroupSearchData>();
+    const result = new WeakMap<SessionGroup, GroupSearchData>()
     if (!hasSessionSearchQuery) {
-      return result;
+      return result
     }
 
-    const countNodes = (nodes: SessionNode[]): number => nodes.reduce((total, node) => total + 1 + countNodes(node.children), 0);
+    const countNodes = (nodes: SessionNode[]): number =>
+      nodes.reduce((total, node) => total + 1 + countNodes(node.children), 0)
 
     visibleProjectSections.forEach((section) => {
       section.groups.forEach((group) => {
-        const filteredNodes = filterSessionNodesForSearch(group.sessions, normalizedSessionSearchQuery);
-        const matchedSessionCount = countNodes(filteredNodes);
-        const groupMatches = buildGroupSearchText(group).includes(normalizedSessionSearchQuery);
-        const scopeKey = normalizePath(group.directory ?? null);
-        const scopeFolders = scopeKey ? (foldersMap[scopeKey] ?? []) : [];
-        const folderNameMatchCount = scopeFolders.filter((folder) => folder.name.toLowerCase().includes(normalizedSessionSearchQuery)).length;
+        const filteredNodes = filterSessionNodesForSearch(group.sessions, normalizedSessionSearchQuery)
+        const matchedSessionCount = countNodes(filteredNodes)
+        const groupMatches = buildGroupSearchText(group).includes(normalizedSessionSearchQuery)
+        const scopeKey = normalizePath(group.directory ?? null)
+        const scopeFolders = scopeKey ? (foldersMap[scopeKey] ?? []) : []
+        const folderNameMatchCount = scopeFolders.filter((folder) =>
+          folder.name.toLowerCase().includes(normalizedSessionSearchQuery),
+        ).length
 
         result.set(group, {
           filteredNodes,
@@ -101,11 +102,11 @@ export const useSessionSidebarSections = (args: Args) => {
           folderNameMatchCount,
           groupMatches,
           hasMatch: groupMatches || matchedSessionCount > 0 || folderNameMatchCount > 0,
-        });
-      });
-    });
+        })
+      })
+    })
 
-    return result;
+    return result
   }, [
     hasSessionSearchQuery,
     visibleProjectSections,
@@ -113,11 +114,11 @@ export const useSessionSidebarSections = (args: Args) => {
     normalizedSessionSearchQuery,
     buildGroupSearchText,
     foldersMap,
-  ]);
+  ])
 
   const searchableProjectSections = React.useMemo(() => {
     if (!hasSessionSearchQuery) {
-      return visibleProjectSections;
+      return visibleProjectSections
     }
 
     return visibleProjectSections
@@ -125,27 +126,30 @@ export const useSessionSidebarSections = (args: Args) => {
         ...section,
         groups: section.groups.filter((group) => groupSearchDataByGroup.get(group)?.hasMatch === true),
       }))
-      .filter((section) => section.groups.length > 0);
-  }, [hasSessionSearchQuery, visibleProjectSections, groupSearchDataByGroup]);
+      .filter((section) => section.groups.length > 0)
+  }, [hasSessionSearchQuery, visibleProjectSections, groupSearchDataByGroup])
 
-  const sectionsForRender = hasSessionSearchQuery ? searchableProjectSections : visibleProjectSections;
+  const sectionsForRender = hasSessionSearchQuery ? searchableProjectSections : visibleProjectSections
 
   const searchMatchCount = React.useMemo(() => {
     if (!hasSessionSearchQuery) {
-      return 0;
+      return 0
     }
 
     return sectionsForRender.reduce((total, section) => {
-      return total + section.groups.reduce((groupTotal, group) => {
-        const data = groupSearchDataByGroup.get(group);
-        if (!data) {
-          return groupTotal;
-        }
-        const metadataMatches = data.folderNameMatchCount + (data.groupMatches ? 1 : 0);
-        return groupTotal + data.matchedSessionCount + metadataMatches;
-      }, 0);
-    }, 0);
-  }, [hasSessionSearchQuery, sectionsForRender, groupSearchDataByGroup]);
+      return (
+        total +
+        section.groups.reduce((groupTotal, group) => {
+          const data = groupSearchDataByGroup.get(group)
+          if (!data) {
+            return groupTotal
+          }
+          const metadataMatches = data.folderNameMatchCount + (data.groupMatches ? 1 : 0)
+          return groupTotal + data.matchedSessionCount + metadataMatches
+        }, 0)
+      )
+    }, 0)
+  }, [hasSessionSearchQuery, sectionsForRender, groupSearchDataByGroup])
 
   return {
     projectSections,
@@ -154,5 +158,5 @@ export const useSessionSidebarSections = (args: Args) => {
     searchableProjectSections,
     sectionsForRender,
     searchMatchCount,
-  };
-};
+  }
+}

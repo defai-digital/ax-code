@@ -1,5 +1,5 @@
-export { QUOTA_PROVIDERS, QUOTA_PROVIDER_MAP } from './providers';
-export type { QuotaProviderMeta } from './providers';
+export { QUOTA_PROVIDERS, QUOTA_PROVIDER_MAP } from "./providers"
+export type { QuotaProviderMeta } from "./providers"
 export {
   clampPercent,
   formatPercent,
@@ -12,5 +12,5 @@ export {
   getPaceStatusColor,
   formatRemainingTime,
   calculateExpectedUsagePercent,
-} from './utils';
-export type { PaceStatus, PaceInfo } from './utils';
+} from "./utils"
+export type { PaceStatus, PaceInfo } from "./utils"

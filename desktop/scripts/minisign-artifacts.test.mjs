@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest"
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
@@ -79,7 +79,11 @@ describe("minisign-artifacts.sh", () => {
     try {
       fs.writeFileSync(
         fixture.publicKey,
-        ["untrusted comment: minisign public key 0000000000000000", "RW00000000000000000000000000000000000000000000000000000000000", ""].join("\n"),
+        [
+          "untrusted comment: minisign public key 0000000000000000",
+          "RW00000000000000000000000000000000000000000000000000000000000",
+          "",
+        ].join("\n"),
       )
 
       const result = runScript(
@@ -150,7 +154,15 @@ exit 1
     try {
       const sigDir = path.join(fixture.dir, "sigs")
       const result = runScript(
-        ["--secret-key", fixture.secretKey, "--public-key", fixture.publicKey, "--signature-dir", sigDir, fixture.asset],
+        [
+          "--secret-key",
+          fixture.secretKey,
+          "--public-key",
+          fixture.publicKey,
+          "--signature-dir",
+          sigDir,
+          fixture.asset,
+        ],
         fixture,
         { AX_CODE_DESKTOP_MINISIGN_PASSWORD: "pw" },
       )
@@ -170,9 +182,12 @@ exit 1
       const missingPub = path.join(fixture.dir, "does-not-exist.pub")
       const result = runScript(
         [
-          "--secret-key", fixture.secretKey,
-          "--public-key", missingPub,
-          "--public-key-string", pinnedPublicKey,
+          "--secret-key",
+          fixture.secretKey,
+          "--public-key",
+          missingPub,
+          "--public-key-string",
+          pinnedPublicKey,
           fixture.asset,
         ],
         fixture,
@@ -216,10 +231,14 @@ exit 1
 
       const result = runScript(
         [
-          "--secret-key", fixture.secretKey,
-          "--public-key", fixture.publicKey,
-          "--keychain-service", "custom-svc",
-          "--keychain-account", "custom-acct",
+          "--secret-key",
+          fixture.secretKey,
+          "--public-key",
+          fixture.publicKey,
+          "--keychain-service",
+          "custom-svc",
+          "--keychain-account",
+          "custom-acct",
           fixture.asset,
         ],
         fixture,
@@ -244,9 +263,12 @@ exit 1
 
       const result = runScript(
         [
-          "--secret-key", fixture.secretKey,
-          "--public-key", fixture.publicKey,
-          "--pinned-public-key", altKey,
+          "--secret-key",
+          fixture.secretKey,
+          "--public-key",
+          fixture.publicKey,
+          "--pinned-public-key",
+          altKey,
           fixture.asset,
         ],
         fixture,

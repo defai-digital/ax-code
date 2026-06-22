@@ -75,70 +75,66 @@ describe("session.started event", () => {
 })
 
 describe("step-finish token propagation via Bus event", () => {
-  test(
-    "non-zero tokens propagate through PartUpdated event",
-    async () => {
-      await Instance.provide({
-        directory: projectRoot,
-        fn: async () => {
-          const session = await Session.create({})
+  test("non-zero tokens propagate through PartUpdated event", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({})
 
-          const messageID = MessageID.ascending()
-          await Session.updateMessage({
-            id: messageID,
-            sessionID: session.id,
-            role: "user",
-            time: { created: Date.now() },
-            agent: "user",
-            model: { providerID: "test", modelID: "test" },
-            tools: {},
-            mode: "",
-          } as unknown as MessageV2.Info)
+        const messageID = MessageID.ascending()
+        await Session.updateMessage({
+          id: messageID,
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "user",
+          model: { providerID: "test", modelID: "test" },
+          tools: {},
+          mode: "",
+        } as unknown as MessageV2.Info)
 
-          let received: MessageV2.Part | undefined
-          const unsub = Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
-            received = event.properties.part
-          })
+        let received: MessageV2.Part | undefined
+        const unsub = Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
+          received = event.properties.part
+        })
 
-          const tokens = {
-            total: 1500,
-            input: 500,
-            output: 800,
-            reasoning: 200,
-            cache: { read: 100, write: 50 },
-          }
+        const tokens = {
+          total: 1500,
+          input: 500,
+          output: 800,
+          reasoning: 200,
+          cache: { read: 100, write: 50 },
+        }
 
-          const partInput = {
-            id: PartID.ascending(),
-            messageID,
-            sessionID: session.id,
-            type: "step-finish" as const,
-            reason: "stop",
-            tokens,
-          }
+        const partInput = {
+          id: PartID.ascending(),
+          messageID,
+          sessionID: session.id,
+          type: "step-finish" as const,
+          reason: "stop",
+          tokens,
+        }
 
-          await Session.updatePart(partInput)
+        await Session.updatePart(partInput)
 
-          await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise((resolve) => setTimeout(resolve, 100))
 
-          expect(received).toBeDefined()
-          expect(received!.type).toBe("step-finish")
-          const finish = received as MessageV2.StepFinishPart
-          expect(finish.tokens.input).toBe(500)
-          expect(finish.tokens.output).toBe(800)
-          expect(finish.tokens.reasoning).toBe(200)
-          expect(finish.tokens.total).toBe(1500)
-          expect(finish.tokens.cache.read).toBe(100)
-          expect(finish.tokens.cache.write).toBe(50)
-          expect(received).not.toBe(partInput)
+        expect(received).toBeDefined()
+        expect(received!.type).toBe("step-finish")
+        const finish = received as MessageV2.StepFinishPart
+        expect(finish.tokens.input).toBe(500)
+        expect(finish.tokens.output).toBe(800)
+        expect(finish.tokens.reasoning).toBe(200)
+        expect(finish.tokens.total).toBe(1500)
+        expect(finish.tokens.cache.read).toBe(100)
+        expect(finish.tokens.cache.write).toBe(50)
+        expect(received).not.toBe(partInput)
 
-          unsub()
-          await Session.remove(session.id)
-        },
-      })
-    },
-    30000,
-  )
+        unsub()
+        await Session.remove(session.id)
+      },
+    })
+  }, 30000)
 })
 
 describe("session.updatePartDelta", () => {

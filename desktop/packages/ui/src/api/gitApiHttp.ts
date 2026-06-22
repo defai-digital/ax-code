@@ -1,2 +1,2 @@
-export * from '../lib/gitApiHttp';
-export * from '../lib/api/types';
+export * from "../lib/gitApiHttp"
+export * from "../lib/api/types"

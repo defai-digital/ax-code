@@ -1,12 +1,12 @@
-import { defineConfig } from 'vitest/config';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { defineConfig } from "vitest/config"
+import { createRequire } from "node:module"
+import path from "node:path"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const requireFromWeb = createRequire(path.join(__dirname, 'packages/web/package.json'));
-const react = (await import(pathToFileURL(requireFromWeb.resolve('@vitejs/plugin-react')).href)).default;
-const uiSrc = path.resolve(__dirname, 'packages/ui/src');
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const requireFromWeb = createRequire(path.join(__dirname, "packages/web/package.json"))
+const react = (await import(pathToFileURL(requireFromWeb.resolve("@vitejs/plugin-react")).href)).default
+const uiSrc = path.resolve(__dirname, "packages/ui/src")
 
 // Single root config that runs every workspace's tests under Vitest across
 // three projects:
@@ -23,37 +23,34 @@ export default defineConfig({
         plugins: [react()],
         resolve: {
           alias: [
-            { find: '@openchamber/ui', replacement: uiSrc },
+            { find: "@openchamber/ui", replacement: uiSrc },
             { find: /^@\//, replacement: `${uiSrc}/` },
           ],
         },
         test: {
-          name: 'ui',
-          root: path.resolve(__dirname, 'packages/ui'),
-          environment: 'jsdom',
-          include: ['src/**/*.test.{ts,tsx,js,jsx}'],
+          name: "ui",
+          root: path.resolve(__dirname, "packages/ui"),
+          environment: "jsdom",
+          include: ["src/**/*.test.{ts,tsx,js,jsx}"],
         },
       },
       {
-        extends: './packages/web/vite.config.ts',
+        extends: "./packages/web/vite.config.ts",
         test: {
-          name: 'web',
-          root: path.resolve(__dirname, 'packages/web'),
-          environment: 'node',
-          include: ['**/*.test.{ts,tsx,js,jsx,mjs}'],
+          name: "web",
+          root: path.resolve(__dirname, "packages/web"),
+          environment: "node",
+          include: ["**/*.test.{ts,tsx,js,jsx,mjs}"],
         },
       },
       {
         test: {
-          name: 'node',
+          name: "node",
           root: __dirname,
-          environment: 'node',
-          include: [
-            'scripts/**/*.test.mjs',
-            'packages/electron/**/*.test.{mjs,js,ts}',
-          ],
+          environment: "node",
+          include: ["scripts/**/*.test.mjs", "packages/electron/**/*.test.{mjs,js,ts}"],
         },
       },
     ],
   },
-});
+})

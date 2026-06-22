@@ -1,50 +1,50 @@
-import React from 'react';
-import { cn } from '@/lib/utils';
-import type { SessionFolder } from '@/stores/useSessionFoldersStore';
-import { usePendingPermissionSessionIds } from '@/sync/sync-context';
-import { useI18n } from '@/lib/i18n';
-import { Icon } from "@/components/icon/Icon";
+import React from "react"
+import { cn } from "@/lib/utils"
+import type { SessionFolder } from "@/stores/useSessionFoldersStore"
+import { usePendingPermissionSessionIds } from "@/sync/sync-context"
+import { useI18n } from "@/lib/i18n"
+import { Icon } from "@/components/icon/Icon"
 
 interface SessionFolderItemProps<TSessionNode> {
-  folder: SessionFolder;
-  sessions: TSessionNode[];
+  folder: SessionFolder
+  sessions: TSessionNode[]
   /** Sub-folders that belong directly to this folder */
-  subFolderItems?: React.ReactNode;
-  isCollapsed: boolean;
-  onToggle: () => void;
-  onRename: (name: string) => void;
-  onDelete: () => void;
+  subFolderItems?: React.ReactNode
+  isCollapsed: boolean
+  onToggle: () => void
+  onRename: (name: string) => void
+  onDelete: () => void
   renderSessionNode: (
     node: TSessionNode,
     depth?: number,
     groupDir?: string | null,
     projectId?: string | null,
     archivedBucket?: boolean,
-  ) => React.ReactNode;
-  groupDirectory?: string | null;
-  projectId?: string | null;
-  alwaysShowActions?: boolean;
-  isRenaming?: boolean;
-  renameDraft?: string;
-  onRenameDraftChange?: (value: string) => void;
-  onRenameSave?: () => void;
-  onRenameCancel?: () => void;
+  ) => React.ReactNode
+  groupDirectory?: string | null
+  projectId?: string | null
+  alwaysShowActions?: boolean
+  isRenaming?: boolean
+  renameDraft?: string
+  onRenameDraftChange?: (value: string) => void
+  onRenameSave?: () => void
+  onRenameCancel?: () => void
   /** Ref callback from useDroppable – attach to folder header to make it a drop zone */
-  droppableRef?: (node: HTMLElement | null) => void;
+  droppableRef?: (node: HTMLElement | null) => void
   /** Whether a draggable session is currently hovering over this folder */
-  isDropTarget?: boolean;
+  isDropTarget?: boolean
   /** Create a new session scoped to this folder */
-  onNewSession?: () => void;
+  onNewSession?: () => void
   /** Create a new sub-folder inside this folder */
-  onNewSubFolder?: () => void;
+  onNewSubFolder?: () => void
   /** Visual indent depth (0 = root folder, 1 = sub-folder) */
-  depth?: number;
+  depth?: number
   /** Hide folder action buttons (rename/delete/new) */
-  hideActions?: boolean;
+  hideActions?: boolean
   /** Whether folder belongs to archived section */
-  archivedBucket?: boolean;
+  archivedBucket?: boolean
   /** Session ids in this folder and its sub-folders, for the collapsed waiting-approval badge */
-  descendantSessionIds?: readonly string[];
+  descendantSessionIds?: readonly string[]
 }
 
 const SessionFolderItemBase = <TSessionNode,>({
@@ -60,7 +60,7 @@ const SessionFolderItemBase = <TSessionNode,>({
   projectId,
   alwaysShowActions = false,
   isRenaming = false,
-  renameDraft = '',
+  renameDraft = "",
   onRenameDraftChange,
   onRenameSave,
   onRenameCancel,
@@ -73,125 +73,133 @@ const SessionFolderItemBase = <TSessionNode,>({
   archivedBucket = false,
   descendantSessionIds,
 }: SessionFolderItemProps<TSessionNode>) => {
-  const { t } = useI18n();
-  const pendingPermissionIds = usePendingPermissionSessionIds();
+  const { t } = useI18n()
+  const pendingPermissionIds = usePendingPermissionSessionIds()
   const waitingApprovalCount = React.useMemo(() => {
     if (!descendantSessionIds || descendantSessionIds.length === 0 || pendingPermissionIds.size === 0) {
-      return 0;
+      return 0
     }
-    let count = 0;
+    let count = 0
     for (const id of descendantSessionIds) {
-      if (pendingPermissionIds.has(id)) count += 1;
+      if (pendingPermissionIds.has(id)) count += 1
     }
-    return count;
-  }, [descendantSessionIds, pendingPermissionIds]);
-  const [localRenaming, setLocalRenaming] = React.useState(false);
-  const [localDraft, setLocalDraft] = React.useState('');
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
+    return count
+  }, [descendantSessionIds, pendingPermissionIds])
+  const [localRenaming, setLocalRenaming] = React.useState(false)
+  const [localDraft, setLocalDraft] = React.useState("")
+  const inputRef = React.useRef<HTMLInputElement | null>(null)
 
-  const renaming = isRenaming || localRenaming;
-  const draft = isRenaming ? renameDraft : localDraft;
+  const renaming = isRenaming || localRenaming
+  const draft = isRenaming ? renameDraft : localDraft
 
   const handleStartRename = React.useCallback(() => {
-    setLocalDraft(folder.name);
-    setLocalRenaming(true);
-  }, [folder.name]);
+    setLocalDraft(folder.name)
+    setLocalRenaming(true)
+  }, [folder.name])
 
   const handleSaveRename = React.useCallback(() => {
-    const trimmed = draft.trim();
+    const trimmed = draft.trim()
     if (trimmed && trimmed !== folder.name) {
-      onRename(trimmed);
+      onRename(trimmed)
     }
     if (isRenaming && onRenameSave) {
-      onRenameSave();
+      onRenameSave()
     }
-    setLocalRenaming(false);
-    setLocalDraft('');
-  }, [draft, folder.name, isRenaming, onRename, onRenameSave]);
+    setLocalRenaming(false)
+    setLocalDraft("")
+  }, [draft, folder.name, isRenaming, onRename, onRenameSave])
 
   const handleCancelRename = React.useCallback(() => {
     if (isRenaming && onRenameCancel) {
-      onRenameCancel();
+      onRenameCancel()
     }
-    setLocalRenaming(false);
-    setLocalDraft('');
-  }, [isRenaming, onRenameCancel]);
+    setLocalRenaming(false)
+    setLocalDraft("")
+  }, [isRenaming, onRenameCancel])
 
   const handleDraftChange = React.useCallback(
     (value: string) => {
       if (isRenaming && onRenameDraftChange) {
-        onRenameDraftChange(value);
+        onRenameDraftChange(value)
       } else {
-        setLocalDraft(value);
+        setLocalDraft(value)
       }
     },
     [isRenaming, onRenameDraftChange],
-  );
+  )
 
   // Auto-focus rename when externally triggered
   React.useEffect(() => {
-    if (!isRenaming) return;
+    if (!isRenaming) return
     const focusInput = () => {
-      const input = inputRef.current;
-      if (!input) return;
-      input.focus();
-      input.select();
-    };
-    const frameId = requestAnimationFrame(focusInput);
-    const timeoutId = window.setTimeout(focusInput, 0);
+      const input = inputRef.current
+      if (!input) return
+      input.focus()
+      input.select()
+    }
+    const frameId = requestAnimationFrame(focusInput)
+    const timeoutId = window.setTimeout(focusInput, 0)
     return () => {
-      cancelAnimationFrame(frameId);
-      window.clearTimeout(timeoutId);
-    };
-  }, [isRenaming]);
+      cancelAnimationFrame(frameId)
+      window.clearTimeout(timeoutId)
+    }
+  }, [isRenaming])
 
-  const folderIconName = isCollapsed ? 'folder' : 'folder-open';
-  const isSubFolder = depth > 0;
+  const folderIconName = isCollapsed ? "folder" : "folder-open"
+  const isSubFolder = depth > 0
 
   return (
-    <div className={cn('oc-folder', isSubFolder && 'ml-3')}>
+    <div className={cn("oc-folder", isSubFolder && "ml-3")}>
       {/* Folder header – also acts as a drop zone when droppableRef is provided */}
       <div
         ref={droppableRef}
         className={cn(
-          'group/folder relative flex items-center justify-between gap-1.5 py-1 min-w-0 rounded-md',
-          'cursor-pointer',
-          isDropTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/30',
+          "group/folder relative flex items-center justify-between gap-1.5 py-1 min-w-0 rounded-md",
+          "cursor-pointer",
+          isDropTarget && "bg-primary/10 ring-1 ring-inset ring-primary/30",
         )}
         onClick={renaming ? undefined : onToggle}
-        role={renaming ? undefined : 'button'}
+        role={renaming ? undefined : "button"}
         tabIndex={renaming ? undefined : 0}
         onKeyDown={
           renaming
             ? undefined
             : (event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onToggle();
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  onToggle()
                 }
               }
         }
-        aria-label={isCollapsed
-          ? t('sessions.sidebar.folderItem.expandAria', { folderName: folder.name })
-          : t('sessions.sidebar.folderItem.collapseAria', { folderName: folder.name })}
+        aria-label={
+          isCollapsed
+            ? t("sessions.sidebar.folderItem.expandAria", { folderName: folder.name })
+            : t("sessions.sidebar.folderItem.collapseAria", { folderName: folder.name })
+        }
       >
-        <div className={cn(
-          'min-w-0 flex items-center gap-1.5 pl-1.5 flex-1 transition-[padding]',
-          archivedBucket
-            ? (alwaysShowActions ? 'pr-7' : 'group-hover/folder:pr-7 group-focus-within/folder:pr-7')
-            : '',
-        )}>
-          <Icon name={folderIconName} className={cn('h-3.5 w-3.5 flex-shrink-0', isDropTarget ? 'text-primary' : 'text-muted-foreground')} />
+        <div
+          className={cn(
+            "min-w-0 flex items-center gap-1.5 pl-1.5 flex-1 transition-[padding]",
+            archivedBucket
+              ? alwaysShowActions
+                ? "pr-7"
+                : "group-hover/folder:pr-7 group-focus-within/folder:pr-7"
+              : "",
+          )}
+        >
+          <Icon
+            name={folderIconName}
+            className={cn("h-3.5 w-3.5 flex-shrink-0", isDropTarget ? "text-primary" : "text-muted-foreground")}
+          />
 
           {renaming ? (
             <form
               className="flex min-w-0 flex-1 items-center gap-1"
-
               onPointerDown={(event) => event.stopPropagation()}
               onMouseDown={(event) => event.stopPropagation()}
               onSubmit={(event) => {
-                event.preventDefault();
-                handleSaveRename();
+                event.preventDefault()
+                handleSaveRename()
               }}
             >
               <input
@@ -200,18 +208,18 @@ const SessionFolderItemBase = <TSessionNode,>({
                 onChange={(event) => handleDraftChange(event.target.value)}
                 className="flex-1 min-w-0 bg-transparent typography-ui-label outline-none placeholder:text-muted-foreground"
                 autoFocus
-                placeholder={t('sessions.sidebar.folderItem.namePlaceholder')}
+                placeholder={t("sessions.sidebar.folderItem.namePlaceholder")}
                 onClick={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
                 onMouseDown={(event) => event.stopPropagation()}
                 onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.stopPropagation();
-                    handleCancelRename();
-                    return;
+                  if (event.key === "Escape") {
+                    event.stopPropagation()
+                    handleCancelRename()
+                    return
                   }
-                  if (event.key === ' ' || event.key === 'Enter') {
-                    event.stopPropagation();
+                  if (event.key === " " || event.key === "Enter") {
+                    event.stopPropagation()
                   }
                 }}
               />
@@ -227,8 +235,8 @@ const SessionFolderItemBase = <TSessionNode,>({
               <button
                 type="button"
                 onClick={(event) => {
-                  event.stopPropagation();
-                  handleCancelRename();
+                  event.stopPropagation()
+                  handleCancelRename()
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
                 onMouseDown={(event) => event.stopPropagation()}
@@ -239,17 +247,20 @@ const SessionFolderItemBase = <TSessionNode,>({
             </form>
           ) : (
             <div className="min-w-0 flex items-center gap-1.5 flex-1">
-              <span className={cn('typography-ui-label font-semibold truncate', isDropTarget ? 'text-primary' : 'text-muted-foreground')}>
+              <span
+                className={cn(
+                  "typography-ui-label font-semibold truncate",
+                  isDropTarget ? "text-primary" : "text-muted-foreground",
+                )}
+              >
                 {folder.name}
               </span>
-              <span className="typography-micro text-muted-foreground/70 flex-shrink-0">
-                • {sessions.length}
-              </span>
+              <span className="typography-micro text-muted-foreground/70 flex-shrink-0">• {sessions.length}</span>
               {isCollapsed && waitingApprovalCount > 0 ? (
                 <span
                   className="inline-flex flex-shrink-0 items-center gap-1 typography-micro text-[var(--status-warning)]"
-                  title={t('sessions.sidebar.folder.waitingApproval', { count: waitingApprovalCount })}
-                  aria-label={t('sessions.sidebar.folder.waitingApproval', { count: waitingApprovalCount })}
+                  title={t("sessions.sidebar.folder.waitingApproval", { count: waitingApprovalCount })}
+                  aria-label={t("sessions.sidebar.folder.waitingApproval", { count: waitingApprovalCount })}
                 >
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--status-warning)]" />
                   {waitingApprovalCount}
@@ -262,7 +273,6 @@ const SessionFolderItemBase = <TSessionNode,>({
               )}
             </div>
           )}
-
         </div>
 
         {/* Action buttons */}
@@ -270,21 +280,23 @@ const SessionFolderItemBase = <TSessionNode,>({
           <div className="flex items-center gap-0.5 px-0.5">
             <div
               className={cn(
-                'flex items-center gap-0.5 transition-opacity',
-                alwaysShowActions ? 'opacity-100' : 'opacity-0 group-hover/folder:opacity-100 group-focus-within/folder:opacity-100',
-                archivedBucket && 'absolute right-0.5 top-1/2 z-10 -translate-y-1/2 px-0',
+                "flex items-center gap-0.5 transition-opacity",
+                alwaysShowActions
+                  ? "opacity-100"
+                  : "opacity-0 group-hover/folder:opacity-100 group-focus-within/folder:opacity-100",
+                archivedBucket && "absolute right-0.5 top-1/2 z-10 -translate-y-1/2 px-0",
               )}
             >
               {!archivedBucket && onNewSession ? (
                 <button
                   type="button"
                   onClick={(event) => {
-                    event.stopPropagation();
-                    onNewSession();
+                    event.stopPropagation()
+                    onNewSession()
                   }}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label={t('sessions.sidebar.folderItem.newSessionAria', { folderName: folder.name })}
-                  title={t('sessions.sidebar.project.actions.newSession')}
+                  aria-label={t("sessions.sidebar.folderItem.newSessionAria", { folderName: folder.name })}
+                  title={t("sessions.sidebar.project.actions.newSession")}
                 >
                   <Icon name="add" className="h-3.5 w-3.5" />
                 </button>
@@ -294,12 +306,12 @@ const SessionFolderItemBase = <TSessionNode,>({
                 <button
                   type="button"
                   onClick={(event) => {
-                    event.stopPropagation();
-                    onNewSubFolder();
+                    event.stopPropagation()
+                    onNewSubFolder()
                   }}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label={t('sessions.sidebar.folderItem.newSubfolderAria', { folderName: folder.name })}
-                  title={t('sessions.sidebar.folderItem.newSubfolder')}
+                  aria-label={t("sessions.sidebar.folderItem.newSubfolderAria", { folderName: folder.name })}
+                  title={t("sessions.sidebar.folderItem.newSubfolder")}
                 >
                   <Icon name="folder-add" className="h-3.5 w-3.5" />
                 </button>
@@ -308,11 +320,11 @@ const SessionFolderItemBase = <TSessionNode,>({
                 <button
                   type="button"
                   onClick={(event) => {
-                    event.stopPropagation();
-                    handleStartRename();
+                    event.stopPropagation()
+                    handleStartRename()
                   }}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label={t('sessions.sidebar.folderItem.renameAria', { folderName: folder.name })}
+                  aria-label={t("sessions.sidebar.folderItem.renameAria", { folderName: folder.name })}
                 >
                   <Icon name="pencil-ai" className="h-3.5 w-3.5" />
                 </button>
@@ -320,13 +332,15 @@ const SessionFolderItemBase = <TSessionNode,>({
               <button
                 type="button"
                 onClick={(event) => {
-                  event.stopPropagation();
-                  onDelete();
+                  event.stopPropagation()
+                  onDelete()
                 }}
                 className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                aria-label={archivedBucket
-                  ? t('sessions.sidebar.folderItem.deleteArchivedInFolderAria', { folderName: folder.name })
-                  : t('sessions.sidebar.folderItem.deleteFolderAria', { folderName: folder.name })}
+                aria-label={
+                  archivedBucket
+                    ? t("sessions.sidebar.folderItem.deleteArchivedInFolderAria", { folderName: folder.name })
+                    : t("sessions.sidebar.folderItem.deleteFolderAria", { folderName: folder.name })
+                }
               >
                 <Icon name="delete-bin" className="h-3.5 w-3.5" />
               </button>
@@ -347,15 +361,15 @@ const SessionFolderItemBase = <TSessionNode,>({
             )
           ) : !subFolderItems ? (
             <div className="py-1 pl-1.5 text-left typography-micro text-muted-foreground/70">
-              {t('sessions.sidebar.folderItem.emptyFolder')}
+              {t("sessions.sidebar.folderItem.emptyFolder")}
             </div>
           ) : null}
         </div>
       ) : null}
     </div>
-  );
-};
+  )
+}
 
 export const SessionFolderItem = React.memo(SessionFolderItemBase) as <TSessionNode>(
   props: SessionFolderItemProps<TSessionNode>,
-) => React.ReactElement;
+) => React.ReactElement

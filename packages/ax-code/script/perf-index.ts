@@ -871,7 +871,7 @@ async function main() {
       Object.keys(opts.baseline.regression.phases).length > 0)
 
   if (hasBase) {
-    if (!(existsSync(base))) {
+    if (!existsSync(base)) {
       throw new Error(`Baseline not found: ${base}`)
     }
     const prev = JSON.parse(await fs.readFile(base, "utf8")) as Bench

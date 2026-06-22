@@ -1,90 +1,90 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { createEventPipeline } from '../event-pipeline';
+import { afterEach, describe, expect, it } from "vitest"
+import { createEventPipeline } from "../event-pipeline"
 
-const originalDocument = globalThis.document;
-const originalWindow = globalThis.window;
-const originalWebSocket = globalThis.WebSocket;
+const originalDocument = globalThis.document
+const originalWindow = globalThis.window
+const originalWebSocket = globalThis.WebSocket
 
 function installDomStubs() {
   // jsdom provides a WebSocket constructor that silently hangs when there is
   // no server — the pipeline would try WS first and never fall back to SSE
   // within the test timeout.  Force the SSE path by removing WebSocket.
-  globalThis.WebSocket = undefined;
+  globalThis.WebSocket = undefined
 
   globalThis.document = {
-    visibilityState: 'visible',
+    visibilityState: "visible",
     addEventListener() {},
     removeEventListener() {},
-  };
+  }
 
   globalThis.window = {
     location: {
-      href: 'http://127.0.0.1:3000/',
-      origin: 'http://127.0.0.1:3000',
+      href: "http://127.0.0.1:3000/",
+      origin: "http://127.0.0.1:3000",
     },
     addEventListener() {},
     removeEventListener() {},
-  };
+  }
 }
 
 class FakeWebSocket {
-  static instances = [];
+  static instances = []
 
   constructor(url) {
-    this.url = url;
-    this.readyState = 0;
-    this.onopen = null;
-    this.onmessage = null;
-    this.onerror = null;
-    this.onclose = null;
-    FakeWebSocket.instances.push(this);
+    this.url = url
+    this.readyState = 0
+    this.onopen = null
+    this.onmessage = null
+    this.onerror = null
+    this.onclose = null
+    FakeWebSocket.instances.push(this)
   }
 
   close() {
-    this.readyState = 3;
+    this.readyState = 3
   }
 
   emitOpen() {
-    this.readyState = 1;
-    this.onopen?.();
+    this.readyState = 1
+    this.onopen?.()
   }
 
   emitMessage(payload) {
-    this.onmessage?.({ data: JSON.stringify(payload) });
+    this.onmessage?.({ data: JSON.stringify(payload) })
   }
 
   emitClose() {
-    this.readyState = 3;
-    this.onclose?.();
+    this.readyState = 3
+    this.onclose?.()
   }
 }
 
 afterEach(() => {
-  globalThis.document = originalDocument;
-  globalThis.window = originalWindow;
-  globalThis.WebSocket = originalWebSocket;
-  FakeWebSocket.instances = [];
-});
+  globalThis.document = originalDocument
+  globalThis.window = originalWindow
+  globalThis.WebSocket = originalWebSocket
+  FakeWebSocket.instances = []
+})
 
 function createSdkWithSingleEvent(event, hold) {
   return {
     global: {
       event: async () => ({
         stream: (async function* () {
-          yield event;
-          await hold;
+          yield event
+          await hold
         })(),
       }),
     },
-  };
+  }
 }
 
 function withTimeout(promise, ms, message) {
-  let timeoutId;
+  let timeoutId
   const timeout = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(message)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+    timeoutId = setTimeout(() => reject(new Error(message)), ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId))
 }
 
 // Helper to create an SDK that yields multiple events in sequence, then holds.
@@ -94,970 +94,990 @@ function createSdkWithEvents(events, hold) {
       event: async () => ({
         stream: (async function* () {
           for (const event of events) {
-            yield event;
+            yield event
           }
-          await hold;
+          await hold
         })(),
       }),
     },
-  };
+  }
 }
 
 // Run a pipeline against a pre-seeded event stream, collect every dispatched
 // event, wait long enough for the 16ms flush window to elapse, then tear it
 // down. Returns the list of { directory, payload } that onEvent saw.
 async function runPipelineWithEvents(events, waitMs = 80) {
-  installDomStubs();
+  installDomStubs()
 
-  let releaseStream;
+  let releaseStream
   const hold = new Promise((resolve) => {
-    releaseStream = resolve;
-  });
+    releaseStream = resolve
+  })
 
-  const received = [];
-  const sdk = createSdkWithEvents(events, hold);
+  const received = []
+  const sdk = createSdkWithEvents(events, hold)
   const { cleanup } = createEventPipeline({
     sdk,
     onEvent: (directory, payload) => {
-      received.push({ directory, payload });
+      received.push({ directory, payload })
     },
-  });
+  })
 
-  await new Promise((resolve) => setTimeout(resolve, waitMs));
-  cleanup();
-  releaseStream();
+  await new Promise((resolve) => setTimeout(resolve, waitMs))
+  cleanup()
+  releaseStream()
 
-  return received;
+  return received
 }
 
-describe('createEventPipeline', () => {
-  it('falls back to payload.properties.directory when the SDK event omits top-level directory', async () => {
-    installDomStubs();
+describe("createEventPipeline", () => {
+  it("falls back to payload.properties.directory when the SDK event omits top-level directory", async () => {
+    installDomStubs()
 
-    let releaseStream;
+    let releaseStream
     const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
+      releaseStream = resolve
+    })
 
-    const received = [];
-    const sdk = createSdkWithSingleEvent({
-      payload: {
-        type: 'session.status',
-        properties: {
-          directory: 'C:/Users/daveotero/localdev/openchamber',
-          sessionID: 'session-1',
-          status: { type: 'busy' },
-        },
-      },
-    }, hold);
-
-    const delivered = new Promise((resolve) => {
-      const { cleanup } = createEventPipeline({
-        sdk,
-        onEvent: (directory, payload) => {
-          received.push({ directory, payload });
-          cleanup();
-          releaseStream();
-          resolve();
-        },
-      });
-    });
-
-    await delivered;
-
-    expect(received).toHaveLength(1);
-    expect(received[0].directory).toBe('C:/Users/daveotero/localdev/openchamber');
-    expect(received[0].payload.type).toBe('session.status');
-  });
-
-  it('prefers the explicit top-level event directory when present', async () => {
-    installDomStubs();
-
-    let releaseStream;
-    const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
-
-    const received = [];
-    const sdk = createSdkWithSingleEvent({
-      directory: 'C:/top-level',
-      payload: {
-        type: 'session.status',
-        properties: {
-          directory: 'C:/nested',
-          sessionID: 'session-2',
-          status: { type: 'busy' },
-        },
-      },
-    }, hold);
-
-    const delivered = new Promise((resolve) => {
-      const { cleanup } = createEventPipeline({
-        sdk,
-        onEvent: (directory, payload) => {
-          received.push({ directory, payload });
-          cleanup();
-          releaseStream();
-          resolve();
-        },
-      });
-    });
-
-    await delivered;
-
-    expect(received).toHaveLength(1);
-    expect(received[0].directory).toBe('C:/top-level');
-    expect(received[0].payload.type).toBe('session.status');
-  });
-
-  it('uses payload.properties.directory when the top-level directory is an empty string', async () => {
-    installDomStubs();
-
-    let releaseStream;
-    const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
-
-    const received = [];
-    const sdk = createSdkWithSingleEvent({
-      directory: '',
-      payload: {
-        type: 'message.part.updated',
-        properties: {
-          directory: 'C:/fallback-dir',
-          part: {
-            id: 'part-1',
-            type: 'text',
-            messageID: 'message-1',
+    const received = []
+    const sdk = createSdkWithSingleEvent(
+      {
+        payload: {
+          type: "session.status",
+          properties: {
+            directory: "C:/Users/daveotero/localdev/openchamber",
+            sessionID: "session-1",
+            status: { type: "busy" },
           },
         },
       },
-    }, hold);
+      hold,
+    )
 
     const delivered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (directory, payload) => {
-          received.push({ directory, payload });
-          cleanup();
-          releaseStream();
-          resolve();
+          received.push({ directory, payload })
+          cleanup()
+          releaseStream()
+          resolve()
         },
-      });
-    });
+      })
+    })
 
-    await delivered;
+    await delivered
 
-    expect(received).toHaveLength(1);
-    expect(received[0].directory).toBe('C:/fallback-dir');
-    expect(received[0].payload.type).toBe('message.part.updated');
-  });
+    expect(received).toHaveLength(1)
+    expect(received[0].directory).toBe("C:/Users/daveotero/localdev/openchamber")
+    expect(received[0].payload.type).toBe("session.status")
+  })
 
-  it('keeps truly global events on the global channel when no directory is present anywhere', async () => {
-    installDomStubs();
+  it("prefers the explicit top-level event directory when present", async () => {
+    installDomStubs()
 
-    let releaseStream;
+    let releaseStream
     const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
+      releaseStream = resolve
+    })
 
-    const received = [];
-    const sdk = createSdkWithSingleEvent({
-      payload: {
-        type: 'server.connected',
-        properties: {},
+    const received = []
+    const sdk = createSdkWithSingleEvent(
+      {
+        directory: "C:/top-level",
+        payload: {
+          type: "session.status",
+          properties: {
+            directory: "C:/nested",
+            sessionID: "session-2",
+            status: { type: "busy" },
+          },
+        },
       },
-    }, hold);
+      hold,
+    )
 
     const delivered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (directory, payload) => {
-          received.push({ directory, payload });
-          cleanup();
-          releaseStream();
-          resolve();
+          received.push({ directory, payload })
+          cleanup()
+          releaseStream()
+          resolve()
         },
-      });
-    });
+      })
+    })
 
-    await delivered;
+    await delivered
 
-    expect(received).toHaveLength(1);
-    expect(received[0].directory).toBe('global');
-    expect(received[0].payload.type).toBe('server.connected');
-  });
+    expect(received).toHaveLength(1)
+    expect(received[0].directory).toBe("C:/top-level")
+    expect(received[0].payload.type).toBe("session.status")
+  })
 
-  it('keeps message.part.delta events when a newer message.part.updated is queued for the same field', async () => {
-    installDomStubs();
+  it("uses payload.properties.directory when the top-level directory is an empty string", async () => {
+    installDomStubs()
 
-    let releaseStream;
+    let releaseStream
     const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
+      releaseStream = resolve
+    })
 
-    const received = [];
+    const received = []
+    const sdk = createSdkWithSingleEvent(
+      {
+        directory: "",
+        payload: {
+          type: "message.part.updated",
+          properties: {
+            directory: "C:/fallback-dir",
+            part: {
+              id: "part-1",
+              type: "text",
+              messageID: "message-1",
+            },
+          },
+        },
+      },
+      hold,
+    )
+
+    const delivered = new Promise((resolve) => {
+      const { cleanup } = createEventPipeline({
+        sdk,
+        onEvent: (directory, payload) => {
+          received.push({ directory, payload })
+          cleanup()
+          releaseStream()
+          resolve()
+        },
+      })
+    })
+
+    await delivered
+
+    expect(received).toHaveLength(1)
+    expect(received[0].directory).toBe("C:/fallback-dir")
+    expect(received[0].payload.type).toBe("message.part.updated")
+  })
+
+  it("keeps truly global events on the global channel when no directory is present anywhere", async () => {
+    installDomStubs()
+
+    let releaseStream
+    const hold = new Promise((resolve) => {
+      releaseStream = resolve
+    })
+
+    const received = []
+    const sdk = createSdkWithSingleEvent(
+      {
+        payload: {
+          type: "server.connected",
+          properties: {},
+        },
+      },
+      hold,
+    )
+
+    const delivered = new Promise((resolve) => {
+      const { cleanup } = createEventPipeline({
+        sdk,
+        onEvent: (directory, payload) => {
+          received.push({ directory, payload })
+          cleanup()
+          releaseStream()
+          resolve()
+        },
+      })
+    })
+
+    await delivered
+
+    expect(received).toHaveLength(1)
+    expect(received[0].directory).toBe("global")
+    expect(received[0].payload.type).toBe("server.connected")
+  })
+
+  it("keeps message.part.delta events when a newer message.part.updated is queued for the same field", async () => {
+    installDomStubs()
+
+    let releaseStream
+    const hold = new Promise((resolve) => {
+      releaseStream = resolve
+    })
+
+    const received = []
 
     // The pipeline only routes/coalesces events. Whether this delta is already
     // represented by the newer snapshot is reducer state, not queue state.
-    const directory = '/test/dir';
-    const sdk = createSdkWithEvents([
-      // T0: message.part.updated for part-A
-      {
-        payload: {
-          type: 'message.part.updated',
-          properties: {
-            directory,
-            part: { id: 'part-A', type: 'text', messageID: 'msg-1' },
+    const directory = "/test/dir"
+    const sdk = createSdkWithEvents(
+      [
+        // T0: message.part.updated for part-A
+        {
+          payload: {
+            type: "message.part.updated",
+            properties: {
+              directory,
+              part: { id: "part-A", type: "text", messageID: "msg-1" },
+            },
           },
         },
-      },
-      // T1: message.part.delta for part-A
-      {
-        payload: {
-          type: 'message.part.delta',
-          properties: {
-            directory,
-            messageID: 'msg-1',
-            partID: 'part-A',
-            field: 'text',
-            delta: ' world',
+        // T1: message.part.delta for part-A
+        {
+          payload: {
+            type: "message.part.delta",
+            properties: {
+              directory,
+              messageID: "msg-1",
+              partID: "part-A",
+              field: "text",
+              delta: " world",
+            },
           },
         },
-      },
-      // T2: message.part.updated for part-A. This must stay after T1:
-      // replacing T0 with this newer snapshot would make the reducer apply the
-      // delta after a snapshot that may already include it.
-      {
-        payload: {
-          type: 'message.part.updated',
-          properties: {
-            directory,
-            part: { id: 'part-A', type: 'text', messageID: 'msg-1' },
+        // T2: message.part.updated for part-A. This must stay after T1:
+        // replacing T0 with this newer snapshot would make the reducer apply the
+        // delta after a snapshot that may already include it.
+        {
+          payload: {
+            type: "message.part.updated",
+            properties: {
+              directory,
+              part: { id: "part-A", type: "text", messageID: "msg-1" },
+            },
           },
         },
-      },
-    ], hold);
+      ],
+      hold,
+    )
 
     const delivered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (dir, payload) => {
-          received.push({ directory: dir, payload });
+          received.push({ directory: dir, payload })
           if (received.length === 3) {
-            cleanup();
-            releaseStream();
-            resolve();
+            cleanup()
+            releaseStream()
+            resolve()
           }
         },
-      });
-    });
+      })
+    })
 
-    await delivered;
+    await delivered
 
-    expect(received.length).toBe(3);
-    expect(received[0].payload.type).toBe('message.part.updated');
-    expect(received[1].payload.type).toBe('message.part.delta');
-    expect(received[1].payload.properties.delta).toBe(' world');
-    expect(received[2].payload.type).toBe('message.part.updated');
-  });
+    expect(received.length).toBe(3)
+    expect(received[0].payload.type).toBe("message.part.updated")
+    expect(received[1].payload.type).toBe("message.part.delta")
+    expect(received[1].payload.properties.delta).toBe(" world")
+    expect(received[2].payload.type).toBe("message.part.updated")
+  })
 
-  it('keeps delta events for other fields on the same part', async () => {
+  it("keeps delta events for other fields on the same part", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.delta',
+          type: "message.part.delta",
           properties: {
-            messageID: 'msg-1',
-            partID: 'part-1',
-            field: 'reasoning',
-            delta: 'before',
+            messageID: "msg-1",
+            partID: "part-1",
+            field: "reasoning",
+            delta: "before",
           },
         },
       },
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.updated',
+          type: "message.part.updated",
           properties: {
-            part: { id: 'part-1', type: 'text', messageID: 'msg-1' },
+            part: { id: "part-1", type: "text", messageID: "msg-1" },
           },
         },
       },
-    ]);
+    ])
 
-    expect(received).toHaveLength(2);
-    expect(received[0].payload.type).toBe('message.part.delta');
-    expect(received[0].payload.properties.field).toBe('reasoning');
-    expect(received[1].payload.type).toBe('message.part.updated');
-  });
+    expect(received).toHaveLength(2)
+    expect(received[0].payload.type).toBe("message.part.delta")
+    expect(received[0].payload.properties.field).toBe("reasoning")
+    expect(received[1].payload.type).toBe("message.part.updated")
+  })
 
-  it('keeps text delta after an initial part.updated when no newer part.updated replaced it', async () => {
+  it("keeps text delta after an initial part.updated when no newer part.updated replaced it", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.updated',
+          type: "message.part.updated",
           properties: {
-            part: { id: 'part-1', type: 'text', messageID: 'msg-1' },
+            part: { id: "part-1", type: "text", messageID: "msg-1" },
           },
         },
       },
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.delta',
+          type: "message.part.delta",
           properties: {
-            messageID: 'msg-1',
-            partID: 'part-1',
-            field: 'text',
-            delta: 'hello',
+            messageID: "msg-1",
+            partID: "part-1",
+            field: "text",
+            delta: "hello",
           },
         },
       },
-    ]);
+    ])
 
-    expect(received).toHaveLength(2);
-    expect(received[0].payload.type).toBe('message.part.updated');
-    expect(received[1].payload.type).toBe('message.part.delta');
-    expect(received[1].payload.properties.delta).toBe('hello');
-  });
+    expect(received).toHaveLength(2)
+    expect(received[0].payload.type).toBe("message.part.updated")
+    expect(received[1].payload.type).toBe("message.part.delta")
+    expect(received[1].payload.properties.delta).toBe("hello")
+  })
 
-  it('coalesces message.part.updated events for the same part', async () => {
-    installDomStubs();
+  it("coalesces message.part.updated events for the same part", async () => {
+    installDomStubs()
 
-    let releaseStream;
+    let releaseStream
     const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
+      releaseStream = resolve
+    })
 
-    const received = [];
-    const directory = '/test/dir';
+    const received = []
+    const directory = "/test/dir"
 
-    const sdk = createSdkWithEvents([
-      {
-        payload: {
-          type: 'message.part.updated',
-          properties: {
-            directory,
-            part: { id: 'part-A', type: 'text', messageID: 'msg-1' },
+    const sdk = createSdkWithEvents(
+      [
+        {
+          payload: {
+            type: "message.part.updated",
+            properties: {
+              directory,
+              part: { id: "part-A", type: "text", messageID: "msg-1" },
+            },
           },
         },
-      },
-      {
-        payload: {
-          type: 'message.part.updated',
-          properties: {
-            directory,
-            part: { id: 'part-A', type: 'text', messageID: 'msg-1' },
+        {
+          payload: {
+            type: "message.part.updated",
+            properties: {
+              directory,
+              part: { id: "part-A", type: "text", messageID: "msg-1" },
+            },
           },
         },
-      },
-    ], hold);
+      ],
+      hold,
+    )
 
     const delivered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (dir, payload) => {
-          received.push({ directory: dir, payload });
-          cleanup();
-          releaseStream();
-          resolve();
+          received.push({ directory: dir, payload })
+          cleanup()
+          releaseStream()
+          resolve()
         },
-      });
-    });
+      })
+    })
 
-    await delivered;
+    await delivered
 
     // Only 1 event should be delivered (coalesced)
-    expect(received.length).toBe(1);
-    expect(received[0].payload.type).toBe('message.part.updated');
-  });
+    expect(received.length).toBe(1)
+    expect(received[0].payload.type).toBe("message.part.updated")
+  })
 
-  it('routes events before queueing so coalescing happens on the resolved directory', async () => {
-    installDomStubs();
+  it("routes events before queueing so coalescing happens on the resolved directory", async () => {
+    installDomStubs()
 
-    let releaseStream;
+    let releaseStream
     const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
+      releaseStream = resolve
+    })
 
-    const received = [];
-    const sdk = createSdkWithEvents([
-      {
-        directory: 'global',
-        payload: {
-          type: 'message.part.updated',
-          properties: {
-            part: { id: 'part-A', type: 'text', messageID: 'msg-1' },
+    const received = []
+    const sdk = createSdkWithEvents(
+      [
+        {
+          directory: "global",
+          payload: {
+            type: "message.part.updated",
+            properties: {
+              part: { id: "part-A", type: "text", messageID: "msg-1" },
+            },
           },
         },
-      },
-      {
-        directory: '/real-dir',
-        payload: {
-          type: 'message.part.updated',
-          properties: {
-            part: { id: 'part-A', type: 'text', messageID: 'msg-1', text: 'next' },
+        {
+          directory: "/real-dir",
+          payload: {
+            type: "message.part.updated",
+            properties: {
+              part: { id: "part-A", type: "text", messageID: "msg-1", text: "next" },
+            },
           },
         },
-      },
-    ], hold);
+      ],
+      hold,
+    )
 
     const delivered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         routeDirectory: (directory, payload) => {
-          if (payload.type === 'message.part.updated') {
-            return '/resolved-dir';
+          if (payload.type === "message.part.updated") {
+            return "/resolved-dir"
           }
-          return directory;
+          return directory
         },
         onEvent: (dir, payload) => {
-          received.push({ directory: dir, payload });
-          cleanup();
-          releaseStream();
-          resolve();
+          received.push({ directory: dir, payload })
+          cleanup()
+          releaseStream()
+          resolve()
         },
-      });
-    });
+      })
+    })
 
-    await delivered;
+    await delivered
 
-    expect(received).toHaveLength(1);
-    expect(received[0].directory).toBe('/resolved-dir');
-    expect(received[0].payload.type).toBe('message.part.updated');
-    expect(received[0].payload.properties.part.text).toBe('next');
-  });
+    expect(received).toHaveLength(1)
+    expect(received[0].directory).toBe("/resolved-dir")
+    expect(received[0].payload.type).toBe("message.part.updated")
+    expect(received[0].payload.properties.part.text).toBe("next")
+  })
 
-  it('consumes websocket message stream frames when transport is ws', async () => {
-    installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+  it("consumes websocket message stream frames when transport is ws", async () => {
+    installDomStubs()
+    globalThis.WebSocket = FakeWebSocket
 
-    const received = [];
+    const received = []
     const sdk = {
       global: {
         event: async () => {
-          throw new Error('SSE should not be used in ws mode');
+          throw new Error("SSE should not be used in ws mode")
         },
       },
-    };
+    }
 
     const delivered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
-        transport: 'ws',
+        transport: "ws",
         onEvent: (directory, payload) => {
-          received.push({ directory, payload });
-          cleanup();
-          resolve();
+          received.push({ directory, payload })
+          cleanup()
+          resolve()
         },
-      });
-    });
+      })
+    })
 
-    await Promise.resolve();
+    await Promise.resolve()
 
-    const socket = FakeWebSocket.instances[0];
-    expect(socket?.url).toContain('/api/global/event/ws');
+    const socket = FakeWebSocket.instances[0]
+    expect(socket?.url).toContain("/api/global/event/ws")
 
-    socket.emitOpen();
-    socket.emitMessage({ type: 'ready', scope: 'global' });
+    socket.emitOpen()
+    socket.emitMessage({ type: "ready", scope: "global" })
     socket.emitMessage({
-      type: 'event',
-      eventId: 'evt-1',
-      directory: '/tmp/project',
+      type: "event",
+      eventId: "evt-1",
+      directory: "/tmp/project",
       payload: {
-        type: 'session.status',
+        type: "session.status",
         properties: {
-          sessionID: 'session-1',
+          sessionID: "session-1",
         },
       },
-    });
+    })
 
-    await delivered;
+    await delivered
 
     expect(received).toEqual([
       {
-        directory: '/tmp/project',
+        directory: "/tmp/project",
         payload: {
-          type: 'session.status',
+          type: "session.status",
           properties: {
-            sessionID: 'session-1',
+            sessionID: "session-1",
           },
         },
       },
-    ]);
-  });
+    ])
+  })
 
-  it('falls back to SSE when websocket closes before ready in auto mode', async () => {
-    installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+  it("falls back to SSE when websocket closes before ready in auto mode", async () => {
+    installDomStubs()
+    globalThis.WebSocket = FakeWebSocket
 
-    let releaseStream;
+    let releaseStream
     const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
+      releaseStream = resolve
+    })
 
-    const received = [];
-    const sdk = createSdkWithSingleEvent({
-      payload: {
-        type: 'server.connected',
-        properties: {},
+    const received = []
+    const sdk = createSdkWithSingleEvent(
+      {
+        payload: {
+          type: "server.connected",
+          properties: {},
+        },
       },
-    }, hold);
+      hold,
+    )
 
     const delivered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
-        transport: 'auto',
+        transport: "auto",
         onEvent: (directory, payload) => {
-          received.push({ directory, payload });
-          cleanup();
-          releaseStream();
-          resolve();
+          received.push({ directory, payload })
+          cleanup()
+          releaseStream()
+          resolve()
         },
-      });
-    });
+      })
+    })
 
-    await Promise.resolve();
-    const socket = FakeWebSocket.instances[0];
-    socket.emitClose();
+    await Promise.resolve()
+    const socket = FakeWebSocket.instances[0]
+    socket.emitClose()
 
-    await delivered;
+    await delivered
 
     expect(received).toEqual([
       {
-        directory: 'global',
+        directory: "global",
         payload: {
-          type: 'server.connected',
+          type: "server.connected",
           properties: {},
         },
       },
-    ]);
-  });
+    ])
+  })
 
-  it('falls back to SSE when websocket does not become ready in auto mode', async () => {
-    installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+  it("falls back to SSE when websocket does not become ready in auto mode", async () => {
+    installDomStubs()
+    globalThis.WebSocket = FakeWebSocket
 
-    let releaseStream;
+    let releaseStream
     const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
+      releaseStream = resolve
+    })
 
-    const received = [];
-    const sdk = createSdkWithSingleEvent({
-      payload: {
-        type: 'server.connected',
-        properties: {},
+    const received = []
+    const sdk = createSdkWithSingleEvent(
+      {
+        payload: {
+          type: "server.connected",
+          properties: {},
+        },
       },
-    }, hold);
+      hold,
+    )
 
-    let cleanup;
+    let cleanup
     const delivered = new Promise((resolve) => {
       const pipeline = createEventPipeline({
         sdk,
-        transport: 'auto',
+        transport: "auto",
         wsReadyTimeoutMs: 20,
         onEvent: (directory, payload) => {
-          received.push({ directory, payload });
-          resolve();
+          received.push({ directory, payload })
+          resolve()
         },
-      });
-      cleanup = pipeline.cleanup;
-    });
+      })
+      cleanup = pipeline.cleanup
+    })
 
-    await Promise.resolve();
-    const socket = FakeWebSocket.instances[0];
-    socket.emitOpen();
+    await Promise.resolve()
+    const socket = FakeWebSocket.instances[0]
+    socket.emitOpen()
 
     try {
-      await withTimeout(delivered, 500, 'timed out waiting for websocket-ready SSE fallback');
+      await withTimeout(delivered, 500, "timed out waiting for websocket-ready SSE fallback")
     } finally {
-      cleanup?.();
-      releaseStream();
+      cleanup?.()
+      releaseStream()
     }
 
     expect(received).toEqual([
       {
-        directory: 'global',
+        directory: "global",
         payload: {
-          type: 'server.connected',
+          type: "server.connected",
           properties: {},
         },
       },
-    ]);
-  });
+    ])
+  })
 
-  it('passes the last websocket event id when falling back to SSE', async () => {
-    installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
-    const originalConsoleError = console.error;
-    console.error = () => {};
+  it("passes the last websocket event id when falling back to SSE", async () => {
+    installDomStubs()
+    globalThis.WebSocket = FakeWebSocket
+    const originalConsoleError = console.error
+    console.error = () => {}
 
-    let releaseStream;
+    let releaseStream
     const hold = new Promise((resolve) => {
-      releaseStream = resolve;
-    });
+      releaseStream = resolve
+    })
 
-    const eventOptions = [];
-    const received = [];
+    const eventOptions = []
+    const received = []
     const sdk = {
       global: {
         event: async (options) => {
-          eventOptions.push(options);
+          eventOptions.push(options)
           return {
             stream: (async function* () {
               yield {
                 payload: {
-                  type: 'server.connected',
+                  type: "server.connected",
                   properties: {},
                 },
-              };
-              await hold;
+              }
+              await hold
             })(),
-          };
+          }
         },
       },
-    };
+    }
 
     const delivered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
-        transport: 'auto',
+        transport: "auto",
         reconnectDelayMs: 0,
         wsReadyTimeoutMs: 20,
         onEvent: (directory, payload) => {
-          received.push({ directory, payload });
-          if (payload.type !== 'server.connected') {
-            return;
+          received.push({ directory, payload })
+          if (payload.type !== "server.connected") {
+            return
           }
-          cleanup();
-          releaseStream();
-          resolve();
+          cleanup()
+          releaseStream()
+          resolve()
         },
-      });
-    });
+      })
+    })
 
     try {
-      await Promise.resolve();
+      await Promise.resolve()
 
-      const firstSocket = FakeWebSocket.instances[0];
-      firstSocket.emitOpen();
-      firstSocket.emitMessage({ type: 'ready', scope: 'global' });
+      const firstSocket = FakeWebSocket.instances[0]
+      firstSocket.emitOpen()
+      firstSocket.emitMessage({ type: "ready", scope: "global" })
       firstSocket.emitMessage({
-        type: 'event',
-        eventId: 'evt-1',
-        directory: '/tmp/project',
+        type: "event",
+        eventId: "evt-1",
+        directory: "/tmp/project",
         payload: {
-          type: 'session.status',
+          type: "session.status",
           properties: {
-            sessionID: 'session-1',
+            sessionID: "session-1",
           },
         },
-      });
-      firstSocket.emitClose();
+      })
+      firstSocket.emitClose()
 
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      await delivered;
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      await delivered
 
-      expect(eventOptions[0]?.headers?.['Last-Event-ID']).toBe('evt-1');
-      expect(received.some((entry) => entry.payload.type === 'server.connected')).toBe(true);
+      expect(eventOptions[0]?.headers?.["Last-Event-ID"]).toBe("evt-1")
+      expect(received.some((entry) => entry.payload.type === "server.connected")).toBe(true)
     } finally {
-      console.error = originalConsoleError;
+      console.error = originalConsoleError
     }
-  });
+  })
 
-  it('marks the pipeline disconnected on heartbeat timeout and recovers on the next websocket connect', async () => {
-    installDomStubs();
-    globalThis.WebSocket = FakeWebSocket;
+  it("marks the pipeline disconnected on heartbeat timeout and recovers on the next websocket connect", async () => {
+    installDomStubs()
+    globalThis.WebSocket = FakeWebSocket
 
-    const disconnectReasons = [];
-    let reconnectCount = 0;
+    const disconnectReasons = []
+    let reconnectCount = 0
 
     const sdk = {
       global: {
         event: async () => {
-          throw new Error('SSE should not be used in ws mode');
+          throw new Error("SSE should not be used in ws mode")
         },
       },
-    };
+    }
 
     const recovered = new Promise((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
-        transport: 'ws',
+        transport: "ws",
         heartbeatTimeoutMs: 20,
         reconnectDelayMs: 0,
         wsReadyTimeoutMs: 20,
         onEvent: () => {},
         onDisconnect: (reason) => {
-          disconnectReasons.push(reason);
+          disconnectReasons.push(reason)
         },
         onReconnect: () => {
-          reconnectCount += 1;
+          reconnectCount += 1
           if (reconnectCount === 2) {
-            cleanup();
-            resolve();
+            cleanup()
+            resolve()
           }
         },
-      });
-    });
+      })
+    })
 
-    await Promise.resolve();
+    await Promise.resolve()
 
-    const firstSocket = FakeWebSocket.instances[0];
-    firstSocket.emitOpen();
-    firstSocket.emitMessage({ type: 'ready', scope: 'global' });
+    const firstSocket = FakeWebSocket.instances[0]
+    firstSocket.emitOpen()
+    firstSocket.emitMessage({ type: "ready", scope: "global" })
 
-    await new Promise((resolve) => setTimeout(resolve, 35));
+    await new Promise((resolve) => setTimeout(resolve, 35))
 
-    const secondSocket = FakeWebSocket.instances[1];
-    expect(secondSocket).toBeDefined();
+    const secondSocket = FakeWebSocket.instances[1]
+    expect(secondSocket).toBeDefined()
 
-    secondSocket.emitOpen();
-    secondSocket.emitMessage({ type: 'ready', scope: 'global' });
+    secondSocket.emitOpen()
+    secondSocket.emitMessage({ type: "ready", scope: "global" })
 
-    await recovered;
+    await recovered
 
-    expect(disconnectReasons).toEqual(['ws_heartbeat_timeout']);
-    expect(reconnectCount).toBe(2);
-  });
-});
+    expect(disconnectReasons).toEqual(["ws_heartbeat_timeout"])
+    expect(reconnectCount).toBe(2)
+  })
+})
 
 // ---------------------------------------------------------------------------
 // P1 — Per-directory queue isolation
 // ---------------------------------------------------------------------------
 
-describe('createEventPipeline — per-directory isolation (P1)', () => {
-  it('delivers events from two directories without losing either', async () => {
+describe("createEventPipeline — per-directory isolation (P1)", () => {
+  it("delivers events from two directories without losing either", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'session.status',
-          properties: { sessionID: 's-a', status: { type: 'busy' } },
+          type: "session.status",
+          properties: { sessionID: "s-a", status: { type: "busy" } },
         },
       },
       {
-        directory: 'dir-b',
+        directory: "dir-b",
         payload: {
-          type: 'session.status',
-          properties: { sessionID: 's-b', status: { type: 'idle' } },
+          type: "session.status",
+          properties: { sessionID: "s-b", status: { type: "idle" } },
         },
       },
-    ]);
+    ])
 
-    const dirs = received.map((r) => r.directory).sort();
-    expect(dirs).toEqual(['dir-a', 'dir-b']);
-  });
+    const dirs = received.map((r) => r.directory).sort()
+    expect(dirs).toEqual(["dir-a", "dir-b"])
+  })
 
-  it('keeps distinct sessionIDs in the same directory as independent coalesce slots', async () => {
+  it("keeps distinct sessionIDs in the same directory as independent coalesce slots", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'session.status',
-          properties: { sessionID: 's1', status: { type: 'busy' } },
+          type: "session.status",
+          properties: { sessionID: "s1", status: { type: "busy" } },
         },
       },
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'session.status',
-          properties: { sessionID: 's2', status: { type: 'busy' } },
+          type: "session.status",
+          properties: { sessionID: "s2", status: { type: "busy" } },
         },
       },
-    ]);
+    ])
 
-    expect(received).toHaveLength(2);
-    const sessionIds = received.map((r) => r.payload.properties.sessionID).sort();
-    expect(sessionIds).toEqual(['s1', 's2']);
-  });
+    expect(received).toHaveLength(2)
+    const sessionIds = received.map((r) => r.payload.properties.sessionID).sort()
+    expect(sessionIds).toEqual(["s1", "s2"])
+  })
 
-  it('collapses repeated session.status for the same session down to the latest', async () => {
+  it("collapses repeated session.status for the same session down to the latest", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'session.status',
-          properties: { sessionID: 's1', status: { type: 'busy' } },
+          type: "session.status",
+          properties: { sessionID: "s1", status: { type: "busy" } },
         },
       },
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'session.status',
-          properties: { sessionID: 's1', status: { type: 'idle' } },
+          type: "session.status",
+          properties: { sessionID: "s1", status: { type: "idle" } },
         },
       },
-    ]);
+    ])
 
-    expect(received).toHaveLength(1);
-    expect(received[0].payload.properties.status.type).toBe('idle');
-  });
-});
+    expect(received).toHaveLength(1)
+    expect(received[0].payload.properties.status.type).toBe("idle")
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Option C — message.part.delta coalescing
 // ---------------------------------------------------------------------------
 
-describe('createEventPipeline — delta coalescing (Option C)', () => {
-  it('accumulates consecutive deltas for the same (messageID, partID, field) into one event', async () => {
-    const events = ['Hello ', 'world', ', ', 'how ', 'are ', 'you?'].map((chunk) => ({
-      directory: 'dir-a',
+describe("createEventPipeline — delta coalescing (Option C)", () => {
+  it("accumulates consecutive deltas for the same (messageID, partID, field) into one event", async () => {
+    const events = ["Hello ", "world", ", ", "how ", "are ", "you?"].map((chunk) => ({
+      directory: "dir-a",
       payload: {
-        type: 'message.part.delta',
+        type: "message.part.delta",
         properties: {
-          messageID: 'msg-1',
-          partID: 'part-1',
-          field: 'text',
+          messageID: "msg-1",
+          partID: "part-1",
+          field: "text",
           delta: chunk,
         },
       },
-    }));
+    }))
 
-    const received = await runPipelineWithEvents(events);
+    const received = await runPipelineWithEvents(events)
 
-    expect(received).toHaveLength(1);
-    expect(received[0].payload.type).toBe('message.part.delta');
-    expect(received[0].payload.properties.delta).toBe('Hello world, how are you?');
-    expect(received[0].payload.properties.messageID).toBe('msg-1');
-    expect(received[0].payload.properties.partID).toBe('part-1');
-    expect(received[0].payload.properties.field).toBe('text');
-  });
+    expect(received).toHaveLength(1)
+    expect(received[0].payload.type).toBe("message.part.delta")
+    expect(received[0].payload.properties.delta).toBe("Hello world, how are you?")
+    expect(received[0].payload.properties.messageID).toBe("msg-1")
+    expect(received[0].payload.properties.partID).toBe("part-1")
+    expect(received[0].payload.properties.field).toBe("text")
+  })
 
-  it('does NOT merge deltas across different fields on the same part', async () => {
+  it("does NOT merge deltas across different fields on the same part", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.delta',
+          type: "message.part.delta",
           properties: {
-            messageID: 'msg-1',
-            partID: 'part-1',
-            field: 'text',
-            delta: 'A',
+            messageID: "msg-1",
+            partID: "part-1",
+            field: "text",
+            delta: "A",
           },
         },
       },
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.delta',
+          type: "message.part.delta",
           properties: {
-            messageID: 'msg-1',
-            partID: 'part-1',
-            field: 'reasoning',
-            delta: 'B',
+            messageID: "msg-1",
+            partID: "part-1",
+            field: "reasoning",
+            delta: "B",
           },
         },
       },
-    ]);
+    ])
 
-    expect(received).toHaveLength(2);
-    const fieldDelta = received.map((r) => [
-      r.payload.properties.field,
-      r.payload.properties.delta,
-    ]).sort();
+    expect(received).toHaveLength(2)
+    const fieldDelta = received.map((r) => [r.payload.properties.field, r.payload.properties.delta]).sort()
     expect(fieldDelta).toEqual([
-      ['reasoning', 'B'],
-      ['text', 'A'],
-    ]);
-  });
+      ["reasoning", "B"],
+      ["text", "A"],
+    ])
+  })
 
-  it('does NOT merge deltas across different parts on the same message', async () => {
+  it("does NOT merge deltas across different parts on the same message", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.delta',
+          type: "message.part.delta",
           properties: {
-            messageID: 'msg-1',
-            partID: 'part-1',
-            field: 'text',
-            delta: 'AAA',
+            messageID: "msg-1",
+            partID: "part-1",
+            field: "text",
+            delta: "AAA",
           },
         },
       },
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.delta',
+          type: "message.part.delta",
           properties: {
-            messageID: 'msg-1',
-            partID: 'part-2',
-            field: 'text',
-            delta: 'BBB',
+            messageID: "msg-1",
+            partID: "part-2",
+            field: "text",
+            delta: "BBB",
           },
         },
       },
-    ]);
+    ])
 
-    expect(received).toHaveLength(2);
-    const byPart = Object.fromEntries(
-      received.map((r) => [r.payload.properties.partID, r.payload.properties.delta]),
-    );
-    expect(byPart['part-1']).toBe('AAA');
-    expect(byPart['part-2']).toBe('BBB');
-  });
+    expect(received).toHaveLength(2)
+    const byPart = Object.fromEntries(received.map((r) => [r.payload.properties.partID, r.payload.properties.delta]))
+    expect(byPart["part-1"]).toBe("AAA")
+    expect(byPart["part-2"]).toBe("BBB")
+  })
 
-  it('does NOT merge deltas across different directories (per-directory queues)', async () => {
+  it("does NOT merge deltas across different directories (per-directory queues)", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'message.part.delta',
+          type: "message.part.delta",
           properties: {
-            messageID: 'msg-1',
-            partID: 'part-1',
-            field: 'text',
-            delta: 'from-a',
+            messageID: "msg-1",
+            partID: "part-1",
+            field: "text",
+            delta: "from-a",
           },
         },
       },
       {
-        directory: 'dir-b',
+        directory: "dir-b",
         payload: {
-          type: 'message.part.delta',
+          type: "message.part.delta",
           properties: {
-            messageID: 'msg-1',
-            partID: 'part-1',
-            field: 'text',
-            delta: 'from-b',
+            messageID: "msg-1",
+            partID: "part-1",
+            field: "text",
+            delta: "from-b",
           },
         },
       },
-    ]);
+    ])
 
-    expect(received).toHaveLength(2);
-    const byDir = Object.fromEntries(
-      received.map((r) => [r.directory, r.payload.properties.delta]),
-    );
-    expect(byDir['dir-a']).toBe('from-a');
-    expect(byDir['dir-b']).toBe('from-b');
-  });
+    expect(received).toHaveLength(2)
+    const byDir = Object.fromEntries(received.map((r) => [r.directory, r.payload.properties.delta]))
+    expect(byDir["dir-a"]).toBe("from-a")
+    expect(byDir["dir-b"]).toBe("from-b")
+  })
 
-  it('does not touch non-delta events (session.status still replaced, not concatenated)', async () => {
+  it("does not touch non-delta events (session.status still replaced, not concatenated)", async () => {
     const received = await runPipelineWithEvents([
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'session.status',
-          properties: { sessionID: 's1', status: { type: 'busy' } },
+          type: "session.status",
+          properties: { sessionID: "s1", status: { type: "busy" } },
         },
       },
       {
-        directory: 'dir-a',
+        directory: "dir-a",
         payload: {
-          type: 'session.status',
-          properties: { sessionID: 's1', status: { type: 'idle' } },
+          type: "session.status",
+          properties: { sessionID: "s1", status: { type: "idle" } },
         },
       },
-    ]);
+    ])
 
-    expect(received).toHaveLength(1);
-    expect(received[0].payload.properties.status.type).toBe('idle');
-  });
-});
+    expect(received).toHaveLength(1)
+    expect(received[0].payload.properties.status.type).toBe("idle")
+  })
+})

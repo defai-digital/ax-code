@@ -35,17 +35,26 @@ export type SelectionState = {
   getSessionAgentSelection: (sessionId: string) => string | null
   saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => void
   getAgentModelForSession: (sessionId: string, agentName: string) => SessionModelSelection | null
-  saveAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string, variant: string | undefined) => void
-  getAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => string | undefined
+  saveAgentModelVariantForSession: (
+    sessionId: string,
+    agentName: string,
+    providerId: string,
+    modelId: string,
+    variant: string | undefined,
+  ) => void
+  getAgentModelVariantForSession: (
+    sessionId: string,
+    agentName: string,
+    providerId: string,
+    modelId: string,
+  ) => string | undefined
 }
 
-const isPersistedSelectionState = (state: unknown): state is PersistedSelectionState => (
+const isPersistedSelectionState = (state: unknown): state is PersistedSelectionState =>
   typeof state === "object" && state !== null
-)
 
-const isLegacyContextPersistedState = (state: unknown): state is LegacyContextPersistedState => (
+const isLegacyContextPersistedState = (state: unknown): state is LegacyContextPersistedState =>
   typeof state === "object" && state !== null
-)
 
 const readLegacyContextStoreState = (): LegacyContextPersistedState | undefined => {
   if (typeof window === "undefined") {
@@ -108,10 +117,7 @@ const deriveLastUsedProvider = (
   return lastSelection ? { providerID: lastSelection.providerId, modelID: lastSelection.modelId } : null
 }
 
-export const mergePersistedSelectionState = (
-  persistedState: unknown,
-  legacyState: unknown,
-) => {
+export const mergePersistedSelectionState = (persistedState: unknown, legacyState: unknown) => {
   const persisted = isPersistedSelectionState(persistedState) ? persistedState : undefined
   const legacy = isLegacyContextPersistedState(legacyState) ? legacyState : undefined
   const sessionModelSelections = mergeEntries(persisted?.sessionModelSelections, legacy?.sessionModelSelections)
@@ -257,9 +263,9 @@ export const useSelectionStore = create<SelectionState>()(
       migrate: (persistedState: unknown) => {
         // Scaffold for future schema migrations
         return persistedState
-      }
-    }
-  )
+      },
+    },
+  ),
 )
 
 // Ensure hydration completes even when no persisted state exists.

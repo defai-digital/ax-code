@@ -1,27 +1,27 @@
-import { InlineCommentCard } from './InlineCommentCard';
-import { InlineCommentInput } from './InlineCommentInput';
-import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
-import type { BlockWidgetDef } from '@/components/ui/CodeMirrorEditor';
+import { InlineCommentCard } from "./InlineCommentCard"
+import { InlineCommentInput } from "./InlineCommentInput"
+import type { InlineCommentDraft } from "@/stores/useInlineCommentDraftStore"
+import type { BlockWidgetDef } from "@/components/ui/CodeMirrorEditor"
 
 type CodeMirrorCommentLineRange = {
-  start: number;
-  end: number;
-  side?: 'additions' | 'deletions';
-};
+  start: number
+  end: number
+  side?: "additions" | "deletions"
+}
 
 interface CodeMirrorCommentWidgetsOptions {
-  drafts: InlineCommentDraft[];
-  editingDraftId: string | null;
-  commentText: string;
-  selection: CodeMirrorCommentLineRange | null;
-  isDragging: boolean;
-  fileLabel: string;
-  newWidgetId: string;
-  mapDraftToRange: (draft: InlineCommentDraft) => CodeMirrorCommentLineRange;
-  onSave: (text: string, range?: CodeMirrorCommentLineRange) => void;
-  onCancel: () => void;
-  onEdit: (draft: InlineCommentDraft) => void;
-  onDelete: (draft: InlineCommentDraft) => void;
+  drafts: InlineCommentDraft[]
+  editingDraftId: string | null
+  commentText: string
+  selection: CodeMirrorCommentLineRange | null
+  isDragging: boolean
+  fileLabel: string
+  newWidgetId: string
+  mapDraftToRange: (draft: InlineCommentDraft) => CodeMirrorCommentLineRange
+  onSave: (text: string, range?: CodeMirrorCommentLineRange) => void
+  onCancel: () => void
+  onEdit: (draft: InlineCommentDraft) => void
+  onDelete: (draft: InlineCommentDraft) => void
 }
 
 export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsOptions): BlockWidgetDef[] {
@@ -38,12 +38,12 @@ export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsO
     onCancel,
     onEdit,
     onDelete,
-  } = options;
+  } = options
 
-  const widgets: BlockWidgetDef[] = [];
+  const widgets: BlockWidgetDef[] = []
 
   for (const draft of drafts) {
-    const draftRange = mapDraftToRange(draft);
+    const draftRange = mapDraftToRange(draft)
     if (draft.id === editingDraftId) {
       widgets.push({
         afterLine: draftRange.end,
@@ -59,8 +59,8 @@ export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsO
             onCancel={onCancel}
           />
         ),
-      });
-      continue;
+      })
+      continue
     }
 
     widgets.push({
@@ -74,7 +74,7 @@ export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsO
           onDelete={() => onDelete(draft)}
         />
       ),
-    });
+    })
   }
 
   if (selection && !editingDraftId && !isDragging) {
@@ -82,7 +82,7 @@ export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsO
       ...selection,
       start: Math.min(selection.start, selection.end),
       end: Math.max(selection.start, selection.end),
-    };
+    }
 
     widgets.push({
       afterLine: normalizedSelection.end,
@@ -98,8 +98,8 @@ export function buildCodeMirrorCommentWidgets(options: CodeMirrorCommentWidgetsO
           onCancel={onCancel}
         />
       ),
-    });
+    })
   }
 
-  return widgets;
+  return widgets
 }

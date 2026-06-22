@@ -1,10 +1,6 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import React from "react"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   Command,
   CommandEmpty,
@@ -13,38 +9,38 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from '@/components/ui/command';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Icon } from "@/components/icon/Icon";
-import { useI18n } from '@/lib/i18n';
+} from "@/components/ui/command"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Icon } from "@/components/icon/Icon"
+import { useI18n } from "@/lib/i18n"
 
 interface BranchInfo {
-  ahead?: number;
-  behind?: number;
+  ahead?: number
+  behind?: number
 }
 
 interface GitBranchSelectorProps {
-  currentBranch: string | null | undefined;
-  localBranches: string[];
-  remoteBranches: string[];
-  branchInfo: Record<string, BranchInfo> | undefined;
-  onCheckout: (branch: string) => void;
-  onCreate: (name: string) => Promise<void>;
-  disabled?: boolean;
+  currentBranch: string | null | undefined
+  localBranches: string[]
+  remoteBranches: string[]
+  branchInfo: Record<string, BranchInfo> | undefined
+  onCheckout: (branch: string) => void
+  onCreate: (name: string) => Promise<void>
+  disabled?: boolean
 }
 
 const sanitizeBranchNameInput = (value: string): string => {
   return value
     .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^A-Za-z0-9._/-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/\/{2,}/g, '/')
-    .replace(/\/-+/g, '/')
-    .replace(/-+\//g, '/')
-    .replace(/^[-/]+/, '')
-    .replace(/[-/]+$/, '');
-};
+    .replace(/\s+/g, "-")
+    .replace(/[^A-Za-z0-9._/-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/\/{2,}/g, "/")
+    .replace(/\/-+/g, "/")
+    .replace(/-+\//g, "/")
+    .replace(/^[-/]+/, "")
+    .replace(/[-/]+$/, "")
+}
 
 export const BranchSelector: React.FC<GitBranchSelectorProps> = ({
   currentBranch,
@@ -55,76 +51,73 @@ export const BranchSelector: React.FC<GitBranchSelectorProps> = ({
   onCreate,
   disabled = false,
 }) => {
-  const { t } = useI18n();
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [search, setSearch] = React.useState('');
-  const [showCreate, setShowCreate] = React.useState(false);
-  const [newBranchName, setNewBranchName] = React.useState('');
-  const [isCreating, setIsCreating] = React.useState(false);
-  const createInputRef = React.useRef<HTMLInputElement>(null);
+  const { t } = useI18n()
+  const [isOpen, setIsOpen] = React.useState(false)
+  const [search, setSearch] = React.useState("")
+  const [showCreate, setShowCreate] = React.useState(false)
+  const [newBranchName, setNewBranchName] = React.useState("")
+  const [isCreating, setIsCreating] = React.useState(false)
+  const createInputRef = React.useRef<HTMLInputElement>(null)
 
   const stopDropdownTypeahead = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    event.stopPropagation();
-  }, []);
+    event.stopPropagation()
+  }, [])
 
-  const sanitizedNewBranch = React.useMemo(
-    () => sanitizeBranchNameInput(newBranchName),
-    [newBranchName]
-  );
+  const sanitizedNewBranch = React.useMemo(() => sanitizeBranchNameInput(newBranchName), [newBranchName])
 
   const filteredLocal = React.useMemo(() => {
-    const term = search.toLowerCase();
-    if (!term) return localBranches;
-    return localBranches.filter((b) => b.toLowerCase().includes(term));
-  }, [search, localBranches]);
+    const term = search.toLowerCase()
+    if (!term) return localBranches
+    return localBranches.filter((b) => b.toLowerCase().includes(term))
+  }, [search, localBranches])
 
   const filteredRemote = React.useMemo(() => {
-    const term = search.toLowerCase();
-    if (!term) return remoteBranches;
-    return remoteBranches.filter((b) => b.toLowerCase().includes(term));
-  }, [search, remoteBranches]);
+    const term = search.toLowerCase()
+    if (!term) return remoteBranches
+    return remoteBranches.filter((b) => b.toLowerCase().includes(term))
+  }, [search, remoteBranches])
 
   const handleCheckout = (branch: string) => {
     if (branch === currentBranch) {
-      setIsOpen(false);
-      return;
+      setIsOpen(false)
+      return
     }
-    onCheckout(branch);
-    setIsOpen(false);
-    setSearch('');
-  };
+    onCheckout(branch)
+    setIsOpen(false)
+    setSearch("")
+  }
 
   const handleShowCreate = () => {
-    setShowCreate(true);
-    setTimeout(() => createInputRef.current?.focus(), 50);
-  };
+    setShowCreate(true)
+    setTimeout(() => createInputRef.current?.focus(), 50)
+  }
 
   const handleCreate = async () => {
-    if (!sanitizedNewBranch || isCreating) return;
+    if (!sanitizedNewBranch || isCreating) return
 
-    setIsCreating(true);
+    setIsCreating(true)
     try {
-      await onCreate(sanitizedNewBranch);
-      setNewBranchName('');
-      setShowCreate(false);
-      setIsOpen(false);
+      await onCreate(sanitizedNewBranch)
+      setNewBranchName("")
+      setShowCreate(false)
+      setIsOpen(false)
     } finally {
-      setIsCreating(false);
+      setIsCreating(false)
     }
-  };
+  }
 
   const handleCancelCreate = () => {
-    setNewBranchName('');
-    setShowCreate(false);
-  };
+    setNewBranchName("")
+    setShowCreate(false)
+  }
 
   React.useEffect(() => {
     if (!isOpen) {
-      setSearch('');
-      setShowCreate(false);
-      setNewBranchName('');
+      setSearch("")
+      setShowCreate(false)
+      setNewBranchName("")
     }
-  }, [isOpen]);
+  }, [isOpen])
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -139,21 +132,19 @@ export const BranchSelector: React.FC<GitBranchSelectorProps> = ({
             >
               <Icon name="git-branch" className="size-4 text-primary" />
               <span className="min-w-0 truncate font-medium text-left">
-                {currentBranch || t('gitView.branch.detachedHead')}
+                {currentBranch || t("gitView.branch.detachedHead")}
               </span>
               <Icon name="arrow-down-s" className="size-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent sideOffset={8}>
-          {t('gitView.branch.currentBranchTooltip')}
-        </TooltipContent>
+        <TooltipContent sideOffset={8}>{t("gitView.branch.currentBranchTooltip")}</TooltipContent>
       </Tooltip>
 
       <DropdownMenuContent align="start" className="w-72 p-0 max-h-[60vh] flex flex-col">
         <Command className="h-full min-h-0">
           <CommandInput
-            placeholder={t('gitView.branch.searchPlaceholder')}
+            placeholder={t("gitView.branch.searchPlaceholder")}
             value={search}
             onValueChange={setSearch}
             onKeyDown={stopDropdownTypeahead}
@@ -162,30 +153,30 @@ export const BranchSelector: React.FC<GitBranchSelectorProps> = ({
             scrollbarClassName="overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"
             disableHorizontal
           >
-            <CommandEmpty>{t('gitView.branch.empty')}</CommandEmpty>
+            <CommandEmpty>{t("gitView.branch.empty")}</CommandEmpty>
 
             <CommandGroup>
               {!showCreate ? (
                 <CommandItem onSelect={handleShowCreate}>
                   <Icon name="add" className="size-4" />
-                  <span>{t('gitView.branch.create')}</span>
+                  <span>{t("gitView.branch.create")}</span>
                 </CommandItem>
               ) : (
                 <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
                   <input
                     ref={createInputRef}
-                    placeholder={t('gitView.branch.newBranchPlaceholder')}
+                    placeholder={t("gitView.branch.newBranchPlaceholder")}
                     value={newBranchName}
                     onChange={(e) => setNewBranchName(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => {
-                      stopDropdownTypeahead(e);
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleCreate();
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault();
-                        handleCancelCreate();
+                      stopDropdownTypeahead(e)
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleCreate()
+                      } else if (e.key === "Escape") {
+                        e.preventDefault()
+                        handleCancelCreate()
                       }
                     }}
                     className="flex-1 min-w-0 bg-transparent typography-meta outline-none placeholder:text-muted-foreground"
@@ -216,60 +207,46 @@ export const BranchSelector: React.FC<GitBranchSelectorProps> = ({
 
             <CommandSeparator />
 
-            <CommandGroup heading={t('gitView.branch.localBranches')}>
+            <CommandGroup heading={t("gitView.branch.localBranches")}>
               {filteredLocal.map((branch) => (
-                <CommandItem
-                  key={`local-${branch}`}
-                  onSelect={() => handleCheckout(branch)}
-                >
+                <CommandItem key={`local-${branch}`} onSelect={() => handleCheckout(branch)}>
                   <span className="flex flex-1 flex-col">
-                    <span className="typography-ui-label text-foreground">
-                      {branch}
-                    </span>
+                    <span className="typography-ui-label text-foreground">{branch}</span>
                     {(branchInfo?.[branch]?.ahead || branchInfo?.[branch]?.behind) && (
                       <span className="typography-micro text-muted-foreground">
-                        {branchInfo[branch].ahead || 0} ahead ·{' '}
-                        {branchInfo[branch].behind || 0} behind
+                        {branchInfo[branch].ahead || 0} ahead · {branchInfo[branch].behind || 0} behind
                       </span>
                     )}
                   </span>
                   {currentBranch === branch && (
-                    <span className="typography-micro text-primary">{t('gitView.branch.currentBadge')}</span>
+                    <span className="typography-micro text-primary">{t("gitView.branch.currentBadge")}</span>
                   )}
                 </CommandItem>
               ))}
               {filteredLocal.length === 0 && (
                 <CommandItem disabled className="justify-center">
-                  <span className="typography-meta text-muted-foreground">
-                    {t('gitView.branch.noLocalBranches')}
-                  </span>
+                  <span className="typography-meta text-muted-foreground">{t("gitView.branch.noLocalBranches")}</span>
                 </CommandItem>
               )}
             </CommandGroup>
 
             <CommandSeparator />
 
-            <CommandGroup heading={t('gitView.branch.remoteBranches')}>
+            <CommandGroup heading={t("gitView.branch.remoteBranches")}>
               {filteredRemote.map((branch) => (
-                <CommandItem
-                  key={`remote-${branch}`}
-                  onSelect={() => handleCheckout(branch)}
-                >
+                <CommandItem key={`remote-${branch}`} onSelect={() => handleCheckout(branch)}>
                   <span className="typography-ui-label text-foreground">{branch}</span>
                 </CommandItem>
               ))}
               {filteredRemote.length === 0 && (
                 <CommandItem disabled className="justify-center">
-                  <span className="typography-meta text-muted-foreground">
-                    {t('gitView.branch.noRemoteBranches')}
-                  </span>
+                  <span className="typography-meta text-muted-foreground">{t("gitView.branch.noRemoteBranches")}</span>
                 </CommandItem>
               )}
             </CommandGroup>
-
           </CommandList>
         </Command>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-};
+  )
+}

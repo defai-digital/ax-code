@@ -3,10 +3,9 @@ import * as React from "react"
 import { useDeviceInfo } from "@/lib/device"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
-import { Icon } from "@/components/icon/Icon";
+import { Icon } from "@/components/icon/Icon"
 
-export interface NumberInputProps
-  extends Omit<React.ComponentProps<"input">, "value" | "onChange" | "type"> {
+export interface NumberInputProps extends Omit<React.ComponentProps<"input">, "value" | "onChange" | "type"> {
   value?: number
   onValueChange: (value: number) => void
   min?: number
@@ -60,19 +59,19 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       disabled,
       fallbackValue,
       onClear,
-      emptyLabel = '—',
+      emptyLabel = "—",
       ...props
     },
-    ref
+    ref,
   ) => {
     const { t } = useI18n()
-    const [draft, setDraft] = React.useState(() => (value === undefined ? '' : String(value)))
+    const [draft, setDraft] = React.useState(() => (value === undefined ? "" : String(value)))
     const { isMobile } = useDeviceInfo()
     const ignoreNextClickRef = React.useRef(false)
     const swallowNextClickCleanupRef = React.useRef<(() => void) | null>(null)
 
     const swallowNextClick = React.useCallback(() => {
-      if (typeof document === 'undefined' || typeof window === 'undefined') {
+      if (typeof document === "undefined" || typeof window === "undefined") {
         return
       }
 
@@ -91,12 +90,12 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
 
       const cleanup = () => {
         window.clearTimeout(timeoutId)
-        document.removeEventListener('click', handleCaptureClick, true)
+        document.removeEventListener("click", handleCaptureClick, true)
         swallowNextClickCleanupRef.current = null
       }
 
       swallowNextClickCleanupRef.current = cleanup
-      document.addEventListener('click', handleCaptureClick, true)
+      document.addEventListener("click", handleCaptureClick, true)
     }, [])
 
     React.useEffect(() => {
@@ -106,7 +105,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
     }, [])
 
     React.useEffect(() => {
-      setDraft(value === undefined ? '' : String(value))
+      setDraft(value === undefined ? "" : String(value))
     }, [value])
 
     const baseValue = React.useMemo(() => {
@@ -121,7 +120,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         const clamped = clamp(rawValue, min, max)
         onValueChange(normalizeToStep(clamped, step))
       },
-      [max, min, onValueChange, step]
+      [max, min, onValueChange, step],
     )
 
     const handleChange = React.useCallback(
@@ -129,7 +128,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         const nextDraft = event.target.value
         setDraft(nextDraft)
 
-        if (nextDraft.trim() === '') {
+        if (nextDraft.trim() === "") {
           onClear?.()
           return
         }
@@ -141,14 +140,14 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
 
         commitValue(parsed)
       },
-      [commitValue, onClear]
+      [commitValue, onClear],
     )
 
     const handleBlur = React.useCallback(
       (event: React.FocusEvent<HTMLInputElement>) => {
-        if (draft.trim() === '') {
+        if (draft.trim() === "") {
           if (!onClear) {
-            setDraft(value === undefined ? '' : String(value))
+            setDraft(value === undefined ? "" : String(value))
           }
           onBlur?.(event)
           return
@@ -156,7 +155,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
 
         const parsed = Number(draft)
         if (!Number.isFinite(parsed)) {
-          setDraft(value === undefined ? '' : String(value))
+          setDraft(value === undefined ? "" : String(value))
         } else {
           const clamped = clamp(parsed, min, max)
           const normalized = normalizeToStep(clamped, step)
@@ -168,7 +167,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
 
         onBlur?.(event)
       },
-      [draft, max, min, onBlur, onClear, onValueChange, step, value]
+      [draft, max, min, onBlur, onClear, onValueChange, step, value],
     )
 
     const incrementDisabled = Boolean(disabled || baseValue >= max)
@@ -214,12 +213,12 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             "flex h-9 shrink-0 items-stretch overflow-x-hidden overflow-y-hidden rounded-lg border border-border bg-transparent select-none overscroll-contain",
             "[-webkit-user-select:none] [-webkit-touch-callout:none]",
             "disabled:pointer-events-none disabled:opacity-50",
-            containerClassName
+            containerClassName,
           )}
         >
           <button
             type="button"
-            aria-label={t('numberInput.actions.decreaseAria')}
+            aria-label={t("numberInput.actions.decreaseAria")}
             disabled={decrementDisabled}
             onTouchStart={handleMobileTouchActivate(handleMobileDecrement)}
             onClick={handleMobileClickActivate(handleMobileDecrement)}
@@ -227,7 +226,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
               "grid h-full min-h-0 w-9 place-items-center overflow-x-hidden overflow-y-hidden border-r border-border p-0 leading-none touch-none",
               "text-muted-foreground",
               "disabled:pointer-events-none disabled:opacity-50",
-              !decrementDisabled && "active:bg-interactive-hover"
+              !decrementDisabled && "active:bg-interactive-hover",
             )}
           >
             <Icon name="subtract" className="block h-4 w-4" />
@@ -237,7 +236,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             className={cn(
               "flex h-full min-w-0 w-14 items-center justify-center bg-transparent px-1.5",
               "text-center text-[16px] leading-none text-foreground [font-variant-numeric:tabular-nums]",
-              className
+              className,
             )}
             aria-live="polite"
           >
@@ -246,7 +245,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
 
           <button
             type="button"
-            aria-label={t('numberInput.actions.increaseAria')}
+            aria-label={t("numberInput.actions.increaseAria")}
             disabled={incrementDisabled}
             onTouchStart={handleMobileTouchActivate(handleMobileIncrement)}
             onClick={handleMobileClickActivate(handleMobileIncrement)}
@@ -254,7 +253,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
               "grid h-full min-h-0 w-9 place-items-center overflow-x-hidden overflow-y-hidden border-l border-border p-0 leading-none touch-none",
               "text-muted-foreground",
               "disabled:pointer-events-none disabled:opacity-50",
-              !incrementDisabled && "active:bg-interactive-hover"
+              !incrementDisabled && "active:bg-interactive-hover",
             )}
           >
             <Icon name="add" className="block h-4 w-4" />
@@ -268,18 +267,18 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         className={cn(
           "flex h-7 shrink-0 items-stretch overflow-x-hidden overflow-y-hidden rounded-lg border border-border bg-transparent",
           "disabled:pointer-events-none disabled:opacity-50",
-          containerClassName
+          containerClassName,
         )}
       >
         <button
           type="button"
-          aria-label={t('numberInput.actions.decreaseAria')}
+          aria-label={t("numberInput.actions.decreaseAria")}
           disabled={decrementDisabled}
           onClick={() => commitValue(baseValue - step)}
           className={cn(
             "flex h-full w-7 items-center justify-center overflow-x-hidden overflow-y-hidden border-r border-border p-0 leading-none touch-manipulation",
             "text-muted-foreground hover:bg-interactive-hover hover:text-foreground",
-            "disabled:pointer-events-none disabled:opacity-50"
+            "disabled:pointer-events-none disabled:opacity-50",
           )}
         >
           <Icon name="subtract" className="block h-3.5 w-3.5" />
@@ -288,7 +287,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           {...props}
           ref={ref}
           type="text"
-          inputMode={props.inputMode ?? 'numeric'}
+          inputMode={props.inputMode ?? "numeric"}
           value={draft}
           onChange={handleChange}
           onBlur={handleBlur}
@@ -302,25 +301,25 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground",
             "appearance-none outline-none [appearance:textfield] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
             "disabled:pointer-events-none disabled:cursor-not-allowed",
-            className
+            className,
           )}
         />
         <button
           type="button"
-          aria-label={t('numberInput.actions.increaseAria')}
+          aria-label={t("numberInput.actions.increaseAria")}
           disabled={incrementDisabled}
           onClick={() => commitValue(baseValue + step)}
           className={cn(
             "flex h-full w-7 items-center justify-center overflow-x-hidden overflow-y-hidden border-l border-border p-0 leading-none touch-manipulation",
             "text-muted-foreground hover:bg-interactive-hover hover:text-foreground",
-            "disabled:pointer-events-none disabled:opacity-50"
+            "disabled:pointer-events-none disabled:opacity-50",
           )}
         >
           <Icon name="add" className="block h-3.5 w-3.5" />
         </button>
       </div>
     )
-  }
+  },
 )
 NumberInput.displayName = "NumberInput"
 

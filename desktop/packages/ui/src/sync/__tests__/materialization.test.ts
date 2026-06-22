@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest"
 import type { Message, Part } from "@ax-code/sdk/v2/client"
 import { getSessionMaterializationStatus, materializeSessionSnapshots } from "../materialization"
 
@@ -16,11 +16,9 @@ function part(id: string, messageID: string, type = "text", text = id): Part {
 
 describe("materializeSessionSnapshots", () => {
   test("materializes messages and parts together", () => {
-    const result = materializeSessionSnapshots(
-      { message: {}, part: {} },
-      "ses_1",
-      [{ info: message("msg_1"), parts: [part("prt_1", "msg_1")] }],
-    )
+    const result = materializeSessionSnapshots({ message: {}, part: {} }, "ses_1", [
+      { info: message("msg_1"), parts: [part("prt_1", "msg_1")] },
+    ])
 
     expect(result.message.ses_1.map((item) => item.id)).toEqual(["msg_1"])
     expect(result.part.msg_1.map((item) => item.id)).toEqual(["prt_1"])
@@ -32,17 +30,21 @@ describe("materializeSessionSnapshots", () => {
     // Reconnect recovery: an assistant reply that completed server-side while
     // disconnected must overwrite the stale in-progress copy (same id).
     const inProgress = { id: "msg_1", sessionID: "ses_1", role: "assistant", time: { created: 1 } } as Message
-    const completed = { id: "msg_1", sessionID: "ses_1", role: "assistant", time: { created: 1, completed: 9 }, finish: "stop" } as unknown as Message
+    const completed = {
+      id: "msg_1",
+      sessionID: "ses_1",
+      role: "assistant",
+      time: { created: 1, completed: 9 },
+      finish: "stop",
+    } as unknown as Message
     const state = { message: { ses_1: [inProgress] }, part: { msg_1: [part("prt_1", "msg_1")] } }
 
-    const result = materializeSessionSnapshots(
-      state,
-      "ses_1",
-      [{ info: completed, parts: [part("prt_1", "msg_1")] }],
-    )
+    const result = materializeSessionSnapshots(state, "ses_1", [{ info: completed, parts: [part("prt_1", "msg_1")] }])
 
     expect(result.messagesChanged).toBe(true)
-    const merged = result.message.ses_1.find((item) => item.id === "msg_1") as Message & { time?: { completed?: number } }
+    const merged = result.message.ses_1.find((item) => item.id === "msg_1") as Message & {
+      time?: { completed?: number }
+    }
     expect(merged.time?.completed).toBe(9)
   })
 
@@ -51,11 +53,7 @@ describe("materializeSessionSnapshots", () => {
     const existingPart = part("prt_1", "msg_1")
     const state = { message: { ses_1: [existingMessage] }, part: { msg_1: [existingPart] } }
 
-    const result = materializeSessionSnapshots(
-      state,
-      "ses_1",
-      [{ info: existingMessage, parts: [existingPart] }],
-    )
+    const result = materializeSessionSnapshots(state, "ses_1", [{ info: existingMessage, parts: [existingPart] }])
 
     expect(result.message).toBe(state.message)
     expect(result.part).toBe(state.part)
@@ -82,11 +80,7 @@ describe("materializeSessionSnapshots", () => {
       part: { msg_1: [livePart] },
     }
 
-    const result = materializeSessionSnapshots(
-      state,
-      "ses_1",
-      [{ info: message("msg_1"), parts: [stalePart] }],
-    )
+    const result = materializeSessionSnapshots(state, "ses_1", [{ info: message("msg_1"), parts: [stalePart] }])
 
     expect(result.part.msg_1[0]).toBe(livePart)
     expect((result.part.msg_1[0] as { text?: string })?.text).toBe("First chunk ")
@@ -99,11 +93,7 @@ describe("materializeSessionSnapshots", () => {
       part: { msg_1: [livePart] },
     }
 
-    const result = materializeSessionSnapshots(
-      state,
-      "ses_1",
-      [{ info: message("msg_1"), parts: [] }],
-    )
+    const result = materializeSessionSnapshots(state, "ses_1", [{ info: message("msg_1"), parts: [] }])
 
     expect(result.part.msg_1[0]).toBe(livePart)
   })
@@ -116,11 +106,7 @@ describe("materializeSessionSnapshots", () => {
       part: { msg_1: [optimisticPart] },
     }
 
-    const result = materializeSessionSnapshots(
-      state,
-      "ses_1",
-      [{ info: userMessage("msg_1"), parts: [serverPart] }],
-    )
+    const result = materializeSessionSnapshots(state, "ses_1", [{ info: userMessage("msg_1"), parts: [serverPart] }])
 
     expect(result.part.msg_1).toEqual([serverPart])
   })

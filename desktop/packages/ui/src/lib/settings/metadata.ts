@@ -1,235 +1,273 @@
-import type { SidebarSection } from '@/constants/sidebar';
+import type { SidebarSection } from "@/constants/sidebar"
 
 export type SettingsPageSlug =
-  | 'home'
-  | 'projects'
-  | 'remote-instances'
-  | 'providers'
-  | 'usage'
-  | 'agents'
-  | 'behavior'
-  | 'commands'
-  | 'mcp'
-  | 'plugins'
-  | 'skills.installed'
-  | 'skills.catalog'
-  | 'git'
-  | 'appearance'
-  | 'chat'
-  | 'shortcuts'
-  | 'sessions'
-  | 'magic-prompts'
-  | 'snippets'
-  | 'notifications';
+  | "home"
+  | "projects"
+  | "remote-instances"
+  | "providers"
+  | "agents"
+  | "behavior"
+  | "commands"
+  | "mcp"
+  | "plugins"
+  | "skills.installed"
+  | "skills.catalog"
+  | "git"
+  | "appearance"
+  | "chat"
+  | "shortcuts"
+  | "sessions"
+  | "magic-prompts"
+  | "snippets"
+  | "notifications"
 
-export type SettingsPageGroup =
-  | 'appearance'
-  | 'projects'
-  | 'general'
-  | 'ax-code'
-  | 'git'
-  | 'skills'
-  | 'usage'
-  | 'advanced';
+export type SettingsPageGroup = "appearance" | "projects" | "general" | "ax-code" | "git" | "skills" | "advanced"
 
 export interface SettingsRuntimeContext {
-  isWeb: boolean;
-  isDesktop: boolean;
+  isWeb: boolean
+  isDesktop: boolean
 }
 
 export interface SettingsPageMeta {
-  slug: SettingsPageSlug;
-  title: string;
-  group: SettingsPageGroup;
-  kind: 'single' | 'split';
-  description?: string;
-  keywords?: string[];
-  isAvailable?: (ctx: SettingsRuntimeContext) => boolean;
+  slug: SettingsPageSlug
+  title: string
+  group: SettingsPageGroup
+  kind: "single" | "split"
+  description?: string
+  keywords?: string[]
+  isAvailable?: (ctx: SettingsRuntimeContext) => boolean
 }
 
 export const SETTINGS_GROUP_LABELS: Record<SettingsPageGroup, string> = {
-  appearance: 'Appearance',
-  projects: 'Projects',
-  general: 'General',
-  'ax-code': 'AX Code',
-  git: 'Git',
-  skills: 'Skills',
-  usage: 'Usage',
-  advanced: 'Advanced',
-};
+  appearance: "Appearance",
+  projects: "Projects",
+  general: "General",
+  "ax-code": "AX Code",
+  git: "Git",
+  skills: "Skills",
+  advanced: "Advanced",
+}
 
 export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
   {
-    slug: 'home',
-    title: 'Settings',
-    group: 'general',
-    kind: 'single',
-    description: 'Search and jump to common pages.',
-    keywords: ['search', 'settings'],
+    slug: "home",
+    title: "Settings",
+    group: "general",
+    kind: "single",
+    description: "Search and jump to common pages.",
+    keywords: ["search", "settings"],
   },
   {
-    slug: 'projects',
-    title: 'Projects',
-    group: 'projects',
-    kind: 'split',
-    keywords: ['project', 'projects', 'worktree', 'worktrees', 'repo', 'repository', 'directory'],
+    slug: "projects",
+    title: "Projects",
+    group: "projects",
+    kind: "split",
+    keywords: ["project", "projects", "worktree", "worktrees", "repo", "repository", "directory"],
   },
   {
-    slug: 'remote-instances',
-    title: 'Remote Instances',
-    group: 'projects',
-    kind: 'split',
-    keywords: ['ssh', 'remote', 'instances', 'forwarding', 'connection'],
+    slug: "remote-instances",
+    title: "Remote Instances",
+    group: "projects",
+    kind: "split",
+    keywords: ["ssh", "remote", "instances", "forwarding", "connection"],
     isAvailable: (ctx) => ctx.isDesktop && !ctx.isWeb,
   },
   {
-    slug: 'providers',
-    title: 'Providers',
-    group: 'ax-code',
-    kind: 'split',
-    keywords: ['provider', 'providers', 'models', 'model', 'api key', 'api keys', 'openai', 'anthropic', 'ollama', 'credentials'],
+    slug: "providers",
+    title: "Providers",
+    group: "ax-code",
+    kind: "split",
+    keywords: [
+      "provider",
+      "providers",
+      "models",
+      "model",
+      "api key",
+      "api keys",
+      "openai",
+      "anthropic",
+      "ollama",
+      "credentials",
+    ],
   },
   {
-    slug: 'usage',
-    title: 'Usage',
-    group: 'usage',
-    kind: 'split',
-    keywords: ['quota', 'billing', 'tokens', 'usage', 'limits'],
+    slug: "agents",
+    title: "Agents",
+    group: "ax-code",
+    kind: "split",
+    keywords: ["agent", "agents", "prompts", "tools", "permissions"],
   },
   {
-    slug: 'agents',
-    title: 'Agents',
-    group: 'ax-code',
-    kind: 'split',
-    keywords: ['agent', 'agents', 'prompts', 'tools', 'permissions'],
+    slug: "behavior",
+    title: "Behavior",
+    group: "ax-code",
+    kind: "single",
+    keywords: ["behavior", "agents.md", "system prompt", "global rules", "instructions", "override"],
   },
   {
-    slug: 'behavior',
-    title: 'Behavior',
-    group: 'ax-code',
-    kind: 'single',
-    keywords: ['behavior', 'agents.md', 'system prompt', 'global rules', 'instructions', 'override'],
+    slug: "commands",
+    title: "Commands",
+    group: "ax-code",
+    kind: "split",
+    keywords: ["command", "commands", "slash", "macros", "automation"],
   },
   {
-    slug: 'commands',
-    title: 'Commands',
-    group: 'ax-code',
-    kind: 'split',
-    keywords: ['command', 'commands', 'slash', 'macros', 'automation'],
+    slug: "mcp",
+    title: "MCP",
+    group: "ax-code",
+    kind: "split",
+    keywords: ["mcp", "model context protocol", "servers", "tools", "remote", "stdio"],
   },
   {
-    slug: 'mcp',
-    title: 'MCP',
-    group: 'ax-code',
-    kind: 'split',
-    keywords: ['mcp', 'model context protocol', 'servers', 'tools', 'remote', 'stdio'],
+    slug: "plugins",
+    title: "Plugins",
+    group: "ax-code",
+    kind: "split",
+    keywords: ["plugin", "plugins", "extensions", "addons", "npm", "ax-code-wakatime"],
   },
   {
-    slug: 'plugins',
-    title: 'Plugins',
-    group: 'ax-code',
-    kind: 'split',
-    keywords: ['plugin', 'plugins', 'extensions', 'addons', 'npm', 'ax-code-wakatime'],
+    slug: "skills.installed",
+    title: "Skills",
+    group: "skills",
+    kind: "split",
+    keywords: ["skill", "skills", "instructions", "install", "catalog"],
   },
   {
-    slug: 'skills.installed',
-    title: 'Skills',
-    group: 'skills',
-    kind: 'split',
-    keywords: ['skill', 'skills', 'instructions', 'install', 'catalog'],
+    slug: "skills.catalog",
+    title: "Skills Catalog",
+    group: "skills",
+    kind: "single",
+    keywords: ["install", "catalog", "external", "repository", "skills catalog"],
   },
   {
-    slug: 'skills.catalog',
-    title: 'Skills Catalog',
-    group: 'skills',
-    kind: 'single',
-    keywords: ['install', 'catalog', 'external', 'repository', 'skills catalog'],
+    slug: "git",
+    title: "Git",
+    group: "git",
+    kind: "single",
+    keywords: [
+      "git",
+      "github",
+      "identity",
+      "identities",
+      "ssh",
+      "profiles",
+      "credentials",
+      "keys",
+      "commit",
+      "gitmoji",
+      "oauth",
+      "prs",
+      "issues",
+    ],
   },
   {
-    slug: 'git',
-    title: 'Git',
-    group: 'git',
-    kind: 'single',
-    keywords: ['git', 'github', 'identity', 'identities', 'ssh', 'profiles', 'credentials', 'keys', 'commit', 'gitmoji', 'oauth', 'prs', 'issues'],
+    slug: "appearance",
+    title: "Appearance",
+    group: "appearance",
+    kind: "single",
+    keywords: [
+      "theme",
+      "font",
+      "spacing",
+      "padding",
+      "corner radius",
+      "radius",
+      "input bar",
+      "keyboard",
+      "viewport",
+      "terminal",
+      "install name",
+      "app shortcuts",
+    ],
   },
   {
-    slug: 'appearance',
-    title: 'Appearance',
-    group: 'appearance',
-    kind: 'single',
-    keywords: ['theme', 'font', 'spacing', 'padding', 'corner radius', 'radius', 'input bar', 'keyboard', 'viewport', 'terminal', 'install name', 'app shortcuts'],
+    slug: "chat",
+    title: "Chat",
+    group: "general",
+    kind: "single",
+    keywords: [
+      "tools",
+      "diff",
+      "reasoning",
+      "dotfiles",
+      "draft",
+      "queue",
+      "output",
+      "copy",
+      "image",
+      "split messages",
+      "message actions",
+    ],
   },
   {
-    slug: 'chat',
-    title: 'Chat',
-    group: 'general',
-    kind: 'single',
-    keywords: ['tools', 'diff', 'reasoning', 'dotfiles', 'draft', 'queue', 'output', 'copy', 'image', 'split messages', 'message actions'],
+    slug: "shortcuts",
+    title: "Shortcuts",
+    group: "general",
+    kind: "single",
+    keywords: ["keyboard", "hotkeys", "shortcuts", "bindings"],
   },
   {
-    slug: 'shortcuts',
-    title: 'Shortcuts',
-    group: 'general',
-    kind: 'single',
-    keywords: ['keyboard', 'hotkeys', 'shortcuts', 'bindings'],
+    slug: "sessions",
+    title: "Sessions",
+    group: "general",
+    kind: "single",
+    keywords: ["defaults", "default agent", "default model", "retention", "memory", "limits", "zen"],
   },
   {
-    slug: 'sessions',
-    title: 'Sessions',
-    group: 'general',
-    kind: 'single',
-    keywords: ['defaults', 'default agent', 'default model', 'retention', 'memory', 'limits', 'zen'],
+    slug: "magic-prompts",
+    title: "Magic Prompts",
+    group: "general",
+    kind: "split",
+    keywords: ["prompts", "templates", "git", "github", "review", "commit", "pull request"],
   },
   {
-    slug: 'magic-prompts',
-    title: 'Magic Prompts',
-    group: 'general',
-    kind: 'split',
-    keywords: ['prompts', 'templates', 'git', 'github', 'review', 'commit', 'pull request'],
-  },
-  {
-    slug: 'snippets',
-    title: 'Snippets',
-    group: 'general',
-    kind: 'split',
-    keywords: ['prompt', 'templates', 'multi-run', 'strategy', 'approach'],
+    slug: "snippets",
+    title: "Snippets",
+    group: "general",
+    kind: "split",
+    keywords: ["prompt", "templates", "multi-run", "strategy", "approach"],
   },
 
-  { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
-] as const;
+  {
+    slug: "notifications",
+    title: "Notifications",
+    group: "general",
+    kind: "single",
+    keywords: ["alerts", "native", "summary", "summarization"],
+  },
+] as const
 
 export const LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG: Record<SidebarSection, SettingsPageSlug> = {
-  sessions: 'sessions',
-  agents: 'agents',
-  commands: 'commands',
-  mcp: 'mcp',
-  skills: 'skills.installed',
-  providers: 'providers',
-  usage: 'usage',
-  'git-identities': 'git',
-  settings: 'home',
-};
+  sessions: "sessions",
+  agents: "agents",
+  commands: "commands",
+  mcp: "mcp",
+  skills: "skills.installed",
+  providers: "providers",
+  "git-identities": "git",
+  settings: "home",
+}
 
 export function getSettingsPageMeta(slug: string): SettingsPageMeta | null {
-  const normalized = slug.trim().toLowerCase();
-  return (SETTINGS_PAGE_METADATA as readonly SettingsPageMeta[]).find((page) => page.slug === normalized) ?? null;
+  const normalized = slug.trim().toLowerCase()
+  return (SETTINGS_PAGE_METADATA as readonly SettingsPageMeta[]).find((page) => page.slug === normalized) ?? null
 }
 
 export function resolveSettingsSlug(value: string | null | undefined): SettingsPageSlug {
-  const normalized = (value ?? '').trim().toLowerCase();
+  const normalized = (value ?? "").trim().toLowerCase()
   if (!normalized) {
-    return 'home';
+    return "home"
   }
 
-  const legacy = (LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG as Record<string, SettingsPageSlug>)[normalized];
+  const legacy = (LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG as Record<string, SettingsPageSlug>)[normalized]
   if (legacy) {
-    return legacy;
+    return legacy
   }
 
-  const direct = getSettingsPageMeta(normalized);
+  const direct = getSettingsPageMeta(normalized)
   if (direct) {
-    return direct.slug;
+    return direct.slug
   }
 
-  return 'home';
+  return "home"
 }

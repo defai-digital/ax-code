@@ -5,11 +5,7 @@
     "description": "A pure monochromatic theme - dark variant with slight colors added",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [
-      "dark",
-      "monochrome",
-      "minimal"
-    ]
+    "tags": ["dark", "monochrome", "minimal"]
   },
   "colors": {
     "primary": {

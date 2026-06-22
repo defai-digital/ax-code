@@ -1,32 +1,28 @@
-import React from "react";
-import {
-  finishConfigUpdate,
-  getConfigUpdateSnapshot,
-  subscribeConfigUpdate,
-} from "@/lib/configUpdate";
-import { AxCodeIcon } from "./AxCodeIcon";
+import React from "react"
+import { finishConfigUpdate, getConfigUpdateSnapshot, subscribeConfigUpdate } from "@/lib/configUpdate"
+import { AxCodeIcon } from "./AxCodeIcon"
 
-const RESTART_OVERLAY_TIMEOUT_MS = 120_000;
+const RESTART_OVERLAY_TIMEOUT_MS = 120_000
 
 export const ConfigUpdateOverlay: React.FC = () => {
-  const [{ isUpdating, message }, setState] = React.useState(() => getConfigUpdateSnapshot());
-  const [timedOut, setTimedOut] = React.useState(false);
+  const [{ isUpdating, message }, setState] = React.useState(() => getConfigUpdateSnapshot())
+  const [timedOut, setTimedOut] = React.useState(false)
 
   React.useEffect(() => {
-    return subscribeConfigUpdate(setState);
-  }, []);
+    return subscribeConfigUpdate(setState)
+  }, [])
 
   React.useEffect(() => {
     if (!isUpdating) {
-      setTimedOut(false);
-      return;
+      setTimedOut(false)
+      return
     }
-    const timer = window.setTimeout(() => setTimedOut(true), RESTART_OVERLAY_TIMEOUT_MS);
-    return () => window.clearTimeout(timer);
-  }, [isUpdating]);
+    const timer = window.setTimeout(() => setTimedOut(true), RESTART_OVERLAY_TIMEOUT_MS)
+    return () => window.clearTimeout(timer)
+  }, [isUpdating])
 
   if (!isUpdating) {
-    return null;
+    return null
   }
 
   return (
@@ -71,5 +67,5 @@ export const ConfigUpdateOverlay: React.FC = () => {
         ) : null}
       </div>
     </div>
-  );
-};
+  )
+}

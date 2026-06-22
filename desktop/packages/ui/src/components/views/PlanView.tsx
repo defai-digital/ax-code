@@ -1,261 +1,259 @@
-import React from 'react';
-import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
-import { PreviewToggleButton } from './PreviewToggleButton';
-import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import React from "react"
+import { CodeMirrorEditor } from "@/components/ui/CodeMirrorEditor"
+import { PreviewToggleButton } from "./PreviewToggleButton"
+import { SimpleMarkdownRenderer } from "@/components/chat/MarkdownRenderer"
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary"
+import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
+import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentController, type LineRange } from '@/components/comments';
+  buildCodeMirrorCommentWidgets,
+  normalizeLineRange,
+  useInlineCommentController,
+  type LineRange,
+} from "@/components/comments"
 
-import { getLanguageFromExtension } from '@/lib/toolHelpers';
-import { useDeviceInfo } from '@/lib/device';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
-import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
-import { languageByExtension } from '@/lib/codemirror/languageByExtension';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessions } from '@/sync/sync-context';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useSelectionStore } from '@/sync/selection-store';
-import { API_ENDPOINTS } from '@/lib/http';
-import { useUIStore } from '@/stores/useUIStore';
-import { useGitStore } from '@/stores/useGitStore';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { EditorView } from '@codemirror/view';
-import { copyTextToClipboard } from '@/lib/clipboard';
-import { generateBranchName } from '@/lib/git/branchNameGenerator';
-import { parseProjectPlanMarkdown } from '@/lib/openchamberConfig';
-import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
-import { TodoSendDialog, type TodoSendExecution } from '@/components/session/TodoSendDialog';
-import { Icon } from "@/components/icon/Icon";
-import { renderMagicPrompt } from '@/lib/magicPrompts';
-import { useI18n } from '@/lib/i18n';
+import { getLanguageFromExtension } from "@/lib/toolHelpers"
+import { useDeviceInfo } from "@/lib/device"
+import { useThemeSystem } from "@/contexts/useThemeSystem"
+import { generateSyntaxTheme } from "@/lib/theme/syntaxThemeGenerator"
+import { createFlexokiCodeMirrorTheme } from "@/lib/codemirror/flexokiTheme"
+import { languageByExtension } from "@/lib/codemirror/languageByExtension"
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { useSessions } from "@/sync/sync-context"
+import { useDirectoryStore } from "@/stores/useDirectoryStore"
+import { useFeatureFlagsStore } from "@/stores/useFeatureFlagsStore"
+import { useProjectsStore } from "@/stores/useProjectsStore"
+import { useSelectionStore } from "@/sync/selection-store"
+import { API_ENDPOINTS } from "@/lib/http"
+import { useUIStore } from "@/stores/useUIStore"
+import { useGitStore } from "@/stores/useGitStore"
+import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
+import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
+import { useEffectiveDirectory } from "@/hooks/useEffectiveDirectory"
+import { EditorView } from "@codemirror/view"
+import { copyTextToClipboard } from "@/lib/clipboard"
+import { generateBranchName } from "@/lib/git/branchNameGenerator"
+import { parseProjectPlanMarkdown } from "@/lib/openchamberConfig"
+import { createWorktreeSessionForNewBranch } from "@/lib/worktreeSessionCreator"
+import { TodoSendDialog, type TodoSendExecution } from "@/components/session/TodoSendDialog"
+import { Icon } from "@/components/icon/Icon"
+import { renderMagicPrompt } from "@/lib/magicPrompts"
+import { useI18n } from "@/lib/i18n"
 import {
   getViewerModeStorage,
   readPreviewViewModePreference,
   savePreviewViewModePreference,
   type PreviewViewMode,
-} from '@/lib/viewerModePreferences';
+} from "@/lib/viewerModePreferences"
 
 type PlanViewProps = {
-  targetPath?: string | null;
-};
+  targetPath?: string | null
+}
 
-type PlanSendAction = 'improve' | 'implement';
-type PlanSendTarget = 'session' | 'worktree';
+type PlanSendAction = "improve" | "implement"
+type PlanSendTarget = "session" | "worktree"
 
 type PendingPlanSend = {
-  action: PlanSendAction;
-  target: PlanSendTarget;
-};
+  action: PlanSendAction
+  target: PlanSendTarget
+}
 
 const normalize = (value: string): string => {
-  if (!value) return '';
-  const replaced = value.replace(/\\/g, '/');
-  return replaced === '/' ? '/' : replaced.replace(/\/+$/, '');
-};
+  if (!value) return ""
+  const replaced = value.replace(/\\/g, "/")
+  return replaced === "/" ? "/" : replaced.replace(/\/+$/, "")
+}
 
 const joinPath = (base: string, segment: string): string => {
-  const normalizedBase = normalize(base);
-  const cleanSegment = segment.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
-  if (!normalizedBase || normalizedBase === '/') {
-    return `/${cleanSegment}`;
+  const normalizedBase = normalize(base)
+  const cleanSegment = segment.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "")
+  if (!normalizedBase || normalizedBase === "/") {
+    return `/${cleanSegment}`
   }
-  return `${normalizedBase}/${cleanSegment}`;
-};
+  return `${normalizedBase}/${cleanSegment}`
+}
 
 const buildRepoPlanPath = (directory: string, created: number, slug: string): string => {
-  return joinPath(joinPath(joinPath(directory, '.ax-code'), 'plans'), `${created}-${slug}.md`);
-};
+  return joinPath(joinPath(joinPath(directory, ".ax-code"), "plans"), `${created}-${slug}.md`)
+}
 
 const buildHomePlanPath = (created: number, slug: string): string => {
-  return `~/.ax-code/plans/${created}-${slug}.md`;
-};
+  return `~/.ax-code/plans/${created}-${slug}.md`
+}
 
 const resolveTilde = (path: string, homeDir: string | null): string => {
-  const trimmed = path.trim();
-  if (!trimmed.startsWith('~')) return trimmed;
-  if (trimmed === '~') return homeDir || trimmed;
-  if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
-    return homeDir ? `${homeDir}${trimmed.slice(1)}` : trimmed;
+  const trimmed = path.trim()
+  if (!trimmed.startsWith("~")) return trimmed
+  if (trimmed === "~") return homeDir || trimmed
+  if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
+    return homeDir ? `${homeDir}${trimmed.slice(1)}` : trimmed
   }
-  return trimmed;
-};
+  return trimmed
+}
 
 const toDisplayPath = (resolvedPath: string, options: { currentDirectory: string; homeDirectory: string }): string => {
-  const current = normalize(options.currentDirectory);
-  const home = normalize(options.homeDirectory);
-  const normalized = normalize(resolvedPath);
+  const current = normalize(options.currentDirectory)
+  const home = normalize(options.homeDirectory)
+  const normalized = normalize(resolvedPath)
 
-  if (current && normalized.startsWith(current + '/')) {
-    return normalized.slice(current.length + 1);
+  if (current && normalized.startsWith(current + "/")) {
+    return normalized.slice(current.length + 1)
   }
 
   if (home && normalized === home) {
-    return '~';
+    return "~"
   }
 
-  if (home && normalized.startsWith(home + '/')) {
-    return `~${normalized.slice(home.length)}`;
+  if (home && normalized.startsWith(home + "/")) {
+    return `~${normalized.slice(home.length)}`
   }
 
-  return normalized;
-};
+  return normalized
+}
 
 const resolveProjectRefForDirectory = (
   directory: string,
   projects: Array<{ id: string; path: string }>,
   activeProjectId: string | null,
 ): { id: string; path: string } | null => {
-  const normalized = normalize(directory.trim());
+  const normalized = normalize(directory.trim())
   if (!normalized) {
-    return null;
+    return null
   }
 
-  const activeProject = activeProjectId
-    ? projects.find((project) => project.id === activeProjectId) ?? null
-    : null;
+  const activeProject = activeProjectId ? (projects.find((project) => project.id === activeProjectId) ?? null) : null
 
   if (activeProject?.path) {
-    const activePath = normalize(activeProject.path);
+    const activePath = normalize(activeProject.path)
     if (normalized === activePath || normalized.startsWith(`${activePath}/`)) {
-      return { id: activeProject.id, path: activeProject.path };
+      return { id: activeProject.id, path: activeProject.path }
     }
   }
 
   const match = projects
     .filter((project) => {
-      const projectPath = normalize(project.path);
-      return normalized === projectPath || normalized.startsWith(`${projectPath}/`);
+      const projectPath = normalize(project.path)
+      return normalized === projectPath || normalized.startsWith(`${projectPath}/`)
     })
-    .sort((left, right) => normalize(right.path).length - normalize(left.path).length)[0];
+    .sort((left, right) => normalize(right.path).length - normalize(left.path).length)[0]
 
-  return match ? { id: match.id, path: match.path } : null;
-};
+  return match ? { id: match.id, path: match.path } : null
+}
 
 export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
-  const { t } = useI18n();
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const createSession = useSessionUIStore((state) => state.createSession);
-  const sendMessage = useSessionUIStore((state) => state.sendMessage);
-  const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
-  const sessions = useSessions();
-  const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
-  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
-  const projects = useProjectsStore((state) => state.projects);
-  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
-  const gitDirectories = useGitStore((state) => state.directories);
-  const effectiveDirectory = useEffectiveDirectory() ?? '';
-  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
-  const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
-  const runtimeApis = useRuntimeAPIs();
-  const { isMobile } = useDeviceInfo();
-  const { currentTheme } = useThemeSystem();
-  React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
+  const { t } = useI18n()
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const createSession = useSessionUIStore((state) => state.createSession)
+  const sendMessage = useSessionUIStore((state) => state.sendMessage)
+  const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession)
+  const sessions = useSessions()
+  const homeDirectory = useDirectoryStore((state) => state.homeDirectory)
+  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled)
+  const projects = useProjectsStore((state) => state.projects)
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId)
+  const gitDirectories = useGitStore((state) => state.directories)
+  const effectiveDirectory = useEffectiveDirectory() ?? ""
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab)
+  const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen)
+  const runtimeApis = useRuntimeAPIs()
+  const { isMobile } = useDeviceInfo()
+  const { currentTheme } = useThemeSystem()
+  React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme])
 
   const session = React.useMemo(() => {
-    if (!currentSessionId) return null;
-    return sessions.find((s) => s.id === currentSessionId) ?? null;
-  }, [currentSessionId, sessions]);
+    if (!currentSessionId) return null
+    return sessions.find((s) => s.id === currentSessionId) ?? null
+  }, [currentSessionId, sessions])
 
   const sessionDirectory = React.useMemo(() => {
-    const raw = typeof session?.directory === 'string' ? session.directory : '';
-    return normalize(raw || '');
-  }, [session?.directory]);
+    const raw = typeof session?.directory === "string" ? session.directory : ""
+    return normalize(raw || "")
+  }, [session?.directory])
   const projectDirectory = React.useMemo(
     () => normalize(effectiveDirectory || sessionDirectory),
     [effectiveDirectory, sessionDirectory],
-  );
+  )
   const currentProjectRef = React.useMemo(
     () => resolveProjectRefForDirectory(projectDirectory, projects, activeProjectId),
     [activeProjectId, projectDirectory, projects],
-  );
+  )
   const canCreateWorktree = React.useMemo(
     () => (currentProjectRef ? gitDirectories.get(currentProjectRef.path)?.isGitRepo === true : false),
     [currentProjectRef, gitDirectories],
-  );
-  const [pendingPlanSend, setPendingPlanSend] = React.useState<PendingPlanSend | null>(null);
-  const [isPlanSendSubmitting, setIsPlanSendSubmitting] = React.useState(false);
+  )
+  const [pendingPlanSend, setPendingPlanSend] = React.useState<PendingPlanSend | null>(null)
+  const [isPlanSendSubmitting, setIsPlanSendSubmitting] = React.useState(false)
 
-  const [resolvedPath, setResolvedPath] = React.useState<string | null>(null);
+  const [resolvedPath, setResolvedPath] = React.useState<string | null>(null)
   const displayPath = React.useMemo(() => {
     if (!resolvedPath || !sessionDirectory || !homeDirectory) {
-      return resolvedPath;
+      return resolvedPath
     }
-    return toDisplayPath(resolvedPath, { currentDirectory: sessionDirectory, homeDirectory });
-  }, [resolvedPath, sessionDirectory, homeDirectory]);
-  const [content, setContent] = React.useState<string>('');
-  const [saveError, setSaveError] = React.useState<string | null>(null);
+    return toDisplayPath(resolvedPath, { currentDirectory: sessionDirectory, homeDirectory })
+  }, [resolvedPath, sessionDirectory, homeDirectory])
+  const [content, setContent] = React.useState<string>("")
+  const [saveError, setSaveError] = React.useState<string | null>(null)
   const planFileLabel = React.useMemo(() => {
-    return displayPath ? displayPath.split('/').pop() || t('planView.file.defaultName') : t('planView.file.defaultName');
-  }, [displayPath, t]);
+    return displayPath ? displayPath.split("/").pop() || t("planView.file.defaultName") : t("planView.file.defaultName")
+  }, [displayPath, t])
   const parsedTitle = React.useMemo(() => {
     if (!content.trim()) {
-      return t('planView.title.default');
+      return t("planView.title.default")
     }
-    return parseProjectPlanMarkdown(content).title || t('planView.title.default');
-  }, [content, t]);
-  const sendPromptTitle = React.useMemo(() => parsedTitle.trim() || t('planView.title.default'), [parsedTitle, t]);
-  const [loading, setLoading] = React.useState(false);
-  const [copiedContent, setCopiedContent] = React.useState(false);
-  const [mdViewMode, setMdViewMode] = React.useState<PreviewViewMode>('edit');
-  const copiedContentTimeoutRef = React.useRef<number | null>(null);
+    return parseProjectPlanMarkdown(content).title || t("planView.title.default")
+  }, [content, t])
+  const sendPromptTitle = React.useMemo(() => parsedTitle.trim() || t("planView.title.default"), [parsedTitle, t])
+  const [loading, setLoading] = React.useState(false)
+  const [copiedContent, setCopiedContent] = React.useState(false)
+  const [mdViewMode, setMdViewMode] = React.useState<PreviewViewMode>("edit")
+  const copiedContentTimeoutRef = React.useRef<number | null>(null)
 
-  const [lineSelection, setLineSelection] = React.useState<LineRange | null>(null);
-  const editorViewRef = React.useRef<EditorView | null>(null);
-  const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const [lineSelection, setLineSelection] = React.useState<LineRange | null>(null)
+  const editorViewRef = React.useRef<EditorView | null>(null)
+  const editorWrapperRef = React.useRef<HTMLDivElement | null>(null)
 
-  const MD_VIEWER_MODE_KEY = 'openchamber:plan:md-viewer-mode';
+  const MD_VIEWER_MODE_KEY = "openchamber:plan:md-viewer-mode"
 
   React.useEffect(() => {
-    setMdViewMode(readPreviewViewModePreference(getViewerModeStorage(), MD_VIEWER_MODE_KEY, 'edit'));
-  }, []);
+    setMdViewMode(readPreviewViewModePreference(getViewerModeStorage(), MD_VIEWER_MODE_KEY, "edit"))
+  }, [])
 
   const saveMdViewMode = React.useCallback((mode: PreviewViewMode) => {
-    setMdViewMode(mode);
-    savePreviewViewModePreference(getViewerModeStorage(), MD_VIEWER_MODE_KEY, mode);
-  }, []);
-  const isSelectingRef = React.useRef(false);
-  const selectionStartRef = React.useRef<number | null>(null);
-  const [isDragging, setIsDragging] = React.useState(false);
+    setMdViewMode(mode)
+    savePreviewViewModePreference(getViewerModeStorage(), MD_VIEWER_MODE_KEY, mode)
+  }, [])
+  const isSelectingRef = React.useRef(false)
+  const selectionStartRef = React.useRef<number | null>(null)
+  const [isDragging, setIsDragging] = React.useState(false)
 
   React.useEffect(() => {
     const handleGlobalMouseUp = () => {
-      isSelectingRef.current = false;
-      selectionStartRef.current = null;
-      setIsDragging(false);
-    };
-    document.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, []);
+      isSelectingRef.current = false
+      selectionStartRef.current = null
+      setIsDragging(false)
+    }
+    document.addEventListener("mouseup", handleGlobalMouseUp)
+    return () => document.removeEventListener("mouseup", handleGlobalMouseUp)
+  }, [])
 
   const extractSelectedCode = React.useCallback((text: string, range: LineRange): string => {
-    const lines = text.split('\n');
-    const startLine = Math.max(1, range.start);
-    const endLine = Math.min(lines.length, range.end);
-    if (startLine > endLine) return '';
-    return lines.slice(startLine - 1, endLine).join('\n');
-  }, []);
+    const lines = text.split("\n")
+    const startLine = Math.max(1, range.start)
+    const endLine = Math.min(lines.length, range.end)
+    if (startLine > endLine) return ""
+    return lines.slice(startLine - 1, endLine).join("\n")
+  }, [])
 
   const commentController = useInlineCommentController<LineRange>({
-    source: 'plan',
+    source: "plan",
     fileLabel: planFileLabel,
-    language: resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown',
+    language: resolvedPath ? getLanguageFromExtension(resolvedPath) || "markdown" : "markdown",
     getCodeForRange: (range) => extractSelectedCode(content, normalizeLineRange(range)),
     toStoreRange: (range) => ({ startLine: range.start, endLine: range.end }),
     fromDraftRange: (draft) => ({ start: draft.startLine, end: draft.endLine }),
-  });
+  })
 
   const {
     drafts: planFileDrafts,
@@ -267,303 +265,314 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
     reset,
     startEdit,
     deleteDraft,
-  } = commentController;
+  } = commentController
 
   React.useEffect(() => {
-    setLineSelection(null);
-    reset();
-  }, [content, reset]);
+    setLineSelection(null)
+    reset()
+  }, [content, reset])
 
   React.useEffect(() => {
-    setCommentSelection(lineSelection);
-  }, [lineSelection, setCommentSelection]);
+    setCommentSelection(lineSelection)
+  }, [lineSelection, setCommentSelection])
 
   const handleCancelComment = React.useCallback(() => {
-    setLineSelection(null);
-    cancel();
-  }, [cancel]);
+    setLineSelection(null)
+    cancel()
+  }, [cancel])
 
-  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }) => {
-    if (rangeOverride) {
-      setLineSelection(rangeOverride);
-    }
-    saveComment(textToSave, rangeOverride ?? lineSelection ?? undefined);
-    setLineSelection(null);
-  }, [lineSelection, saveComment]);
+  const handleSaveComment = React.useCallback(
+    (textToSave: string, rangeOverride?: { start: number; end: number }) => {
+      if (rangeOverride) {
+        setLineSelection(rangeOverride)
+      }
+      saveComment(textToSave, rangeOverride ?? lineSelection ?? undefined)
+      setLineSelection(null)
+    },
+    [lineSelection, saveComment],
+  )
 
   React.useEffect(() => {
-    if (!lineSelection) return;
+    if (!lineSelection) return
 
     if (isMobile && !editingDraftId) {
       // Input handles mobile scroll/focus behavior.
     }
 
     const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
+      const target = e.target as HTMLElement
       if (
         target.closest('[data-comment-card="true"]') ||
         target.closest('[data-comment-input="true"]') ||
-        target.closest('.oc-block-widget')
+        target.closest(".oc-block-widget")
       ) {
-        return;
+        return
       }
 
-      if (target.closest('.cm-gutterElement')) return;
-      if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
+      if (target.closest(".cm-gutterElement")) return
+      if (target.closest("[data-sonner-toast]") || target.closest("[data-sonner-toaster]")) return
 
-      setLineSelection(null);
-      cancel();
-    };
+      setLineSelection(null)
+      cancel()
+    }
 
     const timeoutId = window.setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-    }, 100);
+      document.addEventListener("click", handleClickOutside)
+    }, 100)
 
     return () => {
-      window.clearTimeout(timeoutId);
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [cancel, editingDraftId, isMobile, lineSelection]);
+      window.clearTimeout(timeoutId)
+      document.removeEventListener("click", handleClickOutside)
+    }
+  }, [cancel, editingDraftId, isMobile, lineSelection])
 
   const editorExtensions = React.useMemo(() => {
-    const extensions = [createFlexokiCodeMirrorTheme(currentTheme)];
-    const language = languageByExtension(resolvedPath || 'plan.md');
+    const extensions = [createFlexokiCodeMirrorTheme(currentTheme)]
+    const language = languageByExtension(resolvedPath || "plan.md")
     if (language) {
-      extensions.push(language);
+      extensions.push(language)
     }
-    extensions.push(EditorView.lineWrapping);
-    return extensions;
-  }, [currentTheme, resolvedPath]);
+    extensions.push(EditorView.lineWrapping)
+    return extensions
+  }, [currentTheme, resolvedPath])
 
   React.useEffect(() => {
     // Saved project plans opened via context panel should work even when session plan mode is off.
     if (!planModeEnabled && !targetPath) {
-      setResolvedPath(null);
-      setContent('');
-      setLoading(false);
-      return;
+      setResolvedPath(null)
+      setContent("")
+      setLoading(false)
+      return
     }
 
-    let cancelled = false;
+    let cancelled = false
 
     const readText = async (path: string): Promise<string> => {
       if (runtimeApis.files?.readFile) {
-        const result = await runtimeApis.files.readFile(path);
-        return result?.content ?? '';
+        const result = await runtimeApis.files.readFile(path)
+        return result?.content ?? ""
       }
 
-      const runtimeFiles = getRegisteredRuntimeAPIs()?.files;
+      const runtimeFiles = getRegisteredRuntimeAPIs()?.files
       if (runtimeFiles?.readFile) {
-        const result = await runtimeFiles.readFile(path, { optional: true });
-        return result?.content ?? '';
+        const result = await runtimeFiles.readFile(path, { optional: true })
+        return result?.content ?? ""
       }
 
       const params = new URLSearchParams({
         path,
-        optional: 'true',
-      });
+        optional: "true",
+      })
       const response = await fetch(`${API_ENDPOINTS.fs.read}?${params.toString()}`, {
         // Avoid conditional requests (304 + empty body).
-        cache: 'no-store',
-      });
+        cache: "no-store",
+      })
       if (!response.ok) {
-        throw new Error(`Failed to read plan file (${response.status})`);
+        throw new Error(`Failed to read plan file (${response.status})`)
       }
-      return response.text();
-    };
+      return response.text()
+    }
 
     const run = async () => {
-      setResolvedPath(null);
-      setContent('');
-      setSaveError(null);
+      setResolvedPath(null)
+      setContent("")
+      setSaveError(null)
 
       if (targetPath) {
-        setLoading(true);
+        setLoading(true)
         try {
-          const text = await readText(targetPath);
-          if (cancelled) return;
-          setResolvedPath(targetPath);
-          setContent(text);
+          const text = await readText(targetPath)
+          if (cancelled) return
+          setResolvedPath(targetPath)
+          setContent(text)
         } catch {
-          if (cancelled) return;
-          setResolvedPath(null);
-          setContent('');
+          if (cancelled) return
+          setResolvedPath(null)
+          setContent("")
         } finally {
-          if (!cancelled) setLoading(false);
+          if (!cancelled) setLoading(false)
         }
-        return;
+        return
       }
 
       if (!session?.slug || !session?.time?.created || !sessionDirectory) {
-        setResolvedPath(null);
-        setContent('');
-        return;
+        setResolvedPath(null)
+        setContent("")
+        return
       }
 
-      setLoading(true);
+      setLoading(true)
 
       try {
-        const repoPath = buildRepoPlanPath(sessionDirectory, session.time.created, session.slug);
-        const homePath = resolveTilde(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null);
+        const repoPath = buildRepoPlanPath(sessionDirectory, session.time.created, session.slug)
+        const homePath = resolveTilde(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null)
 
-        let resolved: string | null = null;
-        let text: string | null = null;
+        let resolved: string | null = null
+        let text: string | null = null
 
         try {
-          text = await readText(repoPath);
-          resolved = repoPath;
+          text = await readText(repoPath)
+          resolved = repoPath
         } catch {
           // ignore
         }
 
         if (!resolved) {
           try {
-            text = await readText(homePath);
-            resolved = homePath;
+            text = await readText(homePath)
+            resolved = homePath
           } catch {
             // ignore
           }
         }
 
-        if (cancelled) return;
+        if (cancelled) return
 
         if (!resolved || text === null) {
-          setResolvedPath(null);
-          setContent('');
-          return;
+          setResolvedPath(null)
+          setContent("")
+          return
         }
 
-        setResolvedPath(resolved);
-        setContent(text);
+        setResolvedPath(resolved)
+        setContent(text)
       } catch {
-        if (cancelled) return;
-        setResolvedPath(null);
-        setContent('');
+        if (cancelled) return
+        setResolvedPath(null)
+        setContent("")
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoading(false)
       }
-    };
+    }
 
-    void run();
+    void run()
 
     return () => {
-      cancelled = true;
-    };
-  }, [homeDirectory, planModeEnabled, runtimeApis.files, sessionDirectory, session?.slug, session?.time?.created, targetPath]);
+      cancelled = true
+    }
+  }, [
+    homeDirectory,
+    planModeEnabled,
+    runtimeApis.files,
+    sessionDirectory,
+    session?.slug,
+    session?.time?.created,
+    targetPath,
+  ])
 
   React.useEffect(() => {
     if (!resolvedPath) {
-      setSaveError(null);
-      return;
+      setSaveError(null)
+      return
     }
 
     const controller = window.setTimeout(async () => {
-      setSaveError(null);
+      setSaveError(null)
       try {
         if (runtimeApis.files?.writeFile) {
-          const result = await runtimeApis.files.writeFile(resolvedPath, content);
+          const result = await runtimeApis.files.writeFile(resolvedPath, content)
           if (!result?.success) {
-            throw new Error(t('planView.error.writeFailed'));
+            throw new Error(t("planView.error.writeFailed"))
           }
         } else {
           const response = await fetch(API_ENDPOINTS.fs.write, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ path: resolvedPath, content }),
-          });
+          })
           if (!response.ok) {
-            throw new Error(t('planView.error.writePlanFileFailed', { status: response.status }));
+            throw new Error(t("planView.error.writePlanFileFailed", { status: response.status }))
           }
         }
       } catch (error) {
-        setSaveError(error instanceof Error ? error.message : t('planView.error.saveFailed'));
+        setSaveError(error instanceof Error ? error.message : t("planView.error.saveFailed"))
       }
-    }, 350);
+    }, 350)
 
     return () => {
-      window.clearTimeout(controller);
-    };
-  }, [content, resolvedPath, runtimeApis.files, t]);
+      window.clearTimeout(controller)
+    }
+  }, [content, resolvedPath, runtimeApis.files, t])
 
   React.useEffect(() => {
     return () => {
       if (copiedContentTimeoutRef.current !== null) {
-        window.clearTimeout(copiedContentTimeoutRef.current);
+        window.clearTimeout(copiedContentTimeoutRef.current)
       }
-    };
-  }, []);
+    }
+  }, [])
 
   const routeToChat = React.useCallback(() => {
-    setActiveMainTab('chat');
-    setSessionSwitcherOpen(false);
-  }, [setActiveMainTab, setSessionSwitcherOpen]);
+    setActiveMainTab("chat")
+    setSessionSwitcherOpen(false)
+  }, [setActiveMainTab, setSessionSwitcherOpen])
 
   const handleConfirmPlanSend = React.useCallback(
     async (execution: TodoSendExecution) => {
       if (!currentProjectRef || !pendingPlanSend) {
-        return;
+        return
       }
 
       const visiblePrompt = await renderMagicPrompt(
-        pendingPlanSend.action === 'improve' ? 'plan.improve.visible' : 'plan.implement.visible',
+        pendingPlanSend.action === "improve" ? "plan.improve.visible" : "plan.implement.visible",
         {
           plan_title: sendPromptTitle,
         },
-      );
+      )
       const instructionsText = await renderMagicPrompt(
-        pendingPlanSend.action === 'improve' ? 'plan.improve.instructions' : 'plan.implement.instructions',
+        pendingPlanSend.action === "improve" ? "plan.improve.instructions" : "plan.implement.instructions",
         {
           plan_title: sendPromptTitle,
-          plan_path: resolvedPath ?? '',
+          plan_path: resolvedPath ?? "",
         },
-      );
-      const syntheticParts = [{ synthetic: true as const, text: instructionsText }];
-      setIsPlanSendSubmitting(true);
+      )
+      const syntheticParts = [{ synthetic: true as const, text: instructionsText }]
+      setIsPlanSendSubmitting(true)
 
       try {
-        routeToChat();
+        routeToChat()
 
-        let sessionId: string | null = null;
-        let directoryHint: string | null = currentProjectRef.path;
+        let sessionId: string | null = null
+        let directoryHint: string | null = currentProjectRef.path
 
-        if (pendingPlanSend.target === 'worktree') {
+        if (pendingPlanSend.target === "worktree") {
           if (!canCreateWorktree) {
-            return;
+            return
           }
-          const created = await createWorktreeSessionForNewBranch(currentProjectRef.path, generateBranchName());
+          const created = await createWorktreeSessionForNewBranch(currentProjectRef.path, generateBranchName())
           if (!created?.id) {
-            return;
+            return
           }
-          sessionId = created.id;
-          directoryHint = null;
+          sessionId = created.id
+          directoryHint = null
         } else {
-          const sessionResult = await createSession(undefined, currentProjectRef.path, null);
+          const sessionResult = await createSession(undefined, currentProjectRef.path, null)
           if (!sessionResult?.id) {
-            return;
+            return
           }
-          sessionId = sessionResult.id;
-          directoryHint = sessionResult.directory ?? currentProjectRef.path;
+          sessionId = sessionResult.id
+          directoryHint = sessionResult.directory ?? currentProjectRef.path
         }
 
         if (!sessionId) {
-          return;
+          return
         }
 
-        const selectionState = useSelectionStore.getState();
-        selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID);
+        const selectionState = useSelectionStore.getState()
+        selectionState.saveSessionModelSelection(sessionId, execution.providerID, execution.modelID)
         if (execution.agent.trim()) {
-          selectionState.saveSessionAgentSelection(sessionId, execution.agent);
-          selectionState.saveAgentModelForSession(sessionId, execution.agent, execution.providerID, execution.modelID);
+          selectionState.saveSessionAgentSelection(sessionId, execution.agent)
+          selectionState.saveAgentModelForSession(sessionId, execution.agent, execution.providerID, execution.modelID)
           selectionState.saveAgentModelVariantForSession(
             sessionId,
             execution.agent,
             execution.providerID,
             execution.modelID,
             execution.variant || undefined,
-          );
+          )
         }
 
-        setCurrentSession(sessionId, directoryHint);
+        setCurrentSession(sessionId, directoryHint)
         await sendMessage(
           visiblePrompt,
           execution.providerID,
@@ -573,15 +582,25 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
           undefined,
           syntheticParts,
           execution.variant || undefined,
-        );
+        )
 
-        setPendingPlanSend(null);
+        setPendingPlanSend(null)
       } finally {
-        setIsPlanSendSubmitting(false);
+        setIsPlanSendSubmitting(false)
       }
     },
-    [canCreateWorktree, createSession, currentProjectRef, pendingPlanSend, resolvedPath, routeToChat, sendMessage, sendPromptTitle, setCurrentSession]
-  );
+    [
+      canCreateWorktree,
+      createSession,
+      currentProjectRef,
+      pendingPlanSend,
+      resolvedPath,
+      routeToChat,
+      sendMessage,
+      sendPromptTitle,
+      setCurrentSession,
+    ],
+  )
 
   const blockWidgets = React.useMemo(() => {
     return buildCodeMirrorCommentWidgets({
@@ -591,17 +610,28 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
       selection: lineSelection,
       isDragging,
       fileLabel: planFileLabel,
-      newWidgetId: 'plan-new-comment-input',
+      newWidgetId: "plan-new-comment-input",
       mapDraftToRange: (draft) => ({ start: draft.startLine, end: draft.endLine }),
       onSave: handleSaveComment,
       onCancel: handleCancelComment,
       onEdit: (draft) => {
-        startEdit(draft);
-        setLineSelection({ start: draft.startLine, end: draft.endLine });
+        startEdit(draft)
+        setLineSelection({ start: draft.startLine, end: draft.endLine })
       },
       onDelete: deleteDraft,
-    });
-  }, [commentText, deleteDraft, editingDraftId, handleCancelComment, handleSaveComment, isDragging, lineSelection, planFileDrafts, planFileLabel, startEdit]);
+    })
+  }, [
+    commentText,
+    deleteDraft,
+    editingDraftId,
+    handleCancelComment,
+    handleSaveComment,
+    isDragging,
+    lineSelection,
+    planFileDrafts,
+    planFileLabel,
+    startEdit,
+  ])
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-background">
@@ -610,7 +640,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
           <div className="typography-ui-label font-medium truncate">{parsedTitle}</div>
           {saveError ? (
             <div className="typography-micro text-[color:var(--status-error)] truncate" title={saveError}>
-              {t('planView.error.saveFailed')}
+              {t("planView.error.saveFailed")}
             </div>
           ) : null}
         </div>
@@ -624,24 +654,24 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
                       variant="ghost"
                       size="sm"
                       className="h-5 w-5 p-0"
-                      aria-label={t('planView.actions.improvePlanAria')}
+                      aria-label={t("planView.actions.improvePlanAria")}
                       disabled={!content.trim()}
                     >
                       <Icon name="loop-right-ai" className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
-                <TooltipContent sideOffset={8}>{t('planView.actions.improve')}</TooltipContent>
+                <TooltipContent sideOffset={8}>{t("planView.actions.improve")}</TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setPendingPlanSend({ action: 'improve', target: 'session' })}>
-                  {t('planView.actions.sendToNewSession')}
+                <DropdownMenuItem onClick={() => setPendingPlanSend({ action: "improve", target: "session" })}>
+                  {t("planView.actions.sendToNewSession")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setPendingPlanSend({ action: 'improve', target: 'worktree' })}
+                  onClick={() => setPendingPlanSend({ action: "improve", target: "worktree" })}
                   disabled={!canCreateWorktree}
                 >
-                  {t('planView.actions.sendToNewWorktreeSession')}
+                  {t("planView.actions.sendToNewWorktreeSession")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -653,51 +683,51 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
                       variant="ghost"
                       size="sm"
                       className="h-5 w-5 p-0"
-                      aria-label={t('planView.actions.implementPlanAria')}
+                      aria-label={t("planView.actions.implementPlanAria")}
                       disabled={!content.trim()}
                     >
                       <Icon name="code-ai" className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
-                <TooltipContent sideOffset={8}>{t('planView.actions.implement')}</TooltipContent>
+                <TooltipContent sideOffset={8}>{t("planView.actions.implement")}</TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setPendingPlanSend({ action: 'implement', target: 'session' })}>
-                  {t('planView.actions.sendToNewSession')}
+                <DropdownMenuItem onClick={() => setPendingPlanSend({ action: "implement", target: "session" })}>
+                  {t("planView.actions.sendToNewSession")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setPendingPlanSend({ action: 'implement', target: 'worktree' })}
+                  onClick={() => setPendingPlanSend({ action: "implement", target: "worktree" })}
                   disabled={!canCreateWorktree}
                 >
-                  {t('planView.actions.sendToNewWorktreeSession')}
+                  {t("planView.actions.sendToNewWorktreeSession")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <PreviewToggleButton
               currentMode={mdViewMode}
-              onToggle={() => saveMdViewMode(mdViewMode === 'preview' ? 'edit' : 'preview')}
+              onToggle={() => saveMdViewMode(mdViewMode === "preview" ? "edit" : "preview")}
             />
             <Button
               variant="ghost"
               size="sm"
               onClick={async () => {
-                const result = await copyTextToClipboard(content);
+                const result = await copyTextToClipboard(content)
                 if (result.ok) {
-                  setCopiedContent(true);
+                  setCopiedContent(true)
                   if (copiedContentTimeoutRef.current !== null) {
-                    window.clearTimeout(copiedContentTimeoutRef.current);
+                    window.clearTimeout(copiedContentTimeoutRef.current)
                   }
                   copiedContentTimeoutRef.current = window.setTimeout(() => {
-                    setCopiedContent(false);
-                  }, 1200);
+                    setCopiedContent(false)
+                  }, 1200)
                 } else {
                   // ignored
                 }
               }}
               className="h-5 w-5 p-0"
-              title={t('planView.actions.copyPlanContents')}
-              aria-label={t('planView.actions.copyPlanContents')}
+              title={t("planView.actions.copyPlanContents")}
+              aria-label={t("planView.actions.copyPlanContents")}
             >
               {copiedContent ? (
                 <Icon name="check" className="h-4 w-4 text-[color:var(--status-success)]" />
@@ -713,10 +743,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
         open={pendingPlanSend !== null}
         onOpenChange={(open) => {
           if (!open && !isPlanSendSubmitting) {
-            setPendingPlanSend(null);
+            setPendingPlanSend(null)
           }
         }}
-        target={pendingPlanSend?.target ?? 'session'}
+        target={pendingPlanSend?.target ?? "session"}
         projectDirectory={currentProjectRef?.path ?? null}
         submitting={isPlanSendSubmitting}
         onConfirm={handleConfirmPlanSend}
@@ -725,19 +755,19 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
       <div className="flex-1 min-h-0 min-w-0 relative">
         <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
           {loading ? (
-            <div className="p-3 typography-ui text-muted-foreground">{t('planView.state.loading')}</div>
+            <div className="p-3 typography-ui text-muted-foreground">{t("planView.state.loading")}</div>
           ) : (
             <div className="relative h-full">
               <div className="h-full">
-                {mdViewMode === 'preview' ? (
+                {mdViewMode === "preview" ? (
                   <div className="h-full overflow-auto p-3">
                     <ErrorBoundary
                       fallback={
                         <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
-                          <div className="mb-1 font-medium text-destructive">{t('planView.error.previewUnavailable')}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {t('planView.error.switchToEditMode')}
+                          <div className="mb-1 font-medium text-destructive">
+                            {t("planView.error.previewUnavailable")}
                           </div>
+                          <div className="text-sm text-muted-foreground">{t("planView.error.switchToEditMode")}</div>
                         </div>
                       }
                     >
@@ -752,68 +782,74 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
                       readOnly={false}
                       className="h-full"
                       extensions={editorExtensions}
-                      onViewReady={(view) => { editorViewRef.current = view; }}
-                      onViewDestroy={() => { editorViewRef.current = null; }}
+                      onViewReady={(view) => {
+                        editorViewRef.current = view
+                      }}
+                      onViewDestroy={() => {
+                        editorViewRef.current = null
+                      }}
                       blockWidgets={blockWidgets}
-                      highlightLines={lineSelection
-                        ? {
-                          start: Math.min(lineSelection.start, lineSelection.end),
-                          end: Math.max(lineSelection.start, lineSelection.end),
-                        }
-                        : undefined}
+                      highlightLines={
+                        lineSelection
+                          ? {
+                              start: Math.min(lineSelection.start, lineSelection.end),
+                              end: Math.max(lineSelection.start, lineSelection.end),
+                            }
+                          : undefined
+                      }
                       lineNumbersConfig={{
                         domEventHandlers: {
                           mousedown: (view, line, event) => {
-                            if (!(event instanceof MouseEvent)) return false;
-                            if (event.button !== 0) return false;
-                            event.preventDefault();
-                            const lineNumber = view.state.doc.lineAt(line.from).number;
+                            if (!(event instanceof MouseEvent)) return false
+                            if (event.button !== 0) return false
+                            event.preventDefault()
+                            const lineNumber = view.state.doc.lineAt(line.from).number
 
                             if (isMobile && lineSelection && !event.shiftKey) {
-                              const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
-                              const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
-                              setLineSelection({ start, end });
-                              isSelectingRef.current = false;
-                              selectionStartRef.current = null;
-                              setIsDragging(false);
-                              return true;
+                              const start = Math.min(lineSelection.start, lineSelection.end, lineNumber)
+                              const end = Math.max(lineSelection.start, lineSelection.end, lineNumber)
+                              setLineSelection({ start, end })
+                              isSelectingRef.current = false
+                              selectionStartRef.current = null
+                              setIsDragging(false)
+                              return true
                             }
 
-                            isSelectingRef.current = true;
-                            selectionStartRef.current = lineNumber;
-                            setIsDragging(true);
+                            isSelectingRef.current = true
+                            selectionStartRef.current = lineNumber
+                            setIsDragging(true)
 
                             if (lineSelection && event.shiftKey) {
-                              const start = Math.min(lineSelection.start, lineNumber);
-                              const end = Math.max(lineSelection.end, lineNumber);
-                              setLineSelection({ start, end });
+                              const start = Math.min(lineSelection.start, lineNumber)
+                              const end = Math.max(lineSelection.end, lineNumber)
+                              setLineSelection({ start, end })
                             } else {
-                              setLineSelection({ start: lineNumber, end: lineNumber });
+                              setLineSelection({ start: lineNumber, end: lineNumber })
                             }
 
-                            return true;
+                            return true
                           },
                           mouseover: (view, line, event) => {
-                            if (!(event instanceof MouseEvent)) return false;
-                            if (event.buttons !== 1) return false;
-                            if (!isSelectingRef.current || selectionStartRef.current === null) return false;
-                            const lineNumber = view.state.doc.lineAt(line.from).number;
-                            const start = Math.min(selectionStartRef.current, lineNumber);
-                            const end = Math.max(selectionStartRef.current, lineNumber);
-                            setLineSelection({ start, end });
-                            setIsDragging(true);
-                            return false;
+                            if (!(event instanceof MouseEvent)) return false
+                            if (event.buttons !== 1) return false
+                            if (!isSelectingRef.current || selectionStartRef.current === null) return false
+                            const lineNumber = view.state.doc.lineAt(line.from).number
+                            const start = Math.min(selectionStartRef.current, lineNumber)
+                            const end = Math.max(selectionStartRef.current, lineNumber)
+                            setLineSelection({ start, end })
+                            setIsDragging(true)
+                            return false
                           },
                           mouseup: () => {
-                            isSelectingRef.current = false;
-                            selectionStartRef.current = null;
-                            setIsDragging(false);
-                            return false;
+                            isSelectingRef.current = false
+                            selectionStartRef.current = null
+                            setIsDragging(false)
+                            return false
                           },
                         },
-                    }}
-                  />
-                </div>
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -821,5 +857,5 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
         </ScrollableOverlay>
       </div>
     </div>
-  );
-};
+  )
+}

@@ -25,52 +25,52 @@
  * @property {number} [nextResetTime]
  * @property {Array<{modelCode: string, usage: number}>} [usageDetails]
  */
-import { readAuthFile } from '../../ax-code/auth.js';
-import { readConfigLayers } from '../../ax-code/shared.js';
+import { readAuthFile } from "../../ax-code/auth.js"
+import { readConfigLayers } from "../../ax-code/shared.js"
 import {
   getAuthEntry,
   normalizeAuthEntry,
   buildResult,
   toUsageWindow,
   resolveWindowSeconds,
-  normalizeTimestamp
-} from '../utils/index.js';
+  normalizeTimestamp,
+} from "../utils/index.js"
 
-export const providerId = 'zhipuai-coding-plan';
-export const providerName = 'Zhipu AI Coding Plan';
-export const aliases = ['zhipuai-coding-plan', 'zhipuai', 'zhipu'];
+export const providerId = "zhipuai-coding-plan"
+export const providerName = "Zhipu AI Coding Plan"
+export const aliases = ["zhipuai-coding-plan", "zhipuai", "zhipu"]
 
 function getApiKey() {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKeyFromAuth = entry?.key ?? entry?.token;
+  const auth = readAuthFile()
+  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases))
+  const apiKeyFromAuth = entry?.key ?? entry?.token
 
   if (apiKeyFromAuth) {
-    return apiKeyFromAuth;
+    return apiKeyFromAuth
   }
 
   try {
-    const { mergedConfig } = readConfigLayers();
+    const { mergedConfig } = readConfigLayers()
 
     for (const alias of aliases) {
-      const providerConfig = mergedConfig?.provider?.[alias];
+      const providerConfig = mergedConfig?.provider?.[alias]
       if (providerConfig?.options?.apiKey) {
-        return providerConfig.options.apiKey;
+        return providerConfig.options.apiKey
       }
     }
   } catch {
     // Ignore config read errors; the provider will be treated as not configured.
   }
 
-  return null;
+  return null
 }
 
 export const isConfigured = () => {
-  return Boolean(getApiKey());
-};
+  return Boolean(getApiKey())
+}
 
 export const fetchQuota = async () => {
-  const apiKey = getApiKey();
+  const apiKey = getApiKey()
 
   if (!apiKey) {
     return buildResult({
@@ -78,63 +78,63 @@ export const fetchQuota = async () => {
       providerName,
       ok: false,
       configured: false,
-      error: 'Not configured'
-    });
+      error: "Not configured",
+    })
   }
 
   try {
-    const response = await fetch('https://open.bigmodel.cn/api/monitor/usage/quota/limit', {
-      method: 'GET',
+    const response = await fetch("https://open.bigmodel.cn/api/monitor/usage/quota/limit", {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+        "Content-Type": "application/json",
+      },
+    })
 
     if (!response.ok) {
-      response.body?.cancel();
+      response.body?.cancel()
       return buildResult({
         providerId,
         providerName,
         ok: false,
         configured: true,
-        error: `API error: ${response.status}`
-      });
+        error: `API error: ${response.status}`,
+      })
     }
 
-    const payload = await response.json();
-    const limits = Array.isArray(payload?.data?.limits) ? payload.data.limits : [];
+    const payload = await response.json()
+    const limits = Array.isArray(payload?.data?.limits) ? payload.data.limits : []
 
-    const tokensLimit = limits.find((limit) => limit?.type === 'TOKENS_LIMIT');
-    const mcpToolsTimeLimit = limits.find((limit) => limit?.type === 'TIME_LIMIT');
+    const tokensLimit = limits.find((limit) => limit?.type === "TOKENS_LIMIT")
+    const mcpToolsTimeLimit = limits.find((limit) => limit?.type === "TIME_LIMIT")
 
-    const windows = {};
+    const windows = {}
 
     // Handle TOKENS_LIMIT (5-hour window for token usage)
     if (tokensLimit) {
-      const windowSeconds = resolveWindowSeconds(tokensLimit);
-      const resetAt = tokensLimit?.nextResetTime ? normalizeTimestamp(tokensLimit.nextResetTime) : null;
-      const usedPercent = typeof tokensLimit?.percentage === 'number' ? tokensLimit.percentage : null;
+      const windowSeconds = resolveWindowSeconds(tokensLimit)
+      const resetAt = tokensLimit?.nextResetTime ? normalizeTimestamp(tokensLimit.nextResetTime) : null
+      const usedPercent = typeof tokensLimit?.percentage === "number" ? tokensLimit.percentage : null
 
-      windows['Tokens'] = toUsageWindow({
+      windows["Tokens"] = toUsageWindow({
         usedPercent,
         windowSeconds,
-        resetAt
-      });
+        resetAt,
+      })
     }
 
     // Handle TIME_LIMIT (MCP tools monthly window)
     if (mcpToolsTimeLimit) {
       // TIME_LIMIT unit=5 means 1 month (30 days)
-      const monthSeconds = 30 * 24 * 60 * 60;
-      const resetAt = mcpToolsTimeLimit?.nextResetTime ? normalizeTimestamp(mcpToolsTimeLimit.nextResetTime) : null;
-      const usedPercent = typeof mcpToolsTimeLimit?.percentage === 'number' ? mcpToolsTimeLimit.percentage : null;
+      const monthSeconds = 30 * 24 * 60 * 60
+      const resetAt = mcpToolsTimeLimit?.nextResetTime ? normalizeTimestamp(mcpToolsTimeLimit.nextResetTime) : null
+      const usedPercent = typeof mcpToolsTimeLimit?.percentage === "number" ? mcpToolsTimeLimit.percentage : null
 
-      windows['MCP Tools'] = toUsageWindow({
+      windows["MCP Tools"] = toUsageWindow({
         usedPercent,
         windowSeconds: monthSeconds,
-        resetAt
-      });
+        resetAt,
+      })
     }
 
     return buildResult({
@@ -142,15 +142,15 @@ export const fetchQuota = async () => {
       providerName,
       ok: true,
       configured: true,
-      usage: { windows }
-    });
+      usage: { windows },
+    })
   } catch (error) {
     return buildResult({
       providerId,
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
-    });
+      error: error instanceof Error ? error.message : "Request failed",
+    })
   }
-};
+}

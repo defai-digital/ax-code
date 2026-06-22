@@ -1,16 +1,16 @@
-import React from 'react';
-import { cn } from '@/lib/utils';
-import { clampPercent, resolveUsageTone } from '@/lib/quota';
+import React from "react"
+import { cn } from "@/lib/utils"
+import { clampPercent, resolveUsageTone } from "@/lib/quota"
 
 interface UsageProgressBarProps {
-  percent: number | null;
-  tonePercent?: number | null;
-  className?: string;
-  /** 
+  percent: number | null
+  tonePercent?: number | null
+  className?: string
+  /**
    * Position (0-100) to show a marker indicating expected usage based on time elapsed.
    * Used for weekly/monthly quotas to show where usage "should" be if evenly distributed.
    */
-  expectedMarkerPercent?: number | null;
+  expectedMarkerPercent?: number | null
 }
 
 export const UsageProgressBar: React.FC<UsageProgressBarProps> = ({
@@ -19,20 +19,19 @@ export const UsageProgressBar: React.FC<UsageProgressBarProps> = ({
   className,
   expectedMarkerPercent,
 }) => {
-  const clamped = clampPercent(percent) ?? 0;
-  const tone = resolveUsageTone(tonePercent ?? percent);
-  const markerClamped = expectedMarkerPercent != null
-    ? Math.max(0, Math.min(100, expectedMarkerPercent))
-    : null;
+  const clamped = clampPercent(percent) ?? 0
+  const tone = resolveUsageTone(tonePercent ?? percent)
+  const markerClamped = expectedMarkerPercent != null ? Math.max(0, Math.min(100, expectedMarkerPercent)) : null
 
-  const fillStyle = tone === 'critical'
-    ? { backgroundColor: 'var(--status-error)' }
-    : tone === 'warn'
-      ? { backgroundColor: 'var(--status-warning)' }
-      : { backgroundColor: 'var(--status-success)' };
+  const fillStyle =
+    tone === "critical"
+      ? { backgroundColor: "var(--status-error)" }
+      : tone === "warn"
+        ? { backgroundColor: "var(--status-warning)" }
+        : { backgroundColor: "var(--status-success)" }
 
   return (
-    <div className={cn('relative h-2.5 rounded-full bg-[var(--interactive-border)] overflow-hidden', className)}>
+    <div className={cn("relative h-2.5 rounded-full bg-[var(--interactive-border)] overflow-hidden", className)}>
       <div
         className="h-full transition-all duration-300"
         style={{ ...fillStyle, width: `${clamped}%` }}
@@ -50,5 +49,5 @@ export const UsageProgressBar: React.FC<UsageProgressBarProps> = ({
         />
       )}
     </div>
-  );
-};
+  )
+}

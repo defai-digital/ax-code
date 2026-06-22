@@ -6,12 +6,7 @@
     "author": "AX Code",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "ax-code",
-      "ported",
-      "shadesofpurple"
-    ]
+    "tags": ["light", "ax-code", "ported", "shadesofpurple"]
   },
   "colors": {
     "primary": {
@@ -379,13 +374,7 @@
       "rowSelected": "#e8e7ff"
     },
     "charts": {
-      "series": [
-        "#7a5af8",
-        "#62d4ff",
-        "#3dd598",
-        "#f7c948",
-        "#ff6bd5"
-      ]
+      "series": ["#7a5af8", "#62d4ff", "#3dd598", "#f7c948", "#ff6bd5"]
     },
     "a11y": {
       "focusRing": "#7a5bf7",

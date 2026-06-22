@@ -1,55 +1,47 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import fs from "fs"
+import path from "path"
+import { fileURLToPath, pathToFileURL } from "url"
 
 function normalizeCliEntryPath(filePath, realpath = fs.realpathSync) {
-  if (typeof filePath !== 'string' || filePath.trim().length === 0) {
-    return null;
+  if (typeof filePath !== "string" || filePath.trim().length === 0) {
+    return null
   }
 
-  const resolvedPath = path.resolve(filePath);
+  const resolvedPath = path.resolve(filePath)
   try {
-    return realpath(resolvedPath);
+    return realpath(resolvedPath)
   } catch {
-    return resolvedPath;
+    return resolvedPath
   }
 }
 
-function isModuleCliExecution(
-  entryPath = process.argv[1],
-  moduleUrl,
-  realpath = fs.realpathSync,
-  expectedBinName,
-) {
-  if (typeof entryPath !== 'string' || entryPath.trim().length === 0) {
-    return false;
+function isModuleCliExecution(entryPath = process.argv[1], moduleUrl, realpath = fs.realpathSync, expectedBinName) {
+  if (typeof entryPath !== "string" || entryPath.trim().length === 0) {
+    return false
   }
-  if (typeof moduleUrl !== 'string' || moduleUrl.trim().length === 0) {
-    return false;
+  if (typeof moduleUrl !== "string" || moduleUrl.trim().length === 0) {
+    return false
   }
 
   try {
-    const normalizedEntryPath = normalizeCliEntryPath(entryPath, realpath);
-    const normalizedModulePath = normalizeCliEntryPath(fileURLToPath(moduleUrl), realpath);
+    const normalizedEntryPath = normalizeCliEntryPath(entryPath, realpath)
+    const normalizedModulePath = normalizeCliEntryPath(fileURLToPath(moduleUrl), realpath)
     if (!normalizedEntryPath || !normalizedModulePath) {
-      return false;
+      return false
     }
     if (pathToFileURL(normalizedEntryPath).href === pathToFileURL(normalizedModulePath).href) {
-      return true;
+      return true
     }
 
-    if (typeof expectedBinName === 'string' && expectedBinName.trim().length > 0) {
-      const parsedEntryName = path.parse(normalizedEntryPath).name.toLowerCase();
-      return parsedEntryName === expectedBinName.trim().toLowerCase();
+    if (typeof expectedBinName === "string" && expectedBinName.trim().length > 0) {
+      const parsedEntryName = path.parse(normalizedEntryPath).name.toLowerCase()
+      return parsedEntryName === expectedBinName.trim().toLowerCase()
     }
 
-    return false;
+    return false
   } catch {
-    return false;
+    return false
   }
 }
 
-export {
-  normalizeCliEntryPath,
-  isModuleCliExecution,
-};
+export { normalizeCliEntryPath, isModuleCliExecution }

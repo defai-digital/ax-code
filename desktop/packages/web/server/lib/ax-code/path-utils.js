@@ -7,27 +7,22 @@
  * shell PATH which typically has the full toolchain.
  */
 
-const TOOLCHAIN_SEGMENTS = [
-  '/opt/homebrew/',
-  '/opt/pkg/',
-  '/opt/pmk/',
-  '/snap/',
-];
+const TOOLCHAIN_SEGMENTS = ["/opt/homebrew/", "/opt/pkg/", "/opt/pmk/", "/snap/"]
 
 const TOOLCHAIN_BASENAMES = new Set([
-  '.cargo',
-  '.bun',
-  '.nvm',
-  '.pyenv',
-  '.rbenv',
-  '.sdkman',
-  '.asdf',
-  '.volta',
-  '.fnm',
-  '.local',
-  '.ax-code',
-  'node_modules',
-]);
+  ".cargo",
+  ".bun",
+  ".nvm",
+  ".pyenv",
+  ".rbenv",
+  ".sdkman",
+  ".asdf",
+  ".volta",
+  ".fnm",
+  ".local",
+  ".ax-code",
+  "node_modules",
+])
 
 /**
  * Returns true when `value` (a PATH string) contains at least one segment that
@@ -39,35 +34,35 @@ const TOOLCHAIN_BASENAMES = new Set([
  * @param {string} delim  - The PATH delimiter (':' on POSIX, ';' on Windows).
  */
 export function pathLooksUserConfigured(value, home, delim) {
-  if (typeof value !== 'string' || !value) {
-    return false;
+  if (typeof value !== "string" || !value) {
+    return false
   }
 
-  const normalizedHome = typeof home === 'string' ? home.replaceAll('\\', '/') : '';
-  const homeWithSep = normalizedHome ? normalizedHome + '/' : '';
+  const normalizedHome = typeof home === "string" ? home.replaceAll("\\", "/") : ""
+  const homeWithSep = normalizedHome ? normalizedHome + "/" : ""
 
   return value.split(delim).some((segment) => {
-    if (!segment) return false;
-    const normalizedSegment = segment.replaceAll('\\', '/');
+    if (!segment) return false
+    const normalizedSegment = segment.replaceAll("\\", "/")
 
     // Any path under the user's home directory.
     if (normalizedHome && (normalizedSegment === normalizedHome || normalizedSegment.startsWith(homeWithSep))) {
-      return true;
+      return true
     }
 
     // Well-known package-manager / toolchain prefixes.
     if (TOOLCHAIN_SEGMENTS.some((prefix) => normalizedSegment.startsWith(prefix))) {
-      return true;
+      return true
     }
 
     // Well-known dot-directories inside home (e.g. ~/.cargo/bin).
-    const parts = normalizedSegment.split('/').filter(Boolean);
+    const parts = normalizedSegment.split("/").filter(Boolean)
     if (parts.some((part) => TOOLCHAIN_BASENAMES.has(part))) {
-      return true;
+      return true
     }
 
-    return false;
-  });
+    return false
+  })
 }
 
 /**
@@ -80,21 +75,21 @@ export function pathLooksUserConfigured(value, home, delim) {
  * @param {string} delim    - The PATH delimiter.
  */
 export function mergePathValues(primary, fallback, delim) {
-  const seen = new Set();
-  const result = [];
+  const seen = new Set()
+  const result = []
 
   const addSegments = (value) => {
-    if (typeof value !== 'string' || !value) return;
+    if (typeof value !== "string" || !value) return
     for (const segment of value.split(delim)) {
       if (segment && !seen.has(segment)) {
-        seen.add(segment);
-        result.push(segment);
+        seen.add(segment)
+        result.push(segment)
       }
     }
-  };
+  }
 
-  addSegments(primary);
-  addSegments(fallback);
+  addSegments(primary)
+  addSegments(fallback)
 
-  return result.join(delim);
+  return result.join(delim)
 }

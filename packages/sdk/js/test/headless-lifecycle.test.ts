@@ -564,14 +564,7 @@ async function createIpcFakeAxCode() {
       "",
     ].join("\n"),
   )
-  await writeFile(
-    bin,
-    [
-      "#!/bin/sh",
-      `exec "${process.execPath}" "${nodeScript}" "$@"`,
-      "",
-    ].join("\n"),
-  )
+  await writeFile(bin, ["#!/bin/sh", `exec "${process.execPath}" "${nodeScript}" "$@"`, ""].join("\n"))
   await chmod(bin, 0o755)
 
   process.env.PATH = `${dir}${path.delimiter}${originalPath ?? ""}`

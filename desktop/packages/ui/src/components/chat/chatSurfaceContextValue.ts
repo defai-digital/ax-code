@@ -1,5 +1,5 @@
-import React from 'react';
+import React from "react"
 
-export type ChatSurfaceMode = 'default' | 'mini-chat';
+export type ChatSurfaceMode = "default" | "mini-chat"
 
-export const ChatSurfaceContext = React.createContext<ChatSurfaceMode>('default');
+export const ChatSurfaceContext = React.createContext<ChatSurfaceMode>("default")

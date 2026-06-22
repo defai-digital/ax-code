@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest"
 import type { Part } from "@ax-code/sdk/v2"
 import { isSyntheticPart, isFullySyntheticMessage, filterSyntheticParts } from "./synthetic"
 
@@ -65,26 +65,17 @@ describe("isFullySyntheticMessage", () => {
   })
 
   test("returns false when all parts are non-synthetic", () => {
-    const parts = [
-      createTextPart("1", "hello"),
-      createFilePart("2", "file:///path"),
-    ]
+    const parts = [createTextPart("1", "hello"), createFilePart("2", "file:///path")]
     expect(isFullySyntheticMessage(parts)).toBe(false)
   })
 
   test("returns false when some parts are synthetic", () => {
-    const parts = [
-      createTextPart("1", "user prompt"),
-      createTextPart("2", "file content", true),
-    ]
+    const parts = [createTextPart("1", "user prompt"), createTextPart("2", "file content", true)]
     expect(isFullySyntheticMessage(parts)).toBe(false)
   })
 
   test("returns true when all parts are synthetic", () => {
-    const parts = [
-      createTextPart("1", "file content 1", true),
-      createTextPart("2", "file content 2", true),
-    ]
+    const parts = [createTextPart("1", "file content 1", true), createTextPart("2", "file content 2", true)]
     expect(isFullySyntheticMessage(parts)).toBe(true)
   })
 })
@@ -99,10 +90,7 @@ describe("filterSyntheticParts", () => {
   })
 
   test("returns all parts when no synthetic parts exist", () => {
-    const parts = [
-      createTextPart("1", "hello"),
-      createFilePart("2", "file:///path"),
-    ]
+    const parts = [createTextPart("1", "hello"), createFilePart("2", "file:///path")]
     expect(filterSyntheticParts(parts)).toEqual(parts)
   })
 
@@ -114,10 +102,7 @@ describe("filterSyntheticParts", () => {
   })
 
   test("keeps synthetic parts when all parts are synthetic", () => {
-    const parts = [
-      createTextPart("1", "file content 1", true),
-      createTextPart("2", "file content 2", true),
-    ]
+    const parts = [createTextPart("1", "file content 1", true), createTextPart("2", "file content 2", true)]
     expect(filterSyntheticParts(parts)).toEqual(parts)
   })
 })

@@ -130,9 +130,9 @@ describe("ipc transport client", () => {
   test("propagates error responses", async () => {
     const transport = createIpcTransport({ socketPath })
     try {
-      await expect(
-        transport.requestJson<unknown>({ path: "/error", method: "GET" }),
-      ).rejects.toThrow("something went wrong")
+      await expect(transport.requestJson<unknown>({ path: "/error", method: "GET" })).rejects.toThrow(
+        "something went wrong",
+      )
     } finally {
       await transport.close?.()
     }
@@ -141,9 +141,9 @@ describe("ipc transport client", () => {
   test("rejects non-ok route responses", async () => {
     const transport = createIpcTransport({ socketPath })
     try {
-      await expect(
-        transport.requestJson<unknown>({ path: "/not-found", method: "GET" }),
-      ).rejects.toThrow('Headless runtime request failed (404): {"error":"missing"}')
+      await expect(transport.requestJson<unknown>({ path: "/not-found", method: "GET" })).rejects.toThrow(
+        'Headless runtime request failed (404): {"error":"missing"}',
+      )
     } finally {
       await transport.close?.()
     }
@@ -178,10 +178,7 @@ describe("ipc transport client", () => {
       // Ensure the connection handshake is complete before subscribing.
       await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
 
-      const events = [
-        { type: "server.connected" },
-        { type: "session.created", properties: { info: { id: "sess-1" } } },
-      ]
+      const events = [{ type: "server.connected" }, { type: "session.created", properties: { info: { id: "sess-1" } } }]
 
       const received: unknown[] = []
       const subscription = transport.subscribe()

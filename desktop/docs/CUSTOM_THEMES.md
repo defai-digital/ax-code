@@ -5,6 +5,7 @@ AX Code Desktop supports user-defined themes. Drop a JSON file into the themes d
 ## Quick Start
 
 1. Create the themes directory:
+
    ```bash
    mkdir -p ~/.config/openchamber/themes
    ```
@@ -17,8 +18,8 @@ AX Code Desktop supports user-defined themes. Drop a JSON file into the themes d
 
 ## Theme Location
 
-| Platform | Path |
-|----------|------|
+| Platform    | Path                            |
+| ----------- | ------------------------------- |
 | macOS/Linux | `~/.config/openchamber/themes/` |
 
 ## Theme Format
@@ -218,6 +219,7 @@ AX Code Desktop supports user-defined themes. Drop a JSON file into the themes d
 Themes are validated on load. Invalid themes are skipped with a console warning.
 
 Common issues:
+
 - Missing required fields
 - Invalid `variant` (must be `"light"` or `"dark"`)
 - File size > 512KB

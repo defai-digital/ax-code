@@ -7,7 +7,7 @@ export const createBootstrapRuntime = (dependencies) => {
     registerNotificationRoutes,
     registerOpenChamberRoutes,
     express,
-  } = dependencies;
+  } = dependencies
 
   const setupBaseRoutes = (app, options) => {
     const {
@@ -37,14 +37,14 @@ export const createBootstrapRuntime = (dependencies) => {
       fetchFreeZenModels,
       getCachedZenModels,
       setAutoAcceptSession,
-    } = options;
+    } = options
 
     const uiAuthController = createUiAuth({
       password: uiPassword,
       readSettingsFromDiskMigrated,
-    });
+    })
     if (uiAuthController.enabled) {
-      console.log('UI password protection enabled for browser sessions');
+      console.log("UI password protection enabled for browser sessions")
     }
 
     registerServerStatusRoutes(app, {
@@ -57,14 +57,14 @@ export const createBootstrapRuntime = (dependencies) => {
       getHealthSnapshot,
       getStartupDiagnosticsSnapshot,
       uiAuthController,
-    });
+    })
 
-    registerCommonRequestMiddleware(app, { express, verboseRequestLogs });
+    registerCommonRequestMiddleware(app, { express, verboseRequestLogs })
 
     registerAuthAndAccessRoutes(app, {
       express,
       uiAuthController,
-    });
+    })
 
     registerNotificationRoutes(app, {
       uiAuthController,
@@ -81,7 +81,7 @@ export const createBootstrapRuntime = (dependencies) => {
       markSessionUnviewed: sessionRuntime.markSessionUnviewed,
       markUserMessageSent: sessionRuntime.markUserMessageSent,
       setAutoAcceptSession,
-    });
+    })
 
     registerOpenChamberRoutes(app, {
       fs,
@@ -96,14 +96,14 @@ export const createBootstrapRuntime = (dependencies) => {
       readSettingsFromDiskMigrated,
       fetchFreeZenModels,
       getCachedZenModels,
-    });
+    })
 
     return {
       uiAuthController,
-    };
-  };
+    }
+  }
 
   return {
     setupBaseRoutes,
-  };
-};
+  }
+}

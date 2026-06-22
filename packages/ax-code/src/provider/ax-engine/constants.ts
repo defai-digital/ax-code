@@ -1,18 +1,21 @@
 export const AX_ENGINE_PROVIDER_ID = "ax-engine"
-export const AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID = "qwen3-coder-next"
+export const AX_ENGINE_QWEN36_27B_MODEL_ID = "qwen3.6-27b-6bit"
 export const AX_ENGINE_QWEN36_35B_MODEL_ID = "qwen3.6-35b-a3b"
 export const AX_ENGINE_GEMMA4_12B_MODEL_ID = "gemma-4-12b"
+export const AX_ENGINE_GEMMA4_26B_MODEL_ID = "gemma-4-26b"
 export const AX_ENGINE_GEMMA4_31B_MODEL_ID = "gemma-4-31b"
 export const AX_ENGINE_GLM47_FLASH_MODEL_ID = "glm-4.7-flash"
 export const AX_ENGINE_DISPLAY_NAME = "AX Engine (Local)"
-export const AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID = "qwen3"
+export const AX_ENGINE_QWEN36_27B_API_MODEL_ID = "qwen3.6-27b"
 export const AX_ENGINE_QWEN36_35B_API_MODEL_ID = "qwen3.6-35b"
 export const AX_ENGINE_GEMMA4_12B_API_MODEL_ID = "gemma-4-12b"
+export const AX_ENGINE_GEMMA4_26B_API_MODEL_ID = "gemma-4-26b"
 export const AX_ENGINE_GEMMA4_31B_API_MODEL_ID = "gemma-4-31b"
-export const AX_ENGINE_GLM47_FLASH_API_MODEL_ID = "glm4_moe_lite"
-export const AX_ENGINE_QWEN3_CODER_NEXT_MODEL_DISPLAY_NAME = "Qwen3-Coder-Next 6-bit (Local MLX MTP)"
+export const AX_ENGINE_GLM47_FLASH_API_MODEL_ID = "glm-4.7-flash"
+export const AX_ENGINE_QWEN36_27B_MODEL_DISPLAY_NAME = "Qwen3.6-27B 6-bit (Local MLX MTP)"
 export const AX_ENGINE_QWEN36_35B_MODEL_DISPLAY_NAME = "Qwen3.6-35B-A3B 6-bit (Local MLX MTP)"
 export const AX_ENGINE_GEMMA4_12B_MODEL_DISPLAY_NAME = "Gemma 4 12B 6-bit (Local MLX MTP)"
+export const AX_ENGINE_GEMMA4_26B_MODEL_DISPLAY_NAME = "Gemma 4 26B 6-bit (Local MLX MTP)"
 export const AX_ENGINE_GEMMA4_31B_MODEL_DISPLAY_NAME = "Gemma 4 31B 6-bit (Local MLX MTP)"
 export const AX_ENGINE_GLM47_FLASH_MODEL_DISPLAY_NAME = "GLM 4.7 Flash 6-bit (Local MLX MTP)"
 export const AX_ENGINE_DEFAULT_PORT = 18181
@@ -23,9 +26,10 @@ export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
 export const AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES = AX_ENGINE_RECOMMENDED_MEMORY_BYTES
 
 export const AX_ENGINE_MODEL_IDS = [
-  AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+  AX_ENGINE_QWEN36_27B_MODEL_ID,
   AX_ENGINE_QWEN36_35B_MODEL_ID,
   AX_ENGINE_GEMMA4_12B_MODEL_ID,
+  AX_ENGINE_GEMMA4_26B_MODEL_ID,
   AX_ENGINE_GEMMA4_31B_MODEL_ID,
   AX_ENGINE_GLM47_FLASH_MODEL_ID,
 ] as const
@@ -35,18 +39,19 @@ export const AX_ENGINE_QUANTIZATION_IDS = ["mlx6bit"] as const
 export type AxEngineQuantization = (typeof AX_ENGINE_QUANTIZATION_IDS)[number]
 
 export const AX_ENGINE_MODEL_DEFINITIONS = {
-  [AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID]: {
-    id: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
-    apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID,
-    name: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_DISPLAY_NAME,
+  [AX_ENGINE_QWEN36_27B_MODEL_ID]: {
+    id: AX_ENGINE_QWEN36_27B_MODEL_ID,
+    apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
+    name: AX_ENGINE_QWEN36_27B_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx6bit",
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
     contextTokens: 32_768,
-    outputTokens: 8_192,
+    outputTokens: 16_384,
     quantizations: {
       mlx6bit: {
-        hfRepo: "mlx-community/Qwen3-Coder-Next-6bit",
+        hfRepo: "mlx-community/Qwen3.6-27B-6bit",
+        mtpSource: "Qwen sidecar from Qwen/Qwen3.6-27B",
         minDiskBytes: 96 * 1024 ** 3,
       },
     },
@@ -63,6 +68,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     quantizations: {
       mlx6bit: {
         hfRepo: "mlx-community/Qwen3.6-35B-A3B-6bit",
+        mtpSource: "Qwen sidecar from Qwen/Qwen3.6-35B-A3B",
         minDiskBytes: 96 * 1024 ** 3,
       },
     },
@@ -85,7 +91,25 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     quantizations: {
       mlx6bit: {
         hfRepo: "mlx-community/gemma-4-12B-it-6bit",
+        mtpSource: "assistant package from mlx-community/gemma-4-12B-it-assistant-6bit",
         minDiskBytes: 48 * 1024 ** 3,
+      },
+    },
+  },
+  [AX_ENGINE_GEMMA4_26B_MODEL_ID]: {
+    id: AX_ENGINE_GEMMA4_26B_MODEL_ID,
+    apiModelID: AX_ENGINE_GEMMA4_26B_API_MODEL_ID,
+    name: AX_ENGINE_GEMMA4_26B_MODEL_DISPLAY_NAME,
+    defaultQuantization: "mlx6bit",
+    toolcall: true,
+    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    contextTokens: 32_768,
+    outputTokens: 8_192,
+    quantizations: {
+      mlx6bit: {
+        hfRepo: "mlx-community/gemma-4-26b-a4b-it-6bit",
+        mtpSource: "assistant package from google/gemma-4-26b-a4b-it-assistant",
+        minDiskBytes: 96 * 1024 ** 3,
       },
     },
   },
@@ -101,6 +125,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     quantizations: {
       mlx6bit: {
         hfRepo: "mlx-community/gemma-4-31b-it-6bit",
+        mtpSource: "assistant package from google/gemma-4-31b-it-assistant",
         minDiskBytes: 96 * 1024 ** 3,
       },
     },
@@ -117,13 +142,14 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     quantizations: {
       mlx6bit: {
         hfRepo: "mlx-community/GLM-4.7-Flash-6bit",
+        mtpSource: "GLM built-in MTP sidecar from zai-org/GLM-4.7-Flash",
         minDiskBytes: 48 * 1024 ** 3,
       },
     },
   },
 } as const
 
-export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineModelID = AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID
+export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineModelID = AX_ENGINE_QWEN36_27B_MODEL_ID
 
 export const AX_ENGINE_DEFAULT_QUANTIZATION: AxEngineQuantization = "mlx6bit"
 

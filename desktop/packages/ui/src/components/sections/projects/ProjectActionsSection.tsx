@@ -1,215 +1,204 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { toast } from '@/components/ui';
-import { Icon } from "@/components/icon/Icon";
-import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
-import { isDesktopShell } from '@/lib/desktop';
+import React from "react"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { toast } from "@/components/ui"
+import { Icon } from "@/components/icon/Icon"
+import { useDesktopSshStore } from "@/stores/useDesktopSshStore"
+import { isDesktopShell } from "@/lib/desktop"
 import {
   getProjectActionsState,
   saveProjectActionsState,
   type OpenChamberProjectAction,
   type ProjectRef,
-} from '@/lib/openchamberConfig';
+} from "@/lib/openchamberConfig"
 import {
   buildProjectActionDesktopForwardOptions,
   PROJECT_ACTION_ICON_MAP,
   PROJECT_ACTION_ICONS,
   PROJECT_ACTIONS_UPDATED_EVENT,
-} from '@/lib/projectActions';
-import { dispatchProjectScopedEvent } from '@/lib/projectScopedEvents';
-import { useI18n } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
+} from "@/lib/projectActions"
+import { dispatchProjectScopedEvent } from "@/lib/projectScopedEvents"
+import { useI18n } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
 
-type EditableProjectAction = OpenChamberProjectAction;
+type EditableProjectAction = OpenChamberProjectAction
 
 const createActionId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
   }
-  return `action_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-};
+  return `action_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+}
 
 const createEmptyAction = (): EditableProjectAction => ({
   id: createActionId(),
-  name: '',
-  command: '',
-  icon: 'play',
-});
+  name: "",
+  command: "",
+  icon: "play",
+})
 
 interface ProjectActionsSectionProps {
-  projectRef: ProjectRef;
+  projectRef: ProjectRef
 }
 
 export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ projectRef }) => {
-  const { t } = useI18n();
-  const isDesktopShellApp = React.useMemo(() => isDesktopShell(), []);
-  const desktopSshInstances = useDesktopSshStore((state) => state.instances);
-  const loadDesktopSsh = useDesktopSshStore((state) => state.load);
+  const { t } = useI18n()
+  const isDesktopShellApp = React.useMemo(() => isDesktopShell(), [])
+  const desktopSshInstances = useDesktopSshStore((state) => state.instances)
+  const loadDesktopSsh = useDesktopSshStore((state) => state.load)
 
-  const [actions, setActions] = React.useState<EditableProjectAction[]>([]);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [isSaving, setIsSaving] = React.useState(false);
-  const [initialSnapshot, setInitialSnapshot] = React.useState<string | null>(null);
-  const [expandedActions, setExpandedActions] = React.useState<Record<string, boolean>>({});
+  const [actions, setActions] = React.useState<EditableProjectAction[]>([])
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [initialSnapshot, setInitialSnapshot] = React.useState<string | null>(null)
+  const [expandedActions, setExpandedActions] = React.useState<Record<string, boolean>>({})
 
   React.useEffect(() => {
     if (!isDesktopShellApp) {
-      return;
+      return
     }
-    void loadDesktopSsh().catch(() => undefined);
-  }, [isDesktopShellApp, loadDesktopSsh]);
+    void loadDesktopSsh().catch(() => undefined)
+  }, [isDesktopShellApp, loadDesktopSsh])
 
   React.useEffect(() => {
-    let cancelled = false;
-    setIsLoading(true);
+    let cancelled = false
+    setIsLoading(true)
 
-    (async () => {
+    ;(async () => {
       try {
-        const state = await getProjectActionsState(projectRef);
+        const state = await getProjectActionsState(projectRef)
         if (cancelled) {
-          return;
+          return
         }
-        setActions(state.actions);
-        setInitialSnapshot(JSON.stringify({ actions: state.actions }));
+        setActions(state.actions)
+        setInitialSnapshot(JSON.stringify({ actions: state.actions }))
       } catch {
         if (cancelled) {
-          return;
+          return
         }
-        setActions([]);
-        setInitialSnapshot(JSON.stringify({ actions: [] }));
+        setActions([])
+        setInitialSnapshot(JSON.stringify({ actions: [] }))
       } finally {
         if (!cancelled) {
-          setIsLoading(false);
+          setIsLoading(false)
         }
       }
-    })();
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [projectRef]);
+      cancelled = true
+    }
+  }, [projectRef])
 
   const desktopForwardOptions = React.useMemo(() => {
     if (!isDesktopShellApp) {
-      return [];
+      return []
     }
-    return buildProjectActionDesktopForwardOptions(desktopSshInstances);
-  }, [desktopSshInstances, isDesktopShellApp]);
+    return buildProjectActionDesktopForwardOptions(desktopSshInstances)
+  }, [desktopSshInstances, isDesktopShellApp])
 
   const validationError = React.useMemo(() => {
     const hasIncomplete = actions.some((entry) => {
-      return entry.name.trim().length === 0 || entry.command.trim().length === 0;
-    });
+      return entry.name.trim().length === 0 || entry.command.trim().length === 0
+    })
     if (hasIncomplete) {
-      return t('settings.projects.actions.validation.fillNameAndCommand');
+      return t("settings.projects.actions.validation.fillNameAndCommand")
     }
-    return null;
-  }, [actions, t]);
+    return null
+  }, [actions, t])
 
   const hasChanges = React.useMemo(() => {
     if (initialSnapshot === null) {
-      return false;
+      return false
     }
-    return initialSnapshot !== JSON.stringify({ actions });
-  }, [actions, initialSnapshot]);
+    return initialSnapshot !== JSON.stringify({ actions })
+  }, [actions, initialSnapshot])
 
   const handleAddAction = React.useCallback(() => {
-    const nextAction = createEmptyAction();
-    setActions((prev) => [...prev, nextAction]);
+    const nextAction = createEmptyAction()
+    setActions((prev) => [...prev, nextAction])
     setExpandedActions((prev) => ({
       ...prev,
       [nextAction.id]: true,
-    }));
-  }, []);
+    }))
+  }, [])
 
   const handleRemoveAction = React.useCallback((id: string) => {
-    setActions((prev) => prev.filter((entry) => entry.id !== id));
+    setActions((prev) => prev.filter((entry) => entry.id !== id))
     setExpandedActions((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  }, []);
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }, [])
 
-  const updateAction = React.useCallback((id: string, updater: (current: EditableProjectAction) => EditableProjectAction) => {
-    setActions((prev) => prev.map((entry) => (entry.id === id ? updater(entry) : entry)));
-  }, []);
+  const updateAction = React.useCallback(
+    (id: string, updater: (current: EditableProjectAction) => EditableProjectAction) => {
+      setActions((prev) => prev.map((entry) => (entry.id === id ? updater(entry) : entry)))
+    },
+    [],
+  )
 
   const handleSave = React.useCallback(async () => {
     if (validationError) {
-      toast.error(validationError);
-      return;
+      toast.error(validationError)
+      return
     }
-    setIsSaving(true);
+    setIsSaving(true)
     try {
       const ok = await saveProjectActionsState(projectRef, {
         actions,
         primaryActionId: null,
-      });
+      })
       if (!ok) {
-        toast.error(t('settings.projects.actions.toast.saveFailed'));
-        return;
+        toast.error(t("settings.projects.actions.toast.saveFailed"))
+        return
       }
-      setInitialSnapshot(JSON.stringify({ actions }));
-      dispatchProjectScopedEvent(PROJECT_ACTIONS_UPDATED_EVENT, projectRef.id);
-      toast.success(t('settings.projects.actions.toast.saved'));
+      setInitialSnapshot(JSON.stringify({ actions }))
+      dispatchProjectScopedEvent(PROJECT_ACTIONS_UPDATED_EVENT, projectRef.id)
+      toast.success(t("settings.projects.actions.toast.saved"))
     } catch {
-      toast.error(t('settings.projects.actions.toast.saveFailed'));
+      toast.error(t("settings.projects.actions.toast.saveFailed"))
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  }, [actions, projectRef, t, validationError]);
+  }, [actions, projectRef, t, validationError])
 
-  const canSave = !isSaving && !isLoading && hasChanges && !validationError;
+  const canSave = !isSaving && !isLoading && hasChanges && !validationError
 
   return (
     <div className="mb-8">
       <div className="mb-1 flex items-start justify-between gap-2">
         <div>
-          <h3 className="typography-ui-header font-medium text-foreground">{t('settings.projects.actions.title')}</h3>
-          <p className="typography-meta text-muted-foreground">{t('settings.projects.actions.description')}</p>
+          <h3 className="typography-ui-header font-medium text-foreground">{t("settings.projects.actions.title")}</h3>
+          <p className="typography-meta text-muted-foreground">{t("settings.projects.actions.description")}</p>
         </div>
         <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={handleAddAction}>
           <Icon name="add" className="h-3.5 w-3.5" />
-          {t('settings.projects.actions.actions.add')}
+          {t("settings.projects.actions.actions.add")}
         </Button>
       </div>
 
       <section className="pb-2 pt-0 space-y-2">
         {isLoading ? (
-          <p className="typography-meta text-muted-foreground">{t('settings.projects.actions.state.loading')}</p>
+          <p className="typography-meta text-muted-foreground">{t("settings.projects.actions.state.loading")}</p>
         ) : actions.length === 0 ? (
           <div className="py-2">
-            <p className="typography-meta text-muted-foreground">{t('settings.projects.actions.state.empty')}</p>
+            <p className="typography-meta text-muted-foreground">{t("settings.projects.actions.state.empty")}</p>
           </div>
         ) : (
           <div className="space-y-0 max-w-[30rem]">
             {actions.map((action) => {
-              const selectedIconKey = (action.icon as keyof typeof PROJECT_ACTION_ICON_MAP) || 'play';
-              const selectedIconName = PROJECT_ACTION_ICON_MAP[selectedIconKey] || 'play';
-              const isOpen = expandedActions[action.id] ?? false;
-              const title = action.name.trim() || t('settings.projects.actions.state.untitled');
+              const selectedIconKey = (action.icon as keyof typeof PROJECT_ACTION_ICON_MAP) || "play"
+              const selectedIconName = PROJECT_ACTION_ICON_MAP[selectedIconKey] || "play"
+              const isOpen = expandedActions[action.id] ?? false
+              const title = action.name.trim() || t("settings.projects.actions.state.untitled")
 
               return (
                 <Collapsible
@@ -219,11 +208,9 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
                     setExpandedActions((prev) => ({
                       ...prev,
                       [action.id]: open,
-                    }));
+                    }))
                   }}
-                  className={cn(
-                    'py-1.5'
-                  )}
+                  className={cn("py-1.5")}
                 >
                   <div className="flex items-start gap-2">
                     <CollapsibleTrigger className="group flex-1 justify-start gap-2 rounded-md px-0 pr-1 py-1 hover:bg-[var(--interactive-hover)] focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]">
@@ -254,89 +241,108 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
                   <CollapsibleContent className="pt-1.5">
                     <div className="space-y-2 pb-6 pl-3 pr-3">
                       <div className="flex items-center gap-2 py-1">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--interactive-border)] text-foreground hover:bg-[var(--interactive-hover)]"
-                                aria-label={t('settings.projects.actions.field.selectIconAria')}
-                              >
-                                <Icon name={selectedIconName} className="h-4 w-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-56 p-2">
-                              <div className="grid grid-cols-6 gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--interactive-border)] text-foreground hover:bg-[var(--interactive-hover)]"
+                              aria-label={t("settings.projects.actions.field.selectIconAria")}
+                            >
+                              <Icon name={selectedIconName} className="h-4 w-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-56 p-2">
+                            <div className="grid grid-cols-6 gap-1">
                               {PROJECT_ACTION_ICONS.map((entry) => {
-                                const iconName = entry.Icon;
-                                const selected = (action.icon || 'play') === entry.key;
+                                const iconName = entry.Icon
+                                const selected = (action.icon || "play") === entry.key
                                 return (
                                   <button
                                     key={entry.key}
                                     type="button"
-                                    onClick={() => updateAction(action.id, (current) => ({ ...current, icon: entry.key }))}
+                                    onClick={() =>
+                                      updateAction(action.id, (current) => ({ ...current, icon: entry.key }))
+                                    }
                                     className={cn(
-                                      'inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-foreground hover:bg-[var(--interactive-hover)]',
-                                      selected && 'border-[var(--primary-base)] bg-[var(--primary-base)]/10 text-[var(--primary-base)]'
+                                      "inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-foreground hover:bg-[var(--interactive-hover)]",
+                                      selected &&
+                                        "border-[var(--primary-base)] bg-[var(--primary-base)]/10 text-[var(--primary-base)]",
                                     )}
-                                    aria-label={t('settings.projects.actions.field.iconAria', { icon: entry.label })}
+                                    aria-label={t("settings.projects.actions.field.iconAria", { icon: entry.label })}
                                   >
                                     <Icon name={iconName} className="h-4 w-4" />
                                   </button>
-                                );
+                                )
                               })}
-                              </div>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            </div>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
 
-                          <Input
-                            value={action.name}
-                            onChange={(event) => updateAction(action.id, (current) => ({ ...current, name: event.target.value }))}
-                            placeholder={t('settings.projects.actions.field.actionNamePlaceholder')}
-                            className="h-7 max-w-[14rem]"
-                          />
+                        <Input
+                          value={action.name}
+                          onChange={(event) =>
+                            updateAction(action.id, (current) => ({ ...current, name: event.target.value }))
+                          }
+                          placeholder={t("settings.projects.actions.field.actionNamePlaceholder")}
+                          className="h-7 max-w-[14rem]"
+                        />
                       </div>
 
                       <div className="py-1">
-                        <p className="typography-meta mb-0.5 text-muted-foreground">{t('settings.projects.actions.field.command')}</p>
+                        <p className="typography-meta mb-0.5 text-muted-foreground">
+                          {t("settings.projects.actions.field.command")}
+                        </p>
                         <Textarea
                           value={action.command}
-                          onChange={(event) => updateAction(action.id, (current) => ({ ...current, command: event.target.value }))}
-                          placeholder={t('settings.projects.actions.field.commandPlaceholder')}
+                          onChange={(event) =>
+                            updateAction(action.id, (current) => ({ ...current, command: event.target.value }))
+                          }
+                          placeholder={t("settings.projects.actions.field.commandPlaceholder")}
                           className="min-h-[88px] max-w-[30rem] font-mono text-xs"
                         />
                       </div>
 
                       <div className="py-1">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <span className="typography-ui-label text-foreground">{t('settings.projects.actions.field.autoOpenUrl')}</span>
+                          <span className="typography-ui-label text-foreground">
+                            {t("settings.projects.actions.field.autoOpenUrl")}
+                          </span>
                           <div
                             className="group flex cursor-pointer items-center gap-2"
                             role="button"
                             tabIndex={0}
                             aria-pressed={action.autoOpenUrl === true}
-                            onClick={() => updateAction(action.id, (current) => ({
-                              ...current,
-                              ...(current.autoOpenUrl === true ? { autoOpenUrl: undefined } : { autoOpenUrl: true }),
-                            }))}
+                            onClick={() =>
+                              updateAction(action.id, (current) => ({
+                                ...current,
+                                ...(current.autoOpenUrl === true ? { autoOpenUrl: undefined } : { autoOpenUrl: true }),
+                              }))
+                            }
                             onKeyDown={(event) => {
-                              if (event.key === ' ' || event.key === 'Enter') {
-                                event.preventDefault();
+                              if (event.key === " " || event.key === "Enter") {
+                                event.preventDefault()
                                 updateAction(action.id, (current) => ({
                                   ...current,
-                                  ...(current.autoOpenUrl === true ? { autoOpenUrl: undefined } : { autoOpenUrl: true }),
-                                }));
+                                  ...(current.autoOpenUrl === true
+                                    ? { autoOpenUrl: undefined }
+                                    : { autoOpenUrl: true }),
+                                }))
                               }
                             }}
                           >
                             <Checkbox
                               checked={action.autoOpenUrl === true}
-                              onChange={(checked) => updateAction(action.id, (current) => ({
-                                ...current,
-                                ...(checked ? { autoOpenUrl: true } : { autoOpenUrl: undefined }),
-                              }))}
-                              ariaLabel={t('settings.projects.actions.field.autoOpenUrlForAria', { title })}
+                              onChange={(checked) =>
+                                updateAction(action.id, (current) => ({
+                                  ...current,
+                                  ...(checked ? { autoOpenUrl: true } : { autoOpenUrl: undefined }),
+                                }))
+                              }
+                              ariaLabel={t("settings.projects.actions.field.autoOpenUrlForAria", { title })}
                             />
-                            <span className="typography-ui-label font-normal text-foreground/80">{t('settings.projects.actions.field.autoOpenUrlDescription')}</span>
+                            <span className="typography-ui-label font-normal text-foreground/80">
+                              {t("settings.projects.actions.field.autoOpenUrlDescription")}
+                            </span>
                           </div>
                         </div>
 
@@ -344,64 +350,81 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
                           <div className="mt-1">
                             <div className="flex items-center gap-2">
                               <Input
-                                value={action.openUrl || ''}
-                                onChange={(event) => updateAction(action.id, (current) => ({
-                                  ...current,
-                                  openUrl: event.target.value,
-                                }))}
-                                placeholder={t('settings.projects.actions.field.overrideUrlPlaceholder')}
+                                value={action.openUrl || ""}
+                                onChange={(event) =>
+                                  updateAction(action.id, (current) => ({
+                                    ...current,
+                                    openUrl: event.target.value,
+                                  }))
+                                }
+                                placeholder={t("settings.projects.actions.field.overrideUrlPlaceholder")}
                                 className="h-7 w-full max-w-[24rem]"
                               />
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Icon name="information" className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 cursor-help" />
+                                  <Icon
+                                    name="information"
+                                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 cursor-help"
+                                  />
                                 </TooltipTrigger>
                                 <TooltipContent sideOffset={8} className="max-w-xs">
-                                  {t('settings.projects.actions.field.overrideUrlTooltip')}
+                                  {t("settings.projects.actions.field.overrideUrlTooltip")}
                                 </TooltipContent>
                               </Tooltip>
                             </div>
 
                             {isDesktopShellApp ? (
                               <div className="mt-2">
-                                <p className="typography-meta mb-0.5 text-muted-foreground">{t('settings.projects.actions.field.desktopSshForward')}</p>
+                                <p className="typography-meta mb-0.5 text-muted-foreground">
+                                  {t("settings.projects.actions.field.desktopSshForward")}
+                                </p>
                                 {desktopForwardOptions.length > 0 ? (
                                   <Select
                                     value={
-                                      action.desktopOpenSshForward && desktopForwardOptions.some((entry) => entry.id === action.desktopOpenSshForward)
+                                      action.desktopOpenSshForward &&
+                                      desktopForwardOptions.some((entry) => entry.id === action.desktopOpenSshForward)
                                         ? action.desktopOpenSshForward
-                                        : '__none__'
+                                        : "__none__"
                                     }
                                     onValueChange={(value) => {
                                       updateAction(action.id, (current) => ({
                                         ...current,
-                                        ...(value === '__none__' ? { desktopOpenSshForward: undefined } : { desktopOpenSshForward: value }),
-                                      }));
+                                        ...(value === "__none__"
+                                          ? { desktopOpenSshForward: undefined }
+                                          : { desktopOpenSshForward: value }),
+                                      }))
                                     }}
                                   >
                                     <SelectTrigger className="h-7 w-full max-w-[30rem]">
-                                      <SelectValue placeholder={t('settings.projects.actions.field.useOutputManualUrl')} />
+                                      <SelectValue
+                                        placeholder={t("settings.projects.actions.field.useOutputManualUrl")}
+                                      />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="__none__">{t('settings.projects.actions.field.useOutputManualUrl')}</SelectItem>
+                                      <SelectItem value="__none__">
+                                        {t("settings.projects.actions.field.useOutputManualUrl")}
+                                      </SelectItem>
                                       {desktopForwardOptions.map((entry) => (
-                                        <SelectItem key={entry.id} value={entry.id}>{entry.label}</SelectItem>
+                                        <SelectItem key={entry.id} value={entry.id}>
+                                          {entry.label}
+                                        </SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
                                 ) : (
-                                  <p className="typography-meta text-muted-foreground">{t('settings.projects.actions.state.noDesktopSshForwards')}</p>
+                                  <p className="typography-meta text-muted-foreground">
+                                    {t("settings.projects.actions.state.noDesktopSshForwards")}
+                                  </p>
                                 )}
                               </div>
                             ) : null}
                           </div>
                         ) : null}
                       </div>
-
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
-              );
+              )
             })}
           </div>
         )}
@@ -410,17 +433,11 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
           {validationError ? (
             <p className="typography-meta mb-2 text-[var(--status-warning)]">{validationError}</p>
           ) : null}
-          <Button
-            type="button"
-            size="xs"
-            className="!font-normal"
-            onClick={handleSave}
-            disabled={!canSave}
-          >
-            {isSaving ? t('settings.common.actions.saving') : t('settings.projects.actions.actions.save')}
+          <Button type="button" size="xs" className="!font-normal" onClick={handleSave} disabled={!canSave}>
+            {isSaving ? t("settings.common.actions.saving") : t("settings.projects.actions.actions.save")}
           </Button>
         </div>
       </section>
     </div>
-  );
-};
+  )
+}

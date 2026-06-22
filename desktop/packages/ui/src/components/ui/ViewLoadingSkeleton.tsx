@@ -1,4 +1,4 @@
-import { Skeleton } from './skeleton';
+import { Skeleton } from "./skeleton"
 
 /**
  * Content-shaped placeholder for a main view's initial load — a header bar
@@ -14,5 +14,5 @@ export function ViewLoadingSkeleton({ rows = 6, label }: { rows?: number; label?
       ))}
       {label ? <span className="sr-only">{label}</span> : null}
     </div>
-  );
+  )
 }

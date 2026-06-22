@@ -1,9 +1,11 @@
 # Event Stream Module Documentation
 
 ## Purpose
+
 This module contains the AX Code Desktop message-stream WebSocket protocol and runtime bridge. It keeps the browser-facing WebSocket transport separate from the upstream AX Code SSE transport.
 
 ## Entrypoints and structure
+
 - `packages/web/server/lib/event-stream/index.js`: public entrypoint re-exporting protocol and runtime helpers.
 - `packages/web/server/lib/event-stream/global-hub.js`: shared global upstream SSE hub for server-side subscribers and browser WS fan-out.
 - `packages/web/server/lib/event-stream/global-ws-bridge.js`: browser-facing global WS bridge that subscribes clients to the shared global hub.
@@ -19,6 +21,7 @@ This module contains the AX Code Desktop message-stream WebSocket protocol and r
 ## Public exports
 
 ### Protocol helpers
+
 - `MESSAGE_STREAM_GLOBAL_WS_PATH`: `/api/global/event/ws`
 - `MESSAGE_STREAM_DIRECTORY_WS_PATH`: `/api/event/ws`
 - `MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS`: heartbeat interval for browser-facing WS connections.
@@ -27,17 +30,20 @@ This module contains the AX Code Desktop message-stream WebSocket protocol and r
 - `sendMessageStreamWsEvent(socket, payload, options)`: sends an event frame with optional `eventId` and `directory`.
 
 ### Runtime helpers
+
 - `createGlobalMessageStreamHub(...)`: creates a shared `/global/event` upstream SSE hub with event/status subscribers and bounded event-id replay.
 - `createGlobalUiEventBroadcaster({ sseClients, wsClients, writeSseEvent })`: returns a broadcaster that fans out the same synthetic UI event to SSE and WS clients.
 - `createMessageStreamWsRuntime(...)`: mounts the message-stream WS server, upgrade handler, and SSE-to-WS bridge onto the web HTTP server.
 
 ### Upstream reader helpers
+
 - `DEFAULT_UPSTREAM_STALL_TIMEOUT_MS`: default idle timeout before an attached upstream SSE fetch is aborted for reconnect.
 - `DEFAULT_UPSTREAM_RECONNECT_DELAY_MS`: default delay between upstream reconnect attempts.
 - `createUpstreamSseReader(...)`: creates a start/stop reader for AX Code SSE streams. The reader parses SSE blocks, tracks the latest `Last-Event-ID`, reconnects after closed or stalled upstream streams, and reports events through callbacks.
 - `shouldTriggerUpstreamHealthCheck(upstream)`: shared policy for deciding whether an initial upstream failure should prod AX Code health monitoring.
 
 ## Runtime behavior
+
 - Browser clients connect to the WS endpoints above.
 - AX Code Desktop still fetches AX Code upstream event streams over SSE.
 - The web server creates one shared global message-stream hub. AX Code watcher side effects and global WS clients subscribe to that hub, so there is one upstream /global/event SSE reader for both server-side processing and browser fan-out.
@@ -51,12 +57,14 @@ This module contains the AX Code Desktop message-stream WebSocket protocol and r
 - Browser transport concerns live in the WS bridge modules; server-side global stream ownership lives in `global-hub.js`.
 
 ## Notes for contributors
+
 - Keep protocol helpers pure and small so they can be unit tested without spinning up a server.
 - Keep `runtime.js` focused on WebSocket upgrade and endpoint dispatch. Put global browser-client lifecycle in `global-ws-bridge.js`, directory stream lifecycle in `directory-ws-bridge.js`, and upstream stream sharing in `global-hub.js`.
 - Do not change upstream AX Code transport assumptions here; AX Code remains SSE-based.
 - Keep global replay bounded; do not turn it into an unbounded event log.
 
 ## Testing
+
 - Run `bun test packages/web/server/lib/event-stream/protocol.test.js`
 - Run `bun test packages/web/server/lib/event-stream/upstream-reader.test.js`
 - Run `bun test packages/web/server/lib/event-stream/runtime.test.js`

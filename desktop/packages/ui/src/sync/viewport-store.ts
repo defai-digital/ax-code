@@ -33,7 +33,11 @@ export type ViewportState = {
   sessionMemoryState: Map<string, SessionMemoryState>
   isSyncing: boolean
 
-  updateViewportAnchor: (sessionId: string, anchor: number, scrollPosition?: SessionMemoryState['scrollPosition']) => void
+  updateViewportAnchor: (
+    sessionId: string,
+    anchor: number,
+    scrollPosition?: SessionMemoryState["scrollPosition"],
+  ) => void
 }
 
 // Cap the per-session memory map so it doesn't grow for every session ever
@@ -63,9 +67,7 @@ export const useViewportStore = create<ViewportState>()((set) => ({
       if (map.size > MAX_SESSION_MEMORY_ENTRIES) {
         // Evict the least-recently-accessed entries. The session just touched
         // above has the newest lastAccessedAt, so it is never in the evicted set.
-        const oldestFirst = [...map.entries()].sort(
-          (a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt,
-        )
+        const oldestFirst = [...map.entries()].sort((a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt)
         // Capture the overflow count BEFORE deleting — map.size shrinks on every
         // delete, so reading it in the loop condition would only evict half the
         // excess and leave the map permanently over cap on bulk overflow.

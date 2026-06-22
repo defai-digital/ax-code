@@ -1,4 +1,4 @@
-import { getTauriGlobal } from '@/lib/tauriGlobal';
+import { getTauriGlobal } from "@/lib/tauriGlobal"
 
 /**
  * Utility for opening external URLs with desktop shell support.
@@ -9,30 +9,30 @@ import { getTauriGlobal } from '@/lib/tauriGlobal';
 
 const parseUrlSafely = (value: string): URL | null => {
   try {
-    return new URL(value);
+    return new URL(value)
   } catch {
-    return null;
+    return null
   }
-};
+}
 
 export const isExternalHttpUrl = (url: string): boolean => {
-  const parsed = parseUrlSafely(url.trim());
+  const parsed = parseUrlSafely(url.trim())
   if (!parsed) {
-    return false;
+    return false
   }
-  return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-};
+  return parsed.protocol === "http:" || parsed.protocol === "https:"
+}
 
 export const getExternalFaviconUrl = (url: string): string | null => {
-  const parsed = parseUrlSafely(url.trim());
-  if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
-    return null;
+  const parsed = parseUrlSafely(url.trim())
+  if (!parsed || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) {
+    return null
   }
 
-  return `https://icons.duckduckgo.com/ip3/${parsed.hostname.toLowerCase()}.ico`;
-};
+  return `https://icons.duckduckgo.com/ip3/${parsed.hostname.toLowerCase()}.ico`
+}
 
-const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1']);
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"])
 
 /**
  * Returns true when the URL is an http(s) URL pointing at a loopback host
@@ -40,19 +40,19 @@ const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1'])
  * preview pane instead of opening the system browser.
  */
 export const isLoopbackHttpUrl = (url: string): boolean => {
-  const parsed = parseUrlSafely(url.trim());
+  const parsed = parseUrlSafely(url.trim())
   if (!parsed) {
-    return false;
+    return false
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return false;
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return false
   }
-  return LOOPBACK_HOSTNAMES.has(parsed.hostname.toLowerCase());
-};
+  return LOOPBACK_HOSTNAMES.has(parsed.hostname.toLowerCase())
+}
 
-const LOOPBACK_URL_PATTERN
+const LOOPBACK_URL_PATTERN =
   // eslint-disable-next-line no-control-regex
-  = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d{2,5})?(?:\/[^\s<>"'`\u0000-\u001f]*)?/gi;
+  /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d{2,5})?(?:\/[^\s<>"'`\u0000-\u001f]*)?/gi
 
 /**
  * Extracts loopback http(s) URLs from a free-text string. Returns unique URLs
@@ -61,27 +61,27 @@ const LOOPBACK_URL_PATTERN
  */
 export const extractLoopbackUrls = (text: string): string[] => {
   if (!text) {
-    return [];
+    return []
   }
-  const matches = text.match(LOOPBACK_URL_PATTERN);
+  const matches = text.match(LOOPBACK_URL_PATTERN)
   if (!matches || matches.length === 0) {
-    return [];
+    return []
   }
-  const seen = new Set<string>();
-  const out: string[] = [];
+  const seen = new Set<string>()
+  const out: string[] = []
   for (const raw of matches) {
-    const cleaned = raw.replace(/[),.;:!?'"`]+$/g, '');
+    const cleaned = raw.replace(/[),.;:!?'"`]+$/g, "")
     if (!cleaned || !isLoopbackHttpUrl(cleaned)) {
-      continue;
+      continue
     }
     if (seen.has(cleaned)) {
-      continue;
+      continue
     }
-    seen.add(cleaned);
-    out.push(cleaned);
+    seen.add(cleaned)
+    out.push(cleaned)
   }
-  return out;
-};
+  return out
+}
 
 /**
  * Opens an external URL in the system browser.
@@ -92,40 +92,40 @@ export const extractLoopbackUrls = (text: string): string[] => {
  * @returns Promise<boolean> - true if the URL was opened successfully
  */
 export const openExternalUrl = async (url: string): Promise<boolean> => {
-  if (typeof window === 'undefined') {
-    return false;
+  if (typeof window === "undefined") {
+    return false
   }
 
-  const target = url.trim();
+  const target = url.trim()
   if (!target) {
-    return false;
+    return false
   }
 
-  const parsed = parseUrlSafely(target);
+  const parsed = parseUrlSafely(target)
   if (!parsed) {
-    return false;
+    return false
   }
 
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return false;
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return false
   }
 
-  const normalizedTarget = parsed.toString();
+  const normalizedTarget = parsed.toString()
 
-  const tauri = getTauriGlobal();
+  const tauri = getTauriGlobal()
   if (tauri?.core?.invoke) {
     try {
-      await tauri.core.invoke('desktop_open_external_url', { url: normalizedTarget });
-      return true;
+      await tauri.core.invoke("desktop_open_external_url", { url: normalizedTarget })
+      return true
     } catch {
       // Fall through to window.open
     }
   }
 
   try {
-    window.open(normalizedTarget, '_blank', 'noopener,noreferrer');
-    return true;
+    window.open(normalizedTarget, "_blank", "noopener,noreferrer")
+    return true
   } catch {
-    return false;
+    return false
   }
-};
+}

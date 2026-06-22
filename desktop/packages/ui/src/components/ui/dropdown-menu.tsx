@@ -2,31 +2,32 @@ import * as React from "react"
 import { Menu as BaseMenu } from "@base-ui/react/menu"
 
 import { cn } from "@/lib/utils"
-import { Icon } from "@/components/icon/Icon";
-import { renderFromAsChild, type AsChildProps } from './asChild';
+import { Icon } from "@/components/icon/Icon"
+import { renderFromAsChild, type AsChildProps } from "./asChild"
 
 type DropdownPortalContextValue = {
-  portalContainer: HTMLElement | null;
-  setPortalContainer: (container: HTMLElement | null) => void;
-};
+  portalContainer: HTMLElement | null
+  setPortalContainer: (container: HTMLElement | null) => void
+}
 
-const DropdownPortalContext = React.createContext<DropdownPortalContextValue | null>(null);
+const DropdownPortalContext = React.createContext<DropdownPortalContextValue | null>(null)
 
 const resolveDialogContainer = (element: HTMLElement | null): HTMLElement | null => {
   if (!element) {
-    return null;
+    return null
   }
-  return element.closest('[data-slot="dialog-content"], [role="dialog"]') as HTMLElement | null;
-};
+  return element.closest('[data-slot="dialog-content"], [role="dialog"]') as HTMLElement | null
+}
 
-function DropdownMenu({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Root>) {
-  const [portalContainer, setPortalContainer] = React.useState<HTMLElement | null>(null);
-  const portalContextValue = React.useMemo<DropdownPortalContextValue>(() => ({
-    portalContainer,
-    setPortalContainer,
-  }), [portalContainer]);
+function DropdownMenu({ ...props }: React.ComponentProps<typeof BaseMenu.Root>) {
+  const [portalContainer, setPortalContainer] = React.useState<HTMLElement | null>(null)
+  const portalContextValue = React.useMemo<DropdownPortalContextValue>(
+    () => ({
+      portalContainer,
+      setPortalContainer,
+    }),
+    [portalContainer],
+  )
 
   return (
     <DropdownPortalContext.Provider value={portalContextValue}>
@@ -35,10 +36,8 @@ function DropdownMenu({
   )
 }
 
-function DropdownMenuPortal({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Portal>) {
-  const portalContext = React.useContext(DropdownPortalContext);
+function DropdownMenuPortal({ ...props }: React.ComponentProps<typeof BaseMenu.Portal>) {
+  const portalContext = React.useContext(DropdownPortalContext)
   return <BaseMenu.Portal {...props} container={portalContext?.portalContainer || props.container} />
 }
 
@@ -49,26 +48,29 @@ function DropdownMenuTrigger({
   onFocusCapture,
   ...props
 }: React.ComponentProps<typeof BaseMenu.Trigger> & AsChildProps) {
-  const portalContext = React.useContext(DropdownPortalContext);
-  const syncPortalContainer = React.useCallback((target: EventTarget | null) => {
-    if (!portalContext) {
-      return;
-    }
-    const element = target instanceof HTMLElement ? target : null;
-    portalContext.setPortalContainer(resolveDialogContainer(element));
-  }, [portalContext]);
+  const portalContext = React.useContext(DropdownPortalContext)
+  const syncPortalContainer = React.useCallback(
+    (target: EventTarget | null) => {
+      if (!portalContext) {
+        return
+      }
+      const element = target instanceof HTMLElement ? target : null
+      portalContext.setPortalContainer(resolveDialogContainer(element))
+    },
+    [portalContext],
+  )
 
-  const r = renderFromAsChild(asChild, children);
+  const r = renderFromAsChild(asChild, children)
   return (
     <BaseMenu.Trigger
       data-slot="dropdown-menu-trigger"
       onPointerDownCapture={(event) => {
-        syncPortalContainer(event.currentTarget);
-        onPointerDownCapture?.(event);
+        syncPortalContainer(event.currentTarget)
+        onPointerDownCapture?.(event)
       }}
       onFocusCapture={(event) => {
-        syncPortalContainer(event.currentTarget);
-        onFocusCapture?.(event);
+        syncPortalContainer(event.currentTarget)
+        onFocusCapture?.(event)
       }}
       {...props}
       {...r}
@@ -77,16 +79,16 @@ function DropdownMenuTrigger({
 }
 
 type DropdownMenuContentProps = {
-  sideOffset?: number;
-  align?: "start" | "center" | "end";
-  side?: "top" | "right" | "bottom" | "left";
-  alignOffset?: number;
-  portalToBody?: boolean;
-  positionerClassName?: string;
-  style?: React.CSSProperties;
-  className?: string;
-  children?: React.ReactNode;
-  onCloseAutoFocus?: (event: Event) => void;
+  sideOffset?: number
+  align?: "start" | "center" | "end"
+  side?: "top" | "right" | "bottom" | "left"
+  alignOffset?: number
+  portalToBody?: boolean
+  positionerClassName?: string
+  style?: React.CSSProperties
+  className?: string
+  children?: React.ReactNode
+  onCloseAutoFocus?: (event: Event) => void
 } & Omit<React.ComponentProps<typeof BaseMenu.Popup>, "style" | "className" | "children">
 
 function DropdownMenuContent({
@@ -102,7 +104,7 @@ function DropdownMenuContent({
   onCloseAutoFocus,
   ...props
 }: DropdownMenuContentProps) {
-  const portalContext = React.useContext(DropdownPortalContext);
+  const portalContext = React.useContext(DropdownPortalContext)
   void onCloseAutoFocus
 
   return (
@@ -117,13 +119,13 @@ function DropdownMenuContent({
         <BaseMenu.Popup
           data-slot="dropdown-menu-content"
           style={{
-            backgroundColor: 'var(--surface-elevated)',
-            color: 'var(--surface-elevated-foreground)',
+            backgroundColor: "var(--surface-elevated)",
+            color: "var(--surface-elevated-foreground)",
             ...style,
           }}
           className={cn(
             "app-region-no-drag transition-all duration-150 ease-out data-[starting-style]:opacity-0 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[ending-style]:scale-95 z-50 max-h-[var(--available-height)] min-w-[8rem] origin-[var(--transform-origin)] overflow-visible rounded-xl p-1 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.8),inset_0_0_0_1px_rgba(0,0,0,0.04),0_0_0_1px_rgba(0,0,0,0.10),0_1px_2px_-0.5px_rgba(0,0,0,0.08),0_4px_8px_-2px_rgba(0,0,0,0.08),0_12px_20px_-4px_rgba(0,0,0,0.08)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),inset_0_0_0_1px_rgba(255,255,255,0.08),0_0_0_1px_rgba(0,0,0,0.36),0_1px_1px_-0.5px_rgba(0,0,0,0.22),0_3px_3px_-1.5px_rgba(0,0,0,0.20),0_6px_6px_-3px_rgba(0,0,0,0.16)]",
-            className
+            className,
           )}
           {...props}
         >
@@ -134,9 +136,7 @@ function DropdownMenuContent({
   )
 }
 
-function DropdownMenuGroup({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Group>) {
+function DropdownMenuGroup({ ...props }: React.ComponentProps<typeof BaseMenu.Group>) {
   return <BaseMenu.Group data-slot="dropdown-menu-group" {...props} />
 }
 
@@ -149,16 +149,17 @@ function DropdownMenuItem({
   onSelect,
   onClick,
   ...props
-}: React.ComponentProps<typeof BaseMenu.Item> & AsChildProps & {
-  inset?: boolean
-  variant?: "default" | "destructive"
-  onSelect?: React.ComponentProps<typeof BaseMenu.Item>["onClick"]
-}) {
-  const r = renderFromAsChild(asChild, children);
+}: React.ComponentProps<typeof BaseMenu.Item> &
+  AsChildProps & {
+    inset?: boolean
+    variant?: "default" | "destructive"
+    onSelect?: React.ComponentProps<typeof BaseMenu.Item>["onClick"]
+  }) {
+  const r = renderFromAsChild(asChild, children)
   const handleClick: NonNullable<React.ComponentProps<typeof BaseMenu.Item>["onClick"]> = (event) => {
-    onClick?.(event);
-    if (!event.defaultPrevented) onSelect?.(event);
-  };
+    onClick?.(event)
+    if (!event.defaultPrevented) onSelect?.(event)
+  }
   return (
     <BaseMenu.Item
       data-slot="dropdown-menu-item"
@@ -166,7 +167,7 @@ function DropdownMenuItem({
       data-variant={variant}
       className={cn(
         "data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover data-[variant=destructive]:text-destructive data-[variant=destructive]:hover:bg-destructive/10 dark:data-[variant=destructive]:hover:bg-destructive/20 data-[variant=destructive]:hover:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 typography-ui-label outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        className
+        className,
       )}
       {...props}
       onClick={handleClick}
@@ -186,7 +187,7 @@ function DropdownMenuCheckboxItem({
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
         "data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover data-[checked]:bg-interactive-selection data-[checked]:text-interactive-selection-foreground relative flex cursor-pointer items-center gap-2 rounded-lg py-1 px-2 typography-ui-label outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        className
+        className,
       )}
       checked={checked}
       {...props}
@@ -201,23 +202,17 @@ function DropdownMenuCheckboxItem({
   )
 }
 
-function DropdownMenuRadioGroup({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.RadioGroup>) {
+function DropdownMenuRadioGroup({ ...props }: React.ComponentProps<typeof BaseMenu.RadioGroup>) {
   return <BaseMenu.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />
 }
 
-function DropdownMenuRadioItem({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof BaseMenu.RadioItem>) {
+function DropdownMenuRadioItem({ className, children, ...props }: React.ComponentProps<typeof BaseMenu.RadioItem>) {
   return (
     <BaseMenu.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
         "data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover data-[checked]:bg-interactive-selection data-[checked]:text-interactive-selection-foreground relative flex cursor-pointer items-start gap-2 rounded-lg py-1 pl-2 pr-8 typography-ui-label outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        className
+        className,
       )}
       {...props}
     >
@@ -242,19 +237,13 @@ function DropdownMenuLabel({
     <div
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn(
-        "px-2 py-1 typography-ui-label font-medium data-[inset]:pl-8",
-        className
-      )}
+      className={cn("px-2 py-1 typography-ui-label font-medium data-[inset]:pl-8", className)}
       {...props}
     />
   )
 }
 
-function DropdownMenuSeparator({
-  className,
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Separator>) {
+function DropdownMenuSeparator({ className, ...props }: React.ComponentProps<typeof BaseMenu.Separator>) {
   return (
     <BaseMenu.Separator
       data-slot="dropdown-menu-separator"
@@ -264,25 +253,17 @@ function DropdownMenuSeparator({
   )
 }
 
-function DropdownMenuShortcut({
-  className,
-  ...props
-}: React.ComponentProps<"span">) {
+function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="dropdown-menu-shortcut"
-      className={cn(
-        "text-muted-foreground ml-auto typography-meta tracking-widest",
-        className
-      )}
+      className={cn("text-muted-foreground ml-auto typography-meta tracking-widest", className)}
       {...props}
     />
   )
 }
 
-function DropdownMenuSub({
-  ...props
-}: React.ComponentProps<typeof BaseMenu.SubmenuRoot>) {
+function DropdownMenuSub({ ...props }: React.ComponentProps<typeof BaseMenu.SubmenuRoot>) {
   return <BaseMenu.SubmenuRoot {...props} />
 }
 
@@ -300,7 +281,7 @@ function DropdownMenuSubTrigger({
       data-inset={inset}
       className={cn(
         "data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 typography-ui-label outline-hidden select-none data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
-        className
+        className,
       )}
       {...props}
     >
@@ -310,24 +291,20 @@ function DropdownMenuSubTrigger({
   )
 }
 
-function DropdownMenuSubContent({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<typeof BaseMenu.Popup>) {
-  const portalContext = React.useContext(DropdownPortalContext);
+function DropdownMenuSubContent({ className, children, ...props }: React.ComponentProps<typeof BaseMenu.Popup>) {
+  const portalContext = React.useContext(DropdownPortalContext)
   return (
     <BaseMenu.Portal container={portalContext?.portalContainer || undefined}>
       <BaseMenu.Positioner className="z-50">
         <BaseMenu.Popup
           data-slot="dropdown-menu-sub-content"
           style={{
-            backgroundColor: 'var(--surface-elevated)',
-            color: 'var(--surface-elevated-foreground)',
+            backgroundColor: "var(--surface-elevated)",
+            color: "var(--surface-elevated-foreground)",
           }}
           className={cn(
             "transition-all duration-150 ease-out data-[starting-style]:opacity-0 data-[starting-style]:scale-95 data-[ending-style]:opacity-0 data-[ending-style]:scale-95 z-50 min-w-[8rem] origin-[var(--transform-origin)] overflow-visible rounded-xl p-1 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.8),inset_0_0_0_1px_rgba(0,0,0,0.04),0_0_0_1px_rgba(0,0,0,0.10),0_1px_2px_-0.5px_rgba(0,0,0,0.08),0_4px_8px_-2px_rgba(0,0,0,0.08),0_12px_20px_-4px_rgba(0,0,0,0.08)] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12),inset_0_0_0_1px_rgba(255,255,255,0.08),0_0_0_1px_rgba(0,0,0,0.36),0_1px_1px_-0.5px_rgba(0,0,0,0.22),0_3px_3px_-1.5px_rgba(0,0,0,0.20),0_6px_6px_-3px_rgba(0,0,0,0.16)]",
-            className
+            className,
           )}
           {...props}
         >

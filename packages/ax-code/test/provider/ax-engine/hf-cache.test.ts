@@ -39,8 +39,8 @@ describe("HfCache.root precedence", () => {
   })
 
   test("repoDir encodes the org/name the Hugging Face way", () => {
-    expect(HfCache.repoDir("mlx-community/Qwen3-Coder-Next-6bit", { HF_HUB_CACHE: "/hub" }, home)).toBe(
-      "/hub/models--mlx-community--Qwen3-Coder-Next-6bit",
+    expect(HfCache.repoDir("mlx-community/Qwen3.6-27B-6bit", { HF_HUB_CACHE: "/hub" }, home)).toBe(
+      "/hub/models--mlx-community--Qwen3.6-27B-6bit",
     )
   })
 

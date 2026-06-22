@@ -1,10 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest"
 import type { Event, AxCodeClient } from "@ax-code/sdk/v2/client"
 import { createEventPipeline } from "./event-pipeline"
 
-const failAfter = (ms: number) => new Promise<never>((_, reject) => {
-  setTimeout(() => reject(new Error("Timed out waiting for event pipeline flush")), ms)
-})
+const failAfter = (ms: number) =>
+  new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("Timed out waiting for event pipeline flush")), ms)
+  })
 
 function partUpdatedEvent(text: string): Event {
   return {
@@ -67,11 +68,7 @@ describe("createEventPipeline", () => {
     })
     const delivered: Event[] = []
     const pipeline = createEventPipeline({
-      sdk: createSdk([
-        partUpdatedEvent("a"),
-        deltaEvent("b"),
-        partUpdatedEvent("ab"),
-      ], resolveStreamFinished),
+      sdk: createSdk([partUpdatedEvent("a"), deltaEvent("b"), partUpdatedEvent("ab")], resolveStreamFinished),
       onEvent: (_directory, payload) => {
         delivered.push(payload)
         if (delivered.length === 3) {
@@ -89,12 +86,14 @@ describe("createEventPipeline", () => {
       pipeline.cleanup()
     }
 
-    expect(delivered.map((event) => {
-      if (event.type === "message.part.delta") {
-        return `delta:${(event.properties as { delta: string }).delta}`
-      }
-      return `updated:${((event.properties as { part: { text: string } }).part).text}`
-    })).toEqual(["updated:a", "delta:b", "updated:ab"])
+    expect(
+      delivered.map((event) => {
+        if (event.type === "message.part.delta") {
+          return `delta:${(event.properties as { delta: string }).delta}`
+        }
+        return `updated:${(event.properties as { part: { text: string } }).part.text}`
+      }),
+    ).toEqual(["updated:a", "delta:b", "updated:ab"])
   })
 
   test("preserves a delta that arrives after a full snapshot (delta → updated → delta)", async () => {
@@ -111,11 +110,7 @@ describe("createEventPipeline", () => {
       // Without the snapshot→delta coalesce invalidation, the trailing "b"
       // delta merges into the pre-snapshot delta slot, reordering ahead of the
       // "x" snapshot and getting silently dropped.
-      sdk: createSdk([
-        deltaEvent("a"),
-        partUpdatedEvent("x"),
-        deltaEvent("b"),
-      ], resolveStreamFinished),
+      sdk: createSdk([deltaEvent("a"), partUpdatedEvent("x"), deltaEvent("b")], resolveStreamFinished),
       onEvent: (_directory, payload) => {
         delivered.push(payload)
         if (delivered.length === 3) {
@@ -133,12 +128,14 @@ describe("createEventPipeline", () => {
       pipeline.cleanup()
     }
 
-    expect(delivered.map((event) => {
-      if (event.type === "message.part.delta") {
-        return `delta:${(event.properties as { delta: string }).delta}`
-      }
-      return `updated:${((event.properties as { part: { text: string } }).part).text}`
-    })).toEqual(["delta:a", "updated:x", "delta:b"])
+    expect(
+      delivered.map((event) => {
+        if (event.type === "message.part.delta") {
+          return `delta:${(event.properties as { delta: string }).delta}`
+        }
+        return `updated:${(event.properties as { part: { text: string } }).part.text}`
+      }),
+    ).toEqual(["delta:a", "updated:x", "delta:b"])
   })
 
   test("normalizes openchamber session status events", async () => {
@@ -151,15 +148,18 @@ describe("createEventPipeline", () => {
       resolveDelivered = resolve
     })
     const pipeline = createEventPipeline({
-      sdk: createSdk([
-        {
-          type: "openchamber:session-status",
-          properties: {
-            sessionID: "ses_1",
-            status: "idle",
-          },
-        } as unknown as Event,
-      ], resolveStreamFinished),
+      sdk: createSdk(
+        [
+          {
+            type: "openchamber:session-status",
+            properties: {
+              sessionID: "ses_1",
+              status: "idle",
+            },
+          } as unknown as Event,
+        ],
+        resolveStreamFinished,
+      ),
       onEvent: (_directory, payload) => {
         resolveDelivered(payload)
       },

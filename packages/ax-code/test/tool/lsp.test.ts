@@ -303,7 +303,9 @@ describe("tool.lsp", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        referencesCachedEnvelopeSpy = vi.spyOn(LSP, "referencesCachedEnvelope").mockRejectedValue(new Error("cache down"))
+        referencesCachedEnvelopeSpy = vi
+          .spyOn(LSP, "referencesCachedEnvelope")
+          .mockRejectedValue(new Error("cache down"))
         hasClientsSpy = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
         touchFileSpy = vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as never)
         referencesEnvelopeSpy = vi.spyOn(LSP, "referencesEnvelope").mockResolvedValue({

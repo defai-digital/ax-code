@@ -33,13 +33,7 @@ import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
 import { useI18nStore, formatMessage } from "@/lib/i18n/store"
-import {
-  getSyncSessions,
-  getAllSyncSessions,
-  getSyncMessages,
-  getSyncParts,
-  getDirectoryState,
-} from "./sync-refs"
+import { getSyncSessions, getAllSyncSessions, getSyncMessages, getSyncParts, getDirectoryState } from "./sync-refs"
 import { markSessionViewed } from "./notification-store"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { setActiveSession } from "./sync-context"
@@ -80,19 +74,25 @@ export function routeMessage(params: {
   variant?: string
   inputMode?: "normal" | "shell"
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
-  additionalParts?: Array<{ text: string; synthetic?: boolean; files?: Array<{ type: "file"; mime: string; url: string; filename: string }> }>
+  additionalParts?: Array<{
+    text: string
+    synthetic?: boolean
+    files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
+  }>
 }): Promise<void> {
   const run = (): Promise<void> => {
     if (params.inputMode === "shell") {
       const sdk = axCodeClient.getSdkClient()
       const dir = axCodeClient.getDirectory() || undefined
-      return sdk.session.shell({
-        sessionID: params.sessionId,
-        directory: dir,
-        agent: params.agent,
-        model: { providerID: params.providerID, modelID: params.modelID },
-        command: params.content,
-      }).then(() => {})
+      return sdk.session
+        .shell({
+          sessionID: params.sessionId,
+          directory: dir,
+          agent: params.agent,
+          model: { providerID: params.providerID, modelID: params.modelID },
+          command: params.content,
+        })
+        .then(() => {})
     }
 
     // Slash commands — fire and forget, SSE delivers messages and status
@@ -104,8 +104,7 @@ export function routeMessage(params: {
       const syncCommands = dirState?.command ?? []
       const storeCommands = useCommandsStore.getState().commands
 
-      const isCommand = syncCommands.find((c) => c.name === cmdName)
-        || storeCommands.find((c) => c.name === cmdName)
+      const isCommand = syncCommands.find((c) => c.name === cmdName) || storeCommands.find((c) => c.name === cmdName)
 
       if (isCommand) {
         return optimisticSend({
@@ -115,17 +114,20 @@ export function routeMessage(params: {
           modelID: params.modelID,
           agent: params.agent,
           files: params.files,
-          send: (messageID) => axCodeClient.sendCommand({
-            id: params.sessionId,
-            providerID: params.providerID,
-            modelID: params.modelID,
-            command: cmdName,
-            arguments: tail.join(" "),
-            agent: params.agent,
-            variant: params.variant,
-            files: params.files,
-            messageId: messageID,
-          }).then(() => {}),
+          send: (messageID) =>
+            axCodeClient
+              .sendCommand({
+                id: params.sessionId,
+                providerID: params.providerID,
+                modelID: params.modelID,
+                command: cmdName,
+                arguments: tail.join(" "),
+                agent: params.agent,
+                variant: params.variant,
+                files: params.files,
+                messageId: messageID,
+              })
+              .then(() => {}),
         })
       }
     }
@@ -138,18 +140,21 @@ export function routeMessage(params: {
       modelID: params.modelID,
       agent: params.agent,
       files: params.files,
-      send: (messageID) => axCodeClient.sendMessage({
-        id: params.sessionId,
-        providerID: params.providerID,
-        modelID: params.modelID,
-        text: params.content,
-        agent: params.agent,
-        agentMentions: params.agentMentionName ? [{ name: params.agentMentionName }] : undefined,
-        variant: params.variant,
-        files: params.files,
-        additionalParts: params.additionalParts,
-        messageId: messageID,
-      }).then(() => {}),
+      send: (messageID) =>
+        axCodeClient
+          .sendMessage({
+            id: params.sessionId,
+            providerID: params.providerID,
+            modelID: params.modelID,
+            text: params.content,
+            agent: params.agent,
+            agentMentions: params.agentMentionName ? [{ name: params.agentMentionName }] : undefined,
+            variant: params.variant,
+            files: params.files,
+            additionalParts: params.additionalParts,
+            messageId: messageID,
+          })
+          .then(() => {}),
     })
   }
 
@@ -165,8 +170,9 @@ type SendMessageOptions = {
 }
 
 function notifyMessageSent(sessionId: string): void {
-  fetch(replacePathParams(API_ENDPOINTS.config.sessionsMessageSent, { sessionId }), { method: "POST" })
-    .catch(() => { /* ignore */ })
+  fetch(replacePathParams(API_ENDPOINTS.config.sessionsMessageSent, { sessionId }), { method: "POST" }).catch(() => {
+    /* ignore */
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -230,7 +236,10 @@ export type SessionUIState = {
   setCurrentSession: (id: string | null, directoryHint?: string | null) => void
   openNewSessionDraft: (options?: Partial<NewSessionDraftState>) => void
   closeNewSessionDraft: () => void
-  setNewSessionDraftTarget: (target: { projectId?: string | null; selectedProjectId?: string | null; directoryOverride?: string | null }, options?: { force?: boolean }) => void
+  setNewSessionDraftTarget: (
+    target: { projectId?: string | null; selectedProjectId?: string | null; directoryOverride?: string | null },
+    options?: { force?: boolean },
+  ) => void
   setDraftPreserveDirectoryOverride: (value: boolean) => void
   acknowledgeSessionAbort: (sessionId: string) => void
   clearAbortPrompt: () => void
@@ -239,7 +248,11 @@ export type SessionUIState = {
   getContextUsage: (contextLimit: number, outputLimit: number) => SessionContextUsage | null
   setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => void
   overrideNewSessionDraftTarget: (options: Record<string, unknown>) => void
-  resolvePendingDraftWorktreeTarget: (requestId: string, directory: string | null, options?: Record<string, unknown>) => void
+  resolvePendingDraftWorktreeTarget: (
+    requestId: string,
+    directory: string | null,
+    options?: Record<string, unknown>,
+  ) => void
   setDraftBootstrapPendingDirectory: (directory: string | null) => void
   setPendingDraftWorktreeRequest: (requestId: string | null) => void
   getWorktreeMetadata: (sessionId: string) => WorktreeMetadata | undefined
@@ -258,7 +271,11 @@ export type SessionUIState = {
     options?: SendMessageOptions,
   ) => Promise<void>
 
-  createSession: (title?: string, directoryOverride?: string | null, parentID?: string | null) => Promise<Session | null>
+  createSession: (
+    title?: string,
+    directoryOverride?: string | null,
+    parentID?: string | null,
+  ) => Promise<Session | null>
   deleteSession: (id: string) => Promise<boolean>
   deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>
   archiveSession: (id: string) => Promise<boolean>
@@ -275,7 +292,9 @@ export type SessionUIState = {
   // Data access helpers (read from sync)
   getSessionsByDirectory: (directory: string) => Session[]
   getDirectoryForSession: (sessionId: string) => string | null
-  getLastUserChoice: (sessionId: string) => { agent?: string; providerID?: string; modelID?: string; variant?: string } | null
+  getLastUserChoice: (
+    sessionId: string,
+  ) => { agent?: string; providerID?: string; modelID?: string; variant?: string } | null
   getCurrentAgent: (sessionId: string) => string | undefined
   debugSessionMessages: (sessionId: string) => Promise<void>
 }
@@ -298,8 +317,7 @@ const resolveDirectoryKey = (session: Session): string | null => {
     directory?: string | null
     project?: { worktree?: string | null } | null
   }
-  return normalizePath(sessionRecord.directory ?? null)
-    ?? normalizePath(sessionRecord.project?.worktree ?? null)
+  return normalizePath(sessionRecord.directory ?? null) ?? normalizePath(sessionRecord.project?.worktree ?? null)
 }
 
 const safeStorage = getSafeStorage()
@@ -324,7 +342,9 @@ const readPersistedDraftTarget = (): PersistedDraftTarget | null => {
 const persistDraftTarget = (target: PersistedDraftTarget): void => {
   try {
     safeStorage.setItem(DRAFT_TARGET_STORAGE_KEY, JSON.stringify(target))
-  } catch { /* ignored */ }
+  } catch {
+    /* ignored */
+  }
 }
 
 const resolveDraftProjectForDirectory = resolveProjectForSessionDirectory
@@ -394,10 +414,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     const directoryState = useDirectoryStore.getState()
 
-    const sessionDir = resolveSessionDirectory(
-      id,
-      (sid) => get().worktreeMetadata.get(sid),
-    )
+    const sessionDir = resolveSessionDirectory(id, (sid) => get().worktreeMetadata.get(sid))
     const fallbackDir = axCodeClient.getDirectory() ?? directoryState.currentDirectory ?? null
     const resolvedDir = (directoryHint ? normalizePath(directoryHint) : null) ?? sessionDir ?? fallbackDir
 
@@ -443,14 +460,16 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const currentDirectory = normalizePath(useDirectoryStore.getState().currentDirectory ?? null)
     const persistedTarget = readPersistedDraftTarget()
 
-    const explicitDirectory = options?.directoryOverride !== undefined
-      ? normalizePath(options.directoryOverride)
-      : null
+    const explicitDirectory = options?.directoryOverride !== undefined ? normalizePath(options.directoryOverride) : null
     const explicitProject = options?.selectedProjectId
-      ? projects.find((p) => p.id === options.selectedProjectId) ?? null
+      ? (projects.find((p) => p.id === options.selectedProjectId) ?? null)
       : null
 
-    const inferredProjectFromDir = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, explicitDirectory)
+    const inferredProjectFromDir = resolveDraftProjectForDirectory(
+      projects,
+      availableWorktreesByProject,
+      explicitDirectory,
+    )
     const fallbackProject = (() => {
       if (activeProject) return activeProject
       if (projectsState.activeProjectId) return projects.find((p) => p.id === projectsState.activeProjectId) ?? null
@@ -458,9 +477,13 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     })()
 
     const persistedProjectById = persistedTarget?.projectId
-      ? projects.find((p) => p.id === persistedTarget.projectId) ?? null
+      ? (projects.find((p) => p.id === persistedTarget.projectId) ?? null)
       : null
-    const persistedProjectByDir = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, persistedTarget?.directory ?? null)
+    const persistedProjectByDir = resolveDraftProjectForDirectory(
+      projects,
+      availableWorktreesByProject,
+      persistedTarget?.directory ?? null,
+    )
     const currentDirProject = resolveDraftProjectForDirectory(projects, availableWorktreesByProject, currentDirectory)
 
     const selectedProject = (() => {
@@ -598,8 +621,8 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         worktreeRoot: metadata.worktreeRoot ?? metadata.path ?? null,
         cwd: metadata.path ?? null,
         branch: metadata.branch ?? null,
-        headState: metadata.headState ?? (metadata.branch ? 'branch' : 'detached'),
-        worktreeStatus: metadata.worktreeStatus ?? 'ready',
+        headState: metadata.headState ?? (metadata.branch ? "branch" : "detached"),
+        worktreeStatus: metadata.worktreeStatus ?? "ready",
         worktreeSource: metadata.worktreeSource ?? null,
         legacy: false,
         degraded: false,
@@ -634,11 +657,19 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       return {
         newSessionDraft: {
           ...s.newSessionDraft,
-          selectedProjectId: (options as Record<string, unknown> | undefined)?.projectId as string ?? s.newSessionDraft.selectedProjectId ?? null,
+          selectedProjectId:
+            ((options as Record<string, unknown> | undefined)?.projectId as string) ??
+            s.newSessionDraft.selectedProjectId ??
+            null,
           directoryOverride: normalizePath(directory),
           pendingWorktreeRequestId: null,
-          bootstrapPendingDirectory: normalizePath((options as Record<string, unknown> | undefined)?.bootstrapPendingDirectory as string ?? s.newSessionDraft.bootstrapPendingDirectory ?? null),
-          preserveDirectoryOverride: ((options as Record<string, unknown> | undefined)?.preserveDirectoryOverride ?? true) as boolean,
+          bootstrapPendingDirectory: normalizePath(
+            ((options as Record<string, unknown> | undefined)?.bootstrapPendingDirectory as string) ??
+              s.newSessionDraft.bootstrapPendingDirectory ??
+              null,
+          ),
+          preserveDirectoryOverride: ((options as Record<string, unknown> | undefined)?.preserveDirectoryOverride ??
+            true) as boolean,
         },
       }
     }),
@@ -658,13 +689,13 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   getWorktreeMetadata: (sessionId) => get().worktreeMetadata.get(sessionId),
 
   dismissPendingChangesBar: (sessionId, signature) => {
-    const map = new Map(get().pendingChangesBarDismissed);
+    const map = new Map(get().pendingChangesBarDismissed)
     if (signature === null) {
-      map.delete(sessionId);
+      map.delete(sessionId)
     } else {
-      map.set(sessionId, signature);
+      map.set(sessionId, signature)
     }
-    set({ pendingChangesBarDismissed: map });
+    set({ pendingChangesBarDismissed: map })
   },
 
   // ---------------------------------------------------------------------------
@@ -683,11 +714,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     options?: SendMessageOptions,
   ) => {
     // Clear non-Git changed-files bar on new user message for current session
-    const sid = options?.sessionId ?? get().currentSessionId;
+    const sid = options?.sessionId ?? get().currentSessionId
     if (sid) {
-      const map = new Map(get().pendingChangesBarDismissed);
-      map.delete(sid);
-      set({ pendingChangesBarDismissed: map });
+      const map = new Map(get().pendingChangesBarDismissed)
+      map.delete(sid)
+      set({ pendingChangesBarDismissed: map })
     }
 
     const draft = get().newSessionDraft
@@ -720,14 +751,31 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       const effectiveDraftAgent = trimmedAgent ?? draftAgentName
 
       if (configState.currentProviderId && configState.currentModelId) {
-        useSelectionStore.getState().saveSessionModelSelection(created.id, configState.currentProviderId, configState.currentModelId)
+        useSelectionStore
+          .getState()
+          .saveSessionModelSelection(created.id, configState.currentProviderId, configState.currentModelId)
       }
 
       if (effectiveDraftAgent) {
         useSelectionStore.getState().saveSessionAgentSelection(created.id, effectiveDraftAgent)
         if (configState.currentProviderId && configState.currentModelId) {
-          useSelectionStore.getState().saveAgentModelForSession(created.id, effectiveDraftAgent, configState.currentProviderId, configState.currentModelId)
-          useSelectionStore.getState().saveAgentModelVariantForSession(created.id, effectiveDraftAgent, configState.currentProviderId, configState.currentModelId, variant)
+          useSelectionStore
+            .getState()
+            .saveAgentModelForSession(
+              created.id,
+              effectiveDraftAgent,
+              configState.currentProviderId,
+              configState.currentModelId,
+            )
+          useSelectionStore
+            .getState()
+            .saveAgentModelVariantForSession(
+              created.id,
+              effectiveDraftAgent,
+              configState.currentProviderId,
+              configState.currentModelId,
+              variant,
+            )
         }
       }
 
@@ -797,7 +845,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     if (targetSessionId && effectiveAgent) {
       useSelectionStore.getState().saveSessionAgentSelection(targetSessionId, effectiveAgent)
-      useSelectionStore.getState().saveAgentModelVariantForSession(targetSessionId, effectiveAgent, providerID, modelID, variant)
+      useSelectionStore
+        .getState()
+        .saveAgentModelVariantForSession(targetSessionId, effectiveAgent, providerID, modelID, variant)
     }
 
     if (targetSessionId) {
@@ -956,7 +1006,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     if (userMessages.length === 0) return
 
     const revertToId = currentSession?.revert?.messageID
-    let targetMessage: typeof messages[number] | undefined
+    let targetMessage: (typeof messages)[number] | undefined
     if (revertToId) {
       targetMessage = [...userMessages].reverse().find((m) => m.id < revertToId)
     } else {
@@ -1060,10 +1110,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const assistantPlanText = flattenAssistantTextParts(sourceParts)
     if (!assistantPlanText.trim()) return
 
-    const directory = resolveSessionDirectory(
-      sourceSessionId ?? null,
-      (sid) => get().worktreeMetadata.get(sid),
-    )
+    const directory = resolveSessionDirectory(sourceSessionId ?? null, (sid) => get().worktreeMetadata.get(sid))
 
     const { currentProviderId, currentModelId, currentAgentName } = useConfigStore.getState()
     const sourceChoice = sourceSessionId ? get().getLastUserChoice(sourceSessionId) : null
@@ -1108,8 +1155,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const session = sessions.find((s) => s.id === sessionId)
     if (session) return resolveDirectoryKey(session)
     const globalStore = useGlobalSessionsStore.getState()
-    const globalSession = [...globalStore.activeSessions, ...globalStore.archivedSessions]
-      .find((s) => s.id === sessionId)
+    const globalSession = [...globalStore.activeSessions, ...globalStore.archivedSessions].find(
+      (s) => s.id === sessionId,
+    )
     if (globalSession) return resolveGlobalSessionDirectory(globalSession)
     return null
   },
@@ -1127,19 +1175,23 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         continue
       }
 
-      const providerID = typeof message.model?.providerID === "string" && message.model.providerID.trim().length > 0
-        ? message.model.providerID
-        : undefined
-      const modelID = typeof message.model?.modelID === "string" && message.model.modelID.trim().length > 0
-        ? message.model.modelID
-        : undefined
-      const agent = typeof message.agent === "string" && message.agent.trim().length > 0
-        ? message.agent
-        : (typeof message.mode === "string" && message.mode.trim().length > 0 ? message.mode : undefined)
+      const providerID =
+        typeof message.model?.providerID === "string" && message.model.providerID.trim().length > 0
+          ? message.model.providerID
+          : undefined
+      const modelID =
+        typeof message.model?.modelID === "string" && message.model.modelID.trim().length > 0
+          ? message.model.modelID
+          : undefined
+      const agent =
+        typeof message.agent === "string" && message.agent.trim().length > 0
+          ? message.agent
+          : typeof message.mode === "string" && message.mode.trim().length > 0
+            ? message.mode
+            : undefined
       const variantCandidate = message.model?.variant ?? message.variant
-      const variant = typeof variantCandidate === "string" && variantCandidate.trim().length > 0
-        ? variantCandidate
-        : undefined
+      const variant =
+        typeof variantCandidate === "string" && variantCandidate.trim().length > 0 ? variantCandidate : undefined
 
       return { agent, providerID, modelID, variant }
     }

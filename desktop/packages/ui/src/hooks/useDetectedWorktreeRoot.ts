@@ -1,13 +1,13 @@
-import React from 'react';
-import { execCommand } from '@/lib/execCommands';
-import type { WorktreeMetadata } from '@/types/worktree';
+import React from "react"
+import { execCommand } from "@/lib/execCommands"
+import type { WorktreeMetadata } from "@/types/worktree"
 
 const normalizePath = (value: string): string => {
-  if (!value) return '';
-  const replaced = value.replace(/\\/g, '/');
-  if (replaced === '/') return '/';
-  return replaced.replace(/\/+$/, '');
-};
+  if (!value) return ""
+  const replaced = value.replace(/\\/g, "/")
+  if (replaced === "/") return "/"
+  return replaced.replace(/\/+$/, "")
+}
 
 /**
  * Derive the primary worktree (project) root from the absolute git directory.
@@ -16,17 +16,17 @@ const normalizePath = (value: string): string => {
  * Primary worktree:    /project/.git                   → null (not a secondary)
  */
 const deriveProjectRoot = (gitDir: string): string | null => {
-  const normalized = normalizePath(gitDir);
-  if (!normalized) return null;
+  const normalized = normalizePath(gitDir)
+  if (!normalized) return null
 
-  const marker = '/.git/worktrees/';
-  const idx = normalized.indexOf(marker);
+  const marker = "/.git/worktrees/"
+  const idx = normalized.indexOf(marker)
   if (idx > 0) {
-    return normalized.slice(0, idx) || null;
+    return normalized.slice(0, idx) || null
   }
 
-  return null;
-};
+  return null
+}
 
 /**
  * When the store-based WorktreeMetadata lookup fails, this hook falls back to
@@ -44,56 +44,56 @@ export function useDetectedWorktreeMetadata(
   storeMetadata: WorktreeMetadata | undefined,
   currentBranch: string | undefined,
 ): WorktreeMetadata | undefined {
-  const [detected, setDetected] = React.useState<WorktreeMetadata | undefined>();
+  const [detected, setDetected] = React.useState<WorktreeMetadata | undefined>()
 
   React.useEffect(() => {
     if (storeMetadata) {
-      setDetected(undefined);
-      return;
+      setDetected(undefined)
+      return
     }
 
     if (!currentDirectory) {
-      setDetected(undefined);
-      return;
+      setDetected(undefined)
+      return
     }
 
     // Reset immediately so callers never see stale metadata from a previous directory.
-    setDetected(undefined);
+    setDetected(undefined)
 
-    let cancelled = false;
+    let cancelled = false
     void (async () => {
       const [gitDirResult, toplevelResult] = await Promise.all([
-        execCommand('git rev-parse --absolute-git-dir', currentDirectory),
-        execCommand('git rev-parse --show-toplevel', currentDirectory),
-      ]);
-      if (cancelled) return;
+        execCommand("git rev-parse --absolute-git-dir", currentDirectory),
+        execCommand("git rev-parse --show-toplevel", currentDirectory),
+      ])
+      if (cancelled) return
 
       if (!gitDirResult.success || !toplevelResult.success) {
-        return;
+        return
       }
 
-      const gitDir = normalizePath((gitDirResult.stdout || '').trim());
-      const projectRoot = deriveProjectRoot(gitDir);
+      const gitDir = normalizePath((gitDirResult.stdout || "").trim())
+      const projectRoot = deriveProjectRoot(gitDir)
 
       if (!projectRoot) {
-        return;
+        return
       }
 
       // Use the worktree toplevel, not the active sub-directory, so that
       // worktree operations (e.g. `git worktree remove`) receive a valid root path.
-      const worktreePath = normalizePath((toplevelResult.stdout || '').trim());
+      const worktreePath = normalizePath((toplevelResult.stdout || "").trim())
 
       // Sanity-check: secondary worktree path must differ from project root
       if (!worktreePath || worktreePath === projectRoot) {
-        return;
+        return
       }
 
-      const branch = currentBranch || '';
-      const name = worktreePath.split('/').filter(Boolean).pop() || worktreePath;
-      const headState = !branch ? 'unborn' : 'branch';
+      const branch = currentBranch || ""
+      const name = worktreePath.split("/").filter(Boolean).pop() || worktreePath
+      const headState = !branch ? "unborn" : "branch"
 
       setDetected({
-        source: 'sdk',
+        source: "sdk",
         path: worktreePath,
         projectDirectory: projectRoot,
         branch,
@@ -101,16 +101,16 @@ export function useDetectedWorktreeMetadata(
         name,
         // Phase 1 canonical fields — this hook is fallback-only
         worktreeRoot: worktreePath,
-        worktreeStatus: 'ready',
+        worktreeStatus: "ready",
         headState,
-        worktreeSource: 'existing',
-      });
-    })();
+        worktreeSource: "existing",
+      })
+    })()
 
     return () => {
-      cancelled = true;
-    };
-  }, [currentDirectory, storeMetadata, currentBranch]);
+      cancelled = true
+    }
+  }, [currentDirectory, storeMetadata, currentBranch])
 
-  return storeMetadata ?? detected;
+  return storeMetadata ?? detected
 }

@@ -752,6 +752,23 @@ export type EventFileEdited = {
   }
 }
 
+export type EventDebugEngineCorrelatedDiagnostics = {
+  type: "debug-engine.correlated-diagnostics"
+  properties: {
+    file: string
+    correlations: Array<{
+      file: string
+      line: number
+      message: string
+      severity: number
+      rootCauseFile: string | null
+      rootCauseSymbol: string | null
+      rootCauseChain: Array<string>
+      confidence: "high" | "medium" | "low"
+    }>
+  }
+}
+
 export type EventMcpToolsChanged = {
   type: "mcp.tools.changed"
   properties: {
@@ -1711,6 +1728,7 @@ export type Event =
   | EventTodoUpdated
   | EventNotificationToastShow
   | EventFileEdited
+  | EventDebugEngineCorrelatedDiagnostics
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
@@ -13306,3 +13324,31 @@ export type FormatterStatusResponses = {
 }
 
 export type FormatterStatusResponse = FormatterStatusResponses[keyof FormatterStatusResponses]
+
+export type DebugEngineCorrelatedDiagnosticsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/debug-engine/correlated-diagnostics"
+}
+
+export type DebugEngineCorrelatedDiagnosticsResponses = {
+  /**
+   * Correlated diagnostics
+   */
+  200: Array<{
+    file: string
+    line: number
+    message: string
+    severity: number
+    rootCauseFile: string | null
+    rootCauseSymbol: string | null
+    rootCauseChain: Array<string>
+    confidence: "high" | "medium" | "low"
+  }>
+}
+
+export type DebugEngineCorrelatedDiagnosticsResponse =
+  DebugEngineCorrelatedDiagnosticsResponses[keyof DebugEngineCorrelatedDiagnosticsResponses]

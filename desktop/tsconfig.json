@@ -1,9 +1,6 @@
 {
   "files": [],
-  "references": [
-    { "path": "./packages/ui/tsconfig.json" },
-    { "path": "./packages/web/tsconfig.json" }
-  ],
+  "references": [{ "path": "./packages/ui/tsconfig.json" }, { "path": "./packages/web/tsconfig.json" }],
   "compilerOptions": {
     "moduleResolution": "bundler",
     "moduleDetection": "force",

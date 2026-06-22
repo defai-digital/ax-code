@@ -1,46 +1,46 @@
-import React from 'react';
+import React from "react"
 
-const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect
 
 export const useIsTextTruncated = <T extends HTMLElement>(
   ref: React.RefObject<T | null>,
-  deps: React.DependencyList = []
+  deps: React.DependencyList = [],
 ): boolean => {
-  const [isTruncated, setIsTruncated] = React.useState(false);
+  const [isTruncated, setIsTruncated] = React.useState(false)
 
   const checkTruncation = React.useCallback(() => {
-    const element = ref.current;
+    const element = ref.current
     if (!element) {
-      return;
+      return
     }
-    const next = element.scrollWidth > element.clientWidth + 1;
-    setIsTruncated(next);
-  }, [ref]);
+    const next = element.scrollWidth > element.clientWidth + 1
+    setIsTruncated(next)
+  }, [ref])
 
   useIsomorphicLayoutEffect(() => {
-    checkTruncation();
-  }, [checkTruncation, ...deps]);
+    checkTruncation()
+  }, [checkTruncation, ...deps])
 
   React.useEffect(() => {
-    const element = ref.current;
-    if (!element || typeof ResizeObserver === 'undefined') {
-      return;
+    const element = ref.current
+    if (!element || typeof ResizeObserver === "undefined") {
+      return
     }
     const observer = new ResizeObserver(() => {
-      checkTruncation();
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [checkTruncation, ref]);
+      checkTruncation()
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [checkTruncation, ref])
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
+    if (typeof window === "undefined") {
+      return
     }
-    const handleResize = () => checkTruncation();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [checkTruncation]);
+    const handleResize = () => checkTruncation()
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [checkTruncation])
 
-  return isTruncated;
-};
+  return isTruncated
+}

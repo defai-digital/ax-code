@@ -8,13 +8,14 @@ import type { AttachedFile } from "@/stores/types/sessionTypes"
 
 let attachmentReadGeneration = 0
 
-const readFileAsDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
-  const reader = new FileReader()
-  reader.onload = () => resolve(reader.result as string)
-  reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"))
-  reader.onabort = () => reject(new Error("File read aborted"))
-  reader.readAsDataURL(file)
-})
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"))
+    reader.onabort = () => reject(new Error("File read aborted"))
+    reader.readAsDataURL(file)
+  })
 
 const getDataUrlByteSize = (url: string): number => {
   if (!url.startsWith("data:")) return 0
@@ -71,8 +72,7 @@ export const useInputStore = create<InputState>()((set, get) => ({
   pendingPresetSubmit: null,
   attachedFiles: [],
 
-  setPendingInputText: (text, mode = "replace") =>
-    set({ pendingInputText: text, pendingInputMode: mode }),
+  setPendingInputText: (text, mode = "replace") => set({ pendingInputText: text, pendingInputMode: mode }),
 
   consumePendingInputText: () => {
     const { pendingInputText, pendingInputMode } = get()
@@ -122,8 +122,7 @@ export const useInputStore = create<InputState>()((set, get) => ({
     set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
   },
 
-  removeAttachedFile: (id) =>
-    set((s) => ({ attachedFiles: s.attachedFiles.filter((f) => f.id !== id) })),
+  removeAttachedFile: (id) => set((s) => ({ attachedFiles: s.attachedFiles.filter((f) => f.id !== id) })),
 
   setAttachedFiles: (files) => {
     attachmentReadGeneration += 1

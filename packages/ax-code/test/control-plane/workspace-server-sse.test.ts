@@ -146,7 +146,9 @@ describe("control-plane/workspace-server SSE", () => {
   })
 
   test("heartbeat respects the workspace SSE queue cap", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/control-plane/workspace-server/server.ts")).text()
+    const src = await Bun.file(
+      path.join(import.meta.dirname, "../../src/control-plane/workspace-server/server.ts"),
+    ).text()
     const start = src.indexOf("const heartbeat = setInterval")
     const end = src.indexOf("}, 10_000)", start)
     expect(start).toBeGreaterThan(-1)

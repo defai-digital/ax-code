@@ -6,12 +6,7 @@
     "author": "AX Code",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "ax-code",
-      "ported",
-      "zenburn"
-    ]
+    "tags": ["light", "ax-code", "ported", "zenburn"]
   },
   "colors": {
     "primary": {
@@ -379,13 +374,7 @@
       "rowSelected": "#d7eefa"
     },
     "charts": {
-      "series": [
-        "#5f7f8f",
-        "#8f7f5f",
-        "#5f8f5f",
-        "#8f8f5f",
-        "#8f5f5f"
-      ]
+      "series": ["#5f7f8f", "#8f7f5f", "#5f8f5f", "#8f8f5f", "#8f5f5f"]
     },
     "a11y": {
       "focusRing": "#588094",

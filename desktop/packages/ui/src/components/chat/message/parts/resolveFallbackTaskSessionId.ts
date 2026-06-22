@@ -6,7 +6,7 @@
  * Conservative: only returns a session id when the match is unambiguous.
  */
 
-import type { Session, SessionStatus } from '@ax-code/sdk/v2/client';
+import type { Session, SessionStatus } from "@ax-code/sdk/v2/client"
 
 /**
  * Fallback is intentionally narrow: only sessions created shortly after the
@@ -17,26 +17,26 @@ import type { Session, SessionStatus } from '@ax-code/sdk/v2/client';
  * Narrow initial window avoids binding to wrong sessions on first attempt.
  * Wide window on retry handles late-appearing child sessions under load.
  */
-const TASK_SESSION_MATCH_WINDOW_MS = 3000;
-const TASK_SESSION_MATCH_WINDOW_WIDE_MS = 8000;
+const TASK_SESSION_MATCH_WINDOW_MS = 3000
+const TASK_SESSION_MATCH_WINDOW_WIDE_MS = 8000
 
-const LIVE_STATUSES = new Set<string>(['busy', 'retry']);
+const LIVE_STATUSES = new Set<string>(["busy", "retry"])
 
 export interface ResolveFallbackParams {
   /** True when this tool is a task tool */
-  isTaskTool: boolean;
+  isTaskTool: boolean
   /** The parent session id (current session) */
-  parentSessionId: string | undefined;
+  parentSessionId: string | undefined
   /** When the task tool started (ms timestamp) */
-  taskStartTime: number | undefined;
+  taskStartTime: number | undefined
   /** True when the task tool is finalized (completed/error/etc.) */
-  isTaskFinalized?: boolean;
+  isTaskFinalized?: boolean
   /** Sessions from the directory store */
-  sessions: Session[];
+  sessions: Session[]
   /** Session status map from the sync store */
-  sessionStatusMap?: Record<string, SessionStatus>;
+  sessionStatusMap?: Record<string, SessionStatus>
   /** True when a previous resolution attempt has already failed (enables wider window) */
-  hasRetried?: boolean;
+  hasRetried?: boolean
 }
 
 /**
@@ -58,46 +58,46 @@ export function resolveFallbackTaskSessionId(params: ResolveFallbackParams): str
     sessions,
     sessionStatusMap,
     hasRetried = false,
-  } = params;
+  } = params
 
-  if (!isTaskTool || isTaskFinalized || !parentSessionId || typeof taskStartTime !== 'number') {
-    return undefined;
+  if (!isTaskTool || isTaskFinalized || !parentSessionId || typeof taskStartTime !== "number") {
+    return undefined
   }
 
-  const windowMs = hasRetried ? TASK_SESSION_MATCH_WINDOW_WIDE_MS : TASK_SESSION_MATCH_WINDOW_MS;
-  const latestAllowed = taskStartTime + windowMs;
+  const windowMs = hasRetried ? TASK_SESSION_MATCH_WINDOW_WIDE_MS : TASK_SESSION_MATCH_WINDOW_MS
+  const latestAllowed = taskStartTime + windowMs
 
   // Filter candidate sessions: parentID matches and created shortly after task start.
   const candidates = sessions.filter((session) => {
     if (!session?.id || session.parentID !== parentSessionId) {
-      return false;
+      return false
     }
-    const created = session.time?.created;
-    if (typeof created !== 'number') {
-      return false;
+    const created = session.time?.created
+    if (typeof created !== "number") {
+      return false
     }
-    return created >= taskStartTime && created <= latestAllowed;
-  });
+    return created >= taskStartTime && created <= latestAllowed
+  })
 
   if (candidates.length === 0) {
-    return undefined;
+    return undefined
   }
 
   // If exactly one candidate, return it regardless of status
   if (candidates.length === 1) {
-    return candidates[0].id;
+    return candidates[0].id
   }
 
   // Multiple candidates: try to disambiguate by finding exactly one live (busy/retry)
   const liveCandidates = candidates.filter((session) => {
-    const status = sessionStatusMap?.[session.id];
-    return status != null && LIVE_STATUSES.has(status.type);
-  });
+    const status = sessionStatusMap?.[session.id]
+    return status != null && LIVE_STATUSES.has(status.type)
+  })
 
   if (liveCandidates.length === 1) {
-    return liveCandidates[0].id;
+    return liveCandidates[0].id
   }
 
   // Ambiguous — do not guess
-  return undefined;
+  return undefined
 }

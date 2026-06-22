@@ -1,122 +1,140 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import { useMcpStore } from '@/stores/useMcpStore';
-import { parseMcpOAuthCallbackContext, parseMcpOAuthCallbackStateKey } from '@/components/sections/mcp/mcpOAuth';
-import { API_ENDPOINTS } from '@/lib/http';
+import React from "react"
+import { Button } from "@/components/ui/button"
+import { useMcpStore } from "@/stores/useMcpStore"
+import { parseMcpOAuthCallbackContext, parseMcpOAuthCallbackStateKey } from "@/components/sections/mcp/mcpOAuth"
+import { API_ENDPOINTS } from "@/lib/http"
 
 const parseQueryParam = (params: URLSearchParams, key: string): string | null => {
-  const value = params.get(key);
-  if (typeof value !== 'string') {
-    return null;
+  const value = params.get(key)
+  if (typeof value !== "string") {
+    return null
   }
 
-  const trimmed = value.trim();
-  return trimmed || null;
-};
+  const trimmed = value.trim()
+  return trimmed || null
+}
 
 const normalizeMcpAuthErrorMessage = (error: unknown, fallback: string): string => {
-  const message = error instanceof Error ? error.message : fallback;
+  const message = error instanceof Error ? error.message : fallback
   if (/oauth state required/i.test(message)) {
-    return 'Authorization session expired or was cleared during reload. Return to AX Code Desktop and click Authorize again.';
+    return "Authorization session expired or was cleared during reload. Return to AX Code Desktop and click Authorize again."
   }
-  return message;
-};
+  return message
+}
 
 const buildPendingAuthContextUrl = (stateKey: string): string =>
-  `${API_ENDPOINTS.mcp.authPending}?state=${encodeURIComponent(stateKey)}`;
+  `${API_ENDPOINTS.mcp.authPending}?state=${encodeURIComponent(stateKey)}`
 
 export const McpOAuthCallbackPage: React.FC = () => {
-  const completeAuth = useMcpStore((state) => state.completeAuth);
-  const [status, setStatus] = React.useState<'working' | 'success' | 'error'>('working');
-  const [message, setMessage] = React.useState('Completing MCP authorization...');
+  const completeAuth = useMcpStore((state) => state.completeAuth)
+  const [status, setStatus] = React.useState<"working" | "success" | "error">("working")
+  const [message, setMessage] = React.useState("Completing MCP authorization...")
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      setStatus('error');
-      setMessage('Browser context unavailable.');
-      return;
+    if (typeof window === "undefined") {
+      setStatus("error")
+      setMessage("Browser context unavailable.")
+      return
     }
 
-    const params = new URLSearchParams(window.location.search);
-    const code = parseQueryParam(params, 'code');
-    const callbackContext = parseMcpOAuthCallbackContext(params);
-    const callbackStateKey = parseMcpOAuthCallbackStateKey(params);
-    const error = parseQueryParam(params, 'error');
-    const errorDescription = parseQueryParam(params, 'error_description');
-    const pendingAuthContextUrl = callbackStateKey ? buildPendingAuthContextUrl(callbackStateKey) : null;
+    const params = new URLSearchParams(window.location.search)
+    const code = parseQueryParam(params, "code")
+    const callbackContext = parseMcpOAuthCallbackContext(params)
+    const callbackStateKey = parseMcpOAuthCallbackStateKey(params)
+    const error = parseQueryParam(params, "error")
+    const errorDescription = parseQueryParam(params, "error_description")
+    const pendingAuthContextUrl = callbackStateKey ? buildPendingAuthContextUrl(callbackStateKey) : null
 
-      if (error) {
-        if (callbackStateKey) {
-          void fetch(pendingAuthContextUrl!, { method: 'DELETE' }).catch(() => undefined);
-        }
-      setStatus('error');
-      setMessage(errorDescription ?? error);
-      return;
+    if (error) {
+      if (callbackStateKey) {
+        void fetch(pendingAuthContextUrl!, { method: "DELETE" }).catch(() => undefined)
+      }
+      setStatus("error")
+      setMessage(errorDescription ?? error)
+      return
     }
 
     void (async () => {
       try {
         if (!code) {
-          throw new Error('Missing OAuth authorization code. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.');
+          throw new Error(
+            "Missing OAuth authorization code. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+          )
         }
 
-        let pendingContext = callbackContext;
+        let pendingContext = callbackContext
         if (!pendingContext && callbackStateKey) {
-          const response = await fetch(pendingAuthContextUrl!);
+          const response = await fetch(pendingAuthContextUrl!)
           if (response.ok) {
-            const payload = await response.json().catch(() => null) as { name?: string; directory?: string | null } | null;
+            const payload = (await response.json().catch(() => null)) as {
+              name?: string
+              directory?: string | null
+            } | null
             if (payload?.name?.trim()) {
               pendingContext = {
                 name: payload.name.trim(),
-                directory: typeof payload.directory === 'string' && payload.directory.trim() ? payload.directory.trim() : null,
-              };
+                directory:
+                  typeof payload.directory === "string" && payload.directory.trim() ? payload.directory.trim() : null,
+              }
             }
           }
         }
 
         if (!pendingContext?.name) {
-          throw new Error('Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.');
+          throw new Error(
+            "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+          )
         }
 
-        await completeAuth(pendingContext.name, code, pendingContext.directory);
+        await completeAuth(pendingContext.name, code, pendingContext.directory)
         if (callbackStateKey) {
-          await fetch(pendingAuthContextUrl!, { method: 'DELETE' }).catch(() => undefined);
+          await fetch(pendingAuthContextUrl!, { method: "DELETE" }).catch(() => undefined)
         }
-        setStatus('success');
-        setMessage('Authorization completed. You can close this tab and return to AX Code Desktop.');
+        setStatus("success")
+        setMessage("Authorization completed. You can close this tab and return to AX Code Desktop.")
       } catch (authError) {
         if (callbackStateKey) {
-          await fetch(pendingAuthContextUrl!, { method: 'DELETE' }).catch(() => undefined);
+          await fetch(pendingAuthContextUrl!, { method: "DELETE" }).catch(() => undefined)
         }
-        setStatus('error');
-        setMessage(normalizeMcpAuthErrorMessage(authError, 'Failed to complete MCP authorization.'));
+        setStatus("error")
+        setMessage(normalizeMcpAuthErrorMessage(authError, "Failed to complete MCP authorization."))
       }
-    })();
-  }, [completeAuth]);
+    })()
+  }, [completeAuth])
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-12 text-foreground">
       <div className="w-full max-w-xl rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-8 shadow-sm">
         <div className="space-y-3 text-center">
           <div
-            className={status === 'error' ? 'text-[var(--status-error)]' : status === 'success' ? 'text-[var(--status-success)]' : 'text-[var(--status-info)]'}
+            className={
+              status === "error"
+                ? "text-[var(--status-error)]"
+                : status === "success"
+                  ? "text-[var(--status-success)]"
+                  : "text-[var(--status-info)]"
+            }
           >
             <h1 className="typography-hero font-semibold">
-              {status === 'working' ? 'Completing Authorization' : status === 'success' ? 'Authorization Complete' : 'Authorization Failed'}
+              {status === "working"
+                ? "Completing Authorization"
+                : status === "success"
+                  ? "Authorization Complete"
+                  : "Authorization Failed"}
             </h1>
           </div>
           <p className="typography-body text-muted-foreground">{message}</p>
         </div>
 
-        {status !== 'working' && (
+        {status !== "working" && (
           <div className="mt-8 flex justify-center">
             <Button
               type="button"
               onClick={() => {
-                if (typeof window === 'undefined') {
-                  return;
+                if (typeof window === "undefined") {
+                  return
                 }
-                window.location.replace('/');
+                window.location.replace("/")
               }}
             >
               Return to AX Code Desktop
@@ -125,5 +143,5 @@ export const McpOAuthCallbackPage: React.FC = () => {
         )}
       </div>
     </div>
-  );
-};
+  )
+}

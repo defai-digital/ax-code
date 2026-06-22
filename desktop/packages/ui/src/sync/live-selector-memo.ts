@@ -65,7 +65,9 @@ export type LiveSnapshotMemoOptions<TStates, T> = {
  * 2. result equality — if the selector produced an equivalent value, the
  *    previous reference is returned so subscribers skip re-renders.
  */
-export function createLiveSnapshotMemo<TStates, T>(options: LiveSnapshotMemoOptions<TStates, T>): (states: TStates) => T {
+export function createLiveSnapshotMemo<TStates, T>(
+  options: LiveSnapshotMemoOptions<TStates, T>,
+): (states: TStates) => T {
   const { selector, isEqual, getDeps } = options
   let initialized = false
   let cachedResult: T

@@ -1,1 +1,1 @@
-export type OnboardingPlatform = 'macos' | 'linux' | 'windows' | 'unknown';
+export type OnboardingPlatform = "macos" | "linux" | "windows" | "unknown"

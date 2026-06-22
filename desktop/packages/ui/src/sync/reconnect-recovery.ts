@@ -42,12 +42,7 @@ export function resolveResyncedSessionStatus(input: {
 }): SessionStatus {
   const { serverStatus, existingStatus, promptRecentlyAccepted, hasCompletedAssistantReply } = input
   if (serverStatus) return serverStatus
-  if (
-    promptRecentlyAccepted
-    && !hasCompletedAssistantReply
-    && existingStatus
-    && existingStatus.type !== "idle"
-  ) {
+  if (promptRecentlyAccepted && !hasCompletedAssistantReply && existingStatus && existingStatus.type !== "idle") {
     return existingStatus
   }
   return { type: "idle" }
@@ -56,12 +51,17 @@ export function resolveResyncedSessionStatus(input: {
 /** Whether a session's latest message is a fully-completed assistant reply. */
 export function hasCompletedAssistantReply(messages: Message[] | undefined): boolean {
   const lastMessage = messages?.[messages.length - 1]
-  return !!lastMessage
-    && lastMessage.role === "assistant"
-    && typeof (lastMessage as { time?: { completed?: number } }).time?.completed === "number"
+  return (
+    !!lastMessage &&
+    lastMessage.role === "assistant" &&
+    typeof (lastMessage as { time?: { completed?: number } }).time?.completed === "number"
+  )
 }
 
-export function getReconnectCandidateSessionIds(state: ReconnectMaterializationState, options?: ReconnectCandidateOptions) {
+export function getReconnectCandidateSessionIds(
+  state: ReconnectMaterializationState,
+  options?: ReconnectCandidateOptions,
+) {
   const ids = new Set<string>()
 
   for (const [sessionId, status] of Object.entries(state.session_status ?? {})) {
@@ -71,12 +71,14 @@ export function getReconnectCandidateSessionIds(state: ReconnectMaterializationS
   for (const [sessionId, messages] of Object.entries(state.message ?? {})) {
     const lastMessage = messages[messages.length - 1]
     if (
-      lastMessage
-      && lastMessage.role === "assistant"
-      && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== "number"
+      lastMessage &&
+      lastMessage.role === "assistant" &&
+      typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== "number"
     ) {
       ids.add(sessionId)
-    } else if (!getSessionMaterializationStatus({ message: state.message ?? {}, part: state.part ?? {} }, sessionId).renderable) {
+    } else if (
+      !getSessionMaterializationStatus({ message: state.message ?? {}, part: state.part ?? {} }, sessionId).renderable
+    ) {
       ids.add(sessionId)
     }
   }
@@ -95,9 +97,10 @@ export function getReconnectCandidateSessionIds(state: ReconnectMaterializationS
   const viewedSession = options?.viewedSession
   if (viewedSession?.sessionId && viewedSession.directory === options?.directory) {
     const sessionId = viewedSession.sessionId
-    const sessionExists = state.session.some((session) => session.id === sessionId)
-      || Object.hasOwn(state.session_status ?? {}, sessionId)
-      || Object.hasOwn(state.message ?? {}, sessionId)
+    const sessionExists =
+      state.session.some((session) => session.id === sessionId) ||
+      Object.hasOwn(state.session_status ?? {}, sessionId) ||
+      Object.hasOwn(state.message ?? {}, sessionId)
 
     if (sessionExists) {
       ids.add(sessionId)

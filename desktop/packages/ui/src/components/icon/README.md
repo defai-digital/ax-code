@@ -20,6 +20,7 @@ Icons use kebab-case names based on Remixicon. To find an icon name:
 3. Convert to kebab-case → `arrow-down-s`
 
 Common suffixes:
+
 - `Line` / `Fill` are dropped from the sprite name
 - Numbers are preserved: `RiChat4Line` → `chat-4`
 
@@ -44,9 +45,9 @@ The `Icon` component does not have a `size` prop. Use Tailwind classes instead:
 ## Type Safety
 
 ```tsx
-import type { IconName } from "@/components/icon/icons";
+import type { IconName } from "@/components/icon/icons"
 
-const icon: IconName = "arrow-down-s"; // type-checked
+const icon: IconName = "arrow-down-s" // type-checked
 ```
 
 ## Architecture
@@ -60,18 +61,21 @@ The sprite is injected as a hidden `<svg id="openchamber-icon-sprite">` element 
 ## Migration from @remixicon/react
 
 Old:
+
 ```tsx
-import { RiArrowDownSLine } from "@remixicon/react";
-<RiArrowDownSLine className="h-4 w-4" />
+import { RiArrowDownSLine } from "@remixicon/react"
+;<RiArrowDownSLine className="h-4 w-4" />
 ```
 
 New:
+
 ```tsx
-import { Icon } from "@/components/icon/Icon";
-<Icon name="arrow-down-s" className="h-4 w-4" />
+import { Icon } from "@/components/icon/Icon"
+;<Icon name="arrow-down-s" className="h-4 w-4" />
 ```
 
 If an icon is used as a component reference (not JSX):
+
 ```tsx
 // Old: const icon = RiStackLine; return <icon />;
 // New: const icon: IconName = "stack"; return <Icon name={icon} />;

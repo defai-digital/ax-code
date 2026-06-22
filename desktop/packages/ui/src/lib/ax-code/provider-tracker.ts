@@ -31,16 +31,13 @@ const providers = new Map<string, ProviderState>()
 function evictStaleProviders(): void {
   const now = Date.now()
   for (const [providerID, state] of providers) {
-    if (
-      state.consecutiveErrors === 0 &&
-      now - state.lastErrorAt > PROVIDER_EVICTION_TTL_MS
-    ) {
+    if (state.consecutiveErrors === 0 && now - state.lastErrorAt > PROVIDER_EVICTION_TTL_MS) {
       providers.delete(providerID)
     }
   }
 }
 
-if (typeof setInterval !== 'undefined') {
+if (typeof setInterval !== "undefined") {
   const interval = setInterval(evictStaleProviders, PROVIDER_EVICTION_INTERVAL_MS)
   ;(interval as unknown as { unref?: () => void }).unref?.()
 }
@@ -78,14 +75,11 @@ export function recordProviderError(providerID: string, status?: number): void {
   state.consecutiveErrors += 1
   state.lastErrorAt = Date.now()
 
-  if (
-    isCircuitBreakerStatus(status) &&
-    state.consecutiveErrors >= DEFAULT_CIRCUIT_BREAK_THRESHOLD
-  ) {
+  if (isCircuitBreakerStatus(status) && state.consecutiveErrors >= DEFAULT_CIRCUIT_BREAK_THRESHOLD) {
     state.circuitOpen = true
     state.circuitOpenAt = Date.now()
     console.warn(
-      `[provider-tracker] Circuit opened for ${providerID} after ${state.consecutiveErrors} consecutive errors`
+      `[provider-tracker] Circuit opened for ${providerID} after ${state.consecutiveErrors} consecutive errors`,
     )
   }
 }
@@ -102,10 +96,7 @@ export function isCircuitOpen(providerID: string): boolean {
   if (elapsed >= state.circuitCooldownMs) {
     state.circuitOpen = false
     state.consecutiveErrors = 0
-    state.circuitCooldownMs = Math.min(
-      state.circuitCooldownMs * 2,
-      DEFAULT_RETRY_MAX_DELAY_MS * 4
-    )
+    state.circuitCooldownMs = Math.min(state.circuitCooldownMs * 2, DEFAULT_RETRY_MAX_DELAY_MS * 4)
     return false
   }
 

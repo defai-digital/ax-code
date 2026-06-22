@@ -280,7 +280,9 @@ describe("tool.task", () => {
 
         const controller = new AbortController()
         const originalGet = MessageV2.get
-        const getSpy = vi.spyOn(MessageV2, "get").mockImplementation((async (...args: Parameters<typeof originalGet>) => {
+        const getSpy = vi.spyOn(MessageV2, "get").mockImplementation((async (
+          ...args: Parameters<typeof originalGet>
+        ) => {
           setTimeout(() => controller.abort(), 0)
           await new Promise((resolve) => setTimeout(resolve, 10))
           return originalGet(...args)

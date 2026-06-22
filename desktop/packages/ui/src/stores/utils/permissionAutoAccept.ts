@@ -1,44 +1,44 @@
-import type { Session } from "@ax-code/sdk/v2/client";
+import type { Session } from "@ax-code/sdk/v2/client"
 
-export type PermissionAutoAcceptMap = Record<string, boolean>;
+export type PermissionAutoAcceptMap = Record<string, boolean>
 
 const buildSessionMap = (sessions: Session[]): Map<string, Session> => {
-  const map = new Map<string, Session>();
+  const map = new Map<string, Session>()
   for (const session of sessions) {
-    map.set(session.id, session);
+    map.set(session.id, session)
   }
-  return map;
-};
+  return map
+}
 
 const resolveLineage = (sessionID: string, sessions: Session[]): string[] => {
-  const map = buildSessionMap(sessions);
-  const result: string[] = [];
-  const seen = new Set<string>();
-  let current: string | undefined = sessionID;
+  const map = buildSessionMap(sessions)
+  const result: string[] = []
+  const seen = new Set<string>()
+  let current: string | undefined = sessionID
 
   while (current && !seen.has(current)) {
-    seen.add(current);
-    result.push(current);
-    current = map.get(current)?.parentID;
+    seen.add(current)
+    result.push(current)
+    current = map.get(current)?.parentID
   }
 
-  return result;
-};
+  return result
+}
 
 export const autoRespondsPermission = (input: {
-  autoAccept: PermissionAutoAcceptMap;
-  sessions: Session[];
-  sessionID: string;
+  autoAccept: PermissionAutoAcceptMap
+  sessions: Session[]
+  sessionID: string
 }): boolean => {
-  const { autoAccept, sessions, sessionID } = input;
-  const lineage = resolveLineage(sessionID, sessions);
+  const { autoAccept, sessions, sessionID } = input
+  const lineage = resolveLineage(sessionID, sessions)
 
   for (const id of lineage) {
     if (!Object.prototype.hasOwnProperty.call(autoAccept, id)) {
-      continue;
+      continue
     }
-    return autoAccept[id] === true;
+    return autoAccept[id] === true
   }
 
-  return false;
-};
+  return false
+}

@@ -154,9 +154,9 @@ describe("AutoIndex.maybeStart", () => {
     filesSpy = vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
       yield "src/example.ts"
     })
-    indexFilesSpy = vi.spyOn(CodeIntelligence, "indexFiles").mockRejectedValue(
-      new CodeIntelligence.LockHeldError(projectID),
-    )
+    indexFilesSpy = vi
+      .spyOn(CodeIntelligence, "indexFiles")
+      .mockRejectedValue(new CodeIntelligence.LockHeldError(projectID))
 
     await Instance.reload({
       directory: tmp.path,

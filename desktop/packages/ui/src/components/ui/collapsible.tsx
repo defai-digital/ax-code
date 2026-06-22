@@ -1,41 +1,36 @@
 "use client"
 
-import * as React from "react";
-import { Collapsible as BaseCollapsible } from "@base-ui/react/collapsible";
-import { cn } from "@/lib/utils";
-import { renderFromAsChild, type AsChildProps } from './asChild';
+import * as React from "react"
+import { Collapsible as BaseCollapsible } from "@base-ui/react/collapsible"
+import { cn } from "@/lib/utils"
+import { renderFromAsChild, type AsChildProps } from "./asChild"
 
-const Collapsible = BaseCollapsible.Root;
+const Collapsible = BaseCollapsible.Root
 
-type TriggerProps = React.ComponentProps<typeof BaseCollapsible.Trigger> & AsChildProps;
+type TriggerProps = React.ComponentProps<typeof BaseCollapsible.Trigger> & AsChildProps
 
-const CollapsibleTrigger = ({
-  className,
-  asChild,
-  children,
-  ...props
-}: TriggerProps) => {
-  const renderProps = renderFromAsChild(asChild, children);
+const CollapsibleTrigger = ({ className, asChild, children, ...props }: TriggerProps) => {
+  const renderProps = renderFromAsChild(asChild, children)
   return (
     <BaseCollapsible.Trigger
       className={cn(
         "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-        className
+        className,
       )}
       {...props}
       {...renderProps}
     />
-  );
-};
+  )
+}
 
-const CollapsibleContent = ({
-  className,
-  ...props
-}: React.ComponentProps<typeof BaseCollapsible.Panel>) => (
+const CollapsibleContent = ({ className, ...props }: React.ComponentProps<typeof BaseCollapsible.Panel>) => (
   <BaseCollapsible.Panel
-    className={cn("overflow-hidden data-[closed]:animate-collapsible-up data-[open]:animate-collapsible-down", className)}
+    className={cn(
+      "overflow-hidden data-[closed]:animate-collapsible-up data-[open]:animate-collapsible-down",
+      className,
+    )}
     {...props}
   />
-);
+)
 
-export { Collapsible, CollapsibleTrigger, CollapsibleContent };
+export { Collapsible, CollapsibleTrigger, CollapsibleContent }

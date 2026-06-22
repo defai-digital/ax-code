@@ -1,10 +1,10 @@
-import type { QuotaProviderId } from '@/types';
+import type { QuotaProviderId } from "@/types"
 
 export interface ModelFamily {
-  id: string;
-  label: string;
-  matcher: (modelName: string) => boolean;
-  order: number;
+  id: string
+  label: string
+  matcher: (modelName: string) => boolean
+  order: number
 }
 
 /**
@@ -14,15 +14,15 @@ export interface ModelFamily {
  */
 export function getDisplayModelName(modelName: string): string {
   // Handle prefixes like "gemini/", "antigravity/"
-  const slashIndex = modelName.indexOf('/');
+  const slashIndex = modelName.indexOf("/")
   if (slashIndex !== -1) {
-    const prefix = modelName.substring(0, slashIndex);
+    const prefix = modelName.substring(0, slashIndex)
     // Check if it's an auth source prefix
-    if (prefix === 'gemini' || prefix === 'antigravity') {
-      return modelName.substring(slashIndex + 1);
+    if (prefix === "gemini" || prefix === "antigravity") {
+      return modelName.substring(slashIndex + 1)
     }
   }
-  return modelName;
+  return modelName
 }
 
 /**
@@ -31,50 +31,50 @@ export function getDisplayModelName(modelName: string): string {
  *       "antigravity/..." -> "Antigravity"
  */
 export function getAuthSourceLabel(modelName: string): string | null {
-  const slashIndex = modelName.indexOf('/');
-  if (slashIndex === -1) return null;
-  
-  const prefix = modelName.substring(0, slashIndex);
-  if (prefix === 'gemini') return 'Gemini';
-  if (prefix === 'antigravity') return 'Antigravity';
-  return null;
+  const slashIndex = modelName.indexOf("/")
+  if (slashIndex === -1) return null
+
+  const prefix = modelName.substring(0, slashIndex)
+  if (prefix === "gemini") return "Gemini"
+  if (prefix === "antigravity") return "Antigravity"
+  return null
 }
 
 const GOOGLE_MODEL_FAMILIES: ModelFamily[] = [
   {
-    id: 'gemini-auth',
-    label: 'Gemini',
-    matcher: (modelName) => modelName.startsWith('gemini/'),
+    id: "gemini-auth",
+    label: "Gemini",
+    matcher: (modelName) => modelName.startsWith("gemini/"),
     order: 1,
   },
   {
-    id: 'antigravity-auth',
-    label: 'Antigravity',
-    matcher: (modelName) => modelName.startsWith('antigravity/'),
+    id: "antigravity-auth",
+    label: "Antigravity",
+    matcher: (modelName) => modelName.startsWith("antigravity/"),
     order: 2,
   },
-];
+]
 
 export const PROVIDER_MODEL_FAMILIES: Record<string, ModelFamily[]> = {
   google: GOOGLE_MODEL_FAMILIES,
-};
+}
 
 export function getModelFamily(modelName: string, providerId: QuotaProviderId): ModelFamily | null {
-  const families = PROVIDER_MODEL_FAMILIES[providerId] ?? [];
+  const families = PROVIDER_MODEL_FAMILIES[providerId] ?? []
   for (const family of families) {
     if (family.matcher(modelName)) {
-      return family;
+      return family
     }
   }
-  return null;
+  return null
 }
 
 export function getAllModelFamilies(providerId: QuotaProviderId): ModelFamily[] {
-  return PROVIDER_MODEL_FAMILIES[providerId] ?? [];
+  return PROVIDER_MODEL_FAMILIES[providerId] ?? []
 }
 
 export function sortModelFamilies(families: ModelFamily[]): ModelFamily[] {
-  return [...families].sort((a, b) => a.order - b.order);
+  return [...families].sort((a, b) => a.order - b.order)
 }
 
 /**
@@ -82,21 +82,21 @@ export function sortModelFamilies(families: ModelFamily[]): ModelFamily[] {
  */
 export function groupModelsByFamily(
   models: Record<string, unknown>,
-  providerId: QuotaProviderId
+  providerId: QuotaProviderId,
 ): Map<string | null, string[]> {
-  const groups = new Map<string | null, string[]>();
+  const groups = new Map<string | null, string[]>()
 
   for (const modelName of Object.keys(models)) {
-    const family = getModelFamily(modelName, providerId);
-    const familyId = family?.id ?? null;
+    const family = getModelFamily(modelName, providerId)
+    const familyId = family?.id ?? null
 
     if (!groups.has(familyId)) {
-      groups.set(familyId, []);
+      groups.set(familyId, [])
     }
-    groups.get(familyId)!.push(modelName);
+    groups.get(familyId)!.push(modelName)
   }
 
-  return groups;
+  return groups
 }
 
 /**
@@ -105,22 +105,22 @@ export function groupModelsByFamily(
 export function groupModelsByFamilyWithGetter<T>(
   models: T[],
   getModelName: (model: T) => string,
-  providerId: QuotaProviderId
+  providerId: QuotaProviderId,
 ): Map<string | null, T[]> {
-  const groups = new Map<string | null, T[]>();
+  const groups = new Map<string | null, T[]>()
 
   for (const model of models) {
-    const modelName = getModelName(model);
-    const family = getModelFamily(modelName, providerId);
-    const familyId = family?.id ?? null;
+    const modelName = getModelName(model)
+    const family = getModelFamily(modelName, providerId)
+    const familyId = family?.id ?? null
 
     if (!groups.has(familyId)) {
-      groups.set(familyId, []);
+      groups.set(familyId, [])
     }
-    groups.get(familyId)!.push(model);
+    groups.get(familyId)!.push(model)
   }
 
-  return groups;
+  return groups
 }
 
 /**
@@ -131,13 +131,13 @@ export function groupModelsByFamilyWithGetter<T>(
  */
 export function getDefaultModels(availableModels: string[]): string[] {
   return availableModels.filter((model) => {
-    const lower = model.toLowerCase();
+    const lower = model.toLowerCase()
     // Handle gemini/ and antigravity/ prefixes
-    const modelName = lower.includes('/') ? lower.split('/')[1] : lower;
+    const modelName = lower.includes("/") ? lower.split("/")[1] : lower
     // Gemini 3.x
-    if (modelName.startsWith('gemini-3-')) return true;
+    if (modelName.startsWith("gemini-3-")) return true
     // All Claude models
-    if (modelName.startsWith('claude-')) return true;
-    return false;
-  });
+    if (modelName.startsWith("claude-")) return true
+    return false
+  })
 }

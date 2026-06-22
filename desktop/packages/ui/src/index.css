@@ -56,11 +56,7 @@ textarea[data-chat-input="true"]:focus-visible {
 }
 
 /* Ensure interactive controls consistently show pointer cursor */
-:where(
-  button,
-  [role="button"],
-  a[href]
-):not(:disabled) {
+:where(button, [role="button"], a[href]):not(:disabled) {
   cursor: pointer;
 }
 
@@ -237,8 +233,10 @@ textarea[data-chat-input="true"]:focus-visible {
   --scroll-shadow-size-effective: min(var(--scroll-shadow-size), 32px);
   --scroll-shadow-spread: calc(var(--scroll-shadow-size-effective) * -1);
   --scroll-shadow-color: color-mix(in srgb, var(--foreground) 14%, transparent);
-  --scroll-shadow-top: inset 0 var(--scroll-shadow-size-effective) var(--scroll-shadow-size-effective) var(--scroll-shadow-spread) var(--scroll-shadow-color);
-  --scroll-shadow-bottom: inset 0 calc(var(--scroll-shadow-size-effective) * -1) var(--scroll-shadow-size-effective) var(--scroll-shadow-spread) var(--scroll-shadow-color);
+  --scroll-shadow-top: inset 0 var(--scroll-shadow-size-effective) var(--scroll-shadow-size-effective)
+    var(--scroll-shadow-spread) var(--scroll-shadow-color);
+  --scroll-shadow-bottom: inset 0 calc(var(--scroll-shadow-size-effective) * -1) var(--scroll-shadow-size-effective)
+    var(--scroll-shadow-spread) var(--scroll-shadow-color);
 }
 
 [data-scroll-shadow="true"][data-orientation="vertical"][data-top-bottom-scroll="true"] {
@@ -252,7 +250,6 @@ textarea[data-chat-input="true"]:focus-visible {
 [data-scroll-shadow="true"][data-orientation="vertical"][data-bottom-scroll="true"] {
   box-shadow: var(--scroll-shadow-bottom);
 }
-
 
 @keyframes spin-once {
   from {
@@ -591,7 +588,9 @@ html:not(.dark) .chat-scroll {
   background: var(--oc-scrollbar-thumb);
   border-radius: 9999px;
   opacity: 0.8;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    opacity 0.15s ease;
   will-change: transform, height;
 }
 
@@ -612,11 +611,11 @@ html:not(.dark) .chat-scroll {
 
 /* Pierre diff viewer styling */
 .pierre-diff-wrapper {
-  --diffs-font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  --diffs-font-family: var(--font-mono, "IBM Plex Mono", monospace);
   --diffs-font-size: var(--text-code);
   --diffs-line-height: 24px;
   --diffs-tab-size: 2;
-  --diffs-header-font-family: var(--font-sans, 'IBM Plex Sans', sans-serif);
+  --diffs-header-font-family: var(--font-sans, "IBM Plex Sans", sans-serif);
   --diffs-min-number-column-width: 4ch;
   --diffs-gap-inline: 0;
   --diffs-gap-block: 0;
@@ -631,7 +630,6 @@ html:not(.dark) .chat-scroll {
 }
 
 /* Desktop: slightly smaller diff code text */
-
 
 .pierre-diff-wrapper diffs-container {
   display: block;
@@ -1140,7 +1138,8 @@ html:not(.dark) .chat-scroll {
   white-space: pre;
   width: max-content;
   min-width: 100%;
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   color: var(--surface-foreground);
   background: transparent;
 }
@@ -1197,7 +1196,8 @@ html:not(.dark) .chat-scroll {
   width: max-content;
   min-width: 100%;
   min-height: 100%;
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   color: var(--surface-foreground);
   background: transparent;
 }
@@ -1281,7 +1281,9 @@ input[aria-label="Terminal input"] {
 @media (max-width: 1024px) {
   .terminal-viewport-container {
     font-variant-ligatures: none;
-    font-feature-settings: "liga" 0, "calt" 0;
+    font-feature-settings:
+      "liga" 0,
+      "calt" 0;
   }
 }
 
@@ -1291,11 +1293,14 @@ input[aria-label="Terminal input"] {
 }
 
 .fonts-loaded .terminal-viewport-container {
-  font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family:
+    "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 @keyframes oc-busy-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.2;
   }
   50% {
@@ -1308,7 +1313,8 @@ input[aria-label="Terminal input"] {
 }
 
 @keyframes navrail-dot-wave {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(0.72);
     opacity: 0.52;
   }
@@ -1323,7 +1329,8 @@ input[aria-label="Terminal input"] {
 }
 
 @keyframes border-glow-pulse {
-  0%, 100% {
+  0%,
+  100% {
     border-color: var(--interactive-border);
     outline-color: transparent;
   }
@@ -1365,13 +1372,21 @@ input[aria-label="Terminal input"] {
 }
 
 @keyframes marquee-scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 @keyframes open-file-name-marquee-scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 .open-file-name-marquee-track {
@@ -1430,8 +1445,6 @@ input[aria-label="Terminal input"] {
   .animate-busy-pulse {
     animation: none;
   }
-
-
 }
 
 /* Settings dialog: hide the overlay scrollbar; wheel/keyboard scroll still works. */

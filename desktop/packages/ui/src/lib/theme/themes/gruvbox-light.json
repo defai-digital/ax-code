@@ -5,10 +5,7 @@
     "description": "Gruvbox",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "palette"
-    ]
+    "tags": ["light", "palette"]
   },
   "colors": {
     "primary": {

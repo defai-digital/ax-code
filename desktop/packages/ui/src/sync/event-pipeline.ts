@@ -94,11 +94,12 @@ const normalizeOpenChamberSessionStatus = (payload: Event): Event | null => {
 
   if (record.type !== "openchamber:session-status") return null
 
-  const sessionID = typeof record.properties?.sessionID === "string" && record.properties.sessionID.length > 0
-    ? record.properties.sessionID
-    : typeof record.properties?.sessionId === "string" && record.properties.sessionId.length > 0
-      ? record.properties.sessionId
-      : ""
+  const sessionID =
+    typeof record.properties?.sessionID === "string" && record.properties.sessionID.length > 0
+      ? record.properties.sessionID
+      : typeof record.properties?.sessionId === "string" && record.properties.sessionId.length > 0
+        ? record.properties.sessionId
+        : ""
   const rawStatus = typeof record.properties?.status === "string" ? record.properties.status : ""
   if (!sessionID || !rawStatus) return null
 
@@ -108,9 +109,9 @@ const normalizeOpenChamberSessionStatus = (payload: Event): Event | null => {
   } else if (rawStatus === "retry") {
     const metadata = record.properties?.metadata
     if (
-      typeof metadata?.attempt === "number"
-      && typeof metadata.message === "string"
-      && typeof metadata.next === "number"
+      typeof metadata?.attempt === "number" &&
+      typeof metadata.message === "string" &&
+      typeof metadata.next === "number"
     ) {
       status = {
         type: "retry",
@@ -123,9 +124,10 @@ const normalizeOpenChamberSessionStatus = (payload: Event): Event | null => {
   if (!status) return null
 
   return {
-    id: typeof record.id === "string" && record.id.length > 0
-      ? record.id
-      : `openchamber-status-${sessionID}-${Date.now()}`,
+    id:
+      typeof record.id === "string" && record.id.length > 0
+        ? record.id
+        : `openchamber-status-${sessionID}-${Date.now()}`,
     type: "session.status",
     properties: {
       sessionID,
@@ -185,7 +187,11 @@ function resolveEventPayload(payload: unknown): Event | null {
     return payload as Event
   }
 
-  if (record.payload && typeof record.payload === "object" && typeof (record.payload as { type?: unknown }).type === "string") {
+  if (
+    record.payload &&
+    typeof record.payload === "object" &&
+    typeof (record.payload as { type?: unknown }).type === "string"
+  ) {
     return record.payload as Event
   }
 
@@ -242,10 +248,7 @@ type DirectoryQueue = {
   last: number
 }
 
-type AttemptAbortReason =
-  | "pipeline_stopped"
-  | `${"ws" | "sse"}_${string}`
-  | null
+type AttemptAbortReason = "pipeline_stopped" | `${"ws" | "sse"}_${string}` | null
 
 export function createEventPipeline(input: EventPipelineInput): EventPipeline {
   const {
@@ -325,7 +328,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     if (typeof partID !== "string" || typeof messageID !== "string") return undefined
     return `message.part.delta:${messageID}:${partID}:`
   }
-  
+
   /**
    * Extract a session-level identifier from a delta event for metrics tracking.
    * The SDK delta events carry messageID but may also carry sessionID as an
@@ -383,14 +386,12 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
 
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
   const isAbortError = (error: unknown): boolean =>
-    error instanceof DOMException && error.name === "AbortError" ||
+    (error instanceof DOMException && error.name === "AbortError") ||
     (typeof error === "object" && error !== null && (error as { name?: string }).name === "AbortError")
 
-  const isOffline = (): boolean =>
-    typeof navigator === "object" && navigator !== null && navigator.onLine === false
+  const isOffline = (): boolean => typeof navigator === "object" && navigator !== null && navigator.onLine === false
 
-  const isHidden = (): boolean =>
-    typeof document !== "undefined" && document.visibilityState !== "visible"
+  const isHidden = (): boolean => typeof document !== "undefined" && document.visibilityState !== "visible"
 
   // Extract an HTTP status code from anywhere it might be hiding on the
   // error object. The SDK's unwrap pattern stashes it on `.status`; raw
@@ -423,44 +424,45 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
    *   - the pipeline is being torn down (cleanup aborts).
    * Otherwise resolves after `ms` like a plain timer.
    */
-  const waitForRetry = (ms: number) => new Promise<void>((resolve) => {
-    if (ms <= 0 || abort.signal.aborted) {
-      resolve()
-      return
-    }
-
-    const cleanup = () => {
-      if (timer !== undefined) {
-        clearTimeout(timer)
-        timer = undefined
+  const waitForRetry = (ms: number) =>
+    new Promise<void>((resolve) => {
+      if (ms <= 0 || abort.signal.aborted) {
+        resolve()
+        return
       }
+
+      const cleanup = () => {
+        if (timer !== undefined) {
+          clearTimeout(timer)
+          timer = undefined
+        }
+        if (typeof globalThis.window !== "undefined") {
+          globalThis.window.removeEventListener("online", onInterrupt)
+        }
+        if (typeof document !== "undefined") {
+          document.removeEventListener("visibilitychange", onVisibilityInterrupt)
+        }
+        abort.signal.removeEventListener("abort", onInterrupt)
+      }
+      const onInterrupt = () => {
+        cleanup()
+        resolve()
+      }
+      const onVisibilityInterrupt = () => {
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+          onInterrupt()
+        }
+      }
+
+      let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(onInterrupt, ms)
       if (typeof globalThis.window !== "undefined") {
-        globalThis.window.removeEventListener("online", onInterrupt)
+        globalThis.window.addEventListener("online", onInterrupt, { once: true })
       }
       if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", onVisibilityInterrupt)
+        document.addEventListener("visibilitychange", onVisibilityInterrupt)
       }
-      abort.signal.removeEventListener("abort", onInterrupt)
-    }
-    const onInterrupt = () => {
-      cleanup()
-      resolve()
-    }
-    const onVisibilityInterrupt = () => {
-      if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        onInterrupt()
-      }
-    }
-
-    let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(onInterrupt, ms)
-    if (typeof globalThis.window !== "undefined") {
-      globalThis.window.addEventListener("online", onInterrupt, { once: true })
-    }
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", onVisibilityInterrupt)
-    }
-    abort.signal.addEventListener("abort", onInterrupt, { once: true })
-  })
+      abort.signal.addEventListener("abort", onInterrupt, { once: true })
+    })
 
   const computeRetryDelay = (failures: number): number => {
     if (failures <= 0) return 0
@@ -746,10 +748,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
           lastEventId = frame.eventId
         }
 
-        const directory = resolveEventDirectory(
-          { directory: frame.directory, payload },
-          payload,
-        )
+        const directory = resolveEventDirectory({ directory: frame.directory, payload }, payload)
         enqueueEvent(directory, payload)
       }
 
@@ -829,17 +828,16 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
           // update connection state (e.g. set isConnected = false).
           // Guard: only fire once per disconnection cycle to avoid repeated
           // setState calls on every failed retry attempt.
-          const taggedReason = typeof error === "object" && error !== null
-            ? (error as { reason?: unknown }).reason
-            : undefined
-          const message = typeof error === "object" && error !== null
-            ? (error as { message?: unknown }).message
-            : undefined
-          const reason = typeof taggedReason === "string" && taggedReason.length > 0
-            ? taggedReason
-            : typeof message === "string" && message.length > 0
-              ? `${currentTransport}_error:${message.slice(0, 80)}`
-              : `${currentTransport}_error:unknown`
+          const taggedReason =
+            typeof error === "object" && error !== null ? (error as { reason?: unknown }).reason : undefined
+          const message =
+            typeof error === "object" && error !== null ? (error as { message?: unknown }).message : undefined
+          const reason =
+            typeof taggedReason === "string" && taggedReason.length > 0
+              ? taggedReason
+              : typeof message === "string" && message.length > 0
+                ? `${currentTransport}_error:${message.slice(0, 80)}`
+                : `${currentTransport}_error:unknown`
           notifyDisconnected(reason)
 
           // Exponential backoff so a hard-down server / dead network doesn't

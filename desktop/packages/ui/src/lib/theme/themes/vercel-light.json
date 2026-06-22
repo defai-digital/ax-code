@@ -6,12 +6,7 @@
     "author": "AX Code",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "ax-code",
-      "ported",
-      "vercel"
-    ]
+    "tags": ["light", "ax-code", "ported", "vercel"]
   },
   "colors": {
     "primary": {
@@ -379,13 +374,7 @@
       "rowSelected": "#deebfe"
     },
     "charts": {
-      "series": [
-        "#0070F3",
-        "#0070F3",
-        "#388E3C",
-        "#FF9500",
-        "#DC3545"
-      ]
+      "series": ["#0070F3", "#0070F3", "#388E3C", "#FF9500", "#DC3545"]
     },
     "a11y": {
       "focusRing": "#0570f2",

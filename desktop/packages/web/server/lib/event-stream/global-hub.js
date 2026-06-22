@@ -1,8 +1,8 @@
-import { createUpstreamSseReader } from './upstream-reader.js';
+import { createUpstreamSseReader } from "./upstream-reader.js"
 
 // Raised from 512 → 2048 to improve recovery after brief disconnects during
 // long-running agent sessions where many events accumulate quickly.
-export const MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT = 2048;
+export const MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT = 2048
 
 export function createGlobalMessageStreamHub({
   buildAxCodeUrl,
@@ -12,158 +12,158 @@ export function createGlobalMessageStreamHub({
   upstreamReconnectDelayMs,
   replayLimit = MESSAGE_STREAM_GLOBAL_REPLAY_LIMIT,
 }) {
-  const eventSubscribers = new Set();
-  const statusSubscribers = new Set();
-  const replay = [];
+  const eventSubscribers = new Set()
+  const statusSubscribers = new Set()
+  const replay = []
 
-  let controller = null;
-  let reader = null;
-  let connected = false;
-  let everConnected = false;
-  let buildUrlFailed = false;
+  let controller = null
+  let reader = null
+  let connected = false
+  let everConnected = false
+  let buildUrlFailed = false
 
   const notifySubscriber = (kind, subscriber, payload) => {
     try {
-      const result = subscriber(payload);
-      if (result && typeof result.catch === 'function') {
+      const result = subscriber(payload)
+      if (result && typeof result.catch === "function") {
         result.catch((error) => {
-          console.warn(`Global message stream ${kind} subscriber failed:`, error);
-        });
+          console.warn(`Global message stream ${kind} subscriber failed:`, error)
+        })
       }
     } catch (error) {
-      console.warn(`Global message stream ${kind} subscriber failed:`, error);
+      console.warn(`Global message stream ${kind} subscriber failed:`, error)
     }
-  };
+  }
 
   const notifyStatus = (status) => {
     for (const subscriber of Array.from(statusSubscribers)) {
-      notifySubscriber('status', subscriber, status);
+      notifySubscriber("status", subscriber, status)
     }
-  };
+  }
 
   const normalizeEvent = ({ envelope, payload }) => {
     const directory =
-      typeof envelope?.directory === 'string' && envelope.directory.length > 0 ? envelope.directory : 'global';
-    const eventId = typeof envelope?.eventId === 'string' && envelope.eventId.length > 0 ? envelope.eventId : undefined;
+      typeof envelope?.directory === "string" && envelope.directory.length > 0 ? envelope.directory : "global"
+    const eventId = typeof envelope?.eventId === "string" && envelope.eventId.length > 0 ? envelope.eventId : undefined
     return {
       envelope,
       payload,
       directory,
       eventId,
-    };
-  };
+    }
+  }
 
   const start = () => {
     if (reader) {
-      return;
+      return
     }
 
-    controller = new AbortController();
+    controller = new AbortController()
     reader = createUpstreamSseReader({
       signal: controller.signal,
       stallTimeoutMs: upstreamStallTimeoutMs,
       reconnectDelayMs: upstreamReconnectDelayMs,
       fetchImpl,
       buildUrl: () => {
-        buildUrlFailed = false;
+        buildUrlFailed = false
         try {
-          return new URL(buildAxCodeUrl('/global/event', ''));
+          return new URL(buildAxCodeUrl("/global/event", ""))
         } catch {
-          buildUrlFailed = true;
-          throw new Error('AX Code service unavailable');
+          buildUrlFailed = true
+          throw new Error("AX Code service unavailable")
         }
       },
       getHeaders: getAxCodeAuthHeaders,
       onConnect() {
-        connected = true;
-        const wasReady = everConnected;
-        everConnected = true;
-        notifyStatus({ type: 'connect', wasReady });
+        connected = true
+        const wasReady = everConnected
+        everConnected = true
+        notifyStatus({ type: "connect", wasReady })
       },
       onDisconnect({ reason }) {
-        connected = false;
-        notifyStatus({ type: 'disconnect', reason });
+        connected = false
+        notifyStatus({ type: "disconnect", reason })
       },
       onEvent(event) {
-        const normalized = normalizeEvent(event);
+        const normalized = normalizeEvent(event)
         if (normalized.eventId) {
-          replay.push(normalized);
+          replay.push(normalized)
           if (replay.length > replayLimit) {
-            replay.splice(0, replay.length - replayLimit);
+            replay.splice(0, replay.length - replayLimit)
           }
         }
 
         for (const subscriber of Array.from(eventSubscribers)) {
-          notifySubscriber('event', subscriber, normalized);
+          notifySubscriber("event", subscriber, normalized)
         }
       },
       onError(error) {
         if (controller?.signal.aborted) {
-          return;
+          return
         }
 
         notifyStatus({
-          type: everConnected ? 'error' : 'initial-error',
+          type: everConnected ? "error" : "initial-error",
           error,
           buildUrlFailed,
-        });
+        })
       },
-    });
+    })
 
-    void reader.start();
-  };
+    void reader.start()
+  }
 
   const stop = () => {
-    connected = false;
-    reader?.stop();
+    connected = false
+    reader?.stop()
     if (controller && !controller.signal.aborted) {
-      controller.abort();
+      controller.abort()
     }
-    reader = null;
-    controller = null;
-    everConnected = false;
-    buildUrlFailed = false;
+    reader = null
+    controller = null
+    everConnected = false
+    buildUrlFailed = false
     // Keep the bounded replay buffer across full teardown so the last browser
     // client can reconnect with Last-Event-ID and recover events it already saw
     // advertised by the previous upstream connection.
-  };
+  }
 
   return {
     start,
     stop,
     isConnected() {
-      return connected;
+      return connected
     },
     hasConnected() {
-      return everConnected;
+      return everConnected
     },
     subscribeEvent(subscriber) {
-      eventSubscribers.add(subscriber);
+      eventSubscribers.add(subscriber)
       return () => {
-        eventSubscribers.delete(subscriber);
-      };
+        eventSubscribers.delete(subscriber)
+      }
     },
     subscribeStatus(subscriber) {
-      statusSubscribers.add(subscriber);
+      statusSubscribers.add(subscriber)
       return () => {
-        statusSubscribers.delete(subscriber);
-      };
+        statusSubscribers.delete(subscriber)
+      }
     },
     replayAfter(eventId) {
       if (!eventId) {
-        return [];
+        return []
       }
 
-      const index = replay.findIndex((entry) => entry.eventId === eventId);
+      const index = replay.findIndex((entry) => entry.eventId === eventId)
       if (index !== -1) {
-        return replay.slice(index + 1);
+        return replay.slice(index + 1)
       }
       // Anchor not in the buffer: it was evicted from the front because more
       // than replayLimit events accumulated while the client was disconnected.
       // The buffer is append-only and monotonic, so every retained entry is
       // newer than the requested id — replay the whole buffer instead of
       // silently dropping every event the client missed.
-      return replay.slice();
+      return replay.slice()
     },
-  };
+  }
 }

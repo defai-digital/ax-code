@@ -2,7 +2,10 @@
 <html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
+    />
 
     <!-- Favicon -->
     <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -11,55 +14,65 @@
     <link rel="apple-touch-icon" href="/favicon-512.png" />
 
     <!-- Preload Nerd Fonts for terminal icon display -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2"
-          as="font" type="font/woff2" crossorigin="anonymous">
-    <link rel="preload" href="https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2"
-          as="font" type="font/woff2" crossorigin="anonymous">
+    <link
+      rel="preload"
+      href="https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
 
     <script>
       // Blocking script to detect and apply theme before first paint
-      (function() {
+      ;(function () {
         try {
-          var themeMode = localStorage.getItem('themeMode');
-          var variant = localStorage.getItem('selectedThemeVariant');
-          var useSystem = localStorage.getItem('useSystemTheme');
-          var isDark;
+          var themeMode = localStorage.getItem("themeMode")
+          var variant = localStorage.getItem("selectedThemeVariant")
+          var useSystem = localStorage.getItem("useSystemTheme")
+          var isDark
 
           // Check themeMode first (new storage key)
-          if (themeMode === 'dark') {
-            isDark = true;
-          } else if (themeMode === 'light') {
-            isDark = false;
-          } else if (themeMode === 'system' || useSystem === null || useSystem === 'true') {
+          if (themeMode === "dark") {
+            isDark = true
+          } else if (themeMode === "light") {
+            isDark = false
+          } else if (themeMode === "system" || useSystem === null || useSystem === "true") {
             // System preference
-            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          } else if (variant === 'light' || variant === 'dark') {
+            isDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+          } else if (variant === "light" || variant === "dark") {
             // Legacy storage key fallback
-            isDark = variant === 'dark';
+            isDark = variant === "dark"
           } else {
             // Default to system
-            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            isDark = window.matchMedia("(prefers-color-scheme: dark)").matches
           }
 
           // Apply theme class and data attribute
-          document.documentElement.classList.add(isDark ? 'dark' : 'light');
-          document.documentElement.setAttribute('data-splash-variant', isDark ? 'dark' : 'light');
-          document.documentElement.style.setProperty('color-scheme', isDark ? 'dark' : 'light');
+          document.documentElement.classList.add(isDark ? "dark" : "light")
+          document.documentElement.setAttribute("data-splash-variant", isDark ? "dark" : "light")
+          document.documentElement.style.setProperty("color-scheme", isDark ? "dark" : "light")
 
           // Splash colors persisted by the app theme system
-          var splashBgLight = localStorage.getItem('splashBgLight');
-          var splashFgLight = localStorage.getItem('splashFgLight');
-          var splashBgDark = localStorage.getItem('splashBgDark');
-          var splashFgDark = localStorage.getItem('splashFgDark');
+          var splashBgLight = localStorage.getItem("splashBgLight")
+          var splashFgLight = localStorage.getItem("splashFgLight")
+          var splashBgDark = localStorage.getItem("splashBgDark")
+          var splashFgDark = localStorage.getItem("splashFgDark")
 
-          if (splashBgLight) document.documentElement.style.setProperty('--splash-background-light', splashBgLight);
-          if (splashFgLight) document.documentElement.style.setProperty('--splash-stroke-light', splashFgLight);
-          if (splashBgDark) document.documentElement.style.setProperty('--splash-background-dark', splashBgDark);
-          if (splashFgDark) document.documentElement.style.setProperty('--splash-stroke-dark', splashFgDark);
+          if (splashBgLight) document.documentElement.style.setProperty("--splash-background-light", splashBgLight)
+          if (splashFgLight) document.documentElement.style.setProperty("--splash-stroke-light", splashFgLight)
+          if (splashBgDark) document.documentElement.style.setProperty("--splash-background-dark", splashBgDark)
+          if (splashFgDark) document.documentElement.style.setProperty("--splash-stroke-dark", splashFgDark)
         } catch (error) {
-          console.warn('Failed to apply theme:', error);
+          console.warn("Failed to apply theme:", error)
         }
-      })();
+      })()
     </script>
 
     <!-- Theme color -->
@@ -74,11 +87,13 @@
     <style>
       /* Nerd Font @font-face declarations for terminal icon support */
       @font-face {
-        font-family: 'JetBrainsMono Nerd Font';
+        font-family: "JetBrainsMono Nerd Font";
         src:
-          local('JetBrainsMono Nerd Font'),
-          url('https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2') format('woff2'),
-          url('https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff') format('woff');
+          local("JetBrainsMono Nerd Font"),
+          url("https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2")
+            format("woff2"),
+          url("https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff")
+            format("woff");
         font-weight: normal;
         font-style: normal;
         font-display: swap;
@@ -86,11 +101,13 @@
       }
 
       @font-face {
-        font-family: 'FiraCode Nerd Font';
+        font-family: "FiraCode Nerd Font";
         src:
-          local('FiraCode Nerd Font'),
-          url('https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2') format('woff2'),
-          url('https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff') format('woff');
+          local("FiraCode Nerd Font"),
+          url("https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2")
+            format("woff2"),
+          url("https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff")
+            format("woff");
         font-weight: normal;
         font-style: normal;
         font-display: swap;
@@ -99,22 +116,22 @@
 
       :root {
         --splash-background-dark: #151313;
-        --splash-stroke-dark: #CECDC3;
-        --splash-background-light: #FFFCF0;
-        --splash-stroke-light: #100F0F;
+        --splash-stroke-dark: #cecdc3;
+        --splash-background-light: #fffcf0;
+        --splash-stroke-light: #100f0f;
 
         --splash-background: var(--splash-background-dark);
         --splash-stroke: var(--splash-stroke-dark);
         --splash-foreground: var(--splash-stroke-dark);
       }
 
-      html[data-splash-variant='light'] {
+      html[data-splash-variant="light"] {
         --splash-background: var(--splash-background-light);
         --splash-stroke: var(--splash-stroke-light);
         --splash-foreground: var(--splash-stroke-light);
       }
 
-      html[data-splash-variant='dark'] {
+      html[data-splash-variant="dark"] {
         --splash-background: var(--splash-background-dark);
         --splash-stroke: var(--splash-stroke-dark);
         --splash-foreground: var(--splash-stroke-dark);
@@ -126,7 +143,10 @@
         align-items: center;
         justify-content: center;
         height: 100vh;
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
         transition: opacity 0.3s ease-out;
         position: absolute;
         width: 100%;
@@ -148,53 +168,56 @@
       // Fallback: hide loading screen after 10 seconds if React fails to load.
       // Desktop shells manage their own splash via the injected boot outcome;
       // do not force-remove for desktop windows.
-      setTimeout(function() {
-        if (typeof window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ === 'string' && window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__.length > 0) {
-          return;
+      setTimeout(function () {
+        if (
+          typeof window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ === "string" &&
+          window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__.length > 0
+        ) {
+          return
         }
-        var loading = document.getElementById('initial-loading');
+        var loading = document.getElementById("initial-loading")
         if (loading) {
-          console.warn('Loading screen timeout - forcing hide after 10s');
-          loading.classList.add('fade-out');
-          setTimeout(function() {
-            loading.remove();
-          }, 300);
+          console.warn("Loading screen timeout - forcing hide after 10s")
+          loading.classList.add("fade-out")
+          setTimeout(function () {
+            loading.remove()
+          }, 300)
         }
-      }, 10000);
+      }, 10000)
     </script>
 
     <!-- CSS Font Loading API for reliable Nerd Font loading -->
     <script>
-      (function() {
+      ;(function () {
         const fonts = [
           {
-            name: 'JetBrainsMono Nerd Font',
-            url: 'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2'
+            name: "JetBrainsMono Nerd Font",
+            url: "https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2",
           },
           {
-            name: 'FiraCode Nerd Font',
-            url: 'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2'
-          }
-        ];
+            name: "FiraCode Nerd Font",
+            url: "https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2",
+          },
+        ]
 
-        const fontPromises = fonts.map(font => {
-          const fontFace = new FontFace(font.name, `url(${font.url}) format('woff2')`);
-          document.fonts.add(fontFace);
-          return fontFace.load().catch(err => {
-            console.warn(`Failed to load font: ${font.name}`, err);
-          });
-        });
+        const fontPromises = fonts.map((font) => {
+          const fontFace = new FontFace(font.name, `url(${font.url}) format('woff2')`)
+          document.fonts.add(fontFace)
+          return fontFace.load().catch((err) => {
+            console.warn(`Failed to load font: ${font.name}`, err)
+          })
+        })
 
         Promise.allSettled(fontPromises).then(() => {
-          document.documentElement.classList.add('fonts-loaded');
-        });
-      })();
+          document.documentElement.classList.add("fonts-loaded")
+        })
+      })()
     </script>
 
     <!-- Polyfill for process before loading React -->
     <script>
-      if (typeof process === 'undefined') {
-        window.process = { env: {} };
+      if (typeof process === "undefined") {
+        window.process = { env: {} }
       }
     </script>
 

@@ -1,52 +1,52 @@
-import type { Agent } from "@ax-code/sdk/v2";
+import type { Agent } from "@ax-code/sdk/v2"
 
 export interface AgentMentionSource {
-  value: string;
-  start: number;
-  end: number;
+  value: string
+  start: number
+  end: number
 }
 
 export interface ParsedAgentMention {
-  name: string;
-  source?: AgentMentionSource;
+  name: string
+  source?: AgentMentionSource
 }
 
 export interface ParsedAgentResult {
-  sanitizedText: string;
-  mention: ParsedAgentMention | null;
+  sanitizedText: string
+  mention: ParsedAgentMention | null
 }
 
 const isWordBoundaryChar = (char: string | null): boolean => {
   if (!char) {
-    return true;
+    return true
   }
-  return /(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(char);
-};
+  return /(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(char)
+}
 
 export const parseAgentMentions = (rawText: string, agents: Agent[]): ParsedAgentResult => {
   if (typeof rawText !== "string" || rawText.length === 0) {
-    return { sanitizedText: rawText, mention: null };
+    return { sanitizedText: rawText, mention: null }
   }
 
-  const nonPrimaryAgents = agents.filter((agent) => agent.mode && agent.mode !== "primary");
+  const nonPrimaryAgents = agents.filter((agent) => agent.mode && agent.mode !== "primary")
   if (nonPrimaryAgents.length === 0 || !rawText.includes("@")) {
-    return { sanitizedText: rawText, mention: null };
+    return { sanitizedText: rawText, mention: null }
   }
 
-  let firstMention: ParsedAgentMention | null = null;
+  let firstMention: ParsedAgentMention | null = null
 
   for (const agent of nonPrimaryAgents) {
-    const escapedAgentName = agent.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const pattern = new RegExp(`@${escapedAgentName}\\b`, "gi");
-    let match: RegExpExecArray | null;
+    const escapedAgentName = agent.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const pattern = new RegExp(`@${escapedAgentName}\\b`, "gi")
+    let match: RegExpExecArray | null
 
     while ((match = pattern.exec(rawText)) !== null) {
-      const start = match.index;
-      const end = start + match[0].length;
-      const charBefore = start > 0 ? rawText[start - 1] : null;
+      const start = match.index
+      const end = start + match[0].length
+      const charBefore = start > 0 ? rawText[start - 1] : null
 
       if (!isWordBoundaryChar(charBefore)) {
-        continue;
+        continue
       }
 
       const mention: ParsedAgentMention = {
@@ -56,21 +56,20 @@ export const parseAgentMentions = (rawText: string, agents: Agent[]): ParsedAgen
           start,
           end,
         },
-      };
-
-      if (!firstMention) {
-        firstMention = mention;
       }
 
+      if (!firstMention) {
+        firstMention = mention
+      }
     }
   }
 
   if (!firstMention) {
-    return { sanitizedText: rawText, mention: null };
+    return { sanitizedText: rawText, mention: null }
   }
 
   return {
     sanitizedText: rawText,
     mention: firstMention,
-  };
-};
+  }
+}

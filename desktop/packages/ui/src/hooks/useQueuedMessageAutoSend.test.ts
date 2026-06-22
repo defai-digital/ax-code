@@ -1,38 +1,39 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
-import type { Agent } from '@ax-code/sdk/v2';
-import type { QueuedMessage } from '../stores/messageQueueStore';
+import { beforeEach, describe, expect, test, vi } from "vitest"
+import type { Agent } from "@ax-code/sdk/v2"
+import type { QueuedMessage } from "../stores/messageQueueStore"
 
-let visibleAgents: Agent[] = [];
-const sendMessageCalls: unknown[][] = [];
+let visibleAgents: Agent[] = []
+const sendMessageCalls: unknown[][] = []
 
-const getVisibleAgentsMock = vi.fn(() => visibleAgents);
+const getVisibleAgentsMock = vi.fn(() => visibleAgents)
 
 const _mockSUIState: { currentSessionId: string | null; worktreeMetadata: Map<string, unknown> } = {
   currentSessionId: null,
   worktreeMetadata: new Map(),
-};
+}
 
-vi.doMock('@/stores/useConfigStore', () => ({
+vi.doMock("@/stores/useConfigStore", () => ({
   useConfigStore: {
     getState: () => ({
       getVisibleAgents: getVisibleAgentsMock,
     }),
   },
-}));
+}))
 
-vi.doMock('@/sync/session-ui-store', () => ({
+vi.doMock("@/sync/session-ui-store", () => ({
   routeMessage: vi.fn(() => Promise.resolve()),
   useSessionUIStore: {
     setState: (patch: unknown) => {
-      const update = typeof patch === 'function'
-        ? (patch as (s: typeof _mockSUIState) => Partial<typeof _mockSUIState>)(_mockSUIState)
-        : (patch as Partial<typeof _mockSUIState>);
-      Object.assign(_mockSUIState, update);
+      const update =
+        typeof patch === "function"
+          ? (patch as (s: typeof _mockSUIState) => Partial<typeof _mockSUIState>)(_mockSUIState)
+          : (patch as Partial<typeof _mockSUIState>)
+      Object.assign(_mockSUIState, update)
     },
     getState: () => ({
       sendMessage: (...args: unknown[]) => {
-        sendMessageCalls.push(args);
-        return Promise.resolve();
+        sendMessageCalls.push(args)
+        return Promise.resolve()
       },
       sessionAbortFlags: new Map<string, boolean>(),
       currentSessionId: _mockSUIState.currentSessionId,
@@ -40,155 +41,155 @@ vi.doMock('@/sync/session-ui-store', () => ({
       getDirectoryForSession: (sessionId: string): string | null => {
         // Lazy require to avoid module hoisting issues with mock.module
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { useSessionWorktreeStore } = require('@/sync/session-worktree-store') as {
-          useSessionWorktreeStore: { getState: () => { getAttachment: (id: string) => Record<string, unknown> | undefined } }
-        };
+        const { useSessionWorktreeStore } = require("@/sync/session-worktree-store") as {
+          useSessionWorktreeStore: {
+            getState: () => { getAttachment: (id: string) => Record<string, unknown> | undefined }
+          }
+        }
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { getAttachedSessionDirectory } = require('@/sync/session-worktree-contract') as {
+        const { getAttachedSessionDirectory } = require("@/sync/session-worktree-contract") as {
           getAttachedSessionDirectory: (attachment: Record<string, unknown> | undefined) => string | null
-        };
-        const attachment = useSessionWorktreeStore.getState().getAttachment(sessionId);
-        return getAttachedSessionDirectory(attachment);
+        }
+        const attachment = useSessionWorktreeStore.getState().getAttachment(sessionId)
+        return getAttachedSessionDirectory(attachment)
       },
     }),
     subscribe: vi.fn(() => () => undefined),
   },
-}));
+}))
 
-const {
-  buildQueuedAutoSendPayload,
-  sendQueuedAutoSendPayload,
-  shouldDispatchQueuedAutoSend,
-} = await import('./useQueuedMessageAutoSend');
+const { buildQueuedAutoSendPayload, sendQueuedAutoSendPayload, shouldDispatchQueuedAutoSend } = await import(
+  "./useQueuedMessageAutoSend"
+)
 
-describe('shouldDispatchQueuedAutoSend', () => {
-  test('dispatches only after an active session becomes idle', () => {
-    expect(shouldDispatchQueuedAutoSend('busy', 'idle')).toBe(true);
-    expect(shouldDispatchQueuedAutoSend('retry', 'idle')).toBe(true);
-  });
+describe("shouldDispatchQueuedAutoSend", () => {
+  test("dispatches only after an active session becomes idle", () => {
+    expect(shouldDispatchQueuedAutoSend("busy", "idle")).toBe(true)
+    expect(shouldDispatchQueuedAutoSend("retry", "idle")).toBe(true)
+  })
 
-  test('does not dispatch when idle is only first seen or status is missing', () => {
-    expect(shouldDispatchQueuedAutoSend(undefined, 'idle')).toBe(false);
-    expect(shouldDispatchQueuedAutoSend('idle', 'idle')).toBe(false);
-  });
-});
+  test("does not dispatch when idle is only first seen or status is missing", () => {
+    expect(shouldDispatchQueuedAutoSend(undefined, "idle")).toBe(false)
+    expect(shouldDispatchQueuedAutoSend("idle", "idle")).toBe(false)
+  })
+})
 
-describe('buildQueuedAutoSendPayload', () => {
+describe("buildQueuedAutoSendPayload", () => {
   beforeEach(() => {
-    visibleAgents = [];
-    sendMessageCalls.length = 0;
-  });
+    visibleAgents = []
+    sendMessageCalls.length = 0
+  })
 
-  test('returns only the first queued message for auto-send', () => {
+  test("returns only the first queued message for auto-send", () => {
     const queue: QueuedMessage[] = [
       {
-        id: 'queued-1',
-        content: 'first queued message',
+        id: "queued-1",
+        content: "first queued message",
         createdAt: 1,
       },
       {
-        id: 'queued-2',
-        content: 'second queued message',
+        id: "queued-2",
+        content: "second queued message",
         createdAt: 2,
       },
-    ];
+    ]
 
-    const payload = buildQueuedAutoSendPayload(queue);
+    const payload = buildQueuedAutoSendPayload(queue)
 
-    expect(payload).not.toBeNull();
-    expect(payload?.queuedMessageId).toBe('queued-1');
-    expect(payload?.primaryText).toBe('first queued message');
-    expect(payload?.primaryAttachments).toEqual([]);
-  });
+    expect(payload).not.toBeNull()
+    expect(payload?.queuedMessageId).toBe("queued-1")
+    expect(payload?.primaryText).toBe("first queued message")
+    expect(payload?.primaryAttachments).toEqual([])
+  })
 
-  test('uses the configured visible agents when parsing queued mentions', () => {
+  test("uses the configured visible agents when parsing queued mentions", () => {
     visibleAgents = [
       {
-        name: 'Builder',
-        mode: 'subagent',
+        name: "Builder",
+        mode: "subagent",
         permission: [],
         options: {},
       } as Agent,
-    ];
+    ]
 
     const queue: QueuedMessage[] = [
       {
-        id: 'queued-mention',
-        content: '@Builder please take this',
+        id: "queued-mention",
+        content: "@Builder please take this",
         createdAt: 1,
       },
-    ];
+    ]
 
-    const payload = buildQueuedAutoSendPayload(queue);
+    const payload = buildQueuedAutoSendPayload(queue)
 
-    expect(payload).not.toBeNull();
-    expect(payload?.agentMentionName).toBe('Builder');
-    expect(payload?.primaryText).toBe('@Builder please take this');
-  });
+    expect(payload).not.toBeNull()
+    expect(payload?.agentMentionName).toBe("Builder")
+    expect(payload?.primaryText).toBe("@Builder please take this")
+  })
 
-  test('preserves attachment-only queued messages as sendable payloads', () => {
+  test("preserves attachment-only queued messages as sendable payloads", () => {
     const queue: QueuedMessage[] = [
       {
-        id: 'queued-attachments',
-        content: '',
+        id: "queued-attachments",
+        content: "",
         createdAt: 1,
         attachments: [
           {
-            id: 'file-1',
-            filename: 'notes.txt',
-            mimeType: 'text/plain',
+            id: "file-1",
+            filename: "notes.txt",
+            mimeType: "text/plain",
             size: 5,
-            source: 'local',
-            file: new File(['hello'], 'notes.txt', { type: 'text/plain' }),
-            dataUrl: 'data:text/plain;base64,aGVsbG8=',
+            source: "local",
+            file: new File(["hello"], "notes.txt", { type: "text/plain" }),
+            dataUrl: "data:text/plain;base64,aGVsbG8=",
           },
         ],
       },
       {
-        id: 'queued-2',
-        content: 'later queued message',
+        id: "queued-2",
+        content: "later queued message",
         createdAt: 2,
       },
-    ];
+    ]
 
-    const payload = buildQueuedAutoSendPayload(queue);
+    const payload = buildQueuedAutoSendPayload(queue)
 
-    expect(payload).not.toBeNull();
-    expect(payload?.queuedMessageId).toBe('queued-attachments');
-    expect(payload?.primaryText).toBe('');
-    expect(payload?.primaryAttachments).toHaveLength(1);
-    expect(payload?.primaryAttachments[0]?.filename).toBe('notes.txt');
-  });
+    expect(payload).not.toBeNull()
+    expect(payload?.queuedMessageId).toBe("queued-attachments")
+    expect(payload?.primaryText).toBe("")
+    expect(payload?.primaryAttachments).toHaveLength(1)
+    expect(payload?.primaryAttachments[0]?.filename).toBe("notes.txt")
+  })
 
-  test('auto-send targets the queued session explicitly', async () => {
+  test("auto-send targets the queued session explicitly", async () => {
     const payload = buildQueuedAutoSendPayload([
       {
-        id: 'queued-1',
-        content: 'queued message',
+        id: "queued-1",
+        content: "queued message",
         createdAt: 1,
       },
-    ]);
+    ])
 
-    expect(payload).not.toBeNull();
-    await sendQueuedAutoSendPayload('session-original', payload!, {
-      providerID: 'provider-1',
-      modelID: 'model-1',
-      agent: 'agent-1',
-      variant: 'variant-1',
-    });
+    expect(payload).not.toBeNull()
+    await sendQueuedAutoSendPayload("session-original", payload!, {
+      providerID: "provider-1",
+      modelID: "model-1",
+      agent: "agent-1",
+      variant: "variant-1",
+    })
 
-    expect(sendMessageCalls.length).toBe(1);
+    expect(sendMessageCalls.length).toBe(1)
     expect(sendMessageCalls[0]).toEqual([
-      'queued message',
-      'provider-1',
-      'model-1',
-      'agent-1',
+      "queued message",
+      "provider-1",
+      "model-1",
+      "agent-1",
       [],
       undefined,
       undefined,
-      'variant-1',
-      'normal',
-      { sessionId: 'session-original' },
-    ]);
-  });
-});
+      "variant-1",
+      "normal",
+      { sessionId: "session-original" },
+    ])
+  })
+})

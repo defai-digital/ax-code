@@ -1,151 +1,150 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { createSessionRuntime } from './session-runtime.js';
+import { createSessionRuntime } from "./session-runtime.js"
 
-describe('session runtime', () => {
-  const runtimes = [];
+describe("session runtime", () => {
+  const runtimes = []
 
   afterEach(() => {
     for (const runtime of runtimes) {
-      runtime.dispose();
+      runtime.dispose()
     }
-    runtimes.length = 0;
-  });
+    runtimes.length = 0
+  })
 
-  it('broadcasts attention clears through the shared broadcaster', () => {
-    const events = [];
+  it("broadcasts attention clears through the shared broadcaster", () => {
+    const events = []
     const runtime = createSessionRuntime({
       writeSseEvent() {
-        throw new Error('SSE fallback should not be used when broadcastEvent is provided');
+        throw new Error("SSE fallback should not be used when broadcastEvent is provided")
       },
       getNotificationClients: () => new Set(),
       broadcastEvent: (payload) => {
-        events.push(payload);
+        events.push(payload)
       },
-    });
-    runtimes.push(runtime);
+    })
+    runtimes.push(runtime)
 
     runtime.processAxCodeSsePayload({
-      type: 'session.status',
+      type: "session.status",
       properties: {
-        sessionID: 'session-1',
+        sessionID: "session-1",
         status: {
-          type: 'busy',
+          type: "busy",
         },
       },
-    });
-    runtime.markUserMessageSent('session-1');
+    })
+    runtime.markUserMessageSent("session-1")
     runtime.processAxCodeSsePayload({
-      type: 'session.status',
+      type: "session.status",
       properties: {
-        sessionID: 'session-1',
+        sessionID: "session-1",
         status: {
-          type: 'idle',
+          type: "idle",
         },
       },
-    });
-    runtime.markSessionViewed('session-1', 'client-1');
+    })
+    runtime.markSessionViewed("session-1", "client-1")
 
     expect(events).toContainEqual({
-      type: 'openchamber:session-status',
+      type: "openchamber:session-status",
       properties: expect.objectContaining({
-        sessionID: 'session-1',
-        status: 'idle',
+        sessionID: "session-1",
+        status: "idle",
         needsAttention: true,
       }),
-    });
+    })
     expect(events.at(-1)).toEqual({
-      type: 'openchamber:session-status',
+      type: "openchamber:session-status",
       properties: {
-        sessionID: 'session-1',
-        status: 'idle',
+        sessionID: "session-1",
+        status: "idle",
         timestamp: expect.any(Number),
         metadata: {},
         needsAttention: false,
       },
-    });
-  });
+    })
+  })
 
-  it('accepts legacy session.status info.type payloads', () => {
-    const events = [];
+  it("accepts legacy session.status info.type payloads", () => {
+    const events = []
     const runtime = createSessionRuntime({
       writeSseEvent() {
-        throw new Error('SSE fallback should not be used when broadcastEvent is provided');
+        throw new Error("SSE fallback should not be used when broadcastEvent is provided")
       },
       getNotificationClients: () => new Set(),
       broadcastEvent: (payload) => {
-        events.push(payload);
+        events.push(payload)
       },
-    });
-    runtimes.push(runtime);
+    })
+    runtimes.push(runtime)
 
     runtime.processAxCodeSsePayload({
-      type: 'session.status',
+      type: "session.status",
       properties: {
-        sessionID: 'legacy-session-1',
+        sessionID: "legacy-session-1",
         info: {
-          type: 'busy',
+          type: "busy",
         },
       },
-    });
+    })
 
     expect(events).toContainEqual({
-      type: 'openchamber:session-status',
+      type: "openchamber:session-status",
       properties: expect.objectContaining({
-        sessionID: 'legacy-session-1',
-        status: 'busy',
+        sessionID: "legacy-session-1",
+        status: "busy",
       }),
-    });
-  });
+    })
+  })
 
-  it('broadcasts idle activity when cooldown expires', () => {
-    vi.useFakeTimers();
-    const events = [];
+  it("broadcasts idle activity when cooldown expires", () => {
+    vi.useFakeTimers()
+    const events = []
     const runtime = createSessionRuntime({
       writeSseEvent() {
-        throw new Error('SSE fallback should not be used when broadcastEvent is provided');
+        throw new Error("SSE fallback should not be used when broadcastEvent is provided")
       },
       getNotificationClients: () => new Set(),
       broadcastEvent: (payload) => {
-        events.push(payload);
+        events.push(payload)
       },
-    });
+    })
 
     try {
       runtime.processAxCodeSsePayload({
-        type: 'session.status',
+        type: "session.status",
         properties: {
-          sessionID: 'session-activity-1',
+          sessionID: "session-activity-1",
           status: {
-            type: 'busy',
+            type: "busy",
           },
         },
-      });
+      })
       runtime.processAxCodeSsePayload({
-        type: 'session.status',
+        type: "session.status",
         properties: {
-          sessionID: 'session-activity-1',
+          sessionID: "session-activity-1",
           status: {
-            type: 'idle',
+            type: "idle",
           },
         },
-      });
+      })
 
-      const activityPhases = () => events
-        .filter((event) => event.type === 'openchamber:session-activity')
-        .map((event) => event.properties.phase);
+      const activityPhases = () =>
+        events.filter((event) => event.type === "openchamber:session-activity").map((event) => event.properties.phase)
 
-      expect(activityPhases()).toEqual(['busy', 'cooldown']);
+      expect(activityPhases()).toEqual(["busy", "cooldown"])
 
-      vi.advanceTimersByTime(1999);
-      expect(activityPhases()).toEqual(['busy', 'cooldown']);
+      vi.advanceTimersByTime(1999)
+      expect(activityPhases()).toEqual(["busy", "cooldown"])
 
-      vi.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1)
 
-      expect(activityPhases()).toEqual(['busy', 'cooldown', 'idle']);
+      expect(activityPhases()).toEqual(["busy", "cooldown", "idle"])
     } finally {
-      runtime.dispose();
-      vi.useRealTimers();
+      runtime.dispose()
+      vi.useRealTimers()
     }
-  });
-});
+  })
+})

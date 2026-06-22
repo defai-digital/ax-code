@@ -1,18 +1,24 @@
-import React from 'react';
-import type { UsageWindow } from '@/types';
-import { formatQuotaValueLabel, formatQuotaResetLabel, formatWindowLabel, calculatePace, calculateExpectedUsagePercent } from '@/lib/quota';
-import { UsageProgressBar } from './UsageProgressBar';
-import { PaceIndicator } from './PaceIndicator';
-import { useQuotaStore } from '@/stores/useQuotaStore';
-import { Checkbox } from '@/components/ui/checkbox';
+import React from "react"
+import type { UsageWindow } from "@/types"
+import {
+  formatQuotaValueLabel,
+  formatQuotaResetLabel,
+  formatWindowLabel,
+  calculatePace,
+  calculateExpectedUsagePercent,
+} from "@/lib/quota"
+import { UsageProgressBar } from "./UsageProgressBar"
+import { PaceIndicator } from "./PaceIndicator"
+import { useQuotaStore } from "@/stores/useQuotaStore"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface UsageCardProps {
-  title: string;
-  window: UsageWindow;
-  subtitle?: string | null;
-  showToggle?: boolean;
-  toggleEnabled?: boolean;
-  onToggle?: (enabled: boolean) => void;
+  title: string
+  window: UsageWindow
+  subtitle?: string | null
+  showToggle?: boolean
+  toggleEnabled?: boolean
+  onToggle?: (enabled: boolean) => void
 }
 
 export const UsageCard: React.FC<UsageCardProps> = ({
@@ -23,25 +29,25 @@ export const UsageCard: React.FC<UsageCardProps> = ({
   toggleEnabled = false,
   onToggle,
 }) => {
-  const displayMode = useQuotaStore((state) => state.displayMode);
-  const showPredValues = useQuotaStore((state) => state.showPredValues);
-  const displayPercent = displayMode === 'remaining' ? window.remainingPercent : window.usedPercent;
-  const barLabel = displayMode === 'remaining' ? 'remaining' : 'used';
-  const percentLabel = formatQuotaValueLabel(window.valueLabel, displayPercent);
-  const resetLabel = formatQuotaResetLabel(window.resetAt, window.resetAfterFormatted ?? window.resetAtFormatted);
-  const windowLabel = formatWindowLabel(title);
+  const displayMode = useQuotaStore((state) => state.displayMode)
+  const showPredValues = useQuotaStore((state) => state.showPredValues)
+  const displayPercent = displayMode === "remaining" ? window.remainingPercent : window.usedPercent
+  const barLabel = displayMode === "remaining" ? "remaining" : "used"
+  const percentLabel = formatQuotaValueLabel(window.valueLabel, displayPercent)
+  const resetLabel = formatQuotaResetLabel(window.resetAt, window.resetAfterFormatted ?? window.resetAtFormatted)
+  const windowLabel = formatWindowLabel(title)
 
   const paceInfo = React.useMemo(() => {
-    return calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, title);
-  }, [window.usedPercent, window.resetAt, window.windowSeconds, title]);
+    return calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, title)
+  }, [window.usedPercent, window.resetAt, window.windowSeconds, title])
 
   const expectedMarkerPercent = React.useMemo(() => {
     if (!paceInfo || paceInfo.dailyAllocationPercent === null) {
-      return null;
+      return null
     }
-    const expectedUsed = calculateExpectedUsagePercent(paceInfo.elapsedRatio);
-    return displayMode === 'remaining' ? 100 - expectedUsed : expectedUsed;
-  }, [paceInfo, displayMode]);
+    const expectedUsed = calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+    return displayMode === "remaining" ? 100 - expectedUsed : expectedUsed
+  }, [paceInfo, displayMode])
 
   return (
     <div className="py-3">
@@ -56,13 +62,11 @@ export const UsageCard: React.FC<UsageCardProps> = ({
           )}
           <div className="min-w-0 flex flex-col">
             <span className="typography-ui-label text-foreground truncate">{windowLabel}</span>
-            {subtitle && (
-              <span className="typography-meta text-muted-foreground truncate">{subtitle}</span>
-            )}
+            {subtitle && <span className="typography-meta text-muted-foreground truncate">{subtitle}</span>}
           </div>
         </div>
         <div className="typography-ui-label text-foreground tabular-nums flex items-center justify-end">
-          {percentLabel === '-' ? '' : percentLabel}
+          {percentLabel === "-" ? "" : percentLabel}
         </div>
       </div>
 
@@ -74,12 +78,8 @@ export const UsageCard: React.FC<UsageCardProps> = ({
           className="h-1.5"
         />
         <div className="mt-1 flex items-center justify-between">
-          <span className="typography-micro text-muted-foreground">
-            {resetLabel ? `Resets ${resetLabel}` : ''}
-          </span>
-          <span className="typography-micro text-muted-foreground">
-            {barLabel}
-          </span>
+          <span className="typography-micro text-muted-foreground">{resetLabel ? `Resets ${resetLabel}` : ""}</span>
+          <span className="typography-micro text-muted-foreground">{barLabel}</span>
         </div>
       </div>
 
@@ -89,5 +89,5 @@ export const UsageCard: React.FC<UsageCardProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}

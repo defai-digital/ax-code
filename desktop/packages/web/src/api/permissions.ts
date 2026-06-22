@@ -1,15 +1,15 @@
-import type { DirectoryPermissionRequest, PermissionsAPI, StartAccessingResult } from '@openchamber/ui/api/types';
+import type { DirectoryPermissionRequest, PermissionsAPI, StartAccessingResult } from "@openchamber/ui/api/types"
 
 export const createWebPermissionsAPI = (): PermissionsAPI => ({
   async requestDirectoryAccess(request: DirectoryPermissionRequest) {
-    return { success: true, path: request.path };
+    return { success: true, path: request.path }
   },
   async startAccessingDirectory(path: string): Promise<StartAccessingResult> {
-    void path;
-    return { success: true };
+    void path
+    return { success: true }
   },
   async stopAccessingDirectory(path: string): Promise<StartAccessingResult> {
-    void path;
-    return { success: true };
+    void path
+    return { success: true }
   },
-});
+})

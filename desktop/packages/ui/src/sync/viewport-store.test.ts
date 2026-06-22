@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest"
 import { useViewportStore } from "./viewport-store"
 
 describe("viewport-store sessionMemoryState", () => {

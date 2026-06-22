@@ -5,12 +5,7 @@
     "description": "A color scheme inspired by Japanese art and ink painting - light variant (Lotus)",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "japanese",
-      "lotus",
-      "elegant"
-    ]
+    "tags": ["light", "japanese", "lotus", "elegant"]
   },
   "colors": {
     "primary": {

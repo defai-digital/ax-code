@@ -12,95 +12,96 @@ import {
   normalizeAuthEntry,
   asObject,
   asNonEmptyString,
-  toTimestamp
-} from '../../utils/index.js';
-import { readAuthFile } from '../../../ax-code/auth.js';
-import { parseGoogleRefreshToken } from './transforms.js';
+  toTimestamp,
+} from "../../utils/index.js"
+import { readAuthFile } from "../../../ax-code/auth.js"
+import { parseGoogleRefreshToken } from "./transforms.js"
 
-const ANTIGRAVITY_GOOGLE_CLIENT_ID = process.env.ANTIGRAVITY_GOOGLE_CLIENT_ID ?? '';
-const ANTIGRAVITY_GOOGLE_CLIENT_SECRET = process.env.ANTIGRAVITY_GOOGLE_CLIENT_SECRET ?? '';
-const GEMINI_GOOGLE_CLIENT_ID = process.env.GEMINI_GOOGLE_CLIENT_ID ?? '';
-const GEMINI_GOOGLE_CLIENT_SECRET = process.env.GEMINI_GOOGLE_CLIENT_SECRET ?? '';
-export const DEFAULT_PROJECT_ID = 'rising-fact-p41fc';
+const ANTIGRAVITY_GOOGLE_CLIENT_ID = process.env.ANTIGRAVITY_GOOGLE_CLIENT_ID ?? ""
+const ANTIGRAVITY_GOOGLE_CLIENT_SECRET = process.env.ANTIGRAVITY_GOOGLE_CLIENT_SECRET ?? ""
+const GEMINI_GOOGLE_CLIENT_ID = process.env.GEMINI_GOOGLE_CLIENT_ID ?? ""
+const GEMINI_GOOGLE_CLIENT_SECRET = process.env.GEMINI_GOOGLE_CLIENT_SECRET ?? ""
+export const DEFAULT_PROJECT_ID = "rising-fact-p41fc"
 
 export const resolveGoogleOAuthClient = (sourceId) => {
-  if (sourceId === 'gemini') {
+  if (sourceId === "gemini") {
     return {
       clientId: GEMINI_GOOGLE_CLIENT_ID,
-      clientSecret: GEMINI_GOOGLE_CLIENT_SECRET
-    };
+      clientSecret: GEMINI_GOOGLE_CLIENT_SECRET,
+    }
   }
 
   return {
     clientId: ANTIGRAVITY_GOOGLE_CLIENT_ID,
-    clientSecret: ANTIGRAVITY_GOOGLE_CLIENT_SECRET
-  };
-};
+    clientSecret: ANTIGRAVITY_GOOGLE_CLIENT_SECRET,
+  }
+}
 
 export const resolveGeminiCliAuth = (auth) => {
-  const entry = normalizeAuthEntry(getAuthEntry(auth, ['google', 'google.oauth']));
-  const entryObject = asObject(entry);
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ["google", "google.oauth"]))
+  const entryObject = asObject(entry)
   if (!entryObject) {
-    return null;
+    return null
   }
 
-  const oauthObject = asObject(entryObject.oauth) ?? entryObject;
-  const accessToken = asNonEmptyString(oauthObject.access) ?? asNonEmptyString(oauthObject.token);
-  const refreshParts = parseGoogleRefreshToken(oauthObject.refresh);
+  const oauthObject = asObject(entryObject.oauth) ?? entryObject
+  const accessToken = asNonEmptyString(oauthObject.access) ?? asNonEmptyString(oauthObject.token)
+  const refreshParts = parseGoogleRefreshToken(oauthObject.refresh)
 
   if (!accessToken && !refreshParts.refreshToken) {
-    return null;
+    return null
   }
 
   return {
-    sourceId: 'gemini',
-    sourceLabel: 'Gemini',
+    sourceId: "gemini",
+    sourceLabel: "Gemini",
     accessToken,
     refreshToken: refreshParts.refreshToken,
     projectId: refreshParts.projectId ?? refreshParts.managedProjectId,
-    expires: toTimestamp(oauthObject.expires)
-  };
-};
+    expires: toTimestamp(oauthObject.expires),
+  }
+}
 
 export const resolveAntigravityAuth = () => {
   for (const filePath of ANTIGRAVITY_ACCOUNTS_PATHS) {
-    const data = readJsonFile(filePath);
-    const accounts = data?.accounts;
+    const data = readJsonFile(filePath)
+    const accounts = data?.accounts
     if (Array.isArray(accounts) && accounts.length > 0) {
-      const index = typeof data.activeIndex === 'number' ? data.activeIndex : 0;
-      const account = accounts[index] ?? accounts[0];
+      const index = typeof data.activeIndex === "number" ? data.activeIndex : 0
+      const account = accounts[index] ?? accounts[0]
       if (account?.refreshToken) {
-        const refreshParts = parseGoogleRefreshToken(account.refreshToken);
+        const refreshParts = parseGoogleRefreshToken(account.refreshToken)
         return {
-          sourceId: 'antigravity',
-          sourceLabel: 'Antigravity',
+          sourceId: "antigravity",
+          sourceLabel: "Antigravity",
           refreshToken: refreshParts.refreshToken,
-          projectId: asNonEmptyString(account.projectId)
-            ?? asNonEmptyString(account.managedProjectId)
-            ?? refreshParts.projectId
-            ?? refreshParts.managedProjectId,
-          email: account.email
-        };
+          projectId:
+            asNonEmptyString(account.projectId) ??
+            asNonEmptyString(account.managedProjectId) ??
+            refreshParts.projectId ??
+            refreshParts.managedProjectId,
+          email: account.email,
+        }
       }
     }
   }
 
-  return null;
-};
+  return null
+}
 
 export const resolveGoogleAuthSources = () => {
-  const auth = readAuthFile();
-  const sources = [];
+  const auth = readAuthFile()
+  const sources = []
 
-  const geminiAuth = resolveGeminiCliAuth(auth);
+  const geminiAuth = resolveGeminiCliAuth(auth)
   if (geminiAuth) {
-    sources.push(geminiAuth);
+    sources.push(geminiAuth)
   }
 
-  const antigravityAuth = resolveAntigravityAuth();
+  const antigravityAuth = resolveAntigravityAuth()
   if (antigravityAuth) {
-    sources.push(antigravityAuth);
+    sources.push(antigravityAuth)
   }
 
-  return sources;
-};
+  return sources
+}

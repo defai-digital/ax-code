@@ -89,7 +89,12 @@ export namespace DiagnosticCorrelation {
    * array if no correlations are cached or the cache has expired.
    */
   export function correlateDiagnostics(file: string): DebugEngine.CorrelatedDiagnostic[] {
-    const current = state()
+    let current: CorrelationState
+    try {
+      current = state()
+    } catch {
+      return []
+    }
     const entry = current.cache.get(cacheKey(file))
     if (!entry) return []
     if (Date.now() - entry.timestamp > CACHE_TTL_MS) {

@@ -4,15 +4,15 @@
  * packages/electron/resources/web-dist so electron-builder can
  * include it as an extraResource in the final package.
  */
-import fs from 'fs/promises'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import fs from "fs/promises"
+import path from "path"
+import { fileURLToPath } from "url"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const root = path.resolve(__dirname, '../../..')
+const root = path.resolve(__dirname, "../../..")
 
-const src = path.join(root, 'packages/web/dist')
-const dest = path.join(__dirname, '../resources/web-dist')
+const src = path.join(root, "packages/web/dist")
+const dest = path.join(__dirname, "../resources/web-dist")
 
 async function copyDir(from, to) {
   await fs.mkdir(to, { recursive: true })

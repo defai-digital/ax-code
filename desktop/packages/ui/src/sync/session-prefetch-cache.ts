@@ -15,8 +15,7 @@ type Meta = {
   at: number
 }
 
-const compositeKey = (directory: string, sessionID: string) =>
-  `${directory}\n${sessionID}`
+const compositeKey = (directory: string, sessionID: string) => `${directory}\n${sessionID}`
 
 const cache = new Map<string, Meta>()
 const inflight = new Map<string, Promise<Meta | undefined>>()

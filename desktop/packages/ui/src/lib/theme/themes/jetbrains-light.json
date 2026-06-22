@@ -6,12 +6,7 @@
     "author": "Artem Evsevev, adapted for AX Code Desktop",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "jetbrains",
-      "ide",
-      "blue"
-    ]
+    "tags": ["light", "jetbrains", "ide", "blue"]
   },
   "colors": {
     "primary": {

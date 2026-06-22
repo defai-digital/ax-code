@@ -1,5 +1,13 @@
-import { describe, expect, test } from "vitest";
-import type { Event, Message, Part, PermissionRequest, QuestionRequest, Session, SessionStatus } from "@ax-code/sdk/v2/client"
+import { describe, expect, test } from "vitest"
+import type {
+  Event,
+  Message,
+  Part,
+  PermissionRequest,
+  QuestionRequest,
+  Session,
+  SessionStatus,
+} from "@ax-code/sdk/v2/client"
 import { applyDirectoryEvent } from "../event-reducer"
 import { INITIAL_STATE, type State } from "../types"
 
@@ -235,7 +243,9 @@ describe("applyDirectoryEvent", () => {
       },
     } as Event)
 
-    expect((draft.part.msg_long?.[0] as Extract<Part, { type: "text" }> | undefined)?.text).toBe(`${longPrefix}${longOverlap}ghi`)
+    expect((draft.part.msg_long?.[0] as Extract<Part, { type: "text" }> | undefined)?.text).toBe(
+      `${longPrefix}${longOverlap}ghi`,
+    )
   })
 
   test("skips duplicate session status events", () => {
@@ -301,9 +311,7 @@ describe("applyDirectoryEvent", () => {
   })
 
   test("updates permission request arrays immutably", () => {
-    const initialPermissions = [
-      { id: "perm_1", sessionID: "ses_1" } as PermissionRequest,
-    ]
+    const initialPermissions = [{ id: "perm_1", sessionID: "ses_1" } as PermissionRequest]
     const draft = state({ permission: { ses_1: initialPermissions } })
 
     applyDirectoryEvent(draft, {
@@ -325,9 +333,7 @@ describe("applyDirectoryEvent", () => {
   })
 
   test("updates question request arrays immutably", () => {
-    const initialQuestions = [
-      { id: "ques_1", sessionID: "ses_1" } as QuestionRequest,
-    ]
+    const initialQuestions = [{ id: "ques_1", sessionID: "ses_1" } as QuestionRequest]
     const draft = state({ question: { ses_1: initialQuestions } })
 
     applyDirectoryEvent(draft, {

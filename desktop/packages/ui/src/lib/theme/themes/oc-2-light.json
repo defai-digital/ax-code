@@ -6,12 +6,7 @@
     "author": "AX Code",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "ax-code",
-      "ported",
-      "oc-2"
-    ]
+    "tags": ["light", "ax-code", "ported", "oc-2"]
   },
   "colors": {
     "primary": {
@@ -379,13 +374,7 @@
       "rowSelected": "#e0eafd"
     },
     "charts": {
-      "series": [
-        "#dcde8d",
-        "#a753ae",
-        "#12c905",
-        "#ffdc17",
-        "#fc533a"
-      ]
+      "series": ["#dcde8d", "#a753ae", "#12c905", "#ffdc17", "#fc533a"]
     },
     "a11y": {
       "focusRing": "#054dfd",

@@ -1,79 +1,77 @@
-import { API_ENDPOINTS, HTTP_DEFAULTS } from './http';
+import { API_ENDPOINTS, HTTP_DEFAULTS } from "./http"
 
 export type MagicPromptId =
-  | 'git.commit.generate.visible'
-  | 'git.commit.generate.instructions'
-  | 'git.pr.generate.visible'
-  | 'git.pr.generate.instructions'
-  | 'git.conflict.resolve.visible'
-  | 'git.conflict.resolve.instructions'
-  | 'git.integrate.cherrypick.resolve.visible'
-  | 'git.integrate.cherrypick.resolve.instructions'
-  | 'github.pr.review.visible'
-  | 'github.pr.review.instructions'
-  | 'github.issue.review.visible'
-  | 'github.issue.review.instructions'
-  | 'github.pr.checks.review.visible'
-  | 'github.pr.checks.review.instructions'
-  | 'github.pr.comments.review.visible'
-  | 'github.pr.comments.review.instructions'
-  | 'github.pr.comment.single.visible'
-  | 'github.pr.comment.single.instructions'
-  | 'plan.todo.visible'
-  | 'plan.todo.instructions'
-  | 'plan.improve.visible'
-  | 'plan.improve.instructions'
-  | 'plan.implement.visible'
-  | 'plan.implement.instructions'
-  | 'session.summary.visible'
-  | 'session.summary.instructions'
-  | 'session.review.visible'
-  | 'session.review.instructions'
-  | 'session.plan.visible'
-  | 'session.plan.instructions'
-  | 'session.catchup.visible'
-  | 'session.catchup.instructions'
-  | 'session.debug.visible'
-  | 'session.debug.instructions'
-  | 'session.weigh.visible'
-  | 'session.weigh.instructions'
-  | 'session.explore.visible'
-  | 'session.explore.instructions'
-  | 'session.fusion.visible'
-  | 'session.fusion.instructions';
+  | "git.commit.generate.visible"
+  | "git.commit.generate.instructions"
+  | "git.pr.generate.visible"
+  | "git.pr.generate.instructions"
+  | "git.conflict.resolve.visible"
+  | "git.conflict.resolve.instructions"
+  | "git.integrate.cherrypick.resolve.visible"
+  | "git.integrate.cherrypick.resolve.instructions"
+  | "github.pr.review.visible"
+  | "github.pr.review.instructions"
+  | "github.issue.review.visible"
+  | "github.issue.review.instructions"
+  | "github.pr.checks.review.visible"
+  | "github.pr.checks.review.instructions"
+  | "github.pr.comments.review.visible"
+  | "github.pr.comments.review.instructions"
+  | "github.pr.comment.single.visible"
+  | "github.pr.comment.single.instructions"
+  | "plan.todo.visible"
+  | "plan.todo.instructions"
+  | "plan.improve.visible"
+  | "plan.improve.instructions"
+  | "plan.implement.visible"
+  | "plan.implement.instructions"
+  | "session.summary.visible"
+  | "session.summary.instructions"
+  | "session.review.visible"
+  | "session.review.instructions"
+  | "session.plan.visible"
+  | "session.plan.instructions"
+  | "session.catchup.visible"
+  | "session.catchup.instructions"
+  | "session.debug.visible"
+  | "session.debug.instructions"
+  | "session.weigh.visible"
+  | "session.weigh.instructions"
+  | "session.explore.visible"
+  | "session.explore.instructions"
+  | "session.fusion.visible"
+  | "session.fusion.instructions"
 
 export interface MagicPromptDefinition {
-  id: MagicPromptId;
-  title: string;
-  description: string;
-  group: 'Git' | 'GitHub' | 'Planning' | 'Session';
-  template: string;
-  placeholders?: Array<{ key: string; description: string }>;
+  id: MagicPromptId
+  title: string
+  description: string
+  group: "Git" | "GitHub" | "Planning" | "Session"
+  template: string
+  placeholders?: Array<{ key: string; description: string }>
 }
 
 export interface MagicPromptOverridesPayload {
-  version: number;
-  overrides: Record<string, string>;
+  version: number
+  overrides: Record<string, string>
 }
 
-const API_ENDPOINT = API_ENDPOINTS.magicPrompts;
+const API_ENDPOINT = API_ENDPOINTS.magicPrompts
 
 export const MAGIC_PROMPT_DEFINITIONS: readonly MagicPromptDefinition[] = [
   {
-    id: 'git.commit.generate.visible',
-    title: 'Commit Generation Visible Prompt',
-    group: 'Git',
-    description: 'Visible user message for commit message generation.',
-    template: 'You are generating a Conventional Commits subject line using session context and selected file paths.',
+    id: "git.commit.generate.visible",
+    title: "Commit Generation Visible Prompt",
+    group: "Git",
+    description: "Visible user message for commit message generation.",
+    template: "You are generating a Conventional Commits subject line using session context and selected file paths.",
   },
   {
-    id: 'git.commit.generate.instructions',
-    title: 'Commit Generation Instructions',
-    group: 'Git',
-    description: 'Hidden instructions for commit message generation.',
-    placeholders: [
-      { key: 'selected_files', description: 'Bullet list of currently selected file paths.' },
-    ],
+    id: "git.commit.generate.instructions",
+    title: "Commit Generation Instructions",
+    group: "Git",
+    description: "Hidden instructions for commit message generation.",
+    placeholders: [{ key: "selected_files", description: "Bullet list of currently selected file paths." }],
     template: `Return exactly one JSON object and nothing else. Do not include prose, markdown, explanations, or code fences.
 
 The JSON object must have exactly this shape:
@@ -92,23 +90,24 @@ Selected files:
 {{selected_files}}`,
   },
   {
-    id: 'git.pr.generate.visible',
-    title: 'PR Generation Visible Prompt',
-    group: 'Git',
-    description: 'Visible user message for PR title/body generation.',
-    template: 'You are drafting GitHub Pull Request title and body using session context, commit list, and changed files.',
+    id: "git.pr.generate.visible",
+    title: "PR Generation Visible Prompt",
+    group: "Git",
+    description: "Visible user message for PR title/body generation.",
+    template:
+      "You are drafting GitHub Pull Request title and body using session context, commit list, and changed files.",
   },
   {
-    id: 'git.pr.generate.instructions',
-    title: 'PR Generation Instructions',
-    group: 'Git',
-    description: 'Hidden instructions for PR title/body generation.',
+    id: "git.pr.generate.instructions",
+    title: "PR Generation Instructions",
+    group: "Git",
+    description: "Hidden instructions for PR title/body generation.",
     placeholders: [
-      { key: 'base_branch', description: 'Base branch name.' },
-      { key: 'head_branch', description: 'Head branch name.' },
-      { key: 'commits', description: 'Bullet list of commits in base...head.' },
-      { key: 'changed_files', description: 'Bullet list of changed files in base...head.' },
-      { key: 'additional_context_block', description: 'Optional Additional context block (already formatted).' },
+      { key: "base_branch", description: "Base branch name." },
+      { key: "head_branch", description: "Head branch name." },
+      { key: "commits", description: "Bullet list of commits in base...head." },
+      { key: "changed_files", description: "Bullet list of changed files in base...head." },
+      { key: "additional_context_block", description: "Optional Additional context block (already formatted)." },
     ],
     template: `Return exactly one JSON object and nothing else. Do not include prose, markdown outside JSON, explanations, or code fences.
 
@@ -133,20 +132,18 @@ Files changed across these commits:
 {{changed_files}}{{additional_context_block}}`,
   },
   {
-    id: 'github.pr.review.visible',
-    title: 'PR Review Visible Prompt',
-    group: 'GitHub',
-    description: 'Visible user message when creating PR review requests from GitHub context.',
-    placeholders: [
-      { key: 'pr_number', description: 'Pull request number.' },
-    ],
-    template: 'Review this pull request #{{pr_number}} using the provided PR context',
+    id: "github.pr.review.visible",
+    title: "PR Review Visible Prompt",
+    group: "GitHub",
+    description: "Visible user message when creating PR review requests from GitHub context.",
+    placeholders: [{ key: "pr_number", description: "Pull request number." }],
+    template: "Review this pull request #{{pr_number}} using the provided PR context",
   },
   {
-    id: 'github.pr.review.instructions',
-    title: 'PR Review Instructions',
-    group: 'GitHub',
-    description: 'Hidden instructions attached when generating a PR review response.',
+    id: "github.pr.review.instructions",
+    title: "PR Review Instructions",
+    group: "GitHub",
+    description: "Hidden instructions attached when generating a PR review response.",
     template: `You are drafting a pull request review comment that will be posted back to the PR author. You are not the implementer; do not propose to write code or run commands.
 
 Before drafting:
@@ -193,20 +190,18 @@ Nice-to-have:
 - None`,
   },
   {
-    id: 'github.issue.review.visible',
-    title: 'Issue Review Visible Prompt',
-    group: 'GitHub',
-    description: 'Visible user message when creating issue review requests from GitHub context.',
-    placeholders: [
-      { key: 'issue_number', description: 'Issue number.' },
-    ],
-    template: 'Review this issue #{{issue_number}} using the provided issue context',
+    id: "github.issue.review.visible",
+    title: "Issue Review Visible Prompt",
+    group: "GitHub",
+    description: "Visible user message when creating issue review requests from GitHub context.",
+    placeholders: [{ key: "issue_number", description: "Issue number." }],
+    template: "Review this issue #{{issue_number}} using the provided issue context",
   },
   {
-    id: 'github.issue.review.instructions',
-    title: 'Issue Review Instructions',
-    group: 'GitHub',
-    description: 'Hidden instructions attached when generating an issue review response.',
+    id: "github.issue.review.instructions",
+    title: "Issue Review Instructions",
+    group: "GitHub",
+    description: "Hidden instructions attached when generating an issue review response.",
     template: `Review this issue using the provided issue context.
 
 Process:
@@ -248,17 +243,17 @@ Question/Support:
 Do not implement changes until I confirm; end with: "Next actions: <1 sentence>".`,
   },
   {
-    id: 'github.pr.checks.review.visible',
-    title: 'PR Failed Checks Visible Prompt',
-    group: 'GitHub',
-    description: 'Visible user message for PR failed checks analysis.',
-    template: 'Review these PR failed checks and propose likely fixes. Do not implement until I confirm.',
+    id: "github.pr.checks.review.visible",
+    title: "PR Failed Checks Visible Prompt",
+    group: "GitHub",
+    description: "Visible user message for PR failed checks analysis.",
+    template: "Review these PR failed checks and propose likely fixes. Do not implement until I confirm.",
   },
   {
-    id: 'github.pr.checks.review.instructions',
-    title: 'PR Failed Checks Instructions',
-    group: 'GitHub',
-    description: 'Hidden instructions for PR failed checks analysis.',
+    id: "github.pr.checks.review.instructions",
+    title: "PR Failed Checks Instructions",
+    group: "GitHub",
+    description: "Hidden instructions for PR failed checks analysis.",
     template: `Use the attached checks payload.
 - Summarize what is failing.
 - Prioritize check annotations/errors over generic status text.
@@ -267,17 +262,18 @@ Do not implement changes until I confirm; end with: "Next actions: <1 sentence>"
 - No speculation: ask for missing info if needed.`,
   },
   {
-    id: 'github.pr.comments.review.visible',
-    title: 'PR Comments Review Visible Prompt',
-    group: 'GitHub',
-    description: 'Visible user message for PR comments analysis.',
-    template: 'Review these PR comments and propose the required changes and next actions. Do not implement until I confirm.',
+    id: "github.pr.comments.review.visible",
+    title: "PR Comments Review Visible Prompt",
+    group: "GitHub",
+    description: "Visible user message for PR comments analysis.",
+    template:
+      "Review these PR comments and propose the required changes and next actions. Do not implement until I confirm.",
   },
   {
-    id: 'github.pr.comments.review.instructions',
-    title: 'PR Comments Review Instructions',
-    group: 'GitHub',
-    description: 'Hidden instructions for PR comments analysis.',
+    id: "github.pr.comments.review.instructions",
+    title: "PR Comments Review Instructions",
+    group: "GitHub",
+    description: "Hidden instructions for PR comments analysis.",
     template: `Use the attached comments payload.
 - Identify required vs optional changes.
 - Call out intent/implementation mismatch if present.
@@ -285,17 +281,17 @@ Do not implement changes until I confirm; end with: "Next actions: <1 sentence>"
 - Once intent is clear, propose a minimal plan and verification steps.`,
   },
   {
-    id: 'github.pr.comment.single.visible',
-    title: 'Single PR Comment Visible Prompt',
-    group: 'GitHub',
-    description: 'Visible user message for single PR comment analysis.',
-    template: 'Address this comment from PR and propose required changes. Do not implement until I confirm.',
+    id: "github.pr.comment.single.visible",
+    title: "Single PR Comment Visible Prompt",
+    group: "GitHub",
+    description: "Visible user message for single PR comment analysis.",
+    template: "Address this comment from PR and propose required changes. Do not implement until I confirm.",
   },
   {
-    id: 'github.pr.comment.single.instructions',
-    title: 'Single PR Comment Instructions',
-    group: 'GitHub',
-    description: 'Hidden instructions for single PR comment analysis.',
+    id: "github.pr.comment.single.instructions",
+    title: "Single PR Comment Instructions",
+    group: "GitHub",
+    description: "Hidden instructions for single PR comment analysis.",
     template: `Use the attached single-comment payload.
 - Explain what the reviewer is asking for.
 - Identify exact code areas likely impacted.
@@ -303,27 +299,28 @@ Do not implement changes until I confirm; end with: "Next actions: <1 sentence>"
 - Once intent is clear, propose a minimal implementation plan and verification steps.`,
   },
   {
-    id: 'git.conflict.resolve.visible',
-    title: 'Merge/Rebase Conflict Visible Prompt',
-    group: 'Git',
-    description: 'Visible user message for merge/rebase conflict resolution help.',
+    id: "git.conflict.resolve.visible",
+    title: "Merge/Rebase Conflict Visible Prompt",
+    group: "Git",
+    description: "Visible user message for merge/rebase conflict resolution help.",
     placeholders: [
-      { key: 'operation_label', description: 'Operation label in lower-case (merge/rebase).' },
-      { key: 'head_ref', description: 'Head reference for preserving intent.' },
+      { key: "operation_label", description: "Operation label in lower-case (merge/rebase)." },
+      { key: "head_ref", description: "Head reference for preserving intent." },
     ],
-    template: 'Investigate the {{operation_label}} conflicts and concisely report the intended resolution strategy without making modifications. Wait for confirmation before resolving, staging, or continuing the {{operation_label}}. Preserve the intent of changes from {{head_ref}}.',
+    template:
+      "Investigate the {{operation_label}} conflicts and concisely report the intended resolution strategy without making modifications. Wait for confirmation before resolving, staging, or continuing the {{operation_label}}. Preserve the intent of changes from {{head_ref}}.",
   },
   {
-    id: 'git.conflict.resolve.instructions',
-    title: 'Merge/Rebase Conflict Instructions',
-    group: 'Git',
-    description: 'Hidden instructions for merge/rebase conflict resolution help.',
+    id: "git.conflict.resolve.instructions",
+    title: "Merge/Rebase Conflict Instructions",
+    group: "Git",
+    description: "Hidden instructions for merge/rebase conflict resolution help.",
     placeholders: [
-      { key: 'operation_label', description: 'Operation label in lower-case (merge/rebase).' },
-      { key: 'directory', description: 'Repository directory path.' },
-      { key: 'operation', description: 'Operation name.' },
-      { key: 'head_info', description: 'Head metadata if available.' },
-      { key: 'continue_cmd', description: 'Command to continue operation.' },
+      { key: "operation_label", description: "Operation label in lower-case (merge/rebase)." },
+      { key: "directory", description: "Repository directory path." },
+      { key: "operation", description: "Operation name." },
+      { key: "head_info", description: "Head metadata if available." },
+      { key: "continue_cmd", description: "Command to continue operation." },
     ],
     template: `Git {{operation_label}} operation is in progress with conflicts.
 - Directory: {{directory}}
@@ -346,27 +343,28 @@ Important:
 - After completing all steps, confirm the {{operation_label}} was successful`,
   },
   {
-    id: 'git.integrate.cherrypick.resolve.visible',
-    title: 'Cherry-pick Conflict Visible Prompt',
-    group: 'Git',
-    description: 'Visible user message for cherry-pick conflict resolution help.',
+    id: "git.integrate.cherrypick.resolve.visible",
+    title: "Cherry-pick Conflict Visible Prompt",
+    group: "Git",
+    description: "Visible user message for cherry-pick conflict resolution help.",
     placeholders: [
-      { key: 'current_commit', description: 'Current commit hash being applied.' },
-      { key: 'target_branch', description: 'Target branch name.' },
+      { key: "current_commit", description: "Current commit hash being applied." },
+      { key: "target_branch", description: "Target branch name." },
     ],
-    template: 'Resolve cherry-pick conflicts, stage the resolved files, and continue the cherry-pick. Keep intent of commit {{current_commit}} onto branch {{target_branch}}.',
+    template:
+      "Resolve cherry-pick conflicts, stage the resolved files, and continue the cherry-pick. Keep intent of commit {{current_commit}} onto branch {{target_branch}}.",
   },
   {
-    id: 'git.integrate.cherrypick.resolve.instructions',
-    title: 'Cherry-pick Conflict Instructions',
-    group: 'Git',
-    description: 'Hidden instructions for cherry-pick conflict resolution help.',
+    id: "git.integrate.cherrypick.resolve.instructions",
+    title: "Cherry-pick Conflict Instructions",
+    group: "Git",
+    description: "Hidden instructions for cherry-pick conflict resolution help.",
     placeholders: [
-      { key: 'repo_root', description: 'Repository root path.' },
-      { key: 'temp_worktree_path', description: 'Temporary worktree path.' },
-      { key: 'source_branch', description: 'Source branch name.' },
-      { key: 'target_branch', description: 'Target branch name.' },
-      { key: 'current_commit', description: 'Current commit hash being applied.' },
+      { key: "repo_root", description: "Repository root path." },
+      { key: "temp_worktree_path", description: "Temporary worktree path." },
+      { key: "source_branch", description: "Source branch name." },
+      { key: "target_branch", description: "Target branch name." },
+      { key: "current_commit", description: "Current commit hash being applied." },
     ],
     template: `Worktree commit integration (cherry-pick) is in progress with conflicts.
 - Repo root: {{repo_root}}
@@ -390,23 +388,19 @@ Important:
 - After completing all steps, confirm the cherry-pick was successful`,
   },
   {
-    id: 'plan.todo.visible',
-    title: 'Todo Planning Visible Prompt',
-    group: 'Planning',
-    description: 'Visible user message when sending a todo into a new planning session.',
-    placeholders: [
-      { key: 'todo_text', description: 'Todo text selected by the user.' },
-    ],
-    template: '{{todo_text}}',
+    id: "plan.todo.visible",
+    title: "Todo Planning Visible Prompt",
+    group: "Planning",
+    description: "Visible user message when sending a todo into a new planning session.",
+    placeholders: [{ key: "todo_text", description: "Todo text selected by the user." }],
+    template: "{{todo_text}}",
   },
   {
-    id: 'plan.todo.instructions',
-    title: 'Todo Planning Instructions',
-    group: 'Planning',
-    description: 'Hidden instructions for sending a project todo into a new planning session.',
-    placeholders: [
-      { key: 'todo_text', description: 'Todo text selected by the user.' },
-    ],
+    id: "plan.todo.instructions",
+    title: "Todo Planning Instructions",
+    group: "Planning",
+    description: "Hidden instructions for sending a project todo into a new planning session.",
+    placeholders: [{ key: "todo_text", description: "Todo text selected by the user." }],
     template: `You are starting from a project todo item.
 Todo: {{todo_text}}
 Your job right now is to produce a thorough implementation plan for this todo, not to implement it yet. Optimize for a well-considered plan, not a fast one.
@@ -427,23 +421,21 @@ Final plan:
 7. Once aligned, deliver the concrete implementation plan grounded in the repo context. Make remaining assumptions and missing context explicit.`,
   },
   {
-    id: 'plan.improve.visible',
-    title: 'Improve Plan Visible Prompt',
-    group: 'Planning',
-    description: 'Visible user message when sending a saved plan into an improve flow.',
-    placeholders: [
-      { key: 'plan_title', description: 'Current plan title.' },
-    ],
-    template: 'Improve this plan: {{plan_title}}',
+    id: "plan.improve.visible",
+    title: "Improve Plan Visible Prompt",
+    group: "Planning",
+    description: "Visible user message when sending a saved plan into an improve flow.",
+    placeholders: [{ key: "plan_title", description: "Current plan title." }],
+    template: "Improve this plan: {{plan_title}}",
   },
   {
-    id: 'plan.improve.instructions',
-    title: 'Improve Plan Instructions',
-    group: 'Planning',
-    description: 'Hidden instructions for improving a saved plan from project context.',
+    id: "plan.improve.instructions",
+    title: "Improve Plan Instructions",
+    group: "Planning",
+    description: "Hidden instructions for improving a saved plan from project context.",
     placeholders: [
-      { key: 'plan_title', description: 'Current plan title.' },
-      { key: 'plan_path', description: 'Absolute path to the saved plan file.' },
+      { key: "plan_title", description: "Current plan title." },
+      { key: "plan_path", description: "Absolute path to the saved plan file." },
     ],
     template: `You are starting from an existing implementation plan.
 Plan title: {{plan_title}}
@@ -467,23 +459,21 @@ Final step:
 7. Once aligned, explicitly offer to edit this same file ({{plan_path}}) with the agreed changes. Make remaining assumptions and missing context explicit.`,
   },
   {
-    id: 'plan.implement.visible',
-    title: 'Implement Plan Visible Prompt',
-    group: 'Planning',
-    description: 'Visible user message when sending a saved plan into an implement flow.',
-    placeholders: [
-      { key: 'plan_title', description: 'Current plan title.' },
-    ],
-    template: 'Implement this plan: {{plan_title}}',
+    id: "plan.implement.visible",
+    title: "Implement Plan Visible Prompt",
+    group: "Planning",
+    description: "Visible user message when sending a saved plan into an implement flow.",
+    placeholders: [{ key: "plan_title", description: "Current plan title." }],
+    template: "Implement this plan: {{plan_title}}",
   },
   {
-    id: 'plan.implement.instructions',
-    title: 'Implement Plan Instructions',
-    group: 'Planning',
-    description: 'Hidden instructions for implementing a saved plan from project context.',
+    id: "plan.implement.instructions",
+    title: "Implement Plan Instructions",
+    group: "Planning",
+    description: "Hidden instructions for implementing a saved plan from project context.",
     placeholders: [
-      { key: 'plan_title', description: 'Current plan title.' },
-      { key: 'plan_path', description: 'Absolute path to the saved plan file.' },
+      { key: "plan_title", description: "Current plan title." },
+      { key: "plan_path", description: "Absolute path to the saved plan file." },
     ],
     template: `You are starting from an existing implementation plan.
 Plan title: {{plan_title}}
@@ -497,22 +487,26 @@ Do the implementation work continuously. When a plan step is ambiguous, do not s
 Do not expand scope beyond the plan. If during implementation you find the plan itself is wrong or genuinely blocks completion (not merely ambiguous), stop, state exactly what is broken and why, and propose a plan adjustment to save back into this same file ({{plan_path}}) before continuing.`,
   },
   {
-    id: 'session.summary.visible',
-    title: 'Session Summary Visible Prompt',
-    group: 'Session',
-    description: 'Visible user message sent by the /summary command.',
+    id: "session.summary.visible",
+    title: "Session Summary Visible Prompt",
+    group: "Session",
+    description: "Visible user message sent by the /summary command.",
     placeholders: [
-      { key: 'topic_line', description: 'Pre-formatted topic clause (e.g. " focused on: <topic>") or empty string.' },
+      { key: "topic_line", description: 'Pre-formatted topic clause (e.g. " focused on: <topic>") or empty string.' },
     ],
-    template: 'Summarize this session{{topic_line}}.',
+    template: "Summarize this session{{topic_line}}.",
   },
   {
-    id: 'session.summary.instructions',
-    title: 'Session Summary Instructions',
-    group: 'Session',
-    description: 'Hidden instructions attached to the /summary command. Produces a non-destructive summary usable for handing off to a new session.',
+    id: "session.summary.instructions",
+    title: "Session Summary Instructions",
+    group: "Session",
+    description:
+      "Hidden instructions attached to the /summary command. Produces a non-destructive summary usable for handing off to a new session.",
     placeholders: [
-      { key: 'topic_block', description: 'Pre-formatted topic focus paragraph, or empty string when no topic hint was given.' },
+      {
+        key: "topic_block",
+        description: "Pre-formatted topic focus paragraph, or empty string when no topic hint was given.",
+      },
     ],
     template: `Produce a non-destructive summary of this conversation. Do NOT compact or mutate session history — your output is an additional assistant message the user will read and may use to hand off to a new session.
 
@@ -535,17 +529,18 @@ Formatting:
 Respond in the same language the user used most in the conversation.`,
   },
   {
-    id: 'session.review.visible',
-    title: 'Workspace Review Visible Prompt',
-    group: 'Session',
-    description: 'Visible user message sent by the /workspace-review command.',
-    template: 'Review the changes made in this workspace.',
+    id: "session.review.visible",
+    title: "Workspace Review Visible Prompt",
+    group: "Session",
+    description: "Visible user message sent by the /workspace-review command.",
+    template: "Review the changes made in this workspace.",
   },
   {
-    id: 'session.review.instructions',
-    title: 'Workspace Review Instructions',
-    group: 'Session',
-    description: 'Hidden instructions attached to the /workspace-review command. Reviews the workspace diff for intent, correctness, and adequacy, with severity-classified findings.',
+    id: "session.review.instructions",
+    title: "Workspace Review Instructions",
+    group: "Session",
+    description:
+      "Hidden instructions attached to the /workspace-review command. Reviews the workspace diff for intent, correctness, and adequacy, with severity-classified findings.",
     template: `Review the changes in this workspace and judge whether they are correct and adequate — not just whether they contain catastrophic bugs.
 
 The diff is the source of truth. Read the relevant code around the diff too, not only the diff itself, so you understand the change in context.
@@ -605,17 +600,18 @@ Output:
 Keep the review concise and practical. Respond in the same language the user uses.`,
   },
   {
-    id: 'session.plan.visible',
-    title: 'Feature Planning Visible Prompt',
-    group: 'Session',
-    description: 'Visible user message sent by the /plan-feature command.',
-    template: 'I want to start planning a feature.',
+    id: "session.plan.visible",
+    title: "Feature Planning Visible Prompt",
+    group: "Session",
+    description: "Visible user message sent by the /plan-feature command.",
+    template: "I want to start planning a feature.",
   },
   {
-    id: 'session.plan.instructions',
-    title: 'Feature Planning Instructions',
-    group: 'Session',
-    description: 'Hidden instructions attached to the /plan-feature command. Runs a guided, batched-question dialogue that researches the code before producing an implementation plan.',
+    id: "session.plan.instructions",
+    title: "Feature Planning Instructions",
+    group: "Session",
+    description:
+      "Hidden instructions attached to the /plan-feature command. Runs a guided, batched-question dialogue that researches the code before producing an implementation plan.",
     template: `The user wants to plan a feature through a guided, back-and-forth conversation. They will describe an idea — often briefly and informally. Your job is to turn that idea into a concrete, validated implementation plan, without guessing.
 
 Run this as a dialogue, not a one-shot answer.
@@ -635,17 +631,18 @@ Run this as a dialogue, not a one-shot answer.
 Respond in the same language the user uses.`,
   },
   {
-    id: 'session.catchup.visible',
-    title: 'Catch Up Visible Prompt',
-    group: 'Session',
-    description: 'Visible user message sent by the /catch-up command.',
-    template: 'Catch me up on where this project is right now.',
+    id: "session.catchup.visible",
+    title: "Catch Up Visible Prompt",
+    group: "Session",
+    description: "Visible user message sent by the /catch-up command.",
+    template: "Catch me up on where this project is right now.",
   },
   {
-    id: 'session.catchup.instructions',
-    title: 'Catch Up Instructions',
-    group: 'Session',
-    description: 'Hidden instructions attached to the /catch-up command. Inspects git state and branches on it: in-progress diff, open PR review state, or recent commits.',
+    id: "session.catchup.instructions",
+    title: "Catch Up Instructions",
+    group: "Session",
+    description:
+      "Hidden instructions attached to the /catch-up command. Inspects git state and branches on it: in-progress diff, open PR review state, or recent commits.",
     template: `The user is returning to this project after stepping away and wants to quickly get their bearings — a quick, easy-to-digest "here's where you are and where to pick up", not a status report. Investigate the actual repository state first, then orient them conversationally. Do not assume; check.
 
 Quietly inspect git state first, and do this work silently — the user wants the takeaway, not a play-by-play of the commands you ran. Look at: the current branch and whether it is the repo's default branch (main/master, or whatever this repo uses), uncommitted changes (status and diff), recent commits, and where the branch stands relative to its remote.
@@ -670,17 +667,18 @@ Hard rules:
 Respond in the same language the user uses.`,
   },
   {
-    id: 'session.debug.visible',
-    title: 'Debugging Visible Prompt',
-    group: 'Session',
-    description: 'Visible user message sent by the /debug command.',
-    template: 'I want to debug an issue.',
+    id: "session.debug.visible",
+    title: "Debugging Visible Prompt",
+    group: "Session",
+    description: "Visible user message sent by the /debug command.",
+    template: "I want to debug an issue.",
   },
   {
-    id: 'session.debug.instructions',
-    title: 'Debugging Instructions',
-    group: 'Session',
-    description: 'Hidden instructions attached to the /debug command. Runs a guided root-cause investigation before proposing a fix.',
+    id: "session.debug.instructions",
+    title: "Debugging Instructions",
+    group: "Session",
+    description:
+      "Hidden instructions attached to the /debug command. Runs a guided root-cause investigation before proposing a fix.",
     template: `The user wants help debugging an issue. Drive this as a focused root-cause investigation — not a plan, and not an immediate fix.
 
 1. Get the symptom. When the user describes the problem, capture exactly what is observed versus expected — error messages, stack traces, failing behavior, and when it started. If a key detail is missing to even begin, ask for it briefly.
@@ -698,17 +696,18 @@ Respond in the same language the user uses.`,
 Respond in the same language the user uses.`,
   },
   {
-    id: 'session.weigh.visible',
-    title: 'Weigh Options Visible Prompt',
-    group: 'Session',
-    description: 'Visible user message sent by the /weigh command.',
-    template: 'Help me decide how to approach this.',
+    id: "session.weigh.visible",
+    title: "Weigh Options Visible Prompt",
+    group: "Session",
+    description: "Visible user message sent by the /weigh command.",
+    template: "Help me decide how to approach this.",
   },
   {
-    id: 'session.weigh.instructions',
-    title: 'Weigh Options Instructions',
-    group: 'Session',
-    description: 'Hidden instructions attached to the /weigh command. Investigates the code, then compares distinct approaches with trade-offs and a recommendation — no plan, no code.',
+    id: "session.weigh.instructions",
+    title: "Weigh Options Instructions",
+    group: "Session",
+    description:
+      "Hidden instructions attached to the /weigh command. Investigates the code, then compares distinct approaches with trade-offs and a recommendation — no plan, no code.",
     template: `The user knows WHAT they want to do but not HOW to approach it. Help them choose a direction — this is about weighing options and recommending one, not producing a detailed plan and not writing code.
 
 First, investigate. Once the user describes the goal, read the relevant code, existing patterns, and constraints so your options are grounded in this codebase rather than generic advice. Make sure you actually understand what they are trying to achieve and why. Ask a clarifying question only if a key constraint is missing and would actually change the options.
@@ -727,17 +726,18 @@ Keep it concrete and scannable. Do not start implementing and do not write a ste
 Respond in the same language the user uses.`,
   },
   {
-    id: 'session.explore.visible',
-    title: 'Codebase Tour Visible Prompt',
-    group: 'Session',
-    description: 'Visible user message sent by the /explore command.',
-    template: 'Give me a high-level tour of this codebase.',
+    id: "session.explore.visible",
+    title: "Codebase Tour Visible Prompt",
+    group: "Session",
+    description: "Visible user message sent by the /explore command.",
+    template: "Give me a high-level tour of this codebase.",
   },
   {
-    id: 'session.explore.instructions',
-    title: 'Codebase Tour Instructions',
-    group: 'Session',
-    description: 'Hidden instructions attached to the /explore command. Investigates the repository and gives a structured orientation rather than a file-by-file dump.',
+    id: "session.explore.instructions",
+    title: "Codebase Tour Instructions",
+    group: "Session",
+    description:
+      "Hidden instructions attached to the /explore command. Investigates the repository and gives a structured orientation rather than a file-by-file dump.",
     template: `The user wants to get oriented in this codebase — a high-level tour, as if you were onboarding a new contributor. Investigate first, then explain; do not guess from file or symbol names alone.
 
 Explore the actual repository: entry points, the top-level structure, how it is built and run, and the main modules and how they connect. Read enough real code to be accurate.
@@ -754,17 +754,17 @@ Keep it a readable orientation, not an exhaustive file-by-file dump — favor th
 Respond in the same language the user uses.`,
   },
   {
-    id: 'session.fusion.visible',
-    title: 'Fusion Visible Prompt',
-    group: 'Session',
-    description: 'Visible user message for multi-run fusion sessions.',
-    template: 'Create the best combined answer from the multi-run results.',
+    id: "session.fusion.visible",
+    title: "Fusion Visible Prompt",
+    group: "Session",
+    description: "Visible user message for multi-run fusion sessions.",
+    template: "Create the best combined answer from the multi-run results.",
   },
   {
-    id: 'session.fusion.instructions',
-    title: 'Fusion Instructions',
-    group: 'Session',
-    description: 'Hidden instructions used before multi-run source outputs in fusion sessions.',
+    id: "session.fusion.instructions",
+    title: "Fusion Instructions",
+    group: "Session",
+    description: "Hidden instructions used before multi-run source outputs in fusion sessions.",
     template: `You are performing fusion over multiple model outputs from the same original task.
 
 Goal: produce the strongest possible final answer by combining complementary information, resolving conflicts, removing duplicates, and preserving useful nuance.
@@ -773,73 +773,73 @@ Use the results below as source material. Do not mention that the inputs were hi
 
 --- FUSION INPUTS START ---`,
   },
-] as const;
+] as const
 
 const MAGIC_PROMPT_DEFINITION_BY_ID = new Map<MagicPromptId, MagicPromptDefinition>(
-  MAGIC_PROMPT_DEFINITIONS.map((definition) => [definition.id, definition])
-);
+  MAGIC_PROMPT_DEFINITIONS.map((definition) => [definition.id, definition]),
+)
 
 const LEGACY_PROMPT_KEY_MAP: Record<string, { visible: MagicPromptId; instructions: MagicPromptId }> = {
-  'git.commit.generate': {
-    visible: 'git.commit.generate.visible',
-    instructions: 'git.commit.generate.instructions',
+  "git.commit.generate": {
+    visible: "git.commit.generate.visible",
+    instructions: "git.commit.generate.instructions",
   },
-  'git.pr.generate': {
-    visible: 'git.pr.generate.visible',
-    instructions: 'git.pr.generate.instructions',
+  "git.pr.generate": {
+    visible: "git.pr.generate.visible",
+    instructions: "git.pr.generate.instructions",
   },
-};
+}
 
-let cachedOverrides: Record<string, string> | null = null;
-let inFlightOverridesRequest: Promise<Record<string, string>> | null = null;
+let cachedOverrides: Record<string, string> | null = null
+let inFlightOverridesRequest: Promise<Record<string, string>> | null = null
 
 const replaceTemplateVariables = (template: string, variables: Record<string, string>) => {
   return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
     if (!Object.prototype.hasOwnProperty.call(variables, key)) {
-      return '';
+      return ""
     }
-    return variables[key] ?? '';
-  });
-};
+    return variables[key] ?? ""
+  })
+}
 
 const normalizeOverridesPayload = (payload: unknown): Record<string, string> => {
-  const overridesRaw = (payload as { overrides?: unknown } | null)?.overrides;
-  if (!overridesRaw || typeof overridesRaw !== 'object' || Array.isArray(overridesRaw)) {
-    return {};
+  const overridesRaw = (payload as { overrides?: unknown } | null)?.overrides
+  if (!overridesRaw || typeof overridesRaw !== "object" || Array.isArray(overridesRaw)) {
+    return {}
   }
 
-  const result: Record<string, string> = {};
+  const result: Record<string, string> = {}
   for (const [key, value] of Object.entries(overridesRaw as Record<string, unknown>)) {
-    if (typeof value !== 'string') {
-      continue;
+    if (typeof value !== "string") {
+      continue
     }
-    result[key] = value;
+    result[key] = value
   }
 
   for (const [legacyKey, splitKeys] of Object.entries(LEGACY_PROMPT_KEY_MAP)) {
-    const legacyValue = result[legacyKey];
-    if (typeof legacyValue !== 'string') {
-      continue;
+    const legacyValue = result[legacyKey]
+    if (typeof legacyValue !== "string") {
+      continue
     }
 
-    const firstNewlineIndex = legacyValue.indexOf('\n');
-    const visible = (firstNewlineIndex === -1 ? legacyValue : legacyValue.slice(0, firstNewlineIndex)).trim();
-    const instructions = (firstNewlineIndex === -1 ? '' : legacyValue.slice(firstNewlineIndex + 1)).trim();
+    const firstNewlineIndex = legacyValue.indexOf("\n")
+    const visible = (firstNewlineIndex === -1 ? legacyValue : legacyValue.slice(0, firstNewlineIndex)).trim()
+    const instructions = (firstNewlineIndex === -1 ? "" : legacyValue.slice(firstNewlineIndex + 1)).trim()
 
     if (!(splitKeys.visible in result) && visible.length > 0) {
-      result[splitKeys.visible] = visible;
+      result[splitKeys.visible] = visible
     }
     if (!(splitKeys.instructions in result) && instructions.length > 0) {
-      result[splitKeys.instructions] = instructions;
+      result[splitKeys.instructions] = instructions
     }
   }
 
-  return result;
-};
+  return result
+}
 
 export const fetchMagicPromptOverrides = async (): Promise<Record<string, string>> => {
   if (cachedOverrides) {
-    return cachedOverrides;
+    return cachedOverrides
   }
 
   if (!inFlightOverridesRequest) {
@@ -849,100 +849,103 @@ export const fetchMagicPromptOverrides = async (): Promise<Record<string, string
     })
       .then(async (response) => {
         if (!response.ok) {
-          throw new Error('Failed to load magic prompts');
+          throw new Error("Failed to load magic prompts")
         }
-        const payload = await response.json().catch(() => ({}));
-        const normalized = normalizeOverridesPayload(payload);
-        cachedOverrides = normalized;
-        return normalized;
+        const payload = await response.json().catch(() => ({}))
+        const normalized = normalizeOverridesPayload(payload)
+        cachedOverrides = normalized
+        return normalized
       })
       .finally(() => {
-        inFlightOverridesRequest = null;
-      });
+        inFlightOverridesRequest = null
+      })
   }
 
-  return inFlightOverridesRequest;
-};
+  return inFlightOverridesRequest
+}
 
 export const invalidateMagicPromptOverridesCache = () => {
-  cachedOverrides = null;
-  inFlightOverridesRequest = null;
-};
+  cachedOverrides = null
+  inFlightOverridesRequest = null
+}
 
 export const getMagicPromptDefinition = (id: MagicPromptId): MagicPromptDefinition => {
-  const definition = MAGIC_PROMPT_DEFINITION_BY_ID.get(id);
+  const definition = MAGIC_PROMPT_DEFINITION_BY_ID.get(id)
   if (!definition) {
-    throw new Error(`Unknown magic prompt id: ${id}`);
+    throw new Error(`Unknown magic prompt id: ${id}`)
   }
-  return definition;
-};
+  return definition
+}
 
 export const getDefaultMagicPromptTemplate = (id: MagicPromptId): string => {
-  return getMagicPromptDefinition(id).template;
-};
+  return getMagicPromptDefinition(id).template
+}
 
 export const getEffectiveMagicPromptTemplate = async (id: MagicPromptId): Promise<string> => {
-  const overrides = await fetchMagicPromptOverrides().catch((): Record<string, string> => ({}));
-  const override = overrides[id];
-  if (typeof override === 'string') {
-    return override;
+  const overrides = await fetchMagicPromptOverrides().catch((): Record<string, string> => ({}))
+  const override = overrides[id]
+  if (typeof override === "string") {
+    return override
   }
-  return getDefaultMagicPromptTemplate(id);
-};
+  return getDefaultMagicPromptTemplate(id)
+}
 
 export const renderMagicPrompt = async (id: MagicPromptId, variables: Record<string, string> = {}): Promise<string> => {
-  const template = await getEffectiveMagicPromptTemplate(id);
-  return replaceTemplateVariables(template, variables);
-};
+  const template = await getEffectiveMagicPromptTemplate(id)
+  return replaceTemplateVariables(template, variables)
+}
 
-export const saveMagicPromptOverride = async (id: MagicPromptId, text: string): Promise<MagicPromptOverridesPayload> => {
+export const saveMagicPromptOverride = async (
+  id: MagicPromptId,
+  text: string,
+): Promise<MagicPromptOverridesPayload> => {
   const response = await fetch(`${API_ENDPOINT}/${encodeURIComponent(id)}`, {
     method: HTTP_DEFAULTS.method.put,
     headers: HTTP_DEFAULTS.headers.acceptAndContentTypeJson,
     body: JSON.stringify({ text }),
-  });
+  })
   if (!response.ok) {
-    const errorPayload = await response.json().catch(() => ({}));
-    throw new Error((errorPayload as { error?: string })?.error || 'Failed to save magic prompt');
+    const errorPayload = await response.json().catch(() => ({}))
+    throw new Error((errorPayload as { error?: string })?.error || "Failed to save magic prompt")
   }
-  const payload = await response.json();
-  cachedOverrides = normalizeOverridesPayload(payload);
+  const payload = await response.json()
+  cachedOverrides = normalizeOverridesPayload(payload)
   return {
-    version: typeof payload?.version === 'number' ? payload.version : 1,
+    version: typeof payload?.version === "number" ? payload.version : 1,
     overrides: cachedOverrides,
-  };
-};
+  }
+}
 
 export const resetMagicPromptOverride = async (id: MagicPromptId): Promise<MagicPromptOverridesPayload> => {
   const response = await fetch(`${API_ENDPOINT}/${encodeURIComponent(id)}`, {
     method: HTTP_DEFAULTS.method.delete,
     headers: HTTP_DEFAULTS.headers.acceptJson,
-  });
+  })
   if (!response.ok) {
-    const errorPayload = await response.json().catch(() => ({}));
-    throw new Error((errorPayload as { error?: string })?.error || 'Failed to reset magic prompt');
+    const errorPayload = await response.json().catch(() => ({}))
+    throw new Error((errorPayload as { error?: string })?.error || "Failed to reset magic prompt")
   }
-  const payload = await response.json();
-  cachedOverrides = normalizeOverridesPayload(payload);
+  const payload = await response.json()
+  cachedOverrides = normalizeOverridesPayload(payload)
   return {
-    version: typeof payload?.version === 'number' ? payload.version : 1,
+    version: typeof payload?.version === "number" ? payload.version : 1,
     overrides: cachedOverrides,
-  };
-};
+  }
+}
 
 export const resetAllMagicPromptOverrides = async (): Promise<MagicPromptOverridesPayload> => {
   const response = await fetch(API_ENDPOINT, {
     method: HTTP_DEFAULTS.method.delete,
     headers: HTTP_DEFAULTS.headers.acceptJson,
-  });
+  })
   if (!response.ok) {
-    const errorPayload = await response.json().catch(() => ({}));
-    throw new Error((errorPayload as { error?: string })?.error || 'Failed to reset all magic prompts');
+    const errorPayload = await response.json().catch(() => ({}))
+    throw new Error((errorPayload as { error?: string })?.error || "Failed to reset all magic prompts")
   }
-  const payload = await response.json();
-  cachedOverrides = normalizeOverridesPayload(payload);
+  const payload = await response.json()
+  cachedOverrides = normalizeOverridesPayload(payload)
   return {
-    version: typeof payload?.version === 'number' ? payload.version : 1,
+    version: typeof payload?.version === "number" ? payload.version : 1,
     overrides: cachedOverrides,
-  };
-};
+  }
+}

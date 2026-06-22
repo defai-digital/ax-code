@@ -1,38 +1,37 @@
-import type { Ghostty } from 'ghostty-web';
-import type { Theme } from '@/types/theme';
+import type { Ghostty } from "ghostty-web"
+import type { Theme } from "@/types/theme"
 
 export interface TerminalTheme {
-  background: string;
-  foreground: string;
-  cursor: string;
-  cursorAccent: string;
-  selectionBackground: string;
-  selectionForeground?: string;
-  selectionInactiveBackground?: string;
-  black: string;
-  red: string;
-  green: string;
-  yellow: string;
-  blue: string;
-  magenta: string;
-  cyan: string;
-  white: string;
-  brightBlack: string;
-  brightRed: string;
-  brightGreen: string;
-  brightYellow: string;
-  brightBlue: string;
-  brightMagenta: string;
-  brightCyan: string;
-  brightWhite: string;
+  background: string
+  foreground: string
+  cursor: string
+  cursorAccent: string
+  selectionBackground: string
+  selectionForeground?: string
+  selectionInactiveBackground?: string
+  black: string
+  red: string
+  green: string
+  yellow: string
+  blue: string
+  magenta: string
+  cyan: string
+  white: string
+  brightBlack: string
+  brightRed: string
+  brightGreen: string
+  brightYellow: string
+  brightBlue: string
+  brightMagenta: string
+  brightCyan: string
+  brightWhite: string
 }
 
 export function convertThemeToXterm(theme: Theme): TerminalTheme {
-  const { colors } = theme;
-  const syntax = colors.syntax.base;
+  const { colors } = theme
+  const syntax = colors.syntax.base
 
   return {
-
     background: colors.surface.background,
     foreground: syntax.foreground,
     cursor: colors.interactive.cursor,
@@ -40,7 +39,7 @@ export function convertThemeToXterm(theme: Theme): TerminalTheme {
 
     selectionBackground: colors.interactive.selection,
     selectionForeground: colors.interactive.selectionForeground,
-    selectionInactiveBackground: colors.interactive.selection + '50',
+    selectionInactiveBackground: colors.interactive.selection + "50",
 
     black: colors.surface.muted,
     red: colors.status.error,
@@ -59,36 +58,31 @@ export function convertThemeToXterm(theme: Theme): TerminalTheme {
     brightMagenta: syntax.keyword,
     brightCyan: syntax.type,
     brightWhite: colors.surface.elevatedForeground,
-  };
+  }
 }
 
-export function getTerminalOptions(
-  fontFamily: string,
-  fontSize: number,
-  theme: TerminalTheme
-) {
-
+export function getTerminalOptions(fontFamily: string, fontSize: number, theme: TerminalTheme) {
   const powerlineFallbacks =
-    '"JetBrainsMonoNL Nerd Font", "FiraCode Nerd Font", "Cascadia Code PL", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace';
-  const augmentedFontFamily = `${fontFamily}, ${powerlineFallbacks}`;
+    '"JetBrainsMonoNL Nerd Font", "FiraCode Nerd Font", "Cascadia Code PL", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace'
+  const augmentedFontFamily = `${fontFamily}, ${powerlineFallbacks}`
 
   return {
     fontFamily: augmentedFontFamily,
     fontSize,
     lineHeight: 1,
     cursorBlink: false,
-    cursorStyle: 'bar' as const,
+    cursorStyle: "bar" as const,
     theme,
     allowTransparency: false,
     scrollback: 10_000,
     minimumContrastRatio: 1,
-    fastScrollModifier: 'shift' as const,
+    fastScrollModifier: "shift" as const,
     fastScrollSensitivity: 5,
     scrollSensitivity: 3,
     macOptionIsMeta: true,
     macOptionClickForcesSelection: false,
     rightClickSelectsWord: true,
-  };
+  }
 }
 
 /**
@@ -99,15 +93,15 @@ export function getGhosttyTerminalOptions(
   fontSize: number,
   theme: TerminalTheme,
   ghostty: Ghostty,
-  disableStdin = false
+  disableStdin = false,
 ) {
   const powerlineFallbacks =
-    '"JetBrainsMonoNL Nerd Font", "FiraCode Nerd Font", "Cascadia Code PL", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace';
-  const augmentedFontFamily = `${fontFamily}, ${powerlineFallbacks}`;
+    '"JetBrainsMonoNL Nerd Font", "FiraCode Nerd Font", "Cascadia Code PL", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace'
+  const augmentedFontFamily = `${fontFamily}, ${powerlineFallbacks}`
 
   return {
     cursorBlink: false,
-    cursorStyle: 'bar' as const,
+    cursorStyle: "bar" as const,
     fontSize,
     lineHeight: 1.15,
     fontFamily: augmentedFontFamily,
@@ -139,5 +133,5 @@ export function getGhosttyTerminalOptions(
     scrollback: 10_000,
     ghostty,
     disableStdin,
-  };
+  }
 }

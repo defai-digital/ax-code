@@ -1,60 +1,61 @@
-import React from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Radio } from '@/components/ui/radio';
-import { updateDesktopSettings } from '@/lib/persistence';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useUIStore } from '@/stores/useUIStore';
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
-import { API_ENDPOINTS } from '@/lib/http';
-import { useI18n } from '@/lib/i18n';
+import React from "react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Radio } from "@/components/ui/radio"
+import { updateDesktopSettings } from "@/lib/persistence"
+import { useConfigStore } from "@/stores/useConfigStore"
+import { useUIStore } from "@/stores/useUIStore"
+import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
+import { setFilesViewShowGitignored, useFilesViewShowGitignored } from "@/lib/filesViewShowGitignored"
+import { API_ENDPOINTS } from "@/lib/http"
+import { useI18n } from "@/lib/i18n"
 
 export const GitSettings: React.FC = () => {
-  const { t } = useI18n();
-  const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
-  const setSettingsGitmojiEnabled = useConfigStore((state) => state.setSettingsGitmojiEnabled);
-  const showGitignored = useFilesViewShowGitignored();
-  const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
-  const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
+  const { t } = useI18n()
+  const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled)
+  const setSettingsGitmojiEnabled = useConfigStore((state) => state.setSettingsGitmojiEnabled)
+  const showGitignored = useFilesViewShowGitignored()
+  const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode)
+  const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode)
 
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(true)
   const viewOptions = React.useMemo(
     () => [
-      { id: 'flat' as const, label: t('settings.openchamber.git.option.flatList') },
-      { id: 'tree' as const, label: t('settings.openchamber.git.option.treeView') },
+      { id: "flat" as const, label: t("settings.openchamber.git.option.flatList") },
+      { id: "tree" as const, label: t("settings.openchamber.git.option.treeView") },
     ],
-    [t]
-  );
+    [t],
+  )
 
   type GitSettingsPayload = {
-    gitmojiEnabled?: boolean;
-    gitChangesViewMode?: 'flat' | 'tree';
-  };
+    gitmojiEnabled?: boolean
+    gitChangesViewMode?: "flat" | "tree"
+  }
 
   // Load current settings
   React.useEffect(() => {
     const loadSettings = async () => {
       try {
-        let data: GitSettingsPayload | null = null;
+        let data: GitSettingsPayload | null = null
 
         // 1. Runtime settings API (VSCode)
         if (!data) {
-          const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
+          const runtimeSettings = getRegisteredRuntimeAPIs()?.settings
           if (runtimeSettings) {
             try {
-              const result = await runtimeSettings.load();
-              const settings = result?.settings;
+              const result = await runtimeSettings.load()
+              const settings = result?.settings
               if (settings) {
                 data = {
-                  gitmojiEnabled: typeof (settings as Record<string, unknown>).gitmojiEnabled === 'boolean'
-                    ? ((settings as Record<string, unknown>).gitmojiEnabled as boolean)
-                    : undefined,
-                  gitChangesViewMode:
-                    (settings as Record<string, unknown>).gitChangesViewMode === 'flat'
-                    || (settings as Record<string, unknown>).gitChangesViewMode === 'tree'
-                      ? ((settings as Record<string, unknown>).gitChangesViewMode as 'flat' | 'tree')
+                  gitmojiEnabled:
+                    typeof (settings as Record<string, unknown>).gitmojiEnabled === "boolean"
+                      ? ((settings as Record<string, unknown>).gitmojiEnabled as boolean)
                       : undefined,
-                };
+                  gitChangesViewMode:
+                    (settings as Record<string, unknown>).gitChangesViewMode === "flat" ||
+                    (settings as Record<string, unknown>).gitChangesViewMode === "tree"
+                      ? ((settings as Record<string, unknown>).gitChangesViewMode as "flat" | "tree")
+                      : undefined,
+                }
               }
             } catch {
               // fall through
@@ -65,93 +66,114 @@ export const GitSettings: React.FC = () => {
         // 2. Fetch API (Web/server)
         if (!data) {
           const response = await fetch(API_ENDPOINTS.config.settings, {
-            method: 'GET',
-            headers: { Accept: 'application/json' },
-          });
+            method: "GET",
+            headers: { Accept: "application/json" },
+          })
           if (response.ok) {
-            data = await response.json();
+            data = await response.json()
           }
         }
 
         if (data) {
-          if (typeof data.gitmojiEnabled === 'boolean') {
-            setSettingsGitmojiEnabled(data.gitmojiEnabled);
+          if (typeof data.gitmojiEnabled === "boolean") {
+            setSettingsGitmojiEnabled(data.gitmojiEnabled)
           }
-          if (data.gitChangesViewMode === 'flat' || data.gitChangesViewMode === 'tree') {
-            setGitChangesViewMode(data.gitChangesViewMode);
+          if (data.gitChangesViewMode === "flat" || data.gitChangesViewMode === "tree") {
+            setGitChangesViewMode(data.gitChangesViewMode)
           }
         }
-
       } catch (error) {
-        console.warn('Failed to load git settings:', error);
+        console.warn("Failed to load git settings:", error)
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
-    };
-    loadSettings();
-  }, [setGitChangesViewMode, setSettingsGitmojiEnabled]);
-
-  const handleGitmojiChange = React.useCallback(async (enabled: boolean) => {
-    setSettingsGitmojiEnabled(enabled);
-    try {
-      await updateDesktopSettings({
-        gitmojiEnabled: enabled,
-      });
-    } catch (error) {
-      console.warn('Failed to save gitmoji setting:', error);
     }
-  }, [setSettingsGitmojiEnabled]);
+    loadSettings()
+  }, [setGitChangesViewMode, setSettingsGitmojiEnabled])
 
-  const handleGitChangesViewModeChange = React.useCallback((mode: 'flat' | 'tree') => {
-    if (mode === gitChangesViewMode) {
-      return;
-    }
+  const handleGitmojiChange = React.useCallback(
+    async (enabled: boolean) => {
+      setSettingsGitmojiEnabled(enabled)
+      try {
+        await updateDesktopSettings({
+          gitmojiEnabled: enabled,
+        })
+      } catch (error) {
+        console.warn("Failed to save gitmoji setting:", error)
+      }
+    },
+    [setSettingsGitmojiEnabled],
+  )
 
-    setGitChangesViewMode(mode);
-    void updateDesktopSettings({ gitChangesViewMode: mode });
-  }, [gitChangesViewMode, setGitChangesViewMode]);
+  const handleGitChangesViewModeChange = React.useCallback(
+    (mode: "flat" | "tree") => {
+      if (mode === gitChangesViewMode) {
+        return
+      }
+
+      setGitChangesViewMode(mode)
+      void updateDesktopSettings({ gitChangesViewMode: mode })
+    },
+    [gitChangesViewMode, setGitChangesViewMode],
+  )
 
   if (isLoading) {
-    return null;
+    return null
   }
 
   return (
     <div className="mb-8">
       <div className="mb-1 px-1">
-        <h3 className="typography-ui-header font-medium text-foreground">{t('settings.openchamber.git.title')}</h3>
+        <h3 className="typography-ui-header font-medium text-foreground">{t("settings.openchamber.git.title")}</h3>
       </div>
 
       <section className="px-2 pb-2 pt-0 space-y-0.5">
         <div className="pt-1 pb-1">
-          <h4 className="typography-ui-header font-medium text-foreground">{t('settings.openchamber.git.changesViewTitle')}</h4>
-          <div role="radiogroup" aria-label={t('settings.openchamber.git.changesViewAria')} className="mt-0.5 space-y-0">
+          <h4 className="typography-ui-header font-medium text-foreground">
+            {t("settings.openchamber.git.changesViewTitle")}
+          </h4>
+          <div
+            role="radiogroup"
+            aria-label={t("settings.openchamber.git.changesViewAria")}
+            className="mt-0.5 space-y-0"
+          >
             {viewOptions.map((option) => {
-              const selected = gitChangesViewMode === option.id;
+              const selected = gitChangesViewMode === option.id
               return (
                 <div
                   key={option.id}
                   role="button"
                   tabIndex={0}
                   aria-pressed={selected}
-                  onClick={() => { handleGitChangesViewModeChange(option.id); }}
+                  onClick={() => {
+                    handleGitChangesViewModeChange(option.id)
+                  }}
                   onKeyDown={(event) => {
-                    if (event.key === ' ' || event.key === 'Enter') {
-                      event.preventDefault();
-                      handleGitChangesViewModeChange(option.id);
+                    if (event.key === " " || event.key === "Enter") {
+                      event.preventDefault()
+                      handleGitChangesViewModeChange(option.id)
                     }
                   }}
                   className="flex w-full items-center gap-2 py-0 text-left"
                 >
                   <Radio
                     checked={selected}
-                    onChange={() => { handleGitChangesViewModeChange(option.id); }}
-                    ariaLabel={t('settings.openchamber.git.optionAria', { option: option.label })}
+                    onChange={() => {
+                      handleGitChangesViewModeChange(option.id)
+                    }}
+                    ariaLabel={t("settings.openchamber.git.optionAria", { option: option.label })}
                   />
-                  <span className={selected ? 'typography-ui-label font-normal text-foreground' : 'typography-ui-label font-normal text-foreground/50'}>
+                  <span
+                    className={
+                      selected
+                        ? "typography-ui-label font-normal text-foreground"
+                        : "typography-ui-label font-normal text-foreground/50"
+                    }
+                  >
                     {option.label}
                   </span>
                 </div>
-              );
+              )
             })}
           </div>
         </div>
@@ -162,23 +184,23 @@ export const GitSettings: React.FC = () => {
           tabIndex={0}
           aria-pressed={settingsGitmojiEnabled}
           onClick={() => {
-            void handleGitmojiChange(!settingsGitmojiEnabled);
+            void handleGitmojiChange(!settingsGitmojiEnabled)
           }}
           onKeyDown={(event) => {
-            if (event.key === ' ' || event.key === 'Enter') {
-              event.preventDefault();
-              void handleGitmojiChange(!settingsGitmojiEnabled);
+            if (event.key === " " || event.key === "Enter") {
+              event.preventDefault()
+              void handleGitmojiChange(!settingsGitmojiEnabled)
             }
           }}
         >
           <Checkbox
             checked={settingsGitmojiEnabled}
             onChange={(checked) => {
-              void handleGitmojiChange(checked);
+              void handleGitmojiChange(checked)
             }}
-            ariaLabel={t('settings.openchamber.git.enableGitmojiAria')}
+            ariaLabel={t("settings.openchamber.git.enableGitmojiAria")}
           />
-          <span className="typography-ui-label text-foreground">{t('settings.openchamber.git.enableGitmoji')}</span>
+          <span className="typography-ui-label text-foreground">{t("settings.openchamber.git.enableGitmoji")}</span>
         </div>
 
         <div
@@ -188,20 +210,20 @@ export const GitSettings: React.FC = () => {
           aria-pressed={showGitignored}
           onClick={() => setFilesViewShowGitignored(!showGitignored)}
           onKeyDown={(event) => {
-            if (event.key === ' ' || event.key === 'Enter') {
-              event.preventDefault();
-              setFilesViewShowGitignored(!showGitignored);
+            if (event.key === " " || event.key === "Enter") {
+              event.preventDefault()
+              setFilesViewShowGitignored(!showGitignored)
             }
           }}
         >
           <Checkbox
             checked={showGitignored}
             onChange={setFilesViewShowGitignored}
-            ariaLabel={t('settings.openchamber.git.showGitignoredAria')}
+            ariaLabel={t("settings.openchamber.git.showGitignoredAria")}
           />
-          <span className="typography-ui-label text-foreground">{t('settings.openchamber.git.showGitignored')}</span>
+          <span className="typography-ui-label text-foreground">{t("settings.openchamber.git.showGitignored")}</span>
         </div>
       </section>
     </div>
-  );
-};
+  )
+}

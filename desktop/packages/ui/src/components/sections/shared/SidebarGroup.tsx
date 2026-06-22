@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { cn } from '@/lib/utils';
-import { Icon } from "@/components/icon/Icon";
+import React, { useState, useEffect } from "react"
+import { cn } from "@/lib/utils"
+import { Icon } from "@/components/icon/Icon"
 
 interface SidebarGroupProps {
   /** Group display label (e.g. "business", "automation-ai") */
-  label: string;
+  label: string
   /** Number of items in this group */
-  count: number;
+  count: number
   /** Unique storage key prefix for persisting collapse state */
-  storageKey: string;
+  storageKey: string
   /** Whether to start expanded. Defaults to true. */
-  defaultExpanded?: boolean;
-  children: React.ReactNode;
+  defaultExpanded?: boolean
+  children: React.ReactNode
 }
 
 function getStorageKey(storageKey: string, label: string): string {
-  return `ax-code:sidebar-group:${storageKey}:${label}`;
+  return `ax-code:sidebar-group:${storageKey}:${label}`
 }
 
 /**
@@ -29,26 +29,26 @@ export const SidebarGroup: React.FC<SidebarGroupProps> = ({
   defaultExpanded = true,
   children,
 }) => {
-  const key = getStorageKey(storageKey, label);
-  const contentId = React.useId();
+  const key = getStorageKey(storageKey, label)
+  const contentId = React.useId()
 
   const [expanded, setExpanded] = useState<boolean>(() => {
     try {
-      const stored = localStorage.getItem(key);
-      if (stored !== null) return stored === 'true';
+      const stored = localStorage.getItem(key)
+      if (stored !== null) return stored === "true"
     } catch {
       // ignore storage errors
     }
-    return defaultExpanded;
-  });
+    return defaultExpanded
+  })
 
   useEffect(() => {
     try {
-      localStorage.setItem(key, String(expanded));
+      localStorage.setItem(key, String(expanded))
     } catch {
       // ignore storage errors
     }
-  }, [key, expanded]);
+  }, [key, expanded])
 
   return (
     <div>
@@ -58,17 +58,15 @@ export const SidebarGroup: React.FC<SidebarGroupProps> = ({
         aria-expanded={expanded}
         aria-controls={contentId}
         className={cn(
-          'flex w-full items-center gap-1 rounded-md px-2 py-1 text-left',
-          'text-xs font-semibold uppercase tracking-wide text-muted-foreground',
-          'hover:bg-[var(--interactive-hover)] transition-colors duration-150',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+          "flex w-full items-center gap-1 rounded-md px-2 py-1 text-left",
+          "text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+          "hover:bg-[var(--interactive-hover)] transition-colors duration-150",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
         )}
       >
-        <Icon name="arrow-down-s"
-          className={cn(
-            'h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200',
-            !expanded && '-rotate-90',
-          )}
+        <Icon
+          name="arrow-down-s"
+          className={cn("h-3.5 w-3.5 flex-shrink-0 transition-transform duration-200", !expanded && "-rotate-90")}
         />
         <span className="flex-1 truncate">{label}</span>
         <span className="ml-1 tabular-nums opacity-60">{count}</span>
@@ -82,5 +80,5 @@ export const SidebarGroup: React.FC<SidebarGroupProps> = ({
         {children}
       </div>
     </div>
-  );
-};
+  )
+}

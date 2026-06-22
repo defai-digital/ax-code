@@ -6,12 +6,7 @@
     "author": "AX Code",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [
-      "dark",
-      "ax-code",
-      "ported",
-      "cursor"
-    ]
+    "tags": ["dark", "ax-code", "ported", "cursor"]
   },
   "colors": {
     "primary": {
@@ -379,13 +374,7 @@
       "rowSelected": "#003735"
     },
     "charts": {
-      "series": [
-        "#88c0d0",
-        "#81a1c1",
-        "#3fa266",
-        "#f1b467",
-        "#e34671"
-      ]
+      "series": ["#88c0d0", "#81a1c1", "#3fa266", "#f1b467", "#e34671"]
     },
     "a11y": {
       "focusRing": "#1aaaa6",

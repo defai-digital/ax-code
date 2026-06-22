@@ -1,20 +1,20 @@
-import React from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
-import { ChatView } from '@/components/views/ChatView';
-import { Toaster } from '@/components/ui/sonner';
-import { Button } from '@/components/ui/button';
-import { MemoryDebugPanel } from '@/components/ui/MemoryDebugPanel';
-import { setStreamPerfEnabled } from '@/stores/utils/streamDebug';
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { useMenuActions } from '@/hooks/useMenuActions';
-import { useRouter } from '@/hooks/useRouter';
-import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
-import { PermissionNotifications } from '@/components/notifications/PermissionNotifications';
-import { flushPendingRemovals, recoverPendingRemovals } from '@/sync/soft-removal';
-import { useWindowTitle } from '@/hooks/useWindowTitle';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { hasModifier } from '@/lib/utils';
-import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, restartDesktopApp } from '@/lib/desktop';
+import React from "react"
+import { MainLayout } from "@/components/layout/MainLayout"
+import { ChatView } from "@/components/views/ChatView"
+import { Toaster } from "@/components/ui/sonner"
+import { Button } from "@/components/ui/button"
+import { MemoryDebugPanel } from "@/components/ui/MemoryDebugPanel"
+import { setStreamPerfEnabled } from "@/stores/utils/streamDebug"
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary"
+import { useMenuActions } from "@/hooks/useMenuActions"
+import { useRouter } from "@/hooks/useRouter"
+import { useWebNotificationStream } from "@/hooks/useWebNotificationStream"
+import { PermissionNotifications } from "@/components/notifications/PermissionNotifications"
+import { flushPendingRemovals, recoverPendingRemovals } from "@/sync/soft-removal"
+import { useWindowTitle } from "@/hooks/useWindowTitle"
+import { useConfigStore } from "@/stores/useConfigStore"
+import { hasModifier } from "@/lib/utils"
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, restartDesktopApp } from "@/lib/desktop"
 import {
   getInjectedBootOutcome,
   getBootInjectionStatus,
@@ -23,32 +23,32 @@ import {
   shouldRestartDesktopBootFlow,
   type BootInjectionStatus,
   type DesktopBootView,
-} from '@/lib/desktopBoot';
-import type { RecoveryVariant } from '@/components/onboarding/DesktopConnectionRecovery';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
-import { axCodeClient } from '@/lib/ax-code/client';
-import { SyncProvider } from '@/sync/sync-context';
-import { useSync } from '@/sync/use-sync';
-import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
-import { AboutDialog } from '@/components/ui/AboutDialog';
-import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
-import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { useUIStore } from '@/stores/useUIStore';
-import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
-import type { RuntimeAPIs } from '@/lib/api/types';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { McpOAuthCallbackPage } from '@/components/sections/mcp/McpOAuthCallbackPage';
-import { MCP_OAUTH_CALLBACK_PATH } from '@/components/sections/mcp/mcpOAuth';
-import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
-import { useI18n } from '@/lib/i18n';
-import { getDeviceInfo } from '@/lib/device';
-import { SyncAppEffects } from '@/apps/AppEffects';
-import { useAppFontEffects } from '@/apps/useAppFontEffects';
-import { AxCodeUpdateToast } from '@/components/update/AxCodeUpdateToast';
-import { API_ENDPOINTS, HTTP_DEFAULTS } from '@/lib/http';
+} from "@/lib/desktopBoot"
+import type { RecoveryVariant } from "@/components/onboarding/DesktopConnectionRecovery"
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { useDirectoryStore } from "@/stores/useDirectoryStore"
+import { useProjectsStore } from "@/stores/useProjectsStore"
+import { axCodeClient } from "@/lib/ax-code/client"
+import { SyncProvider } from "@/sync/sync-context"
+import { useSync } from "@/sync/use-sync"
+import { ConfigUpdateOverlay } from "@/components/ui/ConfigUpdateOverlay"
+import { AboutDialog } from "@/components/ui/AboutDialog"
+import { RuntimeAPIProvider } from "@/contexts/RuntimeAPIProvider"
+import { registerRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
+import { useUIStore } from "@/stores/useUIStore"
+import { useGitHubAuthStore } from "@/stores/useGitHubAuthStore"
+import { useFeatureFlagsStore } from "@/stores/useFeatureFlagsStore"
+import type { RuntimeAPIs } from "@/lib/api/types"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { McpOAuthCallbackPage } from "@/components/sections/mcp/McpOAuthCallbackPage"
+import { MCP_OAUTH_CALLBACK_PATH } from "@/components/sections/mcp/mcpOAuth"
+import { lazyWithChunkRecovery } from "@/lib/chunkLoadRecovery"
+import { useI18n } from "@/lib/i18n"
+import { getDeviceInfo } from "@/lib/device"
+import { SyncAppEffects } from "@/apps/AppEffects"
+import { useAppFontEffects } from "@/apps/useAppFontEffects"
+import { AxCodeUpdateToast } from "@/components/update/AxCodeUpdateToast"
+import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import {
   OPEN_DRAFT_SESSION_EVENT,
   OPEN_PROJECT_EVENT,
@@ -57,52 +57,47 @@ import {
   parseOpenDraftSessionEvent,
   parseOpenProjectEvent,
   parseOpenSessionEvent,
-} from '@/lib/appOpenEvents';
+} from "@/lib/appOpenEvents"
 
 // Lazy-loaded heavy views — loaded on demand to reduce initial bundle size.
 const OnboardingScreen = lazyWithChunkRecovery(() =>
-  import('@/components/onboarding/OnboardingScreen').then((m) => ({ default: m.OnboardingScreen })),
-);
+  import("@/components/onboarding/OnboardingScreen").then((m) => ({ default: m.OnboardingScreen })),
+)
 
 const AboutDialogWrapper: React.FC = () => {
-  const isAboutDialogOpen = useUIStore((s) => s.isAboutDialogOpen);
-  const setAboutDialogOpen = useUIStore((s) => s.setAboutDialogOpen);
-  return (
-    <AboutDialog
-      open={isAboutDialogOpen}
-      onOpenChange={setAboutDialogOpen}
-    />
-  );
-};
+  const isAboutDialogOpen = useUIStore((s) => s.isAboutDialogOpen)
+  const setAboutDialogOpen = useUIStore((s) => s.setAboutDialogOpen)
+  return <AboutDialog open={isAboutDialogOpen} onOpenChange={setAboutDialogOpen} />
+}
 
 const StartupInitializationRecovery: React.FC<{
-  onRetry: () => void;
-  isRetrying: boolean;
+  onRetry: () => void
+  isRetrying: boolean
 }> = ({ onRetry, isRetrying }) => {
-  const { t } = useI18n();
+  const { t } = useI18n()
 
   return (
     <div className="flex h-full items-center justify-center bg-background px-6 text-foreground">
       <div className="flex max-w-md flex-col items-center gap-4 text-center">
         <div className="flex flex-col gap-2">
-          <h1 className="typography-title text-foreground">{t('startup.initRecovery.title')}</h1>
-          <p className="typography-body text-muted-foreground">{t('startup.initRecovery.description')}</p>
+          <h1 className="typography-title text-foreground">{t("startup.initRecovery.title")}</h1>
+          <p className="typography-body text-muted-foreground">{t("startup.initRecovery.description")}</p>
         </div>
         <Button type="button" onClick={onRetry} disabled={isRetrying}>
-          {isRetrying ? t('startup.initRecovery.retrying') : t('startup.initRecovery.retry')}
+          {isRetrying ? t("startup.initRecovery.retrying") : t("startup.initRecovery.retry")}
         </Button>
       </div>
     </div>
-  );
-};
+  )
+}
 
 const isUnsupportedMobileRuntime = (): boolean => {
-  if (typeof window === 'undefined' || isDesktopShell()) {
-    return false;
+  if (typeof window === "undefined" || isDesktopShell()) {
+    return false
   }
-  const device = getDeviceInfo();
-  return device.isMobile || device.isTablet;
-};
+  const device = getDeviceInfo()
+  return device.isMobile || device.isTablet
+}
 
 const UnsupportedMobileRuntimeScreen: React.FC = () => (
   <div className="flex h-full items-center justify-center bg-background px-6 text-foreground">
@@ -113,87 +108,85 @@ const UnsupportedMobileRuntimeScreen: React.FC = () => (
       </p>
     </div>
   </div>
-);
+)
 
 type AppProps = {
-  apis: RuntimeAPIs;
-};
+  apis: RuntimeAPIs
+}
 
 type EmbeddedSessionChatConfig = {
-  sessionId: string;
-  directory: string | null;
-  readOnly: boolean;
-};
+  sessionId: string
+  directory: string | null
+  readOnly: boolean
+}
 
 type EmbeddedVisibilityPayload = {
-  visible?: unknown;
-};
+  visible?: unknown
+}
 
 const normalizeEmbeddedDirectory = (value: string | null | undefined): string => {
-  if (!value) return '';
-  return value.replace(/\\/g, '/').replace(/\/+$/g, '');
-};
+  if (!value) return ""
+  return value.replace(/\\/g, "/").replace(/\/+$/g, "")
+}
 
 const readEmbeddedSessionChatConfig = (): EmbeddedSessionChatConfig | null => {
-  if (typeof window === 'undefined') {
-    return null;
+  if (typeof window === "undefined") {
+    return null
   }
 
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('ocPanel') !== 'session-chat') {
-    return null;
+  const params = new URLSearchParams(window.location.search)
+  if (params.get("ocPanel") !== "session-chat") {
+    return null
   }
 
-  const sessionIdRaw = params.get('sessionId');
-  const sessionId = typeof sessionIdRaw === 'string' ? sessionIdRaw.trim() : '';
+  const sessionIdRaw = params.get("sessionId")
+  const sessionId = typeof sessionIdRaw === "string" ? sessionIdRaw.trim() : ""
   if (!sessionId) {
-    return null;
+    return null
   }
 
-  const directoryRaw = params.get('directory');
-  const directory = typeof directoryRaw === 'string' && directoryRaw.trim().length > 0
-    ? directoryRaw.trim()
-    : null;
+  const directoryRaw = params.get("directory")
+  const directory = typeof directoryRaw === "string" && directoryRaw.trim().length > 0 ? directoryRaw.trim() : null
 
   return {
     sessionId,
     directory,
-    readOnly: params.get('readOnly') === '1' || params.get('readOnly') === 'true',
-  };
-};
+    readOnly: params.get("readOnly") === "1" || params.get("readOnly") === "true",
+  }
+}
 
 const isMcpOAuthCallbackPath = (): boolean => {
-  if (typeof window === 'undefined') {
-    return false;
+  if (typeof window === "undefined") {
+    return false
   }
 
-  return window.location.pathname === MCP_OAUTH_CALLBACK_PATH;
-};
+  return window.location.pathname === MCP_OAUTH_CALLBACK_PATH
+}
 
 const EmbeddedSessionChatContent: React.FC<{
-  embeddedSessionChat: EmbeddedSessionChatConfig;
-  embeddedBackgroundWorkEnabled: boolean;
+  embeddedSessionChat: EmbeddedSessionChatConfig
+  embeddedBackgroundWorkEnabled: boolean
 }> = ({ embeddedSessionChat, embeddedBackgroundWorkEnabled }) => {
-  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
-  const sync = useSync();
-  const bootstrapKeyRef = React.useRef<string | null>(null);
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory)
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession)
+  const sync = useSync()
+  const bootstrapKeyRef = React.useRef<string | null>(null)
 
-  const expectedDirectory = normalizeEmbeddedDirectory(embeddedSessionChat.directory);
-  const activeDirectory = normalizeEmbeddedDirectory(currentDirectory);
+  const expectedDirectory = normalizeEmbeddedDirectory(embeddedSessionChat.directory)
+  const activeDirectory = normalizeEmbeddedDirectory(currentDirectory)
 
   React.useEffect(() => {
-    if (expectedDirectory && activeDirectory !== expectedDirectory) return;
+    if (expectedDirectory && activeDirectory !== expectedDirectory) return
 
-    const bootstrapKey = `${expectedDirectory}\n${embeddedSessionChat.sessionId}`;
+    const bootstrapKey = `${expectedDirectory}\n${embeddedSessionChat.sessionId}`
     if (bootstrapKeyRef.current === bootstrapKey && currentSessionId === embeddedSessionChat.sessionId) {
-      return;
+      return
     }
 
-    bootstrapKeyRef.current = bootstrapKey;
-    setCurrentSession(embeddedSessionChat.sessionId, embeddedSessionChat.directory);
-    void sync.ensureSessionRenderable(embeddedSessionChat.sessionId, true);
+    bootstrapKeyRef.current = bootstrapKey
+    setCurrentSession(embeddedSessionChat.sessionId, embeddedSessionChat.directory)
+    void sync.ensureSessionRenderable(embeddedSessionChat.sessionId, true)
   }, [
     activeDirectory,
     currentSessionId,
@@ -202,10 +195,10 @@ const EmbeddedSessionChatContent: React.FC<{
     expectedDirectory,
     setCurrentSession,
     sync,
-  ]);
+  ])
 
   if (expectedDirectory && activeDirectory !== expectedDirectory) {
-    return null;
+    return null
   }
 
   return (
@@ -215,586 +208,594 @@ const EmbeddedSessionChatContent: React.FC<{
       <ChatView readOnly={embeddedSessionChat.readOnly} />
       <Toaster />
     </>
-  );
-};
+  )
+}
 
 function App({ apis }: AppProps) {
-  const initializeApp = useConfigStore((s) => s.initializeApp);
-  const isInitialized = useConfigStore((s) => s.isInitialized);
-  const isConnected = useConfigStore((s) => s.isConnected);
-  const providersCount = useConfigStore((state) => state.providers.length);
-  const agentsCount = useConfigStore((state) => state.agents.length);
-  const loadProviders = useConfigStore((state) => state.loadProviders);
-  const loadAgents = useConfigStore((state) => state.loadAgents);
-  const error = useSessionUIStore((s) => s.error);
-  const clearError = useSessionUIStore((s) => s.clearError);
-  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
-  const setDirectory = useDirectoryStore((state) => state.setDirectory);
-  const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
-  const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
-  const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
-  const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(true);
-  const [initRetryExhausted, setInitRetryExhausted] = React.useState(false);
-  const [initRetryEpoch, setInitRetryEpoch] = React.useState(0);
-  const [manualInitRetrying, setManualInitRetrying] = React.useState(false);
-  const wideChatLayoutEnabled = useUIStore((state) => state.wideChatLayoutEnabled);
-  const isDesktopRuntime = React.useMemo(() => isDesktopShell(), []);
-  const [isUnsupportedMobile, setIsUnsupportedMobile] = React.useState<boolean>(() => isUnsupportedMobileRuntime());
-  const setPlanModeEnabled = useFeatureFlagsStore((state) => state.setPlanModeEnabled);
+  const initializeApp = useConfigStore((s) => s.initializeApp)
+  const isInitialized = useConfigStore((s) => s.isInitialized)
+  const isConnected = useConfigStore((s) => s.isConnected)
+  const providersCount = useConfigStore((state) => state.providers.length)
+  const agentsCount = useConfigStore((state) => state.agents.length)
+  const loadProviders = useConfigStore((state) => state.loadProviders)
+  const loadAgents = useConfigStore((state) => state.loadAgents)
+  const error = useSessionUIStore((s) => s.error)
+  const clearError = useSessionUIStore((s) => s.clearError)
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory)
+  const setDirectory = useDirectoryStore((state) => state.setDirectory)
+  const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory)
+  const [showMemoryDebug, setShowMemoryDebug] = React.useState(false)
+  const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus)
+  const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(true)
+  const [initRetryExhausted, setInitRetryExhausted] = React.useState(false)
+  const [initRetryEpoch, setInitRetryEpoch] = React.useState(0)
+  const [manualInitRetrying, setManualInitRetrying] = React.useState(false)
+  const wideChatLayoutEnabled = useUIStore((state) => state.wideChatLayoutEnabled)
+  const isDesktopRuntime = React.useMemo(() => isDesktopShell(), [])
+  const [isUnsupportedMobile, setIsUnsupportedMobile] = React.useState<boolean>(() => isUnsupportedMobileRuntime())
+  const setPlanModeEnabled = useFeatureFlagsStore((state) => state.setPlanModeEnabled)
   const [bootInjectionStatus, setBootInjectionStatus] = React.useState<BootInjectionStatus>(() => {
-    return getBootInjectionStatus();
-  });
+    return getBootInjectionStatus()
+  })
   const [bootView, setBootView] = React.useState<DesktopBootView | null>(() => {
-    const outcome = getInjectedBootOutcome();
-    return outcome !== null
-      ? resolveDesktopBootView({ isDesktopShell: true, bootOutcome: outcome })
-      : null;
-  });
-  const appReadyDispatchedRef = React.useRef(false);
-  const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), []);
-  const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible;
-  const isMcpOAuthCallback = React.useMemo(() => isMcpOAuthCallbackPath(), []);
+    const outcome = getInjectedBootOutcome()
+    return outcome !== null ? resolveDesktopBootView({ isDesktopShell: true, bootOutcome: outcome }) : null
+  })
+  const appReadyDispatchedRef = React.useRef(false)
+  const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), [])
+  const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible
+  const isMcpOAuthCallback = React.useMemo(() => isMcpOAuthCallbackPath(), [])
 
   React.useEffect(() => {
-    setStreamPerfEnabled(showMemoryDebug);
+    setStreamPerfEnabled(showMemoryDebug)
     return () => {
-      setStreamPerfEnabled(false);
-    };
-  }, [showMemoryDebug]);
+      setStreamPerfEnabled(false)
+    }
+  }, [showMemoryDebug])
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
+    if (typeof window === "undefined") {
+      return
     }
 
     const updateUnsupportedMobile = () => {
-      setIsUnsupportedMobile(isUnsupportedMobileRuntime());
-    };
+      setIsUnsupportedMobile(isUnsupportedMobileRuntime())
+    }
 
-    updateUnsupportedMobile();
-    window.addEventListener('resize', updateUnsupportedMobile);
-    window.addEventListener('orientationchange', updateUnsupportedMobile);
+    updateUnsupportedMobile()
+    window.addEventListener("resize", updateUnsupportedMobile)
+    window.addEventListener("orientationchange", updateUnsupportedMobile)
     return () => {
-      window.removeEventListener('resize', updateUnsupportedMobile);
-      window.removeEventListener('orientationchange', updateUnsupportedMobile);
-    };
-  }, []);
+      window.removeEventListener("resize", updateUnsupportedMobile)
+      window.removeEventListener("orientationchange", updateUnsupportedMobile)
+    }
+  }, [])
 
   React.useEffect(() => {
-    document.documentElement.classList.toggle('wide-chat-layout', wideChatLayoutEnabled);
+    document.documentElement.classList.toggle("wide-chat-layout", wideChatLayoutEnabled)
     return () => {
-      document.documentElement.classList.remove('wide-chat-layout');
-    };
-  }, [wideChatLayoutEnabled]);
+      document.documentElement.classList.remove("wide-chat-layout")
+    }
+  }, [wideChatLayoutEnabled])
 
   React.useEffect(() => {
-    registerRuntimeAPIs(apis);
-    return () => registerRuntimeAPIs(null);
-  }, [apis]);
+    registerRuntimeAPIs(apis)
+    return () => registerRuntimeAPIs(null)
+  }, [apis])
 
   React.useEffect(() => {
     if (embeddedSessionChat) {
-      return;
+      return
     }
 
-    void refreshGitHubAuthStatus(apis.github, { force: true });
-  }, [apis.github, embeddedSessionChat, refreshGitHubAuthStatus]);
+    void refreshGitHubAuthStatus(apis.github, { force: true })
+  }, [apis.github, embeddedSessionChat, refreshGitHubAuthStatus])
 
-  useAppFontEffects();
+  useAppFontEffects()
 
-  const bootOutcomeKnown = bootInjectionStatus === 'valid';
-  const bootViewIsMain = bootView?.screen === 'main';
+  const bootOutcomeKnown = bootInjectionStatus === "valid"
+  const bootViewIsMain = bootView?.screen === "main"
 
   // Splash dismissal: use the authoritative loading gate from desktopBoot.
   // Desktop shells strictly require a valid boot outcome before dismissing.
   // Non-main outcomes (chooser/recovery) can dismiss without waiting for init.
   React.useEffect(() => {
-    if (!canDismissInitialLoading({
-      isDesktopShell: isDesktopRuntime,
-      isInitialized,
-      bootOutcomeKnown,
-      bootViewIsMain,
-    })) {
-      return;
+    if (
+      !canDismissInitialLoading({
+        isDesktopShell: isDesktopRuntime,
+        isInitialized,
+        bootOutcomeKnown,
+        bootViewIsMain,
+      })
+    ) {
+      return
     }
 
     const timer = setTimeout(() => {
-      const loadingElement = document.getElementById('initial-loading');
+      const loadingElement = document.getElementById("initial-loading")
       if (loadingElement) {
-        loadingElement.classList.add('fade-out');
+        loadingElement.classList.add("fade-out")
         setTimeout(() => {
-          loadingElement.remove();
-        }, 300);
+          loadingElement.remove()
+        }, 300)
       }
-    }, 150);
+    }, 150)
 
-    return () => clearTimeout(timer);
-  }, [isDesktopRuntime, isInitialized, bootOutcomeKnown, bootViewIsMain]);
+    return () => clearTimeout(timer)
+  }, [isDesktopRuntime, isInitialized, bootOutcomeKnown, bootViewIsMain])
 
   // Deterministic malformed handling: update splash text so the user
   // sees a specific error instead of a generic spinner, but do NOT
   // dismiss the splash (that only happens on a valid outcome).
   React.useEffect(() => {
-    if (!isDesktopRuntime || bootInjectionStatus !== 'malformed') {
-      return;
+    if (!isDesktopRuntime || bootInjectionStatus !== "malformed") {
+      return
     }
 
-    const loadingElement = document.getElementById('initial-loading');
+    const loadingElement = document.getElementById("initial-loading")
     if (loadingElement) {
-      loadingElement.textContent = 'Desktop startup failed — please restart the app.';
+      loadingElement.textContent = "Desktop startup failed — please restart the app."
     }
-  }, [isDesktopRuntime, bootInjectionStatus]);
+  }, [isDesktopRuntime, bootInjectionStatus])
 
   // Non-desktop fallback: remove splash after 5 seconds even if init stalls.
   React.useEffect(() => {
     if (isDesktopRuntime) {
-      return;
+      return
     }
 
     const fallbackTimer = setTimeout(() => {
-      const loadingElement = document.getElementById('initial-loading');
+      const loadingElement = document.getElementById("initial-loading")
       if (loadingElement && !isInitialized) {
-        loadingElement.classList.add('fade-out');
+        loadingElement.classList.add("fade-out")
         setTimeout(() => {
-          loadingElement.remove();
-        }, 300);
+          loadingElement.remove()
+        }, 300)
       }
-    }, 5000);
+    }, 5000)
 
-    return () => clearTimeout(fallbackTimer);
-  }, [isDesktopRuntime, isInitialized]);
+    return () => clearTimeout(fallbackTimer)
+  }, [isDesktopRuntime, isInitialized])
 
   React.useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
 
     const run = async () => {
       const res = await fetch(API_ENDPOINTS.debug.rootHealth, {
         method: HTTP_DEFAULTS.method.get,
-      }).catch(() => null);
-      if (!res || !res.ok || cancelled) return;
+      }).catch(() => null)
+      if (!res || !res.ok || cancelled) return
       const data = (await res.json().catch(() => null)) as null | {
-        planModeExperimentalEnabled?: unknown;
-      };
-      if (!data || cancelled) return;
-      const raw = data.planModeExperimentalEnabled;
-      const enabled = raw === true || raw === 1 || raw === '1' || raw === 'true';
-      setPlanModeEnabled(enabled);
-    };
+        planModeExperimentalEnabled?: unknown
+      }
+      if (!data || cancelled) return
+      const raw = data.planModeExperimentalEnabled
+      const enabled = raw === true || raw === 1 || raw === "1" || raw === "true"
+      setPlanModeEnabled(enabled)
+    }
 
-    void run();
+    void run()
 
     return () => {
-      cancelled = true;
-    };
-  }, [setPlanModeEnabled]);
+      cancelled = true
+    }
+  }, [setPlanModeEnabled])
 
   React.useEffect(() => {
     if (isUnsupportedMobile) {
-      return;
+      return
     }
-    void initializeApp();
-  }, [initializeApp, isUnsupportedMobile]);
+    void initializeApp()
+  }, [initializeApp, isUnsupportedMobile])
 
   React.useEffect(() => {
-    if (isUnsupportedMobile) return;
-    if (isInitialized) return;
+    if (isUnsupportedMobile) return
+    if (isInitialized) return
 
-    let active = true;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    let retryCount = 0;
-    const MAX_RETRIES = 10;
-    const BASE_DELAY_MS = 1000;
+    let active = true
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let retryCount = 0
+    const MAX_RETRIES = 10
+    const BASE_DELAY_MS = 1000
 
     const retryInitialization = async () => {
-      if (!active) return;
+      if (!active) return
       if (retryCount >= MAX_RETRIES) {
-        setInitRetryExhausted(true);
-        return;
+        setInitRetryExhausted(true)
+        return
       }
-      const state = useConfigStore.getState();
+      const state = useConfigStore.getState()
       if (state.isInitialized) {
-        setInitRetryExhausted(false);
-        return;
+        setInitRetryExhausted(false)
+        return
       }
-      retryCount += 1;
-      await state.initializeApp();
+      retryCount += 1
+      await state.initializeApp()
 
-      const next = useConfigStore.getState();
-      if (!active) return;
+      const next = useConfigStore.getState()
+      if (!active) return
       if (next.isInitialized) {
-        setInitRetryExhausted(false);
-        return;
+        setInitRetryExhausted(false)
+        return
       }
       if (retryCount >= MAX_RETRIES) {
-        setInitRetryExhausted(true);
-        return;
+        setInitRetryExhausted(true)
+        return
       }
-      const delay = Math.min(BASE_DELAY_MS * Math.pow(2, retryCount - 1), 16000);
-      retryTimer = setTimeout(retryInitialization, delay);
-    };
+      const delay = Math.min(BASE_DELAY_MS * Math.pow(2, retryCount - 1), 16000)
+      retryTimer = setTimeout(retryInitialization, delay)
+    }
 
-    retryTimer = setTimeout(retryInitialization, BASE_DELAY_MS);
+    retryTimer = setTimeout(retryInitialization, BASE_DELAY_MS)
 
     return () => {
-      active = false;
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, [initRetryEpoch, isInitialized, isUnsupportedMobile]);
+      active = false
+      if (retryTimer) clearTimeout(retryTimer)
+    }
+  }, [initRetryEpoch, isInitialized, isUnsupportedMobile])
 
   React.useEffect(() => {
     if (isInitialized) {
-      setInitRetryExhausted(false);
+      setInitRetryExhausted(false)
     }
-  }, [isInitialized]);
+  }, [isInitialized])
 
   React.useEffect(() => {
-    if (!initRetryExhausted) return;
+    if (!initRetryExhausted) return
 
-    const loadingElement = document.getElementById('initial-loading');
+    const loadingElement = document.getElementById("initial-loading")
     if (loadingElement) {
-      loadingElement.classList.add('fade-out');
+      loadingElement.classList.add("fade-out")
       setTimeout(() => {
-        loadingElement.remove();
-      }, 300);
+        loadingElement.remove()
+      }, 300)
     }
-  }, [initRetryExhausted]);
+  }, [initRetryExhausted])
 
   // Startup recovery: poll until providers AND agents are loaded.
   // loadProviders/loadAgents resolve normally even on failure (errors swallowed),
   // so a reactive effect can't detect failure — we need an interval.
   React.useEffect(() => {
-    if (isUnsupportedMobile) return;
-    if (!isConnected) return;
-    if (providersCount > 0 && agentsCount > 0) return;
+    if (isUnsupportedMobile) return
+    if (!isConnected) return
+    if (providersCount > 0 && agentsCount > 0) return
 
-    let active = true;
-    let retries = 0;
-    const MAX_RETRIES = 15;
+    let active = true
+    let retries = 0
+    const MAX_RETRIES = 15
     const attempt = async () => {
-      const state = useConfigStore.getState();
-      if (state.providers.length > 0 && state.agents.length > 0) return;
+      const state = useConfigStore.getState()
+      if (state.providers.length > 0 && state.agents.length > 0) return
       try {
-        if (state.providers.length === 0) await loadProviders();
-        if (useConfigStore.getState().agents.length === 0) await loadAgents();
-      } catch { /* retry next interval */ }
-    };
+        if (state.providers.length === 0) await loadProviders()
+        if (useConfigStore.getState().agents.length === 0) await loadAgents()
+      } catch {
+        /* retry next interval */
+      }
+    }
 
-    void attempt();
+    void attempt()
     const id = setInterval(() => {
-      if (!active) return;
-      if (++retries >= MAX_RETRIES) { clearInterval(id); return; }
-      void attempt();
-    }, 2000);
-    return () => { active = false; clearInterval(id); };
-  }, [isConnected, isUnsupportedMobile, loadAgents, loadProviders, providersCount, agentsCount]);
+      if (!active) return
+      if (++retries >= MAX_RETRIES) {
+        clearInterval(id)
+        return
+      }
+      void attempt()
+    }, 2000)
+    return () => {
+      active = false
+      clearInterval(id)
+    }
+  }, [isConnected, isUnsupportedMobile, loadAgents, loadProviders, providersCount, agentsCount])
 
   React.useEffect(() => {
     if (isUnsupportedMobile) {
-      return;
+      return
     }
     if (isSwitchingDirectory) {
-      return;
+      return
     }
 
     if (!isConnected) {
-      return;
+      return
     }
-    axCodeClient.setDirectory(currentDirectory);
+    axCodeClient.setDirectory(currentDirectory)
 
     // Session loading is handled by the sync system's bootstrap — no manual loadSessions needed.
-  }, [currentDirectory, isSwitchingDirectory, isConnected, isUnsupportedMobile]);
+  }, [currentDirectory, isSwitchingDirectory, isConnected, isUnsupportedMobile])
 
   React.useEffect(() => {
-    if (!embeddedSessionChat || typeof window === 'undefined') {
-      return;
+    if (!embeddedSessionChat || typeof window === "undefined") {
+      return
     }
 
     const applyVisibility = (payload?: EmbeddedVisibilityPayload) => {
-      const nextVisible = payload?.visible === true;
-      setIsEmbeddedVisible(nextVisible);
-    };
+      const nextVisible = payload?.visible === true
+      setIsEmbeddedVisible(nextVisible)
+    }
 
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) {
-        return;
+        return
       }
 
-      const data = event.data as { type?: unknown; payload?: EmbeddedVisibilityPayload };
-      if (data?.type !== 'openchamber:embedded-visibility') {
-        return;
+      const data = event.data as { type?: unknown; payload?: EmbeddedVisibilityPayload }
+      if (data?.type !== "openchamber:embedded-visibility") {
+        return
       }
 
-      applyVisibility(data.payload);
-    };
+      applyVisibility(data.payload)
+    }
 
     const scopedWindow = window as unknown as {
-      __openchamberSetEmbeddedVisibility?: (payload?: EmbeddedVisibilityPayload) => void;
-    };
+      __openchamberSetEmbeddedVisibility?: (payload?: EmbeddedVisibilityPayload) => void
+    }
 
-    scopedWindow.__openchamberSetEmbeddedVisibility = applyVisibility;
-    window.addEventListener('message', handleMessage);
+    scopedWindow.__openchamberSetEmbeddedVisibility = applyVisibility
+    window.addEventListener("message", handleMessage)
 
     return () => {
-      window.removeEventListener('message', handleMessage);
+      window.removeEventListener("message", handleMessage)
       if (scopedWindow.__openchamberSetEmbeddedVisibility === applyVisibility) {
-        delete scopedWindow.__openchamberSetEmbeddedVisibility;
+        delete scopedWindow.__openchamberSetEmbeddedVisibility
       }
-    };
-  }, [embeddedSessionChat]);
+    }
+  }, [embeddedSessionChat])
 
   React.useEffect(() => {
     if (!embeddedSessionChat?.directory) {
-      return;
+      return
     }
 
     if (currentDirectory === embeddedSessionChat.directory) {
-      return;
+      return
     }
 
-    setDirectory(embeddedSessionChat.directory, { showOverlay: false });
-  }, [currentDirectory, embeddedSessionChat, setDirectory]);
+    setDirectory(embeddedSessionChat.directory, { showOverlay: false })
+  }, [currentDirectory, embeddedSessionChat, setDirectory])
 
   React.useEffect(() => {
-    if (!embeddedSessionChat || typeof window === 'undefined') {
-      return;
+    if (!embeddedSessionChat || typeof window === "undefined") {
+      return
     }
 
     const handleStorage = (event: StorageEvent) => {
       if (event.storageArea !== window.localStorage) {
-        return;
+        return
       }
 
-      if (event.key !== 'ui-store') {
-        return;
+      if (event.key !== "ui-store") {
+        return
       }
 
-      void useUIStore.persist.rehydrate();
-    };
+      void useUIStore.persist.rehydrate()
+    }
 
-    window.addEventListener('storage', handleStorage);
+    window.addEventListener("storage", handleStorage)
     return () => {
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, [embeddedSessionChat]);
+      window.removeEventListener("storage", handleStorage)
+    }
+  }, [embeddedSessionChat])
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return
 
     const handler = (event: Event) => {
-      const detail = parseOpenSessionEvent(event);
-      if (!detail) return;
-      useUIStore.getState().setActiveMainTab('chat');
-      void useSessionUIStore.getState().setCurrentSession(detail.sessionId, detail.directory);
-    };
+      const detail = parseOpenSessionEvent(event)
+      if (!detail) return
+      useUIStore.getState().setActiveMainTab("chat")
+      void useSessionUIStore.getState().setCurrentSession(detail.sessionId, detail.directory)
+    }
 
-    window.addEventListener(OPEN_SESSION_EVENT, handler);
-    return () => window.removeEventListener(OPEN_SESSION_EVENT, handler);
-  }, []);
+    window.addEventListener(OPEN_SESSION_EVENT, handler)
+    return () => window.removeEventListener(OPEN_SESSION_EVENT, handler)
+  }, [])
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return
 
     const handler = (event: Event) => {
-      const detail = parseOpenDraftSessionEvent(event);
-      useUIStore.getState().setActiveMainTab('chat');
-      useUIStore.getState().setSessionSwitcherOpen(false);
+      const detail = parseOpenDraftSessionEvent(event)
+      useUIStore.getState().setActiveMainTab("chat")
+      useUIStore.getState().setSessionSwitcherOpen(false)
       useSessionUIStore.getState().openNewSessionDraft({
         selectedProjectId: detail.projectId,
         directoryOverride: detail.directory,
         preserveDirectoryOverride: Boolean(detail.directory),
-      });
-    };
+      })
+    }
 
-    window.addEventListener(OPEN_DRAFT_SESSION_EVENT, handler);
-    return () => window.removeEventListener(OPEN_DRAFT_SESSION_EVENT, handler);
-  }, []);
+    window.addEventListener(OPEN_DRAFT_SESSION_EVENT, handler)
+    return () => window.removeEventListener(OPEN_DRAFT_SESSION_EVENT, handler)
+  }, [])
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return
 
     const handler = (event: Event) => {
-      const detail = parseOpenProjectEvent(event);
-      if (!detail) return;
-      applyOpenProjectPathToStore(detail.projectPath, useProjectsStore.getState());
-    };
+      const detail = parseOpenProjectEvent(event)
+      if (!detail) return
+      applyOpenProjectPathToStore(detail.projectPath, useProjectsStore.getState())
+    }
 
-    window.addEventListener(OPEN_PROJECT_EVENT, handler);
-    return () => window.removeEventListener(OPEN_PROJECT_EVENT, handler);
-  }, []);
+    window.addEventListener(OPEN_PROJECT_EVENT, handler)
+    return () => window.removeEventListener(OPEN_PROJECT_EVENT, handler)
+  }, [])
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!isInitialized || isSwitchingDirectory) return;
-    if (appReadyDispatchedRef.current) return;
-    appReadyDispatchedRef.current = true;
-    (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady = true;
-    window.dispatchEvent(new Event('openchamber:app-ready'));
-  }, [isInitialized, isSwitchingDirectory]);
+    if (typeof window === "undefined") return
+    if (!isInitialized || isSwitchingDirectory) return
+    if (appReadyDispatchedRef.current) return
+    appReadyDispatchedRef.current = true
+    ;(window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady = true
+    window.dispatchEvent(new Event("openchamber:app-ready"))
+  }, [isInitialized, isSwitchingDirectory])
 
   // useEventStream replaced by SyncProvider + SyncBridge
 
   // Session attention now handled by notification-store via SSE events (session.idle/session.error)
 
-  useWebNotificationStream({ enabled: embeddedBackgroundWorkEnabled });
-  useWindowTitle();
+  useWebNotificationStream({ enabled: embeddedBackgroundWorkEnabled })
+  useWindowTitle()
 
   React.useEffect(() => {
-    void recoverPendingRemovals();
+    void recoverPendingRemovals()
     const handleBeforeUnload = () => {
-      flushPendingRemovals();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+      flushPendingRemovals()
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [])
 
-  useRouter();
+  useRouter()
 
   const handleToggleMemoryDebug = React.useCallback(() => {
-    setShowMemoryDebug(prev => !prev);
-  }, []);
+    setShowMemoryDebug((prev) => !prev)
+  }, [])
 
-  useMenuActions(handleToggleMemoryDebug);
+  useMenuActions(handleToggleMemoryDebug)
 
   React.useEffect(() => {
     if (embeddedSessionChat) {
-      return;
+      return
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isDebugShortcut = hasModifier(e)
-        && e.shiftKey
-        && !e.altKey
-        && (e.code === 'KeyD' || e.key.toLowerCase() === 'd');
+      const isDebugShortcut =
+        hasModifier(e) && e.shiftKey && !e.altKey && (e.code === "KeyD" || e.key.toLowerCase() === "d")
 
       if (isDebugShortcut) {
-        e.preventDefault();
-        setShowMemoryDebug(prev => !prev);
+        e.preventDefault()
+        setShowMemoryDebug((prev) => !prev)
       }
-    };
+    }
 
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [embeddedSessionChat]);
+    window.addEventListener("keydown", handleKeyDown, true)
+    return () => window.removeEventListener("keydown", handleKeyDown, true)
+  }, [embeddedSessionChat])
 
   React.useEffect(() => {
     if (embeddedSessionChat) {
-      return;
+      return
     }
 
     if (error) {
-      const timer = setTimeout(() => clearError(), 5000);
-      return () => clearTimeout(timer);
+      const timer = setTimeout(() => clearError(), 5000)
+      return () => clearTimeout(timer)
     }
-  }, [clearError, embeddedSessionChat, error]);
+  }, [clearError, embeddedSessionChat, error])
 
   // Poll for the injected boot outcome until it becomes available (desktop only).
   // The Rust backend sets window.__AX_CODE_DESKTOP_DESKTOP_BOOT_OUTCOME__ once the
   // sidecar reaches a stable state. We poll with exponential backoff to handle
   // potential race conditions during startup and config writes.
   React.useEffect(() => {
-    if (!isDesktopRuntime || bootInjectionStatus !== 'not-injected') {
-      return;
+    if (!isDesktopRuntime || bootInjectionStatus !== "not-injected") {
+      return
     }
 
-    let cancelled = false;
-    let attempts = 0;
-    const BASE_INTERVAL = 200;
-    const MAX_INTERVAL = 2000;
-    const MAX_ATTEMPTS = 50; // 10 seconds total (200ms * 50 with exponential backoff cap)
+    let cancelled = false
+    let attempts = 0
+    const BASE_INTERVAL = 200
+    const MAX_INTERVAL = 2000
+    const MAX_ATTEMPTS = 50 // 10 seconds total (200ms * 50 with exponential backoff cap)
 
     const pollWithBackoff = () => {
-      if (cancelled) return;
+      if (cancelled) return
 
-      attempts++;
-      const status = getBootInjectionStatus();
+      attempts++
+      const status = getBootInjectionStatus()
 
-      if (status !== 'not-injected') {
-        cancelled = true;
-        setBootInjectionStatus(status);
+      if (status !== "not-injected") {
+        cancelled = true
+        setBootInjectionStatus(status)
 
-        if (status === 'valid') {
-          const outcome = getInjectedBootOutcome();
+        if (status === "valid") {
+          const outcome = getInjectedBootOutcome()
           if (outcome) {
-            setBootView(resolveDesktopBootView({ isDesktopShell: true, bootOutcome: outcome }));
+            setBootView(resolveDesktopBootView({ isDesktopShell: true, bootOutcome: outcome }))
           }
         }
         // If status is 'malformed', we keep the splash visible with error text
         // handled by the separate useEffect below
-        return;
+        return
       }
 
       // Exponential backoff with cap
-      const nextInterval = Math.min(BASE_INTERVAL * Math.pow(1.1, attempts), MAX_INTERVAL);
+      const nextInterval = Math.min(BASE_INTERVAL * Math.pow(1.1, attempts), MAX_INTERVAL)
 
       if (attempts >= MAX_ATTEMPTS) {
         // Max attempts reached - keep polling but show error
-        const loadingElement = document.getElementById('initial-loading');
-        if (loadingElement && !loadingElement.textContent?.includes('taking longer')) {
-          loadingElement.textContent = 'Desktop startup is taking longer than expected...';
+        const loadingElement = document.getElementById("initial-loading")
+        if (loadingElement && !loadingElement.textContent?.includes("taking longer")) {
+          loadingElement.textContent = "Desktop startup is taking longer than expected..."
         }
       }
 
-      window.setTimeout(pollWithBackoff, nextInterval);
-    };
-
-    // Start polling
-    window.setTimeout(pollWithBackoff, BASE_INTERVAL);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isDesktopRuntime, bootInjectionStatus]);
-
-  const handleDesktopBootDismiss = React.useCallback(async () => {
-    if (shouldRestartDesktopBootFlow({
-      isTauriShell: isTauriShell(),
-      isDesktopLocalOriginActive: isDesktopLocalOriginActive(),
-    })) {
-      await restartDesktopApp();
-      return;
+      window.setTimeout(pollWithBackoff, nextInterval)
     }
 
-    window.location.reload();
-  }, []);
+    // Start polling
+    window.setTimeout(pollWithBackoff, BASE_INTERVAL)
+
+    return () => {
+      cancelled = true
+    }
+  }, [isDesktopRuntime, bootInjectionStatus])
+
+  const handleDesktopBootDismiss = React.useCallback(async () => {
+    if (
+      shouldRestartDesktopBootFlow({
+        isTauriShell: isTauriShell(),
+        isDesktopLocalOriginActive: isDesktopLocalOriginActive(),
+      })
+    ) {
+      await restartDesktopApp()
+      return
+    }
+
+    window.location.reload()
+  }, [])
 
   const handleManualInitRetry = React.useCallback(async () => {
-    if (manualInitRetrying) return;
+    if (manualInitRetrying) return
 
-    setInitRetryExhausted(false);
-    setManualInitRetrying(true);
+    setInitRetryExhausted(false)
+    setManualInitRetrying(true)
     try {
-      await useConfigStore.getState().initializeApp();
+      await useConfigStore.getState().initializeApp()
     } finally {
-      setManualInitRetrying(false);
+      setManualInitRetrying(false)
     }
 
     if (!useConfigStore.getState().isInitialized) {
-      setInitRetryEpoch((value) => value + 1);
+      setInitRetryEpoch((value) => value + 1)
     }
-  }, [manualInitRetrying]);
+  }, [manualInitRetrying])
 
   // Map boot outcome kind to recovery variant
   const mapBootViewToRecoveryVariant = (view: DesktopBootView): RecoveryVariant | undefined => {
-    if (view.screen === 'recovery') {
-      return view.variant;
+    if (view.screen === "recovery") {
+      return view.variant
     }
-    return undefined;
-  };
+    return undefined
+  }
 
   if (isUnsupportedMobile) {
     return (
       <ErrorBoundary>
         <UnsupportedMobileRuntimeScreen />
       </ErrorBoundary>
-    );
+    )
   }
 
   // Desktop boot view routing.
   // When the boot outcome resolves to a non-main screen (chooser, recovery),
   // render OnboardingScreen with appropriate mode/variant.
-  if (isDesktopRuntime && bootView && bootView.screen !== 'main') {
+  if (isDesktopRuntime && bootView && bootView.screen !== "main") {
     // First-launch chooser
-    if (bootView.screen === 'chooser') {
+    if (bootView.screen === "chooser") {
       return (
         <ErrorBoundary>
           <div className="h-full text-foreground bg-transparent">
@@ -809,12 +810,12 @@ function App({ apis }: AppProps) {
             </React.Suspense>
           </div>
         </ErrorBoundary>
-      );
+      )
     }
 
     // Recovery screens
-    const recoveryVariant = mapBootViewToRecoveryVariant(bootView);
-    const hostUrl = bootView.screen === 'recovery' && 'url' in bootView ? bootView.url : undefined;
+    const recoveryVariant = mapBootViewToRecoveryVariant(bootView)
+    const hostUrl = bootView.screen === "recovery" && "url" in bootView ? bootView.url : undefined
 
     return (
       <ErrorBoundary>
@@ -830,13 +831,13 @@ function App({ apis }: AppProps) {
           </React.Suspense>
         </div>
       </ErrorBoundary>
-    );
+    )
   }
 
   if (embeddedSessionChat) {
     return (
       <ErrorBoundary>
-        <SyncProvider sdk={axCodeClient.getSdkClient()} directory={currentDirectory || ''}>
+        <SyncProvider sdk={axCodeClient.getSdkClient()} directory={currentDirectory || ""}>
           <RuntimeAPIProvider apis={apis}>
             <TooltipProvider delayDuration={300} skipDelayDuration={150}>
               <div className="h-full text-foreground bg-background">
@@ -849,7 +850,7 @@ function App({ apis }: AppProps) {
           </RuntimeAPIProvider>
         </SyncProvider>
       </ErrorBoundary>
-    );
+    )
   }
 
   if (isMcpOAuthCallback) {
@@ -857,30 +858,36 @@ function App({ apis }: AppProps) {
       <ErrorBoundary>
         <McpOAuthCallbackPage />
       </ErrorBoundary>
-    );
+    )
   }
 
   if (initRetryExhausted && !isInitialized && !embeddedSessionChat) {
     return (
       <ErrorBoundary>
         <StartupInitializationRecovery
-          onRetry={() => { void handleManualInitRetry(); }}
+          onRetry={() => {
+            void handleManualInitRetry()
+          }}
           isRetrying={manualInitRetrying}
         />
       </ErrorBoundary>
-    );
+    )
   }
 
   // Always mount the full provider tree to avoid remounts when isInitialized
   // flips from false → true.
-  const isBootShell = !isInitialized && !isDesktopRuntime;
+  const isBootShell = !isInitialized && !isDesktopRuntime
 
   return (
     <ErrorBoundary>
-      <SyncProvider sdk={axCodeClient.getSdkClient()} directory={currentDirectory || ''}>
+      <SyncProvider sdk={axCodeClient.getSdkClient()} directory={currentDirectory || ""}>
         <RuntimeAPIProvider apis={apis}>
           <TooltipProvider delayDuration={300} skipDelayDuration={150}>
-            <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
+            <div
+              className={
+                isDesktopRuntime ? "h-full text-foreground bg-transparent" : "h-full text-foreground bg-background"
+              }
+            >
               <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
               <PermissionNotifications />
               <AxCodeUpdateToast />
@@ -890,9 +897,7 @@ function App({ apis }: AppProps) {
                 <>
                   <ConfigUpdateOverlay />
                   <AboutDialogWrapper />
-                  {showMemoryDebug && (
-                    <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
-                  )}
+                  {showMemoryDebug && <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />}
                 </>
               )}
             </div>
@@ -900,7 +905,7 @@ function App({ apis }: AppProps) {
         </RuntimeAPIProvider>
       </SyncProvider>
     </ErrorBoundary>
-  );
+  )
 }
 
-export default App;
+export default App

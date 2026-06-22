@@ -39,14 +39,14 @@ So:
 
 ## Ownership map
 
-| Layer / Store | Owns | Scope |
-|---|---|---|
-| child directory stores in `sync-context.tsx` | `session`, `message`, `part`, `permission`, `question`, etc. | One directory |
-| `session-ui-store.ts` | Session selection, draft lifecycle, abort prompts, worktree metadata, SDK-facing action entrypoints | App UI state |
-| `useGlobalSessionsStore.ts` | Global active sessions, global archived sessions, `sessionsByDirectory` | All opened project/worktree session lists |
-| `viewport-store.ts` | Scroll anchors, session memory, loading indicators | App UI state |
-| `input-store.ts` | Draft input state, attached files, synthetic parts | App UI state |
-| `selection-store.ts` | Model/agent/variant selections, including one-time legacy `context-store` selection migration | App UI state |
+| Layer / Store                                | Owns                                                                                                | Scope                                     |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| child directory stores in `sync-context.tsx` | `session`, `message`, `part`, `permission`, `question`, etc.                                        | One directory                             |
+| `session-ui-store.ts`                        | Session selection, draft lifecycle, abort prompts, worktree metadata, SDK-facing action entrypoints | App UI state                              |
+| `useGlobalSessionsStore.ts`                  | Global active sessions, global archived sessions, `sessionsByDirectory`                             | All opened project/worktree session lists |
+| `viewport-store.ts`                          | Scroll anchors, session memory, loading indicators                                                  | App UI state                              |
+| `input-store.ts`                             | Draft input state, attached files, synthetic parts                                                  | App UI state                              |
+| `selection-store.ts`                         | Model/agent/variant selections, including one-time legacy `context-store` selection migration       | App UI state                              |
 
 ## Session list rules
 
@@ -149,19 +149,19 @@ During streaming, `message.part.delta` fires ~60 times/sec. Eagerly cloning all 
 
 Keep this in sync with `handleDirectoryEvent` in `sync-context.tsx`:
 
-| Event type | Fields to clone |
-|---|---|
-| `session.created/updated/deleted` | `session`, `permission`, `todo`, `part` |
-| `session.diff` | `session_diff` |
-| `session.status` | `session_status` |
-| `todo.updated` | `todo` |
-| `message.updated` | `message` |
-| `message.removed` | `message`, `part` |
-| `message.part.updated/removed/delta` | `part` |
-| `vcs.branch.updated` | (none — mutates `draft.vcs` directly) |
-| `permission.asked/replied` | `permission` |
-| `question.asked/replied/rejected` | `question` |
-| `lsp.updated` | `lsp` |
+| Event type                           | Fields to clone                         |
+| ------------------------------------ | --------------------------------------- |
+| `session.created/updated/deleted`    | `session`, `permission`, `todo`, `part` |
+| `session.diff`                       | `session_diff`                          |
+| `session.status`                     | `session_status`                        |
+| `todo.updated`                       | `todo`                                  |
+| `message.updated`                    | `message`                               |
+| `message.removed`                    | `message`, `part`                       |
+| `message.part.updated/removed/delta` | `part`                                  |
+| `vcs.branch.updated`                 | (none — mutates `draft.vcs` directly)   |
+| `permission.asked/replied`           | `permission`                            |
+| `question.asked/replied/rejected`    | `question`                              |
+| `lsp.updated`                        | `lsp`                                   |
 
 ## Adding a new event type
 
@@ -210,12 +210,12 @@ The optimization multiplies with targeted event cloning: fewer new references pe
 
 ### The stores
 
-| Store | Owns | When it changes |
-|-------|------|-----------------|
-| `session-ui-store.ts` | Session selection, draft lifecycle, abort, worktree, SDK actions | Session switch, draft open/close |
-| `input-store.ts` | Pending input text, synthetic parts, attached files | User typing, file attach, revert/fork |
-| `selection-store.ts` | Per-session model/agent/variant choices | Model/agent picker |
-| `viewport-store.ts` | Scroll anchors, session memory state, sync status | Streaming, scroll, session switch |
+| Store                 | Owns                                                             | When it changes                       |
+| --------------------- | ---------------------------------------------------------------- | ------------------------------------- |
+| `session-ui-store.ts` | Session selection, draft lifecycle, abort, worktree, SDK actions | Session switch, draft open/close      |
+| `input-store.ts`      | Pending input text, synthetic parts, attached files              | User typing, file attach, revert/fork |
+| `selection-store.ts`  | Per-session model/agent/variant choices                          | Model/agent picker                    |
+| `viewport-store.ts`   | Scroll anchors, session memory state, sync status                | Streaming, scroll, session switch     |
 
 ### Rules for new UI state
 

@@ -1,20 +1,20 @@
 export interface ParsedModelIdentifier {
-  providerId: string;
-  modelId: string;
+  providerId: string
+  modelId: string
 }
 
 export const parseModelIdentifier = (value: string | undefined): ParsedModelIdentifier | null => {
   if (!value) {
-    return null;
+    return null
   }
 
-  const separatorIndex = value.indexOf('/');
+  const separatorIndex = value.indexOf("/")
   if (separatorIndex <= 0 || separatorIndex >= value.length - 1) {
-    return null;
+    return null
   }
 
   return {
     providerId: value.slice(0, separatorIndex),
     modelId: value.slice(separatorIndex + 1),
-  };
-};
+  }
+}

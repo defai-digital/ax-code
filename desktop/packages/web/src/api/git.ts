@@ -1,9 +1,5 @@
-import * as gitApiHttp from '@openchamber/ui/api/gitApiHttp';
-import type {
-  GitAPI,
-  CreateGitCommitOptions,
-  GitLogOptions,
-} from '@openchamber/ui/api/types';
+import * as gitApiHttp from "@openchamber/ui/api/gitApiHttp"
+import type { GitAPI, CreateGitCommitOptions, GitLogOptions } from "@openchamber/ui/api/types"
 
 export const createWebGitAPI = (): GitAPI => ({
   checkIsGitRepository: gitApiHttp.checkIsGitRepository,
@@ -17,9 +13,9 @@ export const createWebGitAPI = (): GitAPI => ({
   unstageGitFiles: gitApiHttp.unstageGitFiles,
   isLinkedWorktree: gitApiHttp.isLinkedWorktree,
   getGitBranches: gitApiHttp.getGitBranches,
-  deleteGitBranch: gitApiHttp.deleteGitBranch as GitAPI['deleteGitBranch'],
-  deleteRemoteBranch: gitApiHttp.deleteRemoteBranch as GitAPI['deleteRemoteBranch'],
-  removeRemote: gitApiHttp.removeRemote as GitAPI['removeRemote'],
+  deleteGitBranch: gitApiHttp.deleteGitBranch as GitAPI["deleteGitBranch"],
+  deleteRemoteBranch: gitApiHttp.deleteRemoteBranch as GitAPI["deleteRemoteBranch"],
+  removeRemote: gitApiHttp.removeRemote as GitAPI["removeRemote"],
   generateCommitMessage: gitApiHttp.generateCommitMessage,
   generatePullRequestDescription: gitApiHttp.generatePullRequestDescription,
   listGitWorktrees: gitApiHttp.listGitWorktrees,
@@ -29,7 +25,7 @@ export const createWebGitAPI = (): GitAPI => ({
   validateWorktreeDirectory: gitApiHttp.validateWorktreeDirectory,
   canonicalizeWorktreeState: gitApiHttp.canonicalizeWorktreeState,
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions) {
-    return gitApiHttp.createGitCommit(directory, message, options);
+    return gitApiHttp.createGitCommit(directory, message, options)
   },
   gitPush: gitApiHttp.gitPush,
   gitPull: gitApiHttp.gitPull,
@@ -44,7 +40,7 @@ export const createWebGitAPI = (): GitAPI => ({
   createBranch: gitApiHttp.createBranch,
   renameBranch: gitApiHttp.renameBranch,
   getGitLog(directory: string, options?: GitLogOptions) {
-    return gitApiHttp.getGitLog(directory, options);
+    return gitApiHttp.getGitLog(directory, options)
   },
   getCommitFiles: gitApiHttp.getCommitFiles,
   getCurrentGitIdentity: gitApiHttp.getCurrentGitIdentity,
@@ -74,4 +70,4 @@ export const createWebGitAPI = (): GitAPI => ({
     create: gitApiHttp.createGitWorktree,
     remove: gitApiHttp.deleteGitWorktree,
   },
-});
+})

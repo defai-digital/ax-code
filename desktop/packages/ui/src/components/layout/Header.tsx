@@ -1,9 +1,5 @@
-import React, { useEffect } from 'react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import React, { useEffect } from "react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 import {
   DropdownMenu,
@@ -12,77 +8,84 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
+} from "@/components/ui/dropdown-menu"
+import { SortableTabsStrip, type SortableTabsStripItem } from "@/components/ui/sortable-tabs-strip"
 
-import { useUIStore, type ContextPanelMode } from '@/stores/useUIStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
-import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
-import { useAllLiveSessions, useSession, useSessionMessagesResolved } from '@/sync/sync-context';
-import { getAllSyncSessions } from '@/sync/sync-refs';
-import { useProjectsStore } from '@/stores/useProjectsStore';
-import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
-import { useGitBranchLabel } from '@/stores/useGitStore';
-import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
+import { useUIStore, type ContextPanelMode } from "@/stores/useUIStore"
+import { useConfigStore } from "@/stores/useConfigStore"
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { useSessionWorktreeStore } from "@/sync/session-worktree-store"
+import { formatSessionWorktreeBadge } from "@/sync/session-worktree-contract"
+import { useAllLiveSessions, useSession, useSessionMessagesResolved } from "@/sync/sync-context"
+import { getAllSyncSessions } from "@/sync/sync-refs"
+import { useProjectsStore } from "@/stores/useProjectsStore"
+import { useQuotaAutoRefresh, useQuotaStore } from "@/stores/useQuotaStore"
+import { useGitBranchLabel } from "@/stores/useGitStore"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useFeatureFlagsStore } from "@/stores/useFeatureFlagsStore"
 
-import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
-import { cn } from '@/lib/utils';
-import { McpDropdownContent } from '@/components/mcp/McpDropdown';
-import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { formatQuotaValueLabel, formatQuotaResetLabel, formatWindowLabel, QUOTA_PROVIDERS, calculatePace, calculateExpectedUsagePercent } from '@/lib/quota';
-import { UsageProgressBar } from '@/components/sections/usage/UsageProgressBar';
-import { PaceIndicator } from '@/components/sections/usage/PaceIndicator';
-import { updateDesktopSettings } from '@/lib/persistence';
-import { eventMatchesShortcut, formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
-import { formatClockTime } from '@/lib/timeFormat';
+import { useGitHubAuthStore } from "@/stores/useGitHubAuthStore"
+import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
+import { ContextUsageDisplay } from "@/components/ui/ContextUsageDisplay"
+import { cn } from "@/lib/utils"
+import { McpDropdownContent } from "@/components/mcp/McpDropdown"
+import { ProviderLogo } from "@/components/ui/ProviderLogo"
+import {
+  formatQuotaValueLabel,
+  formatQuotaResetLabel,
+  formatWindowLabel,
+  QUOTA_PROVIDERS,
+  calculatePace,
+  calculateExpectedUsagePercent,
+} from "@/lib/quota"
+import { UsageProgressBar } from "@/components/sections/usage/UsageProgressBar"
+import { PaceIndicator } from "@/components/sections/usage/PaceIndicator"
+import { updateDesktopSettings } from "@/lib/persistence"
+import { eventMatchesShortcut, formatShortcutForDisplay, getEffectiveShortcutCombo } from "@/lib/shortcuts"
+import { formatClockTime } from "@/lib/timeFormat"
 import {
   getAllModelFamilies,
   getDisplayModelName,
   groupModelsByFamily,
   sortModelFamilies,
-} from '@/lib/quota/model-families';
+} from "@/lib/quota/model-families"
 
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import type { UsageWindow } from "@/types"
+import type { GitHubAuthStatus } from "@/lib/api/types"
+import type { SessionContextUsage } from "@/stores/types/sessionTypes"
+import { DesktopHostSwitcherDialog } from "@/components/desktop/DesktopHostSwitcher"
+import { OpenInAppButton } from "@/components/desktop/OpenInAppButton"
+import { forceKillTerminal } from "@/lib/terminalApi"
+import { useTerminalStore } from "@/stores/useTerminalStore"
+import { ProjectActionsButton } from "@/components/layout/ProjectActionsButton"
+import { SessionSwitcherDropdown } from "@/components/session/SessionSwitcherDropdown"
+import { canUseElectronDesktopIPC, invokeDesktop, isDesktopShell, startDesktopWindowDrag } from "@/lib/desktop"
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import type { UsageWindow } from '@/types';
-import type { GitHubAuthStatus } from '@/lib/api/types';
-import type { SessionContextUsage } from '@/stores/types/sessionTypes';
-import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
-import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
-import { forceKillTerminal } from '@/lib/terminalApi';
-import { useTerminalStore } from '@/stores/useTerminalStore';
-import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
-import { SessionSwitcherDropdown } from '@/components/session/SessionSwitcherDropdown';
-import { canUseElectronDesktopIPC, invokeDesktop, isDesktopShell, startDesktopWindowDrag } from '@/lib/desktop';
-import { isDesktopWindowFullscreen as isDesktopWindowFullscreenNative, onDesktopWindowResized } from '@/lib/desktopNative';
-import { API_ENDPOINTS } from '@/lib/http';
-import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
-import { resolveSessionDiffStats } from '@/components/session/sidebar/utils';
-import { Icon } from "@/components/icon/Icon";
-import { useI18n } from '@/lib/i18n';
-import type { Session } from '@ax-code/sdk/v2/client';
-import type { IconName } from "@/components/icon/icons";
+  isDesktopWindowFullscreen as isDesktopWindowFullscreenNative,
+  onDesktopWindowResized,
+} from "@/lib/desktopNative"
+import { API_ENDPOINTS } from "@/lib/http"
+import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from "@/lib/desktopHosts"
+import { resolveSessionDiffStats } from "@/components/session/sidebar/utils"
+import { Icon } from "@/components/icon/Icon"
+import { useI18n } from "@/lib/i18n"
+import type { Session } from "@ax-code/sdk/v2/client"
+import type { IconName } from "@/components/icon/icons"
 
-const DESKTOP_HEADER_ICON_BUTTON_CLASS = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover transition-colors';
+const DESKTOP_HEADER_ICON_BUTTON_CLASS =
+  "app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover transition-colors"
 
 type HeaderIconActionButtonProps = {
-  visible?: boolean;
-  title: string;
-  ariaLabel: string;
-  onClick: React.MouseEventHandler<HTMLButtonElement>;
-  className?: string;
-  Icon: IconName;
-  iconClassName?: string;
-  pressed?: boolean;
-};
+  visible?: boolean
+  title: string
+  ariaLabel: string
+  onClick: React.MouseEventHandler<HTMLButtonElement>
+  className?: string
+  Icon: IconName
+  iconClassName?: string
+  pressed?: boolean
+}
 
 const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
   visible = true,
@@ -95,7 +98,7 @@ const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
   pressed = false,
 }: HeaderIconActionButtonProps) {
   if (!visible) {
-    return null;
+    return null
   }
 
   return (
@@ -108,67 +111,73 @@ const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
           aria-pressed={pressed}
           className={cn(
             className ?? DESKTOP_HEADER_ICON_BUTTON_CLASS,
-            pressed && 'bg-interactive-selection text-interactive-selection-foreground'
+            pressed && "bg-interactive-selection text-interactive-selection-foreground",
           )}
         >
-          <Icon name={iconName} className={iconClassName ?? 'h-[18px] w-[18px]'} />
+          <Icon name={iconName} className={iconClassName ?? "h-[18px] w-[18px]"} />
         </button>
       </TooltipTrigger>
       <TooltipContent>
         <p>{title}</p>
       </TooltipContent>
     </Tooltip>
-  );
-});
+  )
+})
 
 type WindowsWindowControlsProps = {
-  visible: boolean;
-};
+  visible: boolean
+}
 
 const WindowsWindowControls = React.memo(function WindowsWindowControls({ visible }: WindowsWindowControlsProps) {
-  const { t } = useI18n();
-  const [isMaximized, setIsMaximized] = React.useState(false);
+  const { t } = useI18n()
+  const [isMaximized, setIsMaximized] = React.useState(false)
 
   useEffect(() => {
     if (!visible) {
-      return;
+      return
     }
 
-    let disposed = false;
-    void invokeDesktop<{ maximized?: boolean }>('desktop_get_current_window_state')
+    let disposed = false
+    void invokeDesktop<{ maximized?: boolean }>("desktop_get_current_window_state")
       .then((state) => {
         if (!disposed) {
-          setIsMaximized(Boolean(state?.maximized));
+          setIsMaximized(Boolean(state?.maximized))
         }
       })
-      .catch(() => {});
+      .catch(() => {})
 
     const handleMaximizedChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ maximized?: boolean }>).detail;
-      setIsMaximized(Boolean(detail?.maximized));
-    };
+      const detail = (event as CustomEvent<{ maximized?: boolean }>).detail
+      setIsMaximized(Boolean(detail?.maximized))
+    }
 
-    window.addEventListener('openchamber:window-maximized-changed', handleMaximizedChange);
+    window.addEventListener("openchamber:window-maximized-changed", handleMaximizedChange)
     return () => {
-      disposed = true;
-      window.removeEventListener('openchamber:window-maximized-changed', handleMaximizedChange);
-    };
-  }, [visible]);
+      disposed = true
+      window.removeEventListener("openchamber:window-maximized-changed", handleMaximizedChange)
+    }
+  }, [visible])
 
   if (!visible) {
-    return null;
+    return null
   }
 
-  const buttonClassName = 'app-region-no-drag inline-flex h-12 w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+  const buttonClassName =
+    "app-region-no-drag inline-flex h-12 w-11 items-center justify-center text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 
   return (
-    <div className="app-region-no-drag -mr-3 ml-2 flex h-12 shrink-0 items-center" aria-label={t('header.windowControls.groupAria')}>
+    <div
+      className="app-region-no-drag -mr-3 ml-2 flex h-12 shrink-0 items-center"
+      aria-label={t("header.windowControls.groupAria")}
+    >
       <button
         type="button"
         className={buttonClassName}
-        onClick={() => { void invokeDesktop('desktop_minimize_current_window'); }}
-        title={t('header.windowControls.minimize')}
-        aria-label={t('header.windowControls.minimize')}
+        onClick={() => {
+          void invokeDesktop("desktop_minimize_current_window")
+        }}
+        title={t("header.windowControls.minimize")}
+        aria-label={t("header.windowControls.minimize")}
       >
         <Icon name="subtract" className="h-4 w-4" />
       </button>
@@ -176,36 +185,38 @@ const WindowsWindowControls = React.memo(function WindowsWindowControls({ visibl
         type="button"
         className={buttonClassName}
         onClick={() => {
-          void invokeDesktop<{ maximized?: boolean }>('desktop_toggle_current_window_maximized')
+          void invokeDesktop<{ maximized?: boolean }>("desktop_toggle_current_window_maximized")
             .then((state) => setIsMaximized(Boolean(state?.maximized)))
-            .catch(() => {});
+            .catch(() => {})
         }}
-        title={isMaximized ? t('header.windowControls.restore') : t('header.windowControls.maximize')}
-        aria-label={isMaximized ? t('header.windowControls.restore') : t('header.windowControls.maximize')}
+        title={isMaximized ? t("header.windowControls.restore") : t("header.windowControls.maximize")}
+        aria-label={isMaximized ? t("header.windowControls.restore") : t("header.windowControls.maximize")}
       >
-        <Icon name={isMaximized ? 'fullscreen-exit' : 'checkbox-blank'} className="h-3.5 w-3.5" />
+        <Icon name={isMaximized ? "fullscreen-exit" : "checkbox-blank"} className="h-3.5 w-3.5" />
       </button>
       <button
         type="button"
-        className={cn(buttonClassName, 'hover:bg-status-error hover:text-status-error-foreground')}
-        onClick={() => { void invokeDesktop('desktop_close_current_window'); }}
-        title={t('header.windowControls.close')}
-        aria-label={t('header.windowControls.close')}
+        className={cn(buttonClassName, "hover:bg-status-error hover:text-status-error-foreground")}
+        onClick={() => {
+          void invokeDesktop("desktop_close_current_window")
+        }}
+        title={t("header.windowControls.close")}
+        aria-label={t("header.windowControls.close")}
       >
         <Icon name="close" className="h-4 w-4" />
       </button>
     </div>
-  );
-});
+  )
+})
 
 type DesktopGitHubControlProps = {
-  githubAuthStatus: GitHubAuthStatus | null;
-  githubAccounts: Array<NonNullable<GitHubAuthStatus['accounts']>[number]>;
-  githubAvatarUrl: string | null;
-  githubLogin: string | null;
-  isSwitchingGitHubAccount: boolean;
-  handleGitHubAccountSwitch: (accountId: string) => Promise<void>;
-};
+  githubAuthStatus: GitHubAuthStatus | null
+  githubAccounts: Array<NonNullable<GitHubAuthStatus["accounts"]>[number]>
+  githubAvatarUrl: string | null
+  githubLogin: string | null
+  isSwitchingGitHubAccount: boolean
+  handleGitHubAccountSwitch: (accountId: string) => Promise<void>
+}
 
 const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
   githubAuthStatus,
@@ -215,9 +226,9 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
   isSwitchingGitHubAccount,
   handleGitHubAccountSwitch,
 }: DesktopGitHubControlProps) {
-  const { t } = useI18n();
+  const { t } = useI18n()
   if (!githubAuthStatus?.connected) {
-    return null;
+    return null
   }
 
   if (githubAccounts.length > 1) {
@@ -228,15 +239,19 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
             type="button"
             className={cn(
               DESKTOP_HEADER_ICON_BUTTON_CLASS,
-              'h-7 w-7 overflow-hidden rounded-full border border-border/60 bg-muted/80 p-0'
+              "h-7 w-7 overflow-hidden rounded-full border border-border/60 bg-muted/80 p-0",
             )}
-            title={githubLogin ? t('header.github.connectedWithLogin', { login: githubLogin }) : t('header.github.connected')}
+            title={
+              githubLogin ? t("header.github.connectedWithLogin", { login: githubLogin }) : t("header.github.connected")
+            }
             disabled={isSwitchingGitHubAccount}
           >
             {githubAvatarUrl ? (
               <img
                 src={githubAvatarUrl}
-                alt={githubLogin ? t('header.github.avatarWithLogin', { login: githubLogin }) : t('header.github.avatar')}
+                alt={
+                  githubLogin ? t("header.github.avatarWithLogin", { login: githubLogin }) : t("header.github.avatar")
+                }
                 className="h-full w-full object-cover"
                 loading="lazy"
                 referrerPolicy="no-referrer"
@@ -248,12 +263,12 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground">
-            {t('header.github.accountsTitle')}
+            {t("header.github.accountsTitle")}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           {githubAccounts.map((account) => {
-            const accountUser = account.user;
-            const isCurrent = Boolean(account.current);
+            const accountUser = account.user
+            const isCurrent = Boolean(account.current)
             return (
               <DropdownMenuItem
                 key={account.id}
@@ -261,14 +276,18 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
                 disabled={isCurrent || isSwitchingGitHubAccount}
                 onSelect={() => {
                   if (!isCurrent) {
-                    void handleGitHubAccountSwitch(account.id);
+                    void handleGitHubAccountSwitch(account.id)
                   }
                 }}
               >
                 {accountUser?.avatarUrl ? (
                   <img
                     src={accountUser.avatarUrl}
-                    alt={accountUser.login ? t('header.github.avatarWithLogin', { login: accountUser.login }) : t('header.github.avatar')}
+                    alt={
+                      accountUser.login
+                        ? t("header.github.avatarWithLogin", { login: accountUser.login })
+                        : t("header.github.avatar")
+                    }
                     className="h-6 w-6 rounded-full border border-border/60 bg-muted object-cover"
                     loading="lazy"
                     referrerPolicy="no-referrer"
@@ -280,7 +299,7 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
                 )}
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate typography-ui-label text-foreground">
-                    {accountUser?.name?.trim() || accountUser?.login || 'GitHub'}
+                    {accountUser?.name?.trim() || accountUser?.login || "GitHub"}
                   </span>
                   {accountUser?.login ? (
                     <span className="truncate typography-micro font-mono text-muted-foreground">
@@ -290,22 +309,22 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
                 </span>
                 {isCurrent ? <Icon name="check" className="h-4 w-4 text-primary" /> : null}
               </DropdownMenuItem>
-            );
+            )
           })}
         </DropdownMenuContent>
       </DropdownMenu>
-    );
+    )
   }
 
   return (
     <div
       className="app-region-no-drag flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted/80"
-      title={githubLogin ? t('header.github.connectedWithLogin', { login: githubLogin }) : t('header.github.connected')}
+      title={githubLogin ? t("header.github.connectedWithLogin", { login: githubLogin }) : t("header.github.connected")}
     >
       {githubAvatarUrl ? (
         <img
           src={githubAvatarUrl}
-          alt={githubLogin ? t('header.github.avatarWithLogin', { login: githubLogin }) : t('header.github.avatar')}
+          alt={githubLogin ? t("header.github.avatarWithLogin", { login: githubLogin }) : t("header.github.avatar")}
           className="h-full w-full object-cover"
           loading="lazy"
           referrerPolicy="no-referrer"
@@ -314,38 +333,38 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
         <Icon name="github-fill" className="h-3.5 w-3.5 text-foreground" />
       )}
     </div>
-  );
-});
+  )
+})
 
 type DesktopServicesMenuProps = {
-  isDesktopApp: boolean;
-  currentInstanceLabel: string;
-  compactCurrentInstanceLabel: string;
-  isDesktopServicesOpen: boolean;
-  setIsDesktopServicesOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  refreshCurrentInstanceLabel: () => Promise<void>;
-  desktopServicesTab: 'instance' | 'usage' | 'mcp';
-  setDesktopServicesTab: React.Dispatch<React.SetStateAction<'instance' | 'usage' | 'mcp'>>;
-  quotaResultsLength: number;
-  fetchAllQuotas: () => Promise<unknown>;
-  servicesTabItems: SortableTabsStripItem[];
-  quotaLastUpdated: number | null;
-  quotaDisplayMode: 'usage' | 'remaining';
-  quotaDisplayTabItems: SortableTabsStripItem[];
-  handleDisplayModeChange: (mode: 'usage' | 'remaining') => Promise<void>;
-  handleUsageRefresh: () => void;
-  isQuotaLoading: boolean;
-  isUsageRefreshSpinning: boolean;
-  hasRateLimits: boolean;
-  rateLimitGroups: RateLimitGroup[];
-  expandedFamilies: Record<string, string[]>;
-  toggleFamilyExpanded: (providerId: string, familyId: string) => void;
-  shortcutLabel: (actionId: string) => string;
-  showDevShutdown: boolean;
-  isDevShutdownInFlight: boolean;
-  onDevShutdown: () => Promise<void>;
-  showPredValues: boolean;
-};
+  isDesktopApp: boolean
+  currentInstanceLabel: string
+  compactCurrentInstanceLabel: string
+  isDesktopServicesOpen: boolean
+  setIsDesktopServicesOpen: React.Dispatch<React.SetStateAction<boolean>>
+  refreshCurrentInstanceLabel: () => Promise<void>
+  desktopServicesTab: "instance" | "usage" | "mcp"
+  setDesktopServicesTab: React.Dispatch<React.SetStateAction<"instance" | "usage" | "mcp">>
+  quotaResultsLength: number
+  fetchAllQuotas: () => Promise<unknown>
+  servicesTabItems: SortableTabsStripItem[]
+  quotaLastUpdated: number | null
+  quotaDisplayMode: "usage" | "remaining"
+  quotaDisplayTabItems: SortableTabsStripItem[]
+  handleDisplayModeChange: (mode: "usage" | "remaining") => Promise<void>
+  handleUsageRefresh: () => void
+  isQuotaLoading: boolean
+  isUsageRefreshSpinning: boolean
+  hasRateLimits: boolean
+  rateLimitGroups: RateLimitGroup[]
+  expandedFamilies: Record<string, string[]>
+  toggleFamilyExpanded: (providerId: string, familyId: string) => void
+  shortcutLabel: (actionId: string) => string
+  showDevShutdown: boolean
+  isDevShutdownInFlight: boolean
+  onDevShutdown: () => Promise<void>
+  showPredValues: boolean
+}
 
 const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
   isDesktopApp,
@@ -376,21 +395,21 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
   onDevShutdown,
   showPredValues,
 }: DesktopServicesMenuProps) {
-  const { t } = useI18n();
-  const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
+  const { t } = useI18n()
+  const timeFormatPreference = useUIStore((state) => state.timeFormatPreference)
   const formatTime = React.useCallback(
     (timestamp: number | null) => formatClockTime(timestamp, timeFormatPreference),
     [timeFormatPreference],
-  );
+  )
   return (
     <DropdownMenu
       open={isDesktopServicesOpen}
       onOpenChange={(open) => {
-        setIsDesktopServicesOpen(open);
+        setIsDesktopServicesOpen(open)
         if (open) {
-          void refreshCurrentInstanceLabel();
-          if (desktopServicesTab === 'usage' && quotaResultsLength === 0) {
-            void fetchAllQuotas();
+          void refreshCurrentInstanceLabel()
+          if (desktopServicesTab === "usage" && quotaResultsLength === 0) {
+            void fetchAllQuotas()
           }
         }
       }}
@@ -400,17 +419,21 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label={isDesktopApp
-                ? t('header.services.openWithCurrent', { current: currentInstanceLabel })
-                : t('header.services.open')}
+              aria-label={
+                isDesktopApp
+                  ? t("header.services.openWithCurrent", { current: currentInstanceLabel })
+                  : t("header.services.open")
+              }
               className={cn(
                 DESKTOP_HEADER_ICON_BUTTON_CLASS,
-                isDesktopApp ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
+                isDesktopApp ? "w-auto max-w-[14rem] justify-start gap-1.5 px-2.5" : "h-8 w-8",
               )}
             >
               <Icon name="stack" className="h-[18px] w-[18px]" />
               {isDesktopApp ? (
-                <span className="truncate typography-ui-label font-medium text-foreground">{compactCurrentInstanceLabel}</span>
+                <span className="truncate typography-ui-label font-medium text-foreground">
+                  {compactCurrentInstanceLabel}
+                </span>
               ) : null}
             </button>
           </DropdownMenuTrigger>
@@ -418,14 +441,14 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
         <TooltipContent>
           <p>
             {isDesktopApp
-              ? t('header.services.tooltip.currentInstanceWithShortcuts', {
+              ? t("header.services.tooltip.currentInstanceWithShortcuts", {
                   current: currentInstanceLabel,
-                  toggle: shortcutLabel('toggle_services_menu'),
-                  nextTab: shortcutLabel('cycle_services_tab'),
+                  toggle: shortcutLabel("toggle_services_menu"),
+                  nextTab: shortcutLabel("cycle_services_tab"),
                 })
-              : t('header.services.tooltip.servicesWithShortcuts', {
-                  toggle: shortcutLabel('toggle_services_menu'),
-                  nextTab: shortcutLabel('cycle_services_tab'),
+              : t("header.services.tooltip.servicesWithShortcuts", {
+                  toggle: shortcutLabel("toggle_services_menu"),
+                  nextTab: shortcutLabel("cycle_services_tab"),
                 })}
           </p>
         </TooltipContent>
@@ -440,10 +463,10 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
               items={servicesTabItems}
               activeId={desktopServicesTab}
               onSelect={(tabID) => {
-                const value = tabID as 'instance' | 'usage' | 'mcp';
-                setDesktopServicesTab(value);
-                if (value === 'usage' && quotaResultsLength === 0) {
-                  void fetchAllQuotas();
+                const value = tabID as "instance" | "usage" | "mcp"
+                setDesktopServicesTab(value)
+                if (value === "usage" && quotaResultsLength === 0) {
+                  void fetchAllQuotas()
                 }
               }}
               layoutMode="fit"
@@ -455,24 +478,26 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
           </div>
         </div>
 
-        {isDesktopApp && desktopServicesTab === 'instance' ? (
+        {isDesktopApp && desktopServicesTab === "instance" ? (
           <DesktopHostSwitcherDialog
             embedded
-            open={isDesktopServicesOpen && desktopServicesTab === 'instance'}
+            open={isDesktopServicesOpen && desktopServicesTab === "instance"}
             onOpenChange={() => {}}
             onHostSwitched={() => setIsDesktopServicesOpen(false)}
           />
         ) : null}
 
-        {desktopServicesTab === 'mcp' ? (
-          <McpDropdownContent active={isDesktopServicesOpen && desktopServicesTab === 'mcp'} />
+        {desktopServicesTab === "mcp" ? (
+          <McpDropdownContent active={isDesktopServicesOpen && desktopServicesTab === "mcp"} />
         ) : null}
 
-        {desktopServicesTab === 'usage' ? (
+        {desktopServicesTab === "usage" ? (
           <div className="overflow-x-hidden">
             <div className="flex items-center justify-between gap-3 border-b border-[var(--interactive-border)] px-4 py-2.5">
               <div className="flex min-w-0 items-baseline gap-2">
-                <span className="typography-ui-header font-semibold text-foreground">{t('header.services.rateLimits')}</span>
+                <span className="typography-ui-header font-semibold text-foreground">
+                  {t("header.services.rateLimits")}
+                </span>
                 <span className="truncate typography-micro text-muted-foreground">{formatTime(quotaLastUpdated)}</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -480,7 +505,7 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                   <SortableTabsStrip
                     items={quotaDisplayTabItems}
                     activeId={quotaDisplayMode}
-                    onSelect={(tabID) => void handleDisplayModeChange(tabID as 'usage' | 'remaining')}
+                    onSelect={(tabID) => void handleDisplayModeChange(tabID as "usage" | "remaining")}
                     layoutMode="fit"
                     variant="active-pill"
                     activePillInsetClassName="gap-0.5 px-px py-0"
@@ -490,28 +515,28 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                 <button
                   type="button"
                   className={cn(
-                    'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors',
-                    'hover:text-foreground hover:bg-interactive-hover',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                    "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors",
+                    "hover:text-foreground hover:bg-interactive-hover",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   )}
                   onClick={handleUsageRefresh}
                   disabled={isQuotaLoading || isUsageRefreshSpinning}
-                  aria-label={t('header.services.refreshRateLimitsAria')}
+                  aria-label={t("header.services.refreshRateLimitsAria")}
                 >
-                  <Icon name="refresh" className={cn('h-4 w-4', isUsageRefreshSpinning && 'animate-spin')} />
+                  <Icon name="refresh" className={cn("h-4 w-4", isUsageRefreshSpinning && "animate-spin")} />
                 </button>
               </div>
             </div>
 
             {!hasRateLimits ? (
               <div className="px-4 py-5 text-center">
-                <span className="typography-ui-label text-muted-foreground">{t('header.services.noRateLimits')}</span>
+                <span className="typography-ui-label text-muted-foreground">{t("header.services.noRateLimits")}</span>
               </div>
             ) : null}
 
             <div className="py-2">
               {rateLimitGroups.map((group, index) => {
-                const providerExpandedFamilies = expandedFamilies[group.providerId] ?? [];
+                const providerExpandedFamilies = expandedFamilies[group.providerId] ?? []
                 return (
                   <React.Fragment key={group.providerId}>
                     {index > 0 ? <div className="mx-4 my-2 border-t border-[var(--interactive-border)]" /> : null}
@@ -521,25 +546,39 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                     </div>
                     {group.entries.length === 0 && (!group.modelFamilies || group.modelFamilies.length === 0) ? (
                       <div className="px-4 pb-2">
-              <span className="typography-ui-label text-muted-foreground">{group.error ?? t('header.services.noRateLimitsReported')}</span>
+                        <span className="typography-ui-label text-muted-foreground">
+                          {group.error ?? t("header.services.noRateLimitsReported")}
+                        </span>
                       </div>
                     ) : (
                       <div className="space-y-3 px-4 pb-2">
                         {group.entries.map(([label, window]) => {
-                          const displayPercent = quotaDisplayMode === 'remaining' ? window.remainingPercent : window.usedPercent;
-                          const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
-                          const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                            ? (quotaDisplayMode === 'remaining'
+                          const displayPercent =
+                            quotaDisplayMode === "remaining" ? window.remainingPercent : window.usedPercent
+                          const paceInfo = calculatePace(
+                            window.usedPercent,
+                            window.resetAt,
+                            window.windowSeconds,
+                            label,
+                          )
+                          const expectedMarker =
+                            paceInfo?.dailyAllocationPercent != null
+                              ? quotaDisplayMode === "remaining"
                                 ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
-                                : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
-                            : null;
-                          const metricLabel = formatQuotaValueLabel(window.valueLabel, displayPercent);
-                          const resetLabel = formatQuotaResetLabel(window.resetAt, window.resetAfterFormatted ?? window.resetAtFormatted);
+                                : calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                              : null
+                          const metricLabel = formatQuotaValueLabel(window.valueLabel, displayPercent)
+                          const resetLabel = formatQuotaResetLabel(
+                            window.resetAt,
+                            window.resetAfterFormatted ?? window.resetAtFormatted,
+                          )
                           return (
                             <div key={`${group.providerId}-${label}`} className="flex flex-col gap-1.5">
                               <div className="flex min-w-0 items-center justify-between gap-3">
                                 <div className="min-w-0 flex items-center gap-2">
-                                  <span className="truncate typography-ui-label text-foreground">{formatWindowLabel(label)}</span>
+                                  <span className="truncate typography-ui-label text-foreground">
+                                    {formatWindowLabel(label)}
+                                  </span>
                                   {resetLabel ? (
                                     <span className="truncate typography-micro text-muted-foreground">
                                       {resetLabel}
@@ -547,7 +586,7 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                                   ) : null}
                                 </div>
                                 <span className="typography-ui-label tabular-nums text-foreground">
-                                  {metricLabel === '-' ? '' : metricLabel}
+                                  {metricLabel === "-" ? "" : metricLabel}
                                 </span>
                               </div>
                               <UsageProgressBar
@@ -558,13 +597,13 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                               />
                               {paceInfo && showPredValues ? <PaceIndicator paceInfo={paceInfo} compact /> : null}
                             </div>
-                          );
+                          )
                         })}
                         {group.modelFamilies && group.modelFamilies.length > 0 ? (
                           <div className="space-y-0.5">
                             {group.modelFamilies.map((family) => {
-                              const familyKey = family.familyId ?? 'other';
-                              const isExpanded = providerExpandedFamilies.includes(familyKey);
+                              const familyKey = family.familyId ?? "other"
+                              const isExpanded = providerExpandedFamilies.includes(familyKey)
                               return (
                                 <Collapsible
                                   key={familyKey}
@@ -572,26 +611,45 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                                   onOpenChange={() => toggleFamilyExpanded(group.providerId, familyKey)}
                                 >
                                   <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-1 py-1.5 text-left hover:bg-[var(--interactive-hover)]/50 transition-colors">
-                                    <span className="typography-ui-label font-medium text-foreground">{family.familyLabel}</span>
-                                    {isExpanded ? <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground" /> : <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground" />}
+                                    <span className="typography-ui-label font-medium text-foreground">
+                                      {family.familyLabel}
+                                    </span>
+                                    {isExpanded ? (
+                                      <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                      <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground" />
+                                    )}
                                   </CollapsibleTrigger>
                                   <CollapsibleContent>
                                     <div className="space-y-2.5 pb-1 pl-1 pt-1">
                                       {family.models.map(([modelName, window]) => {
-                                        const displayPercent = quotaDisplayMode === 'remaining' ? window.remainingPercent : window.usedPercent;
-                                        const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
-                                        const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                          ? (quotaDisplayMode === 'remaining'
+                                        const displayPercent =
+                                          quotaDisplayMode === "remaining"
+                                            ? window.remainingPercent
+                                            : window.usedPercent
+                                        const paceInfo = calculatePace(
+                                          window.usedPercent,
+                                          window.resetAt,
+                                          window.windowSeconds,
+                                        )
+                                        const expectedMarker =
+                                          paceInfo?.dailyAllocationPercent != null
+                                            ? quotaDisplayMode === "remaining"
                                               ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
-                                              : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
-                                          : null;
-                                        const metricLabel = formatQuotaValueLabel(window.valueLabel, displayPercent);
+                                              : calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                            : null
+                                        const metricLabel = formatQuotaValueLabel(window.valueLabel, displayPercent)
                                         return (
-                                          <div key={`${group.providerId}-${modelName}`} className="flex flex-col gap-1.5">
+                                          <div
+                                            key={`${group.providerId}-${modelName}`}
+                                            className="flex flex-col gap-1.5"
+                                          >
                                             <div className="flex min-w-0 items-center justify-between gap-3">
-                                              <span className="truncate typography-micro text-muted-foreground">{getDisplayModelName(modelName)}</span>
+                                              <span className="truncate typography-micro text-muted-foreground">
+                                                {getDisplayModelName(modelName)}
+                                              </span>
                                               <span className="typography-ui-label tabular-nums text-foreground">
-                                                {metricLabel === '-' ? '' : metricLabel}
+                                                {metricLabel === "-" ? "" : metricLabel}
                                               </span>
                                             </div>
                                             <UsageProgressBar
@@ -600,21 +658,23 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                                               className="h-1.5"
                                               expectedMarkerPercent={expectedMarker}
                                             />
-                                            {paceInfo && showPredValues ? <PaceIndicator paceInfo={paceInfo} compact /> : null}
+                                            {paceInfo && showPredValues ? (
+                                              <PaceIndicator paceInfo={paceInfo} compact />
+                                            ) : null}
                                           </div>
-                                        );
+                                        )
                                       })}
                                     </div>
                                   </CollapsibleContent>
                                 </Collapsible>
-                              );
+                              )
                             })}
                           </div>
                         ) : null}
                       </div>
                     )}
                   </React.Fragment>
-                );
+                )
               })}
             </div>
           </div>
@@ -627,336 +687,347 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
               <DropdownMenuItem
                 disabled={isDevShutdownInFlight}
                 onSelect={() => {
-                  void onDevShutdown();
+                  void onDevShutdown()
                 }}
               >
-                {t('header.services.shutdownDev')}
+                {t("header.services.shutdownDev")}
               </DropdownMenuItem>
             </div>
           </>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-});
+  )
+})
 
-const isSameContextUsage = (
-  a: SessionContextUsage | null,
-  b: SessionContextUsage | null,
-): boolean => {
-  if (a === b) return true;
-  if (!a || !b) return false;
+const isSameContextUsage = (a: SessionContextUsage | null, b: SessionContextUsage | null): boolean => {
+  if (a === b) return true
+  if (!a || !b) return false
 
-  return a.totalTokens === b.totalTokens
-    && a.percentage === b.percentage
-    && a.contextLimit === b.contextLimit
-    && (a.outputLimit ?? 0) === (b.outputLimit ?? 0)
-    && (a.normalizedOutput ?? 0) === (b.normalizedOutput ?? 0)
-    && a.thresholdLimit === b.thresholdLimit
-    && (a.lastMessageId ?? '') === (b.lastMessageId ?? '');
-};
+  return (
+    a.totalTokens === b.totalTokens &&
+    a.percentage === b.percentage &&
+    a.contextLimit === b.contextLimit &&
+    (a.outputLimit ?? 0) === (b.outputLimit ?? 0) &&
+    (a.normalizedOutput ?? 0) === (b.normalizedOutput ?? 0) &&
+    a.thresholdLimit === b.thresholdLimit &&
+    (a.lastMessageId ?? "") === (b.lastMessageId ?? "")
+  )
+}
 
 const formatCompactHeaderLabel = (value: string): string => {
-  const trimmed = value.trim();
+  const trimmed = value.trim()
   if (!trimmed) {
-    return '';
+    return ""
   }
 
-  const words = trimmed.split(/\s+/).filter(Boolean);
+  const words = trimmed.split(/\s+/).filter(Boolean)
   if (words.length >= 2) {
-    const first = words[0];
-    const second = words[1].slice(0, 3);
-    const shortTwoWord = `${first} ${second}`.trim();
+    const first = words[0]
+    const second = words[1].slice(0, 3)
+    const shortTwoWord = `${first} ${second}`.trim()
     if (words.length > 2 || shortTwoWord.length < trimmed.length) {
-      return `${shortTwoWord}...`;
+      return `${shortTwoWord}...`
     }
-    return shortTwoWord;
+    return shortTwoWord
   }
 
-  return trimmed.length > 12 ? `${trimmed.slice(0, 9).trimEnd()}...` : trimmed;
-};
+  return trimmed.length > 12 ? `${trimmed.slice(0, 9).trimEnd()}...` : trimmed
+}
 
 const normalize = (value: string): string => {
-  if (!value) return '';
-  const replaced = value.replace(/\\/g, '/');
-  return replaced === '/' ? '/' : replaced.replace(/\/+$/, '');
-};
+  if (!value) return ""
+  const replaced = value.replace(/\\/g, "/")
+  return replaced === "/" ? "/" : replaced.replace(/\/+$/, "")
+}
 
-const getActiveContextMode = (panelState: {
-  isOpen: boolean;
-  activeTabId: string | null;
-  tabs: Array<{ id: string; mode: ContextPanelMode }>;
-} | undefined): ContextPanelMode | null => {
+const getActiveContextMode = (
+  panelState:
+    | {
+        isOpen: boolean
+        activeTabId: string | null
+        tabs: Array<{ id: string; mode: ContextPanelMode }>
+      }
+    | undefined,
+): ContextPanelMode | null => {
   if (!panelState?.isOpen || !Array.isArray(panelState.tabs) || panelState.tabs.length === 0) {
-    return null;
+    return null
   }
 
-  const activeTab = panelState.tabs.find((tab) => tab.id === panelState.activeTabId) ?? panelState.tabs[panelState.tabs.length - 1];
-  return activeTab?.mode ?? null;
-};
+  const activeTab =
+    panelState.tabs.find((tab) => tab.id === panelState.activeTabId) ?? panelState.tabs[panelState.tabs.length - 1]
+  return activeTab?.mode ?? null
+}
 
 interface RateLimitGroup {
-  providerId: string;
-  providerName: string;
-  entries: Array<[string, UsageWindow]>;
-  error?: string;
+  providerId: string
+  providerName: string
+  entries: Array<[string, UsageWindow]>
+  error?: string
   modelFamilies?: Array<{
-    familyId: string | null;
-    familyLabel: string;
-    models: Array<[string, UsageWindow]>;
-  }>;
+    familyId: string | null
+    familyLabel: string
+    models: Array<[string, UsageWindow]>
+  }>
 }
 
 export const Header: React.FC = () => {
-  const { t } = useI18n();
-  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
-  const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
-  const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
-  const openContextOverview = useUIStore((state) => state.openContextOverview);
-  const openContextPlan = useUIStore((state) => state.openContextPlan);
-  const openContextBrowser = useUIStore((state) => state.openContextBrowser);
-  const closeContextPanel = useUIStore((state) => state.closeContextPanel);
-  const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory);
-  const activeMainTab = useUIStore((state) => state.activeMainTab);
-  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
-  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+  const { t } = useI18n()
+  const toggleSidebar = useUIStore((state) => state.toggleSidebar)
+  const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal)
+  const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar)
+  const openContextOverview = useUIStore((state) => state.openContextOverview)
+  const openContextPlan = useUIStore((state) => state.openContextPlan)
+  const openContextBrowser = useUIStore((state) => state.openContextBrowser)
+  const closeContextPanel = useUIStore((state) => state.closeContextPanel)
+  const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory)
+  const activeMainTab = useUIStore((state) => state.activeMainTab)
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab)
+  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides)
 
-  const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
-  const runtimeApis = useRuntimeAPIs();
-  const [isDevShutdownInFlight, setIsDevShutdownInFlight] = React.useState(false);
+  const getCurrentModel = useConfigStore((state) => state.getCurrentModel)
+  const runtimeApis = useRuntimeAPIs()
+  const [isDevShutdownInFlight, setIsDevShutdownInFlight] = React.useState(false)
 
-  const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
-  const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
-  const currentSyncedSession = useSession(currentSessionId ?? null);
-  const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
-  const liveSessions = useAllLiveSessions();
+  const getContextUsage = useSessionUIStore((state) => state.getContextUsage)
+  const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open))
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? "")
+  const currentSyncedSession = useSession(currentSessionId ?? null)
+  const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions)
+  const liveSessions = useAllLiveSessions()
   const activeProject = useProjectsStore((state) => {
     if (!state.activeProjectId) {
-      return null;
+      return null
     }
-    return state.projects.find((project) => project.id === state.activeProjectId) ?? null;
-  });
+    return state.projects.find((project) => project.id === state.activeProjectId) ?? null
+  })
   const activeProjectLabel = React.useMemo(() => {
     if (!activeProject) {
-      return null;
+      return null
     }
 
-    const trimmedLabel = activeProject.label?.trim();
+    const trimmedLabel = activeProject.label?.trim()
     if (trimmedLabel) {
-      return trimmedLabel;
+      return trimmedLabel
     }
 
-    const pathSegments = activeProject.path.split(/[\\/]/).filter(Boolean);
-    return pathSegments[pathSegments.length - 1] ?? null;
-  }, [activeProject]);
-  const quotaResults = useQuotaStore((state) => state.results);
-  const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
-  const isQuotaLoading = useQuotaStore((state) => state.isLoading);
-  const quotaLastUpdated = useQuotaStore((state) => state.lastUpdated);
-  const quotaDisplayMode = useQuotaStore((state) => state.displayMode);
-  const showPredValues = useQuotaStore((state) => state.showPredValues);
-  const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
-  const loadQuotaSettings = useQuotaStore((state) => state.loadSettings);
-  const setQuotaDisplayMode = useQuotaStore((state) => state.setDisplayMode);
+    const pathSegments = activeProject.path.split(/[\\/]/).filter(Boolean)
+    return pathSegments[pathSegments.length - 1] ?? null
+  }, [activeProject])
+  const quotaResults = useQuotaStore((state) => state.results)
+  const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas)
+  const isQuotaLoading = useQuotaStore((state) => state.isLoading)
+  const quotaLastUpdated = useQuotaStore((state) => state.lastUpdated)
+  const quotaDisplayMode = useQuotaStore((state) => state.displayMode)
+  const showPredValues = useQuotaStore((state) => state.showPredValues)
+  const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds)
+  const loadQuotaSettings = useQuotaStore((state) => state.loadSettings)
+  const setQuotaDisplayMode = useQuotaStore((state) => state.setDisplayMode)
 
-  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
-  const setGitHubAuthStatus = useGitHubAuthStore((state) => state.setStatus);
+  const githubAuthStatus = useGitHubAuthStore((state) => state.status)
+  const setGitHubAuthStatus = useGitHubAuthStore((state) => state.setStatus)
 
-  const headerRef = React.useRef<HTMLElement | null>(null);
+  const headerRef = React.useRef<HTMLElement | null>(null)
 
   const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') {
-      return false;
+    if (typeof window === "undefined") {
+      return false
     }
-    return isDesktopShell();
-  });
-  const hasElectronDesktopIPC = React.useMemo(() => canUseElectronDesktopIPC(), []);
-  const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false);
+    return isDesktopShell()
+  })
+  const hasElectronDesktopIPC = React.useMemo(() => canUseElectronDesktopIPC(), [])
+  const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false)
 
   const isMacPlatform = React.useMemo(() => {
-    if (typeof navigator === 'undefined') {
-      return false;
+    if (typeof navigator === "undefined") {
+      return false
     }
-    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
-  }, []);
+    return /Macintosh|Mac OS X/.test(navigator.userAgent || "")
+  }, [])
 
   const isWindowsElectronDesktop = React.useMemo(() => {
-    if (typeof window === 'undefined') {
-      return false;
+    if (typeof window === "undefined") {
+      return false
     }
-    return Boolean(window.__AX_CODE_DESKTOP_ELECTRON__) && window.__AX_CODE_DESKTOP_PLATFORM__ === 'win32';
-  }, []);
+    return Boolean(window.__AX_CODE_DESKTOP_ELECTRON__) && window.__AX_CODE_DESKTOP_PLATFORM__ === "win32"
+  }, [])
 
   const macosMajorVersion = React.useMemo(() => {
-    if (typeof window === 'undefined') {
-      return null;
+    if (typeof window === "undefined") {
+      return null
     }
 
-    const injected = (window as unknown as { __AX_CODE_DESKTOP_MACOS_MAJOR__?: unknown }).__AX_CODE_DESKTOP_MACOS_MAJOR__;
-    if (typeof injected === 'number' && Number.isFinite(injected) && injected > 0) {
-      return injected;
+    const injected = (window as unknown as { __AX_CODE_DESKTOP_MACOS_MAJOR__?: unknown })
+      .__AX_CODE_DESKTOP_MACOS_MAJOR__
+    if (typeof injected === "number" && Number.isFinite(injected) && injected > 0) {
+      return injected
     }
 
     // Fallback: WebKit reports "Mac OS X 10_15_7" format where 10 is legacy prefix
-    if (typeof navigator === 'undefined') {
-      return null;
+    if (typeof navigator === "undefined") {
+      return null
     }
-    const match = (navigator.userAgent || '').match(/Mac OS X (\d+)[._](\d+)/);
+    const match = (navigator.userAgent || "").match(/Mac OS X (\d+)[._](\d+)/)
     if (!match) {
-      return null;
+      return null
     }
-    const first = Number.parseInt(match[1], 10);
-    const second = Number.parseInt(match[2], 10);
+    const first = Number.parseInt(match[1], 10)
+    const second = Number.parseInt(match[2], 10)
     if (Number.isNaN(first)) {
-      return null;
+      return null
     }
-    return first === 10 ? second : first;
-  }, []);
+    return first === 10 ? second : first
+  }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
+    if (typeof window === "undefined") {
+      return
     }
-    setIsDesktopApp(isDesktopShell());
-  }, []);
+    setIsDesktopApp(isDesktopShell())
+  }, [])
 
-  const currentModel = getCurrentModel();
-  const limit = currentModel && typeof currentModel.limit === 'object' && currentModel.limit !== null
-    ? (currentModel.limit as Record<string, unknown>)
-    : null;
-  const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
-  const outputLimit = (limit && typeof limit.output === 'number' ? limit.output : 0);
-  const contextUsage = getContextUsage(contextLimit, outputLimit);
-  const [stableDesktopContextUsage, setStableDesktopContextUsage] = React.useState<SessionContextUsage | null>(null);
-  const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved;
+  const currentModel = getCurrentModel()
+  const limit =
+    currentModel && typeof currentModel.limit === "object" && currentModel.limit !== null
+      ? (currentModel.limit as Record<string, unknown>)
+      : null
+  const contextLimit = limit && typeof limit.context === "number" ? limit.context : 0
+  const outputLimit = limit && typeof limit.output === "number" ? limit.output : 0
+  const contextUsage = getContextUsage(contextLimit, outputLimit)
+  const [stableDesktopContextUsage, setStableDesktopContextUsage] = React.useState<SessionContextUsage | null>(null)
+  const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved
 
   useEffect(() => {
     if (!currentSessionId) {
-      setStableDesktopContextUsage((prev) => (prev === null ? prev : null));
-      return;
+      setStableDesktopContextUsage((prev) => (prev === null ? prev : null))
+      return
     }
 
     if (contextUsage && contextUsage.totalTokens > 0) {
-      setStableDesktopContextUsage((prev) => (isSameContextUsage(prev, contextUsage) ? prev : contextUsage));
-      return;
+      setStableDesktopContextUsage((prev) => (isSameContextUsage(prev, contextUsage) ? prev : contextUsage))
+      return
     }
 
     if (isContextUsageResolvedForSession) {
-      setStableDesktopContextUsage((prev) => (prev === null ? prev : null));
+      setStableDesktopContextUsage((prev) => (prev === null ? prev : null))
     }
-  }, [contextUsage, currentSessionId, isContextUsageResolvedForSession]);
+  }, [contextUsage, currentSessionId, isContextUsageResolvedForSession])
 
-  const githubAvatarUrl = githubAuthStatus?.connected ? (githubAuthStatus.user?.avatarUrl ?? null) : null;
-  const githubLogin = githubAuthStatus?.connected ? (githubAuthStatus.user?.login ?? null) : null;
-  const githubAccounts = githubAuthStatus?.accounts ?? [];
-  const [isSwitchingGitHubAccount, setIsSwitchingGitHubAccount] = React.useState(false);
-  const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false);
-  const [isUsageRefreshSpinning, setIsUsageRefreshSpinning] = React.useState(false);
-  const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState('Local');
-  const compactCurrentInstanceLabel = React.useMemo(() => formatCompactHeaderLabel(currentInstanceLabel), [currentInstanceLabel]);
-  const [desktopServicesTab, setDesktopServicesTab] = React.useState<'instance' | 'usage' | 'mcp'>(
-    isDesktopApp ? 'instance' : 'usage'
-  );
+  const githubAvatarUrl = githubAuthStatus?.connected ? (githubAuthStatus.user?.avatarUrl ?? null) : null
+  const githubLogin = githubAuthStatus?.connected ? (githubAuthStatus.user?.login ?? null) : null
+  const githubAccounts = githubAuthStatus?.accounts ?? []
+  const [isSwitchingGitHubAccount, setIsSwitchingGitHubAccount] = React.useState(false)
+  const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false)
+  const [isUsageRefreshSpinning, setIsUsageRefreshSpinning] = React.useState(false)
+  const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState("Local")
+  const compactCurrentInstanceLabel = React.useMemo(
+    () => formatCompactHeaderLabel(currentInstanceLabel),
+    [currentInstanceLabel],
+  )
+  const [desktopServicesTab, setDesktopServicesTab] = React.useState<"instance" | "usage" | "mcp">(
+    isDesktopApp ? "instance" : "usage",
+  )
   useEffect(() => {
-    if (!isDesktopApp && desktopServicesTab === 'instance') {
-      setDesktopServicesTab('usage');
+    if (!isDesktopApp && desktopServicesTab === "instance") {
+      setDesktopServicesTab("usage")
     }
-  }, [desktopServicesTab, isDesktopApp]);
+  }, [desktopServicesTab, isDesktopApp])
 
-  const showDesktopHeaderContextUsage = activeMainTab === 'chat' && !!stableDesktopContextUsage && stableDesktopContextUsage.totalTokens > 0;
-  const desktopHeaderDisplayPercentage = stableDesktopContextUsage && stableDesktopContextUsage.contextLimit > 0
-    ? Math.min(999, (stableDesktopContextUsage.totalTokens / stableDesktopContextUsage.contextLimit) * 100)
-    : 0;
+  const showDesktopHeaderContextUsage =
+    activeMainTab === "chat" && !!stableDesktopContextUsage && stableDesktopContextUsage.totalTokens > 0
+  const desktopHeaderDisplayPercentage =
+    stableDesktopContextUsage && stableDesktopContextUsage.contextLimit > 0
+      ? Math.min(999, (stableDesktopContextUsage.totalTokens / stableDesktopContextUsage.contextLimit) * 100)
+      : 0
 
   const refreshCurrentInstanceLabel = React.useCallback(async () => {
-    if (typeof window === 'undefined' || !isDesktopApp) {
-      return;
+    if (typeof window === "undefined" || !isDesktopApp) {
+      return
     }
 
     try {
-      const cfg = await desktopHostsGet();
-      const currentHref = window.location.href;
-      const localOrigin = window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ || window.location.origin;
+      const cfg = await desktopHostsGet()
+      const currentHref = window.location.href
+      const localOrigin = window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ || window.location.origin
 
       if (locationMatchesHost(currentHref, localOrigin)) {
-        setCurrentInstanceLabel('Local');
-        return;
+        setCurrentInstanceLabel("Local")
+        return
       }
 
       const match = cfg.hosts.find((host) => {
-        return locationMatchesHost(currentHref, host.url);
-      });
+        return locationMatchesHost(currentHref, host.url)
+      })
 
       if (match?.label?.trim()) {
-        setCurrentInstanceLabel(redactSensitiveUrl(match.label.trim()));
-        return;
+        setCurrentInstanceLabel(redactSensitiveUrl(match.label.trim()))
+        return
       }
 
-      setCurrentInstanceLabel('Instance');
+      setCurrentInstanceLabel("Instance")
     } catch {
-      setCurrentInstanceLabel('Local');
+      setCurrentInstanceLabel("Local")
     }
-  }, [isDesktopApp]);
+  }, [isDesktopApp])
 
   useEffect(() => {
-    void refreshCurrentInstanceLabel();
-  }, [refreshCurrentInstanceLabel]);
-  useQuotaAutoRefresh();
-  const selectedModels = useQuotaStore((state) => state.selectedModels);
-  const expandedFamilies = useQuotaStore((state) => state.expandedFamilies);
-  const toggleFamilyExpanded = useQuotaStore((state) => state.toggleFamilyExpanded);
+    void refreshCurrentInstanceLabel()
+  }, [refreshCurrentInstanceLabel])
+  useQuotaAutoRefresh()
+  const selectedModels = useQuotaStore((state) => state.selectedModels)
+  const expandedFamilies = useQuotaStore((state) => state.expandedFamilies)
+  const toggleFamilyExpanded = useQuotaStore((state) => state.toggleFamilyExpanded)
 
   const rateLimitGroups = React.useMemo(() => {
-    const groups: RateLimitGroup[] = [];
+    const groups: RateLimitGroup[] = []
 
     for (const provider of QUOTA_PROVIDERS) {
       if (!dropdownProviderIds.includes(provider.id)) {
-        continue;
+        continue
       }
-      const result = quotaResults.find((entry) => entry.providerId === provider.id);
-      const windows = (result?.usage?.windows ?? {}) as Record<string, UsageWindow>;
-      const models = result?.usage?.models;
-      const entries = Object.entries(windows);
+      const result = quotaResults.find((entry) => entry.providerId === provider.id)
+      const windows = (result?.usage?.windows ?? {}) as Record<string, UsageWindow>
+      const models = result?.usage?.models
+      const entries = Object.entries(windows)
 
       const group: RateLimitGroup = {
         providerId: provider.id,
         providerName: provider.name,
         entries,
-        error: (result && !result.ok && result.configured) ? result.error : undefined,
-      };
+        error: result && !result.ok && result.configured ? result.error : undefined,
+      }
 
       // Add model families if provider has per-model quotas
       if (models && Object.keys(models).length > 0) {
-        const providerSelectedModels = selectedModels[provider.id] ?? [];
+        const providerSelectedModels = selectedModels[provider.id] ?? []
         // hasExplicitSelection = true means user has selected specific models to show
         // If the array exists but is empty, treat as "show all" (user cleared selection)
-        const hasExplicitSelection = providerSelectedModels.length > 0;
-        const modelGroups = groupModelsByFamily(models, provider.id);
-        const families = getAllModelFamilies(provider.id);
-        const sortedFamilies = sortModelFamilies(families);
+        const hasExplicitSelection = providerSelectedModels.length > 0
+        const modelGroups = groupModelsByFamily(models, provider.id)
+        const families = getAllModelFamilies(provider.id)
+        const sortedFamilies = sortModelFamilies(families)
 
-        group.modelFamilies = [];
+        group.modelFamilies = []
 
         // Add predefined families first
         for (const family of sortedFamilies) {
-          const modelNames = modelGroups.get(family.id) ?? [];
-          if (modelNames.length === 0) continue;
+          const modelNames = modelGroups.get(family.id) ?? []
+          if (modelNames.length === 0) continue
 
           // Filter to selected models only, OR show all if nothing selected
           const selectedModelNames = hasExplicitSelection
             ? modelNames.filter((m: string) => providerSelectedModels.includes(m))
-            : modelNames;
-          if (selectedModelNames.length === 0) continue;
+            : modelNames
+          if (selectedModelNames.length === 0) continue
 
-          const familyModels: Array<[string, UsageWindow]> = [];
+          const familyModels: Array<[string, UsageWindow]> = []
           for (const modelName of selectedModelNames) {
-            const modelUsage = models[modelName] as { windows?: Record<string, UsageWindow> } | undefined;
+            const modelUsage = models[modelName] as { windows?: Record<string, UsageWindow> } | undefined
             if (modelUsage?.windows) {
-              const windowEntries = Object.entries(modelUsage.windows);
+              const windowEntries = Object.entries(modelUsage.windows)
               if (windowEntries.length > 0) {
-                familyModels.push([modelName, windowEntries[0][1]]);
+                familyModels.push([modelName, windowEntries[0][1]])
               }
             }
           }
@@ -966,88 +1037,93 @@ export const Header: React.FC = () => {
               familyId: family.id,
               familyLabel: family.label,
               models: familyModels,
-            });
+            })
           }
         }
 
         // Add "Other" family for remaining models
-        const otherModelNames = modelGroups.get(null) ?? [];
+        const otherModelNames = modelGroups.get(null) ?? []
         const selectedOtherModels = hasExplicitSelection
           ? otherModelNames.filter((m: string) => providerSelectedModels.includes(m))
-          : otherModelNames;
+          : otherModelNames
         if (selectedOtherModels.length > 0) {
-          const otherModels: Array<[string, UsageWindow]> = [];
+          const otherModels: Array<[string, UsageWindow]> = []
           for (const modelName of selectedOtherModels) {
-            const modelUsage = models[modelName] as { windows?: Record<string, UsageWindow> } | undefined;
+            const modelUsage = models[modelName] as { windows?: Record<string, UsageWindow> } | undefined
             if (modelUsage?.windows) {
-              const windowEntries = Object.entries(modelUsage.windows);
+              const windowEntries = Object.entries(modelUsage.windows)
               if (windowEntries.length > 0) {
-                otherModels.push([modelName, windowEntries[0][1]]);
+                otherModels.push([modelName, windowEntries[0][1]])
               }
             }
           }
           if (otherModels.length > 0) {
             group.modelFamilies.push({
               familyId: null,
-              familyLabel: t('header.services.modelFamily.other'),
+              familyLabel: t("header.services.modelFamily.other"),
               models: otherModels,
-            });
+            })
           }
         }
       }
 
       if (entries.length > 0 || (group.modelFamilies && group.modelFamilies.length > 0) || group.error) {
-        groups.push(group);
+        groups.push(group)
       }
     }
 
-    return groups;
-  }, [dropdownProviderIds, quotaResults, selectedModels, t]);
-  const hasRateLimits = rateLimitGroups.length > 0;
+    return groups
+  }, [dropdownProviderIds, quotaResults, selectedModels, t])
+  const hasRateLimits = rateLimitGroups.length > 0
   React.useEffect(() => {
-    void loadQuotaSettings();
-  }, [loadQuotaSettings]);
-  const handleDisplayModeChange = React.useCallback(async (mode: 'usage' | 'remaining') => {
-    setQuotaDisplayMode(mode);
-    try {
-      await updateDesktopSettings({ usageDisplayMode: mode });
-    } catch (error) {
-      console.warn('Failed to update usage display mode:', error);
-    }
-  }, [setQuotaDisplayMode]);
+    void loadQuotaSettings()
+  }, [loadQuotaSettings])
+  const handleDisplayModeChange = React.useCallback(
+    async (mode: "usage" | "remaining") => {
+      setQuotaDisplayMode(mode)
+      try {
+        await updateDesktopSettings({ usageDisplayMode: mode })
+      } catch (error) {
+        console.warn("Failed to update usage display mode:", error)
+      }
+    },
+    [setQuotaDisplayMode],
+  )
 
   const handleUsageRefresh = React.useCallback(() => {
-    if (isUsageRefreshSpinning) return;
-    setIsUsageRefreshSpinning(true);
-    const minSpinPromise = new Promise(resolve => setTimeout(resolve, 500));
+    if (isUsageRefreshSpinning) return
+    setIsUsageRefreshSpinning(true)
+    const minSpinPromise = new Promise((resolve) => setTimeout(resolve, 500))
     Promise.all([fetchAllQuotas(), minSpinPromise]).finally(() => {
-      setIsUsageRefreshSpinning(false);
-    });
-  }, [fetchAllQuotas, isUsageRefreshSpinning]);
+      setIsUsageRefreshSpinning(false)
+    })
+  }, [fetchAllQuotas, isUsageRefreshSpinning])
 
   const currentSessionLive = React.useMemo(() => {
-    if (!currentSessionId) return null;
-    return liveSessions.find((s) => s.id === currentSessionId)
-      ?? globalActiveSessions.find((s) => s.id === currentSessionId)
-      ?? currentSyncedSession
-      ?? getAllSyncSessions().find((s) => s.id === currentSessionId)
-      ?? null;
-  }, [currentSessionId, currentSyncedSession, globalActiveSessions, liveSessions]);
+    if (!currentSessionId) return null
+    return (
+      liveSessions.find((s) => s.id === currentSessionId) ??
+      globalActiveSessions.find((s) => s.id === currentSessionId) ??
+      currentSyncedSession ??
+      getAllSyncSessions().find((s) => s.id === currentSessionId) ??
+      null
+    )
+  }, [currentSessionId, currentSyncedSession, globalActiveSessions, liveSessions])
 
   const lastResolvedSessionRef = React.useRef<{
-    sessionId: string;
-    session: Session;
-    expiresAt: number;
-  } | null>(null);
-  const [sessionFallbackVersion, setSessionFallbackVersion] = React.useState(0);
+    sessionId: string
+    session: Session
+    expiresAt: number
+  } | null>(null)
+  const [sessionFallbackVersion, setSessionFallbackVersion] = React.useState(0)
 
   React.useEffect(() => {
     if (!currentSessionId) {
       if (lastResolvedSessionRef.current) {
-        lastResolvedSessionRef.current = null;
-        setSessionFallbackVersion((value) => value + 1);
+        lastResolvedSessionRef.current = null
+        setSessionFallbackVersion((value) => value + 1)
       }
-      return;
+      return
     }
 
     if (currentSessionLive) {
@@ -1055,198 +1131,198 @@ export const Header: React.FC = () => {
         sessionId: currentSessionId,
         session: currentSessionLive,
         expiresAt: Date.now() + 2000,
-      };
-      return;
+      }
+      return
     }
 
-    const cached = lastResolvedSessionRef.current;
+    const cached = lastResolvedSessionRef.current
     if (!cached || cached.sessionId !== currentSessionId) {
-      return;
+      return
     }
 
-    const remainingMs = cached.expiresAt - Date.now();
+    const remainingMs = cached.expiresAt - Date.now()
     if (remainingMs <= 0) {
-      lastResolvedSessionRef.current = null;
-      setSessionFallbackVersion((value) => value + 1);
-      return;
+      lastResolvedSessionRef.current = null
+      setSessionFallbackVersion((value) => value + 1)
+      return
     }
 
     const timeoutId = window.setTimeout(() => {
       if (lastResolvedSessionRef.current?.sessionId === currentSessionId) {
-        lastResolvedSessionRef.current = null;
+        lastResolvedSessionRef.current = null
       }
-      setSessionFallbackVersion((value) => value + 1);
-    }, remainingMs);
+      setSessionFallbackVersion((value) => value + 1)
+    }, remainingMs)
 
     return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [currentSessionId, currentSessionLive]);
+      window.clearTimeout(timeoutId)
+    }
+  }, [currentSessionId, currentSessionLive])
 
-  void sessionFallbackVersion;
+  void sessionFallbackVersion
   const currentSession = (() => {
     if (currentSessionLive) {
-      return currentSessionLive;
+      return currentSessionLive
     }
 
     if (!currentSessionId) {
-      return null;
+      return null
     }
 
-    const cached = lastResolvedSessionRef.current;
+    const cached = lastResolvedSessionRef.current
     if (cached && cached.sessionId === currentSessionId && cached.expiresAt > Date.now()) {
-      return cached.session;
+      return cached.session
     }
 
-    return null;
-  })();
+    return null
+  })()
 
   const worktreePath = useSessionUIStore((state) => {
-    if (!currentSessionId) return '';
-    return state.worktreeMetadata.get(currentSessionId)?.path ?? '';
-  });
+    if (!currentSessionId) return ""
+    return state.worktreeMetadata.get(currentSessionId)?.path ?? ""
+  })
   const currentSessionWorktreeBranch = useSessionUIStore((state) => {
-    if (!currentSessionId) return null;
-    return state.worktreeMetadata.get(currentSessionId)?.branch?.trim() ?? null;
-  });
+    if (!currentSessionId) return null
+    return state.worktreeMetadata.get(currentSessionId)?.branch?.trim() ?? null
+  })
 
   // Authoritative session↔worktree attachment from session-worktree-store
   const worktreeAttachment = useSessionWorktreeStore((state) =>
-    currentSessionId ? state.getAttachment(currentSessionId) : undefined
-  );
+    currentSessionId ? state.getAttachment(currentSessionId) : undefined,
+  )
 
   const worktreeBadge = React.useMemo(() => {
-    if (!worktreeAttachment) return null;
-    return formatSessionWorktreeBadge(worktreeAttachment);
-  }, [worktreeAttachment]);
+    if (!worktreeAttachment) return null
+    return formatSessionWorktreeBadge(worktreeAttachment)
+  }, [worktreeAttachment])
 
   const worktreeBadgeKind = React.useMemo(() => {
-    if (!worktreeAttachment) return null;
-    if (worktreeAttachment.legacy) return 'legacy';
-    if (worktreeAttachment.degraded) return 'degraded';
-    if (worktreeAttachment.worktreeStatus === 'missing') return 'missing';
-    if (worktreeAttachment.worktreeStatus === 'invalid') return 'invalid';
-    if (worktreeAttachment.attentionReason) return 'attention';
-    return null;
-  }, [worktreeAttachment]);
+    if (!worktreeAttachment) return null
+    if (worktreeAttachment.legacy) return "legacy"
+    if (worktreeAttachment.degraded) return "degraded"
+    if (worktreeAttachment.worktreeStatus === "missing") return "missing"
+    if (worktreeAttachment.worktreeStatus === "invalid") return "invalid"
+    if (worktreeAttachment.attentionReason) return "attention"
+    return null
+  }, [worktreeAttachment])
   const worktreeDirectory = React.useMemo(() => {
-    return normalize(worktreePath || '');
-  }, [worktreePath]);
+    return normalize(worktreePath || "")
+  }, [worktreePath])
 
   const sessionDirectory = React.useMemo(() => {
-    const raw = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
-    return normalize(raw || '');
-  }, [currentSession?.directory]);
+    const raw = typeof currentSession?.directory === "string" ? currentSession.directory : ""
+    return normalize(raw || "")
+  }, [currentSession?.directory])
 
   const draftDirectory = useSessionUIStore((state) => {
     if (!state.newSessionDraft?.open) {
-      return '';
+      return ""
     }
-    return normalize(state.newSessionDraft.bootstrapPendingDirectory ?? state.newSessionDraft.directoryOverride ?? '');
-  });
+    return normalize(state.newSessionDraft.bootstrapPendingDirectory ?? state.newSessionDraft.directoryOverride ?? "")
+  })
 
   const openDirectory = React.useMemo(() => {
-    return worktreeDirectory || sessionDirectory || draftDirectory;
-  }, [draftDirectory, sessionDirectory, worktreeDirectory]);
+    return worktreeDirectory || sessionDirectory || draftDirectory
+  }, [draftDirectory, sessionDirectory, worktreeDirectory])
 
   const catalogWorktreeBranch = useSessionUIStore((state) => {
-    const candidateDirectory = normalize(worktreeDirectory || sessionDirectory || '');
+    const candidateDirectory = normalize(worktreeDirectory || sessionDirectory || "")
     if (!candidateDirectory) {
-      return null;
+      return null
     }
 
     for (const worktrees of state.availableWorktreesByProject.values()) {
-      const match = worktrees.find((worktree) => normalize(worktree.path) === candidateDirectory);
-      const branch = match?.branch?.trim();
+      const match = worktrees.find((worktree) => normalize(worktree.path) === candidateDirectory)
+      const branch = match?.branch?.trim()
       if (branch) {
-        return branch;
+        return branch
       }
     }
 
-    return null;
-  });
+    return null
+  })
 
-  const gitBranchForDirectory = useGitBranchLabel(openDirectory || null);
-  const currentBranchLabel = gitBranchForDirectory || currentSessionWorktreeBranch || catalogWorktreeBranch;
+  const gitBranchForDirectory = useGitBranchLabel(openDirectory || null)
+  const currentBranchLabel = gitBranchForDirectory || currentSessionWorktreeBranch || catalogWorktreeBranch
 
   const currentSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {
-      return activeProjectLabel ?? 'AX Code Desktop';
+      return activeProjectLabel ?? "AX Code Desktop"
     }
-    const trimmedTitle = currentSession?.title?.trim();
-    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : 'Untitled Session';
-  }, [activeProjectLabel, currentSession?.title, currentSessionId]);
+    const trimmedTitle = currentSession?.title?.trim()
+    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : "Untitled Session"
+  }, [activeProjectLabel, currentSession?.title, currentSessionId])
 
   const currentSessionDiffStats = React.useMemo(() => {
-    return resolveSessionDiffStats(currentSession?.summary as Parameters<typeof resolveSessionDiffStats>[0]);
-  }, [currentSession?.summary]);
+    return resolveSessionDiffStats(currentSession?.summary as Parameters<typeof resolveSessionDiffStats>[0])
+  }, [currentSession?.summary])
 
   const currentSessionChanges = React.useMemo(() => {
     if (currentSessionDiffStats) {
-      return currentSessionDiffStats;
+      return currentSessionDiffStats
     }
-    return { additions: 0, deletions: 0 };
-  }, [currentSessionDiffStats]);
-  const hasNonZeroSessionChanges = currentSessionChanges.additions > 0 || currentSessionChanges.deletions > 0;
+    return { additions: 0, deletions: 0 }
+  }, [currentSessionDiffStats])
+  const hasNonZeroSessionChanges = currentSessionChanges.additions > 0 || currentSessionChanges.deletions > 0
 
   const actionDirectory = React.useMemo(() => {
-    return normalize(openDirectory || activeProject?.path || '');
-  }, [activeProject?.path, openDirectory]);
+    return normalize(openDirectory || activeProject?.path || "")
+  }, [activeProject?.path, openDirectory])
 
   const activeProjectRef = React.useMemo(() => {
     if (!activeProject) {
-      return null;
+      return null
     }
-    return { id: activeProject.id, path: activeProject.path };
-  }, [activeProject]);
+    return { id: activeProject.id, path: activeProject.path }
+  }, [activeProject])
 
   const lastProjectActionsContextRef = React.useRef<{
-    projectRef: { id: string; path: string };
-    directory: string;
-  } | null>(null);
+    projectRef: { id: string; path: string }
+    directory: string
+  } | null>(null)
 
   React.useEffect(() => {
     if (!activeProjectRef || !actionDirectory) {
-      return;
+      return
     }
     lastProjectActionsContextRef.current = {
       projectRef: activeProjectRef,
       directory: actionDirectory,
-    };
-  }, [actionDirectory, activeProjectRef]);
+    }
+  }, [actionDirectory, activeProjectRef])
 
   const projectActionsContext = React.useMemo(() => {
     if (activeProjectRef && actionDirectory) {
-      return { projectRef: activeProjectRef, directory: actionDirectory };
+      return { projectRef: activeProjectRef, directory: actionDirectory }
     }
-    return lastProjectActionsContextRef.current;
-  }, [actionDirectory, activeProjectRef]);
+    return lastProjectActionsContextRef.current
+  }, [actionDirectory, activeProjectRef])
 
-  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
-  const isSessionPlanAvailable = useSessionUIStore((state) => state.isSessionPlanAvailable);
-  const planTabAvailable = planModeEnabled && currentSessionId ? isSessionPlanAvailable(currentSessionId) : false;
-  const showPlanTab = planTabAvailable;
-  const lastPlanSessionKeyRef = React.useRef<string>('');
+  const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled)
+  const isSessionPlanAvailable = useSessionUIStore((state) => state.isSessionPlanAvailable)
+  const planTabAvailable = planModeEnabled && currentSessionId ? isSessionPlanAvailable(currentSessionId) : false
+  const showPlanTab = planTabAvailable
+  const lastPlanSessionKeyRef = React.useRef<string>("")
 
   // Reset plan tab availability when session changes
   React.useEffect(() => {
     if (!planModeEnabled) {
-      if (useUIStore.getState().activeMainTab === 'plan') {
-        useUIStore.getState().setActiveMainTab('chat');
+      if (useUIStore.getState().activeMainTab === "plan") {
+        useUIStore.getState().setActiveMainTab("chat")
       }
-      return;
+      return
     }
 
-    if (!currentSessionId) return;
+    if (!currentSessionId) return
 
-    const sessionKey = `${currentSessionId || 'none'}:${sessionDirectory || 'none'}:${currentSession?.time?.created || 0}:${currentSession?.slug || 'none'}`;
+    const sessionKey = `${currentSessionId || "none"}:${sessionDirectory || "none"}:${currentSession?.time?.created || 0}:${currentSession?.slug || "none"}`
     if (lastPlanSessionKeyRef.current !== sessionKey) {
-      lastPlanSessionKeyRef.current = sessionKey;
+      lastPlanSessionKeyRef.current = sessionKey
     }
 
     // If plan is not available but user is on plan tab, switch them back to chat
-    if (!planTabAvailable && useUIStore.getState().activeMainTab === 'plan') {
-      useUIStore.getState().setActiveMainTab('chat');
+    if (!planTabAvailable && useUIStore.getState().activeMainTab === "plan") {
+      useUIStore.getState().setActiveMainTab("chat")
     }
   }, [
     planModeEnabled,
@@ -1255,340 +1331,353 @@ export const Header: React.FC = () => {
     currentSession?.time?.created,
     currentSessionId,
     sessionDirectory,
-  ]);
+  ])
 
-  const handleGitHubAccountSwitch = React.useCallback(async (accountId: string) => {
-    if (!accountId || isSwitchingGitHubAccount) return;
-    setIsSwitchingGitHubAccount(true);
-    try {
-      const payload = runtimeApis.github
-        ? await runtimeApis.github.authActivate(accountId)
-        : await (async () => {
-          const response = await fetch(API_ENDPOINTS.github.authActivate, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-            },
-            body: JSON.stringify({ accountId }),
-          });
-          const body = (await response.json().catch(() => null)) as
-            | (GitHubAuthStatus & { error?: string })
-            | null;
-          if (!response.ok || !body) {
-            throw new Error(body?.error || response.statusText);
-          }
-          return body;
-        })();
+  const handleGitHubAccountSwitch = React.useCallback(
+    async (accountId: string) => {
+      if (!accountId || isSwitchingGitHubAccount) return
+      setIsSwitchingGitHubAccount(true)
+      try {
+        const payload = runtimeApis.github
+          ? await runtimeApis.github.authActivate(accountId)
+          : await (async () => {
+              const response = await fetch(API_ENDPOINTS.github.authActivate, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                body: JSON.stringify({ accountId }),
+              })
+              const body = (await response.json().catch(() => null)) as (GitHubAuthStatus & { error?: string }) | null
+              if (!response.ok || !body) {
+                throw new Error(body?.error || response.statusText)
+              }
+              return body
+            })()
 
-      setGitHubAuthStatus(payload);
-    } catch (error) {
-      console.error('Failed to switch GitHub account:', error);
-    } finally {
-      setIsSwitchingGitHubAccount(false);
-    }
-  }, [isSwitchingGitHubAccount, runtimeApis.github, setGitHubAuthStatus]);
+        setGitHubAuthStatus(payload)
+      } catch (error) {
+        console.error("Failed to switch GitHub account:", error)
+      } finally {
+        setIsSwitchingGitHubAccount(false)
+      }
+    },
+    [isSwitchingGitHubAccount, runtimeApis.github, setGitHubAuthStatus],
+  )
 
   const handleOpenSessionSwitcher = React.useCallback(() => {
-    toggleSidebar();
-  }, [toggleSidebar]);
+    toggleSidebar()
+  }, [toggleSidebar])
 
   const handleOpenWindowsAppMenu = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    void invokeDesktop('desktop_show_app_menu', {
+    const rect = event.currentTarget.getBoundingClientRect()
+    void invokeDesktop("desktop_show_app_menu", {
       x: rect.left,
       y: rect.bottom,
     }).catch((error) => {
-      console.warn('[header] failed to open app menu', error);
-    });
-  }, []);
+      console.warn("[header] failed to open app menu", error)
+    })
+  }, [])
 
   const handleOpenDraftMiniChat = React.useCallback(() => {
-    void invokeDesktop('desktop_open_draft_mini_chat_window', {
-      directory: normalize(openDirectory || activeProject?.path || ''),
+    void invokeDesktop("desktop_open_draft_mini_chat_window", {
+      directory: normalize(openDirectory || activeProject?.path || ""),
       projectId: activeProject?.id ?? null,
     }).catch((error) => {
-      console.warn('[header] failed to open draft mini chat window', error);
-    });
-  }, [activeProject?.id, activeProject?.path, openDirectory]);
+      console.warn("[header] failed to open draft mini chat window", error)
+    })
+  }, [activeProject?.id, activeProject?.path, openDirectory])
 
   const handleOpenCurrentMiniChat = React.useCallback(() => {
     if (isNewSessionDraftOpen) {
-      handleOpenDraftMiniChat();
-      return;
+      handleOpenDraftMiniChat()
+      return
     }
 
     if (!currentSessionId) {
-      return;
+      return
     }
-    void invokeDesktop('desktop_open_session_mini_chat_window', {
+    void invokeDesktop("desktop_open_session_mini_chat_window", {
       sessionId: currentSessionId,
-      directory: normalize(openDirectory || activeProject?.path || ''),
+      directory: normalize(openDirectory || activeProject?.path || ""),
     }).catch((error) => {
-      console.warn('[header] failed to open session mini chat window', error);
-    });
-  }, [activeProject?.path, currentSessionId, handleOpenDraftMiniChat, isNewSessionDraftOpen, openDirectory]);
+      console.warn("[header] failed to open session mini chat window", error)
+    })
+  }, [activeProject?.path, currentSessionId, handleOpenDraftMiniChat, isNewSessionDraftOpen, openDirectory])
 
   const handleOpenContextPanel = React.useCallback(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = normalize(openDirectory || "")
     if (!directory) {
-      return;
+      return
     }
 
-    const panelState = contextPanelByDirectory[directory];
-    if (getActiveContextMode(panelState) === 'context') {
-      closeContextPanel(directory);
-      return;
+    const panelState = contextPanelByDirectory[directory]
+    if (getActiveContextMode(panelState) === "context") {
+      closeContextPanel(directory)
+      return
     }
 
-    openContextOverview(directory);
-  }, [closeContextPanel, contextPanelByDirectory, openContextOverview, openDirectory]);
+    openContextOverview(directory)
+  }, [closeContextPanel, contextPanelByDirectory, openContextOverview, openDirectory])
 
   const isContextPanelActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = normalize(openDirectory || "")
     if (!directory) {
-      return false;
+      return false
     }
-    const panelState = contextPanelByDirectory[directory];
-    return getActiveContextMode(panelState) === 'context';
-  }, [contextPanelByDirectory, openDirectory]);
+    const panelState = contextPanelByDirectory[directory]
+    return getActiveContextMode(panelState) === "context"
+  }, [contextPanelByDirectory, openDirectory])
 
   const handleOpenContextPlan = React.useCallback(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = normalize(openDirectory || "")
     if (!directory) {
-      return;
+      return
     }
 
-    const panelState = contextPanelByDirectory[directory];
-    if (getActiveContextMode(panelState) === 'plan') {
-      closeContextPanel(directory);
-      return;
+    const panelState = contextPanelByDirectory[directory]
+    if (getActiveContextMode(panelState) === "plan") {
+      closeContextPanel(directory)
+      return
     }
 
-    openContextPlan(directory);
-  }, [closeContextPanel, contextPanelByDirectory, openContextPlan, openDirectory]);
+    openContextPlan(directory)
+  }, [closeContextPanel, contextPanelByDirectory, openContextPlan, openDirectory])
 
   const handleOpenContextBrowser = React.useCallback(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = normalize(openDirectory || "")
     if (!directory) {
-      return;
+      return
     }
 
-    const panelState = contextPanelByDirectory[directory];
-    if (getActiveContextMode(panelState) === 'browser') {
-      closeContextPanel(directory);
-      return;
+    const panelState = contextPanelByDirectory[directory]
+    if (getActiveContextMode(panelState) === "browser") {
+      closeContextPanel(directory)
+      return
     }
 
-    openContextBrowser(directory);
-  }, [closeContextPanel, contextPanelByDirectory, openContextBrowser, openDirectory]);
+    openContextBrowser(directory)
+  }, [closeContextPanel, contextPanelByDirectory, openContextBrowser, openDirectory])
 
   const isContextPlanActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = normalize(openDirectory || "")
     if (!directory) {
-      return false;
+      return false
     }
-    const panelState = contextPanelByDirectory[directory];
-    return getActiveContextMode(panelState) === 'plan';
-  }, [contextPanelByDirectory, openDirectory]);
+    const panelState = contextPanelByDirectory[directory]
+    return getActiveContextMode(panelState) === "plan"
+  }, [contextPanelByDirectory, openDirectory])
 
   const isContextBrowserActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || '');
+    const directory = normalize(openDirectory || "")
     if (!directory) {
-      return false;
+      return false
     }
-    const panelState = contextPanelByDirectory[directory];
-    return getActiveContextMode(panelState) === 'browser';
-  }, [contextPanelByDirectory, openDirectory]);
+    const panelState = contextPanelByDirectory[directory]
+    return getActiveContextMode(panelState) === "browser"
+  }, [contextPanelByDirectory, openDirectory])
 
-  const desktopHeaderIconButtonClass = DESKTOP_HEADER_ICON_BUTTON_CLASS;
+  const desktopHeaderIconButtonClass = DESKTOP_HEADER_ICON_BUTTON_CLASS
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform && !isDesktopWindowFullscreen) {
-      return 'pl-[5.5rem]';
+      return "pl-[5.5rem]"
     }
-    return 'pl-3';
-  }, [isDesktopApp, isDesktopWindowFullscreen, isMacPlatform]);
+    return "pl-3"
+  }, [isDesktopApp, isDesktopWindowFullscreen, isMacPlatform])
 
   useEffect(() => {
     if (!isDesktopApp || !isMacPlatform) {
-      setIsDesktopWindowFullscreen(false);
-      return;
+      setIsDesktopWindowFullscreen(false)
+      return
     }
 
-    let disposed = false;
-    let unlistenResize: (() => void) | null = null;
+    let disposed = false
+    let unlistenResize: (() => void) | null = null
 
     const syncFullscreenState = async () => {
       try {
-        const fullscreen = await isDesktopWindowFullscreenNative();
+        const fullscreen = await isDesktopWindowFullscreenNative()
         if (!disposed) {
-          setIsDesktopWindowFullscreen(fullscreen);
+          setIsDesktopWindowFullscreen(fullscreen)
         }
       } catch {
         if (!disposed) {
-          setIsDesktopWindowFullscreen(false);
+          setIsDesktopWindowFullscreen(false)
         }
       }
-    };
+    }
 
-    void syncFullscreenState();
+    void syncFullscreenState()
     // Electron has no native window-resize event listener exposed to the renderer,
     // so observe DOM resize (which fires on enter/exit fullscreen) and re-sync.
     unlistenResize = onDesktopWindowResized(() => {
-      void syncFullscreenState();
-    });
+      void syncFullscreenState()
+    })
 
     return () => {
-      disposed = true;
+      disposed = true
       if (unlistenResize) {
-        unlistenResize();
+        unlistenResize()
       }
-    };
-  }, [isDesktopApp, isMacPlatform]);
+    }
+  }, [isDesktopApp, isMacPlatform])
 
   const macosHeaderSizeClass = React.useMemo(() => {
     if (!isDesktopApp || !isMacPlatform || macosMajorVersion === null) {
-      return '';
+      return ""
     }
     if (macosMajorVersion >= 26) {
-      return 'h-12';
+      return "h-12"
     }
     if (macosMajorVersion <= 15) {
-      return 'h-14';
+      return "h-14"
     }
-    return '';
-  }, [isDesktopApp, isMacPlatform, macosMajorVersion]);
+    return ""
+  }, [isDesktopApp, isMacPlatform, macosMajorVersion])
 
   const webWindowControlsOverlayStyle = React.useMemo<React.CSSProperties | undefined>(() => {
     if (isDesktopApp && !isWindowsElectronDesktop) {
-      return undefined;
+      return undefined
     }
 
     return {
-      paddingLeft: 'calc(0.75rem + var(--oc-wco-left-inset, 0px))',
-      paddingRight: 'calc(0.75rem + var(--oc-wco-right-inset, 0px))',
-      minHeight: 'max(3rem, var(--oc-wco-titlebar-height, 0px))',
-      height: 'max(3rem, var(--oc-wco-titlebar-height, 0px))',
-    };
-  }, [isDesktopApp, isWindowsElectronDesktop]);
+      paddingLeft: "calc(0.75rem + var(--oc-wco-left-inset, 0px))",
+      paddingRight: "calc(0.75rem + var(--oc-wco-right-inset, 0px))",
+      minHeight: "max(3rem, var(--oc-wco-titlebar-height, 0px))",
+      height: "max(3rem, var(--oc-wco-titlebar-height, 0px))",
+    }
+  }, [isDesktopApp, isWindowsElectronDesktop])
 
   const updateHeaderHeight = React.useCallback(() => {
-    if (typeof document === 'undefined') {
-      return;
+    if (typeof document === "undefined") {
+      return
     }
 
-    const height = headerRef.current?.getBoundingClientRect().height;
+    const height = headerRef.current?.getBoundingClientRect().height
     if (height) {
-      document.documentElement.style.setProperty('--oc-header-height', `${height}px`);
+      document.documentElement.style.setProperty("--oc-header-height", `${height}px`)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
+    if (typeof window === "undefined") {
+      return
     }
 
-    updateHeaderHeight();
+    updateHeaderHeight()
 
-    const node = headerRef.current;
-    if (!node || typeof ResizeObserver === 'undefined') {
-      return () => { };
+    const node = headerRef.current
+    if (!node || typeof ResizeObserver === "undefined") {
+      return () => {}
     }
 
-    let rafId = 0;
+    let rafId = 0
     const scheduleUpdate = () => {
-      if (rafId) return;
+      if (rafId) return
       rafId = requestAnimationFrame(() => {
-        rafId = 0;
-        updateHeaderHeight();
-      });
-    };
+        rafId = 0
+        updateHeaderHeight()
+      })
+    }
 
-    const observer = new ResizeObserver(scheduleUpdate);
+    const observer = new ResizeObserver(scheduleUpdate)
 
-    observer.observe(node);
-    window.addEventListener('resize', scheduleUpdate);
-    window.addEventListener('orientationchange', scheduleUpdate);
+    observer.observe(node)
+    window.addEventListener("resize", scheduleUpdate)
+    window.addEventListener("orientationchange", scheduleUpdate)
 
     return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      observer.disconnect();
-      window.removeEventListener('resize', scheduleUpdate);
-      window.removeEventListener('orientationchange', scheduleUpdate);
-    };
-  }, [updateHeaderHeight]);
+      if (rafId) cancelAnimationFrame(rafId)
+      observer.disconnect()
+      window.removeEventListener("resize", scheduleUpdate)
+      window.removeEventListener("orientationchange", scheduleUpdate)
+    }
+  }, [updateHeaderHeight])
 
   useEffect(() => {
-    updateHeaderHeight();
-  }, [updateHeaderHeight, macosHeaderSizeClass]);
+    updateHeaderHeight()
+  }, [updateHeaderHeight, macosHeaderSizeClass])
 
-  const handleDragStart = React.useCallback(async (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('.app-region-no-drag')) {
-      return;
-    }
-    if (target.closest('button, a, input, select, textarea')) {
-      return;
-    }
-    if (e.button !== 0) {
-      return;
-    }
-    if (isDesktopApp) {
-      await startDesktopWindowDrag();
-    }
-  }, [isDesktopApp]);
+  const handleDragStart = React.useCallback(
+    async (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (target.closest(".app-region-no-drag")) {
+        return
+      }
+      if (target.closest("button, a, input, select, textarea")) {
+        return
+      }
+      if (e.button !== 0) {
+        return
+      }
+      if (isDesktopApp) {
+        await startDesktopWindowDrag()
+      }
+    },
+    [isDesktopApp],
+  )
 
-  const shortcutLabel = React.useCallback((actionId: string) => {
-    return formatShortcutForDisplay(getEffectiveShortcutCombo(actionId, shortcutOverrides));
-  }, [shortcutOverrides]);
+  const shortcutLabel = React.useCallback(
+    (actionId: string) => {
+      return formatShortcutForDisplay(getEffectiveShortcutCombo(actionId, shortcutOverrides))
+    },
+    [shortcutOverrides],
+  )
 
   useEffect(() => {
-    if (activeMainTab === 'git' || activeMainTab === 'terminal' || activeMainTab === 'diff' || activeMainTab === 'files' || activeMainTab === 'context') {
-      setActiveMainTab('chat');
+    if (
+      activeMainTab === "git" ||
+      activeMainTab === "terminal" ||
+      activeMainTab === "diff" ||
+      activeMainTab === "files" ||
+      activeMainTab === "context"
+    ) {
+      setActiveMainTab("chat")
     }
-  }, [activeMainTab, setActiveMainTab]);
+  }, [activeMainTab, setActiveMainTab])
 
   const servicesTabs = React.useMemo(() => {
-    const base: Array<{ value: 'instance' | 'usage' | 'mcp'; label: string; icon: IconName }> = [];
+    const base: Array<{ value: "instance" | "usage" | "mcp"; label: string; icon: IconName }> = []
     if (isDesktopApp) {
-      base.push({ value: 'instance', label: t('layout.services.instance'), icon: "server" });
+      base.push({ value: "instance", label: t("layout.services.instance"), icon: "server" })
     }
     base.push(
-      { value: 'usage', label: t('layout.services.usage'), icon: "timer" },
-      { value: 'mcp', label: 'MCP', icon: "plug-2" }
-    );
-    return base;
-  }, [isDesktopApp, t]);
+      { value: "usage", label: t("layout.services.usage"), icon: "timer" },
+      { value: "mcp", label: "MCP", icon: "plug-2" },
+    )
+    return base
+  }, [isDesktopApp, t])
 
   const servicesTabItems = React.useMemo(() => {
     return servicesTabs.map((tab) => ({
       id: tab.value,
       label: tab.label,
       icon: <Icon name={tab.icon} className="h-3.5 w-3.5" />,
-    }));
-  }, [servicesTabs]);
+    }))
+  }, [servicesTabs])
 
   const showDevShutdown = React.useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    if (isDesktopApp) return false;
-    const host = window.location.hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  }, [isDesktopApp]);
+    if (typeof window === "undefined") return false
+    if (isDesktopApp) return false
+    const host = window.location.hostname
+    return host === "localhost" || host === "127.0.0.1" || host === "::1"
+  }, [isDesktopApp])
 
   const handleDevShutdown = React.useCallback(async () => {
-    if (isDevShutdownInFlight) return;
-    setIsDevShutdownInFlight(true);
-    setIsDesktopServicesOpen(false);
+    if (isDevShutdownInFlight) return
+    setIsDevShutdownInFlight(true)
+    setIsDesktopServicesOpen(false)
 
-    const previewUrls: string[] = [];
-    let shutdownRequested = false;
+    const previewUrls: string[] = []
+    let shutdownRequested = false
     try {
       try {
         for (const [, dirState] of useTerminalStore.getState().sessions.entries()) {
           for (const tab of dirState.tabs) {
             if (tab.previewUrl) {
-              previewUrls.push(tab.previewUrl);
+              previewUrls.push(tab.previewUrl)
             }
           }
         }
@@ -1598,92 +1687,92 @@ export const Header: React.FC = () => {
 
       try {
         // Ensure preview/dev terminals don't linger.
-        await forceKillTerminal({});
+        await forceKillTerminal({})
       } catch {
         // ignore
       }
 
       try {
         const devRes = await fetch(API_ENDPOINTS.system.devShutdown, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ previewUrls }),
-        });
+        })
         if (devRes.ok) {
-          shutdownRequested = true;
+          shutdownRequested = true
         } else {
-          const shutdownRes = await fetch(API_ENDPOINTS.system.shutdown, { method: 'POST' });
-          shutdownRequested = shutdownRes.ok;
+          const shutdownRes = await fetch(API_ENDPOINTS.system.shutdown, { method: "POST" })
+          shutdownRequested = shutdownRes.ok
         }
       } catch {
         // ignore
       }
     } finally {
       if (!shutdownRequested) {
-        setIsDevShutdownInFlight(false);
+        setIsDevShutdownInFlight(false)
       }
     }
-  }, [isDevShutdownInFlight, setIsDesktopServicesOpen]);
+  }, [isDevShutdownInFlight, setIsDesktopServicesOpen])
 
   const quotaDisplayTabs = React.useMemo(() => {
     return [
-      { value: 'usage' as const, label: t('header.services.used') },
-      { value: 'remaining' as const, label: t('header.services.remaining') },
-    ];
-  }, [t]);
+      { value: "usage" as const, label: t("header.services.used") },
+      { value: "remaining" as const, label: t("header.services.remaining") },
+    ]
+  }, [t])
 
   const quotaDisplayTabItems = React.useMemo(() => {
-    return quotaDisplayTabs.map((tab) => ({ id: tab.value, label: tab.label }));
-  }, [quotaDisplayTabs]);
+    return quotaDisplayTabs.map((tab) => ({ id: tab.value, label: tab.label }))
+  }, [quotaDisplayTabs])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const toggleServicesCombo = getEffectiveShortcutCombo('toggle_services_menu', shortcutOverrides);
+      const toggleServicesCombo = getEffectiveShortcutCombo("toggle_services_menu", shortcutOverrides)
       if (eventMatchesShortcut(e, toggleServicesCombo)) {
-        e.preventDefault();
+        e.preventDefault()
 
         if (isDesktopServicesOpen) {
-          setIsDesktopServicesOpen(false);
+          setIsDesktopServicesOpen(false)
         } else {
-          setIsDesktopServicesOpen(true);
-          void refreshCurrentInstanceLabel();
-          if (desktopServicesTab === 'usage' && quotaResults.length === 0) {
-            void fetchAllQuotas();
+          setIsDesktopServicesOpen(true)
+          void refreshCurrentInstanceLabel()
+          if (desktopServicesTab === "usage" && quotaResults.length === 0) {
+            void fetchAllQuotas()
           }
         }
-        return;
+        return
       }
 
-      const cycleServicesCombo = getEffectiveShortcutCombo('cycle_services_tab', shortcutOverrides);
+      const cycleServicesCombo = getEffectiveShortcutCombo("cycle_services_tab", shortcutOverrides)
       if (eventMatchesShortcut(e, cycleServicesCombo)) {
-        e.preventDefault();
+        e.preventDefault()
 
-        const tabValues = servicesTabs.map((tab) => tab.value) as Array<'instance' | 'usage' | 'mcp'>;
+        const tabValues = servicesTabs.map((tab) => tab.value) as Array<"instance" | "usage" | "mcp">
         if (tabValues.length === 0) {
-          return;
+          return
         }
 
-        const currentIndex = tabValues.indexOf(desktopServicesTab);
-        const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % tabValues.length;
-        const nextTab = tabValues[nextIndex];
-        setDesktopServicesTab(nextTab);
-        setIsDesktopServicesOpen(true);
-        void refreshCurrentInstanceLabel();
-        if (nextTab === 'usage' && quotaResults.length === 0) {
-          void fetchAllQuotas();
+        const currentIndex = tabValues.indexOf(desktopServicesTab)
+        const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % tabValues.length
+        const nextTab = tabValues[nextIndex]
+        setDesktopServicesTab(nextTab)
+        setIsDesktopServicesOpen(true)
+        void refreshCurrentInstanceLabel()
+        if (nextTab === "usage" && quotaResults.length === 0) {
+          void fetchAllQuotas()
         }
-        return;
+        return
       }
 
-      const toggleContextPlanCombo = getEffectiveShortcutCombo('toggle_context_plan', shortcutOverrides);
+      const toggleContextPlanCombo = getEffectiveShortcutCombo("toggle_context_plan", shortcutOverrides)
       if (eventMatchesShortcut(e, toggleContextPlanCombo)) {
-        e.preventDefault();
-        handleOpenContextPlan();
+        e.preventDefault()
+        handleOpenContextPlan()
       }
-    };
+    }
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
   }, [
     shortcutOverrides,
     isDesktopServicesOpen,
@@ -1693,26 +1782,26 @@ export const Header: React.FC = () => {
     fetchAllQuotas,
     refreshCurrentInstanceLabel,
     handleOpenContextPlan,
-  ]);
+  ])
 
   const desktopSidebarActions = (
     <>
       {showPlanTab && (
         <Tooltip>
           <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label={t('header.actions.openPlanAria')}
-                onClick={handleOpenContextPlan}
-                className={cn(desktopHeaderIconButtonClass, isContextPlanActive && 'bg-[var(--interactive-hover)]')}
-              >
+            <button
+              type="button"
+              aria-label={t("header.actions.openPlanAria")}
+              onClick={handleOpenContextPlan}
+              className={cn(desktopHeaderIconButtonClass, isContextPlanActive && "bg-[var(--interactive-hover)]")}
+            >
               <Icon name="file-text" className="h-[18px] w-[18px]" />
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>{t('header.actions.planWithShortcut', { shortcut: shortcutLabel('toggle_context_plan') })}</p>
+            <p>{t("header.actions.planWithShortcut", { shortcut: shortcutLabel("toggle_context_plan") })}</p>
           </TooltipContent>
-          </Tooltip>
+        </Tooltip>
       )}
       <OpenInAppButton directory={actionDirectory} className="mr-1" />
       <DesktopServicesMenu
@@ -1745,23 +1834,23 @@ export const Header: React.FC = () => {
         onDevShutdown={handleDevShutdown}
       />
       <HeaderIconActionButton
-        title={t('header.actions.terminalPanelWithShortcut', { shortcut: shortcutLabel('toggle_terminal') })}
-        ariaLabel={t('header.actions.toggleTerminalPanelAria')}
+        title={t("header.actions.terminalPanelWithShortcut", { shortcut: shortcutLabel("toggle_terminal") })}
+        ariaLabel={t("header.actions.toggleTerminalPanelAria")}
         onClick={toggleBottomTerminal}
-        Icon={'terminal-box'}
+        Icon={"terminal-box"}
       />
       <HeaderIconActionButton
-        title={t('contextPanel.browser.open')}
-        ariaLabel={t('contextPanel.browser.open')}
+        title={t("contextPanel.browser.open")}
+        ariaLabel={t("contextPanel.browser.open")}
         onClick={handleOpenContextBrowser}
         pressed={isContextBrowserActive}
-        Icon={'global'}
+        Icon={"global"}
       />
       <HeaderIconActionButton
-        title={t('header.actions.rightSidebarWithShortcut', { shortcut: shortcutLabel('toggle_right_sidebar') })}
-        ariaLabel={t('header.actions.toggleRightSidebarAria')}
+        title={t("header.actions.rightSidebarWithShortcut", { shortcut: shortcutLabel("toggle_right_sidebar") })}
+        ariaLabel={t("header.actions.toggleRightSidebarAria")}
         onClick={toggleRightSidebar}
-        Icon={'layout-right'}
+        Icon={"layout-right"}
       />
       <DesktopGitHubControl
         githubAuthStatus={githubAuthStatus}
@@ -1772,37 +1861,37 @@ export const Header: React.FC = () => {
         handleGitHubAccountSwitch={handleGitHubAccountSwitch}
       />
     </>
-  );
+  )
 
-  const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId));
+  const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId))
 
   const renderDesktop = () => (
     <div
       onMouseDown={handleDragStart}
       className={cn(
-        'app-region-drag relative flex h-12 select-none items-center pr-3',
+        "app-region-drag relative flex h-12 select-none items-center pr-3",
         desktopPaddingClass,
-        macosHeaderSizeClass
+        macosHeaderSizeClass,
       )}
       style={webWindowControlsOverlayStyle}
       role="tablist"
-      aria-label={t('header.navigation.mainAria')}
+      aria-label={t("header.navigation.mainAria")}
     >
       {isWindowsElectronDesktop ? (
         <HeaderIconActionButton
-          title={t('header.actions.openAppMenu')}
-          ariaLabel={t('header.actions.openAppMenuAria')}
+          title={t("header.actions.openAppMenu")}
+          ariaLabel={t("header.actions.openAppMenuAria")}
           onClick={handleOpenWindowsAppMenu}
           className={`${desktopHeaderIconButtonClass} shrink-0`}
-          Icon={'menu-2'}
+          Icon={"menu-2"}
         />
       ) : null}
       <HeaderIconActionButton
-        title={t('header.actions.openSessionsWithShortcut', { shortcut: shortcutLabel('toggle_sidebar') })}
-        ariaLabel={t('header.actions.openSessionsAria')}
+        title={t("header.actions.openSessionsWithShortcut", { shortcut: shortcutLabel("toggle_sidebar") })}
+        ariaLabel={t("header.actions.openSessionsAria")}
         onClick={handleOpenSessionSwitcher}
         className={`${desktopHeaderIconButtonClass} shrink-0`}
-        Icon={'layout-left'}
+        Icon={"layout-left"}
       />
 
       <div className="flex min-w-0 flex-1 items-center pl-3">
@@ -1816,13 +1905,15 @@ export const Header: React.FC = () => {
         <SessionSwitcherDropdown>
           <button
             type="button"
-            aria-label={t('sessions.switcher.openAria')}
+            aria-label={t("sessions.switcher.openAria")}
             className="app-region-no-drag mr-3 flex min-w-0 flex-col items-start rounded-md px-1 py-0.5 -my-0.5 text-left transition-colors hover:bg-interactive-hover/60 focus-visible:outline-none focus-visible:bg-interactive-hover/60"
           >
             <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
-              {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
+              {isNewSessionDraftOpen ? t("sessions.switcher.draftTitle") : currentSessionTitle}
             </span>
-            {(activeProjectLabel || currentBranchLabel || (!isNewSessionDraftOpen && (hasNonZeroSessionChanges || worktreeBadgeKind))) ? (
+            {activeProjectLabel ||
+            currentBranchLabel ||
+            (!isNewSessionDraftOpen && (hasNonZeroSessionChanges || worktreeBadgeKind)) ? (
               <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">
                 {activeProjectLabel ? <span className="truncate">{activeProjectLabel}</span> : null}
                 {currentBranchLabel ? (
@@ -1839,10 +1930,16 @@ export const Header: React.FC = () => {
                   </span>
                 ) : null}
                 {!isNewSessionDraftOpen && worktreeBadgeKind ? (
-                  <span className={cn(
-                    "inline-flex min-w-0 items-center gap-0.5",
-                    worktreeBadgeKind === 'attention' || worktreeBadgeKind === 'invalid' || worktreeBadgeKind === 'missing' ? 'text-status-warning' : 'text-muted-foreground/60'
-                  )}>
+                  <span
+                    className={cn(
+                      "inline-flex min-w-0 items-center gap-0.5",
+                      worktreeBadgeKind === "attention" ||
+                        worktreeBadgeKind === "invalid" ||
+                        worktreeBadgeKind === "missing"
+                        ? "text-status-warning"
+                        : "text-muted-foreground/60",
+                    )}
+                  >
                     <Icon name="alert" className="h-3 w-3 flex-shrink-0" />
                     <span className="truncate">{worktreeBadge}</span>
                   </span>
@@ -1851,7 +1948,6 @@ export const Header: React.FC = () => {
             ) : null}
           </button>
         </SessionSwitcherDropdown>
-
 
         <div className="flex-1" />
 
@@ -1868,37 +1964,37 @@ export const Header: React.FC = () => {
               showPercentIcon
               onClick={handleOpenContextPanel}
               pressed={isContextPanelActive}
-              className={!showMiniChatHeaderAction ? 'mr-3.5' : ''}
+              className={!showMiniChatHeaderAction ? "mr-3.5" : ""}
               valueClassName="typography-ui-label font-medium leading-none text-foreground"
               percentIconClassName="h-5 w-5"
             />
           ) : null}
           <HeaderIconActionButton
             visible={showMiniChatHeaderAction}
-            title={isNewSessionDraftOpen ? t('header.actions.newMiniChat') : t('header.actions.openSessionMiniChat')}
-            ariaLabel={isNewSessionDraftOpen ? t('header.actions.newMiniChatAria') : t('header.actions.openSessionMiniChatAria')}
+            title={isNewSessionDraftOpen ? t("header.actions.newMiniChat") : t("header.actions.openSessionMiniChat")}
+            ariaLabel={
+              isNewSessionDraftOpen ? t("header.actions.newMiniChatAria") : t("header.actions.openSessionMiniChatAria")
+            }
             onClick={handleOpenCurrentMiniChat}
-            className={cn(desktopHeaderIconButtonClass, showDesktopHeaderContextUsage ? 'mr-3.5' : 'mr-1')}
-            Icon={'picture-in-picture-2'}
+            className={cn(desktopHeaderIconButtonClass, showDesktopHeaderContextUsage ? "mr-3.5" : "mr-1")}
+            Icon={"picture-in-picture-2"}
           />
           {desktopSidebarActions}
           <WindowsWindowControls visible={isWindowsElectronDesktop} />
         </div>
       </div>
     </div>
-  );
+  )
 
-  const headerClassName = cn(
-    'header-safe-area relative z-10 bg-sidebar'
-  );
+  const headerClassName = cn("header-safe-area relative z-10 bg-sidebar")
 
   return (
     <header
       ref={headerRef}
       className={headerClassName}
-      style={{ ['--padding-scale' as string]: '1' } as React.CSSProperties}
+      style={{ ["--padding-scale" as string]: "1" } as React.CSSProperties}
     >
       {renderDesktop()}
     </header>
-  );
-};
+  )
+}

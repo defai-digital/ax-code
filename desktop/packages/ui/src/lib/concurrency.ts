@@ -4,24 +4,24 @@ export const mapWithConcurrency = async <T, R>(
   mapper: (value: T) => Promise<R>,
 ): Promise<R[]> => {
   if (values.length === 0) {
-    return [];
+    return []
   }
 
-  const safeConcurrency = Math.max(1, Math.min(concurrency, values.length));
-  const results = new Array<R>(values.length);
-  let cursor = 0;
+  const safeConcurrency = Math.max(1, Math.min(concurrency, values.length))
+  const results = new Array<R>(values.length)
+  let cursor = 0
 
   const worker = async () => {
     while (true) {
-      const nextIndex = cursor;
-      cursor += 1;
+      const nextIndex = cursor
+      cursor += 1
       if (nextIndex >= values.length) {
-        return;
+        return
       }
-      results[nextIndex] = await mapper(values[nextIndex]);
+      results[nextIndex] = await mapper(values[nextIndex])
     }
-  };
+  }
 
-  await Promise.all(Array.from({ length: safeConcurrency }, () => worker()));
-  return results;
-};
+  await Promise.all(Array.from({ length: safeConcurrency }, () => worker()))
+  return results
+}

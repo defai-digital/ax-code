@@ -20,7 +20,7 @@ import {
   password,
   cancel,
   isCancel,
-} from '@clack/prompts';
+} from "@clack/prompts"
 
 // ── Status-aware log dispatch ───────────────────────────────────
 
@@ -32,22 +32,22 @@ import {
  * @param {string} [detail] Optional dim secondary line appended after newline
  */
 function logStatus(status, message, detail) {
-  const full = detail ? `${message}\n${detail}` : message;
+  const full = detail ? `${message}\n${detail}` : message
   switch (status) {
-    case 'success':
-      log.success(full);
-      break;
-    case 'warning':
-      log.warn(full);
-      break;
-    case 'error':
-      log.error(full);
-      break;
-    case 'info':
-    case 'neutral':
+    case "success":
+      log.success(full)
+      break
+    case "warning":
+      log.warn(full)
+      break
+    case "error":
+      log.error(full)
+      break
+    case "info":
+    case "neutral":
     default:
-      log.info(full);
-      break;
+      log.info(full)
+      break
   }
 }
 
@@ -57,50 +57,53 @@ function logStatus(status, message, detail) {
  * Whether both stdout and stdin are interactive TTYs.
  * Prompts must be disabled when stdin is piped (e.g. --token-stdin).
  */
-const isTTY = Boolean(process.stdout?.isTTY) && Boolean(process.stdin?.isTTY);
+const isTTY = Boolean(process.stdout?.isTTY) && Boolean(process.stdin?.isTTY)
 
 function isJsonMode(options) {
-  return Boolean(options?.json);
+  return Boolean(options?.json)
 }
 
 function isQuietMode(options) {
-  return Boolean(options?.quiet);
+  return Boolean(options?.quiet)
 }
 
 function shouldRenderHumanOutput(options) {
-  return !isJsonMode(options) && !isQuietMode(options);
+  return !isJsonMode(options) && !isQuietMode(options)
 }
 
 function canPrompt(options) {
-  return shouldRenderHumanOutput(options) && isTTY;
+  return shouldRenderHumanOutput(options) && isTTY
 }
 
 function createSpinner(options) {
-  return canPrompt(options) ? spinner() : null;
+  return canPrompt(options) ? spinner() : null
 }
 
 async function createProgress(options, config) {
-  return canPrompt(options) ? progress(config) : null;
+  return canPrompt(options) ? progress(config) : null
 }
 
 function printJson(payload) {
-  const base = payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? { ...payload }
-    : { data: payload };
+  const base = payload && typeof payload === "object" && !Array.isArray(payload) ? { ...payload } : { data: payload }
 
-  const messages = Array.isArray(base.messages) ? base.messages : undefined;
-  const hasWarning = Boolean(messages?.some((entry) => entry?.level === 'warning'));
-  const hasError = Boolean(messages?.some((entry) => entry?.level === 'error'));
-  const normalizedStatus = base.status === 'ok' || base.status === 'warning' || base.status === 'error'
-    ? base.status
-    : (hasError ? 'error' : (hasWarning ? 'warning' : 'ok'));
+  const messages = Array.isArray(base.messages) ? base.messages : undefined
+  const hasWarning = Boolean(messages?.some((entry) => entry?.level === "warning"))
+  const hasError = Boolean(messages?.some((entry) => entry?.level === "error"))
+  const normalizedStatus =
+    base.status === "ok" || base.status === "warning" || base.status === "error"
+      ? base.status
+      : hasError
+        ? "error"
+        : hasWarning
+          ? "warning"
+          : "ok"
 
   const output = {
     status: normalizedStatus,
     ...base,
-  };
+  }
 
-  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`)
 }
 
 export {
@@ -126,4 +129,4 @@ export {
   createProgress,
   printJson,
   logStatus,
-};
+}

@@ -45,12 +45,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: TINT_PRIMARY,
-        destructive: cn(
-          TINT_DESTRUCTIVE,
-          "focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
-        ),
-        neutral:
-          "bg-interactive-hover text-foreground border border-border/60 hover:bg-interactive-active",
+        destructive: cn(TINT_DESTRUCTIVE, "focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40"),
+        neutral: "bg-interactive-hover text-foreground border border-border/60 hover:bg-interactive-active",
         outline:
           "bg-[var(--surface-elevated)] text-foreground border border-border/60 hover:bg-interactive-hover hover:text-foreground",
         // Flat chip for "one-of-N" toggles. Unselected: hairline border + hover
@@ -67,10 +63,8 @@ const buttonVariants = cva(
           "dark:aria-pressed:border-[color-mix(in_srgb,var(--primary-base)_20%,transparent)]",
           "dark:aria-pressed:hover:bg-[color-mix(in_srgb,var(--primary-base)_22%,transparent)]",
         ),
-        secondary:
-          "bg-interactive-hover text-foreground hover:bg-interactive-active",
-        ghost:
-          "text-foreground hover:bg-interactive-hover hover:text-foreground",
+        secondary: "bg-interactive-hover text-foreground hover:bg-interactive-active",
+        ghost: "text-foreground hover:bg-interactive-hover hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
@@ -85,7 +79,7 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  }
+  },
 )
 
 function Button({
@@ -100,17 +94,10 @@ function Button({
     asChild?: boolean
   }) {
   const Comp = asChild ? Slot : "button"
-  const typeProps = asChild
-    ? (type === undefined ? {} : { type })
-    : { type: type ?? "button" }
+  const typeProps = asChild ? (type === undefined ? {} : { type }) : { type: type ?? "button" }
 
   return (
-    <Comp
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...typeProps}
-      {...props}
-    />
+    <Comp data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...typeProps} {...props} />
   )
 }
 

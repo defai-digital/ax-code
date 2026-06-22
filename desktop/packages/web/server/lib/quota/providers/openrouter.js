@@ -1,27 +1,20 @@
-import { readAuthFile } from '../../ax-code/auth.js';
-import {
-  getAuthEntry,
-  normalizeAuthEntry,
-  buildResult,
-  toUsageWindow,
-  toNumber,
-  formatMoney
-} from '../utils/index.js';
+import { readAuthFile } from "../../ax-code/auth.js"
+import { getAuthEntry, normalizeAuthEntry, buildResult, toUsageWindow, toNumber, formatMoney } from "../utils/index.js"
 
-export const providerId = 'openrouter';
-export const providerName = 'OpenRouter';
-export const aliases = ['openrouter'];
+export const providerId = "openrouter"
+export const providerName = "OpenRouter"
+export const aliases = ["openrouter"]
 
 export const isConfigured = () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  return Boolean(entry?.key || entry?.token);
-};
+  const auth = readAuthFile()
+  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases))
+  return Boolean(entry?.key || entry?.token)
+}
 
 export const fetchQuota = async () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases));
-  const apiKey = entry?.key ?? entry?.token;
+  const auth = readAuthFile()
+  const entry = normalizeAuthEntry(getAuthEntry(auth, aliases))
+  const apiKey = entry?.key ?? entry?.token
 
   if (!apiKey) {
     return buildResult({
@@ -29,40 +22,38 @@ export const fetchQuota = async () => {
       providerName,
       ok: false,
       configured: false,
-      error: 'Not configured'
-    });
+      error: "Not configured",
+    })
   }
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/credits', {
-      method: 'GET',
+    const response = await fetch("https://openrouter.ai/api/v1/credits", {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+        "Content-Type": "application/json",
+      },
+    })
 
     if (!response.ok) {
-      response.body?.cancel();
+      response.body?.cancel()
       return buildResult({
         providerId,
         providerName,
         ok: false,
         configured: true,
-        error: `API error: ${response.status}`
-      });
+        error: `API error: ${response.status}`,
+      })
     }
 
-    const payload = await response.json();
-    const credits = payload?.data ?? {};
-    const totalCredits = toNumber(credits.total_credits);
-    const totalUsage = toNumber(credits.total_usage);
-    const remaining = totalCredits !== null && totalUsage !== null
-      ? Math.max(0, totalCredits - totalUsage)
-      : null;
-    let valueLabel = null;
+    const payload = await response.json()
+    const credits = payload?.data ?? {}
+    const totalCredits = toNumber(credits.total_credits)
+    const totalUsage = toNumber(credits.total_usage)
+    const remaining = totalCredits !== null && totalUsage !== null ? Math.max(0, totalCredits - totalUsage) : null
+    let valueLabel = null
     if (remaining !== null && totalUsage !== null) {
-      valueLabel = `$${formatMoney(remaining)} left · $${formatMoney(totalUsage)} spent`;
+      valueLabel = `$${formatMoney(remaining)} left · $${formatMoney(totalUsage)} spent`
     }
 
     const windows = {
@@ -70,24 +61,24 @@ export const fetchQuota = async () => {
         usedPercent: null,
         windowSeconds: null,
         resetAt: null,
-        valueLabel
-      })
-    };
+        valueLabel,
+      }),
+    }
 
     return buildResult({
       providerId,
       providerName,
       ok: true,
       configured: true,
-      usage: { windows }
-    });
+      usage: { windows },
+    })
   } catch (error) {
     return buildResult({
       providerId,
       providerName,
       ok: false,
       configured: true,
-      error: error instanceof Error ? error.message : 'Request failed'
-    });
+      error: error instanceof Error ? error.message : "Request failed",
+    })
   }
-};
+}

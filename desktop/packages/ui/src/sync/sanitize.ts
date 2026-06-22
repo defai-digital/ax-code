@@ -36,12 +36,13 @@ export function stripSessionDiffSnapshots(session: Session): Session {
 
   let changed = false
   const stripped = summary.diffs.map((d) => {
-    if (d && (
-      typeof d.before === "string"
-      || typeof d.after === "string"
-      || typeof d.from === "string"
-      || typeof d.to === "string"
-    )) {
+    if (
+      d &&
+      (typeof d.before === "string" ||
+        typeof d.after === "string" ||
+        typeof d.from === "string" ||
+        typeof d.to === "string")
+    ) {
       const rest = { ...d }
       delete rest.before
       delete rest.after
@@ -64,12 +65,13 @@ export function stripMessageDiffSnapshots(message: Message): Message {
 
   let changed = false
   const stripped = summary.diffs.map((d) => {
-    if (d && (
-      typeof d.before === "string"
-      || typeof d.after === "string"
-      || typeof d.from === "string"
-      || typeof d.to === "string"
-    )) {
+    if (
+      d &&
+      (typeof d.before === "string" ||
+        typeof d.after === "string" ||
+        typeof d.from === "string" ||
+        typeof d.to === "string")
+    ) {
       const rest = { ...d }
       delete rest.before
       delete rest.after

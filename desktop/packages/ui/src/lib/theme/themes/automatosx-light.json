@@ -5,12 +5,7 @@
     "description": "AutomatosX brand tone — clean white surfaces, green primary, purple accent",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "brand",
-      "green",
-      "vercel"
-    ]
+    "tags": ["light", "brand", "green", "vercel"]
   },
   "colors": {
     "primary": {

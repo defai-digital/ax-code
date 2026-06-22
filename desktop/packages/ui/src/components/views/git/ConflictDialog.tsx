@@ -1,30 +1,24 @@
-import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import React from "react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useInputStore } from '@/sync/input-store';
-import { useUIStore } from '@/stores/useUIStore';
-import { toast } from '@/components/ui';
-import { Icon } from "@/components/icon/Icon";
-import { getConflictDetails, type MergeConflictDetails } from '@/lib/gitApi';
-import { renderMagicPrompt } from '@/lib/magicPrompts';
-import { useI18n } from '@/lib/i18n';
+import { useSessionUIStore } from "@/sync/session-ui-store"
+import { useInputStore } from "@/sync/input-store"
+import { useUIStore } from "@/stores/useUIStore"
+import { toast } from "@/components/ui"
+import { Icon } from "@/components/icon/Icon"
+import { getConflictDetails, type MergeConflictDetails } from "@/lib/gitApi"
+import { renderMagicPrompt } from "@/lib/magicPrompts"
+import { useI18n } from "@/lib/i18n"
 
 interface ConflictDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  conflictFiles?: string[];
-  directory: string;
-  operation: 'merge' | 'rebase';
-  onAbort: () => void;
-  onClearState?: () => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  conflictFiles?: string[]
+  directory: string
+  operation: "merge" | "rebase"
+  onAbort: () => void
+  onClearState?: () => void
 }
 
 export const ConflictDialog: React.FC<ConflictDialogProps> = ({
@@ -36,61 +30,61 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   onAbort,
   onClearState,
 }) => {
-  const { t } = useI18n();
-  const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
-  const setPendingInputText = useInputStore((state) => state.setPendingInputText);
-  const setPendingSyntheticParts = useInputStore((state) => state.setPendingSyntheticParts);
-  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const { t } = useI18n()
+  const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft)
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const setPendingInputText = useInputStore((state) => state.setPendingInputText)
+  const setPendingSyntheticParts = useInputStore((state) => state.setPendingSyntheticParts)
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab)
 
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [conflictDetails, setConflictDetails] = React.useState<MergeConflictDetails | null>(null);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [conflictDetails, setConflictDetails] = React.useState<MergeConflictDetails | null>(null)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
 
   // Fetch conflict details when dialog opens
   React.useEffect(() => {
-    if (!open || !directory) return;
+    if (!open || !directory) return
 
-    setIsLoading(true);
-    setLoadError(null);
-    setConflictDetails(null);
+    setIsLoading(true)
+    setLoadError(null)
+    setConflictDetails(null)
 
     getConflictDetails(directory)
       .then((details) => {
-        setConflictDetails(details);
+        setConflictDetails(details)
       })
       .catch((err) => {
-        const message = err instanceof Error ? err.message : t('gitView.conflict.loadFailed');
-        setLoadError(message);
+        const message = err instanceof Error ? err.message : t("gitView.conflict.loadFailed")
+        setLoadError(message)
       })
       .finally(() => {
-        setIsLoading(false);
-      });
-  }, [open, directory, t]);
+        setIsLoading(false)
+      })
+  }, [open, directory, t])
 
   const buildConflictContext = React.useCallback(async (): Promise<{
-    visibleText: string;
-    instructionsText: string;
-    payloadText: string;
+    visibleText: string
+    instructionsText: string
+    payloadText: string
   } | null> => {
-    if (!conflictDetails) return null;
+    if (!conflictDetails) return null
 
-    const operationLabel = operation === 'merge' ? 'merge' : 'rebase';
-    const headRef = conflictDetails.headInfo || (operation === 'merge' ? 'MERGE_HEAD' : 'REBASE_HEAD');
-    const continueCmd = operation === 'merge' ? 'git commit --no-edit' : 'git rebase --continue';
+    const operationLabel = operation === "merge" ? "merge" : "rebase"
+    const headRef = conflictDetails.headInfo || (operation === "merge" ? "MERGE_HEAD" : "REBASE_HEAD")
+    const continueCmd = operation === "merge" ? "git commit --no-edit" : "git rebase --continue"
 
-    const visibleText = await renderMagicPrompt('git.conflict.resolve.visible', {
+    const visibleText = await renderMagicPrompt("git.conflict.resolve.visible", {
       operation_label: operationLabel,
       head_ref: headRef,
-    });
+    })
 
-    const instructionsText = await renderMagicPrompt('git.conflict.resolve.instructions', {
+    const instructionsText = await renderMagicPrompt("git.conflict.resolve.instructions", {
       operation_label: operationLabel,
       directory,
       operation,
-      head_info: conflictDetails.headInfo || 'N/A',
+      head_info: conflictDetails.headInfo || "N/A",
       continue_cmd: continueCmd,
-    });
+    })
 
     const payloadText = `${operationLabel} conflict context (JSON)\n${JSON.stringify(
       {
@@ -102,51 +96,53 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
         diff: conflictDetails.diff,
       },
       null,
-      2
-    )}`;
+      2,
+    )}`
 
-    return { visibleText, instructionsText, payloadText };
-  }, [conflictDetails, directory, operation]);
+    return { visibleText, instructionsText, payloadText }
+  }, [conflictDetails, directory, operation])
 
   const handleAbort = () => {
-    onAbort();
-    onOpenChange(false);
-  };
+    onAbort()
+    onOpenChange(false)
+  }
 
   const handleContinueLater = () => {
-    onClearState?.();
-    onOpenChange(false);
-  };
+    onClearState?.()
+    onOpenChange(false)
+  }
 
   const handleResolveInCurrentSession = async () => {
-    const context = await buildConflictContext();
+    const context = await buildConflictContext()
     if (!context) {
-      toast.error(t('gitView.conflict.noDetailsAvailable'));
-      return;
+      toast.error(t("gitView.conflict.noDetailsAvailable"))
+      return
     }
 
     if (!currentSessionId) {
-      toast.error(t('gitView.conflict.noActiveSession'), { description: t('gitView.conflict.noActiveSessionDescription') });
-      return;
+      toast.error(t("gitView.conflict.noActiveSession"), {
+        description: t("gitView.conflict.noActiveSessionDescription"),
+      })
+      return
     }
 
     // Set the visible text in the input and the synthetic parts for when user sends
-    setPendingInputText(context.visibleText, 'replace');
+    setPendingInputText(context.visibleText, "replace")
     setPendingSyntheticParts([
       { text: context.instructionsText, synthetic: true },
       { text: context.payloadText, synthetic: true },
-    ]);
+    ])
 
-    setActiveMainTab('chat');
-    onClearState?.();
-    onOpenChange(false);
-  };
+    setActiveMainTab("chat")
+    onClearState?.()
+    onOpenChange(false)
+  }
 
   const handleResolveInNewSession = async () => {
-    const context = await buildConflictContext();
+    const context = await buildConflictContext()
     if (!context) {
-      toast.error(t('gitView.conflict.noDetailsAvailable'));
-      return;
+      toast.error(t("gitView.conflict.noDetailsAvailable"))
+      return
     }
 
     // Open new session with the conflict context as initial prompt + synthetic parts
@@ -157,15 +153,15 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
         { text: context.instructionsText, synthetic: true },
         { text: context.payloadText, synthetic: true },
       ],
-    });
+    })
     // Navigate to chat tab so user sees the new session
-    setActiveMainTab('chat');
-    onClearState?.();
-    onOpenChange(false);
-  };
+    setActiveMainTab("chat")
+    onClearState?.()
+    onOpenChange(false)
+  }
 
-  const operationLabel = operation === 'merge' ? t('gitView.operation.merge') : t('gitView.operation.rebase');
-  const displayFiles = conflictDetails?.unmergedFiles || conflictFiles;
+  const operationLabel = operation === "merge" ? t("gitView.operation.merge") : t("gitView.operation.rebase")
+  const displayFiles = conflictDetails?.unmergedFiles || conflictFiles
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -174,30 +170,28 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
           <DialogHeader>
             <div className="flex items-center gap-2">
               <Icon name="alert" className="size-5 shrink-0 text-[var(--status-warning)]" />
-              <DialogTitle>{t('gitView.conflict.detectedTitle', { operation: operationLabel })}</DialogTitle>
+              <DialogTitle>{t("gitView.conflict.detectedTitle", { operation: operationLabel })}</DialogTitle>
             </div>
-            <DialogDescription>
-              {t('gitView.conflict.detectedDescription', { operation })}
-            </DialogDescription>
+            <DialogDescription>{t("gitView.conflict.detectedDescription", { operation })}</DialogDescription>
           </DialogHeader>
 
           {isLoading && (
             <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
               <Icon name="loader-4" className="size-4 animate-spin" />
-              <span className="typography-meta">{t('gitView.conflict.loading')}</span>
+              <span className="typography-meta">{t("gitView.conflict.loading")}</span>
             </div>
           )}
 
           {loadError && (
             <div className="rounded-lg bg-[var(--status-error-bg)] p-3 text-[var(--status-error)] typography-meta break-words">
-              {t('gitView.conflict.errorLoadingDetails', { message: loadError })}
+              {t("gitView.conflict.errorLoadingDetails", { message: loadError })}
             </div>
           )}
 
           {displayFiles.length > 0 && (
             <div className="space-y-2 overflow-hidden">
               <div className="flex items-center justify-between">
-                <p className="typography-meta text-muted-foreground">{t('gitView.conflict.conflictedFiles')}</p>
+                <p className="typography-meta text-muted-foreground">{t("gitView.conflict.conflictedFiles")}</p>
                 <span className="typography-micro px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-muted-foreground">
                   {displayFiles.length}
                 </span>
@@ -205,11 +199,7 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
               <div className="bg-[var(--surface-elevated)] rounded-lg p-3 max-h-40 overflow-y-auto overflow-x-hidden">
                 <ul className="space-y-1">
                   {displayFiles.map((file) => (
-                    <li
-                      key={file}
-                      className="typography-micro text-foreground font-mono truncate block"
-                      title={file}
-                    >
+                    <li key={file} className="typography-micro text-foreground font-mono truncate block" title={file}>
                       {file}
                     </li>
                   ))}
@@ -220,7 +210,7 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
 
           {conflictDetails?.headInfo && (
             <div className="space-y-1 overflow-hidden">
-              <p className="typography-meta text-muted-foreground">{t('gitView.conflict.headInfo')}</p>
+              <p className="typography-meta text-muted-foreground">{t("gitView.conflict.headInfo")}</p>
               <div className="typography-micro text-foreground font-mono bg-[var(--surface-elevated)] rounded-lg p-3 max-h-24 overflow-y-auto break-words whitespace-pre-wrap">
                 {conflictDetails.headInfo}
               </div>
@@ -231,7 +221,7 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
             <Button
               variant="default"
               onClick={() => {
-                void handleResolveInNewSession();
+                void handleResolveInNewSession()
               }}
               disabled={isLoading || !conflictDetails}
               className="w-full gap-2"
@@ -241,7 +231,7 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
               ) : (
                 <Icon name="add" className="size-4" />
               )}
-              {t('gitView.conflict.resolveNewSession')}
+              {t("gitView.conflict.resolveNewSession")}
             </Button>
             <Button
               variant="outline"
@@ -254,19 +244,19 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
               ) : (
                 <Icon name="chat-1" className="size-4" />
               )}
-              {t('gitView.conflict.resolveCurrentSession')}
+              {t("gitView.conflict.resolveCurrentSession")}
             </Button>
             <div className="flex gap-2 pt-1">
               <Button variant="ghost" size="sm" onClick={handleContinueLater} className="flex-1">
-                {t('gitView.conflict.continueLater')}
+                {t("gitView.conflict.continueLater")}
               </Button>
               <Button variant="destructive" size="sm" onClick={handleAbort} className="flex-1">
-                {t('gitView.conflict.abortOperation', { operation: operationLabel })}
+                {t("gitView.conflict.abortOperation", { operation: operationLabel })}
               </Button>
             </div>
           </div>
         </div>
       </DialogContent>
     </Dialog>
-  );
-};
+  )
+}

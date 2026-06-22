@@ -118,9 +118,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     const count = current.index.session.unseenCount[sessionId] ?? 0
     if (count === 0) return
 
-    const next = current.list.map((n) =>
-      n.session === sessionId && !n.viewed ? { ...n, viewed: true } : n,
-    )
+    const next = current.list.map((n) => (n.session === sessionId && !n.viewed ? { ...n, viewed: true } : n))
     set({ list: next, index: buildIndex(next) })
   },
 
@@ -129,9 +127,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     const count = current.index.project.unseenCount[directory] ?? 0
     if (count === 0) return
 
-    const next = current.list.map((n) =>
-      n.directory === directory && !n.viewed ? { ...n, viewed: true } : n,
-    )
+    const next = current.list.map((n) => (n.directory === directory && !n.viewed ? { ...n, viewed: true } : n))
     set({ list: next, index: buildIndex(next) })
   },
 

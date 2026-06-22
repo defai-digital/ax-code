@@ -62,7 +62,10 @@ function markPromptAccepted(sessionId: string): void {
  * The reconnect resync and status poll use this to avoid clobbering the
  * optimistic busy status with a stale "idle" before the turn starts streaming.
  */
-export function wasPromptRecentlyAccepted(sessionId: string, withinMs: number = PROMPT_ACCEPTED_BUSY_GRACE_MS): boolean {
+export function wasPromptRecentlyAccepted(
+  sessionId: string,
+  withinMs: number = PROMPT_ACCEPTED_BUSY_GRACE_MS,
+): boolean {
   const at = acceptedPromptAt.get(sessionId)
   if (at === undefined) return false
   if (Date.now() - at <= withinMs) return true
@@ -71,11 +74,7 @@ export function wasPromptRecentlyAccepted(sessionId: string, withinMs: number = 
   return false
 }
 
-export function setActionRefs(
-  sdk: AxCodeClient,
-  childStores: ChildStoreManager,
-  getDirectory: () => string,
-) {
+export function setActionRefs(sdk: AxCodeClient, childStores: ChildStoreManager, getDirectory: () => string) {
   _sdk = sdk
   _childStores = childStores
   _getDirectory = getDirectory
@@ -107,11 +106,7 @@ function dir() {
 
 function connectionLostError(): Error {
   const { hasEverConnected, lastDisconnectReason } = useConfigStore.getState()
-  const suffix = lastDisconnectReason
-    ? ` (${lastDisconnectReason})`
-    : hasEverConnected
-      ? ""
-      : " (never connected)"
+  const suffix = lastDisconnectReason ? ` (${lastDisconnectReason})` : hasEverConnected ? "" : " (never connected)"
   return new Error(`Connection lost${suffix}. Please wait for reconnection.`)
 }
 
@@ -139,11 +134,10 @@ function isSessionWorking(store: WatchdogStore, sessionId: string): boolean {
  * see the busy status from N+1 and incorrectly force idle.
  */
 function hasNewerUnansweredUserMessage(messages: Message[], messageID: string): boolean {
-  return messages.some((m) => (
-    m.role === "user"
-    && m.id > messageID
-    && !messages.some((am) => am.role === "assistant" && am.parentID === m.id)
-  ))
+  return messages.some(
+    (m) =>
+      m.role === "user" && m.id > messageID && !messages.some((am) => am.role === "assistant" && am.parentID === m.id),
+  )
 }
 
 // Pull the authoritative message list from the server into the session's store.
@@ -202,9 +196,7 @@ function scheduleAcceptedPromptWatchdog(sessionId: string, messageID: string): v
     const userMessage = messages.find((message) => message.id === messageID)
     if (!userMessage) return
 
-    const assistantResponse = messages.find((message) => (
-      message.role === "assistant" && message.parentID === messageID
-    ))
+    const assistantResponse = messages.find((message) => message.role === "assistant" && message.parentID === messageID)
     if (assistantResponse) {
       const status = state.session_status?.[sessionId]
       const completedAt = (assistantResponse as { time?: { completed?: number } }).time?.completed
@@ -241,7 +233,10 @@ function scheduleAcceptedPromptWatchdog(sessionId: string, messageID: string): v
       const currentState = store.getState()
       const currentMessages = currentState.message[sessionId] ?? []
       const status = currentState.session_status?.[sessionId]
-      if ((status?.type === "busy" || status?.type === "retry") && !hasNewerUnansweredUserMessage(currentMessages, messageID)) {
+      if (
+        (status?.type === "busy" || status?.type === "retry") &&
+        !hasNewerUnansweredUserMessage(currentMessages, messageID)
+      ) {
         store.setState((current) => ({
           session_status: {
             ...current.session_status,
@@ -267,7 +262,7 @@ function scheduleAcceptedPromptWatchdog(sessionId: string, messageID: string): v
     // still caught but a grace-window clobber does not fabricate a false error.
     if (wasPromptRecentlyAccepted(sessionId)) {
       const acceptedAt = acceptedPromptAt.get(sessionId) ?? Date.now()
-      const rearmDelay = Math.max(1, (acceptedAt + PROMPT_ACCEPTED_BUSY_GRACE_MS) - Date.now())
+      const rearmDelay = Math.max(1, acceptedAt + PROMPT_ACCEPTED_BUSY_GRACE_MS - Date.now())
       const rearmTimer = globalThis.setTimeout(runWatchdogCheck, rearmDelay)
       acceptedPromptWatchdogTimers.set(sessionId, rearmTimer)
       return
@@ -357,9 +352,7 @@ function getDirectoryStore(directory?: string) {
 }
 
 function getSessionReplyClient(sessionId?: string): AxCodeClient {
-  const directory = sessionId
-    ? useSessionUIStore.getState().getDirectoryForSession(sessionId)
-    : null
+  const directory = sessionId ? useSessionUIStore.getState().getDirectoryForSession(sessionId) : null
   if (directory) {
     return axCodeClient.getScopedSdkClient(directory)
   }
@@ -406,11 +399,11 @@ function resolveDirectoryForBlockingRequest(
   for (const [directory, store] of stores.children) {
     const state = store.getState()
     if (
-      state.session.some((session) => session.id === sessionId)
-      || Object.prototype.hasOwnProperty.call(state.message, sessionId)
-      || Object.prototype.hasOwnProperty.call(state.session_status ?? {}, sessionId)
-      || Object.prototype.hasOwnProperty.call(state.permission ?? {}, sessionId)
-      || Object.prototype.hasOwnProperty.call(state.question ?? {}, sessionId)
+      state.session.some((session) => session.id === sessionId) ||
+      Object.prototype.hasOwnProperty.call(state.message, sessionId) ||
+      Object.prototype.hasOwnProperty.call(state.session_status ?? {}, sessionId) ||
+      Object.prototype.hasOwnProperty.call(state.permission ?? {}, sessionId) ||
+      Object.prototype.hasOwnProperty.call(state.question ?? {}, sessionId)
     ) {
       return directory
     }
@@ -419,11 +412,7 @@ function resolveDirectoryForBlockingRequest(
   return null
 }
 
-function getRequestReplyClient(
-  type: "permission" | "question",
-  sessionId: string,
-  requestId: string,
-): AxCodeClient {
+function getRequestReplyClient(type: "permission" | "question", sessionId: string, requestId: string): AxCodeClient {
   const requestDirectory = resolveDirectoryForBlockingRequest(type, sessionId, requestId)
   if (requestDirectory) {
     return axCodeClient.getScopedSdkClient(requestDirectory)
@@ -449,15 +438,15 @@ export async function createSession(
     const session = result.data
     if (!session) return null
 
-      const sessionDirectory = (session as { directory?: string }).directory ?? directoryOverride ?? null
-      // Pre-populate routing index so SSE events arriving before session.created
-      // can be routed to the correct child store
-      if (sessionDirectory) {
-        registerSessionDirectory(session.id, sessionDirectory)
-      }
-      useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory)
-      useGlobalSessionsStore.getState().upsertSession(session)
-      return session
+    const sessionDirectory = (session as { directory?: string }).directory ?? directoryOverride ?? null
+    // Pre-populate routing index so SSE events arriving before session.created
+    // can be routed to the correct child store
+    if (sessionDirectory) {
+      registerSessionDirectory(session.id, sessionDirectory)
+    }
+    useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory)
+    useGlobalSessionsStore.getState().upsertSession(session)
+    return session
   } catch (error) {
     console.error("[session-actions] createSession failed", error)
     return null
@@ -654,12 +643,16 @@ export async function optimisticSend(input: {
   const messageID = ascendingId("msg")
   const textPartId = ascendingId("prt")
 
-  const optimisticParts: Part[] = [
-    { id: textPartId, type: "text", text: input.content } as Part,
-  ]
+  const optimisticParts: Part[] = [{ id: textPartId, type: "text", text: input.content } as Part]
   if (input.files) {
     for (const f of input.files) {
-      optimisticParts.push({ id: ascendingId("prt"), type: "file", mime: f.mime, url: f.url, filename: f.filename } as Part)
+      optimisticParts.push({
+        id: ascendingId("prt"),
+        type: "file",
+        mime: f.mime,
+        url: f.url,
+        filename: f.filename,
+      } as Part)
     }
   }
 
@@ -739,9 +732,8 @@ export async function respondToPermission(
   response: "once" | "always" | "reject",
 ): Promise<void> {
   await waitForConnectionOrThrow()
-  const directory = resolveDirectoryForBlockingRequest("permission", sessionId, requestId)
-    || getSessionDirectory(sessionId)
-    || dir()
+  const directory =
+    resolveDirectoryForBlockingRequest("permission", sessionId, requestId) || getSessionDirectory(sessionId) || dir()
   const result = await getRequestReplyClient("permission", sessionId, requestId).permission.reply({
     requestID: requestId,
     reply: response,
@@ -752,14 +744,10 @@ export async function respondToPermission(
   }
 }
 
-export async function dismissPermission(
-  sessionId: string,
-  requestId: string,
-): Promise<void> {
+export async function dismissPermission(sessionId: string, requestId: string): Promise<void> {
   await waitForConnectionOrThrow()
-  const directory = resolveDirectoryForBlockingRequest("permission", sessionId, requestId)
-    || getSessionDirectory(sessionId)
-    || dir()
+  const directory =
+    resolveDirectoryForBlockingRequest("permission", sessionId, requestId) || getSessionDirectory(sessionId) || dir()
   const result = await getRequestReplyClient("permission", sessionId, requestId).permission.reply({
     requestID: requestId,
     reply: "reject",
@@ -780,9 +768,8 @@ export async function respondToQuestion(
   answers: string[] | string[][],
 ): Promise<void> {
   await waitForConnectionOrThrow()
-  const directory = resolveDirectoryForBlockingRequest("question", sessionId, requestId)
-    || getSessionDirectory(sessionId)
-    || dir()
+  const directory =
+    resolveDirectoryForBlockingRequest("question", sessionId, requestId) || getSessionDirectory(sessionId) || dir()
   const result = await getRequestReplyClient("question", sessionId, requestId).question.reply({
     requestID: requestId,
     answers: answers as Array<Array<string>>,
@@ -793,14 +780,10 @@ export async function respondToQuestion(
   }
 }
 
-export async function rejectQuestion(
-  sessionId: string,
-  requestId: string,
-): Promise<void> {
+export async function rejectQuestion(sessionId: string, requestId: string): Promise<void> {
   await waitForConnectionOrThrow()
-  const directory = resolveDirectoryForBlockingRequest("question", sessionId, requestId)
-    || getSessionDirectory(sessionId)
-    || dir()
+  const directory =
+    resolveDirectoryForBlockingRequest("question", sessionId, requestId) || getSessionDirectory(sessionId) || dir()
   const result = await getRequestReplyClient("question", sessionId, requestId).question.reject({
     requestID: requestId,
     ...(directory ? { directory } : {}),
@@ -1008,7 +991,10 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
   let messageText = ""
   const textParts = parts.filter((p) => p.type === "text" && !isSyntheticPart(p))
   messageText = textParts
-    .map((p: Part) => ((p as Record<string, unknown>).text as string) || ((p as Record<string, unknown>).content as string) || "")
+    .map(
+      (p: Part) =>
+        ((p as Record<string, unknown>).text as string) || ((p as Record<string, unknown>).content as string) || "",
+    )
     .join("\n")
     .trim()
   const fileParts = parts.filter((p) => p.type === "file" && !isSyntheticPart(p)) as Array<Record<string, unknown>>

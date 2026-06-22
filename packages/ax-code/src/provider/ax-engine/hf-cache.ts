@@ -17,7 +17,7 @@ export namespace HfCache {
     return path.join(cacheHome, "huggingface", "hub")
   }
 
-  // "mlx-community/Qwen3-Coder-Next-4bit" -> "models--mlx-community--Qwen3-Coder-Next-4bit"
+  // "mlx-community/Qwen3.6-27B-6bit" -> "models--mlx-community--Qwen3.6-27B-6bit"
   export function repoDir(repo: string, env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string {
     return path.join(root(env, home), `models--${repo.replace(/\//g, "--")}`)
   }
