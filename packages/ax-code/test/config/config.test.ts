@@ -134,6 +134,11 @@ test("rejects unsafe integer config values", () => {
   expect(paths).toContain("mcp.local.timeout")
 })
 
+test("rejects server ports outside the TCP range", () => {
+  expect(Config.Info.safeParse({ server: { port: 65_535 } }).success).toBe(true)
+  expect(Config.Info.safeParse({ server: { port: 65_536 } }).success).toBe(false)
+})
+
 test("loads JSON config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

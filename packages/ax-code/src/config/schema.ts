@@ -10,6 +10,7 @@ const MCP_TIMEOUT_MS = 5000
 const MCP_TIMEOUT_SECONDS = MCP_TIMEOUT_MS / 1000
 const PROVIDER_TIMEOUT_MS = 300_000
 const PROVIDER_TIMEOUT_MINUTES = 5
+const TCP_PORT_MAX = 65_535
 const RFC_DYNAMIC_CLIENT_REGISTRATION = "RFC 7591"
 
 const ModelId = z.string().meta({ $ref: MODEL_SCHEMA_URL })
@@ -480,7 +481,7 @@ export const Keybinds = z
 
 export const Server = z
   .object({
-    port: PositiveInteger.optional().describe("Port to listen on"),
+    port: PositiveInteger.max(TCP_PORT_MAX).optional().describe("Port to listen on"),
     hostname: z.string().optional().describe("Hostname to listen on"),
     mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
     mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: ax-code.local)"),
