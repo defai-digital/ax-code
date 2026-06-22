@@ -238,15 +238,22 @@ export namespace SessionGoal {
     sessionID: SessionID
     message: MessageV2.Assistant
   }): Promise<Info | undefined> {
-    const componentTokens = input.message.tokens.input + input.message.tokens.output + input.message.tokens.reasoning
-    const reportedTotal = input.message.tokens.total ?? 0
+    const componentTokens =
+      nonnegativeFinite(input.message.tokens.input) +
+      nonnegativeFinite(input.message.tokens.output) +
+      nonnegativeFinite(input.message.tokens.reasoning)
+    const reportedTotal = nonnegativeFinite(input.message.tokens.total)
     const tokens = reportedTotal > 0 ? reportedTotal : componentTokens
-    const tokenDelta = Math.max(0, tokens)
+    const tokenDelta = nonnegativeFinite(tokens)
 
+    const elapsedMs =
+      input.message.time.completed === undefined ? 0 : input.message.time.completed - input.message.time.created
     const elapsedSeconds =
       input.message.time.completed === undefined
         ? 0
-        : Math.max(0, Math.round((input.message.time.completed - input.message.time.created) / 1000))
+        : Number.isFinite(elapsedMs)
+          ? Math.max(0, Math.round(elapsedMs / 1000))
+          : 0
     const shouldUpdate = tokenDelta > 0 || input.message.time.completed !== undefined
     const now = Date.now()
 
@@ -274,6 +281,10 @@ export namespace SessionGoal {
     })
     publish(updated)
     return updated
+  }
+
+  function nonnegativeFinite(value: number | null | undefined) {
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0
   }
 
   export function format(goal: Info | undefined): string {
