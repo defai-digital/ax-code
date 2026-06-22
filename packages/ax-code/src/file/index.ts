@@ -346,17 +346,26 @@ export namespace File {
     const ig = ignore()
     const gitignore = path.join(base, ".gitignore")
     let hasPatterns = false
-    if (await Filesystem.exists(gitignore)) {
-      ig.add(await Filesystem.readText(gitignore))
+    const gitignoreText = await readIgnoreFile(gitignore)
+    if (gitignoreText !== undefined) {
+      ig.add(gitignoreText)
       hasPatterns = true
     }
     const ignoreFile = path.join(base, ".ignore")
-    if (await Filesystem.exists(ignoreFile)) {
-      ig.add(await Filesystem.readText(ignoreFile))
+    const ignoreText = await readIgnoreFile(ignoreFile)
+    if (ignoreText !== undefined) {
+      ig.add(ignoreText)
       hasPatterns = true
     }
     if (!hasPatterns) return undefined
     return { base, matcher: ig }
+  }
+
+  async function readIgnoreFile(file: string) {
+    return Filesystem.readText(file).catch((error: NodeJS.ErrnoException) => {
+      if (Filesystem.isMissingPathError(error)) return undefined
+      throw error
+    })
   }
 
   async function ignoreContextsFor(directory: string) {

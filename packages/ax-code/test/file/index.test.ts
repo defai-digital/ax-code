@@ -308,6 +308,33 @@ describe("file/index Filesystem patterns", () => {
         },
       })
     })
+
+    test("treats ignore files deleted during scan as missing", async () => {
+      await using tmp = await tmpdir({ git: true })
+      await fs.writeFile(path.join(tmp.path, "visible.txt"), "ok", "utf-8")
+      const originalReadText = Filesystem.readText
+      const readText = vi.spyOn(Filesystem, "readText").mockImplementation(async (target) => {
+        const name = path.basename(String(target))
+        if (name === ".gitignore" || name === ".ignore") {
+          const error = new Error("gone") as NodeJS.ErrnoException
+          error.code = "ENOENT"
+          throw error
+        }
+        return originalReadText(target)
+      })
+
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const nodes = await File.list()
+            expect(nodes.map((node) => node.name)).toContain("visible.txt")
+          },
+        })
+      } finally {
+        readText.mockRestore()
+      }
+    })
   })
 
   describe("File.changed() - Filesystem.readText() for untracked files", () => {
