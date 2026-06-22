@@ -211,7 +211,7 @@ export namespace ExecutionGraph {
           const callID = e.callID as string
           const tool = e.tool as string
           const status = e.status as "completed" | "error"
-          const dur = e.durationMs as number
+          const dur = finiteNumber(e.durationMs)
           node = {
             id: `result-${callID}`,
             type: "tool_result",
@@ -249,7 +249,7 @@ export namespace ExecutionGraph {
         case "agent.route": {
           const from = e.fromAgent as string
           const to = e.toAgent as string
-          const conf = e.confidence as number
+          const conf = finiteNumber(e.confidence)
           agents.add(from)
           agents.add(to)
           node = {

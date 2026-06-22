@@ -91,4 +91,40 @@ describe("ExecutionGraph.build", () => {
       },
     })
   })
+
+  test("normalizes malformed numeric fields in legacy replay events", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: sid,
+          fromAgent: "build",
+          toAgent: "review",
+          confidence: "high",
+        } as any)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "bash",
+          callID: "call-result-only",
+          status: "completed",
+          durationMs: "slow",
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const graph = ExecutionGraph.build(sid)
+        expect(() => ExecutionGraph.Graph.parse(graph)).not.toThrow()
+        expect(graph.nodes.find((node) => node.type === "agent_route")).toMatchObject({ confidence: 0 })
+        expect(graph.nodes.find((node) => node.type === "tool_result")).toMatchObject({ duration: 0 })
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
 })
