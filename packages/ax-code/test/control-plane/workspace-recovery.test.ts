@@ -45,4 +45,31 @@ describe("control-plane/workspace recovery", () => {
     })
     expect(Workspace.list(project).find((item) => item.id === id)?.extra).toBeUndefined()
   })
+
+  test("list skips corrupt persisted workspace rows", async () => {
+    const { Workspace } = await import("../../src/control-plane/workspace")
+    await using tmp = await tmpdir({ git: true })
+    const { project } = await Project.fromDirectory(tmp.path)
+    const valid = await Workspace.create({
+      projectID: project.id,
+      branch: "main",
+      type: "testing",
+      name: "remote",
+    })
+
+    Database.use((db) =>
+      db
+        .insert(WorkspaceTable)
+        .values({
+          id: "not-a-workspace-id",
+          branch: "main",
+          project_id: project.id,
+          type: "testing",
+          name: "corrupt",
+        } as any)
+        .run(),
+    )
+
+    expect(Workspace.list(project).map((item) => item.id)).toEqual([valid.id])
+  })
 })

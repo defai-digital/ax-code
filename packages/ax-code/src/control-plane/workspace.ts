@@ -98,7 +98,19 @@ export namespace Workspace {
 
   export function list(project: Project.Info) {
     return Database.use((db) =>
-      db.select().from(WorkspaceTable).where(eq(WorkspaceTable.project_id, project.id)).all().map(toInfo),
+      db
+        .select()
+        .from(WorkspaceTable)
+        .where(eq(WorkspaceTable.project_id, project.id))
+        .all()
+        .flatMap((row) => {
+          try {
+            return [toInfo(row)]
+          } catch {
+            log.warn("skipping corrupt workspace row", { workspaceID: row.id })
+            return []
+          }
+        }),
     )
   }
 
