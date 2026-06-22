@@ -1356,10 +1356,10 @@ export namespace ProbabilisticRollout {
     },
   ): ShadowFile {
     const predictions = predictionMap(predictionFile.predictions)
-    const baselineThreshold = options?.baselineThreshold ?? 0.5
-    const candidateThreshold = options?.candidateThreshold ?? 0.5
-    const baselineAbstainBelow = options?.baselineAbstainBelow
-    const candidateAbstainBelow = options?.candidateAbstainBelow
+    const baselineThreshold = finiteOption(options?.baselineThreshold, 0.5)
+    const candidateThreshold = finiteOption(options?.candidateThreshold, 0.5)
+    const baselineAbstainBelow = finiteOptionalOption(options?.baselineAbstainBelow)
+    const candidateAbstainBelow = finiteOptionalOption(options?.candidateAbstainBelow)
     const capturedAt = new Date().toISOString()
 
     const records: ShadowRecord[] = items.map((item) => {

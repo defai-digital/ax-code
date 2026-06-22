@@ -1285,6 +1285,66 @@ describe("ProbabilisticRollout.summarizeCalibration", () => {
     expect(comparison.gates.find((gate) => gate.name === "calibration-error")?.status).toBe("warn")
   })
 
+  test("normalizes non-finite shadow decision thresholds", () => {
+    const items: ProbabilisticRollout.ReplayItem[] = [
+      {
+        schemaVersion: 1,
+        kind: "ax-code-quality-replay-item",
+        workflow: "review",
+        artifactKind: "review_finding",
+        artifactID: "a",
+        sessionID: "ses_1",
+        projectID: "proj_1",
+        title: "A",
+        createdAt: "2026-04-20T00:00:00.000Z",
+        baseline: { source: "Risk.assess", confidence: 0.9, score: 80, readiness: "ready", rank: 1 },
+        context: {
+          directory: "/repo",
+          graphCommitSha: "abc",
+          touchedFiles: ["src/a.ts"],
+          diffSummary: { files: 1, additions: 10, deletions: 2 },
+          eventCount: 5,
+          toolCount: 1,
+        },
+        evidence: { toolSummaries: [] },
+      },
+    ]
+    const predictions: ProbabilisticRollout.PredictionFile = {
+      schemaVersion: 1,
+      kind: "ax-code-quality-prediction-file",
+      source: "candidate-v1",
+      generatedAt: "2026-04-20T00:00:00.000Z",
+      predictions: [
+        {
+          artifactID: "a",
+          workflow: "review",
+          artifactKind: "review_finding",
+          sessionID: "ses_1",
+          source: "candidate-v1",
+          confidence: 0.8,
+          score: 70,
+          readiness: "ready",
+          rank: 1,
+        },
+      ],
+    }
+
+    const shadow = ProbabilisticRollout.buildShadowFile(items, predictions, {
+      baselineThreshold: Number.NaN,
+      baselineAbstainBelow: Number.POSITIVE_INFINITY,
+      candidateThreshold: Number.POSITIVE_INFINITY,
+      candidateAbstainBelow: Number.NaN,
+    })
+
+    expect(() => ProbabilisticRollout.ShadowFile.parse(shadow)).not.toThrow()
+    expect(shadow.records[0]?.baseline.threshold).toBe(0.5)
+    expect(shadow.records[0]?.baseline.abstainBelow).toBeNull()
+    expect(shadow.records[0]?.baseline.predictedPositive).toBe(true)
+    expect(shadow.records[0]?.candidate.threshold).toBe(0.5)
+    expect(shadow.records[0]?.candidate.abstainBelow).toBeNull()
+    expect(shadow.records[0]?.candidate.predictedPositive).toBe(true)
+  })
+
   test("compares baseline and candidate summaries and produces shadow records", () => {
     const items: ProbabilisticRollout.ReplayItem[] = [
       {
