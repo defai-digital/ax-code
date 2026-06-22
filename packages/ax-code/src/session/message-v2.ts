@@ -26,6 +26,7 @@ import { PromptIsolationPolicy } from "./prompt-runtime-policy"
 
 export namespace MessageV2 {
   const log = Log.create({ service: "session.message" })
+  const SafeInteger = z.number().int().refine(Number.isSafeInteger, "must be a safe integer")
 
   export function isMedia(mime: string) {
     return mime.startsWith("image/") || mime === "application/pdf"
@@ -76,7 +77,7 @@ export namespace MessageV2 {
     .object({
       type: z.literal("json_schema"),
       schema: z.record(z.string(), z.any()).meta({ ref: "JSONSchema" }),
-      retryCount: z.number().int().min(0).default(2),
+      retryCount: SafeInteger.min(0).default(2),
     })
     .meta({
       ref: "OutputFormatJsonSchema",
@@ -144,8 +145,8 @@ export namespace MessageV2 {
     text: z
       .object({
         value: z.string(),
-        start: z.number().int(),
-        end: z.number().int(),
+        start: SafeInteger,
+        end: SafeInteger,
       })
       .meta({
         ref: "FilePartSourceText",
@@ -164,7 +165,7 @@ export namespace MessageV2 {
     path: z.string(),
     range: LSP.Range,
     name: z.string(),
-    kind: z.number().int(),
+    kind: SafeInteger,
   }).meta({
     ref: "SymbolSource",
   })
@@ -198,8 +199,8 @@ export namespace MessageV2 {
     source: z
       .object({
         value: z.string(),
-        start: z.number().int(),
-        end: z.number().int(),
+        start: SafeInteger,
+        end: SafeInteger,
       })
       .optional(),
   }).meta({
@@ -906,7 +907,7 @@ export namespace MessageV2 {
   export const page = fn(
     z.object({
       sessionID: SessionID.zod,
-      limit: z.number().int().positive(),
+      limit: SafeInteger.positive(),
       before: z.string().optional(),
     }),
     async (input) => {

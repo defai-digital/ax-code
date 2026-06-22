@@ -108,6 +108,41 @@ function basePart(messageID: string, id: string) {
   }
 }
 
+describe("session.message-v2 schema", () => {
+  test("rejects unsafe integer part source offsets", () => {
+    const unsafe = Number.MAX_SAFE_INTEGER + 1
+    const parsed = MessageV2.Part.safeParse({
+      ...basePart(messageID, "unsafe-source"),
+      type: "file",
+      mime: "text/plain",
+      url: "file:///tmp/source.ts",
+      source: {
+        type: "file",
+        path: "/tmp/source.ts",
+        text: {
+          value: "source",
+          start: unsafe,
+          end: unsafe,
+        },
+      },
+    })
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "source.text.start")).toBe(true)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "source.text.end")).toBe(true)
+  })
+
+  test("rejects unsafe integer format retry counts", () => {
+    expect(
+      MessageV2.Format.safeParse({
+        type: "json_schema",
+        schema: {},
+        retryCount: Number.MAX_SAFE_INTEGER + 1,
+      }).success,
+    ).toBe(false)
+  })
+})
+
 describe("session.message-v2.cursor", () => {
   test("decodes already-parsed cursor values", () => {
     expect(MessageV2.cursor.decodeValue({ id: messageID, time: 123 })).toEqual({
