@@ -124,7 +124,7 @@ export namespace McpAuth {
   async function withFileEntryLock<T>(mcpName: string, fn: (entry: Entry) => Promise<T> | T): Promise<T> {
     return withLock(filepath, async () => {
       const raw = await readRawFile()
-      const entry = raw[mcpName] ? decryptEntry(raw[mcpName] as Record<string, unknown>) : ({} as Entry)
+      const entry = parseStoredEntry(raw[mcpName]) ?? {}
       const result = await fn(entry)
       raw[mcpName] = encryptEntry(entry)
       await Filesystem.writeJson(filepath, raw, 0o600)
