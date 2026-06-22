@@ -86,6 +86,13 @@ export namespace Server {
     return isLoopbackHostname(opts.hostname ?? "127.0.0.1") || Flag.AX_CODE_ENABLE_HTTP_DOCS
   }
 
+  export function validateListenPort(port: unknown): number {
+    if (typeof port !== "number" || !Number.isInteger(port) || port < 0 || port > 65535) {
+      throw new Error("Server listen port must be an integer between 0 and 65535")
+    }
+    return port
+  }
+
   export const createApp = (opts: { port?: number; hostname?: string; cors?: string[] }): Hono => {
     const app = new Hono()
     const openApiHandler = openAPIRouteHandler(app, {
@@ -303,6 +310,7 @@ export namespace Server {
     cors?: string[]
     app?: Hono
   }) {
+    const port = validateListenPort(opts.port)
     assertAuthenticatedNetworkBind(opts.hostname)
     // Warn loudly when Basic Auth is sent over plaintext to a non-loopback
     // bind. Credentials can be sniffed/replayed on a LAN or by a MITM. The
@@ -329,10 +337,10 @@ export namespace Server {
       }
     }
     const server =
-      opts.port === 0 ? ((await tryServe(DEFAULT_SERVER_PORT)) ?? (await tryServe(0))) : await tryServe(opts.port)
+      port === 0 ? ((await tryServe(DEFAULT_SERVER_PORT)) ?? (await tryServe(0))) : await tryServe(port)
     if (!server) {
       const reason = toErrorMessage(lastServeError)
-      throw new Error(`Failed to start server on port ${opts.port}: ${reason}`)
+      throw new Error(`Failed to start server on port ${port}: ${reason}`)
     }
     url = new URL(`http://${opts.hostname}:${server.port}`)
 

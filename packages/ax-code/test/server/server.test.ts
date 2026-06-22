@@ -28,6 +28,16 @@ test("cors uses the bound port after --port=0 fallback", async () => {
   }
 })
 
+test("listen port validation rejects invalid port numbers before binding", () => {
+  expect(Server.validateListenPort(0)).toBe(0)
+  expect(Server.validateListenPort(4096)).toBe(4096)
+  expect(Server.validateListenPort(65535)).toBe(65535)
+
+  for (const value of [-1, 1.5, 65536, Number.NaN, Number.POSITIVE_INFINITY, "4096", undefined]) {
+    expect(() => Server.validateListenPort(value)).toThrow("Server listen port must be an integer between 0 and 65535")
+  }
+})
+
 test("/doc is available on loopback app instances", async () => {
   const app = Server.createApp({ hostname: "127.0.0.1", port: 4096 })
   const response = await app.fetch(new Request("http://127.0.0.1:4096/doc"))
