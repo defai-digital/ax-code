@@ -90,6 +90,19 @@ export namespace ExecutionGraph {
     .meta({ ref: "ExecutionGraphResponse" })
   export type Response = z.output<typeof Response>
 
+  function finiteNumber(value: unknown) {
+    return typeof value === "number" && Number.isFinite(value) ? value : 0
+  }
+
+  function eventTokens(value: unknown): Tokens {
+    if (!value || typeof value !== "object") return { input: 0, output: 0 }
+    const tokens = value as { input?: unknown; output?: unknown }
+    return {
+      input: finiteNumber(tokens.input),
+      output: finiteNumber(tokens.output),
+    }
+  }
+
   export function build(sessionID: SessionID): Graph {
     const rows = EventQuery.bySessionWithTimestamp(sessionID)
     if (rows.length === 0) {
@@ -170,8 +183,7 @@ export namespace ExecutionGraph {
           const existing = currentStepID ? stepNodes.get(stepCount) : undefined
           if (existing) {
             existing.duration = ts - existing.timestamp
-            const tokens = e.tokens as { input: number; output: number }
-            existing.tokens = { input: tokens.input, output: tokens.output }
+            existing.tokens = eventTokens(e.tokens)
           }
           currentStepID = undefined
           break
@@ -219,8 +231,8 @@ export namespace ExecutionGraph {
         }
 
         case "llm.response": {
-          const tokens = e.tokens as { input: number; output: number }
-          const latency = e.latencyMs as number
+          const tokens = eventTokens(e.tokens)
+          const latency = finiteNumber(e.latencyMs)
           totalInput += tokens.input
           totalOutput += tokens.output
           node = {

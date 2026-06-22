@@ -51,4 +51,44 @@ describe("ExecutionGraph.build", () => {
       },
     })
   })
+
+  test("normalizes malformed token payloads in legacy replay events", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 })
+        Recorder.emit({
+          type: "llm.response",
+          sessionID: sid,
+          model: "test/model",
+          latencyMs: "slow",
+          tokens: {},
+          finishReason: "stop",
+        } as any)
+        Recorder.emit({
+          type: "step.finish",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: {},
+        } as any)
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const graph = ExecutionGraph.build(sid)
+        const step = graph.nodes.find((node) => node.type === "step")
+        const llm = graph.nodes.find((node) => node.type === "llm")
+
+        expect(step).toMatchObject({ tokens: { input: 0, output: 0 } })
+        expect(llm).toMatchObject({ tokens: { input: 0, output: 0 }, duration: 0 })
+        expect(graph.metadata.tokens).toEqual({ input: 0, output: 0 })
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
 })
