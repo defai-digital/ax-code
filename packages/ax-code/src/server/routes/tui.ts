@@ -3,11 +3,11 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import z from "zod"
 import { Bus } from "../../bus"
-import { Session } from "../../session"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import { errors, invalidRequest } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
+import { requireCurrentProjectSession } from "./session-lookup"
 
 const log = Log.create({ service: "server.tui" })
 
@@ -290,8 +290,7 @@ export const TuiRoutes = lazy(() =>
       validator("json", TuiEvent.SessionSelect.properties),
       async (c) => {
         const { sessionID } = c.req.valid("json")
-        const session = await Session.get(sessionID)
-        if (!session) return c.json(false, 404)
+        await requireCurrentProjectSession(sessionID)
         await Bus.publish(TuiEvent.SessionSelect, { sessionID })
         return c.json(true)
       },
