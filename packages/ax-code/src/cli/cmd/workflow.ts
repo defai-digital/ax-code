@@ -10,7 +10,7 @@ import { WorkflowScheduler } from "../../workflow/scheduler"
 import { isWorkflowRuntimeEnabled } from "../../workflow/spec"
 import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
 import { WorkflowTemplate } from "../../workflow/template"
-import type { SessionID } from "../../session/schema"
+import { SessionID } from "../../session/schema"
 import {
   WorkflowChildID,
   WorkflowPhaseID,
@@ -592,7 +592,7 @@ const WorkflowRunStartCommand = cmd({
       const options = args as unknown as StartOptions
       const run = await WorkflowTemplate.createRun({
         templateID: options.templateID as WorkflowTemplate.ID,
-        parentSessionID: options.parentSession as SessionID | undefined,
+        parentSessionID: parseOptionalSessionID(options.parentSession),
         modelPolicy: modelPolicyFromStartOptions(options),
         inputValues: parseWorkflowInputArguments(options.input),
       })
@@ -691,7 +691,7 @@ const WorkflowRoutineRunCommand = cmd({
       const options = args as unknown as RoutineRunOptions
       const result = await WorkflowRoutineTrigger.run({
         route: options.route,
-        parentSessionID: options.parentSession as SessionID | undefined,
+        parentSessionID: parseOptionalSessionID(options.parentSession),
         modelPolicy: modelPolicyFromStartOptions(options),
         inputValues: parseWorkflowInputArguments(options.input),
         startOptions: {
@@ -776,6 +776,10 @@ export function parseWorkflowPhaseID(value: string): WorkflowPhaseID {
 
 export function parseWorkflowChildID(value: string): WorkflowChildID {
   return WorkflowChildID.zod.parse(value)
+}
+
+export function parseOptionalSessionID(value: string | undefined): SessionID | undefined {
+  return value === undefined ? undefined : SessionID.zod.parse(value)
 }
 
 function parseWorkflowInputValue(value: string): unknown {

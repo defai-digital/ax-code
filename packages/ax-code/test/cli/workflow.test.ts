@@ -8,6 +8,7 @@ import {
   formatWorkflowRunList,
   formatWorkflowRoutineList,
   formatWorkflowTemplateList,
+  parseOptionalSessionID,
   parseWorkflowChildID,
   parseWorkflowPhaseID,
   parseWorkflowInputArguments,
@@ -451,9 +452,12 @@ describe("workflow command helpers", () => {
     expect(parseWorkflowRunID("wfr_01")).toBe("wfr_01")
     expect(parseWorkflowPhaseID("wfp_01")).toBe("wfp_01")
     expect(parseWorkflowChildID("wfc_01")).toBe("wfc_01")
+    expect(parseOptionalSessionID("ses_01")).toBe("ses_01")
+    expect(parseOptionalSessionID(undefined)).toBeUndefined()
     expect(() => parseWorkflowRunID("not-a-run")).toThrow()
     expect(() => parseWorkflowPhaseID("wfr_01")).toThrow()
     expect(() => parseWorkflowChildID("wfp_01")).toThrow()
+    expect(() => parseOptionalSessionID("not-a-session")).toThrow()
   })
 })
 
