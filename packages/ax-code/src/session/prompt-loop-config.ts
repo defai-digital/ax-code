@@ -2,6 +2,13 @@ import type { Config } from "@/config/config"
 import { GLOBAL_STEP_LIMIT } from "@/constants/session"
 
 export const MAX_EMPTY_MODEL_TURN_RETRIES = 1
+// Maximum consecutive outer-loop turns where the model only produces tool
+// calls (finish="tool-calls") without ever finishing with a text response.
+// Normal agentic work involves a handful of tool-calling turns before the
+// model summarizes. 25 consecutive tool-only turns without convergence
+// strongly indicates a model stuck in a read-only exploration loop (e.g.
+// repeatedly listing directories or running the same shell commands).
+export const MAX_TOOL_ONLY_TURNS = 25
 // Truncated turns (finish=length) are a normal consequence of output-token
 // limits — the model was actively generating useful content that exceeded its
 // budget. Recovery ("continue from where you left off") is usually effective,

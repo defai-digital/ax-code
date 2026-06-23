@@ -65,7 +65,7 @@ import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
-import { promptLoopLimits } from "./prompt-loop-config"
+import { MAX_TOOL_ONLY_TURNS, promptLoopLimits } from "./prompt-loop-config"
 import {
   CommandInput as CommandInputSchema,
   type CommandInput as CommandInputType,
@@ -213,6 +213,12 @@ export namespace SessionPrompt {
     let stagnantTodoRetries = 0
     let emptyModelTurnRetries = 0
     let truncatedModelTurnRetries = 0
+    // Consecutive outer-loop turns where the model only produced tool calls
+    // (finish="tool-calls") without ever finishing with a text response.
+    // Reset to 0 whenever the model finishes cleanly. If this exceeds
+    // MAX_TOOL_ONLY_TURNS, the model is stuck in a read-only exploration
+    // loop (e.g. endlessly listing directories) and we break out.
+    let consecutiveToolOnlyTurns = 0
     const cachedSystemPrompt: PromptRequestCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -242,6 +248,7 @@ export namespace SessionPrompt {
       continuations += 1
       step = 0
       consecutiveErrors = 0
+      consecutiveToolOnlyTurns = 0
       fallbackModelOverride = undefined
       failedFallbackProviderIDs.clear()
       cachedMsgs = undefined
@@ -794,6 +801,41 @@ export namespace SessionPrompt {
       if (completionGateAllowedComplete) {
         reason = "completed"
         break
+      }
+
+      // Tool-only turn convergence: when the model's last step was tool
+      // calls (finish="tool-calls"), modelFinished is false and none of
+      // the above completion paths fire. The loop would otherwise keep
+      // calling the model indefinitely if the model never produces a
+      // final text response (common when stuck in a read-only exploration
+      // loop — e.g. repeatedly listing directories or running shell
+      // commands). Track consecutive tool-only outer-loop turns and break
+      // when the count exceeds MAX_TOOL_ONLY_TURNS.
+      if (modelFinished) {
+        consecutiveToolOnlyTurns = 0
+      } else {
+        consecutiveToolOnlyTurns += 1
+        if (consecutiveToolOnlyTurns > MAX_TOOL_ONLY_TURNS) {
+          log.warn("autonomous tool-only turn convergence limit", {
+            command: "session.prompt.loop",
+            status: "stopped",
+            errorCode: "TOOL_ONLY_TURN_LIMIT",
+            sessionID,
+            consecutiveToolOnlyTurns,
+            maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
+          })
+          await publishPromptFailure({
+            sessionID,
+            assistant: processor.message,
+            message:
+              `Autonomous mode stopped: the agent made ${consecutiveToolOnlyTurns} consecutive turns ` +
+              `calling tools without producing a final text response. ` +
+              `The model appears stuck in a tool-calling loop. ` +
+              `Try rephrasing the request or breaking it into smaller steps.`,
+          })
+          reason = "stalled"
+          break
+        }
       }
 
       const errorTransition = await resolvePromptLoopErrorTransition({
