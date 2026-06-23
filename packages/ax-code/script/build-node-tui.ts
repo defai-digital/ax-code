@@ -167,11 +167,9 @@ await writeText(
   JSON.stringify({ name: "ax-code-dist", private: true, type: "module", dependencies: distDeps }, null, 2) + "\n",
 )
 console.log("Installing runtime dependencies (@opentui, node-pty) into the distribution...")
-const npm = process.platform === "win32" ? "npm.cmd" : "npm"
-const install = spawnSync(npm, ["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], {
-  cwd: outRoot,
-  stdio: "inherit",
-})
+const runNpm = (args: string[]) =>
+  spawnSync("npm", args, { cwd: outRoot, stdio: "inherit", shell: process.platform === "win32" })
+const install = runNpm(["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"])
 if (install.status !== 0) {
   console.error("npm install for the distribution failed")
   if (install.error) console.error(install.error)
@@ -219,7 +217,7 @@ for (const [spec, patchRel] of Object.entries(rootPkg.pnpm?.patchedDependencies 
 const ptyDir = path.join(outRoot, "node_modules", "node-pty-prebuilt-multiarch")
 if (fs.existsSync(ptyDir) && !fs.existsSync(path.join(ptyDir, "build", "Release", "pty.node"))) {
   console.log("Building node-pty native addon...")
-  const gyp = spawnSync(npm, ["rebuild", "node-pty-prebuilt-multiarch"], { cwd: outRoot, stdio: "inherit" })
+  const gyp = runNpm(["rebuild", "node-pty-prebuilt-multiarch"])
   if (gyp.status !== 0) console.warn("node-pty build failed — terminal feature will be unavailable")
 }
 

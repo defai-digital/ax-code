@@ -106,8 +106,11 @@ describe("tui OpenTUI stability guardrails", () => {
   test("keeps release dependency install from running optional native lifecycle scripts", async () => {
     const build = await fs.readFile(BUILD_NODE_TUI_SRC, "utf8")
 
+    expect(build).toContain('spawnSync("npm", args')
+    expect(build).toContain('shell: process.platform === "win32"')
+    expect(build).not.toContain('"npm.cmd"')
     expect(build).toContain('"--ignore-scripts"')
-    expect(build).toContain('npm, ["rebuild", "node-pty-prebuilt-multiarch"]')
+    expect(build).toContain('runNpm(["rebuild", "node-pty-prebuilt-multiarch"]')
     expect(build).toContain("node-pty build failed")
   })
 
