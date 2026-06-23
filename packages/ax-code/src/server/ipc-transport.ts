@@ -179,6 +179,9 @@ class IpcConnection {
               this.abortController.abort()
             })
           }
+          // Stream ended cleanly (EOF) — server restarted. Reset backoff so the
+          // next reconnect attempt uses the base delay, not an accumulated value.
+          delay = IpcConnection.EVENT_RETRY_BASE_MS
         } catch (error) {
           if (this.abortController.signal.aborted) return
           log.debug("ipc event subscription ended, retrying", { error, delayMs: delay })

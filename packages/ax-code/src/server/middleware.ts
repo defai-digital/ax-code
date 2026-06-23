@@ -11,10 +11,6 @@ export function resolveRateLimitClientIP(input: {
   warnOnce: () => boolean
 }) {
   try {
-    const srv = (input.context.env as any)?.server
-    const bunAddress = srv?.requestIP?.(input.context.req.raw)?.address
-    if (typeof bunAddress === "string" && bunAddress.length > 0) return bunAddress
-
     const nodeAddress = getConnInfo(input.context).remote.address
     if (typeof nodeAddress === "string" && nodeAddress.length > 0) return nodeAddress
   } catch (error) {

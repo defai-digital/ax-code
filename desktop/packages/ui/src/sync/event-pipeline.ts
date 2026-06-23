@@ -328,6 +328,10 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
   let lastEventId: string | undefined
   let wsFallbackUntil = 0
 
+  // One entry per connected workspace directory. Cardinality is bounded by
+  // the number of workspace roots open in the desktop (typically 1-3).
+  // Entries are not evicted during a pipeline lifetime because the pipeline
+  // itself is per-mount; the entire Map is GC'd when cleanup() is called.
   const directories = new Map<string, DirectoryQueue>()
 
   const getOrCreateDir = (directory: string): DirectoryQueue => {

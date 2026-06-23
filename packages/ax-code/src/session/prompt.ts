@@ -180,6 +180,9 @@ export namespace SessionPrompt {
 
     let step = 0
     let totalSteps = 0
+    // IMPORTANT: every break path inside the loop MUST set `reason` first.
+    // The default "error" is the correct catch-all for unexpected throws,
+    // but a break without a prior assignment will misreport a completed session.
     let reason: PromptLoopEndReason = "error"
     let consecutiveErrors = 0
     let continuations = 0

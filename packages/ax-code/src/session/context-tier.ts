@@ -116,7 +116,7 @@ export namespace ContextTier {
   }
 
   function isCompactionSummary(msg: MessageV2.WithParts): boolean {
-    return msg.parts.some((p) => p.type === "compaction") || (msg.info as any).summary === true
+    return msg.parts.some((p) => p.type === "compaction") || (msg.info as Record<string, unknown>).summary === true
   }
 
   function tierReason(msg: MessageV2.WithParts, tier: Tier): string {
