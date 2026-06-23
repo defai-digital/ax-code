@@ -43,6 +43,7 @@ import { useI18n } from "@/lib/i18n"
 import { extractLoopbackUrls } from "@/lib/url"
 import { useDeviceInfo } from "@/lib/device"
 import { dispatchProjectPlanSaved } from "@/lib/projectScopedEvents"
+import { isActiveToolPart, isFinalizedToolPart } from "./toolPartState"
 
 const CONTAIN_LAYOUT_STYLE = { contain: "layout" as const, transform: "translateZ(0)" }
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: "inline-size" as const, containerName: "message-footer" }
@@ -1041,35 +1042,15 @@ const AssistantMessageBody = React.memo(
     const hasTools = toolParts.length > 0
 
     const hasPendingTools = React.useMemo(() => {
-      return toolParts.some((toolPart) => {
-        const state = ((toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined) ?? {}
-        const status = state?.status
-        return status === "pending" || status === "running" || status === "started"
-      })
+      return toolParts.some((toolPart) => isActiveToolPart(toolPart))
     }, [toolParts])
 
     const isActiveTool = React.useCallback((toolPart: ToolPartType): boolean => {
-      const state = ((toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined) ?? {}
-      const status = state?.status
-      return status === "pending" || status === "running" || status === "started"
+      return isActiveToolPart(toolPart)
     }, [])
 
     const isToolFinalized = React.useCallback((toolPart: ToolPartType) => {
-      const state = ((toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined) ?? {}
-      const status = state?.status
-      if (status === "pending" || status === "running" || status === "started") {
-        return false
-      }
-      const time = (state?.time as Record<string, unknown> | undefined) ?? {}
-      const endTime = typeof time?.end === "number" ? time.end : undefined
-      const startTime = typeof time?.start === "number" ? time.start : undefined
-      if (typeof endTime !== "number") {
-        return false
-      }
-      if (typeof startTime === "number" && endTime < startTime) {
-        return false
-      }
-      return true
+      return isFinalizedToolPart(toolPart)
     }, [])
 
     const shouldShowTool = React.useCallback(

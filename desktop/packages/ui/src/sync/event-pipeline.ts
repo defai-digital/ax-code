@@ -33,6 +33,8 @@ const DEFAULT_RECONNECT_DELAY_MS = 250
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000
 const WS_FALLBACK_WINDOW_MS = 60_000
 const DEFAULT_WS_READY_TIMEOUT_MS = 2_000
+const ACTIVE_TOOL_STATUSES = new Set(["pending", "running", "started"])
+const FINAL_TOOL_STATUSES = new Set(["completed", "error", "aborted", "failed", "timeout", "cancelled"])
 // Retry pacing. Visible+online tabs probe quickly so the user sees connection
 // recovery in under a second of real outage; hidden/offline tabs back off
 // further so a backgrounded browser tab on a flaky link doesn't burn battery
@@ -249,6 +251,63 @@ type DirectoryQueue = {
 }
 
 type AttemptAbortReason = "pipeline_stopped" | `${"ws" | "sse"}_${string}` | null
+
+type CoalescedPart = {
+  type?: unknown
+  state?: {
+    status?: unknown
+    time?: {
+      end?: unknown
+    }
+  }
+  time?: {
+    end?: unknown
+  }
+}
+
+function getUpdatedPart(payload: Event): CoalescedPart | undefined {
+  if (payload.type !== "message.part.updated") return undefined
+  const part = (payload.properties as { part?: unknown }).part
+  return typeof part === "object" && part !== null ? (part as CoalescedPart) : undefined
+}
+
+function getToolStatus(part: CoalescedPart): string | undefined {
+  if (part.type !== "tool") return undefined
+  const status = part.state?.status
+  return typeof status === "string" ? status : undefined
+}
+
+function getPartEndTime(part: CoalescedPart): number | undefined {
+  const stateEnd = part.state?.time?.end
+  if (typeof stateEnd === "number") return stateEnd
+
+  const timeEnd = part.time?.end
+  return typeof timeEnd === "number" ? timeEnd : undefined
+}
+
+function isFinalToolPart(part: CoalescedPart | undefined): boolean {
+  if (!part || part.type !== "tool") return false
+
+  const status = getToolStatus(part)
+  if (status && ACTIVE_TOOL_STATUSES.has(status)) return false
+  if (status && FINAL_TOOL_STATUSES.has(status)) return true
+
+  return typeof getPartEndTime(part) === "number"
+}
+
+export function coalesceQueuedEvent(previous: Event, next: Event): Event {
+  if (previous.type !== "message.part.updated" || next.type !== "message.part.updated") {
+    return next
+  }
+
+  const previousPart = getUpdatedPart(previous)
+  const nextPart = getUpdatedPart(next)
+  if (isFinalToolPart(previousPart) && !isFinalToolPart(nextPart)) {
+    return previous
+  }
+
+  return next
+}
 
 export function createEventPipeline(input: EventPipelineInput): EventPipeline {
   const {
@@ -554,7 +613,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
             },
           } as unknown as Event
         } else {
-          d.queue[i] = normalizedPayload
+          d.queue[i] = coalesceQueuedEvent(d.queue[i], normalizedPayload)
         }
         syncDebug.pipeline.coalesced(normalizedPayload.type, k)
         return

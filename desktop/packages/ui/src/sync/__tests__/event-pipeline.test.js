@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { afterEach, describe, expect, it } from "vitest"
 import { createEventPipeline } from "../event-pipeline"
 
@@ -491,6 +493,52 @@ describe("createEventPipeline", () => {
     // Only 1 event should be delivered (coalesced)
     expect(received.length).toBe(1)
     expect(received[0].payload.type).toBe("message.part.updated")
+  })
+
+  it("keeps a completed tool part when a stale running update is coalesced in the same frame", async () => {
+    const received = await runPipelineWithEvents([
+      {
+        directory: "dir-a",
+        payload: {
+          type: "message.part.updated",
+          properties: {
+            part: {
+              id: "part-1",
+              type: "tool",
+              messageID: "msg-1",
+              tool: "bash",
+              state: {
+                status: "completed",
+                time: { start: 10, end: 20 },
+              },
+            },
+          },
+        },
+      },
+      {
+        directory: "dir-a",
+        payload: {
+          type: "message.part.updated",
+          properties: {
+            part: {
+              id: "part-1",
+              type: "tool",
+              messageID: "msg-1",
+              tool: "bash",
+              state: {
+                status: "running",
+                time: { start: 10, end: 15 },
+              },
+            },
+          },
+        },
+      },
+    ])
+
+    expect(received).toHaveLength(1)
+    expect(received[0].payload.type).toBe("message.part.updated")
+    expect(received[0].payload.properties.part.state.status).toBe("completed")
+    expect(received[0].payload.properties.part.state.time.end).toBe(20)
   })
 
   it("routes events before queueing so coalescing happens on the resolved directory", async () => {
