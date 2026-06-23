@@ -72,14 +72,14 @@ jobs:
             smoke-runtime: node-bundled
           - os: windows-2022
             targets: win32-x64
-            build-script: script/build-node.ts
-            build-args: --arch x64
+            build-script: script/build-node-tui.ts
+            build-args: --release --arch x64
             smoke-bin: dist/ax-code-windows-x64/bin/ax-code.cmd
             smoke-runtime: node-bundled
           - os: windows-11-arm
             targets: win32-arm64
-            build-script: script/build-node.ts
-            build-args: --arch arm64
+            build-script: script/build-node-tui.ts
+            build-args: --release --arch arm64
             smoke-bin: dist/ax-code-windows-arm64/bin/ax-code.cmd
             smoke-runtime: node-bundled
     runs-on: ${{ matrix.os }}

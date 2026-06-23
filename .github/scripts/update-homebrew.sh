@@ -128,6 +128,9 @@ class AxCode < Formula
   homepage "https://github.com/defai-digital/ax-code"
   version "${VERSION}"
   license "MIT"
+  # The vendored OpenTUI dylib ships with an @rpath install name and not enough
+  # Mach-O header padding for Homebrew to rewrite it to the long Cellar/opt path.
+  preserve_rpath
 
   on_macos do
     depends_on arch: :arm64

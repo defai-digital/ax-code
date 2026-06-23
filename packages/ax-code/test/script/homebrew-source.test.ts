@@ -67,6 +67,7 @@ describe("distribution support guardrails", () => {
     // node-bundled: install the whole tree into libexec and depend on node, not
     // a single compiled binary. Bun is gone entirely.
     expect(text).toContain('libexec.install Dir["*"]')
+    expect(text).toContain("preserve_rpath")
     expect(text).toContain('depends_on "node"')
     expect(text).toContain("--experimental-ffi")
     expect(text).toContain("--disable-warning=ExperimentalWarning")
@@ -256,6 +257,10 @@ describe("distribution support guardrails", () => {
     // With Bun removed, every leg (macOS + Windows) ships node-bundled — verified
     // by the same generic step.
     expect(buildJob![0]).toContain("Smoke — release runtime")
+    expect(buildJob![0]).toContain("build-script: script/build-node-tui.ts")
+    expect(buildJob![0]).not.toContain("build-script: script/build-node.ts")
+    expect(buildJob![0]).toContain("build-args: --release --arch arm64")
+    expect(buildJob![0]).toContain("build-args: --release --arch x64")
     expect(buildJob![0]).toContain("smoke-bin:")
     expect(buildJob![0]).toContain('BIN="${{ matrix.smoke-bin }}"')
     expect(buildJob![0]).toContain("smoke-runtime: node-bundled")

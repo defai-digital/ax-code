@@ -17,6 +17,7 @@ import { QuestionID } from "../../src/question/schema"
 import { appErrorEnvelope } from "../../src/server/error"
 import { DefaultQueryNumber, OptionalQueryNumber } from "../../src/server/routes/query"
 import { parsePtyReconnectCursor } from "../../src/server/routes/pty"
+import { File } from "../../src/file"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -760,18 +761,38 @@ describe("server route validation", () => {
     expect(optional.safeParse("0x10").success).toBe(false)
     expect(optional.safeParse("1e3").success).toBe(false)
 
-    await Instance.provide({
-      directory: root,
-      fn: async () => {
-        const bare = await Server.Default().request("/find/file?query=package&limit")
-        expect(bare.status).toBe(200)
+    const searchSpy = vi.spyOn(File, "search").mockResolvedValue(["package.json"])
 
-        const numeric = await Server.Default().request("/find/file?query=package&limit=1")
-        expect(numeric.status).toBe(200)
+    try {
+      await Instance.provide({
+        directory: root,
+        fn: async () => {
+          const bare = await Server.Default().request("/find/file?query=package&limit")
+          expect(bare.status).toBe(200)
 
-        const invalid = await Server.Default().request("/find/file?query=package&limit=abc")
-        expect(invalid.status).toBe(400)
-      },
-    })
+          const numeric = await Server.Default().request("/find/file?query=package&limit=1")
+          expect(numeric.status).toBe(200)
+
+          const invalid = await Server.Default().request("/find/file?query=package&limit=abc")
+          expect(invalid.status).toBe(400)
+
+          expect(searchSpy).toHaveBeenCalledTimes(2)
+          expect(searchSpy).toHaveBeenNthCalledWith(1, {
+            query: "package",
+            limit: 10,
+            dirs: true,
+            type: undefined,
+          })
+          expect(searchSpy).toHaveBeenNthCalledWith(2, {
+            query: "package",
+            limit: 1,
+            dirs: true,
+            type: undefined,
+          })
+        },
+      })
+    } finally {
+      searchSpy.mockRestore()
+    }
   })
 })
