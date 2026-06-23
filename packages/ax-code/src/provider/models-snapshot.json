@@ -5240,6 +5240,30 @@
           "output": 100000
         }
       },
+      "openai/gpt-4o-transcribe": {
+        "id": "openai/gpt-4o-transcribe",
+        "name": "GPT-4o Transcribe",
+        "family": "gpt",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2024-03-13",
+        "last_updated": "2024-03-13",
+        "modalities": {
+          "input": [
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "openai/gpt-5.4-nano": {
         "id": "openai/gpt-5.4-nano",
         "name": "GPT 5.4 Nano",
@@ -5435,6 +5459,30 @@
           "output": 128000
         }
       },
+      "openai/gpt-4o-mini-transcribe": {
+        "id": "openai/gpt-4o-mini-transcribe",
+        "name": "GPT-4o mini Transcribe",
+        "family": "o-mini",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2024-03-13",
+        "last_updated": "2024-03-13",
+        "modalities": {
+          "input": [
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "openai/text-embedding-ada-002": {
         "id": "openai/text-embedding-ada-002",
         "name": "text-embedding-ada-002",
@@ -5565,6 +5613,32 @@
           "context": 8192,
           "input": 6656,
           "output": 1536
+        }
+      },
+      "openai/gpt-realtime-1.5": {
+        "id": "openai/gpt-realtime-1.5",
+        "name": "GPT-Realtime-1.5",
+        "family": "gpt",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-02-23",
+        "last_updated": "2026-02-23",
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text",
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
         }
       },
       "openai/gpt-5.1-codex-mini": {
@@ -5748,6 +5822,104 @@
           "output": 128000
         }
       },
+      "openai/gpt-realtime-mini": {
+        "id": "openai/gpt-realtime-mini",
+        "name": "GPT-Realtime mini",
+        "family": "gpt",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2025-10-10",
+        "last_updated": "2025-10-10",
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text",
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "openai/tts-1": {
+        "id": "openai/tts-1",
+        "name": "TTS-1",
+        "family": "o",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2023-11-06",
+        "last_updated": "2023-11-06",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "openai/whisper-1": {
+        "id": "openai/whisper-1",
+        "name": "Whisper",
+        "family": "whisper",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2022-09-21",
+        "last_updated": "2022-09-21",
+        "modalities": {
+          "input": [
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "openai/tts-1-hd": {
+        "id": "openai/tts-1-hd",
+        "name": "TTS-1 HD",
+        "family": "o",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2023-11-06",
+        "last_updated": "2023-11-06",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "openai/o3-deep-research": {
         "id": "openai/o3-deep-research",
         "name": "o3-deep-research",
@@ -5800,6 +5972,32 @@
           ],
           "output": [
             "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "openai/gpt-realtime-2": {
+        "id": "openai/gpt-realtime-2",
+        "name": "gpt-realtime-2",
+        "family": "gpt",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-05-07",
+        "last_updated": "2026-05-07",
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text",
+            "audio"
           ]
         },
         "open_weights": false,
@@ -27064,33 +27262,6 @@
         "limit": {
           "context": 198000,
           "output": 16384
-        }
-      },
-      "minimax-m3": {
-        "id": "minimax-m3",
-        "name": "MiniMax M3",
-        "family": "minimax-m3",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-06-01",
-        "last_updated": "2026-06-11",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 500000,
-          "output": 131072
         }
       },
       "claude-opus-4-8-fast": {
@@ -61665,6 +61836,35 @@
         },
         "status": "deprecated"
       },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "hy3-preview-free": {
         "id": "hy3-preview-free",
         "name": "Hy3 preview Free",
@@ -71903,6 +72103,43 @@
         "limit": {
           "context": 202752,
           "output": 202752
+        }
+      },
+      "zai-org/GLM-5.2": {
+        "id": "zai-org/GLM-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
         }
       },
       "zai-org/GLM-5.1": {
@@ -90281,8 +90518,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 131072
+          "context": 262144,
+          "output": 262144
         }
       },
       "zai-org/GLM-5.1": {
@@ -107291,25 +107528,27 @@
           "output": 262144
         }
       },
-      "minimaxai/minimax-m2.7": {
-        "id": "minimaxai/minimax-m2.7",
-        "name": "MiniMax M2.7",
-        "family": "minimax",
-        "attachment": false,
+      "minimaxai/minimax-m3": {
+        "id": "minimaxai/minimax-m3",
+        "name": "MiniMax M3",
+        "family": "minimax-m3",
+        "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
         "structured_output": true,
         "temperature": true,
-        "knowledge": "2025-01",
-        "release_date": "2026-03-18",
-        "last_updated": "2026-03-18",
+        "release_date": "2026-06-01",
+        "last_updated": "2026-06-01",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image",
+            "video"
           ],
           "output": [
             "text"
@@ -107317,8 +107556,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 204800,
-          "output": 204800
+          "context": 1048576,
+          "output": 1048576
         }
       },
       "google/gemma-4-31b-it": {
@@ -107357,15 +107596,22 @@
           "output": 262100
         }
       },
-      "zai-org/glm-5.1": {
-        "id": "zai-org/glm-5.1",
-        "name": "GLM 5.1",
+      "zai-org/glm-5.2": {
+        "id": "zai-org/glm-5.2",
+        "name": "GLM 5.2",
         "family": "glm",
         "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
             "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
           }
         ],
         "tool_call": true,
@@ -107374,9 +107620,8 @@
         },
         "structured_output": true,
         "temperature": true,
-        "knowledge": "2025-04",
-        "release_date": "2026-04-07",
-        "last_updated": "2026-04-07",
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
         "modalities": {
           "input": [
             "text"
@@ -107387,8 +107632,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 202800,
-          "output": 131072
+          "context": 524288,
+          "output": 524288
         }
       }
     }
