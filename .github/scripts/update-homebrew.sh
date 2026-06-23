@@ -128,9 +128,6 @@ class AxCode < Formula
   homepage "https://github.com/defai-digital/ax-code"
   version "${VERSION}"
   license "MIT"
-  # The vendored OpenTUI dylib ships with an @rpath install name and not enough
-  # Mach-O header padding for Homebrew to rewrite it to the long Cellar/opt path.
-  preserve_rpath
 
   on_macos do
     depends_on arch: :arm64
@@ -141,6 +138,16 @@ class AxCode < Formula
   depends_on "node"
   depends_on "ripgrep"
 
+  # The vendored OpenTUI native library is a prebuilt Mach-O with an @rpath
+  # install id and zero Mach-O header padding. Homebrew's post-install
+  # fix_dynamic_linkage tries to rewrite its dylib id to the long Cellar/opt path
+  # and fails ("Updated load commands do not fit in the header"), making the
+  # install exit non-zero even though the keg is fine. node:ffi dlopens the
+  # library by absolute path at runtime, so its install id is irrelevant. Gzip it
+  # during install so the Mach-O linkage scan skips it, then restore it in
+  # post_install, which runs after fix_dynamic_linkage.
+  OPENTUI_DYLIB = "node_modules/@opentui/core-darwin-arm64/libopentui.dylib"
+
   def install
     libexec.install Dir["*"]
     (bin/"ax-code").write <<~SH
@@ -148,6 +155,17 @@ class AxCode < Formula
       exec "#{Formula["node"].opt_bin}/node" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
     SH
     chmod 0755, bin/"ax-code"
+
+    dylib = libexec/OPENTUI_DYLIB
+    system "gzip", "-n", "--", dylib if dylib.exist?
+  end
+
+  def post_install
+    gz = libexec/"#{OPENTUI_DYLIB}.gz"
+    return unless gz.exist?
+
+    chmod 0755, gz.dirname
+    system "gunzip", "--", gz
   end
 
   test do

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-06-23
+
+### Fixed
+
+- **Sync**: tool parts no longer revert from a final state (`completed`/`error`) to a stale `pending`/`running` state when `message.part.updated` events arrive out of order. The event-pipeline coalescer now preserves the finalized state, so finished tools stop showing a perpetual spinner. Pairs with the ax-code 6.7.3 server-side guard that breaks read-only tool-calling loops.
+
 ## [1.4.0] - 2026-06-20
 
 ### Changed

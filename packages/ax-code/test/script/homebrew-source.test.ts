@@ -67,7 +67,17 @@ describe("distribution support guardrails", () => {
     // node-bundled: install the whole tree into libexec and depend on node, not
     // a single compiled binary. Bun is gone entirely.
     expect(text).toContain('libexec.install Dir["*"]')
-    expect(text).toContain("preserve_rpath")
+    // The vendored OpenTUI dylib has zero Mach-O header padding, so Homebrew's
+    // fix_dynamic_linkage cannot relocate its @rpath install id and `brew install`
+    // exits non-zero. There is no formula DSL to skip relocation, so the install
+    // gzips the dylib (hiding it from the Mach-O linkage scan) and post_install —
+    // which runs after fix_dynamic_linkage — restores it. `preserve_rpath` is not a
+    // real Homebrew DSL method and would raise NoMethodError on formula load.
+    expect(text).not.toContain("preserve_rpath")
+    expect(text).toContain("node_modules/@opentui/core-darwin-arm64/libopentui.dylib")
+    expect(text).toContain('system "gzip"')
+    expect(text).toContain("def post_install")
+    expect(text).toContain('system "gunzip"')
     expect(text).toContain('depends_on "node"')
     expect(text).toContain("--experimental-ffi")
     expect(text).toContain("--disable-warning=ExperimentalWarning")
