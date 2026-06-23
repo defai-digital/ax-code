@@ -168,9 +168,13 @@ await writeText(
 )
 console.log("Installing runtime dependencies (@opentui, node-pty) into the distribution...")
 const npm = process.platform === "win32" ? "npm.cmd" : "npm"
-const install = spawnSync(npm, ["install", "--omit=dev", "--no-audit", "--no-fund"], { cwd: outRoot, stdio: "inherit" })
+const install = spawnSync(npm, ["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], {
+  cwd: outRoot,
+  stdio: "inherit",
+})
 if (install.status !== 0) {
   console.error("npm install for the distribution failed")
+  if (install.error) console.error(install.error)
   process.exit(1)
 }
 

@@ -103,6 +103,14 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(loader).toContain('["solid-js/web",')
   })
 
+  test("keeps release dependency install from running optional native lifecycle scripts", async () => {
+    const build = await fs.readFile(BUILD_NODE_TUI_SRC, "utf8")
+
+    expect(build).toContain('"--ignore-scripts"')
+    expect(build).toContain('npm, ["rebuild", "node-pty-prebuilt-multiarch"]')
+    expect(build).toContain("node-pty build failed")
+  })
+
   test("keeps renderer startup configured for terminal stability", async () => {
     const renderer = await fs.readFile(RENDERER_SRC, "utf8")
 
