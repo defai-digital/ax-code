@@ -17,6 +17,7 @@ import { Flag } from "@/flag/flag"
 import { Token } from "@/util/token"
 import { markEstimatedUsage } from "../usage"
 import { Shell } from "@/shell/shell"
+import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
@@ -100,6 +101,14 @@ function readAbortError(signal: AbortSignal): Error {
   return new DOMException("This operation was aborted", "AbortError")
 }
 
+function currentInstanceDirectory(): string | undefined {
+  try {
+    return Instance.directory
+  } catch {
+    return undefined
+  }
+}
+
 export class CliLanguageModel implements LanguageModelV3 {
   readonly specificationVersion = "v3" as const
   readonly provider: string
@@ -169,6 +178,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       attachments: attachments.refs,
     })
     const proc = Process.spawn(this.buildCmd(text), {
+      cwd: currentInstanceDirectory(),
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
@@ -257,6 +267,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       attachments: attachments.refs,
     })
     const proc = Process.spawn(this.buildCmd(text), {
+      cwd: currentInstanceDirectory(),
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",

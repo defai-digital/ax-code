@@ -6,6 +6,8 @@ import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
 import { PassThrough } from "node:stream"
+import { Instance } from "../../../src/project/instance"
+import { tmpdir } from "../../fixture/fixture"
 
 function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageModel>[0]>) {
   return new CliLanguageModel({
@@ -18,6 +20,28 @@ function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageM
     promptFlag: "-p",
     ...overrides,
   })
+}
+
+function successfulChild(output = '{"type":"result","result":"ok"}\n') {
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  const exited = new Promise<number>((resolve) => {
+    setTimeout(() => {
+      stdout.end(output)
+      stderr.end()
+      resolve(0)
+    }, 0)
+  })
+  return {
+    stdout,
+    stderr,
+    exited,
+    exitCode: null,
+    signalCode: null,
+    kill: () => true,
+    pid: 123,
+    stdin: null,
+  } as any
 }
 
 describe("CliLanguageModel", () => {
@@ -104,6 +128,45 @@ describe("CliLanguageModel", () => {
     expect(finish.usage.outputTokens.text).toBe(finish.usage.outputTokens.total)
     expect(finish.usage.outputTokens.reasoning).toBe(0)
     expect(usageSource(finish.usage)).toBe("estimated")
+  })
+
+  test("runs CLI providers in the current instance directory", async () => {
+    await using tmp = await tmpdir()
+    const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => successfulChild())
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = makeModel({
+            parser: {
+              parseComplete: () => ({ text: "ok" }),
+              parseStreamLine: (line: string) => line.trim() || null,
+            },
+          })
+
+          await model.doGenerate({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+
+          const { stream } = await model.doStream({
+            prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+          })
+          const reader = stream.getReader()
+          for (;;) {
+            const { done } = await reader.read()
+            if (done) break
+          }
+        },
+      })
+
+      expect(spawn).toHaveBeenCalledTimes(2)
+      for (const call of spawn.mock.calls) {
+        expect(call[1]).toMatchObject({ cwd: tmp.path })
+      }
+    } finally {
+      spawn.mockRestore()
+    }
   })
 
   test("doGenerate throws on non-zero exit with no output", async () => {
