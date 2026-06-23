@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { tmpdir } from "../../fixture/fixture"
@@ -12,6 +12,7 @@ import {
 } from "../../../src/provider/ax-engine/model-cache"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { Filesystem } from "../../../src/util/filesystem"
+import { Process } from "../../../src/util/process"
 
 const GEMMA = { modelID: "gemma-4-12b", quant: "mlx6bit", repo: "mlx-community/gemma-4-12B-it-6bit" } as const
 const COMMIT = "1111111111111111111111111111111111111111"
@@ -175,6 +176,16 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     process.env.HF_HUB_CACHE = hfRoot
     const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
     await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
+    const originalText = Process.text
+    vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
+      if (cmd[0] === "df") {
+        const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
+/dev/test 200000000 1000000 120000000 1% ${cmd.at(-1) ?? "/"}
+`)
+        return Promise.resolve({ code: 0, stdout, stderr: Buffer.alloc(0), text: stdout.toString() })
+      }
+      return originalText(cmd, opts)
+    })
     const binary = path.join(dir.path, "fake-ax-engine")
     await fs.writeFile(
       binary,
