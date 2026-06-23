@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  antigravityCliParser,
   claudeCodeParser,
   codexCliParser,
   geminiCliParser,
@@ -68,9 +69,10 @@ describe("provider CLI parser nested content", () => {
 })
 
 describe("provider CLI raw stream text", () => {
-  test("qoder and grok parsers preserve whitespace in non-JSON stream lines", () => {
+  test("qoder, grok, and antigravity parsers preserve whitespace in non-JSON stream lines", () => {
     expect(qoderCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
     expect(grokBuildCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
+    expect(antigravityCliParser.parseStreamLine("  indented output  ")).toBe("  indented output  ")
   })
 
   test("raw complete fallback preserves model whitespace", () => {
@@ -79,5 +81,6 @@ describe("provider CLI raw stream text", () => {
     expect(codexCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(qoderCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
     expect(grokBuildCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
+    expect(antigravityCliParser.parseComplete("  indented output  \n")).toEqual({ text: "  indented output  " })
   })
 })

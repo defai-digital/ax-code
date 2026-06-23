@@ -52,7 +52,7 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
   },
   "antigravity-cli": {
     binary: "agy",
-    args: ["--output-format", "stream-json"],
+    args: [],
     parser: antigravityCliParser,
     promptMode: "arg",
     promptFlag: "-p",
