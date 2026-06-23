@@ -283,4 +283,6 @@ if (release) {
 }
 
 console.log(`Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/4 native addons)`)
-console.log(`Run: node --experimental-ffi ${path.relative(dir, path.join(outLib, "index-node-tui.js"))}`)
+console.log(
+  `Run: node --experimental-ffi --disable-warning=ExperimentalWarning ${path.relative(dir, path.join(outLib, "index-node-tui.js"))}`,
+)

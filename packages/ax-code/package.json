@@ -28,7 +28,7 @@
     "build:node": "tsx script/build-node.ts",
     "build:node-tui": "tsx script/build-node-tui.ts",
     "tui:startup-smoke": "tsx script/tui-startup-smoke.ts",
-    "dev": "node --experimental-ffi --import tsx --import ../../script/solid-loader.mjs --conditions=node ./src/index-node-tui.ts",
+    "dev": "node --experimental-ffi --disable-warning=ExperimentalWarning --import tsx --import ../../script/solid-loader.mjs --conditions=node ./src/index-node-tui.ts",
     "db": "pnpm exec drizzle-kit"
   },
   "exports": {

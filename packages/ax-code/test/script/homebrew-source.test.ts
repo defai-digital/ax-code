@@ -69,6 +69,7 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('libexec.install Dir["*"]')
     expect(text).toContain('depends_on "node"')
     expect(text).toContain("--experimental-ffi")
+    expect(text).toContain("--disable-warning=ExperimentalWarning")
     expect(text).not.toContain('bin.install "ax-code"')
     expect(text).not.toContain('depends_on "bun"')
     expect(text).not.toContain("bundle/index.js")

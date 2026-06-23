@@ -122,7 +122,7 @@ cat > /tmp/ax-code.rb << HEADER
 # distribution (bin + lib + node_modules), not a single compiled binary, so the
 # whole tree installs into libexec and bin/ax-code is a wrapper that runs the
 # bundle with the Homebrew node (the launcher needs --experimental-ffi for
-# OpenTUI's node:ffi backend).
+# OpenTUI's node:ffi backend and suppresses Node's experimental FFI notice).
 class AxCode < Formula
   desc "Sovereign AI coding agent — provider-agnostic, LSP-first"
   homepage "https://github.com/defai-digital/ax-code"
@@ -142,7 +142,7 @@ class AxCode < Formula
     libexec.install Dir["*"]
     (bin/"ax-code").write <<~SH
       #!/bin/sh
-      exec "#{Formula["node"].opt_bin}/node" --experimental-ffi "#{libexec}/lib/index-node-tui.js" "\$@"
+      exec "#{Formula["node"].opt_bin}/node" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
     SH
     chmod 0755, bin/"ax-code"
   end
