@@ -312,8 +312,8 @@ jobs:
 
       - name: Sign release assets
         env:
-          AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64 }}
-          AX_CODE_DESKTOP_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_DESKTOP_MINISIGN_PASSWORD }}
+          AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64 || secrets.AX_CODE_MINISIGN_SECRET_KEY_B64 }}
+          AX_CODE_DESKTOP_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_DESKTOP_MINISIGN_PASSWORD || secrets.AX_CODE_MINISIGN_PASSWORD }}
         run: |
           set -euo pipefail
           SECRET_KEY="$RUNNER_TEMP/ax-code-desktop.minisign.key"
@@ -323,7 +323,7 @@ jobs:
           RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
           EOF
           if [ -z "$AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64" ] || [ -z "$AX_CODE_DESKTOP_MINISIGN_PASSWORD" ]; then
-            echo "::error::Desktop minisign secrets are required to publish signed release assets."
+            echo "::error::Desktop minisign secrets are required to publish signed release assets. Configure AX_CODE_DESKTOP_MINISIGN_* or AX_CODE_MINISIGN_*."
             exit 1
           fi
           printf '%s' "$AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64" | base64 -d > "$SECRET_KEY"

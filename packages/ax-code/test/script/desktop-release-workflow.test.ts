@@ -28,4 +28,15 @@ describe("desktop release workflow", () => {
     expect(text).not.toContain("node_modules/.bin")
     expect(text).not.toContain("node_modules\", \".bin\"")
   })
+
+  test("signing job falls back to the shared minisign release secrets", async () => {
+    const text = await Bun.file(desktopReleaseWorkflow).text()
+    const job = text.match(/  sign-release-assets:[\s\S]*?(?=\n  finalize-release:|$)/)
+
+    expect(job, "sign-release-assets job should exist").not.toBeNull()
+    expect(job![0]).toContain("secrets.AX_CODE_DESKTOP_MINISIGN_SECRET_KEY_B64 || secrets.AX_CODE_MINISIGN_SECRET_KEY_B64")
+    expect(job![0]).toContain("secrets.AX_CODE_DESKTOP_MINISIGN_PASSWORD || secrets.AX_CODE_MINISIGN_PASSWORD")
+    expect(job![0]).toContain("Install minisign")
+    expect(job![0]).toContain("Sign release assets")
+  })
 })
