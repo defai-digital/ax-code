@@ -233,6 +233,8 @@ describe("distribution support guardrails", () => {
     const windowsJob = text.match(/windows:[\s\S]*$/)
     expect(windowsJob).not.toBeNull()
     expect(windowsJob![0]).toContain("set-isolated-home-env.sh")
+    expect(windowsJob![0]).toContain("actions/setup-node@v6")
+    expect(windowsJob![0]).toContain('node-version: "26"')
 
     expect(isolatedHome).toContain("AX_CODE_TEST_HOME")
     expect(isolatedHome).toContain("XDG_CONFIG_HOME")

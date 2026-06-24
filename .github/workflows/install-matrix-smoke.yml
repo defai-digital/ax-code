@@ -155,6 +155,12 @@ jobs:
         shell: bash
         run: bash .github/scripts/filter-dispatch-channel.sh "$GITHUB_OUTPUT" "${{ inputs.channel }}" "windows" "Windows PowerShell installer"
 
+      - name: Setup Node.js runtime
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+
       - name: Install ax-code from PowerShell release installer
         if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: pwsh
