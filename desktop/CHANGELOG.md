@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.4] - 2026-06-24
+
+### Fixed
+
+- Release: align the Desktop release with the AX Code 6.7.4 issue-fix build, including minisign-signed GitHub assets and the Homebrew cask refresh.
+
 ## [1.4.3] - 2026-06-23
 
 ### Fixed
