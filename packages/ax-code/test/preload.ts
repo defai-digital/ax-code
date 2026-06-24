@@ -15,20 +15,23 @@ await fs.mkdir(dir, { recursive: true })
 afterAll(async () => {
   const { Database } = await import("../src/storage/db")
   Database.close()
-  const busy = (error: unknown) =>
-    typeof error === "object" && error !== null && "code" in error && error.code === "EBUSY"
+  const transientCleanupError = (error: unknown) =>
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error.code === "EBUSY" || error.code === "ENOTEMPTY" || error.code === "EPERM")
   const rm = async (left: number): Promise<void> => {
     Bun.gc(true)
     await sleep(100)
-    return fs.rm(dir, { recursive: true, force: true }).catch((error) => {
-      if (!busy(error)) throw error
+    return fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch((error) => {
+      if (!transientCleanupError(error)) throw error
       if (left <= 1) throw error
       return rm(left - 1)
     })
   }
 
-  // Windows can keep SQLite WAL handles alive until GC finalizers run, so we
-  // force GC and retry teardown to avoid flaky EBUSY in test cleanup.
+  // Handles and background writers can briefly outlive a test file under the
+  // fork pool, so force GC and retry teardown to avoid flaky cleanup failures.
   await rm(30)
 })
 
