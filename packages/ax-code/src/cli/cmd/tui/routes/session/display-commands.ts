@@ -565,8 +565,8 @@ export function displayCommands(input: {
             const file = resolveTranscriptExportPath(options.filename)
             await Filesystem.write(file, transcript)
             const result = await Editor.open({ value: transcript, renderer: input.renderer })
-            if (result !== undefined) {
-              await Filesystem.write(file, result)
+            if (result.status === "saved") {
+              await Filesystem.write(file, result.content)
             }
             input.toast.show({ message: `Session exported to ${options.filename.trim()}`, variant: "success" })
           }

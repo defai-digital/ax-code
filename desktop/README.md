@@ -59,7 +59,7 @@ xattr -cr "/Applications/AX Code.app"
 
 Do not run the executable directly from inside the ZIP viewer — extract first so the app can find its bundled resources.
 
-If Windows SmartScreen warns about an unknown publisher, click **More info → Run anyway** only if you downloaded from the official [Releases page](https://github.com/defai-digital/ax-code/releases).
+If Windows SmartScreen warns about an unknown publisher, click **More info → Run anyway** only if you downloaded from the official [Releases page](https://github.com/defai-digital/ax-code/releases) and the release notes state the expected Windows signing and SmartScreen status for that build.
 
 ## Before You Start
 
@@ -157,7 +157,7 @@ For manual downloads, only use the official [Releases page](https://github.com/d
 RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
 ```
 
-Windows SmartScreen may warn about unsigned builds; click **More info → Run anyway** if you trust the source.
+Windows SmartScreen may warn for unsigned or low-reputation builds. Release notes must state whether Windows artifacts are Authenticode-signed and what first-run warning users should expect. Detached minisign signatures verify release asset integrity, but they do not replace Windows SmartScreen reputation, Windows Authenticode signing, or macOS Gatekeeper/notarization trust.
 
 AX Code Desktop is intended for trusted desktop workstations. Do not expose the development web UI publicly.
 

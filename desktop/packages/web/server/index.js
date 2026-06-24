@@ -1140,7 +1140,7 @@ async function main(options = {}) {
 
   const app = express()
   const serverStartedAt = new Date().toISOString()
-  app.set("trust proxy", true)
+  app.set("trust proxy", "loopback, linklocal, uniquelocal")
   // ── HTTP security headers (defense-in-depth for standalone/Docker deployments) ──
   app.use((req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff")

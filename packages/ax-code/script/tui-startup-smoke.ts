@@ -1,6 +1,7 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
+import { createRequire } from "module"
 import { detached } from "./proc-compat"
 
 const TUI_STARTUP_SUCCESS_EVENT = "tui.startup.appMounted"
@@ -32,6 +33,10 @@ type SmokePty = {
   write(data: string): void
   kill(signal?: string): void
 }
+
+type NodePtyModule = typeof import("node-pty-prebuilt-multiarch")
+
+const require = createRequire(import.meta.url)
 
 export type TuiStartupSmokeOptions = {
   bin: string
@@ -212,6 +217,45 @@ async function waitForTuiStartup(
   )
 }
 
+async function loadNodePty() {
+  try {
+    return await import("node-pty-prebuilt-multiarch")
+  } catch (error) {
+    const bundled = loadBundledNodePty()
+    if (bundled) return bundled
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(
+      [
+        "TUI startup smoke cannot load node-pty-prebuilt-multiarch.",
+        "Run `pnpm install` from the repository root, then rerun the smoke test.",
+        "If the package is installed but pty.node is missing, rebuild native dependencies for the active Node version.",
+        `Original error: ${message}`,
+      ].join("\n"),
+      { cause: error },
+    )
+  }
+}
+
+function distPlatform() {
+  return process.platform === "win32" ? "windows" : process.platform
+}
+
+function loadBundledNodePty(): NodePtyModule | undefined {
+  const moduleDir = path.join(
+    import.meta.dirname,
+    "..",
+    "dist",
+    `ax-code-${distPlatform()}-${process.arch}`,
+    "node_modules",
+    "node-pty-prebuilt-multiarch",
+  )
+  try {
+    return require(moduleDir) as NodePtyModule
+  } catch {
+    return undefined
+  }
+}
+
 export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
   const timeoutMs =
     input.timeoutMs ??
@@ -223,7 +267,7 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
   await fs.promises.mkdir(input.cwd, { recursive: true })
 
   console.log(`${label}: running installed TUI startup smoke (timeout ${timeoutMs}ms)`)
-  const { spawn } = await import("node-pty-prebuilt-multiarch")
+  const { spawn } = await loadNodePty()
   const env = stringEnv({
     ...process.env,
     HOME: input.homeDir,

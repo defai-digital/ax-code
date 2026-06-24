@@ -9,9 +9,11 @@ import { parseShellArgs } from "@/util/shell-args"
 import { pickFirstEnvValue } from "./env"
 
 export namespace Editor {
-  export async function open(opts: { value: string; renderer: CliRenderer }): Promise<string | undefined> {
+  export type OpenResult = { status: "saved"; content: string } | { status: "cancelled" } | { status: "missing-editor" }
+
+  export async function open(opts: { value: string; renderer: CliRenderer }): Promise<OpenResult> {
     const editor = pickFirstEnvValue({ env: process.env, names: ["VISUAL", "EDITOR"] })
-    if (!editor) return
+    if (!editor) return { status: "missing-editor" }
 
     const filepath = join(tmpdir(), `${Date.now()}-${crypto.randomUUID()}.md`)
     await using _ = defer(async () => rm(filepath, { force: true }))
@@ -23,7 +25,7 @@ export namespace Editor {
       suspended = true
       opts.renderer.currentRenderBuffer.clear()
       const parts = parseShellArgs(editor)
-      if (parts.length === 0) return
+      if (parts.length === 0) return { status: "missing-editor" }
       const proc = Process.spawn([...parts, filepath], {
         stdin: "inherit",
         stdout: "inherit",
@@ -32,7 +34,7 @@ export namespace Editor {
       })
       await proc.exited
       const content = await Filesystem.readText(filepath)
-      return content || undefined
+      return content ? { status: "saved", content } : { status: "cancelled" }
     } finally {
       opts.renderer.currentRenderBuffer.clear()
       if (suspended) opts.renderer.resume()

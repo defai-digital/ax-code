@@ -393,6 +393,39 @@ describe("tool.edit", () => {
       })
     })
 
+    test("throws when file changes while edit approval is pending", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "original content", "utf-8")
+      await touch(filepath, 1_000)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await FileTime.read(ctx.sessionID, filepath)
+
+          const edit = await EditTool.init()
+          await expect(
+            edit.execute(
+              {
+                filePath: filepath,
+                oldString: "original content",
+                newString: "edited content",
+              },
+              {
+                ...ctx,
+                ask: async () => {
+                  await fs.writeFile(filepath, "modified while waiting", "utf-8")
+                  await touch(filepath, 2_000)
+                },
+              },
+            ),
+          ).rejects.toThrow("modified since it was last read")
+          expect(await fs.readFile(filepath, "utf-8")).toBe("modified while waiting")
+        },
+      })
+    })
+
     test("replaces all occurrences with replaceAll option", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "file.txt")
@@ -503,6 +536,31 @@ describe("tool.edit", () => {
           expect(content).toBe("line1\nnew line 2\nextra line\nline3")
         },
       })
+    })
+
+    test("does not fuzzy-replace a similar block when oldString is absent", () => {
+      const content = `describe("settings", () => {
+  it("uses defaults", () => {
+    const value = loadConfig("alpha")
+    expect(value.mode).toBe("safe")
+  })
+
+  it("uses defaults", () => {
+    const value = loadConfig("beta")
+    expect(value.mode).toBe("fast")
+  })
+})
+`
+      const oldString = `  it("uses defaults", () => {
+    const value = loadConfig("gamma")
+    expect(value.mode).toBe("safe")
+  })`
+      const newString = `  it("uses defaults", () => {
+    const value = loadConfig("gamma")
+    expect(value.mode).toBe("strict")
+  })`
+
+      expect(() => replace(content, oldString, newString, false)).toThrow("Could not find oldString")
     })
 
     test("handles CRLF line endings", async () => {

@@ -21,15 +21,6 @@ let rateLimitCleanupTimer = null
 const rateLimitLocks = new Map()
 
 const getClientIp = (req) => {
-  const forwarded = req.headers["x-forwarded-for"]
-  if (typeof forwarded === "string") {
-    const ip = forwarded.split(",")[0].trim()
-    if (ip.startsWith("::ffff:")) {
-      return ip.substring(7)
-    }
-    return ip
-  }
-
   const ip = req.ip || req.connection?.remoteAddress
   if (ip) {
     if (ip.startsWith("::ffff:")) {

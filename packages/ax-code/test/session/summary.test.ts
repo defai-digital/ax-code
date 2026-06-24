@@ -5,6 +5,7 @@ import { MessageID, SessionID } from "../../src/session/schema"
 import { NotFoundError } from "../../src/storage/db"
 import { Bus } from "../../src/bus"
 import { Storage } from "../../src/storage/storage"
+import { Snapshot } from "../../src/snapshot"
 
 describe("session.summary", () => {
   test("does not mutate the cached message object passed into summarize", async () => {
@@ -79,6 +80,46 @@ describe("session.summary", () => {
       expect(await SessionSummary.diff({ sessionID })).toEqual([valid])
     } finally {
       storageRead.mockRestore()
+    }
+  })
+
+  test("diff recomputes from session snapshots when persisted session_diff is empty", async () => {
+    const sessionID = SessionID.make("ses_summary_recompute_diff")
+    const liveDiff = {
+      file: "src/app.ts",
+      before: "old",
+      after: "new",
+      additions: 1,
+      deletions: 1,
+      status: "modified" as const,
+    }
+    const messages = [
+      {
+        info: { id: MessageID.make("msg_summary_recompute_user"), sessionID, role: "user" },
+        parts: [{ type: "step-start", snapshot: "a".repeat(40) }],
+      },
+      {
+        info: { id: MessageID.make("msg_summary_recompute_assistant"), sessionID, role: "assistant" },
+        parts: [{ type: "step-finish", snapshot: "b".repeat(40) }],
+      },
+    ] as any
+    const storageRead = vi.spyOn(Storage, "read").mockResolvedValue([])
+    const storageWrite = vi.spyOn(Storage, "write").mockResolvedValue(undefined as any)
+    const sessionMessages = vi.spyOn(Session, "messages").mockResolvedValue(messages)
+    const diffFull = vi.spyOn(Snapshot, "diffFull").mockResolvedValue([liveDiff])
+    const publish = vi.spyOn(Bus, "publish").mockResolvedValue(undefined as any)
+
+    try {
+      expect(await SessionSummary.diff({ sessionID })).toEqual([liveDiff])
+      expect(sessionMessages).toHaveBeenCalledWith({ sessionID })
+      expect(storageWrite).toHaveBeenCalledWith(["session_diff", sessionID], [liveDiff])
+      expect(publish).toHaveBeenCalled()
+    } finally {
+      storageRead.mockRestore()
+      storageWrite.mockRestore()
+      sessionMessages.mockRestore()
+      diffFull.mockRestore()
+      publish.mockRestore()
     }
   })
 

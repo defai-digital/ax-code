@@ -22,6 +22,14 @@ export type SourceLauncherInput = {
   windows?: boolean
 }
 
+export const WINDOWS_UTF8_WARNING = `for /f "tokens=2 delims=:" %%A in ('chcp') do set "AX_CODE_ACTIVE_CODEPAGE=%%A"
+set "AX_CODE_ACTIVE_CODEPAGE=%AX_CODE_ACTIVE_CODEPAGE: =%"
+if not "%AX_CODE_ACTIVE_CODEPAGE%"=="65001" (
+  echo AX Code warning: your terminal code page is %AX_CODE_ACTIVE_CODEPAGE%, not UTF-8 ^(65001^). Box drawing may render incorrectly. 1^>^&2
+  echo Run chcp 65001, set LANG=en_US.UTF-8, or use Windows Terminal / VS Code Terminal. 1^>^&2
+)
+`
+
 export function sourceLauncherScript(input: SourceLauncherInput): string {
   // Use platform-explicit path joiners so the generated script is correct
   // regardless of which host OS produced it (release pipelines build
@@ -43,7 +51,7 @@ if not exist "%AX_CODE_SOURCE_CWD%\\" (
   exit /b 127
 )
 set AX_CODE_ORIGINAL_CWD=%CD%
-cd /d "%AX_CODE_SOURCE_CWD%"
+${WINDOWS_UTF8_WARNING}cd /d "%AX_CODE_SOURCE_CWD%"
 node --experimental-ffi --disable-warning=ExperimentalWarning --import tsx --import "%AX_CODE_SOURCE_LOADER%" --conditions=node "%AX_CODE_SOURCE_ENTRY%" %*
 `
   }

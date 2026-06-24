@@ -765,6 +765,11 @@ export type EventDebugEngineCorrelatedDiagnostics = {
       rootCauseSymbol: string | null
       rootCauseChain: Array<string>
       confidence: "high" | "medium" | "low"
+      lspTimestamp: number
+      lspServerIDs: Array<string>
+      graphQueryIds: Array<string>
+      graphIndexedAt: number
+      graphCompleteness: "full" | "partial" | "lsp-only"
     }>
   }
 }
@@ -7347,6 +7352,7 @@ export type WorkflowRunStartData = {
     allowWriteWorkflows?: boolean
     durableChildren?: boolean
     enqueueChildren?: boolean
+    autoStartChildren?: boolean
   }
   path: {
     runID: string
@@ -9603,6 +9609,7 @@ export type WorkflowRoutineRunData = {
       allowWriteWorkflows?: boolean
       durableChildren?: boolean
       enqueueChildren?: boolean
+      autoStartChildren?: boolean
     }
   }
   path?: never
@@ -11957,7 +11964,7 @@ export type ProviderAxEnginePrepareData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-31b" | "glm-4.7-flash"
+    modelID?: "qwen3.6-27b-6bit" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b" | "gemma-4-31b" | "glm-4.7-flash"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
     start?: boolean
@@ -11989,7 +11996,7 @@ export type ProviderAxEngineStartData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-31b" | "glm-4.7-flash"
+    modelID?: "qwen3.6-27b-6bit" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b" | "gemma-4-31b" | "glm-4.7-flash"
     quantization?: "mlx4bit" | "mlx6bit"
     download?: boolean
   }
@@ -13347,6 +13354,11 @@ export type DebugEngineCorrelatedDiagnosticsResponses = {
     rootCauseSymbol: string | null
     rootCauseChain: Array<string>
     confidence: "high" | "medium" | "low"
+    lspTimestamp: number
+    lspServerIDs: Array<string>
+    graphQueryIds: Array<string>
+    graphIndexedAt: number
+    graphCompleteness: "full" | "partial" | "lsp-only"
   }>
 }
 

@@ -221,6 +221,12 @@ export namespace Snapshot {
     await runGit([...cfg, ...args(current, ["add", "."])], { cwd: current.directory })
   }
 
+  async function checkoutIndex(current: State) {
+    return runGit([...core, ...args(current, ["checkout-index", "-a", "-f"])], {
+      cwd: current.worktree,
+    })
+  }
+
   async function cleanupFor(current: State) {
     if (!(await enabled(current))) return
     if (!(await exists(current.gitdir))) return
@@ -385,6 +391,7 @@ export namespace Snapshot {
         return
       }
       log.info("restore", { commit: snapshot })
+      await add(current)
       const savedTree = await runGit([...core, ...args(current, ["write-tree"])], { cwd: current.worktree })
       if (savedTree.code !== 0) {
         log.error("failed to prepare snapshot restore rollback", {
@@ -397,9 +404,7 @@ export namespace Snapshot {
       const rollbackTree = savedTree.text.trim()
       const result = await runGit([...core, ...args(current, ["read-tree", snapshot])], { cwd: current.worktree })
       if (result.code === 0) {
-        const checkout = await runGit([...core, ...args(current, ["checkout-index", "-a", "-f"])], {
-          cwd: current.worktree,
-        })
+        const checkout = await checkoutIndex(current)
         if (checkout.code === 0) return
         const rollback = await runGit([...core, ...args(current, ["read-tree", rollbackTree])], {
           cwd: current.worktree,
@@ -411,6 +416,16 @@ export namespace Snapshot {
             exitCode: rollback.code,
             stderr: rollback.stderr,
           })
+        } else {
+          const rollbackCheckout = await checkoutIndex(current)
+          if (rollbackCheckout.code !== 0) {
+            log.error("failed to rollback snapshot working tree after restore failure", {
+              snapshot,
+              rollbackTree,
+              exitCode: rollbackCheckout.code,
+              stderr: rollbackCheckout.stderr,
+            })
+          }
         }
         log.error("failed to restore snapshot", {
           snapshot,
@@ -447,7 +462,13 @@ export namespace Snapshot {
               cwd: current.worktree,
             })
             if (tree.code === 0 && tree.text.trim()) {
-              log.info("file existed in snapshot but checkout failed, keeping", { file })
+              log.error("file existed in snapshot but checkout failed", {
+                file,
+                hash: item.hash,
+                exitCode: result.code,
+                stderr: result.stderr,
+              })
+              throw new Error(`Snapshot revert failed for ${file}: checkout exited with code ${result.code}`)
             } else {
               log.info("file did not exist in snapshot, deleting", { file })
               await remove(file)

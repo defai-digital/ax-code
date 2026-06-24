@@ -152,7 +152,22 @@ export namespace SessionSummary {
         Storage.write(["session_diff", input.sessionID], next).catch((err) =>
           log.error("failed to persist session_diff", { sessionID: input.sessionID, err }),
         )
-      return next
+      if (next.length > 0 || input.messageID) return next
+
+      const messages = await Session.messages({ sessionID: input.sessionID }).catch((err) => {
+        if (NotFoundError.isInstance(err)) return []
+        throw err
+      })
+      const live = await computeDiff({ messages })
+      if (live.length === 0) return next
+      await Storage.write(["session_diff", input.sessionID], live).catch((err) =>
+        log.error("failed to persist recomputed session_diff", { sessionID: input.sessionID, err }),
+      )
+      await Bus.publish(Session.Event.Diff, {
+        sessionID: input.sessionID,
+        diff: live,
+      })
+      return live
     },
   )
 

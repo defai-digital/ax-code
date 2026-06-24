@@ -54,3 +54,20 @@ Use `--skip-signing` only for emergency releases where detached minisign
 signatures are intentionally not being published. Use `--skip-local-validation`
 only after the same validation commands have already passed on the exact commit
 being tagged.
+
+## Platform trust checklist
+
+Before broad promotion, make the release notes explicit about native platform
+trust:
+
+- macOS: state whether artifacts are Developer ID signed and notarized, or
+  whether users should expect Gatekeeper/manual quarantine remediation.
+- Windows: state whether artifacts are Authenticode-signed and whether
+  SmartScreen may show an unknown-publisher or low-reputation warning.
+- minisign: confirm every downloadable artifact has a matching `.minisig` and
+  that the pinned public key in `docs/MINISIGN.md` is still current.
+- Scope: describe minisign as artifact-integrity verification only. It does not
+  replace macOS notarization, Windows Authenticode, SmartScreen reputation, or
+  Electron update signing.
+- First launch: include user-facing first-run guidance for any expected
+  Gatekeeper or SmartScreen warning.

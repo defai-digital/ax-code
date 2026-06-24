@@ -1,5 +1,6 @@
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useSync } from "@tui/context/sync"
+import { useLocal } from "@tui/context/local"
 import { map, pipe } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
@@ -25,6 +26,7 @@ import {
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
+  providerModelSelectable,
 } from "./dialog-provider-options"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
@@ -152,6 +154,7 @@ export function createDialogProviderOptions() {
   const dialog = useDialog()
   const sdk = useSDK()
   const toast = useToast()
+  const local = useLocal()
   const { theme } = useTheme()
 
   async function refreshConfiguredProviders() {
@@ -213,6 +216,48 @@ export function createDialogProviderOptions() {
       return
     }
     dialog.replace(() => <DialogModel providerID={providerID} />)
+  }
+
+  async function selectDefaultModelForProvider(providerID: string, providerName: string) {
+    await refreshConfiguredProviders()
+    let provider = sync.data.provider.find((item) => item.id === providerID)
+    if (!provider || Object.keys(provider.models).length === 0) {
+      const response = await sdk.client.provider.list({}, { throwOnError: true })
+      const data = normalizeProviderListPayload(response.data)
+      const available = data.all.find((item) => item.id === providerID) as
+        | (typeof sync.data.provider)[number]
+        | undefined
+      sync.set("provider_next", data)
+      if (available && Object.keys(available.models).length > 0) {
+        const existing = sync.data.provider.filter((item) => item.id !== providerID)
+        sync.set("provider", [...existing, available])
+        sync.set("provider_default", providerID, data.default[providerID] ?? Object.keys(available.models)[0] ?? "")
+        sync.set("provider_loaded", true)
+        sync.set("provider_failed", false)
+        provider = available
+      }
+    }
+
+    const models = Object.values(provider?.models ?? {})
+    const defaultModel = sync.data.provider_default[providerID]
+    const selectableDefault =
+      defaultModel &&
+      provider?.models[defaultModel] &&
+      providerModelSelectable({
+        providerID,
+        toolcall: provider.models[defaultModel].capabilities.toolcall,
+      })
+        ? defaultModel
+        : undefined
+    const modelID =
+      selectableDefault ??
+      models.find((model) => providerModelSelectable({ providerID, toolcall: model.capabilities.toolcall }))?.id
+
+    if (!modelID) {
+      throw new Error(`${providerName} connected, but no selectable models are available yet`)
+    }
+
+    local.model.set({ providerID, modelID }, { recent: true })
   }
 
   const options = createMemo(() => {
@@ -467,6 +512,8 @@ export function createDialogProviderOptions() {
                       )
                     })
                     if (action === "use") {
+                      await selectDefaultModelForProvider(provider.id, provider.name)
+                      toast.show({ variant: "success", message: `Using ${provider.name}` })
                       dialog.clear()
                     } else if (action === "disconnect") {
                       await sdk.client.auth.remove({ providerID: provider.id })
@@ -483,6 +530,7 @@ export function createDialogProviderOptions() {
                     })
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
+                    await selectDefaultModelForProvider(provider.id, provider.name)
                     toast.show({ variant: "success", message: `Connected ${provider.name}` })
                     dialog.clear()
                   }

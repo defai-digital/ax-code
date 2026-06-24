@@ -633,7 +633,7 @@ export function Prompt(props: PromptProps) {
       const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
       if (msg.agent && isPrimaryAgent) {
         local.agent.set(msg.agent)
-        if (msg.model) local.model.set(msg.model)
+        if (!sessionChanged && msg.model) local.model.set(msg.model)
         if (msg.variant) local.model.variant.set(msg.variant)
       }
     }),
@@ -765,8 +765,16 @@ export function Prompt(props: PromptProps) {
           const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
 
           const value = text
-          const content = await Editor.open({ value, renderer })
-          if (!content) return
+          const result = await Editor.open({ value, renderer })
+          if (result.status === "missing-editor") {
+            toast.show({
+              message: "No editor configured. Set VISUAL or EDITOR to use /editor.",
+              variant: "warning",
+            })
+            return
+          }
+          if (result.status === "cancelled") return
+          const content = result.content
 
           input.setText(content)
 
@@ -1616,7 +1624,7 @@ export function Prompt(props: PromptProps) {
                 // when the escape sequence parser partially processes a mouse event during
                 // focus transitions (dialog open/close, session switching). Strip before
                 // the text lands in the prompt buffer.
-                const value = raw.replace(/<\d+;\d+;\d+[Mm]/g, "")
+                const value = raw.replace(/(?:<)?\d+;\d+;\d+[Mm]/g, "")
                 if (value !== raw) {
                   input.setText(value)
                   return

@@ -67,6 +67,8 @@ describe("setup-cli helpers", () => {
     expect(unix).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')
     expect(windows).toContain('set "AX_CODE_SOURCE_CWD=\\repo\\packages\\ax-code"')
     expect(windows).toContain('set "AX_CODE_SOURCE_ENTRY=\\repo\\packages\\ax-code\\src\\index-node-tui.ts"')
+    expect(windows).toContain("chcp")
+    expect(windows).toContain("not UTF-8")
     expect(windows).toContain("node --experimental-ffi")
     expect(windows).toContain("%*")
   })

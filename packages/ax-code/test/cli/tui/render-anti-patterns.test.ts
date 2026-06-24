@@ -70,6 +70,7 @@ const DEFERRED_STARTUP_SRCS = [
 const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/doctor-preload.ts")
 const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/debug/explain.ts")
 const BUILD_NODE_TUI_SRC = path.join(PACKAGE_ROOT, "script/build-node-tui.ts")
+const TUI_STARTUP_SMOKE_SRC = path.join(PACKAGE_ROOT, "script/tui-startup-smoke.ts")
 const SOURCE_SOLID_LOADER_SRC = path.join(REPO_ROOT, "script/solid-loader.mjs")
 
 describe("tui OpenTUI stability guardrails", () => {
@@ -112,6 +113,16 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(build).toContain('"--ignore-scripts"')
     expect(build).toContain('runNpm(["rebuild", "node-pty-prebuilt-multiarch"]')
     expect(build).toContain("node-pty build failed")
+    expect(build).toContain("WINDOWS_UTF8_WARNING")
+  })
+
+  test("keeps TUI startup smoke resilient to missing workspace node-pty builds", async () => {
+    const smoke = await fs.readFile(TUI_STARTUP_SMOKE_SRC, "utf8")
+
+    expect(smoke).toContain("function loadBundledNodePty(")
+    expect(smoke).toContain('"dist"')
+    expect(smoke).toContain("TUI startup smoke cannot load node-pty-prebuilt-multiarch.")
+    expect(smoke).toContain("rebuild native dependencies")
   })
 
   test("keeps renderer startup configured for terminal stability", async () => {
@@ -596,6 +607,8 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(dialogProvider).toContain("await sdk.client.instance.dispose()")
     expect(dialogProvider).toContain("await sync.bootstrap()")
+    expect(dialogProvider).toContain("function selectDefaultModelForProvider(")
+    expect(dialogProvider).toContain("local.model.set({ providerID, modelID }, { recent: true })")
     expect(dialogProvider).toContain('toast.show({ variant: "success", message: `Disconnected ${provider.name}` })')
     expect(dialogProvider).toContain('toast.show({ variant: "success", message: `Connected ${provider.name}` })')
     expect(dialogProvider).toContain("dialog.replace(() => <DialogModel providerID={provider.id} />)")
@@ -684,6 +697,14 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(autocomplete).toContain("scheduleMicrotaskTask")
     expect(autocomplete).not.toContain("setInterval(")
+  })
+
+  test("prioritizes file attachment suggestions for bare @ autocomplete", async () => {
+    const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
+
+    expect(autocomplete).toContain(
+      'store.visible === "@" ? [...(filesValue || []), ...mcpResources(), ...agentsValue] : [...commandsValue]',
+    )
   })
 
   test("handles prompt session interrupts without leaking unhandled rejections", async () => {
@@ -853,6 +874,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogSelect).toContain("onSubmit={confirmSelected}")
     expect(dialogSelect).toContain('keyBindings={[{ name: "return", action: "submit" }]}')
     expect(dialogSelect).toContain("confirmInFlight")
+    expect(dialogSelect).toContain('overflow="visible"')
+    expect(dialogSelect).toContain('wrapMode="word"')
     expect(dialogSelect).not.toContain("setTimeout(")
   })
 
@@ -936,6 +959,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)")
     expect(prompt).toContain("input.cursorOffset === Bun.stringWidth(input.plainText)")
     expect(prompt).toContain("input.cursorOffset = Bun.stringWidth(input.plainText)")
+    expect(prompt).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
+    expect(prompt).toContain("if (!sessionChanged && msg.model) local.model.set(msg.model)")
+    expect(prompt).toContain("raw.replace(/(?:<)?\\d+;\\d+;\\d+[Mm]/g")
     expect(prompt).toContain("if (!input || input.isDestroyed) return")
     expect(prompt).toContain("syncInputCursorColor()")
     expect(prompt).not.toContain("if (inputBlocked()) input.cursorColor")
@@ -950,7 +976,10 @@ describe("tui OpenTUI stability guardrails", () => {
     const toast = await fs.readFile(TOAST_SRC, "utf8")
 
     expect(dialogExport).toContain("dialog.clear()")
-    expect(dialogHelp).not.toContain('evt.name === "return" || evt.name === "escape"')
+    expect(dialogHelp).toContain("<scrollbox")
+    expect(dialogHelp).toContain("maxBodyHeight")
+    expect(dialogHelp).toContain('evt.name === "return" || evt.name === "escape"')
+    expect(dialogHelp).toContain('evt.name === "pagedown"')
     expect(route).toContain("function parseInitialRoute(")
     expect(toast).toContain("queue: [] as ToastOptions[]")
     expect(toast).toContain("function scheduleNextToast(options: ToastOptions)")

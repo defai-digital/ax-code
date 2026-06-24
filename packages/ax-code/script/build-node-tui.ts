@@ -7,6 +7,7 @@ import esbuild from "esbuild"
 import { SkillLint } from "./check-skills"
 import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
+import { WINDOWS_UTF8_WARNING } from "./source-launcher"
 import pkg from "../package.json"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
@@ -145,7 +146,7 @@ await writeText(
 await fs.promises.chmod(path.join(outBin, "ax-code"), 0o755)
 await writeText(
   path.join(outBin, "ax-code.cmd"),
-  `@echo off\r\nset AX_CODE_ORIGINAL_CWD=%CD%\r\nnode --experimental-ffi --disable-warning=ExperimentalWarning "%~dp0..\\lib\\index-node-tui.js" %*\r\n`,
+  `@echo off\r\nset AX_CODE_ORIGINAL_CWD=%CD%\r\n${WINDOWS_UTF8_WARNING.replaceAll("\n", "\r\n")}node --experimental-ffi --disable-warning=ExperimentalWarning "%~dp0..\\lib\\index-node-tui.js" %*\r\n`,
 )
 
 // --- Make the distribution self-contained (Bun-free) -----------------------

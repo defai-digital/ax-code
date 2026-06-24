@@ -231,6 +231,29 @@ function Verify-InstalledRuntime([string]$ExpectedVersion) {
   }
 }
 
+function Assert-NodeFfiRuntime {
+  $node = Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $node -or -not $node.Source) {
+    throw "AX Code requires Node.js with --experimental-ffi support. Install Node.js 26 or newer, then rerun this installer."
+  }
+
+  $originalNodeOptions = $env:NODE_OPTIONS
+  try {
+    $env:NODE_OPTIONS = ""
+    $output = (& $node.Source --experimental-ffi --version 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+      $details = ($output | Out-String).Trim()
+      throw "AX Code requires a Node.js runtime that supports --experimental-ffi. Run: winget upgrade -e --id OpenJS.NodeJS. Then restart PowerShell and rerun this installer. $details"
+    }
+  } finally {
+    $env:NODE_OPTIONS = $originalNodeOptions
+  }
+
+  if ($originalNodeOptions -and $originalNodeOptions -match "--experimental-ffi") {
+    Write-Warn "NODE_OPTIONS contains --experimental-ffi. AX Code passes this flag itself; remove it if Node reports duplicate or unsupported option errors."
+  }
+}
+
 function Add-ToUserPath {
   $currentUserPath = [Environment]::GetEnvironmentVariable("Path", "User")
   $parts = @()
@@ -278,6 +301,8 @@ if ($Help) {
   Show-Usage
   exit 0
 }
+
+Assert-NodeFfiRuntime
 
 if ($Binary) {
   $installedVersion = Install-FromBinary $Binary

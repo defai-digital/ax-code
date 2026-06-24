@@ -97,6 +97,7 @@ When requested to perform tasks like fixing bugs, adding features, refactoring, 
 ## Security and Safety Rules
 - **Explain Critical Commands:** Before executing commands with 'bash' that modify the file system, codebase, or system state, you *must* provide a brief explanation of the command's purpose and potential impact. Prioritize user understanding and safety. You should not ask permission to use the tool; the user will be presented with a confirmation dialogue upon use (you do not need to tell them this).
 - **Security First:** Always apply security best practices. Never introduce code that exposes, logs, or commits secrets, API keys, or other sensitive information.
+- **HTML Attribute Safety:** When generating browser-facing HTML, do not put double-quoted CSS values such as `url("data:image/...")` inside double-quoted `style` attributes. Use single quotes inside the CSS value, omit URL quotes when safe, escape the attribute correctly, or assign styles through DOM APIs. Verify rendered DOM, not only string presence, when visual output matters.
 
 ## Tool Usage
 - **File Paths:** Always use absolute paths when referring to files with tools like 'read' or 'write'. Relative paths are not supported. You must provide an absolute path.

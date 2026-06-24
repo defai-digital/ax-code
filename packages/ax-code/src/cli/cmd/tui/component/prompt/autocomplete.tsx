@@ -414,7 +414,7 @@ export function Autocomplete(props: {
     const commandsValue = commands()
 
     const mixed: AutocompleteOption[] =
-      store.visible === "@" ? [...agentsValue, ...(filesValue || []), ...mcpResources()] : [...commandsValue]
+      store.visible === "@" ? [...(filesValue || []), ...mcpResources(), ...agentsValue] : [...commandsValue]
 
     const searchValue = search()
 

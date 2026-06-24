@@ -8,6 +8,7 @@ import { createRequire } from "node:module"
 
 const dir = path.dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
+const normalizeVitePath = (input: string) => input.replaceAll("\\", "/")
 
 // vitest 4 bundles vite 8, whose default Oxc transformer only partially supports
 // TS namespaces — namespace-internal references (`const Y = Status` inside a
@@ -16,7 +17,7 @@ const require = createRequire(import.meta.url)
 // so transform our SRC TS with it (enforce:"pre") before Oxc sees it. Scoped to
 // src/ only: test files must keep vitest's own transform so vi.mock() hoisting
 // (which esbuild would bypass) keeps working.
-const srcDir = path.join(dir, "src") + path.sep
+const srcDir = normalizeVitePath(path.join(dir, "src")) + "/"
 // Tools import their descriptions as `import D from "./x.txt"`. Bun returns the
 // file contents; vite treats .txt as an asset (returns its path). Load .txt as
 // raw text so descriptions are correct (matches Bun + the build's text loader).
@@ -36,7 +37,7 @@ const forceEsbuildTs: Plugin = {
   name: "force-esbuild-ts",
   enforce: "pre",
   async transform(code, id) {
-    const file = id.split("?")[0]
+    const file = normalizeVitePath(id.split("?")[0])
     if (!file.startsWith(srcDir) || !/\.tsx?$/.test(file)) return null
     const result = await esbuildTransform(code, {
       loader: file.endsWith(".tsx") ? "tsx" : "ts",

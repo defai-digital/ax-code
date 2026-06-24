@@ -1,9 +1,9 @@
-import { TextAttributes } from "@opentui/core"
+import { ScrollBoxRenderable, TextAttributes } from "@opentui/core"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "./dialog"
-import { useKeyboard } from "@opentui/solid"
+import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { useKeybind } from "@tui/context/keybind"
-import { For } from "solid-js"
+import { createMemo, For } from "solid-js"
 
 const GROUPS = [
   {
@@ -66,11 +66,19 @@ export function DialogHelp() {
   const dialog = useDialog()
   const { theme } = useTheme()
   const keybind = useKeybind()
+  const dimensions = useTerminalDimensions()
+  const maxBodyHeight = createMemo(() => Math.max(1, Math.min(GROUPS.length * 8, dimensions().height - 8)))
+  let scroll: ScrollBoxRenderable | undefined
 
   useKeyboard((evt) => {
-    if (evt.name === "return") {
+    if (evt.name === "return" || evt.name === "escape") {
       dialog.clear()
+      return
     }
+    if (evt.name === "up") scroll?.scrollBy(-1)
+    if (evt.name === "down") scroll?.scrollBy(1)
+    if (evt.name === "pageup") scroll?.scrollBy(-Math.max(1, maxBodyHeight() - 1))
+    if (evt.name === "pagedown") scroll?.scrollBy(Math.max(1, maxBodyHeight() - 1))
   })
 
   return (
@@ -83,25 +91,39 @@ export function DialogHelp() {
           esc
         </text>
       </box>
-      <For each={GROUPS}>
-        {(group) => (
-          <box>
-            <text fg={theme.text}>
-              <b>{group.title}</b>
-            </text>
-            <For each={group.binds.filter((b) => keybind.print(b.key))}>
-              {(bind) => (
-                <box flexDirection="row" justifyContent="space-between" gap={2}>
-                  <text fg={theme.textMuted}>{bind.label}</text>
-                  <text fg={theme.text} flexShrink={0}>
-                    {keybind.print(bind.key)}
-                  </text>
-                </box>
-              )}
-            </For>
-          </box>
-        )}
-      </For>
+      <scrollbox
+        ref={(r: ScrollBoxRenderable) => (scroll = r)}
+        maxHeight={maxBodyHeight()}
+        viewportOptions={{ paddingRight: 1 }}
+        verticalScrollbarOptions={{
+          visible: true,
+          paddingLeft: 1,
+          trackOptions: {
+            backgroundColor: theme.backgroundElement,
+            foregroundColor: theme.primary,
+          },
+        }}
+      >
+        <For each={GROUPS}>
+          {(group) => (
+            <box>
+              <text fg={theme.text}>
+                <b>{group.title}</b>
+              </text>
+              <For each={group.binds.filter((b) => keybind.print(b.key))}>
+                {(bind) => (
+                  <box flexDirection="row" justifyContent="space-between" gap={2}>
+                    <text fg={theme.textMuted}>{bind.label}</text>
+                    <text fg={theme.text} flexShrink={0}>
+                      {keybind.print(bind.key)}
+                    </text>
+                  </box>
+                )}
+              </For>
+            </box>
+          )}
+        </For>
+      </scrollbox>
     </box>
   )
 }

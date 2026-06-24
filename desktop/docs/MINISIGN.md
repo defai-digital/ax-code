@@ -204,3 +204,8 @@ This minisign signature is separate from platform code signing and notarization.
 It proves artifact integrity against the published minisign public key; it does
 not replace Apple Developer ID, Windows Authenticode, or Electron auto-update
 metadata.
+
+Release notes should repeat the native platform trust status for each Desktop
+release: macOS signing/notarization state, Windows Authenticode state, and any
+expected Gatekeeper or SmartScreen first-run warning. Minisign verification is
+not a substitute for those native trust signals.

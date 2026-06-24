@@ -2634,6 +2634,7 @@ export class WorkflowRun extends HeyApiClient {
       allowWriteWorkflows?: boolean
       durableChildren?: boolean
       enqueueChildren?: boolean
+      autoStartChildren?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2648,6 +2649,7 @@ export class WorkflowRun extends HeyApiClient {
             { in: "body", key: "allowWriteWorkflows" },
             { in: "body", key: "durableChildren" },
             { in: "body", key: "enqueueChildren" },
+            { in: "body", key: "autoStartChildren" },
           ],
         },
       ],
@@ -3183,6 +3185,7 @@ export class WorkflowRoutine extends HeyApiClient {
         allowWriteWorkflows?: boolean
         durableChildren?: boolean
         enqueueChildren?: boolean
+        autoStartChildren?: boolean
       }
     },
     options?: Options<never, ThrowOnError>,
@@ -5130,7 +5133,7 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-31b" | "glm-4.7-flash"
+      modelID?: "qwen3.6-27b-6bit" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b" | "gemma-4-31b" | "glm-4.7-flash"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
       start?: boolean
@@ -5179,7 +5182,7 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
-      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-31b" | "glm-4.7-flash"
+      modelID?: "qwen3.6-27b-6bit" | "qwen3.6-35b-a3b" | "gemma-4-12b" | "gemma-4-26b" | "gemma-4-31b" | "glm-4.7-flash"
       quantization?: "mlx4bit" | "mlx6bit"
       download?: boolean
     },

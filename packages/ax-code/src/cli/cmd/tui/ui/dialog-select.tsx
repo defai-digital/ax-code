@@ -460,8 +460,8 @@ function Option(props: {
         flexGrow={1}
         fg={props.disabled ? theme.textMuted : props.active ? fg : props.current ? theme.primary : theme.text}
         attributes={props.active && !props.disabled ? TextAttributes.BOLD : undefined}
-        overflow="hidden"
-        wrapMode="none"
+        overflow="visible"
+        wrapMode="word"
         paddingLeft={3}
       >
         {Locale.truncate(props.title, 61)}

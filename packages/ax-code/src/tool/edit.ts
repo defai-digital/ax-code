@@ -72,6 +72,16 @@ export const EditTool = Tool.define("edit", {
       // read/permission/write flow, matching write.ts.
       await assertSymlinkInsideProject(filePath)
 
+      const assertUnchangedBeforeWrite = async (expected: string) => {
+        await FileTime.assert(ctx.sessionID, filePath)
+        const current = await Filesystem.readText(filePath)
+        if (current !== expected) {
+          throw new Error(
+            `File ${filePath} changed while edit approval was pending. Read the file again and retry the edit.`,
+          )
+        }
+      }
+
       if (params.oldString === "") {
         const existed = await Filesystem.exists(filePath)
         // When overwriting an existing file, enforce the "must read
@@ -95,6 +105,13 @@ export const EditTool = Tool.define("edit", {
             diff,
           },
         })
+        if (existed) {
+          await assertUnchangedBeforeWrite(contentOld)
+        } else if (await Filesystem.exists(filePath)) {
+          throw new Error(
+            `File ${filePath} was created while edit approval was pending. Read the file again and retry the edit.`,
+          )
+        }
         await Filesystem.write(filePath, params.newString)
         await notifyFileEdited(filePath, existed ? "change" : "add")
         await FileTime.read(ctx.sessionID, filePath)
@@ -173,6 +190,7 @@ export const EditTool = Tool.define("edit", {
         },
       })
 
+      await assertUnchangedBeforeWrite(contentOld)
       await Filesystem.write(filePath, contentNew)
       await notifyFileEdited(filePath, "change")
       // The diff above was already computed from the same `contentOld`
@@ -252,9 +270,9 @@ function lineStartIndex(lines: string[], lineIndex: number) {
 }
 
 // Similarity thresholds for block anchor fallback matching
-const SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.6
-const MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD = 0.3
-const CONTEXT_AWARE_SIMILARITY_THRESHOLD = 0.7
+const SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.95
+const MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD = 0.95
+const CONTEXT_AWARE_SIMILARITY_THRESHOLD = 0.95
 
 import { levenshtein } from "@/util/levenshtein"
 
@@ -717,8 +735,12 @@ export function trimDiff(diff: string): string {
 }
 
 export function replace(content: string, oldString: string, newString: string, replaceAll = false): string {
+  if (oldString === newString) {
+    throw new Error("No changes to apply: oldString and newString are identical.")
+  }
+
   const hasCRLF = content.includes("\r\n")
-  const native = hasCRLF ? undefined : NativeAddon.diff()
+  const native = hasCRLF || !content.includes(oldString) ? undefined : NativeAddon.diff()
   if (native) {
     try {
       const json = NativePerf.run(
@@ -739,10 +761,6 @@ export function replace(content: string, oldString: string, newString: string, r
         message.includes("Could not find oldString") || message.includes("Found multiple matches for oldString")
       if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !canRetryInJs) throw e
     }
-  }
-
-  if (oldString === newString) {
-    throw new Error("No changes to apply: oldString and newString are identical.")
   }
 
   if (replaceAll) {
