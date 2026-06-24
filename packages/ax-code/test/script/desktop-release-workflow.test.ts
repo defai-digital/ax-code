@@ -3,6 +3,7 @@ import path from "path"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const desktopReleaseWorkflow = path.join(repoRoot, ".github/workflows/desktop-release.yml")
+const sdkBuildScript = path.join(repoRoot, "packages/sdk/js/script/build.ts")
 
 describe("desktop release workflow", () => {
   test("build jobs generate the SDK before packaging Desktop artifacts", async () => {
@@ -17,5 +18,14 @@ describe("desktop release workflow", () => {
         job![0].indexOf(jobName === "package-web" ? "pnpm run desktop:build" : "pnpm --filter @ax-code/electron run build"),
       )
     }
+  })
+
+  test("SDK build script avoids platform-specific .bin shims", async () => {
+    const text = await Bun.file(sdkBuildScript).text()
+
+    expect(text).toContain("packageBin(\"typescript\", \"tsc\")")
+    expect(text).toContain("process.execPath")
+    expect(text).not.toContain("node_modules/.bin")
+    expect(text).not.toContain("node_modules\", \".bin\"")
   })
 })

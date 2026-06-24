@@ -1,7 +1,7 @@
 import { fileURLToPath, pathToFileURL } from "url"
 import { spawn } from "child_process"
 import { createRequire } from "module"
-import { createWriteStream } from "fs"
+import { createWriteStream, readFileSync } from "fs"
 import fs from "fs/promises"
 import path from "path"
 import { createClient } from "@hey-api/openapi-ts"
@@ -15,12 +15,14 @@ const axCodeDir = path.resolve(dir, "../../ax-code")
 const solidLoader = pathToFileURL(path.join(repoRoot, "script", "solid-loader.mjs")).href
 const tsxLoader = pathToFileURL(require.resolve("tsx")).href
 
-// Resolve a local CLI (tsc/prettier) from node_modules/.bin so this runs under
-// plain node (no Bun, no global tooling).
-function bin(name: string) {
-  const local = path.join(dir, "node_modules", ".bin", name)
-  const root = path.join(repoRoot, "node_modules", ".bin", name)
-  return require("fs").existsSync(local) ? local : root
+// Resolve JavaScript CLI entrypoints and run them through Node. Directly
+// spawning package-manager shims is not portable on Windows.
+function packageBin(packageName: string, binName = packageName) {
+  const packageJsonPath = require.resolve(`${packageName}/package.json`)
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { bin?: string | Record<string, string> }
+  const bin = typeof packageJson.bin === "string" ? packageJson.bin : packageJson.bin?.[binName]
+  if (!bin) throw new Error(`${packageName} does not declare a ${binName} bin`)
+  return path.resolve(path.dirname(packageJsonPath), bin)
 }
 
 function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv; toFile?: string } = {}) {
@@ -45,7 +47,7 @@ try {
   await fs.mkdir(path.join(tmp, "cache"), { recursive: true })
   await fs.mkdir(path.join(tmp, "state"), { recursive: true })
 
-  await run(bin("tsc"), ["--build", "--force"])
+  await run(process.execPath, [packageBin("typescript", "tsc"), "--build", "--force"])
 
   // Generate the OpenAPI document through the non-TUI Node entrypoint. The TUI
   // entrypoint requires Node's FFI tier, but SDK generation must run on the
@@ -107,10 +109,10 @@ try {
   await generateClient("./src/gen")
   await generateClient("./src/v2/gen")
 
-  await run(bin("prettier"), ["--write", "src/gen"])
-  await run(bin("prettier"), ["--write", "src/v2"])
+  await run(process.execPath, [packageBin("prettier"), "--write", "src/gen"])
+  await run(process.execPath, [packageBin("prettier"), "--write", "src/v2"])
   await fs.rm(path.join(dir, "dist"), { recursive: true, force: true })
-  await run(bin("tsc"), ["--build", "--force"])
+  await run(process.execPath, [packageBin("typescript", "tsc"), "--build", "--force"])
   await fs.cp(path.resolve(dir, "../proto"), path.join(dir, "dist", "proto"), { recursive: true })
   await fs.rm(path.join(dir, "openapi.json"), { force: true })
 } finally {
