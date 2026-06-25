@@ -26,7 +26,8 @@ function agentInstructionPart(input: {
   attachDraftContext: <T extends object>(part: T) => T & { messageID: MessageID; sessionID: SessionID }
   draftSyntheticTextPart: (text: string) => DraftTextPart
 }): DraftPart[] {
-  const perm = Permission.evaluate("task", input.part.name, input.agentPermission)
+  const ruleset = Array.isArray(input.agentPermission) ? input.agentPermission : []
+  const perm = Permission.evaluate("task", input.part.name, ruleset)
   const hint = perm.action === "deny" ? " . Invoked by user; guaranteed to exist." : ""
   return [
     input.attachDraftContext(input.part),

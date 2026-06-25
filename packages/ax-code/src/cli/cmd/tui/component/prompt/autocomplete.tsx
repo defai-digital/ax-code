@@ -26,6 +26,27 @@ import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
 
+export type AutocompleteGroupEntry =
+  | { type: "header"; label: string }
+  | { type: "option"; option: AutocompleteOption; flatIndex: number }
+
+export function insertGroupHeaders(opts: AutocompleteOption[]): AutocompleteGroupEntry[] {
+  if (!opts.length) return []
+
+  const entries: AutocompleteGroupEntry[] = []
+  let lastGroup: string | undefined
+  let flatIndex = 0
+  for (const opt of opts) {
+    if (opt.group && opt.group !== lastGroup) {
+      entries.push({ type: "header", label: opt.group })
+      lastGroup = opt.group
+    }
+    entries.push({ type: "option", option: opt, flatIndex })
+    flatIndex++
+  }
+  return entries
+}
+
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
   return hashIndex !== -1 ? input.substring(0, hashIndex) : input
@@ -73,6 +94,7 @@ export type AutocompleteOption = {
   isDirectory?: boolean
   onSelect?: () => void
   path?: string
+  group?: string
 }
 
 export function Autocomplete(props: {
@@ -288,6 +310,7 @@ export function Autocomplete(props: {
               value: filename,
               isDirectory: isDir,
               path: item,
+              group: "Files",
               onSelect: () => {
                 insertPart(filename, {
                   type: "file",
@@ -329,6 +352,7 @@ export function Autocomplete(props: {
         display: Locale.truncateMiddle(text, width),
         value: text,
         description: res.description,
+        group: "Resources",
         onSelect: () => {
           insertPart(res.name, {
             type: "file",
@@ -363,6 +387,8 @@ export function Autocomplete(props: {
       .map(
         (agent): AutocompleteOption => ({
           display: "@" + (agent.displayName ?? agent.name),
+          description: "Invoke subagent",
+          group: "Subagents",
           onSelect: () => {
             insertPart(agent.name, {
               type: "agent",
@@ -641,9 +667,11 @@ export function Autocomplete(props: {
     })
   })
 
+  const optionsWithGroupHeaders = createMemo(() => insertGroupHeaders(options()))
+
   const desired = createMemo(() => {
-    const count = options().length || 1
-    return Math.min(10, count)
+    const count = optionsWithGroupHeaders().length || 1
+    return Math.min(14, count)
   })
 
   const placement = createMemo(() => {
@@ -678,49 +706,63 @@ export function Autocomplete(props: {
         scrollbarOptions={{ visible: false }}
       >
         <Index
-          each={options()}
+          each={optionsWithGroupHeaders()}
           fallback={
             <box paddingLeft={1} paddingRight={1}>
               <text fg={theme.textMuted}>No matching items</text>
             </box>
           }
         >
-          {(option, index) => (
-            <box
-              id={autocompleteOptionID(index)}
-              paddingLeft={1}
-              paddingRight={1}
-              backgroundColor={index === store.selected ? theme.primary : undefined}
-              flexDirection="row"
-              width="100%"
-              flexShrink={0}
-              onMouseMove={() => {
-                setStore("input", "mouse")
-              }}
-              onMouseOver={() => {
-                if (store.input !== "mouse") return
-                moveTo(index)
-              }}
-              onMouseDown={() => {
-                setStore("input", "mouse")
-                moveTo(index)
-              }}
-              onMouseUp={() => select()}
-            >
-              <text fg={index === store.selected ? selectedForeground(theme) : theme.text} flexShrink={0}>
-                {option().display}
-              </text>
-              <Show when={option().description}>
-                <text
-                  fg={index === store.selected ? selectedForeground(theme) : theme.textMuted}
-                  wrapMode="none"
-                  flexGrow={1}
-                >
-                  {option().description}
+          {(item, index) => {
+            const entry = item()
+            if (entry.type === "header") {
+              return (
+                <box paddingLeft={1} paddingRight={1} paddingTop={index > 0 ? 1 : 0} flexShrink={0}>
+                  <text fg={theme.textMuted}>
+                    {entry.label}
+                  </text>
+                </box>
+              )
+            }
+            const option = entry.option
+            const optIndex = entry.flatIndex
+            return (
+              <box
+                id={autocompleteOptionID(optIndex)}
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={optIndex === store.selected ? theme.primary : undefined}
+                flexDirection="row"
+                width="100%"
+                flexShrink={0}
+                onMouseMove={() => {
+                  setStore("input", "mouse")
+                }}
+                onMouseOver={() => {
+                  if (store.input !== "mouse") return
+                  moveTo(optIndex)
+                }}
+                onMouseDown={() => {
+                  setStore("input", "mouse")
+                  moveTo(optIndex)
+                }}
+                onMouseUp={() => select()}
+              >
+                <text fg={optIndex === store.selected ? selectedForeground(theme) : theme.text} flexShrink={0}>
+                  {option.display}
                 </text>
-              </Show>
-            </box>
-          )}
+                <Show when={option.description}>
+                  <text
+                    fg={optIndex === store.selected ? selectedForeground(theme) : theme.textMuted}
+                    wrapMode="none"
+                    flexGrow={1}
+                  >
+                    {option.description}
+                  </text>
+                </Show>
+              </box>
+            )
+          }}
         </Index>
       </scrollbox>
     </box>

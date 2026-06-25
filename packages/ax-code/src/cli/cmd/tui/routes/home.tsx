@@ -162,8 +162,8 @@ export function Home() {
             <text>
               <span style={{ fg: theme.accent }}>●</span>
               {"  "}
-              <span style={{ fg: theme.text }}>@filename</span>
-              <span style={{ fg: theme.textMuted }}> · attach files from your project</span>
+              <span style={{ fg: theme.text }}>@</span>
+              <span style={{ fg: theme.textMuted }}> · attach files and invoke subagents</span>
             </text>
           </box>
         </Show>
