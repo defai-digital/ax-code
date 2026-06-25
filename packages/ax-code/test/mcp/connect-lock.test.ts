@@ -1,4 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest"
+import { readFile } from "node:fs/promises"
 import { setTimeout as sleep } from "node:timers/promises"
 
 let connectStarted!: Promise<void>
@@ -92,7 +93,7 @@ test("disconnect waits for an in-flight connect before disabling the MCP server"
 })
 
 test("MCP client teardown kills process trees before closing clients", async () => {
-  const source = await Bun.file(new URL("../../src/mcp/index.ts", import.meta.url)).text()
+  const source = await readFile(new URL("../../src/mcp/impl.ts", import.meta.url), "utf-8")
 
   expect(source).toContain("await killProcessTree(pid)")
   expect(source).toContain("rememberClientTransport(client, transport)")
@@ -117,7 +118,7 @@ test("clients added dynamically clear stale state when they close outside the in
       await add
 
       client = (await MCP.clients())["dynamic-close"] as { onclose?: () => void }
-      expect(client?.onclose).toBeFunction()
+      expect(client?.onclose).toBeTypeOf("function")
     },
   })
 
@@ -134,7 +135,7 @@ test("clients added dynamically clear stale state when they close outside the in
 
 test("tools closes and kills MCP clients when listTools fails", async () => {
   await using tmp = await tmpdir({ git: true })
-  const source = await Bun.file(new URL("../../src/mcp/index.ts", import.meta.url)).text()
+  const source = await readFile(new URL("../../src/mcp/impl.ts", import.meta.url), "utf-8")
 
   await Instance.provide({
     directory: tmp.path,

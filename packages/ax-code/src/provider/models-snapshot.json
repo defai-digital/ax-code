@@ -49653,6 +49653,32 @@
           "output": 128000
         }
       },
+      "mistral-ocr-latest": {
+        "id": "mistral-ocr-latest",
+        "name": "Mistral OCR",
+        "family": "mistral",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2025-03-06",
+        "last_updated": "2025-03-06",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "claude-sonnet-4-6": {
         "id": "claude-sonnet-4-6",
         "name": "Claude Sonnet 4.6",
@@ -113918,6 +113944,11 @@
         "family": "kimi-k2",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -113976,8 +114007,15 @@
         "family": "minimax",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-06-12",
@@ -113995,8 +114033,7 @@
         "limit": {
           "context": 524288,
           "output": 65536
-        },
-        "status": "beta"
+        }
       },
       "hf:openai/gpt-oss-120b": {
         "id": "hf:openai/gpt-oss-120b",
@@ -114054,19 +114091,22 @@
       },
       "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4": {
         "id": "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
-        "name": "Nemotron 3 Super 120B",
+        "name": "Nemotron 3 Super 120B A12B",
         "family": "nemotron",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
         },
-        "structured_output": true,
         "temperature": true,
-        "knowledge": "2024-04",
         "release_date": "2026-03-11",
-        "last_updated": "2026-04-03",
+        "last_updated": "2026-03-11",
         "modalities": {
           "input": [
             "text"
