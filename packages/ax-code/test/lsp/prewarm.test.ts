@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
@@ -8,7 +9,7 @@ import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
-let configSpy: ReturnType<typeof spyOn> | undefined
+let configSpy: MockInstance | undefined
 
 afterEach(() => {
   configSpy?.mockRestore()
@@ -56,8 +57,8 @@ describe("LSP.prewarmFiles", () => {
     const a = path.join(tmp.path, "a.ts")
     const b = path.join(tmp.path, "b.ts")
     const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
-    await Bun.write(a, "export const a = 1\n")
-    await Bun.write(b, "export const b = 2\n")
+    await writeFile(a, "export const a = 1\n")
+    await writeFile(b, "export const b = 2\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -98,8 +99,8 @@ describe("LSP.prewarmFiles", () => {
     const ts = path.join(tmp.path, "a.ts")
     const rs = path.join(tmp.path, "lib.rs")
     const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
-    await Bun.write(ts, "export const a = 1\n")
-    await Bun.write(rs, "fn main() {}\n")
+    await writeFile(ts, "export const a = 1\n")
+    await writeFile(rs, "fn main() {}\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -151,7 +152,7 @@ describe("LSP.prewarmFiles", () => {
     await using tmp = await tmpdir({ git: true })
     const sh = path.join(tmp.path, "script.sh")
     const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
-    await Bun.write(sh, "#!/usr/bin/env bash\necho ok\n")
+    await writeFile(sh, "#!/usr/bin/env bash\necho ok\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -185,9 +186,9 @@ describe("LSP.prewarmFiles", () => {
     const b = path.join(tmp.path, "b.ts")
     const readme = path.join(tmp.path, "README.md")
     const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
-    await Bun.write(a, "export const a = 1\n")
-    await Bun.write(b, "export const b = 2\n")
-    await Bun.write(readme, "# demo\n")
+    await writeFile(a, "export const a = 1\n")
+    await writeFile(b, "export const b = 2\n")
+    await writeFile(readme, "# demo\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -223,7 +224,7 @@ describe("LSP.prewarmFiles", () => {
     await using tmp = await tmpdir({ git: true })
     const a = path.join(tmp.path, "a.ts")
     const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
-    await Bun.write(a, "export const a = 1\n")
+    await writeFile(a, "export const a = 1\n")
 
     await Instance.provide({
       directory: tmp.path,

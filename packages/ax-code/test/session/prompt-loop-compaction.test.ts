@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import z from "zod"
 import { SessionCompaction } from "../../src/session/compaction"
 import {
@@ -49,10 +49,10 @@ const agent: Agent.Info = {
   options: {},
 }
 
-let budgetSpy: ReturnType<typeof spyOn> | undefined
-let createSpy: ReturnType<typeof spyOn> | undefined
-let toolsSpy: ReturnType<typeof spyOn> | undefined
-let overflowSpy: ReturnType<typeof spyOn> | undefined
+let budgetSpy: MockInstance | undefined
+let createSpy: MockInstance | undefined
+let toolsSpy: MockInstance | undefined
+let overflowSpy: MockInstance | undefined
 
 afterEach(() => {
   budgetSpy?.mockRestore()

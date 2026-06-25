@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
@@ -9,7 +10,7 @@ import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
-let configSpy: ReturnType<typeof spyOn> | undefined
+let configSpy: MockInstance | undefined
 
 afterEach(() => {
   configSpy?.mockRestore()
@@ -37,7 +38,7 @@ describe("Request collapse (§S1)", () => {
   test("concurrent identical referencesEnvelope calls produce equivalent envelopes", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -67,7 +68,7 @@ describe("Request collapse (§S1)", () => {
   test("calls with different positions produce distinct (non-collapsed) envelopes", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -91,7 +92,7 @@ describe("Request collapse (§S1)", () => {
   test("registry empties after concurrent batch settles", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,

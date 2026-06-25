@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { Agent } from "../../src/agent/agent"
 import type { Provider } from "../../src/provider/provider"
 import { Instance } from "../../src/project/instance"
@@ -37,8 +37,8 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
-let streamSpy: ReturnType<typeof spyOn> | undefined
-let sleepSpy: ReturnType<typeof spyOn> | undefined
+let streamSpy: MockInstance | undefined
+let sleepSpy: MockInstance | undefined
 
 afterEach(() => {
   streamSpy?.mockRestore()

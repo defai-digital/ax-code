@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
@@ -36,8 +36,8 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
-let streamSpy: ReturnType<typeof spyOn> | undefined
-let modelSpy: ReturnType<typeof spyOn> | undefined
+let streamSpy: MockInstance | undefined
+let modelSpy: MockInstance | undefined
 
 // Goal auto-continuation runs inside the autonomous prompt loop. Pin the
 // flag explicitly: config loads with an `autonomous` key sync the env, so

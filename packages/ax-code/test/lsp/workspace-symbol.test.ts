@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
@@ -11,7 +12,7 @@ beforeEach(async () => {
   await Log.init({ print: false })
 })
 
-let configSpy: ReturnType<typeof spyOn> | undefined
+let configSpy: MockInstance | undefined
 
 afterEach(() => {
   configSpy?.mockRestore()
@@ -157,7 +158,7 @@ describe("LSP.workspaceSymbol", () => {
   test("primes configured servers on a cold workspace query", async () => {
     await using tmp = await tmpdir({ git: true })
     const serverPath = path.join(__dirname, "../fixture/lsp/fake-lsp-server.js")
-    await Bun.write(path.join(tmp.path, "demo.ts"), "export const demo = 1\n")
+    await writeFile(path.join(tmp.path, "demo.ts"), "export const demo = 1\n")
 
     await Instance.provide({
       directory: tmp.path,

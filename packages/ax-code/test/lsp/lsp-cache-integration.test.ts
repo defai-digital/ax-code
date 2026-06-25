@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
 import { pathToFileURL } from "url"
+import { writeFile, readFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
@@ -15,8 +17,8 @@ Log.init({ print: false })
 // and LSP.documentSymbolEnvelope. Uses the fake LSP server fixture so we
 // can verify "second call returns source: 'cache'" end-to-end.
 
-let configSpy: ReturnType<typeof spyOn> | undefined
-let flagSpy: ReturnType<typeof spyOn> | undefined
+let configSpy: MockInstance | undefined
+let flagSpy: MockInstance | undefined
 
 // Flag.AX_CODE_LSP_CACHE is evaluated at module load; override per-test
 // via Object.defineProperty since the export is a const.
@@ -47,7 +49,7 @@ describe("LSP cache integration", () => {
   test("cache flag OFF: no cache row written even on full response", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -77,7 +79,7 @@ describe("LSP cache integration", () => {
   test("cache flag ON: empty / partial envelopes are not written", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -107,7 +109,7 @@ describe("LSP cache integration", () => {
   test("cache flag ON: full response round-trips through cache on second call", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -117,8 +119,8 @@ describe("LSP cache integration", () => {
 
         // Pre-seed the cache for a known content hash. We compute it the
         // same way the production path does.
-        const buf = await Bun.file(file).arrayBuffer()
-        const contentHash = Bun.hash(new Uint8Array(buf)).toString()
+        const buf = await readFile(file)
+        const contentHash = createHash("sha256").update(new Uint8Array(buf)).digest("hex")
 
         CodeGraphQuery.upsertLspCache({
           projectID: Instance.project.id,
@@ -151,7 +153,7 @@ describe("LSP cache integration", () => {
   test("per-call cache override can read cache even when the global flag is off", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -159,8 +161,8 @@ describe("LSP cache integration", () => {
         setCacheFlag(false)
         configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
-        const buf = await Bun.file(file).arrayBuffer()
-        const contentHash = Bun.hash(new Uint8Array(buf)).toString()
+        const buf = await readFile(file)
+        const contentHash = createHash("sha256").update(new Uint8Array(buf)).digest("hex")
 
         CodeGraphQuery.upsertLspCache({
           projectID: Instance.project.id,
@@ -200,7 +202,7 @@ describe("LSP cache integration", () => {
   test("cache flag ON: content change (different hash) yields a miss", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,

@@ -1,13 +1,13 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { LSPCache } from "../../src/lsp/cache"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-let upsertSpy: ReturnType<typeof spyOn> | undefined
-let lookupSpy: ReturnType<typeof spyOn> | undefined
-let nowSpy: ReturnType<typeof spyOn> | undefined
-let randomSpy: ReturnType<typeof spyOn> | undefined
+let upsertSpy: MockInstance | undefined
+let lookupSpy: MockInstance | undefined
+let nowSpy: MockInstance | undefined
+let randomSpy: MockInstance | undefined
 
 afterEach(() => {
   upsertSpy?.mockRestore()

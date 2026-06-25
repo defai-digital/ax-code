@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
@@ -13,11 +13,11 @@ import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
-let workspaceEnvelopeSpy: ReturnType<typeof spyOn> | undefined
-let diagnosticsAggregatedSpy: ReturnType<typeof spyOn> | undefined
-let hasClientsSpy: ReturnType<typeof spyOn> | undefined
-let touchFileSpy: ReturnType<typeof spyOn> | undefined
-let incomingCallsEnvelopeSpy: ReturnType<typeof spyOn> | undefined
+let workspaceEnvelopeSpy: MockInstance | undefined
+let diagnosticsAggregatedSpy: MockInstance | undefined
+let hasClientsSpy: MockInstance | undefined
+let touchFileSpy: MockInstance | undefined
+let incomingCallsEnvelopeSpy: MockInstance | undefined
 
 // Force sync mode so assertions can observe DB state immediately.
 Object.defineProperty(Flag, "AX_CODE_AUDIT_SYNC", {

@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from "vitest"
+import { afterEach, expect, test, vi, type MockInstance } from "vitest"
 import { NamedError } from "@ax-code/util/error"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
@@ -36,7 +36,7 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
-let modelSpy: ReturnType<typeof spyOn> | undefined
+let modelSpy: MockInstance | undefined
 
 afterEach(async () => {
   modelSpy?.mockRestore()

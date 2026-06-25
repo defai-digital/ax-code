@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { APICallError } from "ai"
 import path from "path"
+import { access } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Permission } from "../../src/permission"
 import { Provider } from "../../src/provider/provider"
@@ -49,15 +50,15 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
-let streamSpy: ReturnType<typeof spyOn> | undefined
-let modelSpy: ReturnType<typeof spyOn> | undefined
-let summarySpy: ReturnType<typeof spyOn> | undefined
-let trackSpy: ReturnType<typeof spyOn> | undefined
-let patchSpy: ReturnType<typeof spyOn> | undefined
-let codeStatusSpy: ReturnType<typeof spyOn> | undefined
-let startWatcherSpy: ReturnType<typeof spyOn> | undefined
-let autoIndexSpy: ReturnType<typeof spyOn> | undefined
-let gateSpy: ReturnType<typeof spyOn> | undefined
+let streamSpy: MockInstance | undefined
+let modelSpy: MockInstance | undefined
+let summarySpy: MockInstance | undefined
+let trackSpy: MockInstance | undefined
+let patchSpy: MockInstance | undefined
+let codeStatusSpy: MockInstance | undefined
+let startWatcherSpy: MockInstance | undefined
+let autoIndexSpy: MockInstance | undefined
+let gateSpy: MockInstance | undefined
 
 afterEach(async () => {
   streamSpy?.mockRestore()
@@ -1126,7 +1127,7 @@ describe("session.prompt flow", () => {
           expect(
             assistant?.parts.some((part) => part.type === "text" && part.text.includes("<function=write_file")),
           ).toBe(true)
-          expect(await Bun.file(path.join(tmp.path, "coffee-shop/index.html")).exists()).toBe(false)
+          expect(await access(path.join(tmp.path, "coffee-shop/index.html")).then(() => true, () => false)).toBe(false)
 
           await Session.remove(session.id)
         },

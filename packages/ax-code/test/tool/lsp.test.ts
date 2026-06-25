@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { LspTool, normalizeLspToolEnvelopeData } from "../../src/tool/lsp"
 import { Instance } from "../../src/project/instance"
@@ -20,16 +21,16 @@ const ctx = {
   ask: async () => {},
 }
 
-let envelopeSpy: ReturnType<typeof spyOn> | undefined
-let hasClientsSpy: ReturnType<typeof spyOn> | undefined
-let touchFileSpy: ReturnType<typeof spyOn> | undefined
-let diagnosticsSpy: ReturnType<typeof spyOn> | undefined
-let implementationEnvelopeSpy: ReturnType<typeof spyOn> | undefined
-let prepareCallHierarchyEnvelopeSpy: ReturnType<typeof spyOn> | undefined
-let incomingCallsEnvelopeSpy: ReturnType<typeof spyOn> | undefined
-let outgoingCallsEnvelopeSpy: ReturnType<typeof spyOn> | undefined
-let referencesCachedEnvelopeSpy: ReturnType<typeof spyOn> | undefined
-let referencesEnvelopeSpy: ReturnType<typeof spyOn> | undefined
+let envelopeSpy: MockInstance | undefined
+let hasClientsSpy: MockInstance | undefined
+let touchFileSpy: MockInstance | undefined
+let diagnosticsSpy: MockInstance | undefined
+let implementationEnvelopeSpy: MockInstance | undefined
+let prepareCallHierarchyEnvelopeSpy: MockInstance | undefined
+let incomingCallsEnvelopeSpy: MockInstance | undefined
+let outgoingCallsEnvelopeSpy: MockInstance | undefined
+let referencesCachedEnvelopeSpy: MockInstance | undefined
+let referencesEnvelopeSpy: MockInstance | undefined
 
 afterEach(() => {
   envelopeSpy?.mockRestore()
@@ -106,7 +107,7 @@ describe("tool.lsp", () => {
   test("file-based operations surface server startup failure", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -127,7 +128,7 @@ describe("tool.lsp", () => {
   test("diagnosticsAggregated returns aggregated envelope metadata", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -190,7 +191,7 @@ describe("tool.lsp", () => {
   test("diagnosticsAggregated does not ask permission when no server matches", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
     const ask = vi.spyOn({ ask: async () => {} }, "ask")
 
     try {
@@ -214,7 +215,7 @@ describe("tool.lsp", () => {
   test("findReferences cache hit skips live server startup", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -263,7 +264,7 @@ describe("tool.lsp", () => {
   test("findReferences cache miss falls back to cache-enabled live request", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -298,7 +299,7 @@ describe("tool.lsp", () => {
   test("findReferences falls back to live LSP when cache probe throws", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -336,7 +337,7 @@ describe("tool.lsp", () => {
   test("goToImplementation uses real implementation envelope", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -368,7 +369,7 @@ describe("tool.lsp", () => {
   test("prepareCallHierarchy uses real envelope metadata", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -400,7 +401,7 @@ describe("tool.lsp", () => {
   test("incomingCalls uses real envelope metadata", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -429,7 +430,7 @@ describe("tool.lsp", () => {
   test("outgoingCalls uses real envelope metadata", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,

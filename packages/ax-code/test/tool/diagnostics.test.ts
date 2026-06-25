@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { collectDiagnostics } from "../../src/tool/diagnostics"
 import { LSP } from "../../src/lsp"
@@ -7,9 +7,9 @@ import { DebugEngine } from "../../src/debug-engine"
 
 Log.init({ print: false })
 
-let touchFileSpy: ReturnType<typeof spyOn> | undefined
-let diagnosticsSpy: ReturnType<typeof spyOn> | undefined
-let analyzeImpactSpy: ReturnType<typeof spyOn> | undefined
+let touchFileSpy: MockInstance | undefined
+let diagnosticsSpy: MockInstance | undefined
+let analyzeImpactSpy: MockInstance | undefined
 
 afterEach(() => {
   touchFileSpy?.mockRestore()

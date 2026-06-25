@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import z from "zod"
 import { Agent } from "../../src/agent/agent"
 import { ProviderTransform } from "../../src/provider/transform"
@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "../fixture/fixture"
 
 describe("session.prompt-tools", () => {
-  let schemaSpy: ReturnType<typeof spyOn> | undefined
+  let schemaSpy: MockInstance | undefined
 
   afterEach(() => {
     schemaSpy?.mockRestore()

@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
+import { readFile } from "fs/promises"
 import { Agent } from "../../src/agent/agent"
 import type { Provider } from "../../src/provider/provider"
 import { Instance } from "../../src/project/instance"
@@ -44,8 +45,8 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
-let streamSpy: ReturnType<typeof spyOn> | undefined
-let sleepSpy: ReturnType<typeof spyOn> | undefined
+let streamSpy: MockInstance | undefined
+let sleepSpy: MockInstance | undefined
 
 afterEach(() => {
   streamSpy?.mockRestore()
@@ -56,7 +57,7 @@ afterEach(() => {
 
 describe("session.processor", () => {
   test("flushes pending deltas before breaking for compaction", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     const start = src.indexOf("if (needsCompaction) {")
     const end = src.indexOf("\n                break", start)
     expect(start).toBeGreaterThan(-1)
@@ -67,7 +68,7 @@ describe("session.processor", () => {
   })
 
   test("finalizes in-flight parts before processor error handling", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     const catchStart = src.indexOf("} catch (e: unknown) {")
     const retryStart = src.indexOf("const errStack", catchStart)
     expect(catchStart).toBeGreaterThan(-1)
@@ -76,7 +77,7 @@ describe("session.processor", () => {
   })
 
   test("resets short-lived tool loop state across compaction", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     expect(src).toContain("const resetShortLivedToolLoopState = () => {")
     expect(src).toContain("recentToolRing.length = 0")
     expect(src).toContain("toolCallTimestamps.length = 0")
@@ -89,7 +90,7 @@ describe("session.processor", () => {
   })
 
   test("resets short-lived tool loop state across processor errors", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     const catchStart = src.indexOf("} catch (e: unknown) {")
     const retryStart = src.indexOf("const retry = SessionRetry.retryable(error)", catchStart)
     expect(catchStart).toBeGreaterThan(-1)
@@ -98,7 +99,7 @@ describe("session.processor", () => {
   })
 
   test("continue-loop-on-deny config is read per process call", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     expect(src).not.toContain("cachedShouldBreak")
     expect(src).toContain(
       "const shouldBreak = autonomous ? false : (await Config.get()).experimental?.continue_loop_on_deny !== true",
@@ -106,7 +107,7 @@ describe("session.processor", () => {
   })
 
   test("delta batch timer does not keep the process alive", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     const start = src.indexOf("function createDeltaBatcher")
     const end = src.indexOf("export type Info", start)
     expect(start).toBeGreaterThan(-1)
@@ -117,23 +118,23 @@ describe("session.processor", () => {
   })
 
   test("wraps recurring error-pattern guidance in system-reminder tags", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     expect(src).toContain("annotatedError = `${base}\\n\\n<system-reminder>\\n${guidance}\\n</system-reminder>`")
   })
 
   test("sanitizes tool output before appending doom-loop reminders", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     expect(src).toContain("`${sanitizeForXmlTag(value.output.output)}\\n\\n<system-reminder>")
   })
 
   test("stores sanitized rejected permission and question errors", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     expect(src).toContain("const sanitizedError = sanitizeForXmlTag(errorMsg)")
     expect(src).toContain("let annotatedError = sanitizedError")
   })
 
   test("clears per-attempt tool rate-limit timestamps before retrying", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/processor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
     const catchStart = src.indexOf("} catch (e: unknown) {")
     const retryStart = src.indexOf("const errStack", catchStart)
     expect(catchStart).toBeGreaterThan(-1)
@@ -198,7 +199,7 @@ describe("session.processor", () => {
   })
 
   test("prompt loop resolves provider errors before processor stop decisions", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/session/prompt.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/prompt.ts"), "utf-8")
     const errorTransitionStart = src.indexOf("const errorTransition = await resolvePromptLoopErrorTransition")
     const processorDecisionStart = src.indexOf("const processorDecision = processorLoopDecision")
 

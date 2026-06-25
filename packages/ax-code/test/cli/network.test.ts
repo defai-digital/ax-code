@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { Config } from "../../src/config/config"
 import { isLocalhostOnly, resolveNetworkOptions, type NetworkOptions } from "../../src/cli/network"
 
 const ORIGINAL_ARGV = process.argv
-let configSpy: ReturnType<typeof spyOn<typeof Config, "global">> | undefined
+let configSpy: MockInstance | undefined
 
 afterEach(() => {
   process.argv = ORIGINAL_ARGV

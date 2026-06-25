@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll, vi } from "vitest"
+import { describe, test, expect, beforeAll, afterAll, vi, type MockInstance } from "vitest"
 import { Discovery } from "../../src/skill/discovery"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
@@ -12,7 +12,7 @@ let downloadCount = 0
 let externalFetchCount = 0
 const origin = "http://example.com"
 const originalFetch = globalThis.fetch
-let lookupSpy: ReturnType<typeof spyOn>
+let lookupSpy: MockInstance
 
 const fixturePath = path.join(import.meta.dirname, "../fixture/skills")
 const cacheDir = path.join(Global.Path.cache, "skills")

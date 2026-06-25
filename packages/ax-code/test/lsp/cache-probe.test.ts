@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { LSPCache } from "../../src/lsp/cache"
 import * as LSPCacheProbe from "../../src/lsp/cache-probe"
 import * as LSPPerf from "../../src/lsp/perf"
 
-let lookupSpy: ReturnType<typeof spyOn> | undefined
-let hashFileSpy: ReturnType<typeof spyOn> | undefined
-let writeSpy: ReturnType<typeof spyOn> | undefined
+let lookupSpy: MockInstance | undefined
+let hashFileSpy: MockInstance | undefined
+let writeSpy: MockInstance | undefined
 
 afterEach(() => {
   lookupSpy?.mockRestore()

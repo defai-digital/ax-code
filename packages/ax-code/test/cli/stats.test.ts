@@ -1,11 +1,11 @@
-import { afterEach, expect, test, vi } from "vitest"
+import { afterEach, expect, test, vi, type MockInstance } from "vitest"
 import { aggregateSessionStats, displayStats, validateStatsDays, validateStatsDisplayLimit } from "../../src/cli/cmd/stats"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
 
 let messagesSpy: { mockRestore(): void } | undefined
-let warnSpy: ReturnType<typeof spyOn<typeof console, "warn">> | undefined
+let warnSpy: MockInstance | undefined
 
 afterEach(() => {
   messagesSpy?.mockRestore()

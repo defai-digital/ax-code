@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { NativeAddon } from "../../src/native/addon"
 
 const nativeStoreModule = "../../src/code-intelligence/native-store.ts" + "?native-store-unit"
 const { NativeStore } = (await import(nativeStoreModule)) as typeof import("../../src/code-intelligence/native-store")
-let nativeIndexSpy: ReturnType<typeof spyOn<typeof NativeAddon, "index">> | undefined
+let nativeIndexSpy: MockInstance | undefined
 
 afterEach(() => {
   nativeIndexSpy?.mockRestore()

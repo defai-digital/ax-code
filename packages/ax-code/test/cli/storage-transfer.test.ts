@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
 import { Instance } from "../../src/project/instance"
@@ -10,7 +11,7 @@ import { readSessionTransferFile } from "../../src/cli/cmd/storage/import"
 import { buildTransfer, writeTransfer } from "../../src/cli/cmd/storage/transfer"
 import { tmpdir } from "../fixture/fixture"
 
-let readJsonSpy: ReturnType<typeof spyOn<typeof Filesystem, "readJson">> | undefined
+let readJsonSpy: MockInstance | undefined
 
 afterEach(() => {
   readJsonSpy?.mockRestore()
@@ -21,7 +22,7 @@ describe("storage transfer", () => {
   test("reports corrupt import files as read failures, not missing files", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "corrupt.json"), "{not json")
+        await writeFile(path.join(dir, "corrupt.json"), "{not json")
       },
     })
 
@@ -49,7 +50,7 @@ describe("storage transfer", () => {
   test("reports schema-invalid import files before DB import starts", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "invalid-shape.json"), JSON.stringify({ info: { id: "ses_import" } }))
+        await writeFile(path.join(dir, "invalid-shape.json"), JSON.stringify({ info: { id: "ses_import" } }))
       },
     })
 

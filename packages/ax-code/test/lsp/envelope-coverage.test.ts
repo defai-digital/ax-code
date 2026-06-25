@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { pathToFileURL } from "url"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
@@ -10,7 +11,7 @@ import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
-let configSpy: ReturnType<typeof spyOn> | undefined
+let configSpy: MockInstance | undefined
 
 afterEach(() => {
   configSpy?.mockRestore()
@@ -37,7 +38,7 @@ describe("LSP envelope coverage (S1)", () => {
   test("documentSymbolEnvelope returns empty envelope when no server matches", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -53,7 +54,7 @@ describe("LSP envelope coverage (S1)", () => {
   test("definitionEnvelope returns empty envelope when no server matches", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -69,7 +70,7 @@ describe("LSP envelope coverage (S1)", () => {
   test("referencesEnvelope returns empty envelope when no server matches", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -85,7 +86,7 @@ describe("LSP envelope coverage (S1)", () => {
   test("hoverEnvelope returns empty envelope when no server matches", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -101,7 +102,7 @@ describe("LSP envelope coverage (S1)", () => {
   test("implementationEnvelope returns empty envelope when no server matches", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -117,7 +118,7 @@ describe("LSP envelope coverage (S1)", () => {
   test("call hierarchy envelopes return empty envelopes when no server matches", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -141,7 +142,7 @@ describe("LSP envelope coverage (S1)", () => {
   test("cache-enabled envelope fallback hashes each file once", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -165,7 +166,7 @@ describe("LSP envelope coverage (S1)", () => {
   test("bare functions remain back-compat wrappers returning data arrays", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await writeFile(file, "export const x = 1\n")
 
     await Instance.provide({
       directory: tmp.path,

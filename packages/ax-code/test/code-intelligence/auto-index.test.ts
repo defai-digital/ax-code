@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { AutoIndex } from "../../src/code-intelligence/auto-index"
 import { CodeIntelligence } from "../../src/code-intelligence"
@@ -9,11 +9,11 @@ import { Instance } from "../../src/project/instance"
 import { ProjectID } from "../../src/project/schema"
 import { tmpdir } from "../fixture/fixture"
 
-let nativeIndexSpy: ReturnType<typeof spyOn> | undefined
-let countNodesSpy: ReturnType<typeof spyOn> | undefined
-let getCursorSpy: ReturnType<typeof spyOn> | undefined
-let filesSpy: ReturnType<typeof spyOn> | undefined
-let indexFilesSpy: ReturnType<typeof spyOn> | undefined
+let nativeIndexSpy: MockInstance | undefined
+let countNodesSpy: MockInstance | undefined
+let getCursorSpy: MockInstance | undefined
+let filesSpy: MockInstance | undefined
+let indexFilesSpy: MockInstance | undefined
 
 afterEach(() => {
   nativeIndexSpy?.mockRestore()

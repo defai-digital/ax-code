@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { LSP } from "../../src/lsp"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
@@ -8,7 +9,7 @@ import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
-let configSpy: ReturnType<typeof spyOn> | undefined
+let configSpy: MockInstance | undefined
 
 afterEach(() => {
   configSpy?.mockRestore()
@@ -20,7 +21,7 @@ describe("LSP call hierarchy aggregation", () => {
     await using tmp = await tmpdir({ git: true })
     const serverPath = path.join(import.meta.dirname, "../fixture/lsp/fake-lsp-server.js")
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const hello = () => 1\n")
+    await writeFile(file, "export const hello = () => 1\n")
     const input = {
       file,
       line: 0,
@@ -58,7 +59,7 @@ describe("LSP call hierarchy aggregation", () => {
     await using tmp = await tmpdir({ git: true })
     const serverPath = path.join(import.meta.dirname, "../fixture/lsp/fake-lsp-server.js")
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const hello = () => 1\n")
+    await writeFile(file, "export const hello = () => 1\n")
     const input = {
       file,
       line: 0,

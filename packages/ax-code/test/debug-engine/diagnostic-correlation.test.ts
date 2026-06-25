@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, beforeEach, vi } from "vitest"
+import { afterEach, describe, expect, test, beforeEach, vi, type MockInstance } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
@@ -21,8 +21,8 @@ import { LSPClient } from "../../src/lsp/client"
 
 Log.init({ print: false })
 
-let diagnosticsSpy: ReturnType<typeof spyOn> | undefined
-let diagnosticsAggregatedSpy: ReturnType<typeof spyOn> | undefined
+let diagnosticsSpy: MockInstance | undefined
+let diagnosticsAggregatedSpy: MockInstance | undefined
 
 afterEach(() => {
   diagnosticsSpy?.mockRestore()

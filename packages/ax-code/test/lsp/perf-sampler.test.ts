@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
+import { writeFile } from "node:fs/promises"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
@@ -9,7 +10,7 @@ import path from "path"
 
 Log.init({ print: false })
 
-let configSpy: ReturnType<typeof spyOn> | undefined
+let configSpy: MockInstance | undefined
 
 afterEach(() => {
   configSpy?.mockRestore()
@@ -120,7 +121,7 @@ describe("LSP.perfSnapshot", () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
     const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
-    await Bun.write(file, "export const demo = 1\n")
+    await writeFile(file, "export const demo = 1\n")
 
     await Instance.provide({
       directory: tmp.path,

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import fs from "fs"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -10,7 +10,7 @@ import { File } from "../../src/file"
 
 Log.init({ print: false })
 
-let workspaceSymbolSpy: ReturnType<typeof spyOn> | undefined
+let workspaceSymbolSpy: MockInstance | undefined
 
 afterEach(() => {
   workspaceSymbolSpy?.mockRestore()

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import {
   buildIndexReport,
@@ -13,8 +13,8 @@ import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
-let touchFileSpy: ReturnType<typeof spyOn> | undefined
-let statusSpy: ReturnType<typeof spyOn> | undefined
+let touchFileSpy: MockInstance | undefined
+let statusSpy: MockInstance | undefined
 
 afterEach(() => {
   touchFileSpy?.mockRestore()
