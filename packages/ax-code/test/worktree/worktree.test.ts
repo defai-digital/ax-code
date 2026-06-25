@@ -12,6 +12,26 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
+async function waitForStableFileContent(file: string, expected: string) {
+  const deadline = Date.now() + 7_500
+  let last = ""
+  let expectedSince = 0
+
+  while (Date.now() < deadline) {
+    last = await fs.readFile(file, "utf8").catch(() => "")
+    if (last === expected) {
+      expectedSince ||= Date.now()
+      if (Date.now() - expectedSince >= 1_000) return last
+    } else {
+      expectedSince = 0
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+
+  return last
+}
+
 test("create removes the preallocated directory when git worktree add fails", async () => {
   await using tmp = await tmpdir()
   await $`git init`.cwd(tmp.path).quiet()
@@ -114,9 +134,8 @@ test("reset cancels pending bootstrap before queueing start scripts", async () =
 
       const info = await Worktree.create({ name: "reset-cancel" })
       await Worktree.reset({ directory: info.directory })
-      await new Promise((resolve) => setTimeout(resolve, 500))
 
-      const content = await fs.readFile(marker, "utf8").catch(() => "")
+      const content = await waitForStableFileContent(marker, "x")
       expect(content).toBe("x")
 
       await Worktree.remove({ directory: info.directory })
