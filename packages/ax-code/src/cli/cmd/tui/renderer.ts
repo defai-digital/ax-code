@@ -1,5 +1,5 @@
-import { render, type JSX } from "@opentui/solid"
-import type { CliRendererConfig } from "@opentui/core"
+import { render, type JSX } from "@ax-code/opentui-solid"
+import type { CliRendererConfig } from "@ax-code/opentui-core"
 import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"

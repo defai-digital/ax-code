@@ -1,4 +1,4 @@
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@ax-code/opentui-core"
 import { fileURLToPath } from "url"
 import { useTheme } from "../context/theme"
 import { useDialog } from "@tui/ui/dialog"

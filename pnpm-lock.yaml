@@ -124,9 +124,6 @@ patchedDependencies:
   '@msgpack/msgpack@3.1.3':
     hash: c43f29d50927abd31b657723acd5410ebaed8363c976e472de21b8cc2f3cdfe9
     path: patches/@msgpack__msgpack@3.1.3.patch
-  '@opentui/core@0.4.1':
-    hash: b7c4dbbf272421a5c122a1e8bc8c6fca62f3f5071e972133fd801c57b741d61e
-    path: patches/@opentui__core@0.4.1.patch
   '@standard-community/standard-openapi@0.2.9':
     hash: 4c6248f000365bd4af943a672532d6bdeb179f46e6831d05d4f2f1ecc4d6e439
     path: patches/@standard-community%2Fstandard-openapi@0.2.9.patch
@@ -766,6 +763,15 @@ importers:
       '@ax-code/index-core':
         specifier: workspace:*
         version: link:../ax-code-index-core
+      '@ax-code/opentui-core':
+        specifier: workspace:*
+        version: link:../opentui-core
+      '@ax-code/opentui-solid':
+        specifier: workspace:*
+        version: link:../opentui-solid
+      '@ax-code/opentui-spinner':
+        specifier: workspace:*
+        version: link:../opentui-spinner
       '@ax-code/parser':
         specifier: workspace:*
         version: link:../ax-code-parser-native
@@ -826,12 +832,6 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.40.0
         version: 1.40.0
-      '@opentui/core':
-        specifier: 0.4.1
-        version: 0.4.1(patch_hash=b7c4dbbf272421a5c122a1e8bc8c6fca62f3f5071e972133fd801c57b741d61e)(typescript@5.9.3)(web-tree-sitter@0.25.10)
-      '@opentui/solid':
-        specifier: 0.4.1
-        version: 0.4.1(solid-js@1.9.12)(typescript@5.9.3)(web-tree-sitter@0.25.10)
       '@parcel/watcher':
         specifier: 2.5.1
         version: 2.5.1
@@ -913,9 +913,6 @@ importers:
       open:
         specifier: 10.1.2
         version: 10.1.2
-      opentui-spinner:
-        specifier: 0.0.6
-        version: 0.0.6(@opentui/core@0.4.1(patch_hash=b7c4dbbf272421a5c122a1e8bc8c6fca62f3f5071e972133fd801c57b741d61e)(typescript@5.9.3)(web-tree-sitter@0.25.10))(@opentui/solid@0.4.1(solid-js@1.9.12)(typescript@5.9.3)(web-tree-sitter@0.25.10))(typescript@5.9.3)
       partial-json:
         specifier: 0.1.7
         version: 0.1.7
@@ -1156,6 +1153,91 @@ importers:
       vitest:
         specifier: 4.1.9
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@20.19.37)(@vitest/coverage-v8@4.1.9)(vite@8.0.16(@types/node@20.19.37)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
+  packages/opentui-core:
+    dependencies:
+      bun-ffi-structs:
+        specifier: 0.2.3
+        version: 0.2.3(typescript@5.9.3)
+      diff:
+        specifier: 9.0.0
+        version: 9.0.0
+      marked:
+        specifier: 17.0.1
+        version: 17.0.1
+      string-width:
+        specifier: 7.2.0
+        version: 7.2.0
+      strip-ansi:
+        specifier: 7.1.2
+        version: 7.1.2
+      web-tree-sitter:
+        specifier: 0.25.10
+        version: 0.25.10
+    optionalDependencies:
+      '@opentui/core-darwin-arm64':
+        specifier: 0.4.1
+        version: 0.4.1
+      '@opentui/core-darwin-x64':
+        specifier: 0.4.1
+        version: 0.4.1
+      '@opentui/core-linux-arm64':
+        specifier: 0.4.1
+        version: 0.4.1
+      '@opentui/core-linux-arm64-musl':
+        specifier: 0.4.1
+        version: 0.4.1
+      '@opentui/core-linux-x64':
+        specifier: 0.4.1
+        version: 0.4.1
+      '@opentui/core-linux-x64-musl':
+        specifier: 0.4.1
+        version: 0.4.1
+      '@opentui/core-win32-arm64':
+        specifier: 0.4.1
+        version: 0.4.1
+      '@opentui/core-win32-x64':
+        specifier: 0.4.1
+        version: 0.4.1
+
+  packages/opentui-solid:
+    dependencies:
+      '@ax-code/opentui-core':
+        specifier: workspace:*
+        version: link:../opentui-core
+      '@babel/core':
+        specifier: 7.29.6
+        version: 7.29.6
+      '@babel/preset-typescript':
+        specifier: 7.27.1
+        version: 7.27.1(@babel/core@7.29.6)
+      babel-plugin-module-resolver:
+        specifier: 5.0.2
+        version: 5.0.2
+      babel-preset-solid:
+        specifier: 1.9.12
+        version: 1.9.12(@babel/core@7.29.6)(solid-js@1.9.12)
+      entities:
+        specifier: 7.0.1
+        version: 7.0.1
+      s-js:
+        specifier: ^0.4.9
+        version: 0.4.9
+      solid-js:
+        specifier: 1.9.12
+        version: 1.9.12
+
+  packages/opentui-spinner:
+    dependencies:
+      '@ax-code/opentui-core':
+        specifier: workspace:*
+        version: link:../opentui-core
+      '@ax-code/opentui-solid':
+        specifier: workspace:*
+        version: link:../opentui-solid
+      cli-spinners:
+        specifier: ^3.3.0
+        version: 3.4.0
 
   packages/plugin:
     dependencies:
@@ -1520,10 +1602,6 @@ packages:
     resolution: {integrity: sha512-QdxmAo/ikZqqRGA8s43ww8lcql6naWRvEz0FFrl6MIlc7Gi6TroXnSdWa5U/kq6fzcpqpHesicQxFZIieZbyIA==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/generator@7.29.1':
-    resolution: {integrity: sha512-qsaF+9Qcm2Qv8SRIMMscAvG4O3lJ0F1GuMo5HR/Bp02LopNgnZBC/EkbevHFeGs4ls/oPz9v+Bsmzbkbe+0dUw==}
-    engines: {node: '>=6.9.0'}
-
   '@babel/generator@7.29.7':
     resolution: {integrity: sha512-DkXD5OJQaAQIdZ1bt3UZdEnHAn9Imd3IVBdX03UFe+ony9Ojw5pzr9YVKGDY1jt+Gcn/FnGkNf8r+Vj5NOJWtQ==}
     engines: {node: '>=6.9.0'}
@@ -1566,10 +1644,6 @@ packages:
 
   '@babel/helper-optimise-call-expression@7.27.1':
     resolution: {integrity: sha512-URMGH08NzYFhubNSGJrpUEphGKQwMQYBySzat5cAByY1/YgIRkULnIy3tAMeszlL/so2HbeilYloUmSpd7GdVw==}
-    engines: {node: '>=6.9.0'}
-
-  '@babel/helper-plugin-utils@7.28.6':
-    resolution: {integrity: sha512-S9gzZ/bz83GRysI7gAD4wPT/AI3uCnY+9xn+Mx/KPs2JwHJIz1W8PZkg2cqyt3RNOBM8ejcXhV6y8Og7ly/Dug==}
     engines: {node: '>=6.9.0'}
 
   '@babel/helper-plugin-utils@7.29.7':
@@ -3105,16 +3179,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@opentui/core@0.4.1':
-    resolution: {integrity: sha512-ejlunoFCGLcghYGdfamI/DlWHsgCTLbuoL2JeOmFuLsN+DM5phje3CQbGR4tpl24cadCgHJQFomjoQ9Htvin+Q==}
-    peerDependencies:
-      web-tree-sitter: 0.25.10
-
-  '@opentui/solid@0.4.1':
-    resolution: {integrity: sha512-CD3M3mlUFwy2r8fd43MFY8kR7bFO+CfL1LHjV6+adp7T4jpadb9zuhfKKJpMzSdgAqQof+F5ifGMx6RljiCmwQ==}
-    peerDependencies:
-      solid-js: 1.9.12
-
   '@oxc-project/types@0.133.0':
     resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
 
@@ -3164,28 +3228,24 @@ packages:
     engines: {node: '>= 10.0.0'}
     cpu: [arm64]
     os: [linux]
-    libc: [glibc]
 
   '@parcel/watcher-linux-arm64-musl@2.5.1':
     resolution: {integrity: sha512-cFOjABi92pMYRXS7AcQv9/M1YuKRw8SZniCDw0ssQb/noPkRzA+HBDkwmyOJYp5wXcsTrhxO0zq1U11cK9jsFg==}
     engines: {node: '>= 10.0.0'}
     cpu: [arm64]
     os: [linux]
-    libc: [musl]
 
   '@parcel/watcher-linux-x64-glibc@2.5.1':
     resolution: {integrity: sha512-GcESn8NZySmfwlTsIur+49yDqSny2IhPeZfXunQi48DMugKeZ7uy1FX83pO0X22sHntJ4Ub+9k34XQCX+oHt2A==}
     engines: {node: '>= 10.0.0'}
     cpu: [x64]
     os: [linux]
-    libc: [glibc]
 
   '@parcel/watcher-linux-x64-musl@2.5.1':
     resolution: {integrity: sha512-n0E2EQbatQ3bXhcH2D1XIAANAcTZkQICBPVaxMeaCVBtOpBZpWJuf7LwyWPSBDITb7In8mqQgJ7gH8CILCURXg==}
     engines: {node: '>= 10.0.0'}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@parcel/watcher-win32-arm64@2.5.1':
     resolution: {integrity: sha512-RFzklRvmc3PkjKjry3hLF9wD7ppR4AKcWNzH7kXR7GUe0Igb3Nz8fyPwtZCSquGrhU5HhUNDr/mKBqj7tqA2Vw==}
@@ -7789,19 +7849,6 @@ packages:
   openapi-types@12.1.3:
     resolution: {integrity: sha512-N4YtSYJqghVu4iek2ZUvcN/0aqH1kRDuNqzcycDxhOUpg7GdvLa2F3DgS6yBNhInhv2r/6I0Flkn7CqL8+nIcw==}
 
-  opentui-spinner@0.0.6:
-    resolution: {integrity: sha512-xupLOeVQEAXEvVJCvHkfX6fChDWmJIPHe5jyUrVb8+n4XVTX8mBNhitFfB9v2ZbkC1H2UwPab/ElePHoW37NcA==}
-    peerDependencies:
-      '@opentui/core': ^0.1.49
-      '@opentui/react': ^0.1.49
-      '@opentui/solid': ^0.1.49
-      typescript: ^5
-    peerDependenciesMeta:
-      '@opentui/react':
-        optional: true
-      '@opentui/solid':
-        optional: true
-
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -9919,7 +9966,7 @@ snapshots:
 
   '@babel/code-frame@7.29.0':
     dependencies:
-      '@babel/helper-validator-identifier': 7.28.5
+      '@babel/helper-validator-identifier': 7.29.7
       js-tokens: 4.0.0
       picocolors: 1.1.1
 
@@ -9935,7 +9982,7 @@ snapshots:
       '@babel/parser': 7.29.7
       '@babel/template': 7.28.6
       '@babel/traverse': 7.29.0
-      '@babel/types': 7.29.0
+      '@babel/types': 7.29.7
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
       debug: 4.4.3(supports-color@5.5.0)
@@ -9944,14 +9991,6 @@ snapshots:
       semver: 6.3.1
     transitivePeerDependencies:
       - supports-color
-
-  '@babel/generator@7.29.1':
-    dependencies:
-      '@babel/parser': 7.29.2
-      '@babel/types': 7.29.0
-      '@jridgewell/gen-mapping': 0.3.13
-      '@jridgewell/trace-mapping': 0.3.31
-      jsesc: 3.1.0
 
   '@babel/generator@7.29.7':
     dependencies:
@@ -10002,7 +10041,7 @@ snapshots:
   '@babel/helper-module-imports@7.28.6':
     dependencies:
       '@babel/traverse': 7.29.0
-      '@babel/types': 7.29.0
+      '@babel/types': 7.29.7
     transitivePeerDependencies:
       - supports-color
 
@@ -10010,7 +10049,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.29.6
       '@babel/helper-module-imports': 7.28.6
-      '@babel/helper-validator-identifier': 7.28.5
+      '@babel/helper-validator-identifier': 7.29.7
       '@babel/traverse': 7.29.0
     transitivePeerDependencies:
       - supports-color
@@ -10018,8 +10057,6 @@ snapshots:
   '@babel/helper-optimise-call-expression@7.27.1':
     dependencies:
       '@babel/types': 7.29.7
-
-  '@babel/helper-plugin-utils@7.28.6': {}
 
   '@babel/helper-plugin-utils@7.29.7': {}
 
@@ -10052,7 +10089,7 @@ snapshots:
   '@babel/helpers@7.29.2':
     dependencies:
       '@babel/template': 7.28.6
-      '@babel/types': 7.29.0
+      '@babel/types': 7.29.7
 
   '@babel/parser@7.29.2':
     dependencies:
@@ -10065,18 +10102,18 @@ snapshots:
   '@babel/plugin-syntax-jsx@7.28.6(@babel/core@7.29.6)':
     dependencies:
       '@babel/core': 7.29.6
-      '@babel/helper-plugin-utils': 7.28.6
+      '@babel/helper-plugin-utils': 7.29.7
 
   '@babel/plugin-syntax-typescript@7.28.6(@babel/core@7.29.6)':
     dependencies:
       '@babel/core': 7.29.6
-      '@babel/helper-plugin-utils': 7.28.6
+      '@babel/helper-plugin-utils': 7.29.7
 
   '@babel/plugin-transform-modules-commonjs@7.28.6(@babel/core@7.29.6)':
     dependencies:
       '@babel/core': 7.29.6
       '@babel/helper-module-transforms': 7.28.6(@babel/core@7.29.6)
-      '@babel/helper-plugin-utils': 7.28.6
+      '@babel/helper-plugin-utils': 7.29.7
     transitivePeerDependencies:
       - supports-color
 
@@ -10095,7 +10132,7 @@ snapshots:
       '@babel/core': 7.29.6
       '@babel/helper-annotate-as-pure': 7.27.3
       '@babel/helper-create-class-features-plugin': 7.28.6(@babel/core@7.29.6)
-      '@babel/helper-plugin-utils': 7.28.6
+      '@babel/helper-plugin-utils': 7.29.7
       '@babel/helper-skip-transparent-expression-wrappers': 7.27.1
       '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.6)
     transitivePeerDependencies:
@@ -10104,7 +10141,7 @@ snapshots:
   '@babel/preset-typescript@7.27.1(@babel/core@7.29.6)':
     dependencies:
       '@babel/core': 7.29.6
-      '@babel/helper-plugin-utils': 7.28.6
+      '@babel/helper-plugin-utils': 7.29.7
       '@babel/helper-validator-option': 7.27.1
       '@babel/plugin-syntax-jsx': 7.28.6(@babel/core@7.29.6)
       '@babel/plugin-transform-modules-commonjs': 7.28.6(@babel/core@7.29.6)
@@ -10118,16 +10155,16 @@ snapshots:
     dependencies:
       '@babel/code-frame': 7.29.0
       '@babel/parser': 7.29.7
-      '@babel/types': 7.29.0
+      '@babel/types': 7.29.7
 
   '@babel/traverse@7.29.0':
     dependencies:
       '@babel/code-frame': 7.29.0
-      '@babel/generator': 7.29.1
+      '@babel/generator': 7.29.7
       '@babel/helper-globals': 7.28.0
-      '@babel/parser': 7.29.2
+      '@babel/parser': 7.29.7
       '@babel/template': 7.28.6
-      '@babel/types': 7.29.0
+      '@babel/types': 7.29.7
       debug: 4.4.3(supports-color@5.5.0)
     transitivePeerDependencies:
       - supports-color
@@ -11715,41 +11752,6 @@ snapshots:
 
   '@opentui/core-win32-x64@0.4.1':
     optional: true
-
-  '@opentui/core@0.4.1(patch_hash=b7c4dbbf272421a5c122a1e8bc8c6fca62f3f5071e972133fd801c57b741d61e)(typescript@5.9.3)(web-tree-sitter@0.25.10)':
-    dependencies:
-      bun-ffi-structs: 0.2.3(typescript@5.9.3)
-      diff: 9.0.0
-      marked: 17.0.1
-      string-width: 7.2.0
-      strip-ansi: 7.1.2
-      web-tree-sitter: 0.25.10
-    optionalDependencies:
-      '@opentui/core-darwin-arm64': 0.4.1
-      '@opentui/core-darwin-x64': 0.4.1
-      '@opentui/core-linux-arm64': 0.4.1
-      '@opentui/core-linux-arm64-musl': 0.4.1
-      '@opentui/core-linux-x64': 0.4.1
-      '@opentui/core-linux-x64-musl': 0.4.1
-      '@opentui/core-win32-arm64': 0.4.1
-      '@opentui/core-win32-x64': 0.4.1
-    transitivePeerDependencies:
-      - typescript
-
-  '@opentui/solid@0.4.1(solid-js@1.9.12)(typescript@5.9.3)(web-tree-sitter@0.25.10)':
-    dependencies:
-      '@babel/core': 7.29.6
-      '@babel/preset-typescript': 7.27.1(@babel/core@7.29.6)
-      '@opentui/core': 0.4.1(patch_hash=b7c4dbbf272421a5c122a1e8bc8c6fca62f3f5071e972133fd801c57b741d61e)(typescript@5.9.3)(web-tree-sitter@0.25.10)
-      babel-plugin-module-resolver: 5.0.2
-      babel-preset-solid: 1.9.12(@babel/core@7.29.6)(solid-js@1.9.12)
-      entities: 7.0.1
-      s-js: 0.4.9
-      solid-js: 1.9.12
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
-      - web-tree-sitter
 
   '@oxc-project/types@0.133.0': {}
 
@@ -13849,7 +13851,7 @@ snapshots:
       '@babel/core': 7.29.6
       '@babel/helper-module-imports': 7.18.6
       '@babel/plugin-syntax-jsx': 7.28.6(@babel/core@7.29.6)
-      '@babel/types': 7.29.0
+      '@babel/types': 7.29.7
       html-entities: 2.3.3
       parse5: 7.3.0
 
@@ -15767,7 +15769,7 @@ snapshots:
 
   is-core-module@2.16.1:
     dependencies:
-      hasown: 2.0.2
+      hasown: 2.0.4
 
   is-decimal@1.0.4: {}
 
@@ -16609,7 +16611,7 @@ snapshots:
 
   minimatch@8.0.7:
     dependencies:
-      brace-expansion: 2.0.3
+      brace-expansion: 2.1.1
 
   minimatch@9.0.9:
     dependencies:
@@ -16734,7 +16736,7 @@ snapshots:
 
   node-abi@3.89.0:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.5
 
   node-addon-api@1.7.2:
     optional: true
@@ -16748,7 +16750,7 @@ snapshots:
 
   node-api-version@0.2.1:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.5
 
   node-domexception@1.0.0: {}
 
@@ -16928,14 +16930,6 @@ snapshots:
       - encoding
 
   openapi-types@12.1.3: {}
-
-  opentui-spinner@0.0.6(@opentui/core@0.4.1(patch_hash=b7c4dbbf272421a5c122a1e8bc8c6fca62f3f5071e972133fd801c57b741d61e)(typescript@5.9.3)(web-tree-sitter@0.25.10))(@opentui/solid@0.4.1(solid-js@1.9.12)(typescript@5.9.3)(web-tree-sitter@0.25.10))(typescript@5.9.3):
-    dependencies:
-      '@opentui/core': 0.4.1(patch_hash=b7c4dbbf272421a5c122a1e8bc8c6fca62f3f5071e972133fd801c57b741d61e)(typescript@5.9.3)(web-tree-sitter@0.25.10)
-      cli-spinners: 3.4.0
-      typescript: 5.9.3
-    optionalDependencies:
-      '@opentui/solid': 0.4.1(solid-js@1.9.12)(typescript@5.9.3)(web-tree-sitter@0.25.10)
 
   optionator@0.9.4:
     dependencies:

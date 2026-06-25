@@ -13,12 +13,12 @@ import {
   MacOSScrollAccel,
   type ScrollAcceleration,
   RGBA,
-} from "@opentui/core"
+} from "@ax-code/opentui-core"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@ax-code/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
-import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@ax-code/opentui-solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"

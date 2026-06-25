@@ -1,10 +1,10 @@
 import { Show } from "solid-js"
 import { useTheme } from "../context/theme"
 import { useKV } from "../context/kv"
-import type { JSX } from "@opentui/solid"
-import type { RGBA } from "@opentui/core"
-import type { ColorGenerator } from "opentui-spinner"
-import "opentui-spinner/solid"
+import type { JSX } from "@ax-code/opentui-solid"
+import type { RGBA } from "@ax-code/opentui-core"
+import type { ColorGenerator } from "@ax-code/opentui-spinner"
+import "@ax-code/opentui-spinner/solid"
 import { shouldUseTuiAnimations } from "./spinner-profile"
 
 const frames = ["|", "/", "-", "\\"]

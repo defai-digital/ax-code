@@ -1,5 +1,5 @@
 import type { JSX } from "solid-js"
-import type { RGBA } from "@opentui/core"
+import type { RGBA } from "@ax-code/opentui-core"
 import open from "open"
 import { useToast } from "./toast"
 import { Log } from "@/util/log"

@@ -1,9 +1,9 @@
-import { TextareaRenderable, TextAttributes } from "@opentui/core"
+import { TextareaRenderable, TextAttributes } from "@ax-code/opentui-core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { onMount, onCleanup, Show } from "solid-js"
-import { useKeyboard } from "@opentui/solid"
+import { useKeyboard } from "@ax-code/opentui-solid"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 
 export type DialogExportOptionsProps = {

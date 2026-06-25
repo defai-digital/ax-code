@@ -1,7 +1,7 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
-import { MouseButton, TextAttributes } from "@opentui/core"
+import { MouseButton, TextAttributes } from "@ax-code/opentui-core"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import {
   type Component,

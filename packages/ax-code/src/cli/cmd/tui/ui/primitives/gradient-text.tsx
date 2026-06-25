@@ -1,5 +1,5 @@
-import { TextAttributes } from "@opentui/core"
-import type { RGBA } from "@opentui/core"
+import { TextAttributes } from "@ax-code/opentui-core"
+import type { RGBA } from "@ax-code/opentui-core"
 import { For, Show, createMemo } from "solid-js"
 import { gradientLineRuns } from "./color"
 import { useVisualCapability } from "./capability-context"

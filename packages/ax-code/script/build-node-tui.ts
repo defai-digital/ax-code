@@ -86,7 +86,7 @@ const result = await esbuild.build({
   // Native / Bun-only ids kept external, loaded at runtime from node_modules
   // shipped beside the bundle (OpenTUI FFI lib, node-pty .node, bun:* are
   // never hit on Node).
-  external: ["bun:ffi", "bun:sqlite", "node-pty-prebuilt-multiarch", "@opentui/core", "@opentui/solid"],
+  external: ["bun:ffi", "bun:sqlite", "node-pty-prebuilt-multiarch", "@ax-code/opentui-core", "@ax-code/opentui-solid"],
   plugins: [
     {
       name: "ax-node-overrides",
@@ -153,9 +153,14 @@ await writeText(
 // The bundle externalizes the native FFI/.node packages and OpenTUI; ship them
 // in node_modules beside the bundle so the dist runs anywhere `node` is present.
 const deps = pkg.dependencies as Record<string, string>
-const distDeps = {
-  "@opentui/core": deps["@opentui/core"],
-  "@opentui/solid": deps["@opentui/solid"],
+// Read the vendored opentui-core's optionalDependencies to find the native platform packages.
+const opentuiCorePkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-core", "package.json"), "utf8")) as {
+  optionalDependencies?: Record<string, string>
+}
+const currentNativePkg = Object.keys(opentuiCorePkg.optionalDependencies ?? {}).find(
+  (name) => name.includes(`-${process.platform}-${process.arch}`)
+)
+const distDeps: Record<string, string> = {
   "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
   // .wasm files are kept external (esbuild) and resolved at runtime via
   // createRequire — ship the tree-sitter packages beside the bundle so the bash
@@ -163,11 +168,23 @@ const distDeps = {
   "web-tree-sitter": deps["web-tree-sitter"],
   "tree-sitter-bash": deps["tree-sitter-bash"],
 }
+// The vendored @ax-code/opentui-core dynamically imports @opentui/core-<platform>
+// for the native .dylib/.so. Ship the matching platform package.
+if (currentNativePkg) {
+  distDeps[currentNativePkg] = opentuiCorePkg.optionalDependencies![currentNativePkg]
+}
+// @ax-code/opentui-* are workspace packages (not on npm); copy them directly
+// into the distribution instead of npm install.
+const vendoredOpentuiPackages: Array<[string, string]> = [
+  ["@ax-code/opentui-core", path.join(dir, "..", "opentui-core")],
+  ["@ax-code/opentui-solid", path.join(dir, "..", "opentui-solid")],
+  ["@ax-code/opentui-spinner", path.join(dir, "..", "opentui-spinner")],
+]
 await writeText(
   path.join(outRoot, "package.json"),
   JSON.stringify({ name: "ax-code-dist", private: true, type: "module", dependencies: distDeps }, null, 2) + "\n",
 )
-console.log("Installing runtime dependencies (@opentui, node-pty) into the distribution...")
+console.log("Installing runtime dependencies (node-pty, tree-sitter) into the distribution...")
 const runNpm = (args: string[]) =>
   spawnSync("npm", args, { cwd: outRoot, stdio: "inherit", shell: process.platform === "win32" })
 const install = runNpm(["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"])
@@ -178,13 +195,9 @@ if (install.status !== 0) {
 }
 
 // Re-apply pnpm patches to the freshly npm-installed dist deps. The install
-// above pulls @opentui/core et al. clean from the registry, which drops the
+// above pulls deps clean from the registry, which drops the
 // pnpm patches that `pnpm dev` runs with — so without this step the shipped
-// binary silently differs from source. Critically it carries the OpenTUI FFI
-// coordinate guards; missing them, the TUI throws on every render frame the
-// moment a cell scrolls off-screen (negative coord -> strict-u32 FFI reject)
-// and spams an unstoppable crash. Overlay each patched file from the (patched)
-// workspace copy so the distribution matches source.
+// binary silently differs from source.
 const rootPkg = JSON.parse(await readText(path.join(dir, "..", "..", "package.json"))) as {
   pnpm?: { patchedDependencies?: Record<string, string> }
 }
@@ -212,6 +225,20 @@ for (const [spec, patchRel] of Object.entries(rootPkg.pnpm?.patchedDependencies 
     fs.copyFileSync(src, dest)
   }
   console.log(`Re-applied pnpm patch for ${name} (${files.length} file(s)) into the distribution`)
+}
+
+// Copy vendored @ax-code/opentui-* workspace packages into the distribution.
+// These are not on npm, so they cannot be installed via npm install.
+const distAxScope = path.join(outRoot, "node_modules", "@ax-code")
+fs.mkdirSync(distAxScope, { recursive: true })
+for (const [pkgName, srcDir] of vendoredOpentuiPackages) {
+  const destDir = path.join(distAxScope, pkgName.replace("@ax-code/", ""))
+  if (!fs.existsSync(srcDir)) {
+    console.warn(`Vendored package missing: ${srcDir} — ${pkgName} will be unavailable in the distribution`)
+    continue
+  }
+  fs.cpSync(srcDir, destDir, { recursive: true, dereference: true })
+  console.log(`Copied vendored ${pkgName} into the distribution`)
 }
 // node-pty ships a node-gyp addon; build it for this platform (no abi prebuild
 // for newer Node yet). Cross-platform builds run this on each target in CI.

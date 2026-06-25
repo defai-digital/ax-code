@@ -4,7 +4,7 @@
 // site — never per frame. Adjacent cells quantized to the same gradient step
 // are merged into a single run to bound the number of rendered spans.
 
-import { RGBA } from "@opentui/core"
+import { RGBA } from "@ax-code/opentui-core"
 
 export function lerpRgba(a: RGBA, b: RGBA, t: number): RGBA {
   const f = Math.min(1, Math.max(0, t))

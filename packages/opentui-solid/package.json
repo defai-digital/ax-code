@@ -1,0 +1,69 @@
+{
+  "name": "@ax-code/opentui-solid",
+  "module": "index.js",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "type": "module",
+  "version": "0.4.1",
+  "description": "Vendored fork of @opentui/solid - SolidJS renderer for OpenTUI",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "bun": "./index.bun.js",
+      "node": "./index.js",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./preload": {
+      "bun": "./scripts/preload.js",
+      "node": "./scripts/preload.node.js",
+      "default": "./scripts/preload.node.js"
+    },
+    "./bun-plugin": {
+      "types": "./scripts/solid-plugin.d.ts",
+      "bun": "./scripts/solid-plugin.js",
+      "node": "./scripts/solid-plugin.node.js",
+      "default": "./scripts/solid-plugin.node.js"
+    },
+    "./runtime-plugin-support": {
+      "types": "./scripts/runtime-plugin-support.d.ts",
+      "bun": "./scripts/runtime-plugin-support.js",
+      "node": "./scripts/runtime-plugin-support.node.js",
+      "default": "./scripts/runtime-plugin-support.node.js"
+    },
+    "./runtime-plugin-support/configure": {
+      "types": "./scripts/runtime-plugin-support-configure.d.ts",
+      "bun": "./scripts/runtime-plugin-support-configure.js",
+      "node": "./scripts/runtime-plugin-support-configure.node.js",
+      "default": "./scripts/runtime-plugin-support-configure.node.js"
+    },
+    "./components": {
+      "types": "./components.d.ts",
+      "import": "./components.js",
+      "require": "./components.js"
+    },
+    "./jsx-runtime": {
+      "types": "./jsx-runtime.d.ts",
+      "import": "./jsx-runtime.js",
+      "default": "./jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./jsx-dev-runtime.d.ts",
+      "import": "./jsx-dev-runtime.js",
+      "default": "./jsx-dev-runtime.js"
+    }
+  },
+  "dependencies": {
+    "@ax-code/opentui-core": "workspace:*",
+    "@babel/core": "7.28.0",
+    "@babel/preset-typescript": "7.27.1",
+    "babel-plugin-module-resolver": "5.0.2",
+    "babel-preset-solid": "1.9.12",
+    "entities": "7.0.1",
+    "s-js": "^0.4.9"
+  },
+  "peerDependencies": {
+    "solid-js": "1.9.12"
+  }
+}

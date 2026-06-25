@@ -1,4 +1,4 @@
-import { RGBA } from "@opentui/core"
+import { RGBA } from "@ax-code/opentui-core"
 import automatosx from "./theme/automatosx.json" with { type: "json" }
 import aura from "./theme/aura.json" with { type: "json" }
 import ayu from "./theme/ayu.json" with { type: "json" }

@@ -1,4 +1,4 @@
-import { useRenderer } from "@opentui/solid"
+import { useRenderer } from "@ax-code/opentui-solid"
 import { onCleanup } from "solid-js"
 import { createSimpleContext } from "./helper"
 import { FormatError, FormatUnknownError } from "@/cli/error"

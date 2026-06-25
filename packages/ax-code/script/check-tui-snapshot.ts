@@ -12,7 +12,7 @@
 
 import path from "node:path"
 import { exists, readText, writeText } from "./fs-compat"
-import type { RGBA } from "@opentui/core"
+import type { RGBA } from "@ax-code/opentui-core"
 import { logo } from "../src/cli/logo"
 import { gradientLineRuns } from "../src/cli/cmd/tui/ui/primitives/color"
 import { formatGauge } from "../src/cli/cmd/tui/ui/primitives/format"

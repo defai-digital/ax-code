@@ -20,7 +20,7 @@ function isSolid(spec: string) {
 }
 
 function isOpenTui(spec: string) {
-  return spec.startsWith("@opentui/")
+  return spec.startsWith("@opentui/") || spec.startsWith("@ax-code/opentui-")
 }
 
 function v4Rule(spec: string): V4Guardrails.Rule | undefined {

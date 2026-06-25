@@ -1,6 +1,6 @@
 import { useSync } from "@tui/context/sync"
 import { createMemo, createEffect, type Accessor, For, Match, Show, Switch } from "solid-js"
-import { useTerminalDimensions } from "@opentui/solid"
+import { useTerminalDimensions } from "@ax-code/opentui-solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import { Installation } from "@/installation"

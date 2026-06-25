@@ -1,4 +1,4 @@
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@ax-code/opentui-core"
 import type { JSX } from "solid-js"
 import { Spinner } from "../component/spinner"
 import { useTheme } from "../context/theme"

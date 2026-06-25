@@ -9,7 +9,7 @@ import {
   type Accessor,
   type ParentProps,
 } from "solid-js"
-import { useKeyboard } from "@opentui/solid"
+import { useKeyboard } from "@ax-code/opentui-solid"
 import { type KeybindKey, useKeybind } from "@tui/context/keybind"
 import { useToast } from "@tui/ui/toast"
 import { useKV } from "@tui/context/kv"

@@ -10,7 +10,7 @@ import {
   t,
   dim,
   fg,
-} from "@opentui/core"
+} from "@ax-code/opentui-core"
 import {
   createEffect,
   createMemo,
@@ -55,7 +55,7 @@ import { assign } from "./part"
 import { usePromptStash } from "./stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
 import { Editor } from "@tui/util/editor"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { useExit } from "../../context/exit"

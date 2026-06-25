@@ -1,5 +1,5 @@
 // esbuild plugin that applies OpenTUI's Solid JSX transform under Node, so the
-// TUI can be bundled without Bun's `@opentui/solid/bun-plugin` (which is
+// TUI can be bundled without Bun's `@ax-code/opentui-solid/bun-plugin` (which is
 // Bun-only). It reuses OpenTUI's own `transformSolidSource` (Babel +
 // babel-preset-solid) — the same transform the bun plugin runs — keeping the
 // JSX output identical across runtimes. (ADR-036 — TUI on Node.)
@@ -16,14 +16,14 @@ const require = createRequire(import.meta.url)
 let cachedTransform: ((code: string, opts: Record<string, unknown>) => Promise<{ code?: string } | string>) | undefined
 async function getTransform() {
   if (cachedTransform) return cachedTransform
-  const dir = path.dirname(require.resolve("@opentui/solid/bun-plugin"))
+  const dir = path.dirname(require.resolve("@ax-code/opentui-solid/bun-plugin"))
   const mod = await import(pathToFileURL(path.join(dir, "solid-transform.js")).href)
   cachedTransform = mod.transformSolidSource
   return cachedTransform!
 }
 
 export function solidEsbuildPlugin(options: { moduleName?: string } = {}): Plugin {
-  const moduleName = options.moduleName ?? "@opentui/solid"
+  const moduleName = options.moduleName ?? "@ax-code/opentui-solid"
   return {
     name: "opentui-solid",
     setup(build) {

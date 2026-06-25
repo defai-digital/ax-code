@@ -18,7 +18,7 @@ import {
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { useRoute } from "./route"
-import { RGBA } from "@opentui/core"
+import { RGBA } from "@ax-code/opentui-core"
 import { Filesystem } from "@/util/filesystem"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import {
