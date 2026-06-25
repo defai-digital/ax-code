@@ -3,7 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import type { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
-import { assertExternalDirectory, assertSymlinkInsideProject } from "../../src/tool/external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject, fileToolGuard } from "../../src/tool/external-directory"
 import type { Permission } from "../../src/permission"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
@@ -319,6 +319,64 @@ describe("tool.assertSymlinkInsideProject", () => {
       directory: project.path,
       fn: async () => {
         await expect(assertSymlinkInsideProject(path.join(outside.path, "file.txt"))).resolves.toBeUndefined()
+      },
+    })
+  })
+})
+
+describe("tool.fileToolGuard", () => {
+  test("resolves relative path and runs both guards", async () => {
+    await using project = await tmpdir()
+    const requests: string[] = []
+    const ctx: Tool.Context = {
+      ...baseCtx,
+      ask: async (req) => {
+        requests.push(req.permission)
+      },
+    }
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const result = await fileToolGuard(ctx, "subdir/file.txt")
+        expect(result).toBe(path.resolve(project.path, "subdir/file.txt"))
+      },
+    })
+  })
+
+  test("returns resolved absolute path for absolute input", async () => {
+    await using project = await tmpdir()
+    const ctx: Tool.Context = {
+      ...baseCtx,
+      ask: async () => {},
+    }
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const absPath = path.join(project.path, "file.txt")
+        const result = await fileToolGuard(ctx, absPath)
+        expect(result).toBe(absPath)
+      },
+    })
+  })
+
+  test("passes options through to assertExternalDirectory", async () => {
+    await using project = await tmpdir()
+    const requests: Array<{ permission: string; patterns: string[] }> = []
+    const ctx: Tool.Context = {
+      ...baseCtx,
+      ask: async (req) => {
+        requests.push({ permission: req.permission, patterns: req.patterns })
+      },
+    }
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await fileToolGuard(ctx, project.path, { kind: "directory" })
+        // Internal path should not trigger external_directory permission
+        expect(requests.filter((r) => r.permission === "external_directory")).toHaveLength(0)
       },
     })
   })

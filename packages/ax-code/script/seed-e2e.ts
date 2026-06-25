@@ -1,3 +1,5 @@
+export {}
+
 const dir = process.env.AX_CODE_E2E_PROJECT_DIR ?? process.cwd()
 const title = process.env.AX_CODE_E2E_SESSION_TITLE ?? "E2E Session"
 const text = process.env.AX_CODE_E2E_MESSAGE ?? "Seeded for UI e2e"

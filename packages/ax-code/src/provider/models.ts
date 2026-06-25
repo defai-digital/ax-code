@@ -1,6 +1,7 @@
 import { Log } from "../util/log"
 import z from "zod"
 import { lazy } from "@/util/lazy"
+import { errorCode } from "@/util/error-message"
 import { Filesystem } from "../util/filesystem"
 import { Ssrf } from "../util/ssrf"
 import { Global } from "../global"
@@ -169,8 +170,8 @@ export namespace ModelsDev {
     const read = async (file: string, source: string) => {
       try {
         return await Filesystem.readJson(file)
-      } catch (error: any) {
-        const level = error?.code === "ENOENT" ? "debug" : "warn"
+      } catch (error: unknown) {
+        const level = errorCode(error) === "ENOENT" ? "debug" : "warn"
         log[level]("failed to load model data", { source, file, error })
       }
     }

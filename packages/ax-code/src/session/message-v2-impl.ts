@@ -1078,6 +1078,12 @@ export namespace MessageV2 {
     return `Network error: ${msg}`
   }
 
+  /** Normalize a thrown error: call `.toObject()` if present, else pass through. */
+  function normalizeToPlain(e: unknown): unknown {
+    const maybe = e as { toObject?: () => unknown }
+    return typeof maybe.toObject === "function" ? maybe.toObject() : e
+  }
+
   export function fromError(e: unknown, ctx: { providerID: ProviderID }): NonNullable<Assistant["error"]> {
     switch (true) {
       case e instanceof DOMException && e.name === "AbortError":
@@ -1100,15 +1106,15 @@ export namespace MessageV2 {
       // the serialized shape ends up mangling fields on persistence;
       // detect instances and normalize via `.toObject()`.
       case MessageV2.APIError.isInstance(e):
-        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
+        return normalizeToPlain(e) as ReturnType<typeof fromError>
       case MessageV2.AuthError.isInstance(e):
-        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
+        return normalizeToPlain(e) as ReturnType<typeof fromError>
       case MessageV2.ContextOverflowError.isInstance(e):
-        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
+        return normalizeToPlain(e) as ReturnType<typeof fromError>
       case MessageV2.AbortedError.isInstance(e):
-        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
+        return normalizeToPlain(e) as ReturnType<typeof fromError>
       case MessageV2.OutputLengthError.isInstance(e):
-        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
+        return normalizeToPlain(e) as ReturnType<typeof fromError>
       case LoadAPIKeyError.isInstance(e):
         return new MessageV2.AuthError(
           {

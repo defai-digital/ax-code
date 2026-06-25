@@ -15,7 +15,7 @@ import { Filesystem } from "../util/filesystem"
 import { FileTime } from "../file/time"
 import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
-import { toErrorMessage } from "@/util/error-message"
+import { toErrorMessage, errorCode } from "@/util/error-message"
 import { Log } from "../util/log"
 import { BlastRadius } from "@/session/blast-radius"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
@@ -421,8 +421,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                   activeDirty = true
                   await Filesystem.write(dest, change.newContent)
                   if (dest !== change.filePath)
-                    await fs.unlink(change.filePath).catch((error: any) => {
-                      if (error?.code !== "ENOENT") throw error
+                    await fs.unlink(change.filePath).catch((error: unknown) => {
+                      if (errorCode(error) !== "ENOENT") throw error
                     })
                 })
               } else {
@@ -447,8 +447,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                     activeDirty = true
                     await Filesystem.write(dest, change.newContent)
                     if (dest !== change.filePath)
-                      await fs.unlink(change.filePath).catch((error: any) => {
-                        if (error?.code !== "ENOENT") throw error
+                      await fs.unlink(change.filePath).catch((error: unknown) => {
+                        if (errorCode(error) !== "ENOENT") throw error
                       })
                   })
                 })
@@ -464,8 +464,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               await assertSymlinkInsideProject(change.filePath)
 
               activeDirty = true
-              await fs.unlink(change.filePath).catch((error: any) => {
-                if (error?.code !== "ENOENT") throw error
+              await fs.unlink(change.filePath).catch((error: unknown) => {
+                if (errorCode(error) !== "ENOENT") throw error
               })
               await FileTime.read(ctx.sessionID, change.filePath)
             })

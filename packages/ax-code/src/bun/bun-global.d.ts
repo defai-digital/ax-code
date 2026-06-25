@@ -126,13 +126,6 @@ declare module "bun" {
   }
 }
 
-// Tools import their prompt/description text as `import D from "./x.txt"`. Bun
-// loads `.txt` as a string; the Node build and vitest both apply a text loader.
-declare module "*.txt" {
-  const content: string
-  export default content
-}
-
 // Windows console FFI; loaded via createRequire only when running under Bun.
 // Kept so win32.ts (which guards the require behind process.versions.bun) type-checks.
 declare module "bun:ffi" {

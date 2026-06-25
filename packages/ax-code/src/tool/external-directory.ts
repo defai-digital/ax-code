@@ -3,6 +3,7 @@ import { promises as fs } from "fs"
 import type { Tool } from "./tool"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
+import { resolveToolFilePath } from "./file-path"
 
 type Kind = "file" | "directory"
 
@@ -89,6 +90,25 @@ export async function assertSymlinkInsideProject(target: string): Promise<void> 
     }
     break
   }
+}
+
+/**
+ * Combined guard that resolves a raw tool-input path, verifying it is not
+ * outside the project (or prompting for external-directory permission), and
+ * that any symlink target stays inside the project boundary.
+ *
+ * Eliminates the repeated `resolveToolFilePath` + `assertExternalDirectory` +
+ * `assertSymlinkInsideProject` boilerplate across tool execute handlers.
+ */
+export async function fileToolGuard(
+  ctx: Tool.Context,
+  rawPath: string,
+  options?: Options,
+): Promise<string> {
+  const resolved = resolveToolFilePath(rawPath, Instance.directory)
+  await assertExternalDirectory(ctx, resolved, options)
+  await assertSymlinkInsideProject(resolved)
+  return resolved
 }
 
 export async function assertExternalDirectory(ctx: Tool.Context, target?: string, options?: Options) {

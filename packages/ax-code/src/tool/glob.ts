@@ -5,11 +5,12 @@ import { Filesystem } from "../util/filesystem"
 import DESCRIPTION from "./glob.txt"
 import { Ripgrep } from "../file/ripgrep"
 import { Instance } from "../project/instance"
-import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
+import { fileToolGuard } from "./external-directory"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import { parseNativeJsonArray } from "../util/native-json"
+import { errorCode } from "@/util/error-message"
 
 const NativeGlobEntry = z.object({
   path: z.string(),
@@ -42,9 +43,7 @@ export const GlobTool = Tool.define("glob", {
     if (params.pattern.includes("\x00")) throw new Error("Glob pattern contains null byte")
 
     let search = params.path ?? Instance.directory
-    search = resolveToolFilePath(search, Instance.directory)
-    await assertExternalDirectory(ctx, search, { kind: "directory" })
-    await assertSymlinkInsideProject(search)
+    search = await fileToolGuard(ctx, search, { kind: "directory" })
 
     await ctx.ask({
       permission: "glob",
@@ -91,8 +90,9 @@ export const GlobTool = Tool.define("glob", {
           },
           output: output.join("\n"),
         }
-      } catch (e: any) {
-        if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) throw e
+      } catch (e: unknown) {
+        const code = errorCode(e)
+        if (code !== "MODULE_NOT_FOUND" && code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError)) throw e
       }
     }
 

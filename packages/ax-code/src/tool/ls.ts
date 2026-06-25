@@ -5,8 +5,8 @@ import fs from "fs/promises"
 import { minimatch } from "minimatch"
 import DESCRIPTION from "./ls.txt"
 import { Instance } from "../project/instance"
-import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
-import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+import { fileToolGuard } from "./external-directory"
+import { normalizeToWorkspacePath } from "./file-path"
 
 const IGNORE_PATTERNS = [
   "node_modules/",
@@ -103,9 +103,7 @@ export const ListTool = Tool.define("list", {
     ignore: z.array(z.string()).describe("List of glob patterns to ignore").optional(),
   }),
   async execute(params, ctx) {
-    const searchPath = resolveToolFilePath(params.path ?? Instance.directory, Instance.directory)
-    await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
-    await assertSymlinkInsideProject(searchPath)
+    const searchPath = await fileToolGuard(ctx, params.path ?? Instance.directory, { kind: "directory" })
 
     await ctx.ask({
       permission: "list",

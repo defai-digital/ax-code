@@ -7,13 +7,14 @@ import { Process } from "../util/process"
 
 import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
-import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
+import { fileToolGuard } from "./external-directory"
 import { MAX_LINE_LENGTH } from "@/constants/tool"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Env } from "@/util/env"
 import { resolveToolFilePath } from "./file-path"
 import { parseNativeJsonArray } from "../util/native-json"
+import { errorCode } from "@/util/error-message"
 
 const NativeSearchMatch = z.object({
   path: z.string(),
@@ -53,9 +54,7 @@ export const GrepTool = Tool.define("grep", {
     if (params.include?.includes("\x00")) throw new Error("Include pattern contains null byte")
 
     let searchPath = params.path ?? Instance.directory
-    searchPath = resolveToolFilePath(searchPath, Instance.directory)
-    await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
-    await assertSymlinkInsideProject(searchPath)
+    searchPath = await fileToolGuard(ctx, searchPath, { kind: "directory" })
 
     await ctx.ask({
       permission: "grep",
@@ -134,8 +133,9 @@ export const GrepTool = Tool.define("grep", {
           },
           output: outputLines.join("\n"),
         }
-      } catch (e: any) {
-        if (e?.code === "MODULE_NOT_FOUND" || e?.code === "ERR_MODULE_NOT_FOUND" || e instanceof SyntaxError) {
+      } catch (e: unknown) {
+        const code = errorCode(e)
+        if (code === "MODULE_NOT_FOUND" || code === "ERR_MODULE_NOT_FOUND" || e instanceof SyntaxError) {
           /* fall through to ripgrep */
         } else throw e
       }

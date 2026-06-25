@@ -1,6 +1,7 @@
 //! TUI rendering module using Ratatui.
 
 pub mod app;
+mod app_events;
 pub mod input;
 pub mod render;
 

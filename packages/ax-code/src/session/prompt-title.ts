@@ -116,7 +116,7 @@ export async function ensureTitle(input: {
   // Return undefined explicitly on failure. The previous code relied on
   // log.error happening to return void, which works today but would silently
   // break if log.error ever returns something truthy.
-  const text = await Promise.resolve(result.text).catch((err: any) => {
+  const text = await Promise.resolve(result.text).catch((err: unknown) => {
     log.error("failed to generate title", { error: DiagnosticLog.redactForLog(err) })
     return undefined
   })

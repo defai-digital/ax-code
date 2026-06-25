@@ -1,3 +1,5 @@
+export {}
+
 const { createAgent } = await import("./src/sdk/programmatic.ts")
 console.log("=== AX-CODE PROGRAMMATIC SDK ===")
 const s = Date.now()

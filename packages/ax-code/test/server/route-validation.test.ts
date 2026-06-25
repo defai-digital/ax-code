@@ -367,7 +367,7 @@ describe("server route validation", () => {
   })
 
   test("revert and unrevert routes assert that the session is not busy", async () => {
-    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/session.ts"), "utf-8")
+    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/session-impl.ts"), "utf-8")
     const revertStart = src.indexOf('"/:sessionID/revert"')
     const unrevertStart = src.indexOf('"/:sessionID/unrevert"', revertStart)
     const permissionStart = src.indexOf('"/:sessionID/permissions/:permissionID"', unrevertStart)
