@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { recordEntry, removeEntry, listEntries } from "../../src/memory/recorder"
 import { buildContext } from "../../src/memory/injector"
@@ -132,7 +133,7 @@ describe("memory.recorder", () => {
 
   test("generate preserves recorded entries across warmup", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
+    await writeFile(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
 
     await recordEntry(tmp.path, "userPrefs", { name: "language", body: "TW Chinese" })
     await recordEntry(tmp.path, "reference", { name: "linear", body: "bugs in LINEAR/INGEST" })
@@ -259,7 +260,7 @@ describe("memory.recorder", () => {
 
   test("budget: large entries shrink scanned sections, totalTokens stays within maxTokens", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(
+    await writeFile(
       `${tmp.path}/package.json`,
       JSON.stringify({
         name: "pkg",
@@ -270,7 +271,7 @@ describe("memory.recorder", () => {
         ),
       }),
     )
-    await Bun.write(`${tmp.path}/README.md`, "x".repeat(20_000))
+    await writeFile(`${tmp.path}/README.md`, "x".repeat(20_000))
 
     // Record an entry large enough to dominate the small budget
     await recordEntry(tmp.path, "feedback", {
@@ -293,7 +294,7 @@ describe("memory.recorder", () => {
 
   test("budget: when entries exceed maxTokens, scanned sections drop entirely", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
+    await writeFile(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
 
     await recordEntry(tmp.path, "feedback", { name: "huge", body: "z".repeat(2000) })
 
@@ -309,7 +310,7 @@ describe("memory.recorder", () => {
 
   test("budget: tiny maxTokens never overruns even when budget < truncation suffix", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(
+    await writeFile(
       `${tmp.path}/package.json`,
       JSON.stringify({
         name: "pkg",
@@ -364,7 +365,7 @@ describe("memory.recorder", () => {
 
   test("budget: with no entries, behaves identically to pre-budget logic", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
+    await writeFile(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
 
     const memory = await generate(tmp.path, { maxTokens: 4000 })
     expect(memory.totalTokens).toBeLessThanOrEqual(4000)
@@ -373,7 +374,7 @@ describe("memory.recorder", () => {
 
   test("contentHash is consistent across generator and recorder code paths", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
+    await writeFile(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
 
     // 1. Initial warmup hash via generator
     const initial = await generate(tmp.path)
@@ -540,7 +541,7 @@ describe("memory.recorder", () => {
 
   test("scanned sections get scannedAt timestamp after warmup", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
+    await writeFile(`${tmp.path}/package.json`, JSON.stringify({ name: "pkg", version: "1.0.0" }))
 
     const memory = await generate(tmp.path)
     expect(memory.sections.config?.scannedAt).toBeDefined()

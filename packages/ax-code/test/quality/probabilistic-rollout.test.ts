@@ -4145,7 +4145,7 @@ describe("QualityShadow", () => {
               },
             ],
           }
-          await Bun.write(predictionPath, JSON.stringify(predictionFile, null, 2))
+          await fs.writeFile(predictionPath, JSON.stringify(predictionFile, null, 2))
 
           process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW"] = "1"
           process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS"] = predictionPath
@@ -4278,8 +4278,8 @@ describe("QualityShadow", () => {
             ],
           }
 
-          await Bun.write(modelPath, JSON.stringify(model, null, 2))
-          await Bun.write(predictionPath, JSON.stringify(predictionFile, null, 2))
+          await fs.writeFile(modelPath, JSON.stringify(model, null, 2))
+          await fs.writeFile(predictionPath, JSON.stringify(predictionFile, null, 2))
 
           process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW"] = "1"
           process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL"] = modelPath
@@ -4474,7 +4474,7 @@ describe("QualityShadow", () => {
               },
             ],
           }
-          await Bun.write(predictionPath, JSON.stringify(predictionFile, null, 2))
+          await fs.writeFile(predictionPath, JSON.stringify(predictionFile, null, 2))
 
           process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW"] = "1"
           process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS"] = predictionPath

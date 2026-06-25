@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
-import { mkdir } from "fs/promises"
+import { mkdir, writeFile, readFile } from "fs/promises"
 import path from "path"
 import {
   doctorProjectContext,
@@ -39,9 +39,9 @@ describe("cli doctor", () => {
     await mkdir(path.join(tmp.path, ".git"), { recursive: true })
     await mkdir(path.join(tmp.path, ".ax-code"), { recursive: true })
     await mkdir(packageDir, { recursive: true })
-    await Bun.write(path.join(tmp.path, ".git", "HEAD"), "ref: refs/heads/main\n")
-    await Bun.write(path.join(tmp.path, "AGENTS.md"), "# Project instructions\n")
-    await Bun.write(path.join(tmp.path, ".ax-code", "ax-code.json"), "{}\n")
+    await writeFile(path.join(tmp.path, ".git", "HEAD"), "ref: refs/heads/main\n")
+    await writeFile(path.join(tmp.path, "AGENTS.md"), "# Project instructions\n")
+    await writeFile(path.join(tmp.path, ".ax-code", "ax-code.json"), "{}\n")
 
     const context = await doctorProjectContext(packageDir)
 
@@ -138,7 +138,7 @@ describe("cli doctor", () => {
   })
 
   test("logs configured TUI port fallback failures", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/doctor.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/doctor.ts"), "utf-8")
     const start = src.indexOf("async function getConfiguredTuiPort()")
     const end = src.indexOf("export async function getDuplicateProjectIdentityCheck", start)
     expect(start).toBeGreaterThan(-1)

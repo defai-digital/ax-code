@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { mkdir } from "fs/promises"
+import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { CodeIntelligenceTool } from "../../src/tool/code-intelligence"
 import { Instance } from "../../src/project/instance"
@@ -546,7 +546,7 @@ describe("CodeIntelligence tool envelope (§S4)", () => {
         const projectID = Instance.project.id as ProjectID
         CodeIntelligence.__clearProject(projectID)
         const file = path.join(tmp.path, "ctx.ts")
-        await Bun.write(file, "export function buildContextTarget() {\n  return true\n}\n")
+        await writeFile(file, "export function buildContextTarget() {\n  return true\n}\n")
         seedSymbol(projectID, { name: "buildContextTarget", base: tmp.path, relFile: "ctx.ts" })
         CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)
 
@@ -595,7 +595,7 @@ describe("CodeIntelligence tool envelope (§S4)", () => {
         const projectID = Instance.project.id as ProjectID
         CodeIntelligence.__clearProject(projectID)
         const file = path.join(tmp.path, "shared.ts")
-        await Bun.write(file, "export function sharedContextTarget() {\n  return true\n}\n")
+        await writeFile(file, "export function sharedContextTarget() {\n  return true\n}\n")
         seedSymbol(projectID, { name: "sharedContextTarget", base: tmp.path, relFile: "shared.ts" })
         CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)
 

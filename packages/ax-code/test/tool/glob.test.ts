@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
+import { writeFile } from "fs/promises"
 import { GlobTool, parseNativeGlobEntries } from "../../src/tool/glob"
 import { NativeAddon } from "../../src/native/addon"
 import { Instance } from "../../src/project/instance"
@@ -37,7 +38,7 @@ describe("tool.glob", () => {
   test("JS fallback keeps vanished matches with mtime 0", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "gone.txt"), "content")
+        await writeFile(path.join(dir, "gone.txt"), "content")
       },
     })
 

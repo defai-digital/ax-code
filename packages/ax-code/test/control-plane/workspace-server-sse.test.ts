@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
+import fs from "fs/promises"
 import path from "path"
 import { Log } from "../../src/util/log"
 import { WorkspaceServer } from "../../src/control-plane/workspace-server/server"
@@ -146,9 +147,10 @@ describe("control-plane/workspace-server SSE", () => {
   })
 
   test("heartbeat respects the workspace SSE queue cap", async () => {
-    const src = await Bun.file(
+    const src = await fs.readFile(
       path.join(import.meta.dirname, "../../src/control-plane/workspace-server/server.ts"),
-    ).text()
+      "utf-8",
+    )
     const start = src.indexOf("const heartbeat = setInterval")
     const end = src.indexOf("}, 10_000)", start)
     expect(start).toBeGreaterThan(-1)

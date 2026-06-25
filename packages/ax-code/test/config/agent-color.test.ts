@@ -1,5 +1,6 @@
 import { test, expect } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Config } from "../../src/config/config"
@@ -9,7 +10,7 @@ import { Color } from "../../src/util/color"
 test("agent color parsed from project config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -34,7 +35,7 @@ test("agent color parsed from project config", async () => {
 test("Agent.get includes color from config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",

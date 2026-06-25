@@ -1,10 +1,11 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { readFile } from "node:fs/promises"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 
 async function readRepoFile(relativePath: string) {
-  return Bun.file(path.join(repoRoot, relativePath)).text()
+  return readFile(path.join(repoRoot, relativePath), "utf-8")
 }
 
 describe("public safety documentation contract", () => {
@@ -29,7 +30,7 @@ describe("public safety documentation contract", () => {
 
   test("security policy supported version table tracks the current minor line", async () => {
     const security = await readRepoFile("SECURITY.md")
-    const pkg = await Bun.file(path.join(repoRoot, "packages/ax-code/package.json")).json()
+    const pkg = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf-8"))
     const [major, minor] = String(pkg.version).split(".")
 
     expect(security).toContain(`| ${major}.${minor}.x`)

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { readFile } from "node:fs/promises"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const desktopReleaseWorkflow = path.join(repoRoot, ".github/workflows/desktop-release.yml")
@@ -7,7 +8,7 @@ const sdkBuildScript = path.join(repoRoot, "packages/sdk/js/script/build.ts")
 
 describe("desktop release workflow", () => {
   test("build jobs generate the SDK before packaging Desktop artifacts", async () => {
-    const text = await Bun.file(desktopReleaseWorkflow).text()
+    const text = await readFile(desktopReleaseWorkflow, "utf-8")
 
     for (const jobName of ["package-web", "build-macos", "build-windows"]) {
       const nextJob = jobName === "package-web" ? "build-macos" : jobName === "build-macos" ? "build-windows" : "sign-release-assets"
@@ -21,7 +22,7 @@ describe("desktop release workflow", () => {
   })
 
   test("SDK build script avoids platform-specific .bin shims", async () => {
-    const text = await Bun.file(sdkBuildScript).text()
+    const text = await readFile(sdkBuildScript, "utf-8")
 
     expect(text).toContain("packageBin(\"typescript\", \"tsc\")")
     expect(text).toContain("process.execPath")
@@ -30,7 +31,7 @@ describe("desktop release workflow", () => {
   })
 
   test("signing job falls back to the shared minisign release secrets", async () => {
-    const text = await Bun.file(desktopReleaseWorkflow).text()
+    const text = await readFile(desktopReleaseWorkflow, "utf-8")
     const job = text.match(/  sign-release-assets:[\s\S]*?(?=\n  finalize-release:|$)/)
 
     expect(job, "sign-release-assets job should exist").not.toBeNull()

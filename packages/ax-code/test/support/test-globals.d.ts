@@ -30,6 +30,32 @@ declare global {
   // type positions, including explicit type arguments. Declare a clean generic
   // matching `bun:test`'s signature so both forms resolve.
   function spyOn<T, K extends keyof T>(obj: T, method: K): import("vitest").MockInstance
+
+  // Bun→Node compat shim installed by test/support/vitest.setup.ts.
+  // These declarations allow tests that exercise the shim to typecheck.
+  interface BunCompatShellPromise extends PromiseLike<{ stdout: Buffer; stderr: Buffer; exitCode: number }> {
+    quiet(): Promise<{ stdout: Buffer; stderr: Buffer; exitCode: number }>
+  }
+  namespace Bun {
+    function write(path: string, data: string | Uint8Array): Promise<number>
+    function sleep(ms: number): Promise<void>
+    function hash(data: string | Uint8Array): { toString(): string }
+    const $: {
+      (strings: TemplateStringsArray, ...values: unknown[]): BunCompatShellPromise
+      env(env: Record<string, string | undefined>): typeof $
+    }
+    class Glob {
+      constructor(pattern: string)
+      scan(options?: string | { cwd?: string; dot?: boolean; absolute?: boolean; onlyFiles?: boolean }): AsyncIterable<string>
+      scanSync(options?: { cwd?: string; dot?: boolean; absolute?: boolean; onlyFiles?: boolean }): Iterable<string>
+    }
+    function spawnSync(input: { cmd: string[]; cwd?: string; env?: Record<string, string> }): {
+      exitCode: number
+      stdout: Buffer
+      stderr: Buffer
+      success: boolean
+    }
+  }
 }
 
 export {}

@@ -13,7 +13,7 @@ describe("plugin.auth-override", () => {
         const pluginDir = path.join(dir, ".ax-code", "plugin")
         await fs.mkdir(pluginDir, { recursive: true })
 
-        await Bun.write(
+        await fs.writeFile(
           path.join(pluginDir, "custom-copilot-auth.ts"),
           [
             "export default async () => ({",
@@ -59,7 +59,7 @@ const file = path.join(import.meta.dirname, "../../src/plugin/index.ts")
 
 describe("plugin.config-hook-error-isolation", () => {
   test("config hooks are individually error-isolated in the layer factory", async () => {
-    const src = await Bun.file(file).text()
+    const src = await fs.readFile(file, "utf-8")
 
     // The config hook try/catch lives in the InstanceState factory (layer definition),
     // not in init() which now just delegates to the Effect service.

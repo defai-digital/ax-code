@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
+import { setTimeout as sleep } from "node:timers/promises"
 import { ServiceManager } from "../../src/runtime/service-manager"
 
 describe("ServiceManager", () => {
@@ -126,7 +127,7 @@ describe("ServiceManager", () => {
       },
     })
 
-    await Bun.sleep(40)
+    await sleep(40)
 
     expect(timeouts).toHaveLength(1)
     expect(timeouts[0]?.tasks[0]).toMatchObject({

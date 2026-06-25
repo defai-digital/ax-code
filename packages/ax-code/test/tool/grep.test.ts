@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
+import { writeFile } from "fs/promises"
 import { GrepTool, parseNativeSearchMatches, parseRipgrepLineNumber } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -72,7 +73,7 @@ describe("tool.grep", () => {
   test("no matches returns correct output", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "test.txt"), "hello world")
+        await writeFile(path.join(dir, "test.txt"), "hello world")
       },
     })
     await Instance.provide({
@@ -97,7 +98,7 @@ describe("tool.grep", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         // Create a test file with content
-        await Bun.write(path.join(dir, "test.txt"), "line1\nline2\nline3")
+        await writeFile(path.join(dir, "test.txt"), "line1\nline2\nline3")
       },
     })
     await Instance.provide({

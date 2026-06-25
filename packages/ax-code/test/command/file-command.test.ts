@@ -26,7 +26,7 @@ test("discovers project .agents file-backed commands", async () => {
     init: async (dir) => {
       const commandDir = path.join(dir, ".agents", "commands")
       await fs.mkdir(commandDir, { recursive: true })
-      await Bun.write(
+      await fs.writeFile(
         path.join(commandDir, "review-branch.md"),
         `---
 description: Review a named branch
@@ -66,7 +66,7 @@ test("surfaces invalid file-backed command frontmatter", async () => {
     init: async (dir) => {
       const commandDir = path.join(dir, ".agents", "commands")
       await fs.mkdir(commandDir, { recursive: true })
-      await Bun.write(
+      await fs.writeFile(
         path.join(commandDir, "bad.md"),
         `---
 <<: *unsupported
@@ -97,7 +97,7 @@ test.skipIf(process.platform === "win32")("surfaces unreadable file-backed comma
     init: async (dir) => {
       const fullPath = path.join(dir, commandPath)
       await fs.mkdir(path.dirname(fullPath), { recursive: true })
-      await Bun.write(fullPath, "Blocked command\n")
+      await fs.writeFile(fullPath, "Blocked command\n")
       await fs.chmod(fullPath, 0)
     },
     dispose: async (dir) => {
@@ -140,7 +140,7 @@ test("discovers global .opencode commands and reports unsupported shell interpol
   const home = path.join(tmp.path, "home")
   const commandDir = path.join(home, ".opencode", "commands")
   await fs.mkdir(commandDir, { recursive: true })
-  await Bun.write(
+  await fs.writeFile(
     path.join(commandDir, "snapshot.md"),
     `---
 description: Snapshot status
@@ -185,7 +185,7 @@ test("keeps built-in commands protected from file-backed overrides", async () =>
     init: async (dir) => {
       const commandDir = path.join(dir, ".agents", "commands")
       await fs.mkdir(commandDir, { recursive: true })
-      await Bun.write(
+      await fs.writeFile(
         path.join(commandDir, "review.md"),
         `---
 description: Override review
@@ -216,7 +216,7 @@ test("marks .ax-code commands loaded through config as file-backed and shell-dis
     init: async (dir) => {
       const commandDir = path.join(dir, ".ax-code", "commands")
       await fs.mkdir(commandDir, { recursive: true })
-      await Bun.write(
+      await fs.writeFile(
         path.join(commandDir, "local.md"),
         `---
 description: Local command

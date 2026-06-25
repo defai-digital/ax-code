@@ -1,8 +1,9 @@
 import { expect, test } from "vitest"
 import path from "path"
+import { readFile } from "node:fs/promises"
 
 async function readBenchScript(name: string) {
-  return Bun.file(path.join(import.meta.dirname, "../..", name)).text()
+  return readFile(path.join(import.meta.dirname, "../..", name), "utf-8")
 }
 
 test("bench server processes use sanitized environments", async () => {

@@ -1,14 +1,17 @@
 import { describe, test, expect } from "vitest"
 import { tmpdir } from "../fixture/fixture"
 import path from "path"
+import { readFile, writeFile } from "node:fs/promises"
+import { spawnSync } from "node:child_process"
 
 describe("update-models script", () => {
   test("fetches models and writes snapshot", async () => {
     await using tmp = await tmpdir()
     const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
 
-    const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
+    const result = spawnSync("tsx",
+      [path.join(import.meta.dirname, "../../script/update-models.ts")],
+      {
       env: {
         ...process.env,
         AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
@@ -17,17 +20,17 @@ describe("update-models script", () => {
       cwd: path.join(import.meta.dirname, "../.."),
     })
 
-    const stdout = result.stdout.toString()
-    expect(result.exitCode).toBe(0)
+    const stdout = result.output?.[1]?.toString()
+    expect(result.status).toBe(0)
     expect(stdout).toContain("Fetching models from")
     // Either "Updated" or "already up to date" — both are valid
     expect(stdout).toMatch(/Updated|already up to date/)
-    expect(await Bun.file(snapshotPath).json()).toHaveProperty("anthropic")
+    expect(JSON.parse(await readFile(snapshotPath, "utf-8"))).toHaveProperty("anthropic")
   })
 
   test("snapshot file is valid JSON with provider entries", async () => {
     const snapshotPath = path.join(import.meta.dirname, "../../src/provider/models-snapshot.json")
-    const data = await Bun.file(snapshotPath).json()
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
 
     expect(typeof data).toBe("object")
     expect(data).not.toBeNull()
@@ -43,7 +46,7 @@ describe("update-models script", () => {
 
   test("preserves CLI provider entries", async () => {
     const snapshotPath = path.join(import.meta.dirname, "../../src/provider/models-snapshot.json")
-    const data = await Bun.file(snapshotPath).json()
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
 
     // CLI providers should be preserved from the existing snapshot and keep
     // image capability metadata aligned with the CLI attachment adapter.
@@ -62,7 +65,7 @@ describe("update-models script", () => {
   test("normalizes stale CLI provider entries during snapshot regeneration", async () => {
     await using tmp = await tmpdir()
     const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
-    await Bun.write(
+    await writeFile(
       snapshotPath,
       JSON.stringify(
         Object.fromEntries(
@@ -74,8 +77,9 @@ describe("update-models script", () => {
       ),
     )
 
-    const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
+    const result = spawnSync("tsx",
+      [path.join(import.meta.dirname, "../../script/update-models.ts")],
+      {
       env: {
         ...process.env,
         AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
@@ -84,8 +88,8 @@ describe("update-models script", () => {
       cwd: path.join(import.meta.dirname, "../.."),
     })
 
-    expect(result.exitCode).toBe(0)
-    const data = await Bun.file(snapshotPath).json()
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
     for (const id of ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "qoder-cli", "antigravity-cli"]) {
       const model = data[id]?.models?.[id]
       expect(model?.attachment).toBe(true)
@@ -95,7 +99,7 @@ describe("update-models script", () => {
 
   test("preserves Grok API and CLI plan entries", async () => {
     const snapshotPath = path.join(import.meta.dirname, "../../src/provider/models-snapshot.json")
-    const data = await Bun.file(snapshotPath).json()
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
 
     expect(data.xai?.name).toBe("Grok Cloud API")
     expect(data.xai?.models?.["grok-build-0.1"]?.id).toBe("grok-build-0.1")
@@ -111,7 +115,7 @@ describe("update-models script", () => {
   test("normalizes local provider endpoints during snapshot regeneration", async () => {
     await using tmp = await tmpdir()
     const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
-    await Bun.write(
+    await writeFile(
       snapshotPath,
       JSON.stringify({
         ollama: localProvider("ollama", "Ollama", "OLLAMA_HOST", "http://wrong-host/v1"),
@@ -119,8 +123,9 @@ describe("update-models script", () => {
       }),
     )
 
-    const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
+    const result = spawnSync("tsx",
+      [path.join(import.meta.dirname, "../../script/update-models.ts")],
+      {
       env: {
         ...process.env,
         AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
@@ -129,8 +134,8 @@ describe("update-models script", () => {
       cwd: path.join(import.meta.dirname, "../.."),
     })
 
-    expect(result.exitCode).toBe(0)
-    const data = await Bun.file(snapshotPath).json()
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
     expect(data.ollama?.api).toBe("http://localhost:11434/v1")
     expect(data["ax-studio"]?.api).toBe("http://localhost:18080/v1")
     expect(data["ax-studio"]?.env).toEqual(["AX_STUDIO_HOST"])
@@ -146,30 +151,33 @@ describe("update-models script", () => {
       AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
     }
 
-    Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
+    spawnSync("tsx",
+      [path.join(import.meta.dirname, "../../script/update-models.ts")],
+      {
       env,
       cwd: path.join(import.meta.dirname, "../.."),
     })
-    const before = await Bun.file(snapshotPath).text()
+    const before = await readFile(snapshotPath, "utf-8")
 
-    const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
+    const result = spawnSync("tsx",
+      [path.join(import.meta.dirname, "../../script/update-models.ts")],
+      {
       env,
       cwd: path.join(import.meta.dirname, "../.."),
     })
 
-    expect(result.exitCode).toBe(0)
-    const stdout = result.stdout.toString()
+    expect(result.status).toBe(0)
+    const stdout = result.output?.[1]?.toString()
     expect(stdout).toContain("already up to date")
 
-    const after = await Bun.file(snapshotPath).text()
+    const after = await readFile(snapshotPath, "utf-8")
     expect(after).toBe(before)
   })
 
   test("handles network failure gracefully", async () => {
-    const result = Bun.spawnSync({
-      cmd: ["bun", "run", path.join(import.meta.dirname, "../../script/update-models.ts")],
+    const result = spawnSync("tsx",
+      [path.join(import.meta.dirname, "../../script/update-models.ts")],
+      {
       env: {
         ...process.env,
         AX_CODE_MODELS_URL: "http://localhost:19999", // unreachable
@@ -178,8 +186,8 @@ describe("update-models script", () => {
     })
 
     // Should exit 0 (not block commits) even on network failure
-    expect(result.exitCode).toBe(0)
-    const stderr = result.stderr.toString()
+    expect(result.status).toBe(0)
+    const stderr = result.output?.[2]?.toString()
     expect(stderr).toContain("Failed to fetch models")
   })
 })
@@ -187,7 +195,7 @@ describe("update-models script", () => {
 async function createModelsFixture(dir: string) {
   const fixturePath = path.join(dir, "models-fixture.json")
   const snapshotPath = path.join(dir, "models-snapshot.json")
-  await Bun.write(
+  await writeFile(
     fixturePath,
     JSON.stringify({
       anthropic: {
@@ -204,7 +212,7 @@ async function createModelsFixture(dir: string) {
       },
     }),
   )
-  await Bun.write(snapshotPath, "{}\n")
+  await writeFile(snapshotPath, "{}\n")
   return { fixturePath, snapshotPath }
 }
 

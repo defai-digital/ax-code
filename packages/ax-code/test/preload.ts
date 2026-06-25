@@ -21,7 +21,6 @@ afterAll(async () => {
     "code" in error &&
     (error.code === "EBUSY" || error.code === "ENOTEMPTY" || error.code === "EPERM")
   const rm = async (left: number): Promise<void> => {
-    Bun.gc(true)
     await sleep(100)
     return fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch((error) => {
       if (!transientCleanupError(error)) throw error

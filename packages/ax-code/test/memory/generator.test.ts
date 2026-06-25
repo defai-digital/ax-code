@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import fs from "fs/promises"
 import { decodeMemoryPackageJsonValue, generate, parseMemoryPackageJson } from "../../src/memory/generator"
 import { tmpdir } from "../fixture/fixture"
 
@@ -67,7 +68,7 @@ describe("memory.generator", () => {
 
   test("generate uses decoded package metadata for config and patterns", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(
+    await fs.writeFile(
       path.join(tmp.path, "package.json"),
       JSON.stringify({
         name: "pkg",

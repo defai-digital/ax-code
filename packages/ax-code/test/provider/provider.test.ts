@@ -37,7 +37,7 @@ function errorCauseMessages(error: unknown) {
 test("provider loaded from env variable", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -61,7 +61,7 @@ test("provider loaded from env variable", async () => {
 })
 
 test("Provider.invalidate clears SDK cache as well as pending loads", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/provider/provider.ts")).text()
+  const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
   const start = src.indexOf("export async function invalidate()")
   const end = src.indexOf("async function getSDK", start)
   expect(start).toBeGreaterThan(-1)
@@ -93,7 +93,7 @@ test("Auth.set invalidates provider cache after key replacement", async () => {
 })
 
 test("getLanguage registers pending model loads before awaiting them", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/provider/provider.ts")).text()
+  const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
   const start = src.indexOf("export async function getLanguage(")
   const end = src.indexOf("export async function closest(", start)
   expect(start).toBeGreaterThan(-1)
@@ -316,7 +316,7 @@ test("wrapSSE removes the outer abort listener when the underlying reader fails"
 test("provider loaded from config with apiKey option", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -343,7 +343,7 @@ test("provider loaded from config with apiKey option", async () => {
 test("provider api keys are stripped of pasted newlines before SDK use", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -378,7 +378,7 @@ test("provider api keys are stripped of pasted newlines before SDK use", async (
 test("disabled_providers excludes provider", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -402,7 +402,7 @@ test("disabled_providers excludes provider", async () => {
 test("enabled_providers restricts to only listed providers", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -428,7 +428,7 @@ test("enabled_providers restricts to only listed providers", async () => {
 test("model whitelist filters models for provider", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -459,7 +459,7 @@ test("model whitelist filters models for provider", async () => {
 test("model blacklist excludes specific models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -489,7 +489,7 @@ test("model blacklist excludes specific models", async () => {
 test("custom model alias via config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -524,7 +524,7 @@ test("custom model alias via config", async () => {
 test("custom provider with npm package", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -567,7 +567,7 @@ test("custom provider with npm package", async () => {
 test("env variable takes precedence, config merges options", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -601,7 +601,7 @@ test("env variable takes precedence, config merges options", async () => {
 test("getModel returns model for valid provider/model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -628,7 +628,7 @@ test("getModel returns model for valid provider/model", async () => {
 test("getModel throws ModelNotFoundError for invalid model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -650,7 +650,7 @@ test("getModel throws ModelNotFoundError for invalid model", async () => {
 test("getModel throws ModelNotFoundError for invalid provider", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -669,7 +669,7 @@ test("getModel throws ModelNotFoundError for invalid provider", async () => {
 test("getLanguage throws ModelNotFoundError when the model provider is missing", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -730,7 +730,7 @@ test("parseModel accepts object input with id alias", () => {
 test("defaultModel returns first available model when no config set", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -754,7 +754,7 @@ test("defaultModel returns first available model when no config set", async () =
 test("defaultModel respects config model setting", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -778,11 +778,9 @@ test("defaultModel respects config model setting", async () => {
 
 test("defaultModel skips recent models that are not selectable for agent tool use", async () => {
   const statePath = path.join(Global.Path.state, "model.json")
-  const previousState = await Bun.file(statePath)
-    .text()
-    .catch(() => undefined)
+  const previousState = await fs.readFile(statePath, "utf-8").catch(() => undefined)
 
-  await Bun.write(
+  await fs.writeFile(
     statePath,
     JSON.stringify({
       recent: [
@@ -830,17 +828,15 @@ test("defaultModel skips recent models that are not selectable for agent tool us
     })
   } finally {
     if (previousState === undefined) await fs.rm(statePath, { force: true })
-    else await Bun.write(statePath, previousState)
+    else await fs.writeFile(statePath, previousState)
   }
 })
 
 test("defaultModel skips configured providers with no selectable models", async () => {
   const statePath = path.join(Global.Path.state, "model.json")
-  const previousState = await Bun.file(statePath)
-    .text()
-    .catch(() => undefined)
+  const previousState = await fs.readFile(statePath, "utf-8").catch(() => undefined)
 
-  await Bun.write(statePath, JSON.stringify({ recent: [] }))
+  await fs.writeFile(statePath, JSON.stringify({ recent: [] }))
 
   try {
     await using tmp = await tmpdir({
@@ -890,7 +886,7 @@ test("defaultModel skips configured providers with no selectable models", async 
     })
   } finally {
     if (previousState === undefined) await fs.rm(statePath, { force: true })
-    else await Bun.write(statePath, previousState)
+    else await fs.writeFile(statePath, previousState)
   }
 })
 
@@ -987,7 +983,7 @@ test("defaultModel surfaces unreadable recent-model store errors", async () => {
 test("provider with baseURL from config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1031,7 +1027,7 @@ test("local provider file URLs reject symlinks that escape allowed directories",
     init: async (dir) => {
       const outsideProvider = path.join(outside.path, "provider.mjs")
       const linkedProvider = path.join(dir, "provider-link.mjs")
-      await Bun.write(
+      await fs.writeFile(
         outsideProvider,
         `export function createEscapedProvider() {
   return {
@@ -1043,7 +1039,7 @@ test("local provider file URLs reject symlinks that escape allowed directories",
 `,
       )
       await fs.symlink(outsideProvider, linkedProvider)
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1085,7 +1081,7 @@ test("local provider file URLs are detected case-insensitively", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       const providerFile = path.join(dir, "local-provider.mjs")
-      await Bun.write(
+      await fs.writeFile(
         providerFile,
         `export function createLocalProvider() {
   return {
@@ -1097,7 +1093,7 @@ test("local provider file URLs are detected case-insensitively", async () => {
 `,
       )
       const providerUrl = pathToFileURL(providerFile).href.replace(/^file:/, "FILE:")
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1133,7 +1129,7 @@ test("local provider file URLs are detected case-insensitively", async () => {
 test("model options are merged from existing model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1168,7 +1164,7 @@ test("model options are merged from existing model", async () => {
 test("provider removed when all models filtered out", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1196,7 +1192,7 @@ test("provider removed when all models filtered out", async () => {
 test("closest finds model by partial match", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1221,7 +1217,7 @@ test("closest finds model by partial match", async () => {
 test("closest returns undefined for nonexistent provider", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1241,7 +1237,7 @@ test("closest returns undefined for nonexistent provider", async () => {
 test("getModel uses realIdByKey for aliased models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1279,7 +1275,7 @@ test("getModel uses realIdByKey for aliased models", async () => {
 test("provider api field sets model api.url", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1318,7 +1314,7 @@ test("provider api field sets model api.url", async () => {
 test("explicit baseURL overrides api field", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1357,7 +1353,7 @@ test("explicit baseURL overrides api field", async () => {
 test("model inherits properties from existing database model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1392,7 +1388,7 @@ test("model inherits properties from existing database model", async () => {
 test("disabled_providers prevents loading even with env var", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1416,7 +1412,7 @@ test("disabled_providers prevents loading even with env var", async () => {
 test("enabled_providers with empty array allows no providers", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1441,7 +1437,7 @@ test("enabled_providers with empty array allows no providers", async () => {
 test("whitelist and blacklist can be combined", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1474,7 +1470,7 @@ test("whitelist and blacklist can be combined", async () => {
 test("model modalities default correctly", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1511,7 +1507,7 @@ test("model modalities default correctly", async () => {
 test("getSmallModel returns appropriate small model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1535,7 +1531,7 @@ test("getSmallModel returns appropriate small model", async () => {
 test("getSmallModel uses a supported Alibaba plan model", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1560,7 +1556,7 @@ test("getSmallModel uses a supported Alibaba plan model", async () => {
 test("getSmallModel respects config small_model override", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1586,7 +1582,7 @@ test("getSmallModel respects config small_model override", async () => {
 test("config-defined Z.AI Coding Plan models filter GLM <5 and keep GLM 5+", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1630,7 +1626,7 @@ test("config-defined Z.AI Coding Plan models filter GLM <5 and keep GLM 5+", asy
 test("bundled Z.AI coding plan providers expose GLM flagship and long-context variants", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1673,7 +1669,7 @@ test("bundled Z.AI coding plan providers expose GLM flagship and long-context va
 test("google provider only exposes Gemini 3 or later models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1702,7 +1698,7 @@ test("google provider only exposes Gemini 3 or later models", async () => {
 test("getSmallModel prefers a Gemini 3 model for google", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1727,7 +1723,7 @@ test("getSmallModel prefers a Gemini 3 model for google", async () => {
 test("openai provider only exposes GPT-4 or later models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1760,7 +1756,7 @@ test("openai provider only exposes GPT-4 or later models", async () => {
 test("provider list filters GPT-5.5 from configured provider models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1945,7 +1941,7 @@ test("provider.sort prioritizes preferred models", () => {
 test("multiple providers can be configured simultaneously", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2063,7 +2059,7 @@ test("Kimi Cloud Plan exposes only the current validated Kimi coding model", asy
 test("provider with custom npm package", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2105,7 +2101,7 @@ test("provider with custom npm package", async () => {
 test("model alias name defaults to alias key when id differs", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2138,7 +2134,7 @@ test("model alias name defaults to alias key when id differs", async () => {
 test("provider with multiple env var options only includes apiKey when single env", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2180,7 +2176,7 @@ test("provider with multiple env var options only includes apiKey when single en
 test("provider with single env var includes apiKey automatically", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2222,7 +2218,7 @@ test("provider with single env var includes apiKey automatically", async () => {
 test("completely new provider not in database can be configured", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2272,7 +2268,7 @@ test("completely new provider not in database can be configured", async () => {
 test("disabled_providers and enabled_providers interaction", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2306,7 +2302,7 @@ test("disabled_providers and enabled_providers interaction", async () => {
 test("model with tool_call false", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2341,7 +2337,7 @@ test("model with tool_call false", async () => {
 test("model defaults tool_call to true when not specified", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2376,7 +2372,7 @@ test("model defaults tool_call to true when not specified", async () => {
 test("model headers are preserved", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2419,7 +2415,7 @@ test("model headers are preserved", async () => {
 test("provider env fallback - second env var used if first missing", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2459,7 +2455,7 @@ test("provider env fallback - second env var used if first missing", async () =>
 test("getModel returns consistent results", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2485,7 +2481,7 @@ test("getModel returns consistent results", async () => {
 test("provider name defaults to id when not in database", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2520,7 +2516,7 @@ test("provider name defaults to id when not in database", async () => {
 test("ModelNotFoundError includes suggestions for typos", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2548,7 +2544,7 @@ test("ModelNotFoundError includes suggestions for typos", async () => {
 test("ModelNotFoundError for provider includes suggestions", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2576,7 +2572,7 @@ test("ModelNotFoundError for provider includes suggestions", async () => {
 test("getProvider returns undefined for nonexistent provider", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2596,7 +2592,7 @@ test("getProvider returns undefined for nonexistent provider", async () => {
 test("getProvider returns provider info", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2620,7 +2616,7 @@ test("getProvider returns provider info", async () => {
 test("closest returns undefined when no partial match found", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2643,7 +2639,7 @@ test("closest returns undefined when no partial match found", async () => {
 test("closest checks multiple query terms in order", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2668,7 +2664,7 @@ test("closest checks multiple query terms in order", async () => {
 test("model limit defaults to zero when not specified", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2705,7 +2701,7 @@ test("model limit defaults to zero when not specified", async () => {
 test("provider options are deeply merged", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2740,7 +2736,7 @@ test("provider options are deeply merged", async () => {
 test("custom model inherits npm package from models.dev provider config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2776,7 +2772,7 @@ test("custom model inherits npm package from models.dev provider config", async 
 test("custom model inherits api.url from models.dev provider", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2820,7 +2816,7 @@ test("custom model inherits api.url from models.dev provider", async () => {
 test("xai reasoning models do not auto-generate reasoningEffort variants", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2847,7 +2843,7 @@ test("xai reasoning models do not auto-generate reasoningEffort variants", async
 test("model variants can be disabled via config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2884,7 +2880,7 @@ test("model variants can be disabled via config", async () => {
 test("model variants can be customized via config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2923,7 +2919,7 @@ test("model variants can be customized via config", async () => {
 test("disabled key is stripped from variant config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -2963,7 +2959,7 @@ test("disabled key is stripped from variant config", async () => {
 test("all variants can be disabled via config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -3001,7 +2997,7 @@ test("all variants can be disabled via config", async () => {
 test("xai variant config stays explicit without generated reasoningEffort", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -3040,7 +3036,7 @@ test("xai variant config stays explicit without generated reasoningEffort", asyn
 test("variants filtered in second pass for database models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -3077,7 +3073,7 @@ test("variants filtered in second pass for database models", async () => {
 test("custom model with variants enabled and disabled", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -3134,7 +3130,7 @@ test("custom model with variants enabled and disabled", async () => {
 test("Google Vertex: retains baseURL for custom proxy", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -3178,7 +3174,7 @@ test("Google Vertex: retains baseURL for custom proxy", async () => {
 test("Google Vertex: supports OpenAI compatible models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -3225,7 +3221,7 @@ test("Google Vertex: supports OpenAI compatible models", async () => {
 test("cloudflare-ai-gateway loads with env variables", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -3250,7 +3246,7 @@ test("cloudflare-ai-gateway loads with env variables", async () => {
 test("cloudflare-ai-gateway forwards config metadata options", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",

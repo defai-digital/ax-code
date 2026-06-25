@@ -12,7 +12,7 @@ afterEach(async () => {
 async function writeSkill(dir: string, name: string, frontmatter: string, body = "Do the thing.\n") {
   const skillDir = path.join(dir, ".agents", "skills", name)
   await fs.mkdir(skillDir, { recursive: true })
-  await Bun.write(path.join(skillDir, "SKILL.md"), `---\n${frontmatter}\n---\n${body}`)
+  await fs.writeFile(path.join(skillDir, "SKILL.md"), `---\n${frontmatter}\n---\n${body}`)
 }
 
 function request(app: ReturnType<typeof Server.Default>, dir: string, route: string, init?: RequestInit) {
@@ -140,5 +140,5 @@ test("POST /skill rejects absolute paths outside the worktree and home", async (
     }),
   })
   expect(response.status).toBe(400)
-  expect(await Bun.file("/tmp/ax-code-skill-escape/evil/SKILL.md").exists()).toBe(false)
+  expect(await fs.access("/tmp/ax-code-skill-escape/evil/SKILL.md").then(() => true, () => false)).toBe(false)
 })

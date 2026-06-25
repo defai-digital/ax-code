@@ -1,9 +1,10 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { readFile } from "node:fs/promises"
 
 describe("LSP lifecycle guardrails", () => {
   test("root cache is invalidated when project marker files change", async () => {
-    const source = await Bun.file(path.join(__dirname, "../../src/lsp/index.ts")).text()
+    const source = await readFile(path.join(__dirname, "../../src/lsp/index-impl.ts"), "utf-8")
 
     expect(source).toContain("Bus.subscribe(FileWatcher.Event.Updated")
     expect(source).toContain("isRootMarkerFile(event.properties.file)")
@@ -12,7 +13,7 @@ describe("LSP lifecycle guardrails", () => {
   })
 
   test("cleanup failures do not mask client initialization failures", async () => {
-    const source = await Bun.file(path.join(__dirname, "../../src/lsp/index.ts")).text()
+    const source = await readFile(path.join(__dirname, "../../src/lsp/index-impl.ts"), "utf-8")
     const initializeCatch = source.slice(
       source.indexOf("} catch (err) {", source.indexOf("LSPClient.create")),
       source.indexOf("if (!client)", source.indexOf("LSPClient.create")),

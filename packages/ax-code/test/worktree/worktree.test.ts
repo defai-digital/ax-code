@@ -1,11 +1,11 @@
-import { $ } from "bun"
+import { execFileSync } from "child_process"
 import { afterEach, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { Global } from "../../src/global"
-import { Instance } from "../../src/project/instance"
-import { Project } from "../../src/project/project"
-import { Worktree } from "../../src/worktree"
+import { Global } from "@/global"
+import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
+import { Worktree } from "@/worktree"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -34,7 +34,7 @@ async function waitForStableFileContent(file: string, expected: string) {
 
 test("create removes the preallocated directory when git worktree add fails", async () => {
   await using tmp = await tmpdir()
-  await $`git init`.cwd(tmp.path).quiet()
+  execFileSync("git", ["init"], { cwd: tmp.path, stdio: "pipe" })
 
   await Instance.provide({
     directory: tmp.path,
@@ -61,9 +61,9 @@ test("create rolls back the git worktree when sandbox recording fails", async ()
         const projectRoot = path.join(Global.Path.data, "worktree", Instance.project.id)
         await expect(fs.stat(path.join(projectRoot, "db-fail"))).rejects.toThrow()
 
-        const list = await $`git worktree list --porcelain`.cwd(tmp.path).text()
+        const list = execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: tmp.path, encoding: "utf-8" })
         expect(list).not.toContain("db-fail")
-        const branches = await $`git branch --list`.cwd(tmp.path).text()
+        const branches = execFileSync("git", ["branch", "--list"], { cwd: tmp.path, encoding: "utf-8" })
         expect(branches).not.toContain("db-fail")
       } finally {
         addSandbox.mockRestore()
@@ -118,9 +118,9 @@ test("runStartScripts fails when the worktree start command fails", async () => 
 
 test("reset cancels pending bootstrap before queueing start scripts", async () => {
   await using tmp = await tmpdir({ git: true })
-  await Bun.write(path.join(tmp.path, "tracked.txt"), "ready\n")
-  await $`git add tracked.txt`.cwd(tmp.path).quiet()
-  await $`git commit -m test`.cwd(tmp.path).quiet()
+  await fs.writeFile(path.join(tmp.path, "tracked.txt"), "ready\n")
+  execFileSync("git", ["add", "tracked.txt"], { cwd: tmp.path, stdio: "pipe" })
+  execFileSync("git", ["commit", "-m", "test"], { cwd: tmp.path, stdio: "pipe" })
 
   const marker = path.join(tmp.path, "start-count.txt")
 

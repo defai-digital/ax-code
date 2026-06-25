@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { decodeMemoryEvaluationFileValue, evaluate, parseMemoryEvaluationFileText } from "../../src/memory/evaluation"
 import { recordEntry } from "../../src/memory/recorder"
@@ -37,7 +38,7 @@ describe("memory.evaluation", () => {
     })
 
     const casesPath = path.join(tmp.path, "memory-cases.json")
-    await Bun.write(
+    await fs.writeFile(
       casesPath,
       JSON.stringify({
         cases: [
@@ -81,7 +82,7 @@ describe("memory.evaluation", () => {
     })
 
     const casesPath = path.join(tmp.path, "memory-cases.json")
-    await Bun.write(
+    await fs.writeFile(
       casesPath,
       JSON.stringify({
         cases: [
@@ -112,7 +113,7 @@ describe("memory.evaluation", () => {
     })
 
     const casesPath = path.join(tmp.path, "memory-cases.json")
-    await Bun.write(
+    await fs.writeFile(
       casesPath,
       JSON.stringify({
         cases: [
@@ -150,7 +151,7 @@ describe("memory.evaluation", () => {
     })
 
     const casesPath = path.join(tmp.path, "memory-cases.json")
-    await Bun.write(
+    await fs.writeFile(
       casesPath,
       JSON.stringify({
         cases: [
@@ -184,7 +185,7 @@ describe("memory.evaluation", () => {
     })
 
     const casesPath = path.join(tmp.path, "memory-cases.json")
-    await Bun.write(
+    await fs.writeFile(
       casesPath,
       JSON.stringify({
         cases: [

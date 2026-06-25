@@ -1,15 +1,16 @@
 import { describe, expect, test } from "vitest"
+import { readFile } from "node:fs/promises"
 import path from "path"
 
 const SRC = path.join(import.meta.dirname, "../../src")
 const REPO = path.join(import.meta.dirname, "../../../..")
 
 async function source(relativePath: string) {
-  return Bun.file(path.join(SRC, relativePath)).text()
+  return readFile(path.join(SRC, relativePath), "utf-8")
 }
 
 async function repoSource(relativePath: string) {
-  return Bun.file(path.join(REPO, relativePath)).text()
+  return readFile(path.join(REPO, relativePath), "utf-8")
 }
 
 describe("bug report lifecycle visibility guards", () => {

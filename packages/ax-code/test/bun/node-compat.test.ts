@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
+import { writeFile } from "node:fs/promises"
 import path from "path"
 import { Env } from "../../src/util/env"
 import { tmpdir } from "../fixture/fixture"
@@ -51,8 +52,8 @@ describe("node-compat Bun.$ shell", () => {
   test("Glob.scan accepts a string cwd like Bun", async () => {
     await using dir = await tmpdir({
       init: async (root) => {
-        await Bun.write(path.join(root, "src", "app.ts"), "export const app = true\n")
-        await Bun.write(path.join(root, "outside.ts"), "export const outside = true\n")
+        await writeFile(path.join(root, "src", "app.ts"), "export const app = true\n")
+        await writeFile(path.join(root, "outside.ts"), "export const outside = true\n")
       },
     })
 
@@ -64,8 +65,8 @@ describe("node-compat Bun.$ shell", () => {
   test("Glob.scanSync honors absolute and dot options", async () => {
     await using dir = await tmpdir({
       init: async (root) => {
-        await Bun.write(path.join(root, "visible.ts"), "export const visible = true\n")
-        await Bun.write(path.join(root, ".hidden.ts"), "export const hidden = true\n")
+        await writeFile(path.join(root, "visible.ts"), "export const visible = true\n")
+        await writeFile(path.join(root, ".hidden.ts"), "export const hidden = true\n")
       },
     })
 
@@ -78,8 +79,8 @@ describe("node-compat Bun.$ shell", () => {
   test("Glob.scan includes matching directories when onlyFiles is false", async () => {
     await using dir = await tmpdir({
       init: async (root) => {
-        await Bun.write(path.join(root, "file.txt"), "")
-        await Bun.write(path.join(root, "subdir", "nested.txt"), "")
+        await writeFile(path.join(root, "file.txt"), "")
+        await writeFile(path.join(root, "subdir", "nested.txt"), "")
       },
     })
 
@@ -94,8 +95,8 @@ describe("node-compat Bun.$ shell", () => {
   test("Glob.scanSync includes matching directories when onlyFiles is false", async () => {
     await using dir = await tmpdir({
       init: async (root) => {
-        await Bun.write(path.join(root, "file.txt"), "")
-        await Bun.write(path.join(root, "subdir", "nested.txt"), "")
+        await writeFile(path.join(root, "file.txt"), "")
+        await writeFile(path.join(root, "subdir", "nested.txt"), "")
       },
     })
 

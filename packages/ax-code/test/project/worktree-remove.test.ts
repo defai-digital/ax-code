@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import { $ } from "bun"
+import { execSync } from "child_process"
 import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -8,18 +8,30 @@ import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
+function run(cmd: string, cwd?: string) {
+  execSync(cmd, { cwd, stdio: "pipe" })
+}
+function runOk(cmd: string, cwd?: string): { status: number } {
+  try {
+    execSync(cmd, { cwd, stdio: "pipe" })
+    return { status: 0 }
+  } catch (e: any) {
+    return { status: e.status ?? 1 }
+  }
+}
+
 const wintest = process.platform !== "linux" ? test : test.skip
 
 async function startFsmonitor(dir: string) {
-  await $`git config core.fsmonitor true`.cwd(dir).quiet()
-  await $`git fsmonitor--daemon stop`.cwd(dir).quiet().nothrow()
+  run("git config core.fsmonitor true", dir)
+  runOk("git fsmonitor--daemon stop", dir)
 
-  const started = await $`git fsmonitor--daemon start`.cwd(dir).quiet().nothrow()
-  if (started.exitCode !== 0) return false
+  const started = runOk("git fsmonitor--daemon start", dir)
+  if (started.status !== 0) return false
 
-  const status = await $`git fsmonitor--daemon status`.cwd(dir).quiet().nothrow()
-  if (status.exitCode !== 0) {
-    await $`git fsmonitor--daemon stop`.cwd(dir).quiet().nothrow()
+  const status = runOk("git fsmonitor--daemon status", dir)
+  if (status.status !== 0) {
+    runOk("git fsmonitor--daemon stop", dir)
     return false
   }
 
@@ -34,16 +46,16 @@ describe("Worktree.remove", () => {
     const branch = `opencode/${name}`
     const dir = path.join(root, "..", name)
 
-    await $`git worktree add --no-checkout -b ${branch} ${dir}`.cwd(root).quiet()
-    await $`git reset --hard`.cwd(dir).quiet()
+    run(`git worktree add --no-checkout -b ${branch} ${dir}`, root)
+    run("git reset --hard", dir)
 
-    const real = (await $`which git`.quiet().text()).trim()
+    const real = execSync("which git", { encoding: "utf-8" }).trim()
     expect(real).toBeTruthy()
 
     const bin = path.join(root, "bin")
     const shim = path.join(bin, "git")
     await fs.mkdir(bin, { recursive: true })
-    await Bun.write(
+    await fs.writeFile(
       shim,
       [
         "#!/bin/bash",
@@ -75,11 +87,11 @@ describe("Worktree.remove", () => {
     expect(ok).toBe(true)
     expect(await Filesystem.exists(dir)).toBe(false)
 
-    const list = await $`git worktree list --porcelain`.cwd(root).quiet().text()
+    const list = execSync("git worktree list --porcelain", { cwd: root, encoding: "utf-8" })
     expect(list).not.toContain(`worktree ${dir}`)
 
-    const ref = await $`git show-ref --verify --quiet refs/heads/${branch}`.cwd(root).quiet().nothrow()
-    expect(ref.exitCode).not.toBe(0)
+    const ref = runOk(`git show-ref --verify --quiet refs/heads/${branch}`, root)
+    expect(ref.status).not.toBe(0)
   })
 
   test("keeps sandbox record when git worktree removal fails", async () => {
@@ -89,16 +101,16 @@ describe("Worktree.remove", () => {
     const branch = `opencode/${name}`
     const dir = path.join(root, "..", name)
 
-    await $`git worktree add --no-checkout -b ${branch} ${dir}`.cwd(root).quiet()
-    await $`git reset --hard`.cwd(dir).quiet()
+    run(`git worktree add --no-checkout -b ${branch} ${dir}`, root)
+    run("git reset --hard", dir)
 
-    const real = (await $`which git`.quiet().text()).trim()
+    const real = execSync("which git", { encoding: "utf-8" }).trim()
     expect(real).toBeTruthy()
 
     const bin = path.join(root, "bin-fail")
     const shim = path.join(bin, "git")
     await fs.mkdir(bin, { recursive: true })
-    await Bun.write(
+    await fs.writeFile(
       shim,
       [
         "#!/bin/bash",
@@ -128,8 +140,8 @@ describe("Worktree.remove", () => {
     } finally {
       process.env.PATH = prev
       removeSandbox.mockRestore()
-      await $`git worktree remove --force ${dir}`.cwd(root).quiet().nothrow()
-      await $`git branch -D ${branch}`.cwd(root).quiet().nothrow()
+      runOk(`git worktree remove --force ${dir}`, root)
+      runOk(`git branch -D ${branch}`, root)
     }
   })
 
@@ -140,8 +152,8 @@ describe("Worktree.remove", () => {
     const branch = `opencode/${name}`
     const dir = path.join(root, "..", name)
 
-    await $`git worktree add --no-checkout -b ${branch} ${dir}`.cwd(root).quiet()
-    await $`git reset --hard`.cwd(dir).quiet()
+    run(`git worktree add --no-checkout -b ${branch} ${dir}`, root)
+    run("git reset --hard", dir)
 
     const realRm = fs.rm.bind(fs)
     const rm = vi.spyOn(fs, "rm").mockImplementation((target, options) => {
@@ -159,12 +171,12 @@ describe("Worktree.remove", () => {
         }),
       ).rejects.toThrow("WorktreeRemoveFailedError")
 
-      const ref = await $`git show-ref --verify --quiet refs/heads/${branch}`.cwd(root).quiet().nothrow()
-      expect(ref.exitCode).not.toBe(0)
+      const ref = runOk(`git show-ref --verify --quiet refs/heads/${branch}`, root)
+      expect(ref.status).not.toBe(0)
     } finally {
       rm.mockRestore()
-      await $`git worktree remove --force ${dir}`.cwd(root).quiet().nothrow()
-      await $`git branch -D ${branch}`.cwd(root).quiet().nothrow()
+      runOk(`git worktree remove --force ${dir}`, root)
+      runOk(`git branch -D ${branch}`, root)
     }
   })
 
@@ -175,8 +187,8 @@ describe("Worktree.remove", () => {
     const branch = `opencode/${name}`
     const dir = path.join(root, "..", name)
 
-    await $`git worktree add --no-checkout -b ${branch} ${dir}`.cwd(root).quiet()
-    await $`git reset --hard`.cwd(dir).quiet()
+    run(`git worktree add --no-checkout -b ${branch} ${dir}`, root)
+    run("git reset --hard", dir)
     try {
       if (!(await startFsmonitor(dir))) return
 
@@ -188,12 +200,12 @@ describe("Worktree.remove", () => {
       expect(ok).toBe(true)
       expect(await Filesystem.exists(dir)).toBe(false)
 
-      const ref = await $`git show-ref --verify --quiet refs/heads/${branch}`.cwd(root).quiet().nothrow()
-      expect(ref.exitCode).not.toBe(0)
+      const ref = runOk(`git show-ref --verify --quiet refs/heads/${branch}`, root)
+      expect(ref.status).not.toBe(0)
     } finally {
       if (await Filesystem.exists(dir)) {
-        await $`git fsmonitor--daemon stop`.cwd(dir).quiet().nothrow()
-        await $`git worktree remove --force ${dir}`.cwd(root).quiet().nothrow()
+        runOk("git fsmonitor--daemon stop", dir)
+        runOk(`git worktree remove --force ${dir}`, root)
       }
     }
   })
@@ -201,9 +213,9 @@ describe("Worktree.remove", () => {
   test("removing one worktree does not cancel another pending bootstrap", async () => {
     await using tmp = await tmpdir({ git: true })
     const root = tmp.path
-    await Bun.write(path.join(root, "tracked.txt"), "ready\n")
-    await $`git add tracked.txt`.cwd(root).quiet()
-    await $`git commit -m test`.cwd(root).quiet()
+    await fs.writeFile(path.join(root, "tracked.txt"), "ready\n")
+    run("git add tracked.txt", root)
+    run("git commit -m test", root)
 
     await Instance.provide({
       directory: root,

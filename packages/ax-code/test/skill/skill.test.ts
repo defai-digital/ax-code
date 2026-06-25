@@ -17,7 +17,7 @@ function userSkills(skills: Skill.Info[]) {
 async function createGlobalSkill(homeDir: string) {
   const skillDir = path.join(homeDir, ".claude", "skills", "global-test-skill")
   await fs.mkdir(skillDir, { recursive: true })
-  await Bun.write(
+  await fs.writeFile(
     path.join(skillDir, "SKILL.md"),
     `---
 name: global-test-skill
@@ -36,7 +36,7 @@ test("discovers skills from .ax-code/skill/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "test-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: test-skill
@@ -69,7 +69,7 @@ test("discovers optional skill agent metadata", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "debug-helper")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: debug-helper
@@ -155,7 +155,7 @@ test("returns skill directories from Skill.dirs", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "dir-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: dir-skill
@@ -192,7 +192,7 @@ test("discovers multiple skills from .ax-code/skill/ directory", async () => {
     init: async (dir) => {
       const skillDir1 = path.join(dir, ".ax-code", "skill", "skill-one")
       const skillDir2 = path.join(dir, ".ax-code", "skill", "skill-two")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir1, "SKILL.md"),
         `---
 name: skill-one
@@ -202,7 +202,7 @@ description: First test skill.
 # Skill One
 `,
       )
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir2, "SKILL.md"),
         `---
 name: skill-two
@@ -231,7 +231,7 @@ test("skips skills with missing frontmatter", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "no-frontmatter")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `# No Frontmatter
 
@@ -255,7 +255,7 @@ test("discovers skills from .claude/skills/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".claude", "skills", "claude-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: claude-skill
@@ -320,7 +320,7 @@ test("discovers skills from .agents/skills/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".agents", "skills", "agent-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: agent-skill
@@ -350,7 +350,7 @@ test("discovers skills from .opencode/skills/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".opencode", "skills", "opencode-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: opencode-skill
@@ -386,7 +386,7 @@ test("discovers global skills from ~/.agents/skills/ directory", async () => {
   try {
     const skillDir = path.join(tmp.path, ".agents", "skills", "global-agent-skill")
     await fs.mkdir(skillDir, { recursive: true })
-    await Bun.write(
+    await fs.writeFile(
       path.join(skillDir, "SKILL.md"),
       `---
 name: global-agent-skill
@@ -424,7 +424,7 @@ test("discovers global skills from ~/.opencode/skills/ directory", async () => {
   try {
     const skillDir = path.join(homeDir, ".opencode", "skills", "global-opencode-skill")
     await fs.mkdir(skillDir, { recursive: true })
-    await Bun.write(
+    await fs.writeFile(
       path.join(skillDir, "SKILL.md"),
       `---
 name: global-opencode-skill
@@ -458,7 +458,7 @@ test("discovers skills from both .claude/skills/ and .agents/skills/", async () 
     init: async (dir) => {
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(claudeDir, "SKILL.md"),
         `---
 name: claude-skill
@@ -468,7 +468,7 @@ description: A skill in the .claude/skills directory.
 # Claude Skill
 `,
       )
-      await Bun.write(
+      await fs.writeFile(
         path.join(agentDir, "SKILL.md"),
         `---
 name: agent-skill
@@ -499,7 +499,7 @@ test("skips configured skill paths whose symlink target escapes workspace and ho
   const outside = path.join(root.path, "outside")
   await fs.mkdir(path.join(outside, "external-skill"), { recursive: true })
   await fs.mkdir(home)
-  await Bun.write(
+  await fs.writeFile(
     path.join(outside, "external-skill", "SKILL.md"),
     `---
 name: escaped-config-skill
@@ -511,7 +511,7 @@ description: Skill outside the allowed config path boundary.
   )
   await fs.mkdir(workspace)
   await fs.symlink(outside, path.join(workspace, "linked-skills"), "dir")
-  await Bun.write(
+  await fs.writeFile(
     path.join(workspace, "ax-code.json"),
     JSON.stringify({
       skills: {
@@ -540,7 +540,7 @@ test("parses paths from YAML array in frontmatter", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "ts-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: ts-skill
@@ -571,7 +571,7 @@ test("parses paths from comma-separated string in frontmatter", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "css-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: css-skill
@@ -600,7 +600,7 @@ test("parses portable Agent Skills metadata without requiring it", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "release-notes")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: release-notes
@@ -640,7 +640,7 @@ test("keeps non-standard skills available while surfacing standard issues", asyn
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "different-name")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: Bad_Name
@@ -676,7 +676,7 @@ test("skills without paths have no paths field", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "plain-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: plain-skill
@@ -825,7 +825,7 @@ test("properly resolves directories that skills live in", async () => {
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
       const opencodeDir = path.join(dir, ".opencode", "skills", "external-opencode-skill")
-      await Bun.write(
+      await fs.writeFile(
         path.join(claudeDir, "SKILL.md"),
         `---
 name: claude-skill
@@ -835,7 +835,7 @@ description: A skill in the .claude/skills directory.
 # Claude Skill
 `,
       )
-      await Bun.write(
+      await fs.writeFile(
         path.join(agentDir, "SKILL.md"),
         `---
 name: agent-skill
@@ -845,7 +845,7 @@ description: A skill in the .agents/skills directory.
 # Agent Skill
 `,
       )
-      await Bun.write(
+      await fs.writeFile(
         path.join(opencodeDir, "SKILL.md"),
         `---
 name: external-opencode-skill
@@ -855,7 +855,7 @@ description: A skill in the .opencode/skills directory.
 # External OpenCode Skill
 `,
       )
-      await Bun.write(
+      await fs.writeFile(
         path.join(opencodeSkillDir, "SKILL.md"),
         `---
 name: opencode-skill
@@ -865,7 +865,7 @@ description: A skill in the .ax-code/skill directory.
 # OpenCode Skill
 `,
       )
-      await Bun.write(
+      await fs.writeFile(
         path.join(opencodeSkillsDir, "SKILL.md"),
         `---
 name: opencode-skill

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
 import fs from "fs/promises"
-import { $ } from "bun"
+import { execFileSync } from "child_process"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
@@ -1166,7 +1166,7 @@ describe("detectSecurity", () => {
       [
         "import path from 'path'",
         "const out = path.resolve(process.cwd(), process.argv[2] ?? 'dist')",
-        "await Bun.write(path.join(out, 'bundle.js'), '')",
+        "await fs.writeFile(path.join(out, 'bundle.js'), '')",
       ].join("\n"),
     )
     await fs.writeFile(
@@ -1389,7 +1389,7 @@ describe("ShadowWorktree", () => {
         expect(stat.isDirectory()).toBe(true)
 
         // Branch is registered in git.
-        const branches = await $`git branch --list ${branch}`.cwd(tmp.path).text()
+        const branches = execFileSync("git", ["branch", "--list", branch], { cwd: tmp.path, encoding: "utf-8" })
         expect(branches).toContain(branch)
 
         // Dispose: directory gone, branch gone.
@@ -1400,7 +1400,7 @@ describe("ShadowWorktree", () => {
           .then(() => true)
           .catch(() => false)
         expect(exists).toBe(false)
-        const branchesAfter = await $`git branch --list ${branch}`.cwd(tmp.path).text()
+        const branchesAfter = execFileSync("git", ["branch", "--list", branch], { cwd: tmp.path, encoding: "utf-8" })
         expect(branchesAfter.trim()).toBe("")
       },
     })
@@ -1533,8 +1533,8 @@ describe("applySafeRefactor", () => {
     // Minimal package.json with no test/typecheck/lint scripts so
     // resolveCommands returns all null — checks pass vacuously.
     await fs.writeFile(path.join(tmp.path, "package.json"), JSON.stringify({ name: "dre-test", version: "0.0.0" }))
-    await $`git add .`.cwd(tmp.path).quiet()
-    await $`git commit -m "add pkg"`.cwd(tmp.path).quiet()
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "pipe" })
+    execFileSync("git", ["commit", "-m", "add pkg"], { cwd: tmp.path, stdio: "pipe" })
 
     await Instance.provide({
       directory: tmp.path,
@@ -1577,8 +1577,8 @@ describe("applySafeRefactor", () => {
   test("typecheck failure aborts before applying anything", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(path.join(tmp.path, "package.json"), JSON.stringify({ name: "t", version: "0.0.0" }))
-    await $`git add .`.cwd(tmp.path).quiet()
-    await $`git commit -m "init"`.cwd(tmp.path).quiet()
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "pipe" })
+    execFileSync("git", ["commit", "-m", "init"], { cwd: tmp.path, stdio: "pipe" })
 
     await Instance.provide({
       directory: tmp.path,
@@ -1619,8 +1619,8 @@ describe("applySafeRefactor", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(path.join(tmp.path, "greet.ts"), 'export const msg = "hello"\n')
     await fs.writeFile(path.join(tmp.path, "package.json"), JSON.stringify({ name: "t", version: "0.0.0" }))
-    await $`git add .`.cwd(tmp.path).quiet()
-    await $`git commit -m "init"`.cwd(tmp.path).quiet()
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "pipe" })
+    execFileSync("git", ["commit", "-m", "init"], { cwd: tmp.path, stdio: "pipe" })
 
     await Instance.provide({
       directory: tmp.path,
@@ -1681,8 +1681,8 @@ describe("applySafeRefactor", () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(path.join(tmp.path, "greet.ts"), 'export const msg = "hello"\n')
     await fs.writeFile(path.join(tmp.path, "package.json"), JSON.stringify({ name: "t", version: "0.0.0" }))
-    await $`git add .`.cwd(tmp.path).quiet()
-    await $`git commit -m "init"`.cwd(tmp.path).quiet()
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "pipe" })
+    execFileSync("git", ["commit", "-m", "init"], { cwd: tmp.path, stdio: "pipe" })
 
     await Instance.provide({
       directory: tmp.path,

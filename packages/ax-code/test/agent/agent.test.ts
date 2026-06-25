@@ -1,4 +1,5 @@
 import { afterEach, test, expect } from "vitest"
+import { writeFile } from "node:fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -590,7 +591,7 @@ test("skill directories are allowed for external_directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "perm-skill")
-      await Bun.write(
+      await writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: perm-skill

@@ -90,7 +90,7 @@ describe("McpAuth persistence", () => {
 
   test("does not overwrite malformed auth JSON during updates", async () => {
     const malformed = "{not json"
-    await Bun.write(authFile, malformed)
+    await fs.writeFile(authFile, malformed)
 
     await expect(
       McpAuth.set("server", {
@@ -100,12 +100,12 @@ describe("McpAuth persistence", () => {
       }),
     ).rejects.toThrow("Failed to parse JSON")
 
-    expect(await Bun.file(authFile).text()).toBe(malformed)
+    expect(await fs.readFile(authFile, "utf-8")).toBe(malformed)
   })
 
   test("does not silently ignore writes when auth JSON is not an object", async () => {
     const invalid = "[]"
-    await Bun.write(authFile, invalid)
+    await fs.writeFile(authFile, invalid)
 
     await expect(
       McpAuth.set("server", {
@@ -115,7 +115,7 @@ describe("McpAuth persistence", () => {
       }),
     ).rejects.toThrow("Invalid MCP auth store")
 
-    expect(await Bun.file(authFile).text()).toBe(invalid)
+    expect(await fs.readFile(authFile, "utf-8")).toBe(invalid)
   })
 
   test("filters malformed auth entries without rewriting the file", async () => {
@@ -133,7 +133,7 @@ describe("McpAuth persistence", () => {
         },
       },
     })
-    await Bun.write(authFile, stored)
+    await fs.writeFile(authFile, stored)
 
     const all = await McpAuth.all()
 
@@ -145,11 +145,11 @@ describe("McpAuth persistence", () => {
     })
     expect(all.malformedPrimitive).toBeUndefined()
     expect(all.malformedTokens).toBeUndefined()
-    expect(await Bun.file(authFile).text()).toBe(stored)
+    expect(await fs.readFile(authFile, "utf-8")).toBe(stored)
   })
 
   test("repairs malformed auth entries during field updates", async () => {
-    await Bun.write(
+    await fs.writeFile(
       authFile,
       JSON.stringify({
         server: "bad-entry",
@@ -171,7 +171,7 @@ describe("McpAuth persistence", () => {
       serverUrl: "https://example.com/mcp",
     })
 
-    const stored = JSON.parse(await Bun.file(authFile).text())
+    const stored = JSON.parse(await fs.readFile(authFile, "utf-8"))
     expect(stored.server).not.toHaveProperty("0")
     expect(stored.server).toHaveProperty("tokens")
     expect(stored.server).toHaveProperty("serverUrl", "https://example.com/mcp")

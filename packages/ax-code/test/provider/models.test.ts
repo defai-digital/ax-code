@@ -19,7 +19,7 @@ afterEach(() => {
 test("falls back to bundled snapshot when custom models file is corrupted", async () => {
   await using tmp = await tmpdir()
   const file = path.join(tmp.path, "bad-models.json")
-  await Bun.write(file, "{ invalid json")
+  await fs.writeFile(file, "{ invalid json")
 
   process.env["AX_CODE_MODELS_PATH"] = file
   delete process.env["AX_CODE_MODELS_URL"]
@@ -32,7 +32,7 @@ test("falls back to bundled snapshot when custom models file is corrupted", asyn
 test("falls back to bundled snapshot when custom models file has invalid schema", async () => {
   await using tmp = await tmpdir()
   const file = path.join(tmp.path, "bad-models.json")
-  await Bun.write(
+  await fs.writeFile(
     file,
     JSON.stringify({
       broken: {
@@ -54,7 +54,7 @@ test("falls back to bundled snapshot when custom models file has invalid schema"
 test("loads custom models file from the active project directory", async () => {
   await using tmp = await tmpdir({ git: true })
   const file = path.join(tmp.path, "models.json")
-  await Bun.write(
+  await fs.writeFile(
     file,
     JSON.stringify({
       custom: {
@@ -100,7 +100,7 @@ test("ignores custom models path symlinks that escape allowed directories", asyn
   await using outside = await tmpdir()
   const outsideFile = path.join(outside.path, "models.json")
   const link = path.join(project.path, "models-link.json")
-  await Bun.write(
+  await fs.writeFile(
     outsideFile,
     JSON.stringify({
       escaped: {

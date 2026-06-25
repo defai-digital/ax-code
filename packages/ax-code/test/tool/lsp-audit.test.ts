@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
 import { LspTool } from "../../src/tool/lsp"
@@ -156,7 +157,7 @@ describe("lsp tool audit trail (S3)", () => {
   test("diagnosticsAggregated writes an audit row with the aggregated envelope", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -210,7 +211,7 @@ describe("lsp tool audit trail (S3)", () => {
   test("incomingCalls writes an audit row with a real LSP envelope", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
-    await Bun.write(file, "export const value = 1\n")
+    await writeFile(file, "export const value = 1\n")
 
     await Instance.provide({
       directory: tmp.path,

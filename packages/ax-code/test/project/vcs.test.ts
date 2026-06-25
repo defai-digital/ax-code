@@ -1,7 +1,8 @@
-import { $ } from "bun"
+import { execSync } from "child_process"
 import { afterEach, describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
+import { setTimeout as sleep } from "node:timers/promises"
 import { tmpdir } from "../fixture/fixture"
 import { FileWatcher } from "../../src/file/watcher"
 import { Instance } from "../../src/project/instance"
@@ -22,7 +23,7 @@ function withVcs(directory: string, body: () => Promise<void>) {
       try {
         await FileWatcher.init({ enabled: true, disabled: false })
         await Vcs.init()
-        await Bun.sleep(500)
+        await sleep(500)
         await body()
       } finally {
         await Instance.dispose()
@@ -90,7 +91,7 @@ describeVcs("Vcs", () => {
   test("publishes BranchUpdated when .git/HEAD changes", async () => {
     await using tmp = await tmpdir({ git: true })
     const branch = `test-${Math.random().toString(36).slice(2)}`
-    await $`git branch ${branch}`.cwd(tmp.path).quiet()
+    execSync(`git branch ${branch}`, { cwd: tmp.path, stdio: "pipe" })
 
     await withVcs(tmp.path, async () => {
       const pending = nextBranchUpdate(tmp.path)
@@ -106,7 +107,7 @@ describeVcs("Vcs", () => {
   test("branch() reflects the new branch after HEAD change", async () => {
     await using tmp = await tmpdir({ git: true })
     const branch = `test-${Math.random().toString(36).slice(2)}`
-    await $`git branch ${branch}`.cwd(tmp.path).quiet()
+    execSync(`git branch ${branch}`, { cwd: tmp.path, stdio: "pipe" })
 
     await withVcs(tmp.path, async () => {
       const pending = nextBranchUpdate(tmp.path)

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { EventQuery } from "../../src/replay/query"
@@ -99,7 +100,7 @@ describe("session.system", () => {
       git: true,
       init: async (dir) => {
         const skillDir = path.join(dir, ".ax-code", "skill", "ts-skill")
-        await Bun.write(
+        await writeFile(
           path.join(skillDir, "SKILL.md"),
           `---
 name: ts-skill
@@ -180,7 +181,7 @@ paths:
           ["middle-skill", "Middle skill."],
         ]) {
           const skillDir = path.join(dir, ".ax-code", "skill", name)
-          await Bun.write(
+          await writeFile(
             path.join(skillDir, "SKILL.md"),
             `---
 name: ${name}

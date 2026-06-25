@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest"
 import path from "path"
+import { writeFile } from "fs/promises"
 import { pathToFileURL } from "url"
 import z from "zod"
 import type { Permission } from "../../src/permission"
@@ -32,7 +33,7 @@ describe("tool.skill", () => {
       git: true,
       init: async (dir) => {
         const skillDir = path.join(dir, ".ax-code", "skill", "tool-skill")
-        await Bun.write(
+        await writeFile(
           path.join(skillDir, "SKILL.md"),
           `---
 name: tool-skill
@@ -72,7 +73,7 @@ description: Skill for tool tests.
           ["middle-skill", "Middle skill."],
         ]) {
           const skillDir = path.join(dir, ".ax-code", "skill", name)
-          await Bun.write(
+          await writeFile(
             path.join(skillDir, "SKILL.md"),
             `---
 name: ${name}
@@ -117,7 +118,7 @@ description: ${description}
       git: true,
       init: async (dir) => {
         const skillDir = path.join(dir, ".ax-code", "skill", "tool-skill")
-        await Bun.write(
+        await writeFile(
           path.join(skillDir, "SKILL.md"),
           `---
 name: tool-skill
@@ -129,8 +130,8 @@ description: Skill for tool tests.
 Use this skill.
 `,
         )
-        await Bun.write(path.join(skillDir, "scripts", "demo.txt"), "demo")
-        await Bun.write(path.join(skillDir, "scripts", "ABOUT_SKILL.md.txt"), "about")
+        await writeFile(path.join(skillDir, "scripts", "demo.txt"), "demo")
+        await writeFile(path.join(skillDir, "scripts", "ABOUT_SKILL.md.txt"), "about")
       },
     })
 
@@ -256,7 +257,7 @@ Use this skill.
       git: true,
       init: async (dir) => {
         const skillDir = path.join(dir, ".ax-code", "skill", "evil-skill")
-        await Bun.write(
+        await writeFile(
           path.join(skillDir, "SKILL.md"),
           `---
 name: 'evil"><tag>'
@@ -266,7 +267,7 @@ description: Skill for escaping.
 # Evil Skill
 `,
         )
-        await Bun.write(path.join(skillDir, "scripts", "evil<system>.txt"), "demo")
+        await writeFile(path.join(skillDir, "scripts", "evil<system>.txt"), "demo")
       },
     })
 

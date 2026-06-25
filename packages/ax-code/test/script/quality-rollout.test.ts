@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { describe, expect, test } from "vitest"
+import { spawnSync } from "child_process"
 import { Instance } from "../../src/project/instance"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
@@ -204,9 +205,7 @@ describe("script.quality-rollout promotion summary", () => {
     const reportOut = path.join(tmp, "promotion-summary.md")
 
     try {
-      const result = Bun.spawnSync({
-        cmd: [
-          process.execPath,
+      const result = spawnSync(process.execPath, [
           "--experimental-ffi",
           "--disable-warning=ExperimentalWarning",
           "--import",
@@ -223,14 +222,14 @@ describe("script.quality-rollout promotion summary", () => {
           summaryOut,
           "--report-out",
           reportOut,
-        ],
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ], {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        })
 
-      expect(result.exitCode).toBe(0)
+      expect(result.status).toBe(0)
       expect(result.stdout.toString()).toContain("current stage: post_signing_reviewed")
-      const summary = JSON.parse(await Bun.file(summaryOut).text())
+      const summary = JSON.parse(await fs.readFile(summaryOut, "utf-8"))
       expect(summary.canonicalArtifactKind).toBe("signed_archive_review_dossier")
       expect(summary.canonicalArtifactID).toBe("signed-review-dossier-1")
     } finally {
@@ -311,9 +310,7 @@ describe("script.quality-rollout replay readiness", () => {
         })
 
         const summaryOut = path.join(tmp.path, "replay-readiness.json")
-        const result = Bun.spawnSync({
-          cmd: [
-            process.execPath,
+        const result = spawnSync(process.execPath, [
             "--experimental-ffi",
             "--disable-warning=ExperimentalWarning",
             "--import",
@@ -330,16 +327,16 @@ describe("script.quality-rollout replay readiness", () => {
             sid,
             "--out",
             summaryOut,
-          ],
+          ], {
           cwd: path.join(import.meta.dirname, "../.."),
           env: process.env,
         })
 
-        expect(result.exitCode).toBe(0)
+        expect(result.status).toBe(0)
         expect(result.stdout.toString()).toContain("workflow: review")
         expect(result.stdout.toString()).toContain("overall status: warn")
         expect(result.stdout.toString()).toContain("Finish label coverage")
-        const file = JSON.parse(await Bun.file(summaryOut).text())
+        const file = JSON.parse(await fs.readFile(summaryOut, "utf-8"))
         expect(file.summaries).toHaveLength(1)
         expect(file.summaries[0].missingLabels).toBe(1)
 
@@ -407,9 +404,7 @@ describe("script.quality-rollout replay readiness", () => {
         })
 
         const summaryOut = path.join(tmp.path, "qa-replay-readiness.json")
-        const result = Bun.spawnSync({
-          cmd: [
-            process.execPath,
+        const result = spawnSync(process.execPath, [
             "--experimental-ffi",
             "--disable-warning=ExperimentalWarning",
             "--import",
@@ -426,16 +421,16 @@ describe("script.quality-rollout replay readiness", () => {
             sid,
             "--out",
             summaryOut,
-          ],
+          ], {
           cwd: path.join(import.meta.dirname, "../.."),
           env: process.env,
         })
 
-        expect(result.exitCode).toBe(0)
+        expect(result.status).toBe(0)
         expect(result.stdout.toString()).toContain("workflow: qa")
         expect(result.stdout.toString()).toContain("targeted-test-recommendation")
         expect(result.stdout.toString()).toContain("bun test test/auth.test.ts")
-        const file = JSON.parse(await Bun.file(summaryOut).text())
+        const file = JSON.parse(await fs.readFile(summaryOut, "utf-8"))
         expect(file.summaries).toHaveLength(1)
         expect(file.summaries[0].workflow).toBe("qa")
 

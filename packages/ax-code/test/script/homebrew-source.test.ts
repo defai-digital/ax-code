@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { readFile } from "node:fs/promises"
 import fs from "fs"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
@@ -35,7 +36,7 @@ describe("distribution support guardrails", () => {
       expect(fs.existsSync(path.join(repoRoot, rel)), `${rel} should be removed`).toBe(false)
     }
 
-    const pkg = JSON.parse(await Bun.file(axCodePackageJson).text())
+    const pkg = JSON.parse(await readFile(axCodePackageJson, "utf-8"))
     expect(pkg.bin).toBeUndefined()
     expect(pkg.scripts["bundle:source"]).toBeUndefined()
     expect(pkg.scripts["bundle:source:smoke"]).toBeUndefined()
@@ -43,7 +44,7 @@ describe("distribution support guardrails", () => {
     expect(pkg.scripts["bundle:source:install-smoke"]).toBeUndefined()
     expect(pkg.scripts["bundle:source:tui-smoke"]).toBeUndefined()
 
-    const ci = await Bun.file(axCodeCiWorkflow).text()
+    const ci = await readFile(axCodeCiWorkflow, "utf-8")
     expect(ci).not.toContain("bundle-source:")
     expect(ci).not.toContain("dist-source")
     expect(ci).not.toContain("publish-source")
@@ -51,7 +52,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("default formula installs the node-bundled distribution", async () => {
-    const text = await Bun.file(homebrewDefaultScript).text()
+    const text = await readFile(homebrewDefaultScript, "utf-8")
     expect(text).toContain("github.com/defai-digital/ax-code/releases/download")
     expect(text).toContain('gh release download "${TAG}"')
     expect(text).toContain('--repo "${SOURCE_REPO}"')
@@ -87,7 +88,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("default homebrew update separates release-read and tap-write tokens", async () => {
-    const text = await Bun.file(homebrewDefaultScript).text()
+    const text = await readFile(homebrewDefaultScript, "utf-8")
     expect(text).toContain('RELEASE_READ_TOKEN="${GH_TOKEN:-}"')
     expect(text).toContain('LEGACY_TAP_AUTH_TOKEN="${TAP_TOKEN:-}"')
     expect(text).toContain('NAMED_TAP_AUTH_TOKEN="${HOMEBREW_TAP_TOKEN:-}"')
@@ -108,7 +109,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("release workflow publishes GitHub release assets without package-channel gates", async () => {
-    const text = await Bun.file(releaseWorkflow).text()
+    const text = await readFile(releaseWorkflow, "utf-8")
     const publishJob = text.match(/\n  publish:[\s\S]*$/)
     expect(publishJob).not.toBeNull()
     expect(publishJob![0]).toContain("gh release create")
@@ -121,7 +122,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("release workflow signs archives with minisign before uploading assets", async () => {
-    const text = await Bun.file(releaseWorkflow).text()
+    const text = await readFile(releaseWorkflow, "utf-8")
     const publishJob = text.match(/\n  publish:[\s\S]*?(?=\n  homebrew:|$)/)
     expect(publishJob).not.toBeNull()
     const job = publishJob![0]
@@ -153,7 +154,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("release workflow auto-publishes the Homebrew tap but never npm", async () => {
-    const text = await Bun.file(releaseWorkflow).text()
+    const text = await readFile(releaseWorkflow, "utf-8")
     // npm/source distribution stays retired.
     expect(text).not.toMatch(/\n  publish-npm:/)
     expect(text).not.toMatch(/\n  publish-source:/)
@@ -177,7 +178,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("install matrix is dispatch-only so release.published cannot race package publication", async () => {
-    const text = await Bun.file(installMatrixWorkflow).text()
+    const text = await readFile(installMatrixWorkflow, "utf-8")
     expect(text).toContain("permissions:")
     expect(text).toContain("contents: read")
     expect(text).toContain("uses: actions/checkout@v7")
@@ -188,9 +189,9 @@ describe("distribution support guardrails", () => {
   })
 
   test("install matrix supports Homebrew and Windows without npm package installs", async () => {
-    const text = await Bun.file(installMatrixWorkflow).text()
-    const filterDispatchChannel = await Bun.file(filterDispatchChannelScript).text()
-    const validateInputs = await Bun.file(validateInstallMatrixInputsScript).text()
+    const text = await readFile(installMatrixWorkflow, "utf-8")
+    const filterDispatchChannel = await readFile(filterDispatchChannelScript, "utf-8")
+    const validateInputs = await readFile(validateInstallMatrixInputsScript, "utf-8")
     // Linux support was dropped: no curl/linux smoke legs remain.
     expect(text).not.toContain("- curl")
     expect(text).not.toContain("ubuntu")
@@ -214,7 +215,7 @@ describe("distribution support guardrails", () => {
     // (invoked above), which maps every non-source channel — Homebrew included —
     // to the node-bundled runtime. With Bun fully removed, macOS arm64 now ships
     // the same node-bundled distribution as the Windows legs.
-    const assertRuntimeMode = await Bun.file(assertRuntimeModeScript).text()
+    const assertRuntimeMode = await readFile(assertRuntimeModeScript, "utf-8")
     expect(assertRuntimeMode).toContain("RUNTIME_RE='node-bundled'")
     expect(assertRuntimeMode).toContain('PATTERN="\\"runtimeMode\\":\\"${RUNTIME_RE}\\""')
     expect(text).not.toContain("npm install -g")
@@ -224,8 +225,8 @@ describe("distribution support guardrails", () => {
   })
 
   test("install matrix smokes supported installers with isolated runtime homes", async () => {
-    const text = await Bun.file(installMatrixWorkflow).text()
-    const isolatedHome = await Bun.file(isolatedHomeScript).text()
+    const text = await readFile(installMatrixWorkflow, "utf-8")
+    const isolatedHome = await readFile(isolatedHomeScript, "utf-8")
     const homebrewJob = text.match(/homebrew:[\s\S]*?(?=\n  windows:|$)/)
     expect(homebrewJob).not.toBeNull()
     expect(homebrewJob![0]).toContain("set-isolated-home-env.sh")
@@ -244,7 +245,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("install matrix refreshes the Homebrew tap while waiting for formula propagation", async () => {
-    const text = await Bun.file(installMatrixWorkflow).text()
+    const text = await readFile(installMatrixWorkflow, "utf-8")
     const homebrewStep = text.match(/Install ax-code from Homebrew tap[\s\S]*?(?=\n      - name: ax-code --version|$)/)
     expect(homebrewStep).not.toBeNull()
     expect(homebrewStep![0]).toContain("brew update 2>&1 || true")
@@ -256,7 +257,7 @@ describe("distribution support guardrails", () => {
   })
 
   test("release build matrix smokes each runtime via doctor", async () => {
-    const text = await Bun.file(releaseWorkflow).text()
+    const text = await readFile(releaseWorkflow, "utf-8")
     const buildJob = text.match(/build:[\s\S]*?(?=\n  publish:|$)/)
     expect(buildJob).not.toBeNull()
     expect(buildJob![0]).toContain("AX_CODE_TEST_HOME")

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import {
   compareCoverage,
@@ -72,7 +73,7 @@ describe("script.test-coverage", () => {
       const reportFile = path.join(tmp.path, "coverage-report.md")
       const baselineFile = path.join(tmp.path, "coverage-baseline-summary.json")
 
-      await Bun.write(
+      await writeFile(
         lcovFile,
         [
           "TN:",
@@ -136,7 +137,7 @@ describe("script.test-coverage", () => {
           ci: {},
         },
       }
-      await Bun.write(baselineFile, JSON.stringify(baseline, null, 2) + "\n")
+      await writeFile(baselineFile, JSON.stringify(baseline, null, 2) + "\n")
 
       process.env.GITHUB_REF_NAME = "feature/coverage"
       process.env.GITHUB_SHA = "def456"
@@ -151,8 +152,8 @@ describe("script.test-coverage", () => {
 
       expect(summary.metrics.lines.pct).toBe(75)
       expect(summary.metrics.functions.pct).toBeCloseTo((2 / 3) * 100)
-      expect(summary.metrics.branches.available).toBeFalse()
-      expect(summary.notes.some((item) => item.includes("branch coverage is unavailable"))).toBeTrue()
+      expect(summary.metrics.branches.available).toBe(false)
+      expect(summary.notes.some((item) => item.includes("branch coverage is unavailable"))).toBe(true)
       expect(summary.trend?.metrics.lines?.deltaPct).toBe(25)
       expect(summary.trend?.metrics.functions?.deltaPct).toBeCloseTo((2 / 3) * 100 - 33.3333333333)
       expect(summary.trend?.metrics.branches).toBeUndefined()
@@ -183,7 +184,7 @@ describe("script.test-coverage", () => {
       const reportFile = path.join(tmp.path, "coverage-report.md")
       const externalFile = path.join(tmp.path, "..", "external.ts")
 
-      await Bun.write(
+      await writeFile(
         lcovFile,
         [
           "TN:",
@@ -212,7 +213,7 @@ describe("script.test-coverage", () => {
       expect(summary.files.map((file) => file.path)).toEqual([path.join("src", "inside.ts")])
       expect(
         summary.notes.some((item) => item.includes("excluded 1 coverage entries outside the repository root")),
-      ).toBeTrue()
+      ).toBe(true)
     } finally {
       process.chdir(cwd)
       if (savedWorkspace !== undefined) process.env["GITHUB_WORKSPACE"] = savedWorkspace
@@ -314,7 +315,7 @@ describe("script.test-coverage", () => {
       const reportFile = path.join(tmp.path, "coverage-report.md")
       const baselineFile = path.join(tmp.path, "coverage-baseline-summary.json")
 
-      await Bun.write(
+      await writeFile(
         lcovFile,
         ["TN:", `SF:${path.join(tmp.path, "src", "only.ts")}`, "FNF:1", "FNH:1", "DA:1,1", "end_of_record"].join("\n"),
       )
@@ -350,7 +351,7 @@ describe("script.test-coverage", () => {
           ci: {},
         },
       }
-      await Bun.write(baselineFile, JSON.stringify(baseline, null, 2) + "\n")
+      await writeFile(baselineFile, JSON.stringify(baseline, null, 2) + "\n")
 
       const summary = await createCoverageSummary({
         group: "deterministic",
@@ -365,7 +366,7 @@ describe("script.test-coverage", () => {
         summary.notes.some((line) =>
           line.includes("baseline summary at coverage-baseline-summary.json did not match group deterministic"),
         ),
-      ).toBeTrue()
+      ).toBe(true)
     } finally {
       process.chdir(cwd)
       if (savedWorkspace !== undefined) process.env["GITHUB_WORKSPACE"] = savedWorkspace

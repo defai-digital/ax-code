@@ -62,7 +62,7 @@ describe("tool.registry", () => {
         const toolDir = path.join(opencodeDir, "tool")
         await fs.mkdir(toolDir, { recursive: true })
 
-        await Bun.write(
+        await fs.writeFile(
           path.join(toolDir, "hello.ts"),
           [
             "export default {",
@@ -96,7 +96,7 @@ describe("tool.registry", () => {
         const toolsDir = path.join(opencodeDir, "tools")
         await fs.mkdir(toolsDir, { recursive: true })
 
-        await Bun.write(
+        await fs.writeFile(
           path.join(toolsDir, "hello.ts"),
           [
             "export default {",
@@ -130,7 +130,7 @@ describe("tool.registry", () => {
         const toolsDir = path.join(opencodeDir, "tools")
         await fs.mkdir(toolsDir, { recursive: true })
 
-        await Bun.write(
+        await fs.writeFile(
           path.join(opencodeDir, "package.json"),
           JSON.stringify({
             name: "custom-tools",
@@ -141,7 +141,7 @@ describe("tool.registry", () => {
           }),
         )
 
-        await Bun.write(
+        await fs.writeFile(
           path.join(toolsDir, "cowsay.ts"),
           [
             "import { say } from 'cowsay'",

@@ -15,7 +15,7 @@ test("GET /capability returns unified catalog entries for the requested director
     init: async (dir) => {
       const commandDir = path.join(dir, ".agents", "commands")
       await fs.mkdir(commandDir, { recursive: true })
-      await Bun.write(
+      await fs.writeFile(
         path.join(commandDir, "server-check.md"),
         `---
 description: Server catalog check

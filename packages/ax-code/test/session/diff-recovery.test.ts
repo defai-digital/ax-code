@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -35,7 +36,7 @@ describe("session diff recovery", () => {
         const session = await Session.create({ title: "Diff Corrupt Test" })
         const file = path.join(Global.Path.data, "storage", "session_diff", `${session.id}.json`)
         const corrupt = "{ invalid json"
-        await Bun.write(file, corrupt)
+        await writeFile(file, corrupt)
 
         let caught: unknown = null
         await Session.diff(session.id).catch((err) => {

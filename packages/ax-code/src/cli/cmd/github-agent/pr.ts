@@ -1,12 +1,12 @@
 import { UI } from "../../ui"
 import { cmd } from "../cmd"
-import { Instance } from "@/project/instance"
-import { Process } from "@/util/process"
-import { git } from "@/util/git"
-import { registerShutdownSignals } from "@/util/signals"
-import { isRecord } from "@/util/record"
-import { parseJsonResult } from "@/util/json-value"
-import { Shell } from "@/shell/shell"
+import { Instance } from "../../../project/instance"
+import { Process } from "../../../util/process"
+import { git } from "../../../util/git"
+import { registerShutdownSignals } from "../../../util/signals"
+import { isRecord } from "../../../util/record"
+import { parseJsonResult } from "../../../util/json-value"
+import { Shell } from "../../../shell/shell"
 
 export interface GitHubPrViewInfo {
   isCrossRepository?: boolean

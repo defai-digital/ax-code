@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
 import path from "path"
+import { readFile } from "node:fs/promises"
 import { formatRunToolFallbackInput } from "../../src/cli/cmd/run"
 
 test("run command fallback tool formatter handles non-json-safe input", () => {
@@ -17,7 +18,7 @@ test("run command fallback tool formatter handles non-json-safe input", () => {
 })
 
 test("run command awaits the event loop before bootstrap cleanup", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
   const loopStart = src.indexOf("const loopPromise = loop()")
   const sendCommand = src.indexOf("await sdk.session.command", loopStart)
   const awaitLoop = src.indexOf("await loopPromise.catch", sendCommand)
@@ -31,7 +32,7 @@ test("run command awaits the event loop before bootstrap cleanup", async () => {
 })
 
 test("run command uses the requested directory for attached path display", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
 
   expect(src).toContain('import { AsyncLocalStorage } from "node:async_hooks"')
   expect(src).toContain("const pathDisplayRootContext = new AsyncLocalStorage<string>()")
@@ -41,7 +42,7 @@ test("run command uses the requested directory for attached path display", async
 })
 
 test("run command restores cwd after a requested directory run", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
 
   expect(src).toContain("const previousCwd = process.cwd()")
   expect(src).toContain("if (process.cwd() !== previousCwd)")
@@ -49,7 +50,7 @@ test("run command restores cwd after a requested directory run", async () => {
 })
 
 test("run command scopes the local SDK client to the runtime directory", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
 
   expect(src).toContain("const runtimeDirectory = directory || callerCwd")
   expect(src).toContain("await bootstrap(runtimeDirectory")
@@ -59,7 +60,7 @@ test("run command scopes the local SDK client to the runtime directory", async (
 })
 
 test("run command logs tool renderer fallback errors", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
 
   expect(src).toContain('Log.Default.debug("tool renderer fallback"')
   expect(src).toContain("error: toErrorMessage(error)")
@@ -67,7 +68,7 @@ test("run command logs tool renderer fallback errors", async () => {
 })
 
 test("headless-run clears the idle timer before checking timeout state", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
   const runStart = src.indexOf("await runHeadlessSession({")
   const timeoutCheck = src.indexOf("if (timedOut)", runStart)
   const clearTimer = src.indexOf("clearTimeout(idleTimer)", runStart)
@@ -79,7 +80,7 @@ test("headless-run clears the idle timer before checking timeout state", async (
 })
 
 test("headless-run keeps signal handlers installed until cleanup", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
 
   expect(src).toContain('process.on("SIGINT", onSignal)')
   expect(src).toContain('process.on("SIGTERM", onSignal)')
@@ -90,7 +91,7 @@ test("headless-run keeps signal handlers installed until cleanup", async () => {
 })
 
 test("headless-run attach mode rejects non-internal fetch targets", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
   expect(src).toContain("function assertInternalUrl(url: URL)")
   expect(src).toContain('url.protocol !== "http:" && url.protocol !== "https:"')
   expect(src).toContain("Internal fetch rejected: unsupported protocol")
@@ -109,7 +110,7 @@ test("headless-run attach mode rejects non-internal fetch targets", async () => 
 })
 
 test("shell env loading uses shared process timeout cleanup", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/runtime/shell-env.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/runtime/shell-env.ts"), "utf-8")
   const start = src.indexOf("async function loadShellEnv(")
   const end = src.length
   expect(start).toBeGreaterThan(-1)
@@ -126,7 +127,7 @@ test("shell env loading uses shared process timeout cleanup", async () => {
 })
 
 test("shell env loading starts after logging is configured", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/bootstrap/env.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/bootstrap/env.ts"), "utf-8")
   const start = src.indexOf("export async function init(")
   expect(start).toBeGreaterThan(-1)
   const body = src.slice(start)
@@ -136,7 +137,7 @@ test("shell env loading starts after logging is configured", async () => {
 })
 
 test("debug wait unrefs the underlying timer", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/debug/index.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/debug/index.ts"), "utf-8")
   const waitStart = src.indexOf('command: "wait"')
   const waitEnd = src.indexOf(".demandCommand()", waitStart)
   expect(waitStart).toBeGreaterThan(-1)
@@ -149,7 +150,7 @@ test("debug wait unrefs the underlying timer", async () => {
 })
 
 test("auth lock polling does not keep the process alive while waiting", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/auth/index.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/auth/index.ts"), "utf-8")
   const start = src.indexOf("async function acquireFileLock")
   const end = src.indexOf("async function invalidateProviderCacheAfterAuthChange", start)
   expect(start).toBeGreaterThan(-1)
@@ -160,14 +161,14 @@ test("auth lock polling does not keep the process alive while waiting", async ()
   // pending wait never keeps the process alive.
   expect(body).toContain("sleep(LOCK_POLL_MS)")
 
-  const timeoutSrc = await Bun.file(path.join(import.meta.dirname, "../../src/util/timeout.ts")).text()
+  const timeoutSrc = await readFile(path.join(import.meta.dirname, "../../src/util/timeout.ts"), "utf-8")
   const sleepStart = timeoutSrc.indexOf("export function sleep(")
   expect(sleepStart).toBeGreaterThan(-1)
   expect(timeoutSrc.slice(sleepStart)).toContain("timer.unref?.()")
 })
 
 test("TUI worker removes signal handlers during RPC shutdown", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts"), "utf-8")
 
   // Worker now routes signal registration through the shared helper so
   // SSH disconnect (SIGHUP) and ^\ (SIGQUIT) also drain MCP children /
@@ -181,7 +182,7 @@ test("TUI worker removes signal handlers during RPC shutdown", async () => {
 })
 
 test("TUI worker always forces exit after uncaught exceptions", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts"), "utf-8")
   const start = src.indexOf('process.on("uncaughtException"')
   const end = src.indexOf("const handleGlobalEvent", start)
   expect(start).toBeGreaterThan(-1)
@@ -193,7 +194,7 @@ test("TUI worker always forces exit after uncaught exceptions", async () => {
 })
 
 test("TUI worker waits for an old event stream before replacing it", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts"), "utf-8")
 
   expect(src).toContain("const startEventStream = async")
   expect(src).toContain("await eventStream.done?.catch")
@@ -202,9 +203,10 @@ test("TUI worker waits for an old event stream before replacing it", async () =>
 })
 
 test("autonomous pulse timer does not keep the process alive", async () => {
-  const src = await Bun.file(
+  const src = await readFile(
     path.join(import.meta.dirname, "../../src/cli/cmd/tui/routes/session/autonomous-pulse.ts"),
-  ).text()
+    "utf-8",
+  )
 
   expect(src).toContain("timer = setInterval(tick, TICK_MS)")
   expect(src).toContain("timer.unref?.()")

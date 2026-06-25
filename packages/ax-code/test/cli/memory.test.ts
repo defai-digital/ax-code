@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import * as prompts from "@clack/prompts"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import {
   MemoryDoctorCommand,
@@ -151,7 +152,7 @@ describe("memory command", () => {
     logSpy.mockClear()
 
     const casesPath = path.join(tmp.path, "memory-cases.json")
-    await Bun.write(
+    await writeFile(
       casesPath,
       JSON.stringify({
         cases: [{ query: "evaluation", expected: ["eval-target"] }],

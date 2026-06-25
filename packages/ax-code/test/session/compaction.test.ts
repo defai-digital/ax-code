@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { SessionCompaction } from "../../src/session/compaction"
 import { Token } from "../../src/util/token"
 import { Instance } from "../../src/project/instance"
@@ -252,7 +253,7 @@ describe("session.compaction.isOverflow", () => {
   test("explicit compaction.reserved overrides the 10% default", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             // Reserve 200K instead of 10% (= 100K). Usable = 800K.
@@ -277,7 +278,7 @@ describe("session.compaction.isOverflow", () => {
   test("disables automatic compaction when the usable budget is too small to converge", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             compaction: { reserved: 4_200 },
@@ -331,7 +332,7 @@ describe("session.compaction.isOverflow", () => {
   test("returns false when compaction.auto is disabled", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             compaction: { auto: false },
@@ -450,7 +451,7 @@ describe("session.compaction.prune tool estimates", () => {
   test("counts serialized tool input when pruning", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
       },
     })
     await Instance.provide({
@@ -469,7 +470,7 @@ describe("session.compaction.prune tool estimates", () => {
         const part = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)
         expect(part?.state.status).toBe("completed")
         if (part?.state.status !== "completed") throw new Error("expected completed tool part")
-        expect(part.state.time.compacted).toBeNumber()
+        expect(part.state.time.compacted).toBeTypeOf("number")
       },
     })
   })
@@ -477,7 +478,7 @@ describe("session.compaction.prune tool estimates", () => {
   test("counts attachment placeholders when pruning", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
       },
     })
     await Instance.provide({
@@ -497,7 +498,7 @@ describe("session.compaction.prune tool estimates", () => {
         const part = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)
         expect(part?.state.status).toBe("completed")
         if (part?.state.status !== "completed") throw new Error("expected completed tool part")
-        expect(part.state.time.compacted).toBeNumber()
+        expect(part.state.time.compacted).toBeTypeOf("number")
       },
     })
   })
@@ -505,7 +506,7 @@ describe("session.compaction.prune tool estimates", () => {
   test("continues pruning when tool input cannot be stringified", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
       },
     })
     await Instance.provide({
@@ -537,7 +538,7 @@ describe("session.compaction.prune tool estimates", () => {
   test("prune uses compacted clones without mutating caller-owned message parts", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
       },
     })
     await Instance.provide({
@@ -559,7 +560,7 @@ describe("session.compaction.prune tool estimates", () => {
         const stored = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)
         expect(stored?.state.status).toBe("completed")
         if (stored?.state.status !== "completed") throw new Error("expected completed stored tool part")
-        expect(stored.state.time.compacted).toBeNumber()
+        expect(stored.state.time.compacted).toBeTypeOf("number")
       },
     })
   })
@@ -567,7 +568,7 @@ describe("session.compaction.prune tool estimates", () => {
   test("prune skips already compacted parts and still evaluates older candidates", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
       },
     })
     await Instance.provide({
@@ -633,7 +634,7 @@ describe("session.compaction.prune tool estimates", () => {
 
         expect(olderPart?.state.status).toBe("completed")
         if (olderPart?.state.status !== "completed") throw new Error("expected completed older tool part")
-        expect(olderPart.state.time.compacted).toBeNumber()
+        expect(olderPart.state.time.compacted).toBeTypeOf("number")
       },
     })
   })
@@ -776,7 +777,8 @@ describe("session.getUsage", () => {
       usage: markEstimatedUsage({
         inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
         outputTokens: { total: 20, text: 20, reasoning: 0 },
-      } as any),
+        totalTokens: 120,
+      }) as any,
     })
     const missing = Session.getUsage({
       model,
@@ -924,7 +926,7 @@ describe("session.compaction.prune tier-aware", () => {
   test("prunes lower-priority tiers first and stops when enough content was selected", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
       },
     })
     await Instance.provide({
@@ -998,7 +1000,7 @@ describe("session.compaction.prune tier-aware", () => {
           return part.state.time.compacted
         }
 
-        expect(compactedAt(partIDs.turn1)).toBeNumber()
+        expect(compactedAt(partIDs.turn1)).toBeTypeOf("number")
         for (const turn of [2, 3, 4, 5, 6, 7, 8]) {
           expect(compactedAt(partIDs[`turn${turn}`])).toBeUndefined()
         }

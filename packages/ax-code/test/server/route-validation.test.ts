@@ -367,7 +367,7 @@ describe("server route validation", () => {
   })
 
   test("revert and unrevert routes assert that the session is not busy", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/session.ts")).text()
+    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/session.ts"), "utf-8")
     const revertStart = src.indexOf('"/:sessionID/revert"')
     const unrevertStart = src.indexOf('"/:sessionID/unrevert"', revertStart)
     const permissionStart = src.indexOf('"/:sessionID/permissions/:permissionID"', unrevertStart)
@@ -616,14 +616,14 @@ describe("server route validation", () => {
   })
 
   test("pty websocket route closes failed connects instead of leaving an unhandled async open", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/pty.ts")).text()
+    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/pty.ts"), "utf-8")
     expect(src).toContain("try {")
     expect(src).toContain("handler = await Pty.connect(id, socket, cursor)")
     expect(src).toContain("ws.close()")
   })
 
   test("pty websocket route reports missing sessions as not found", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/pty.ts")).text()
+    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/pty.ts"), "utf-8")
     expect(src).toContain('throw new NotFoundError({ message: "Session not found" })')
     expect(src).not.toContain('throw new Error("Session not found")')
   })
@@ -643,8 +643,8 @@ describe("server route validation", () => {
   })
 
   test("sse stop handlers always close their queues even if unsubscribe throws", async () => {
-    const eventSrc = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/event.ts")).text()
-    const globalSrc = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/global.ts")).text()
+    const eventSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/event.ts"), "utf-8")
+    const globalSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/global.ts"), "utf-8")
     expect(eventSrc).toContain("} finally {")
     expect(eventSrc).toContain("q.push(null)")
     expect(globalSrc).toContain("} finally {")
@@ -652,7 +652,7 @@ describe("server route validation", () => {
   })
 
   test("event stream only forwards bus events from the current project", async () => {
-    const eventSrc = await Bun.file(path.join(import.meta.dirname, "../../src/server/routes/event.ts")).text()
+    const eventSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/event.ts"), "utf-8")
     expect(eventSrc).toContain("const shouldForward")
     expect(eventSrc).toContain("directory === undefined || directory === Instance.directory")
     expect(eventSrc).toMatch(/Bus\.subscribeAll\(\(event\) => \{\s*if \(!shouldForward\(event\)\) return/)

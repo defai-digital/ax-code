@@ -119,8 +119,8 @@ describe("tool.bash", () => {
         const hang = result.metadata.hang as Record<string, unknown>
         expect(hang["timedOut"]).toBe(true)
         expect(hang["timeoutMs"]).toBe(50)
-        expect(hang["processId"]).toBeNumber()
-        expect(hang["killStartedAt"]).toBeNumber()
+        expect(hang["processId"]).toBeTypeOf("number")
+        expect(hang["killStartedAt"]).toBeTypeOf("number")
         expect(result.output).toContain("bash tool terminated command after exceeding timeout 50 ms")
       },
     })
@@ -261,7 +261,7 @@ describe("tool.bash permissions", () => {
   test("asks for external_directory permission when file arg is outside project", async () => {
     await using outerTmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "outside.txt"), "x")
+        await fs.writeFile(path.join(dir, "outside.txt"), "x")
       },
     })
     await using tmp = await tmpdir({ git: true })
@@ -297,7 +297,7 @@ describe("tool.bash permissions", () => {
       fn: async () => {
         const bash = await BashTool.init()
 
-        await Bun.write(path.join(tmp.path, "tmpfile"), "x")
+        await fs.writeFile(path.join(tmp.path, "tmpfile"), "x")
 
         const requests = await collectPermissionRequests(
           (testCtx) =>
@@ -622,7 +622,7 @@ describe("tool.bash truncation", () => {
         expect((result.metadata as any).truncated).toBe(true)
         expect((result.metadata as any).originalSize).toBeGreaterThan(0)
         expect((result.metadata as any).truncatedTo).toBeGreaterThan(0)
-        expect((result.metadata as any).contentHint).toBeString()
+        expect((result.metadata as any).contentHint).toBeTypeOf("string")
         expect((result.metadata as any).fullOutputPath).toBe((result.metadata as any).outputPath)
         expect(result.output).toContain("truncated")
         expect(result.output).toContain("The tool call succeeded but the output was truncated")

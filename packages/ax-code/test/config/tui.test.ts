@@ -20,10 +20,10 @@ afterEach(async () => {
 test("loads tui config with the same precedence order as server config paths", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(Global.Path.config, "tui.json"), JSON.stringify({ theme: "global" }, null, 2))
-      await Bun.write(path.join(dir, "tui.json"), JSON.stringify({ theme: "project" }, null, 2))
+      await fs.writeFile(path.join(Global.Path.config, "tui.json"), JSON.stringify({ theme: "global" }, null, 2))
+      await fs.writeFile(path.join(dir, "tui.json"), JSON.stringify({ theme: "project" }, null, 2))
       await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, ".ax-code", "tui.json"),
         JSON.stringify({ theme: "local", diff_style: "stacked" }, null, 2),
       )
@@ -43,7 +43,7 @@ test("loads tui config with the same precedence order as server config paths", a
 test("migrates tui-specific keys from ax-code.json when tui.json does not exist", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify(
           {
@@ -83,8 +83,8 @@ test("migrates tui-specific keys from ax-code.json when tui.json does not exist"
 test("migrates project legacy tui keys even when global tui.json already exists", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(Global.Path.config, "tui.json"), JSON.stringify({ theme: "global" }, null, 2))
-      await Bun.write(
+      await fs.writeFile(path.join(Global.Path.config, "tui.json"), JSON.stringify({ theme: "global" }, null, 2))
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify(
           {
@@ -116,7 +116,7 @@ test("migrates project legacy tui keys even when global tui.json already exists"
 test("drops unknown legacy tui keys during migration", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.json"),
         JSON.stringify(
           {
@@ -148,7 +148,7 @@ test("drops unknown legacy tui keys during migration", async () => {
 test("skips migration when ax-code.jsonc is syntactically invalid", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.jsonc"),
         `{
   "theme": "broken-theme",
@@ -177,8 +177,8 @@ test("skips migration when ax-code.jsonc is syntactically invalid", async () => 
 test("skips migration when tui.json already exists", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "legacy" }, null, 2))
-      await Bun.write(path.join(dir, "tui.json"), JSON.stringify({ diff_style: "stacked" }, null, 2))
+      await fs.writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "legacy" }, null, 2))
+      await fs.writeFile(path.join(dir, "tui.json"), JSON.stringify({ diff_style: "stacked" }, null, 2))
     },
   })
 
@@ -201,7 +201,7 @@ test.skipIf(process.getuid?.() === 0 || !!process.env.CI)(
   async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "readonly-theme" }, null, 2))
+        await fs.writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "readonly-theme" }, null, 2))
       },
     })
 
@@ -229,7 +229,7 @@ test.skipIf(process.getuid?.() === 0 || !!process.env.CI)(
 test("migration backup preserves JSONC comments", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "ax-code.jsonc"),
         `{
   // top-level comment
@@ -262,8 +262,8 @@ test("migrates legacy tui keys across multiple ax-code.json levels", async () =>
     init: async (dir) => {
       const nested = path.join(dir, "apps", "client")
       await fs.mkdir(nested, { recursive: true })
-      await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "root-theme" }, null, 2))
-      await Bun.write(path.join(nested, "ax-code.json"), JSON.stringify({ theme: "nested-theme" }, null, 2))
+      await fs.writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ theme: "root-theme" }, null, 2))
+      await fs.writeFile(path.join(nested, "ax-code.json"), JSON.stringify({ theme: "nested-theme" }, null, 2))
     },
   })
 
@@ -281,7 +281,7 @@ test("migrates legacy tui keys across multiple ax-code.json levels", async () =>
 test("flattens nested tui key inside tui.json", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "tui.json"),
         JSON.stringify({
           theme: "outer",
@@ -306,7 +306,7 @@ test("flattens nested tui key inside tui.json", async () => {
 test("top-level keys in tui.json take precedence over nested tui key", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await fs.writeFile(
         path.join(dir, "tui.json"),
         JSON.stringify({
           diff_style: "auto",
@@ -329,9 +329,9 @@ test("top-level keys in tui.json take precedence over nested tui key", async () 
 test("project config takes precedence over AX_CODE_TUI_CONFIG (matches AX_CODE_CONFIG)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(dir, "tui.json"), JSON.stringify({ theme: "project", diff_style: "auto" }))
+      await fs.writeFile(path.join(dir, "tui.json"), JSON.stringify({ theme: "project", diff_style: "auto" }))
       const custom = path.join(dir, "custom-tui.json")
-      await Bun.write(custom, JSON.stringify({ theme: "custom", diff_style: "stacked" }))
+      await fs.writeFile(custom, JSON.stringify({ theme: "custom", diff_style: "stacked" }))
       process.env.AX_CODE_TUI_CONFIG = custom
     },
   })
@@ -351,8 +351,8 @@ test("project config takes precedence over AX_CODE_TUI_CONFIG (matches AX_CODE_C
 test("merges keybind overrides across precedence layers", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(Global.Path.config, "tui.json"), JSON.stringify({ keybinds: { app_exit: "ctrl+q" } }))
-      await Bun.write(path.join(dir, "tui.json"), JSON.stringify({ keybinds: { theme_list: "ctrl+k" } }))
+      await fs.writeFile(path.join(Global.Path.config, "tui.json"), JSON.stringify({ keybinds: { app_exit: "ctrl+q" } }))
+      await fs.writeFile(path.join(dir, "tui.json"), JSON.stringify({ keybinds: { theme_list: "ctrl+k" } }))
     },
   })
 
@@ -370,7 +370,7 @@ test("AX_CODE_TUI_CONFIG provides settings when no project config exists", async
   await using tmp = await tmpdir({
     init: async (dir) => {
       const custom = path.join(dir, "custom-tui.json")
-      await Bun.write(custom, JSON.stringify({ theme: "from-env", diff_style: "stacked" }))
+      await fs.writeFile(custom, JSON.stringify({ theme: "from-env", diff_style: "stacked" }))
       process.env.AX_CODE_TUI_CONFIG = custom
     },
   })
@@ -390,8 +390,8 @@ test("does not derive tui path from AX_CODE_CONFIG", async () => {
     init: async (dir) => {
       const customDir = path.join(dir, "custom")
       await fs.mkdir(customDir, { recursive: true })
-      await Bun.write(path.join(customDir, "ax-code.json"), JSON.stringify({ model: "test/model" }))
-      await Bun.write(path.join(customDir, "tui.json"), JSON.stringify({ theme: "should-not-load" }))
+      await fs.writeFile(path.join(customDir, "ax-code.json"), JSON.stringify({ model: "test/model" }))
+      await fs.writeFile(path.join(customDir, "tui.json"), JSON.stringify({ theme: "should-not-load" }))
       process.env.AX_CODE_CONFIG = path.join(customDir, "ax-code.json")
     },
   })
@@ -411,8 +411,8 @@ test("applies env and file substitutions in tui.json", async () => {
   try {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "keybind.txt"), "ctrl+q")
-        await Bun.write(
+        await fs.writeFile(path.join(dir, "keybind.txt"), "ctrl+q")
+        await fs.writeFile(
           path.join(dir, "tui.json"),
           JSON.stringify({
             theme: "{env:TUI_THEME_TEST}",
@@ -439,8 +439,8 @@ test("applies env and file substitutions in tui.json", async () => {
 test("applies file substitutions when first identical token is in a commented line", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(dir, "theme.txt"), "resolved-theme")
-      await Bun.write(
+      await fs.writeFile(path.join(dir, "theme.txt"), "resolved-theme")
+      await fs.writeFile(
         path.join(dir, "tui.jsonc"),
         `{
   // "theme": "{file:theme.txt}",
@@ -462,9 +462,9 @@ test("applies file substitutions when first identical token is in a commented li
 test("loads managed tui config and gives it highest precedence", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(dir, "tui.json"), JSON.stringify({ theme: "project-theme" }, null, 2))
+      await fs.writeFile(path.join(dir, "tui.json"), JSON.stringify({ theme: "project-theme" }, null, 2))
       await fs.mkdir(managedConfigDir, { recursive: true })
-      await Bun.write(path.join(managedConfigDir, "tui.json"), JSON.stringify({ theme: "managed-theme" }, null, 2))
+      await fs.writeFile(path.join(managedConfigDir, "tui.json"), JSON.stringify({ theme: "managed-theme" }, null, 2))
     },
   })
 
@@ -481,7 +481,7 @@ test("loads .ax-code/tui.json", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
-      await Bun.write(path.join(dir, ".ax-code", "tui.json"), JSON.stringify({ diff_style: "stacked" }, null, 2))
+      await fs.writeFile(path.join(dir, ".ax-code", "tui.json"), JSON.stringify({ diff_style: "stacked" }, null, 2))
     },
   })
 
@@ -497,9 +497,9 @@ test("loads .ax-code/tui.json", async () => {
 test("gracefully falls back when tui.json has invalid JSON", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(path.join(dir, "tui.json"), "{ invalid json }")
+      await fs.writeFile(path.join(dir, "tui.json"), "{ invalid json }")
       await fs.mkdir(managedConfigDir, { recursive: true })
-      await Bun.write(path.join(managedConfigDir, "tui.json"), JSON.stringify({ theme: "managed-fallback" }, null, 2))
+      await fs.writeFile(path.join(managedConfigDir, "tui.json"), JSON.stringify({ theme: "managed-fallback" }, null, 2))
     },
   })
 

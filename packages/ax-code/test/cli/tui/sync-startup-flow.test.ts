@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { setTimeout as sleep } from "node:timers/promises"
 import { registerSyncLifecycle } from "../../../src/cli/cmd/tui/context/sync-lifecycle"
 import { createSyncStartupCoordinator } from "../../../src/cli/cmd/tui/context/sync-startup"
 import { RECONNECT_STABILIZE_MS } from "../../../src/cli/cmd/tui/util/reconnect-recovery"
@@ -43,7 +44,7 @@ describe("tui sync startup flow", () => {
 
     // Dispose the provider before the reconnect stabilization delay elapses.
     rootCleanups[0]?.()
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
 
     expect(bootstrapStarts).toBe(0)
     expect(reconnectRecoveries).toBe(0)

@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
 import path from "path"
+import { readFile } from "fs/promises"
 import { formatToolArgumentsForPrompt } from "../../src/sdk/programmatic"
 
 test("programmatic tool argument formatting handles bigint and circular input", () => {
@@ -28,7 +29,7 @@ test("programmatic tool argument formatting falls back when serialization throws
 })
 
 test("programmatic stream removes abort listeners when prompt fails", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/sdk/programmatic.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("stream(message: string, options?: RunOptions): StreamHandle")
   const end = src.indexOf("async messages()", start)
   expect(start).toBeGreaterThan(-1)
@@ -45,7 +46,7 @@ test("programmatic stream removes abort listeners when prompt fails", async () =
 })
 
 test("programmatic stream handle exposes cancel cleanup", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/sdk/programmatic.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("function createStreamHandle(")
   const end = src.indexOf("// ============================================================\n// RETRY LOGIC", start)
   expect(start).toBeGreaterThan(-1)
@@ -62,7 +63,7 @@ test("programmatic stream handle exposes cancel cleanup", async () => {
 })
 
 test("programmatic agent dispose aborts sessions created by the agent", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/sdk/programmatic.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("export async function createAgent(")
   const end = src.indexOf("async dispose()", start)
   expect(start).toBeGreaterThan(-1)
@@ -76,7 +77,7 @@ test("programmatic agent dispose aborts sessions created by the agent", async ()
 })
 
 test("programmatic agent stream does not mark initialization started before it succeeds", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/sdk/programmatic.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("stream(message: string, runOptions?: RunOptions): StreamHandle")
   const end = src.indexOf("async session(): Promise<SessionHandle>", start)
   expect(start).toBeGreaterThan(-1)
@@ -97,7 +98,7 @@ test("programmatic agent stream does not mark initialization started before it s
 })
 
 test("programmatic agent run aborts the session on outer timeout", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/sdk/programmatic.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("async run(message: string, runOptions?: RunOptions): Promise<RunResult>")
   const end = src.indexOf("stream(message: string, runOptions?: RunOptions): StreamHandle", start)
   expect(start).toBeGreaterThan(-1)
@@ -112,7 +113,7 @@ test("programmatic agent run aborts the session on outer timeout", async () => {
 })
 
 test("programmatic agent run timed out session guard handles races before and after create", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/sdk/programmatic.ts")).text()
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("async run(message: string, runOptions?: RunOptions): Promise<RunResult>")
   const end = src.indexOf("stream(message: string, runOptions?: RunOptions): StreamHandle", start)
   expect(start).toBeGreaterThan(-1)

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { readFile } from "node:fs/promises"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const installScript = path.join(repoRoot, "install")
@@ -7,7 +8,7 @@ const installPowerShellScript = path.join(repoRoot, "install.ps1")
 
 describe("install script", () => {
   test("quarantines stale source launchers that shadow the packaged binary", async () => {
-    const text = await Bun.file(installScript).text()
+    const text = await readFile(installScript, "utf-8")
     expect(text).toContain("cleanup_stale_source_launchers")
     expect(text).toContain("source_launcher_cwd")
     expect(text).toContain('AX_CODE_SOURCE_CWD="')
@@ -22,7 +23,7 @@ describe("install script", () => {
   })
 
   test("quarantines stale bundled launchers whose target binary is missing", async () => {
-    const text = await Bun.file(installScript).text()
+    const text = await readFile(installScript, "utf-8")
     expect(text).toContain("cleanup_stale_bundled_launchers")
     expect(text).toContain("bundled_launcher_target")
     expect(text).toContain(".stale-bundled-")
@@ -30,7 +31,7 @@ describe("install script", () => {
   })
 
   test("installs the complete Unix node-bundled runtime tree", async () => {
-    const text = await Bun.file(installScript).text()
+    const text = await readFile(installScript, "utf-8")
     expect(text).toContain('INSTALL_ROOT=$(dirname "$INSTALL_DIR")')
     expect(text).toContain('INSTALL_LIB_DIR="$INSTALL_ROOT/lib"')
     expect(text).toContain('INSTALL_NODE_MODULES_DIR="$INSTALL_ROOT/node_modules"')
@@ -43,14 +44,14 @@ describe("install script", () => {
   })
 
   test("warns when the installed binary is not first on PATH", async () => {
-    const text = await Bun.file(installScript).text()
+    const text = await readFile(installScript, "utf-8")
     expect(text).toContain("warn_path_precedence")
     expect(text).toContain("your current shell resolves ax-code to")
     expect(text).toContain("export PATH=${INSTALL_DIR}:\\$PATH")
   })
 
   test("provides a native Windows PowerShell release installer", async () => {
-    const text = await Bun.file(installPowerShellScript).text()
+    const text = await readFile(installPowerShellScript, "utf-8")
     expect(text).toContain("param(")
     expect(text).toContain("[string]$Version")
     expect(text).toContain("[string]$Binary")
@@ -76,7 +77,7 @@ describe("install script", () => {
   })
 
   test("installs the Windows Node distribution without AVX2 binary fallback", async () => {
-    const text = await Bun.file(installPowerShellScript).text()
+    const text = await readFile(installPowerShellScript, "utf-8")
     expect(text).toContain('$filename = "$App-windows-$arch.zip"')
     expect(text).toContain("Downloaded archive did not contain ax-code.cmd")
     expect(text).toContain("Downloaded archive did not contain the Node runtime lib directory")

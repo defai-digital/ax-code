@@ -28,7 +28,7 @@ describe("storage transfer", () => {
 
     const result = await readSessionTransferFile(path.join(tmp.path, "corrupt.json"))
 
-    expect(result.error).toStartWith("Failed to read ")
+    expect(result.error).toMatch(/^Failed to read /)
     expect(result.error).not.toContain("File not found")
   })
 

@@ -25,7 +25,7 @@ test("lists commands, skills, agents, and workflow templates with stable metadat
     init: async (dir) => {
       const commandDir = path.join(dir, ".agents", "commands")
       await fs.mkdir(commandDir, { recursive: true })
-      await Bun.write(
+      await fs.writeFile(
         path.join(commandDir, "release-check.md"),
         `---
 description: Check a release
@@ -36,8 +36,8 @@ Check release $ARGUMENTS.
 
       const skillDir = path.join(dir, ".opencode", "skills", "release-check")
       await fs.mkdir(skillDir, { recursive: true })
-      await Bun.write(path.join(dir, "AGENTS.md"), "# Project Instructions\n")
-      await Bun.write(
+      await fs.writeFile(path.join(dir, "AGENTS.md"), "# Project Instructions\n")
+      await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
 name: release-check
@@ -160,7 +160,7 @@ test("keeps dotted project instruction paths relative in capability names", asyn
     init: async (dir) => {
       const instructionDir = path.join(dir, "..instructions")
       await fs.mkdir(instructionDir, { recursive: true })
-      await Bun.write(path.join(instructionDir, "AGENTS.md"), "# Dotted Instructions\n")
+      await fs.writeFile(path.join(instructionDir, "AGENTS.md"), "# Dotted Instructions\n")
     },
   })
 

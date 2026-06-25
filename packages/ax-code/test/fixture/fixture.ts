@@ -59,7 +59,7 @@ export async function tmpdir<T>(options?: TmpDirOptions<T>) {
     await run("git", ["commit", "--allow-empty", "-m", `root commit ${dirpath}`], { cwd: dirpath })
   }
   if (options?.config) {
-    await Bun.write(
+    await fs.writeFile(
       path.join(dirpath, "ax-code.json"),
       JSON.stringify({
         $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",

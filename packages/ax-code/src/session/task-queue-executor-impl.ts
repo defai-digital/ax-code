@@ -1,0 +1,996 @@
+import { Bus } from "@/bus"
+import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { Permission } from "@/permission"
+import { Instance } from "@/project/instance"
+import { Question } from "@/question"
+import { EventQuery } from "@/replay/query"
+import { Log } from "@/util/log"
+import { KeyedSerialQueue } from "@/util/queue"
+import { NamedError } from "@ax-code/util/error"
+import { lazy } from "../util/lazy"
+import { SessionPrompt } from "./prompt"
+import { PromptIsolationPolicy, type PromptIsolationPolicy as PromptIsolationPolicyType } from "./prompt-runtime-policy"
+import { TaskQueue } from "./task-queue"
+import type { SessionID, TaskQueueID } from "./schema"
+import type {
+  WorkflowArtifactID,
+  WorkflowChildID,
+  WorkflowEvidenceRef,
+  WorkflowPhaseID,
+  WorkflowRunID,
+} from "../workflow/state"
+
+const log = Log.create({ service: "session.task-queue-executor" })
+
+// Lazy: session/prompt has a circular dep with session/index. Evaluating these
+// schemas at module load can race the circular load cycle in the full test suite.
+const QueuePromptBody = lazy(() => SessionPrompt.PromptInput.omit({ sessionID: true }))
+const QueueCommandBody = lazy(() => SessionPrompt.CommandInput.omit({ sessionID: true }))
+const QueueShellBody = lazy(() => SessionPrompt.ShellInput.omit({ sessionID: true }))
+
+type WorkflowRunApi = typeof import("../workflow/run").WorkflowRun
+
+type QueueExecution = {
+  sessionID: SessionID
+  run: () => Promise<unknown>
+}
+
+const activeStatuses = ["running", "blocked_permission", "blocked_question"] as const
+const WORKFLOW_PACING_WINDOW_MS = 60_000
+const workflowPacingTimers = new Map<TaskQueueID, ReturnType<typeof setTimeout>>()
+const startLocks = Instance.state(
+  () => new KeyedSerialQueue(),
+  async (queue) => {
+    queue.clear()
+  },
+)
+
+const blockObserverState = Instance.state(
+  () => ({
+    initialized: false,
+    unsubscribe: [] as Array<() => void>,
+  }),
+  async (state) => {
+    for (const unsubscribe of state.unsubscribe) unsubscribe()
+    state.unsubscribe = []
+    state.initialized = false
+  },
+)
+
+export namespace TaskQueueExecutor {
+  export function initSessionBlockObservers() {
+    ensureSessionBlockObservers()
+  }
+
+  export async function sendNow(id: TaskQueueID): Promise<TaskQueue.Info> {
+    const item = await TaskQueue.sendNow(id)
+    return start(item)
+  }
+
+  export async function start(item: TaskQueue.Info): Promise<TaskQueue.Info> {
+    if (item.directory !== Instance.directory) {
+      return Instance.provide({
+        directory: item.directory,
+        fn: () => start(item),
+      })
+    }
+
+    ensureSessionBlockObservers()
+    const execution = queueItemExecution(item)
+    if (!execution) return item
+
+    return withStartLocks(item, execution, async () => {
+      const latest = await TaskQueue.get(item.id)
+      const latestExecution = queueItemExecution(latest)
+      if (!latestExecution) return latest
+      if (latest.status !== "queued" && latest.status !== "waiting_for_idle") return latest
+
+      if (await shouldWaitForIdle(latestExecution.sessionID, latest.id)) {
+        return latest.status === "waiting_for_idle"
+          ? latest
+          : TaskQueue.setStatus({ id: latest.id, status: "waiting_for_idle" })
+      }
+      if (await shouldWaitForWorkflowPhaseSlot(latest)) return latest
+      const pacingWaitMs = await workflowPacingWaitMs(latest)
+      if (pacingWaitMs > 0) {
+        scheduleWorkflowPacingRetry(latest, pacingWaitMs)
+        return latest
+      }
+
+      const running = await TaskQueue.claimForExecution(latest.id)
+      if (!running) return TaskQueue.get(latest.id)
+
+      startDetachedQueueTask(async () => {
+        await executeClaimedItem(running, latestExecution)
+      })
+      return running
+    })
+  }
+
+  export async function drainNextForSession(sessionID: SessionID): Promise<TaskQueue.Info | undefined> {
+    const pending = await pendingSessionItems(sessionID)
+    for (const item of pending) {
+      if (!queueItemExecution(item)) continue
+      return start(item)
+    }
+    return undefined
+  }
+}
+
+function withStartLocks<T>(item: TaskQueue.Info, execution: QueueExecution, fn: () => Promise<T>): Promise<T> {
+  const keys = startLockKeys(item, execution)
+  let run = fn
+  for (const key of [...keys].reverse()) {
+    const next = run
+    run = () => startLocks().run(key, next)
+  }
+  return run()
+}
+
+function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[] {
+  const keys = [`session:${item.projectID}:${execution.sessionID}`]
+  const workflow = workflowPayload(item)
+  if (workflow) keys.push(`workflow-phase:${item.projectID}:${workflow.runID}:${workflow.phaseID}`)
+  return Array.from(new Set(keys)).sort()
+}
+
+async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecution) {
+  try {
+    // Keep execution.run() and finishIfRunning("completed") in separate try
+    // blocks. If they shared one block a DB error from finishIfRunning would
+    // fall into the catch and mark a successfully-run task as "failed".
+    let succeeded = false
+    try {
+      const result = await execution.run()
+      const failure = replayFailureForQueueExecution(item, result)
+      if (failure) throw new Error(failure)
+      succeeded = true
+    } catch (error) {
+      DiagnosticLog.recordProcess("server.taskQueueTaskFailed", {
+        taskID: item.id,
+        sessionID: item.sessionID,
+        kind: item.kind,
+        error,
+      })
+      await finishIfRunning(item, {
+        status: "failed",
+        error: NamedError.message(error),
+      })
+      log.error("task queue item execution failed", { taskID: item.id, sessionID: item.sessionID, error })
+    }
+    if (succeeded) await finishIfRunning(item, { status: "completed" })
+  } finally {
+    if (item.sessionID) {
+      await TaskQueueExecutor.drainNextForSession(item.sessionID).catch((error) => {
+        DiagnosticLog.recordProcess("server.taskQueueDrainFailed", {
+          taskID: item.id,
+          sessionID: item.sessionID,
+          error,
+        })
+        log.warn("failed to drain task queue after item settled", { taskID: item.id, sessionID: item.sessionID, error })
+      })
+    }
+    await drainNextWorkflowPhaseItem(item).catch((error) => {
+      DiagnosticLog.recordProcess("server.taskQueueWorkflowDrainFailed", {
+        taskID: item.id,
+        sessionID: item.sessionID,
+        error,
+      })
+      log.warn("failed to drain workflow phase queue after item settled", {
+        taskID: item.id,
+        sessionID: item.sessionID,
+        error,
+      })
+    })
+  }
+}
+
+async function finishIfRunning(
+  item: TaskQueue.Info,
+  input: { status: Extract<TaskQueue.Status, "completed" | "failed">; error?: string },
+) {
+  const current = await TaskQueue.get(item.id)
+  if (!isActiveQueueStatus(current.status)) return current
+  return TaskQueue.setStatus({ id: item.id, status: input.status, error: input.error })
+}
+
+function startDetachedQueueTask(task: () => Promise<void>) {
+  setTimeout(() => {
+    void task().catch((error) => {
+      DiagnosticLog.recordProcess("server.taskQueueTaskUnhandledFailure", { error })
+      log.error("detached task queue execution failed", { error })
+    })
+  }, 0)
+}
+
+async function shouldWaitForIdle(sessionID: SessionID, currentTaskID: TaskQueueID) {
+  if (sessionPromptBusy(sessionID)) return true
+  const active = await activeSessionItems(sessionID)
+  return active.some((item) => item.id !== currentTaskID)
+}
+
+async function shouldWaitForWorkflowPhaseSlot(item: TaskQueue.Info) {
+  const workflow = workflowPayload(item)
+  const maxParallel = workflowMaxParallel(item.payload)
+  if (!workflow || maxParallel === undefined) return false
+  const active = await activeWorkflowPhaseItems(workflow, item.id)
+  return active.length >= maxParallel
+}
+
+async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
+  const workflow = workflowPayload(item)
+  const maxParallel = workflowMaxParallel(item.payload)
+  if (!workflow || maxParallel === undefined) return
+  if ((await activeWorkflowPhaseItems(workflow, item.id)).length >= maxParallel) return
+
+  // Include waiting_for_idle items: a task that was blocked on idle when
+  // start() ran stays in waiting_for_idle, invisible to a queued-only query.
+  // When a phase slot opens it would never be retried otherwise.
+  const [queued, waitingForIdle] = await Promise.all([
+    TaskQueue.list({ status: "queued", limit: 100 }),
+    TaskQueue.list({ status: "waiting_for_idle", limit: 100 }),
+  ])
+  const next = [...queued, ...waitingForIdle]
+    .filter((candidate) => sameWorkflowPhase(candidate, workflow))
+    .sort(compareQueueItems)[0]
+  if (!next) return
+  await TaskQueueExecutor.start(next)
+}
+
+async function workflowPacingWaitMs(item: TaskQueue.Info, now = Date.now()) {
+  const workflow = workflowPayload(item)
+  const pacing = workflowPacing(item.payload)
+  if (!workflow || !pacing) return 0
+
+  const started = (await TaskQueue.list({ limit: 500 }))
+    .filter((candidate) => candidate.id !== item.id && sameWorkflowRun(candidate, workflow))
+    .map((candidate) => ({
+      startedAt: candidate.time.started,
+      tokens: workflowEstimatedTokensForPacing(candidate.payload),
+    }))
+    .filter((candidate): candidate is { startedAt: number; tokens: number } => {
+      return candidate.startedAt !== undefined && candidate.startedAt > now - WORKFLOW_PACING_WINDOW_MS
+    })
+    .sort((left, right) => left.startedAt - right.startedAt)
+
+  const requestWaitMs =
+    started.length >= pacing.maxRequestsPerMinute
+      ? Math.max(1, started[0]!.startedAt + WORKFLOW_PACING_WINDOW_MS - now)
+      : 0
+  const tokenWaitMs = workflowTokenPacingWaitMs({
+    started,
+    requestedTokens: workflowEstimatedTokensForPacing(item.payload),
+    maxTokensPerMinute: pacing.maxTokensPerMinute,
+    now,
+  })
+  return Math.max(requestWaitMs, tokenWaitMs)
+}
+
+function workflowTokenPacingWaitMs(input: {
+  started: Array<{ startedAt: number; tokens: number }>
+  requestedTokens: number
+  maxTokensPerMinute: number
+  now: number
+}) {
+  if (input.requestedTokens <= 0 || input.requestedTokens > input.maxTokensPerMinute) return 0
+  let total = input.requestedTokens + input.started.reduce((sum, item) => sum + item.tokens, 0)
+  if (total <= input.maxTokensPerMinute) return 0
+  for (const item of input.started) {
+    total -= item.tokens
+    if (total <= input.maxTokensPerMinute) {
+      return Math.max(1, item.startedAt + WORKFLOW_PACING_WINDOW_MS - input.now)
+    }
+  }
+  return 0
+}
+
+function scheduleWorkflowPacingRetry(item: TaskQueue.Info, waitMs: number) {
+  if (workflowPacingTimers.has(item.id)) return
+  const timer = setTimeout(() => {
+    workflowPacingTimers.delete(item.id)
+    void TaskQueue.get(item.id)
+      .then((latest) => TaskQueueExecutor.start(latest))
+      .catch((error) => {
+        DiagnosticLog.recordProcess("server.taskQueueWorkflowPacingRetryFailed", {
+          taskID: item.id,
+          sessionID: item.sessionID,
+          error,
+        })
+        log.warn("failed to retry workflow child after pacing wait", {
+          taskID: item.id,
+          sessionID: item.sessionID,
+          error,
+        })
+      })
+  }, waitMs)
+  ;(timer as { unref?: () => void }).unref?.()
+  workflowPacingTimers.set(item.id, timer)
+}
+
+async function activeWorkflowPhaseItems(workflow: WorkflowQueuePayload, currentTaskID?: TaskQueueID) {
+  const items = await Promise.all(activeStatuses.map((status) => TaskQueue.list({ status, limit: 100 })))
+  return items.flat().filter((candidate) => candidate.id !== currentTaskID && sameWorkflowPhase(candidate, workflow))
+}
+
+function sessionPromptBusy(sessionID: SessionID) {
+  try {
+    SessionPrompt.assertNotBusy(sessionID)
+    return false
+  } catch {
+    return true
+  }
+}
+
+async function pendingSessionItems(sessionID: SessionID) {
+  const [queued, waiting] = await Promise.all([
+    TaskQueue.list({ sessionID, status: "queued", limit: 100 }),
+    TaskQueue.list({ sessionID, status: "waiting_for_idle", limit: 100 }),
+  ])
+  return [...queued, ...waiting].sort(compareQueueItems)
+}
+
+async function activeSessionItems(sessionID: SessionID) {
+  const items = await Promise.all(activeStatuses.map((status) => TaskQueue.list({ sessionID, status, limit: 100 })))
+  return items.flat()
+}
+
+function isActiveQueueStatus(status: TaskQueue.Status) {
+  return activeStatuses.includes(status as (typeof activeStatuses)[number])
+}
+
+function replayFailureForQueueExecution(item: TaskQueue.Info, result: unknown): string | undefined {
+  if (!item.sessionID) return undefined
+  const startedAt = item.time.started ?? item.time.created
+  const events = EventQuery.bySessionLog(item.sessionID).filter((event) => event.time_created >= startedAt)
+  const latestEnd = events.findLast((event) => event.event_data.type === "session.end")?.event_data
+  if (latestEnd?.type !== "session.end" || latestEnd.reason !== "error") return undefined
+
+  const messageID = resultMessageID(result)
+  const latestError = events.findLast((event) => {
+    const data = event.event_data
+    if (data.type !== "error") return false
+    return !messageID || !data.messageID || data.messageID === messageID
+  })?.event_data
+
+  if (latestError?.type === "error" && latestError.message.trim()) {
+    return latestError.message.trim()
+  }
+  return "Session ended with an error"
+}
+
+function resultMessageID(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") return undefined
+  const info = (result as { info?: unknown }).info
+  if (!info || typeof info !== "object") return undefined
+  const id = (info as { id?: unknown }).id
+  return typeof id === "string" && id.length > 0 ? id : undefined
+}
+
+function ensureSessionBlockObservers() {
+  const state = blockObserverState()
+  if (state.initialized) return
+  state.initialized = true
+  state.unsubscribe.push(
+    Bus.subscribe(Permission.Event.Asked, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+    Bus.subscribe(Permission.Event.Replied, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+    Bus.subscribe(Question.Event.Asked, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+    Bus.subscribe(Question.Event.Replied, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+    Bus.subscribe(Question.Event.Rejected, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+  )
+}
+
+async function refreshSessionBlockStatus(sessionID: SessionID) {
+  try {
+    const target = await sessionBlockStatus(sessionID)
+    const active = await activeSessionItems(sessionID)
+    await Promise.all(
+      active.map(async (item) => {
+        // Re-read the live status before writing: the item may have completed,
+        // failed, or been cancelled between the snapshot above and now (e.g.
+        // run() finished right after the permission reply that triggered this
+        // refresh). Never transition an item that is no longer active, or we'd
+        // resurrect a terminal item back to "running" and wedge it forever.
+        const current = await TaskQueue.get(item.id).catch(() => undefined)
+        if (!current || !isActiveQueueStatus(current.status)) return
+        const status = target ?? "running"
+        if (current.status === status) return
+        await TaskQueue.setStatus({ id: item.id, status })
+      }),
+    )
+  } catch (error) {
+    DiagnosticLog.recordProcess("server.taskQueueBlockRefreshFailed", { sessionID, error })
+    log.warn("failed to refresh task queue block status", { sessionID, error })
+  }
+}
+
+async function sessionBlockStatus(sessionID: SessionID): Promise<TaskQueue.Status | undefined> {
+  const [permissions, questions] = await Promise.all([Permission.list(), Question.list()])
+  if (permissions.some((request) => request.sessionID === sessionID)) return "blocked_permission"
+  if (questions.some((request) => request.sessionID === sessionID)) return "blocked_question"
+  return undefined
+}
+
+function compareQueueItems(a: TaskQueue.Info, b: TaskQueue.Info) {
+  return a.position - b.position || b.time.created - a.time.created || b.id.localeCompare(a.id)
+}
+
+function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
+  if (!item.sessionID) return undefined
+  switch (item.kind) {
+    case "prompt":
+    case "followup": {
+      const body = promptBodyFromQueueItem(item)
+      if (!body) return undefined
+      return {
+        sessionID: item.sessionID,
+        run: () => runInQueueItemInstance(item, () => SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })),
+      }
+    }
+    case "command": {
+      const body = commandBodyFromQueueItem(item)
+      if (!body) return undefined
+      return {
+        sessionID: item.sessionID,
+        run: () => runInQueueItemInstance(item, () => SessionPrompt.command({ ...body, sessionID: item.sessionID! })),
+      }
+    }
+    case "shell": {
+      const body = shellBodyFromQueueItem(item)
+      if (!body) return undefined
+      return {
+        sessionID: item.sessionID,
+        run: () => runInQueueItemInstance(item, () => SessionPrompt.shell({ ...body, sessionID: item.sessionID! })),
+      }
+    }
+    case "subagent":
+      return workflowSubagentExecution(item)
+    case "review":
+    case "automation":
+      return undefined
+  }
+}
+
+function workflowSubagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
+  if (!isWorkflowQueueItem(item)) return undefined
+  const body = promptBodyFromQueueItem(item)
+  if (!body) return undefined
+  return {
+    sessionID: item.sessionID!,
+    run: () =>
+      runInQueueItemInstance(item, async () => {
+        const result = await SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })
+        await recordWorkflowSubagentUsage(item, result)
+        return result
+      }),
+  }
+}
+
+async function runInQueueItemInstance<T>(item: TaskQueue.Info, run: () => Promise<T>): Promise<T> {
+  if (item.directory === Instance.directory) return run()
+  return Instance.provide({
+    directory: item.directory,
+    fn: run,
+  })
+}
+
+async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown) {
+  const workflow = workflowPayload(item)
+  if (!workflow) return
+  const usage = messageBudgetUsage(result)
+
+  const { WorkflowRun } = await import("../workflow/run")
+  const artifactIDs: WorkflowArtifactID[] = []
+  const evidenceRefs: WorkflowEvidenceRef[] = []
+  const outputArtifact = messageOutputArtifact(result, usage ?? EmptyWorkflowSubagentBudgetUsage)
+  if (outputArtifact) {
+    const artifact = await WorkflowRun.appendArtifact({
+      runID: workflow.runID as WorkflowRunID,
+      phaseID: workflow.phaseID as WorkflowPhaseID,
+      childID: workflow.childID as WorkflowChildID,
+      kind: "summary",
+      retention: "session",
+      summary: outputArtifact.summary,
+      payload: outputArtifact.payload,
+    })
+    artifactIDs.push(artifact.id)
+    evidenceRefs.push({ kind: "artifact", id: artifact.id })
+  }
+  if (usage) {
+    const toolCallArtifact = messageToolCallArtifact(result, usage)
+    if (toolCallArtifact) {
+      const artifact = await WorkflowRun.appendArtifact({
+        runID: workflow.runID as WorkflowRunID,
+        phaseID: workflow.phaseID as WorkflowPhaseID,
+        childID: workflow.childID as WorkflowChildID,
+        kind: "metric",
+        retention: "session",
+        summary: toolCallArtifact.summary,
+        payload: toolCallArtifact.payload,
+      })
+      artifactIDs.push(artifact.id)
+      evidenceRefs.push({ kind: "artifact", id: artifact.id })
+    }
+  }
+  await attachWorkflowChildArtifacts(WorkflowRun, {
+    runID: workflow.runID as WorkflowRunID,
+    childID: workflow.childID as WorkflowChildID,
+    artifactIDs,
+    evidenceRefs,
+  })
+  if (!usage) return
+  await WorkflowRun.appendBudgetUsage({
+    runID: workflow.runID as WorkflowRunID,
+    phaseID: workflow.phaseID as WorkflowPhaseID,
+    childID: workflow.childID as WorkflowChildID,
+    kind: "consume",
+    usageDelta: usage,
+  })
+
+  const detail = await WorkflowRun.getDetail(workflow.runID as WorkflowRunID)
+  const child = detail.children.find((candidate) => candidate.id === workflow.childID)
+  if (child?.status === "failed" && child.error?.startsWith("Workflow budget exceeded")) {
+    throw new Error(child.error)
+  }
+}
+
+async function attachWorkflowChildArtifacts(
+  WorkflowRun: WorkflowRunApi,
+  input: {
+    runID: WorkflowRunID
+    childID: WorkflowChildID
+    artifactIDs: WorkflowArtifactID[]
+    evidenceRefs: WorkflowEvidenceRef[]
+  },
+) {
+  if (input.artifactIDs.length === 0 && input.evidenceRefs.length === 0) return
+  const detail = await WorkflowRun.getDetail(input.runID)
+  const child = detail.children.find((candidate) => candidate.id === input.childID)
+  if (!child) return
+  await WorkflowRun.setChildStatus({
+    id: child.id,
+    status: child.status,
+    outputSummary: child.outputSummary,
+    artifactIDs: uniqueWorkflowArtifactIDs([...child.artifactIDs, ...input.artifactIDs]),
+    evidenceRefs: uniqueWorkflowEvidenceRefs([...child.evidenceRefs, ...input.evidenceRefs]),
+    error: child.error,
+  })
+}
+
+function uniqueWorkflowArtifactIDs(ids: WorkflowArtifactID[]): WorkflowArtifactID[] {
+  return Array.from(new Set(ids))
+}
+
+function uniqueWorkflowEvidenceRefs(refs: WorkflowEvidenceRef[]): WorkflowEvidenceRef[] {
+  const seen = new Set<string>()
+  return refs.filter((ref) => {
+    const key = `${ref.kind}:${ref.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function messageToolCallArtifact(result: unknown, usage: WorkflowSubagentBudgetUsage) {
+  if (usage.toolCalls === 0) return undefined
+  const parts = result && typeof result === "object" ? (result as { parts?: unknown }).parts : undefined
+  const tools = messageToolNames(parts)
+  const info = result && typeof result === "object" ? (result as { info?: unknown }).info : undefined
+  const messageID = info && typeof info === "object" ? (info as { id?: unknown }).id : undefined
+  const label = tools.length > 0 ? tools.join(", ") : "unknown tools"
+  return {
+    summary: `Tool-call summary: ${usage.toolCalls} call(s) (${label}).`,
+    payload: {
+      kind: "workflow-tool-call-summary",
+      messageID: typeof messageID === "string" ? messageID : undefined,
+      toolCalls: usage.toolCalls,
+      tools,
+      usage,
+    },
+  }
+}
+
+function promptBodyFromQueueItem(item: TaskQueue.Info) {
+  const direct = readPayloadBody(item)
+  if (direct) return QueuePromptBody().parse(applyWorkflowPromptPolicy(direct, item))
+  const text = readPayloadText(item) ?? readPayloadPrompt(item)
+  if (!text) return undefined
+  return QueuePromptBody().parse(
+    applyWorkflowPromptPolicy(
+      {
+        parts: [{ type: "text", text }],
+        agent: item.agent,
+        agentRouting: "preserve",
+        model: modelObject(item.model),
+      },
+      item,
+    ),
+  )
+}
+
+function commandBodyFromQueueItem(item: TaskQueue.Info) {
+  const direct = readPayloadBody(item)
+  if (direct) return QueueCommandBody().parse(direct)
+  const text = readPayloadText(item)
+  if (!text) return undefined
+  return QueueCommandBody().parse({
+    command: text,
+    arguments: "",
+    agent: item.agent,
+    model: typeof item.model === "string" ? item.model : undefined,
+  })
+}
+
+function shellBodyFromQueueItem(item: TaskQueue.Info) {
+  const direct = readPayloadBody(item)
+  if (direct) return QueueShellBody().parse(direct)
+  const text = readPayloadText(item)
+  if (!text) return undefined
+  return QueueShellBody().parse({
+    command: text,
+    agent: item.agent ?? "build",
+    model: modelObject(item.model),
+  })
+}
+
+function readPayloadBody(item: TaskQueue.Info) {
+  const body = item.payload["body"]
+  return body && typeof body === "object" ? (body as Record<string, unknown>) : undefined
+}
+
+function readPayloadText(item: TaskQueue.Info) {
+  const text = item.payload["text"]
+  return typeof text === "string" && text.trim().length > 0 ? text.trim() : undefined
+}
+
+function readPayloadPrompt(item: TaskQueue.Info) {
+  const prompt = item.payload["prompt"]
+  return typeof prompt === "string" && prompt.trim().length > 0 ? prompt.trim() : undefined
+}
+
+function applyWorkflowPromptPolicy(body: Record<string, unknown>, item: TaskQueue.Info): Record<string, unknown> {
+  const policy = workflowPromptPolicy(item.payload)
+  if (!policy) return body
+
+  const next = { ...body }
+  const tools = promptToolsFromAllowedTools(policy.allowedTools, policy.escalationPolicy)
+  if (tools) {
+    next.tools = mergeWorkflowToolPolicy(readBooleanRecord(next.tools), tools)
+    next.toolsScope = "turn"
+  } else if (readBooleanRecord(next.tools)) {
+    next.toolsScope = "turn"
+  }
+
+  const isolation = promptIsolationFromWorkflowPolicy(policy)
+  if (isolation) next.isolation = mergeWorkflowIsolationPolicy(readPromptIsolationPolicy(next.isolation), isolation)
+  return next
+}
+
+function workflowPromptPolicy(payload: TaskQueue.Payload) {
+  const workflow = payload["workflow"]
+  if (!workflow || typeof workflow !== "object") return undefined
+
+  const allowedTools = stringArray(payload["allowedTools"])
+  const writePolicy = workflowWritePolicy(payload["writePolicy"])
+  const networkPolicy = workflowNetworkPolicy(payload["networkPolicy"])
+  const escalationPolicy = workflowEscalationPolicy(payload["escalationPolicy"])
+  return { allowedTools, writePolicy, networkPolicy, escalationPolicy }
+}
+
+function promptToolsFromAllowedTools(
+  allowedTools: string[] | undefined,
+  escalationPolicy: "inherit" | "ask" | "deny" | undefined,
+): Record<string, boolean> | undefined {
+  const tools: Record<string, boolean> = {}
+  if (allowedTools?.length) {
+    tools["*"] = false
+    for (const tool of allowedTools.flatMap(workflowToolPermissionNames)) tools[tool] = true
+  }
+  if (escalationPolicy === "deny") {
+    tools.isolation_escalation = false
+  } else if (escalationPolicy === "ask" && allowedTools?.length) {
+    // `isolation_escalation` is interactive-only, so an allow rule still asks.
+    // This preserves the workflow default while `* = false` denies other tools.
+    tools.isolation_escalation = true
+  }
+  return Object.keys(tools).length > 0 ? tools : undefined
+}
+
+function workflowToolPermissionNames(tool: string): string[] {
+  const trimmed = tool.trim()
+  if (!trimmed) return []
+  const names = new Set([trimmed])
+  const sanitized = trimmed.replace(/[^A-Za-z0-9_]/g, "_")
+  if (sanitized !== trimmed) names.add(sanitized)
+  for (const alias of workflowToolAliases(trimmed)) names.add(alias)
+  return Array.from(names)
+}
+
+function workflowToolAliases(tool: string): string[] {
+  switch (tool) {
+    case "file.read":
+      return ["read"]
+    case "file.grep":
+    case "rg":
+      return ["grep"]
+    case "file.glob":
+      return ["glob"]
+    case "file.list":
+      return ["list"]
+    default:
+      return []
+  }
+}
+
+function mergeWorkflowToolPolicy(
+  existing: Record<string, boolean> | undefined,
+  workflow: Record<string, boolean>,
+): Record<string, boolean> {
+  const merged = { ...workflow }
+  for (const [tool, enabled] of Object.entries(existing ?? {})) {
+    if (enabled === false) merged[tool] = false
+    else if (workflow[tool] === true) merged[tool] = true
+  }
+  return merged
+}
+
+function promptIsolationFromWorkflowPolicy(policy: {
+  writePolicy?: "read-only" | "serialized" | "worktree-required"
+  networkPolicy?: "inherit" | "disabled" | "allowed"
+}): PromptIsolationPolicyType | undefined {
+  const isolation: PromptIsolationPolicyType = {}
+  if (policy.writePolicy === "read-only") isolation.mode = "read-only"
+  if (policy.writePolicy === "serialized" || policy.writePolicy === "worktree-required") {
+    isolation.mode = "workspace-write"
+  }
+  if (policy.networkPolicy === "disabled") isolation.network = false
+  if (policy.networkPolicy === "allowed") isolation.network = true
+  return Object.keys(isolation).length > 0 ? isolation : undefined
+}
+
+function mergeWorkflowIsolationPolicy(
+  existing: PromptIsolationPolicyType | undefined,
+  workflow: PromptIsolationPolicyType,
+): PromptIsolationPolicyType {
+  if (!existing) return workflow
+  const mode = stricterIsolationMode(workflow.mode, existing.mode)
+  const network =
+    workflow.network === false || existing.network === false ? false : (workflow.network ?? existing.network)
+  return {
+    ...(mode ? { mode } : {}),
+    ...(network === undefined ? {} : { network }),
+  }
+}
+
+function stricterIsolationMode(
+  a: PromptIsolationPolicyType["mode"],
+  b: PromptIsolationPolicyType["mode"],
+): PromptIsolationPolicyType["mode"] {
+  if (!a) return b
+  if (!b) return a
+  const rank = { "read-only": 0, "workspace-write": 1, "full-access": 2 } as const
+  return rank[a] <= rank[b] ? a : b
+}
+
+function readPromptIsolationPolicy(value: unknown): PromptIsolationPolicyType | undefined {
+  const parsed = PromptIsolationPolicy.safeParse(value)
+  return parsed.success ? parsed.data : undefined
+}
+
+function readBooleanRecord(value: unknown): Record<string, boolean> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const result: Record<string, boolean> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "boolean") result[key] = item
+  }
+  return result
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const items = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+  return items.length ? items : undefined
+}
+
+function workflowWritePolicy(value: unknown): "read-only" | "serialized" | "worktree-required" | undefined {
+  return value === "read-only" || value === "serialized" || value === "worktree-required" ? value : undefined
+}
+
+function workflowNetworkPolicy(value: unknown): "inherit" | "disabled" | "allowed" | undefined {
+  return value === "inherit" || value === "disabled" || value === "allowed" ? value : undefined
+}
+
+function workflowEscalationPolicy(value: unknown): "inherit" | "ask" | "deny" | undefined {
+  return value === "inherit" || value === "ask" || value === "deny" ? value : undefined
+}
+
+type WorkflowQueuePayload = {
+  runID: string
+  phaseID: string
+  childID: string
+}
+
+function isWorkflowQueueItem(item: TaskQueue.Info) {
+  const workflow = item.payload["workflow"]
+  return !!workflow && typeof workflow === "object"
+}
+
+function workflowPayload(item: TaskQueue.Info): WorkflowQueuePayload | undefined {
+  const workflow = item.payload["workflow"]
+  if (!workflow || typeof workflow !== "object") return undefined
+  const record = workflow as Record<string, unknown>
+  if (typeof record.runID !== "string" || typeof record.phaseID !== "string" || typeof record.childID !== "string") {
+    return undefined
+  }
+  return {
+    runID: record.runID,
+    phaseID: record.phaseID,
+    childID: record.childID,
+  }
+}
+
+function sameWorkflowPhase(item: TaskQueue.Info, workflow: WorkflowQueuePayload) {
+  const candidate = workflowPayload(item)
+  return candidate?.runID === workflow.runID && candidate.phaseID === workflow.phaseID
+}
+
+function sameWorkflowRun(item: TaskQueue.Info, workflow: WorkflowQueuePayload) {
+  return workflowPayload(item)?.runID === workflow.runID
+}
+
+function workflowMaxParallel(payload: TaskQueue.Payload) {
+  return positiveInteger(payload["maxParallel"])
+}
+
+function workflowPacing(payload: TaskQueue.Payload) {
+  const pacing = payload["pacing"]
+  if (!pacing || typeof pacing !== "object") return undefined
+  const record = pacing as Record<string, unknown>
+  const maxRequestsPerMinute = positiveInteger(record.maxRequestsPerMinute)
+  const maxTokensPerMinute = positiveInteger(record.maxTokensPerMinute)
+  if (maxRequestsPerMinute === undefined || maxTokensPerMinute === undefined) return undefined
+  return { maxRequestsPerMinute, maxTokensPerMinute }
+}
+
+function workflowEstimatedTokensForPacing(payload: TaskQueue.Payload) {
+  const budgetSlice = payload["budgetSlice"]
+  if (!budgetSlice || typeof budgetSlice !== "object") return 0
+  const record = budgetSlice as Record<string, unknown>
+  const total = positiveInteger(record.maxTotalTokens)
+  if (total !== undefined) return total
+  return (positiveInteger(record.maxInputTokensPerChild) ?? 0) + (positiveInteger(record.maxOutputTokensPerChild) ?? 0)
+}
+
+type WorkflowSubagentBudgetUsage = {
+  totalTokens: number
+  inputTokens: number
+  outputTokens: number
+  toolCalls: number
+}
+
+const EmptyWorkflowSubagentBudgetUsage: WorkflowSubagentBudgetUsage = {
+  totalTokens: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  toolCalls: 0,
+}
+
+function messageBudgetUsage(result: unknown): WorkflowSubagentBudgetUsage | undefined {
+  const tokens = messageTokens(result)
+  const toolCalls = messageToolCalls(result)
+  if (!tokens && toolCalls === 0) return undefined
+  return {
+    totalTokens: tokens?.total ?? 0,
+    inputTokens: tokens?.input ?? 0,
+    outputTokens: tokens?.output ?? 0,
+    toolCalls,
+  }
+}
+
+function messageOutputArtifact(result: unknown, usage: WorkflowSubagentBudgetUsage) {
+  if (!result || typeof result !== "object") return undefined
+  const info = (result as { info?: unknown }).info
+  if (!info || typeof info !== "object" || (info as { role?: unknown }).role !== "assistant") return undefined
+  const messageID = info && typeof info === "object" ? (info as { id?: unknown }).id : undefined
+  const parts = (result as { parts?: unknown }).parts
+  const output = messageTextOutput(parts)
+  const tools = messageToolNames(parts)
+  const fallback = usage.toolCalls > 0 ? `${usage.toolCalls} tool call(s) completed.` : "Workflow child completed."
+  return {
+    summary: truncateArtifactSummary(output || fallback),
+    payload: {
+      messageID: typeof messageID === "string" ? messageID : undefined,
+      output: output || undefined,
+      tools,
+      usage,
+    },
+  }
+}
+
+function messageTokens(result: unknown) {
+  if (!result || typeof result !== "object") return undefined
+  const info = (result as { info?: unknown }).info
+  if (!info || typeof info !== "object") return undefined
+  const tokens = (info as { tokens?: unknown }).tokens
+  if (!tokens || typeof tokens !== "object") return undefined
+  const record = tokens as Record<string, unknown>
+  const input = nonNegativeNumber(record.input)
+  const output = nonNegativeNumber(record.output)
+  const total = nonNegativeNumber(record.total) ?? (input ?? 0) + (output ?? 0)
+  if (input === undefined && output === undefined && total === 0) return undefined
+  return {
+    total,
+    input: input ?? 0,
+    output: output ?? 0,
+  }
+}
+
+function messageToolCalls(result: unknown) {
+  if (!result || typeof result !== "object") return 0
+  const parts = (result as { parts?: unknown }).parts
+  if (!Array.isArray(parts)) return 0
+  return parts.filter((part) => {
+    if (!part || typeof part !== "object") return false
+    return (part as { type?: unknown }).type === "tool"
+  }).length
+}
+
+function messageTextOutput(parts: unknown) {
+  if (!Array.isArray(parts)) return ""
+  return parts
+    .map((part) => {
+      if (!part || typeof part !== "object") return ""
+      const record = part as { type?: unknown; text?: unknown }
+      return record.type === "text" && typeof record.text === "string" ? record.text.trim() : ""
+    })
+    .filter(Boolean)
+    .join("\n\n")
+    .trim()
+}
+
+function messageToolNames(parts: unknown) {
+  if (!Array.isArray(parts)) return []
+  return Array.from(
+    new Set(
+      parts
+        .map((part) => {
+          if (!part || typeof part !== "object") return undefined
+          const record = part as { type?: unknown; tool?: unknown }
+          return record.type === "tool" && typeof record.tool === "string" ? record.tool : undefined
+        })
+        .filter((tool): tool is string => typeof tool === "string" && tool.length > 0),
+    ),
+  )
+}
+
+function truncateArtifactSummary(text: string) {
+  const compact = text.replace(/\s+/g, " ").trim()
+  return compact.length > 500 ? `${compact.slice(0, 497)}...` : compact
+}
+
+function nonNegativeNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+function positiveInteger(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+function modelObject(value: unknown) {
+  if (!value || typeof value !== "object") return undefined
+  const record = value as Record<string, unknown>
+  if (typeof record.providerID !== "string" || typeof record.modelID !== "string") return undefined
+  return {
+    providerID: record.providerID,
+    modelID: record.modelID,
+  }
+}

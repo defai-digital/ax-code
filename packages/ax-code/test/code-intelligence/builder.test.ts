@@ -1,4 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
+import { writeFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
 import path from "path"
 import { pathToFileURL } from "url"
 import { tmpdir } from "../fixture/fixture"
@@ -198,7 +200,7 @@ describe("builder.indexFile same-file edge resolution", () => {
         CodeIntelligence.__clearProject(projectID)
 
         const filePath = path.join(tmp.path, "same-file.ts")
-        await Bun.write(
+        await writeFile(
           filePath,
           ["function target() {", "  function caller() {", "    target()", "  }", "}", ""].join("\n"),
         )
@@ -548,8 +550,8 @@ async function writeAndSeedFile(
   content: string,
   completeness: "full" | "partial" | "lsp-only" = "full",
 ): Promise<string> {
-  await Bun.write(filePath, content)
-  const sha = Bun.hash(content).toString()
+  await writeFile(filePath, content)
+  const sha = createHash("sha256").update(content).digest("hex")
   const t = Date.now()
   CodeGraphQuery.upsertFile({
     id: CodeFileID.ascending(),
@@ -649,7 +651,7 @@ describe("builder.indexFile hash-skip fast path", () => {
         CodeIntelligence.__clearProject(projectID)
 
         const filePath = path.join(tmp.path, "drift.ts")
-        await Bun.write(filePath, "export const real = 4\n")
+        await writeFile(filePath, "export const real = 4\n")
         // Seed with a deliberately wrong sha to simulate a file that
         // changed on disk since the last index run.
         const t = Date.now()
@@ -683,7 +685,7 @@ describe("builder.indexFile hash-skip fast path", () => {
         CodeIntelligence.__clearProject(projectID)
 
         const filePath = path.join(tmp.path, "fresh.ts")
-        await Bun.write(filePath, "export const z = 5\n")
+        await writeFile(filePath, "export const z = 5\n")
 
         const result = await CodeGraphBuilder.indexFile(projectID, filePath)
         expect(result.completeness).not.toBe("unchanged")

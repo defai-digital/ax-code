@@ -225,8 +225,8 @@ describe("ConfigMarkdown: frontmatter has weird model id", async () => {
     expect(result.data["description"]).toEqual("General coding and planning agent")
     expect(result.data["mode"]).toEqual("subagent")
     expect(result.data["model"]).toEqual("synthetic/hf:zai-org/GLM-4.7")
-    expect(result.data["tools"]["write"]).toBeTrue()
-    expect(result.data["tools"]["read"]).toBeTrue()
+    expect(result.data["tools"]["write"]).toBe(true)
+    expect(result.data["tools"]["read"]).toBe(true)
     expect(result.data["stuff"]).toBe("This is some stuff\n")
 
     expect(result.content.trim()).toBe("Strictly follow da rules")

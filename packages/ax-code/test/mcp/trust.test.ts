@@ -138,7 +138,7 @@ test("project MCP trust is invalidated when the command fingerprint changes", as
   localTransports.length = 0
   connectCalls = 0
 
-  await Bun.write(
+  await fs.writeFile(
     path.join(tmp.path, "ax-code.json"),
     JSON.stringify({
       $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -167,7 +167,7 @@ test("project MCP trust is invalidated when the command fingerprint changes", as
 test("project MCP trust updates do not overwrite malformed trust JSON", async () => {
   await using tmp = await tmpdir({ git: true })
   const malformed = "{not json"
-  await Bun.write(trustFile, malformed)
+  await fs.writeFile(trustFile, malformed)
 
   await Instance.provide({
     directory: tmp.path,
@@ -189,13 +189,13 @@ test("project MCP trust updates do not overwrite malformed trust JSON", async ()
     },
   })
 
-  expect(await Bun.file(trustFile).text()).toBe(malformed)
+  expect(await fs.readFile(trustFile, "utf-8")).toBe(malformed)
 })
 
 test("project MCP trust updates do not overwrite invalid trust store schema", async () => {
   await using tmp = await tmpdir({ git: true })
   const invalid = JSON.stringify({ version: 999, records: {} })
-  await Bun.write(trustFile, invalid)
+  await fs.writeFile(trustFile, invalid)
 
   await Instance.provide({
     directory: tmp.path,
@@ -217,5 +217,5 @@ test("project MCP trust updates do not overwrite invalid trust store schema", as
     },
   })
 
-  expect(await Bun.file(trustFile).text()).toBe(invalid)
+  expect(await fs.readFile(trustFile, "utf-8")).toBe(invalid)
 })

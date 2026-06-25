@@ -262,7 +262,7 @@ describe("session.llm.stream", () => {
       init: async (dir) => {
         const pluginDir = path.join(dir, ".ax-code", "plugin")
         await fs.mkdir(pluginDir, { recursive: true })
-        await Bun.write(
+        await fs.writeFile(
           path.join(pluginDir, "unsafe-token-plan-params.ts"),
           [
             "export default async () => ({",
@@ -278,7 +278,7 @@ describe("session.llm.stream", () => {
             "",
           ].join("\n"),
         )
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -391,7 +391,7 @@ describe("session.llm.stream", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -475,7 +475,7 @@ describe("session.llm.stream", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -566,7 +566,7 @@ describe("session.llm.stream", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -664,7 +664,7 @@ describe("session.llm.stream", () => {
 
       await using tmp = await tmpdir({
         init: async (dir) => {
-          await Bun.write(
+          await fs.writeFile(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
               $schema:
@@ -768,7 +768,7 @@ describe("session.llm.stream", () => {
 
       await using tmp = await tmpdir({
         init: async (dir) => {
-          await Bun.write(
+          await fs.writeFile(
             path.join(dir, "ax-code.json"),
             JSON.stringify({
               $schema:
@@ -878,7 +878,7 @@ describe("session.llm.stream", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -977,7 +977,7 @@ describe("session.llm.stream", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1097,7 +1097,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1170,7 +1170,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1249,7 +1249,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1326,7 +1326,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1399,7 +1399,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1475,7 +1475,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1556,7 +1556,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -1633,7 +1633,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(
+        await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",

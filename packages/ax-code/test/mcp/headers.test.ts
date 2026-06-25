@@ -1,4 +1,5 @@
 import { test, expect, beforeEach, afterAll, vi } from "vitest"
+import { writeFile, readFile } from "node:fs/promises"
 
 // Track what options were passed to each transport constructor
 const transportCalls: Array<{
@@ -91,7 +92,7 @@ afterAll(async () => {
 test("headers are passed to transports when oauth is enabled (default)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -199,7 +200,7 @@ test("no requestInit when headers are not provided", async () => {
 })
 
 test("converted MCP tools forward the tool abort signal to client.callTool", async () => {
-  const source = await Bun.file(new URL("../../src/mcp/tool-conversion.ts", import.meta.url)).text()
+  const source = await readFile(new URL("../../src/mcp/tool-conversion.ts", import.meta.url), "utf-8")
   expect(source).toContain("execute: async (args: unknown, opts: ToolCallOptions)")
   expect(source).toContain("signal: opts.abortSignal")
 })

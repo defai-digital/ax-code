@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { LSPServerConfig } from "../../src/lsp/server-config"
 import { Instance } from "../../src/project/instance"
 import { Process } from "../../src/util/process"
@@ -123,7 +124,7 @@ describe("LSPServerConfig", () => {
         const playbook = path.join(tmp.path, "playbook.yml")
         expect(await server?.root(playbook)).toBeUndefined()
 
-        await Bun.write(path.join(tmp.path, "ansible.cfg"), "[defaults]\n")
+        await writeFile(path.join(tmp.path, "ansible.cfg"), "[defaults]\n")
         expect(await server?.root(playbook)).toBe(tmp.path)
       },
     })

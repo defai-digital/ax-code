@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { eq } from "drizzle-orm"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { createRequire } from "module"
 import { pathToFileURL } from "url"
 import stripAnsi from "strip-ansi"
@@ -135,7 +136,7 @@ describe("cli smoke", () => {
 
   test("run --file resolves relative paths from AX_CODE_ORIGINAL_CWD", async () => {
     await using tmp = await tmpdir()
-    await Bun.write(path.join(tmp.path, "testfile.txt"), "hello")
+    await writeFile(path.join(tmp.path, "testfile.txt"), "hello")
 
     const out = await Process.run(cmd("run", "--file", "testfile.txt", "--", ""), {
       cwd: ROOT,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { mkdir, symlink } from "fs/promises"
+import { mkdir, symlink, writeFile } from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -85,7 +85,7 @@ describe("GraphContext.build", () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
         const file = path.join(tmp.path, "server.ts")
-        await Bun.write(
+        await writeFile(
           file,
           [
             "export function processPayment() {",
@@ -129,7 +129,7 @@ describe("GraphContext.build", () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
         const file = path.join(tmp.path, "routes.ts")
-        await Bun.write(
+        await writeFile(
           file,
           [
             "import { router, bus } from './deps'",
@@ -171,7 +171,7 @@ describe("GraphContext.build", () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
         const file = path.join(tmp.path, "app.py")
-        await Bun.write(
+        await writeFile(
           file,
           [
             "from flask import Flask",
@@ -211,7 +211,7 @@ describe("GraphContext.build", () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
         const inside = path.join(tmp.path, "inside.ts")
-        await Bun.write(inside, "export function localThing() {}\n")
+        await writeFile(inside, "export function localThing() {}\n")
         seedSymbol(projectID, { name: "localThing", file: inside })
         seedSymbol(projectID, { name: "localThing", file: "/etc/outside.ts" })
 
@@ -239,7 +239,7 @@ describe("GraphContext.build", () => {
         CodeIntelligence.__clearProject(projectID)
         const outsideFile = path.join(outside.path, "secret.ts")
         const link = path.join(tmp.path, "linked-secret.ts")
-        await Bun.write(outsideFile, 'export function leakSecret() { return "outside-secret-token" }\n')
+        await writeFile(outsideFile, 'export function leakSecret() { return "outside-secret-token" }\n')
         await symlink(outsideFile, link)
 
         seedSymbol(projectID, { name: "leakSecret", file: link })
@@ -272,7 +272,7 @@ describe("GraphContext.build", () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
         const file = path.join(tmp.path, "shared.ts")
-        await Bun.write(file, 'export function sharedThing() { return "shared-visible-token" }\n')
+        await writeFile(file, 'export function sharedThing() { return "shared-visible-token" }\n')
 
         seedSymbol(projectID, { name: "sharedThing", file })
         CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)

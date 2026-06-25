@@ -24,7 +24,7 @@ const authLockFile = `${authFile}.lock`
 
 afterEach(async () => {
   process.chdir(originalCwd)
-  await Bun.write(authFile, "{}")
+  await fs.writeFile(authFile, "{}")
   await fs.unlink(authLockFile).catch(() => undefined)
   await Instance.disposeAll()
   vi.restoreAllMocks()
@@ -155,7 +155,7 @@ describe("providers command", () => {
   })
 
   test("CLI provider login reports probe failures as user-facing errors", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/cmd/providers.ts")).text()
+    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/cli/cmd/providers-impl.ts"), "utf-8")
     expect(src).toContain("const result = await probeCliProvider(provider).catch((error) => {")
     expect(src).toContain("prompts.log.error(toErrorMessage(error))")
   })

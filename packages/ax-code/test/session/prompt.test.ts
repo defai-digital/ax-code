@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { describe, expect, test, vi } from "vitest"
+import { hash as bunCompatHash } from "../../src/bun/node-compat"
 import { NamedError } from "@ax-code/util/error"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Instance } from "../../src/project/instance"
@@ -254,7 +255,7 @@ describe("session.prompt missing file", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        await Bun.write(path.join(dir, "demo.ts"), ["export function demo() {", "  return 1", "}", ""].join("\n"))
+        await fs.writeFile(path.join(dir, "demo.ts"), ["export function demo() {", "  return 1", "}", ""].join("\n"))
       },
     })
 
@@ -264,7 +265,7 @@ describe("session.prompt missing file", () => {
         const session = await Session.create({})
         const file = path.join(tmp.path, "demo.ts")
         const uri = pathToFileURL(file).href
-        const contentHash = Bun.hash(new Uint8Array(await Bun.file(file).arrayBuffer())).toString()
+        const contentHash = bunCompatHash(new Uint8Array(await fs.readFile(file))).toString()
 
         CodeGraphQuery.upsertLspCache({
           projectID: Instance.project.id,
@@ -342,7 +343,7 @@ describe("session.prompt missing file", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        await Bun.write(path.join(dir, "demo.ts"), ["first line", "second line", ""].join("\n"))
+        await fs.writeFile(path.join(dir, "demo.ts"), ["first line", "second line", ""].join("\n"))
       },
     })
 
@@ -438,7 +439,7 @@ describe("session.prompt special characters", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        await Bun.write(path.join(dir, "file#name.txt"), "special content\n")
+        await fs.writeFile(path.join(dir, "file#name.txt"), "special content\n")
       },
     })
 
@@ -476,8 +477,8 @@ describe("session.prompt special characters", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        await Bun.write(path.join(dir, "first.txt"), "first\n")
-        await Bun.write(path.join(dir, "second.txt"), "second\n")
+        await fs.writeFile(path.join(dir, "first.txt"), "first\n")
+        await fs.writeFile(path.join(dir, "second.txt"), "second\n")
       },
     })
 
@@ -508,7 +509,7 @@ describe("session.prompt special characters", () => {
   test("ignores @file references that escape the worktree", async () => {
     await using tmp = await tmpdir({ git: true })
     const outside = path.join(tmp.path, "..", `outside-${Date.now()}.txt`)
-    await Bun.write(outside, "outside secret\n")
+    await fs.writeFile(outside, "outside secret\n")
 
     await Instance.provide({
       directory: tmp.path,
@@ -525,7 +526,7 @@ describe("session.prompt special characters", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        await Bun.write(path.join(dir, "parent.txt"), "not a directory\n")
+        await fs.writeFile(path.join(dir, "parent.txt"), "not a directory\n")
       },
     })
 
@@ -542,7 +543,7 @@ describe("session.prompt special characters", () => {
     await using tmp = await tmpdir({ git: true })
     const fakeHome = path.join(tmp.path, "home")
     await fs.mkdir(fakeHome, { recursive: true })
-    await Bun.write(path.join(fakeHome, "allowed.txt"), "home content\n")
+    await fs.writeFile(path.join(fakeHome, "allowed.txt"), "home content\n")
     const homedir = vi.spyOn(os, "homedir").mockReturnValue(fakeHome)
 
     try {
@@ -567,7 +568,7 @@ describe("session.prompt special characters", () => {
       git: true,
       init: async (dir) => {
         await fs.mkdir(path.join(dir, "private"), { recursive: true })
-        await Bun.write(path.join(dir, "private", "secret.txt"), "secret\n")
+        await fs.writeFile(path.join(dir, "private", "secret.txt"), "secret\n")
       },
     })
     const privateDir = path.join(tmp.path, "private")

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { mkdir, symlink } from "fs/promises"
+import { mkdir, symlink, writeFile, readFile } from "fs/promises"
 import path from "path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { ReadTool } from "../../src/tool/read"
@@ -34,7 +34,7 @@ describe("tool.read external_directory permission", () => {
   test("allows reading absolute path inside project directory", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "test.txt"), "hello world")
+        await writeFile(path.join(dir, "test.txt"), "hello world")
       },
     })
     await Instance.provide({
@@ -50,7 +50,7 @@ describe("tool.read external_directory permission", () => {
   test("allows reading file in subdirectory inside project directory", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "subdir", "test.txt"), "nested content")
+        await writeFile(path.join(dir, "subdir", "test.txt"), "nested content")
       },
     })
     await Instance.provide({
@@ -66,7 +66,7 @@ describe("tool.read external_directory permission", () => {
   test("rejects worktree symlink escapes outside the current directory", async () => {
     await using outerTmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "secret.txt"), "secret data")
+        await writeFile(path.join(dir, "secret.txt"), "secret data")
       },
     })
     await using tmp = await tmpdir({ git: true })
@@ -90,7 +90,7 @@ describe("tool.read external_directory permission", () => {
   test("asks for external_directory permission when reading absolute path outside project", async () => {
     await using outerTmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "secret.txt"), "secret data")
+        await writeFile(path.join(dir, "secret.txt"), "secret data")
       },
     })
     await using tmp = await tmpdir({ git: true })
@@ -116,7 +116,7 @@ describe("tool.read external_directory permission", () => {
   test("asks for directory-scoped external_directory permission when reading external directory", async () => {
     await using outerTmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "external", "a.txt"), "a")
+        await writeFile(path.join(dir, "external", "a.txt"), "a")
       },
     })
     await using tmp = await tmpdir({ git: true })
@@ -164,7 +164,7 @@ describe("tool.read external_directory permission", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        await Bun.write(path.join(dir, "internal.txt"), "internal content")
+        await writeFile(path.join(dir, "internal.txt"), "internal content")
       },
     })
     await Instance.provide({
@@ -200,7 +200,7 @@ describe("tool.read env file permissions", () => {
   describe.each(["build", "plan"])("agent=%s", (agentName) => {
     test.each(cases)("%s asks=%s", async (filename, shouldAsk) => {
       await using tmp = await tmpdir({
-        init: (dir) => Bun.write(path.join(dir, filename), "content"),
+        init: (dir) => writeFile(path.join(dir, filename), "content"),
       })
       await Instance.provide({
         directory: tmp.path,
@@ -250,7 +250,7 @@ describe("tool.read observability", () => {
       let rawLog = ""
       for (let attempt = 0; attempt < 20; attempt++) {
         await sleep(10)
-        rawLog = await Bun.file(logPath).text()
+        rawLog = await readFile(logPath, "utf-8")
         if (rawLog.includes("service=tool.read") && rawLog.includes("service=tool toolName=read")) {
           break
         }
@@ -294,7 +294,7 @@ describe("tool.read truncation", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
-        await Bun.write(path.join(dir, "many-lines.txt"), lines)
+        await writeFile(path.join(dir, "many-lines.txt"), lines)
       },
     })
     await Instance.provide({
@@ -315,7 +315,7 @@ describe("tool.read truncation", () => {
   test("does not truncate small file", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "small.txt"), "hello world")
+        await writeFile(path.join(dir, "small.txt"), "hello world")
       },
     })
     await Instance.provide({
@@ -333,7 +333,7 @@ describe("tool.read truncation", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         const lines = Array.from({ length: 20 }, (_, i) => `line${i + 1}`).join("\n")
-        await Bun.write(path.join(dir, "offset.txt"), lines)
+        await writeFile(path.join(dir, "offset.txt"), lines)
       },
     })
     await Instance.provide({
@@ -357,7 +357,7 @@ describe("tool.read truncation", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         const lines = Array.from({ length: 3 }, (_, i) => `line${i + 1}`).join("\n")
-        await Bun.write(path.join(dir, "short.txt"), lines)
+        await writeFile(path.join(dir, "short.txt"), lines)
       },
     })
     await Instance.provide({
@@ -372,14 +372,14 @@ describe("tool.read truncation", () => {
   })
 
   test("does not report byte-capped reads as offset-out-of-range", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/tool/read.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/tool/read.ts"), "utf-8")
     expect(src).toContain("if (!truncatedByBytes && lines < offset")
   })
 
   test("strips a UTF-8 BOM from the first line", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "bom.txt"), "\uFEFFfirst line\nsecond line\n")
+        await writeFile(path.join(dir, "bom.txt"), "\uFEFFfirst line\nsecond line\n")
       },
     })
     await Instance.provide({
@@ -396,7 +396,7 @@ describe("tool.read truncation", () => {
   test("rejects non-integer offsets", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "offset.txt"), "line1\nline2\n")
+        await writeFile(path.join(dir, "offset.txt"), "line1\nline2\n")
       },
     })
     await Instance.provide({
@@ -411,7 +411,7 @@ describe("tool.read truncation", () => {
   test("rejects non-decimal numeric strings", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "numbers.txt"), "line1\nline2\n")
+        await writeFile(path.join(dir, "numbers.txt"), "line1\nline2\n")
       },
     })
     await Instance.provide({
@@ -430,7 +430,7 @@ describe("tool.read truncation", () => {
   test("rejects non-positive and non-integer limits", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "limit.txt"), "line1\nline2\n")
+        await writeFile(path.join(dir, "limit.txt"), "line1\nline2\n")
       },
     })
     await Instance.provide({
@@ -449,7 +449,7 @@ describe("tool.read truncation", () => {
   test("allows reading empty file at default offset", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "empty.txt"), "")
+        await writeFile(path.join(dir, "empty.txt"), "")
       },
     })
     await Instance.provide({
@@ -466,7 +466,7 @@ describe("tool.read truncation", () => {
   test("throws when offset > 1 for empty file", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "empty.txt"), "")
+        await writeFile(path.join(dir, "empty.txt"), "")
       },
     })
     await Instance.provide({
@@ -484,7 +484,7 @@ describe("tool.read truncation", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await Promise.all(
-          Array.from({ length: 10 }, (_, i) => Bun.write(path.join(dir, "dir", `file-${i + 1}.txt`), `line${i}`)),
+          Array.from({ length: 10 }, (_, i) => writeFile(path.join(dir, "dir", `file-${i + 1}.txt`), `line${i}`)),
         )
       },
     })
@@ -503,7 +503,7 @@ describe("tool.read truncation", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         const longLine = "x".repeat(3000)
-        await Bun.write(path.join(dir, "long-line.txt"), longLine)
+        await writeFile(path.join(dir, "long-line.txt"), longLine)
       },
     })
     await Instance.provide({
@@ -525,7 +525,7 @@ describe("tool.read truncation", () => {
           "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
           "base64",
         )
-        await Bun.write(path.join(dir, "image.png"), png)
+        await writeFile(path.join(dir, "image.png"), png)
       },
     })
     await Instance.provide({
@@ -573,7 +573,7 @@ table Monster {
 }
 
 root_type Monster;`
-        await Bun.write(path.join(dir, "schema.fbs"), fbsContent)
+        await writeFile(path.join(dir, "schema.fbs"), fbsContent)
       },
     })
     await Instance.provide({
@@ -602,7 +602,7 @@ describe("tool.read lsp", () => {
         },
       },
       init: async (dir) => {
-        await Bun.write(path.join(dir, "test.txt"), "hello world")
+        await writeFile(path.join(dir, "test.txt"), "hello world")
       },
     })
     await Instance.provide({
@@ -634,7 +634,7 @@ describe("tool.read lsp", () => {
   test("does not wait for opportunistic lsp warmup", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "test.txt"), "hello world")
+        await writeFile(path.join(dir, "test.txt"), "hello world")
       },
     })
 
@@ -672,7 +672,7 @@ describe("tool.read lsp", () => {
   test("continues when opportunistic lsp warmup fails", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "test.txt"), "hello world")
+        await writeFile(path.join(dir, "test.txt"), "hello world")
       },
     })
 
@@ -698,7 +698,7 @@ describe("tool.read lsp", () => {
   test("skips opportunistic lsp warmup when no semantic server matches", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "notes.txt"), "hello world")
+        await writeFile(path.join(dir, "notes.txt"), "hello world")
       },
     })
 
@@ -726,7 +726,7 @@ describe("tool.read lsp", () => {
   test("skips deferred lsp warmup after instance disposal", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "test.txt"), "hello world")
+        await writeFile(path.join(dir, "test.txt"), "hello world")
       },
     })
 
@@ -759,8 +759,8 @@ describe("tool.read loaded instructions", () => {
   test("loads AGENTS.md from parent directory and includes in metadata", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "subdir", "AGENTS.md"), "# Test Instructions\nDo something special.")
-        await Bun.write(path.join(dir, "subdir", "nested", "test.txt"), "test content")
+        await writeFile(path.join(dir, "subdir", "AGENTS.md"), "# Test Instructions\nDo something special.")
+        await writeFile(path.join(dir, "subdir", "nested", "test.txt"), "test content")
       },
     })
     await Instance.provide({
@@ -783,7 +783,7 @@ describe("tool.read binary detection", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         const bytes = Buffer.from([0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x77, 0x6f, 0x72, 0x6c, 0x64])
-        await Bun.write(path.join(dir, "null-byte.txt"), bytes)
+        await writeFile(path.join(dir, "null-byte.txt"), bytes)
       },
     })
     await Instance.provide({
@@ -800,7 +800,7 @@ describe("tool.read binary detection", () => {
   test("rejects known binary extensions", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "module.wasm"), "not really wasm")
+        await writeFile(path.join(dir, "module.wasm"), "not really wasm")
       },
     })
     await Instance.provide({

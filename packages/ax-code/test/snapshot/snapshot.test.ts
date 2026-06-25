@@ -1,5 +1,61 @@
 import { afterEach, test, expect } from "vitest"
-import { $ } from "bun"
+import { execFileSync } from "node:child_process"
+
+// Minimal Bun $ shim backed by Node.js execFileSync.
+// Supports: await $`cmd args`, .cwd(dir), .quiet(), .nothrow()
+class $Proc {
+  private _cmd: string
+  private _args: string[]
+  private _cwd?: string
+  private _quiet = false
+  private _nothrow = false
+  constructor(cmd: string, args: string[]) {
+    this._cmd = cmd
+    this._args = args
+  }
+  cwd(dir: string) {
+    this._cwd = dir
+    return this
+  }
+  quiet() {
+    this._quiet = true
+    return this
+  }
+  nothrow() {
+    this._nothrow = true
+    return this
+  }
+  then(resolve: (v: { exitCode: number }) => void, reject: (e: unknown) => void) {
+    try {
+      execFileSync(this._cmd, this._args, {
+        cwd: this._cwd,
+        stdio: this._quiet ? "ignore" : undefined,
+      })
+      resolve({ exitCode: 0 })
+    } catch (err: unknown) {
+      if (this._nothrow) {
+        const e = err as { status?: number }
+        resolve({ exitCode: e.status ?? 1 })
+      } else {
+        reject(err)
+      }
+    }
+  }
+}
+
+function $(strings: TemplateStringsArray, ...values: unknown[]) {
+  const parts: string[] = []
+  for (let i = 0; i < strings.length; i++) {
+    parts.push(strings[i])
+    if (i < values.length) parts.push(String(values[i]))
+  }
+  const full = parts.join("").trim()
+  const spaceIdx = full.indexOf(" ")
+  const cmd = spaceIdx === -1 ? full : full.slice(0, spaceIdx)
+  const rest = spaceIdx === -1 ? "" : full.slice(spaceIdx + 1)
+  const args = rest ? rest.split(/\s+/) : []
+  return new $Proc(cmd, args)
+}
 import fs from "fs/promises"
 import path from "path"
 import { Snapshot } from "../../src/snapshot"
@@ -663,10 +719,10 @@ test("git info exclude changes", async () => {
       expect(before).toBeTruthy()
 
       const file = `${tmp.path}/.git/info/exclude`
-      const text = await Bun.file(file).text()
-      await Bun.write(file, `${text.trimEnd()}\nignored.txt\n`)
-      await Bun.write(`${tmp.path}/ignored.txt`, "ignored content")
-      await Bun.write(`${tmp.path}/normal.txt`, "normal content")
+      const text = await fs.readFile(file, "utf-8")
+      await fs.writeFile(file, `${text.trimEnd()}\nignored.txt\n`)
+      await fs.writeFile(`${tmp.path}/ignored.txt`, "ignored content")
+      await fs.writeFile(`${tmp.path}/normal.txt`, "normal content")
 
       const patch = await Snapshot.patch(before!)
       expect(patch.files).toContain(fwd(tmp.path, "normal.txt"))
@@ -687,8 +743,8 @@ test("git info exclude keeps global excludes", async () => {
     fn: async () => {
       const global = `${tmp.path}/global.ignore`
       const config = `${tmp.path}/global.gitconfig`
-      await Bun.write(global, "global.tmp\n")
-      await Bun.write(config, `[core]\n\texcludesFile = ${global.replaceAll("\\", "/")}\n`)
+      await fs.writeFile(global, "global.tmp\n")
+      await fs.writeFile(config, `[core]\n\texcludesFile = ${global.replaceAll("\\", "/")}\n`)
 
       const prev = process.env.GIT_CONFIG_GLOBAL
       process.env.GIT_CONFIG_GLOBAL = config
@@ -697,12 +753,12 @@ test("git info exclude keeps global excludes", async () => {
         expect(before).toBeTruthy()
 
         const file = `${tmp.path}/.git/info/exclude`
-        const text = await Bun.file(file).text()
-        await Bun.write(file, `${text.trimEnd()}\ninfo.tmp\n`)
+        const text = await fs.readFile(file, "utf-8")
+        await fs.writeFile(file, `${text.trimEnd()}\ninfo.tmp\n`)
 
-        await Bun.write(`${tmp.path}/global.tmp`, "global content")
-        await Bun.write(`${tmp.path}/info.tmp`, "info content")
-        await Bun.write(`${tmp.path}/normal.txt`, "normal content")
+        await fs.writeFile(`${tmp.path}/global.tmp`, "global content")
+        await fs.writeFile(`${tmp.path}/info.tmp`, "info content")
+        await fs.writeFile(`${tmp.path}/normal.txt`, "normal content")
 
         const patch = await Snapshot.patch(before!)
         expect(patch.files).toContain(fwd(tmp.path, "normal.txt"))
@@ -963,7 +1019,7 @@ test("restore function", async () => {
 })
 
 test("restore rolls back the snapshot index when checkout-index fails", async () => {
-  const source = await Bun.file(path.join(import.meta.dirname, "../../src/snapshot/index.ts")).text()
+  const source = await fs.readFile(path.join(import.meta.dirname, "../../src/snapshot/index.ts"), "utf-8")
   const restoreStart = source.indexOf("export async function restore")
   const diffStart = source.indexOf("export async function diffFull")
   const body = source.slice(restoreStart, diffStart)
@@ -1088,7 +1144,7 @@ test("diffFull sets status based on git change type", async () => {
 })
 
 test("diffFull holds the snapshot operation lock across its two diff phases", async () => {
-  const source = await Bun.file(path.join(import.meta.dirname, "../../src/snapshot/index.ts")).text()
+  const source = await fs.readFile(path.join(import.meta.dirname, "../../src/snapshot/index.ts"), "utf-8")
   const body = source.slice(source.indexOf("export async function diffFull"))
 
   expect(body).toContain("return withOperationLock(current, async () => {")

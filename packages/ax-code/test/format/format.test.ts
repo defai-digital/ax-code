@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { writeFile, readFile } from "node:fs/promises"
+import { setTimeout as sleep } from "node:timers/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Bus } from "../../src/bus"
 import { File } from "../../src/file"
@@ -148,7 +150,7 @@ describe("Format", () => {
     await using tmp = await tmpdir()
 
     const file = `${tmp.path}/test.parallel`
-    await Bun.write(file, "x")
+    await writeFile(file, "x")
 
     const one = {
       extensions: Formatter.gofmt.extensions,
@@ -171,14 +173,14 @@ describe("Format", () => {
     Formatter.gofmt.enabled = async () => {
       active++
       max = Math.max(max, active)
-      await Bun.sleep(20)
+      await sleep(20)
       active--
       return true
     }
     Formatter.mix.enabled = async () => {
       active++
       max = Math.max(max, active)
-      await Bun.sleep(20)
+      await sleep(20)
       active--
       return true
     }
@@ -220,7 +222,7 @@ describe("Format", () => {
     })
 
     const file = `${tmp.path}/test.seq`
-    await Bun.write(file, "x")
+    await writeFile(file, "x")
 
     await Instance.provide({
       directory: tmp.path,
@@ -230,7 +232,7 @@ describe("Format", () => {
       },
     })
 
-    expect(await Bun.file(file).text()).toBe("xAB")
+    expect(await readFile(file, "utf-8")).toBe("xAB")
   })
 
   test("formatter help checks wait for process kill to complete on timeout", async () => {

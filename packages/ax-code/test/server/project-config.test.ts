@@ -51,7 +51,7 @@ describe("project config route decoding", () => {
 
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "ax-code.json")
-    await Bun.write(file, JSON.stringify({ super_long: true }))
+    await fs.writeFile(file, JSON.stringify({ super_long: true }))
     await fs.chmod(file, 0)
 
     try {
@@ -70,7 +70,7 @@ describe("project config route decoding", () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "ax-code.json")
     const malformed = "{not json"
-    await Bun.write(file, malformed)
+    await fs.writeFile(file, malformed)
 
     await Instance.provide({
       directory: tmp.path,
@@ -83,7 +83,7 @@ describe("project config route decoding", () => {
       },
     })
 
-    expect(await Bun.file(file).text()).toBe(malformed)
+    expect(await fs.readFile(file, "utf-8")).toBe(malformed)
   })
 
   test.each(["[]", "null", '"model"'])(
@@ -91,7 +91,7 @@ describe("project config route decoding", () => {
     async (invalid) => {
       await using tmp = await tmpdir({ git: true })
       const file = path.join(tmp.path, "ax-code.json")
-      await Bun.write(file, invalid)
+      await fs.writeFile(file, invalid)
 
       await Instance.provide({
         directory: tmp.path,
@@ -104,7 +104,7 @@ describe("project config route decoding", () => {
         },
       })
 
-      expect(await Bun.file(file).text()).toBe(invalid)
+      expect(await fs.readFile(file, "utf-8")).toBe(invalid)
     },
   )
 
@@ -121,6 +121,6 @@ describe("project config route decoding", () => {
       },
     })
 
-    expect(JSON.parse(await Bun.file(file).text())).toEqual({ super_long: true })
+    expect(JSON.parse(await fs.readFile(file, "utf-8"))).toEqual({ super_long: true })
   })
 })

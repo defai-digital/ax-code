@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest"
 import { Project } from "../../src/project/project"
 import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
-import { $ } from "bun"
+import { execFileSync } from "child_process"
 import path from "path"
 import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
@@ -17,6 +17,47 @@ Log.init({ print: false })
 
 function shellQuote(value: string) {
   return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function $(strings: TemplateStringsArray, ...values: unknown[]) {
+  const cmd = strings
+    .flatMap((s, i) => [s, values[i] != null ? String(values[i]) : ""])
+    .join("")
+    .split(/\s+/)
+    .filter(Boolean)
+  let cwd: string | undefined
+  let quiet = false
+  let nothrow = false
+  const builder = {
+    cwd(dir: string) {
+      cwd = dir
+      return builder
+    },
+    quiet() {
+      quiet = true
+      return builder
+    },
+    nothrow() {
+      nothrow = true
+      return builder
+    },
+    then(resolve: (v: unknown) => void, reject: (e: unknown) => void) {
+      try {
+        execFileSync(cmd[0], cmd.slice(1), {
+          cwd,
+          stdio: quiet ? "pipe" : "inherit",
+        })
+        resolve(null)
+      } catch (err: any) {
+        if (nothrow && err.status != null) resolve(null)
+        else reject(err)
+      }
+    },
+    catch(onRejected: (e: unknown) => void) {
+      return Promise.resolve(builder).catch(onRejected)
+    },
+  }
+  return builder
 }
 
 async function withGitFailure(directory: string, failArg: string, fn: () => Promise<void>) {
@@ -62,7 +103,8 @@ describe("Project.fromDirectory", () => {
     expect(project.worktree).toBe(tmp.path)
 
     const opencodeFile = path.join(tmp.path, ".git", "ax-code")
-    expect(await Bun.file(opencodeFile).exists()).toBe(false)
+    const content = await fs.readFile(opencodeFile).catch(() => null)
+    expect(content instanceof Buffer).toBe(false)
   })
 
   test("should handle git repository with commits", async () => {
@@ -76,7 +118,8 @@ describe("Project.fromDirectory", () => {
     expect(project.worktree).toBe(tmp.path)
 
     const opencodeFile = path.join(tmp.path, ".git", "ax-code")
-    expect(await Bun.file(opencodeFile).exists()).toBe(true)
+    const content = await fs.readFile(opencodeFile).catch(() => null)
+    expect(content instanceof Buffer).toBe(true)
   })
 
   test("returns directory-hash id for non-git directory", async () => {
@@ -218,7 +261,8 @@ describe("Project.fromDirectory with worktrees", () => {
 
       // Cache should live in the common .git dir, not the worktree's .git file
       const cache = path.join(tmp.path, ".git", "ax-code")
-      const exists = await Bun.file(cache).exists()
+      const content = await fs.readFile(cache).catch(() => null)
+      const exists = content instanceof Buffer
       expect(exists).toBe(true)
     } finally {
       await $`git worktree remove ${worktreePath}`
@@ -302,7 +346,7 @@ describe("Project.discover", () => {
     const { project } = await Project.fromDirectory(tmp.path)
 
     const pngData = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-    await Bun.write(path.join(tmp.path, "favicon.png"), pngData)
+    await fs.writeFile(path.join(tmp.path, "favicon.png"), pngData)
 
     await Project.discover(project)
 
@@ -318,7 +362,7 @@ describe("Project.discover", () => {
     await using tmp = await tmpdir({ git: true })
     const { project } = await Project.fromDirectory(tmp.path)
 
-    await Bun.write(path.join(tmp.path, "favicon.txt"), "not an image")
+    await fs.writeFile(path.join(tmp.path, "favicon.txt"), "not an image")
 
     await Project.discover(project)
 

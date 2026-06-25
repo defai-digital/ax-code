@@ -1,4 +1,5 @@
 import { test, expect, beforeEach, afterAll, vi } from "vitest"
+import { writeFile } from "node:fs/promises"
 
 // Mock UnauthorizedError to match the SDK's class
 class MockUnauthorizedError extends Error {
@@ -233,7 +234,7 @@ async function trustConfiguredMcp(name: string) {
 test("first connect to OAuth server shows needs_auth instead of failed", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -271,7 +272,7 @@ test("first connect to OAuth server shows needs_auth instead of failed", async (
 test("connect path closes unused SSE transport when StreamableHTTP path is selected first", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -375,7 +376,7 @@ test("saveTokens treats expires_in=0 as non-expiring", async () => {
 
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -411,7 +412,7 @@ test("startAuth reuses an existing saved oauth state", async () => {
 
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -446,7 +447,7 @@ test("startAuth returns the oauth state used for the flow", async () => {
 
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -476,7 +477,7 @@ test("startAuth returns the oauth state used for the flow", async () => {
 test("startAuth closes prior pending OAuth transport before creating a new one", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -525,7 +526,7 @@ test("startAuth closes prior pending OAuth transport before creating a new one",
 test("startAuth closes temporary client and transport when authentication is already valid", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -560,7 +561,7 @@ test("startAuth closes temporary client and transport when authentication is alr
 test("finishAuth closes the pending OAuth transport after reconnecting", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -594,7 +595,7 @@ test("finishAuth closes the pending OAuth transport after reconnecting", async (
 test("removeAuth closes the pending OAuth transport", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
@@ -627,7 +628,7 @@ test("removeAuth closes the pending OAuth transport", async () => {
 test("instance disposal closes pending OAuth transports", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Bun.write(
+      await writeFile(
         `${dir}/ax-code.json`,
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",

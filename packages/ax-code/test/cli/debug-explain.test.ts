@@ -116,7 +116,7 @@ describe("debug explain replay hang analysis", () => {
     const records = parseProcessEventLines(lines)
     const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:05.000Z"))
 
-    expect(issues.some((issue) => issue.title.includes("TUI startup failed"))).toBeTrue()
+    expect(issues.some((issue) => issue.title.includes("TUI startup failed"))).toBe(true)
     expect(issues[0]?.rootCause).toContain("Unable to load session bootstrap")
   })
 
@@ -140,7 +140,7 @@ describe("debug explain replay hang analysis", () => {
       Date.parse("2026-04-18T12:00:05.000Z"),
     )
 
-    expect(issues.some((issue) => issue.title.includes("TUI startup failed"))).toBeTrue()
+    expect(issues.some((issue) => issue.title.includes("TUI startup failed"))).toBe(true)
     expect(issues[0]?.rootCause).toBe("Unknown error")
   })
 
@@ -332,8 +332,8 @@ describe("debug explain replay hang analysis", () => {
     const records = parseProcessEventLines(lines)
     const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:20.000Z"))
 
-    expect(issues.some((issue) => issue.title.includes("TUI backend requests failed"))).toBeTrue()
-    expect(issues.some((issue) => issue.title.includes("never painted a first frame"))).toBeTrue()
+    expect(issues.some((issue) => issue.title.includes("TUI backend requests failed"))).toBe(true)
+    expect(issues.some((issue) => issue.title.includes("never painted a first frame"))).toBe(true)
   })
 
   test("classifies tui state burst events as a reducer loop", () => {
@@ -546,6 +546,6 @@ describe("debug explain replay hang analysis", () => {
 
     const records = parseProcessEventLines(lines)
     const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:00:41.000Z"))
-    expect(issues.some((issue) => issue.title.includes("heartbeat stopped"))).toBeFalse()
+    expect(issues.some((issue) => issue.title.includes("heartbeat stopped"))).toBe(false)
   })
 })

@@ -1087,7 +1087,7 @@ test("does not overwrite malformed config package.json during dependency install
   try {
     await expect(Config.installDependencies(tmp.path)).rejects.toThrow("Failed to parse JSON")
     expect(run).not.toHaveBeenCalled()
-    expect(await Bun.file(pkg).text()).toBe(malformed)
+    expect(await fs.readFile(pkg, "utf-8")).toBe(malformed)
   } finally {
     run.mockRestore()
   }
@@ -1101,7 +1101,7 @@ test("rejects malformed config package.json during dependency install checks", a
   await Filesystem.write(pkg, malformed)
 
   await expect(Config.needsInstall(tmp.path)).rejects.toThrow("Failed to parse JSON")
-  expect(await Bun.file(pkg).text()).toBe(malformed)
+  expect(await fs.readFile(pkg, "utf-8")).toBe(malformed)
 })
 
 test("does not overwrite non-object config package.json during dependency install", async () => {
@@ -1119,7 +1119,7 @@ test("does not overwrite non-object config package.json during dependency instal
   try {
     await expect(Config.installDependencies(tmp.path)).rejects.toThrow("Config package.json must be a JSON object")
     expect(run).not.toHaveBeenCalled()
-    expect(await Bun.file(pkg).text()).toBe(invalid)
+    expect(await fs.readFile(pkg, "utf-8")).toBe(invalid)
   } finally {
     run.mockRestore()
   }
@@ -1142,7 +1142,7 @@ test("does not overwrite config package.json with non-object dependencies during
       "Config package.json dependencies must be a JSON object",
     )
     expect(run).not.toHaveBeenCalled()
-    expect(await Bun.file(pkg).text()).toBe(invalid)
+    expect(await fs.readFile(pkg, "utf-8")).toBe(invalid)
   } finally {
     run.mockRestore()
   }

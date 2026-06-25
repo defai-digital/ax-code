@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -83,7 +84,7 @@ describe("audit bug fixes", () => {
         spies.push(vi.spyOn(LSP, "touchFile").mockResolvedValue(1 as any))
 
         const file = `${tmp.path}/demo.ts`
-        await Bun.write(file, "export const x = 1\n")
+        await writeFile(file, "export const x = 1\n")
 
         const tool = await LspTool.init()
         await expect(

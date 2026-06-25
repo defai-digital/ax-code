@@ -9,7 +9,7 @@ const file = path.join(Global.Path.data, "auth.json")
 const lockFile = `${file}.lock`
 
 afterEach(async () => {
-  await Bun.write(file, "{}")
+  await fs.writeFile(file, "{}")
   await fs.unlink(lockFile).catch(() => undefined)
 })
 
@@ -71,16 +71,16 @@ test("set and remove are no-ops on keys without trailing slashes", async () => {
 
 test("all does not overwrite corrupted auth file", async () => {
   const corrupted = "{ invalid json"
-  await Bun.write(file, corrupted)
+  await fs.writeFile(file, corrupted)
 
   await expect(Auth.all()).rejects.toMatchObject({ name: "AuthError" })
   await expect(Auth.get("anthropic")).rejects.toMatchObject({ name: "AuthError" })
-  expect(await Bun.file(file).text()).toBe(corrupted)
+  expect(await fs.readFile(file, "utf-8")).toBe(corrupted)
 })
 
 test("set does not overwrite corrupted auth file", async () => {
   const corrupted = "{ invalid json"
-  await Bun.write(file, corrupted)
+  await fs.writeFile(file, corrupted)
 
   await expect(
     Auth.set("anthropic", {
@@ -89,20 +89,20 @@ test("set does not overwrite corrupted auth file", async () => {
     }),
   ).rejects.toMatchObject({ name: "AuthError" })
 
-  expect(await Bun.file(file).text()).toBe(corrupted)
+  expect(await fs.readFile(file, "utf-8")).toBe(corrupted)
 })
 
 test("remove does not overwrite corrupted auth file", async () => {
   const corrupted = "{ invalid json"
-  await Bun.write(file, corrupted)
+  await fs.writeFile(file, corrupted)
 
   await expect(Auth.remove("anthropic")).rejects.toMatchObject({ name: "AuthError" })
 
-  expect(await Bun.file(file).text()).toBe(corrupted)
+  expect(await fs.readFile(file, "utf-8")).toBe(corrupted)
 })
 
 test("all filters invalid auth entries and keeps valid ones", async () => {
-  await Bun.write(
+  await fs.writeFile(
     file,
     JSON.stringify({
       anthropic: { type: "api", key: "sk-test" },
@@ -116,7 +116,7 @@ test("all filters invalid auth entries and keeps valid ones", async () => {
 })
 
 test("canary migration preserves entries that fail to decode instead of erasing them", async () => {
-  await Bun.write(
+  await fs.writeFile(
     file,
     JSON.stringify({
       anthropic: { type: "api", key: "sk-test" },
@@ -183,7 +183,7 @@ test("set does not steal an auth lock when its body cannot be read", async () =>
 })
 
 test("stale auth lock stealing claims and revalidates the stale snapshot before unlinking", async () => {
-  const src = await Bun.file(path.join(import.meta.dirname, "../../src/auth/index.ts")).text()
+  const src = await fs.readFile(path.join(import.meta.dirname, "../../src/auth/index.ts"), "utf-8")
   const start = src.indexOf("async function removeStaleSnapshot")
   const end = src.indexOf("async function maybeSteal", start)
   expect(start).toBeGreaterThan(-1)

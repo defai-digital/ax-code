@@ -67,9 +67,9 @@ describe("file.ripgrep", () => {
   test("defaults to include hidden", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "visible.txt"), "hello")
+        await fs.writeFile(path.join(dir, "visible.txt"), "hello")
         await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
-        await Bun.write(path.join(dir, ".ax-code", "thing.json"), "{}")
+        await fs.writeFile(path.join(dir, ".ax-code", "thing.json"), "{}")
       },
     })
 
@@ -83,9 +83,9 @@ describe("file.ripgrep", () => {
   test("hidden false excludes hidden", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "visible.txt"), "hello")
+        await fs.writeFile(path.join(dir, "visible.txt"), "hello")
         await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
-        await Bun.write(path.join(dir, ".ax-code", "thing.json"), "{}")
+        await fs.writeFile(path.join(dir, ".ax-code", "thing.json"), "{}")
       },
     })
 
@@ -99,7 +99,7 @@ describe("file.ripgrep", () => {
   test("search returns empty when nothing matches", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "match.ts"), "const value = 'other'\n")
+        await fs.writeFile(path.join(dir, "match.ts"), "const value = 'other'\n")
       },
     })
 
@@ -114,7 +114,7 @@ describe("file.ripgrep", () => {
   test("search treats zero limit as no results", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "match.ts"), "const value = 'needle'\n")
+        await fs.writeFile(path.join(dir, "match.ts"), "const value = 'needle'\n")
       },
     })
 
@@ -130,8 +130,8 @@ describe("file.ripgrep", () => {
   test("search limit caps total matches, not matches per file", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "a.ts"), "needle one\nneedle two\n")
-        await Bun.write(path.join(dir, "b.ts"), "needle three\nneedle four\n")
+        await fs.writeFile(path.join(dir, "a.ts"), "needle one\nneedle two\n")
+        await fs.writeFile(path.join(dir, "b.ts"), "needle three\nneedle four\n")
       },
     })
 
@@ -164,7 +164,7 @@ describe("file.ripgrep", () => {
   test("files() terminates spawned ripgrep process when generator is returned early", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "visible.txt"), "hello")
+        await fs.writeFile(path.join(dir, "visible.txt"), "hello")
       },
     })
 

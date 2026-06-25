@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { setTimeout as sleep } from "node:timers/promises"
 import { createBootstrapController } from "../../../src/cli/cmd/tui/context/sync-bootstrap-controller"
 
 describe("tui sync bootstrap controller", () => {
@@ -56,7 +57,7 @@ describe("tui sync bootstrap controller", () => {
     })
 
     controller.runInBackground()
-    await Bun.sleep(0)
+    await sleep(0)
 
     expect(warnings).toEqual(["Error: background async failed"])
   })
@@ -73,7 +74,7 @@ describe("tui sync bootstrap controller", () => {
     })
 
     controller.runInBackground()
-    await Bun.sleep(0)
+    await sleep(0)
 
     expect(warnings).toEqual(["Error: background sync failed"])
   })

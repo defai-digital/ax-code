@@ -22,11 +22,11 @@ describe("tui renderer profile", () => {
     const options = createTuiRenderOptionsFromProfile(profile)
 
     expect(profile.profile).toBe("compatible")
-    expect(profile.exitOnCtrlC).toBeFalse()
-    expect(profile.allowTerminalTitle).toBeFalse()
-    expect(options.exitOnCtrlC).toBeFalse()
-    expect(options.useThread).toBeFalse()
-    expect(options.useMouse).toBeTrue()
+    expect(profile.exitOnCtrlC).toBe(false)
+    expect(profile.allowTerminalTitle).toBe(false)
+    expect(options.exitOnCtrlC).toBe(false)
+    expect(options.useThread).toBe(false)
+    expect(options.useMouse).toBe(true)
     expect(options.screenMode).toBe("main-screen")
     expect(options.useKittyKeyboard).toBeNull()
   })
@@ -39,11 +39,11 @@ describe("tui renderer profile", () => {
     const options = createTuiRenderOptionsFromProfile(profile)
 
     expect(profile.profile).toBe("advanced")
-    expect(profile.exitOnCtrlC).toBeFalse()
-    expect(profile.allowTerminalTitle).toBeTrue()
-    expect(options.exitOnCtrlC).toBeFalse()
-    expect(options.useThread).toBeTrue()
-    expect(options.useMouse).toBeTrue()
+    expect(profile.exitOnCtrlC).toBe(false)
+    expect(profile.allowTerminalTitle).toBe(true)
+    expect(options.exitOnCtrlC).toBe(false)
+    expect(options.useThread).toBe(true)
+    expect(options.useMouse).toBe(true)
     expect(options.screenMode).toBe("alternate-screen")
     expect(options.useKittyKeyboard).toEqual({})
   })
@@ -60,21 +60,21 @@ describe("tui renderer profile", () => {
       advancedTerminal: false,
       terminalTitleDisabled: false,
     })
-    expect(setTuiTerminalTitle(renderer, "ax-code", compatible)).toBeFalse()
-    expect(clearTuiTerminalTitle(renderer, compatible)).toBeFalse()
+    expect(setTuiTerminalTitle(renderer, "ax-code", compatible)).toBe(false)
+    expect(clearTuiTerminalTitle(renderer, compatible)).toBe(false)
 
     const advancedDisabled = resolveTuiRenderProfile({
       advancedTerminal: true,
       terminalTitleDisabled: true,
     })
-    expect(setTuiTerminalTitle(renderer, "ax-code", advancedDisabled)).toBeFalse()
+    expect(setTuiTerminalTitle(renderer, "ax-code", advancedDisabled)).toBe(false)
 
     const advanced = resolveTuiRenderProfile({
       advancedTerminal: true,
       terminalTitleDisabled: false,
     })
-    expect(setTuiTerminalTitle(renderer, "ax-code", advanced)).toBeTrue()
-    expect(clearTuiTerminalTitle(renderer, advanced)).toBeTrue()
+    expect(setTuiTerminalTitle(renderer, "ax-code", advanced)).toBe(true)
+    expect(clearTuiTerminalTitle(renderer, advanced)).toBe(true)
     expect(calls).toEqual(["ax-code", ""])
   })
 
@@ -89,7 +89,7 @@ describe("tui renderer profile", () => {
       },
     }
 
-    expect(disableTuiMouseTracking(stream)).toBeTrue()
+    expect(disableTuiMouseTracking(stream)).toBe(true)
     await flushTuiStdout(stream)
 
     expect(writes).toEqual([TUI_MOUSE_TRACKING_DISABLE_SEQUENCE, ""])

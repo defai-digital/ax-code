@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { num, parseJUnit, resolveTestCIGroup, renderSummaryText } from "../../script/test-ci"
 
@@ -36,7 +37,7 @@ describe("script.test-ci", () => {
   test("parses junit with harmless effect interruption as ignored error", async () => {
     await using tmp = await tmpdir()
     const junit = path.join(tmp.path, "report.xml")
-    await Bun.write(
+    await writeFile(
       junit,
       [
         `<testsuite tests=\"1\" failures=\"0\" errors=\"1\" skipped=\"0\" time=\"1.23\">`,
@@ -57,7 +58,7 @@ describe("script.test-ci", () => {
   test("falls back to testcase count when junit root tests attr is missing", async () => {
     await using tmp = await tmpdir()
     const junit = path.join(tmp.path, "report.xml")
-    await Bun.write(
+    await writeFile(
       junit,
       [
         '<testsuite skipped="1" time="0.50">',
@@ -79,7 +80,7 @@ describe("script.test-ci", () => {
   test("keeps non-harmless failures from being ignored", async () => {
     await using tmp = await tmpdir()
     const junit = path.join(tmp.path, "report.xml")
-    await Bun.write(
+    await writeFile(
       junit,
       [
         `<testsuite tests=\"1\" failures=\"0\" errors=\"1\" skipped=\"0\" time=\"0.50\">`,
@@ -173,7 +174,7 @@ describe("script.test-ci", () => {
   test("falls back to failure tag counts when failures attribute is invalid", async () => {
     await using tmp = await tmpdir()
     const junit = path.join(tmp.path, "report.xml")
-    await Bun.write(
+    await writeFile(
       junit,
       [
         `<testsuite tests=\"1\" failures=\"oops\" errors=\"0\" skipped=\"0\" time=\"0.10\">`,

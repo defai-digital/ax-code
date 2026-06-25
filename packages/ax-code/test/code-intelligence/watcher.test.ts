@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
+import { writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
@@ -203,7 +204,7 @@ describe("CodeGraphWatcher.start / stop", () => {
         const projectID = Instance.project.id
         CodeIntelligence.__clearProject(projectID)
         const file = `${tmp.path}/changed.ts`
-        await Bun.write(file, "export const changed = 1\n")
+        await writeFile(file, "export const changed = 1\n")
         const indexFiles = vi.spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({
           nodes: 0,
           edges: 0,

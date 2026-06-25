@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "vitest"
+import { setTimeout as sleep } from "node:timers/promises"
 
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -101,7 +102,7 @@ test("Instance.state dedupes concurrent promise initialization", async () => {
   let n = 0
   const state = Instance.state(async () => {
     n += 1
-    await Bun.sleep(10)
+    await sleep(10)
     return { n }
   })
 

@@ -139,7 +139,7 @@ describe("memory.doctor", () => {
   test("reports load failure for corrupt project JSON", async () => {
     await using tmp = await tmpdir()
     await fs.mkdir(`${tmp.path}/.ax-code`, { recursive: true })
-    await Bun.write(`${tmp.path}/.ax-code/memory.json`, '{"truncated":')
+    await fs.writeFile(`${tmp.path}/.ax-code/memory.json`, '{"truncated":')
 
     const report = await doctor(tmp.path, { scope: "project" })
 

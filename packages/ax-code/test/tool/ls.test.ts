@@ -60,7 +60,7 @@ describe("tool.list", () => {
       init: async (dir) => {
         await fs.mkdir(path.join(dir, "empty"))
         await fs.mkdir(path.join(dir, "src"))
-        await Bun.write(path.join(dir, "src", "app.ts"), "export const app = true\n")
+        await fs.writeFile(path.join(dir, "src", "app.ts"), "export const app = true\n")
       },
     })
 
@@ -82,8 +82,8 @@ describe("tool.list", () => {
       init: async (dir) => {
         await fs.mkdir(path.join(dir, "node_modules", "pkg"), { recursive: true })
         await fs.mkdir(path.join(dir, "src"))
-        await Bun.write(path.join(dir, "node_modules", "pkg", "index.js"), "module.exports = {}\n")
-        await Bun.write(path.join(dir, "src", "app.ts"), "export const app = true\n")
+        await fs.writeFile(path.join(dir, "node_modules", "pkg", "index.js"), "module.exports = {}\n")
+        await fs.writeFile(path.join(dir, "src", "app.ts"), "export const app = true\n")
       },
     })
 

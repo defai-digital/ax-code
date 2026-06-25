@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, writeFile, readFile } from "node:fs/promises"
 import path from "path"
 import z from "zod"
 import { Instance } from "../../src/project/instance"
@@ -91,7 +91,7 @@ describe("scan coverage notices", () => {
   test("warns when JS/TS scanners run in a Rust workspace without Rust coverage", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
+        await writeFile(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
       },
     })
 
@@ -118,8 +118,8 @@ describe("scan coverage notices", () => {
   test("recognizes language extensions inside brace globs", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
-        await Bun.write(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
+        await writeFile(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
+        await writeFile(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
       },
     })
 
@@ -139,9 +139,9 @@ describe("scan coverage notices", () => {
   test("treats broad include globs as limited source coverage", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
-        await Bun.write(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
-        await Bun.write(path.join(dir, "Gemfile"), 'source "https://rubygems.org"\n')
+        await writeFile(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
+        await writeFile(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
+        await writeFile(path.join(dir, "Gemfile"), 'source "https://rubygems.org"\n')
       },
     })
 
@@ -179,8 +179,8 @@ describe("scan coverage notices", () => {
   test("warns when JS/TS scanners run in Python and Ruby workspaces without source coverage", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
-        await Bun.write(path.join(dir, "Gemfile"), 'source "https://rubygems.org"\n')
+        await writeFile(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
+        await writeFile(path.join(dir, "Gemfile"), 'source "https://rubygems.org"\n')
       },
     })
 
@@ -202,8 +202,8 @@ describe("scan coverage notices", () => {
   test("detects Python and Ruby workspaces from source files when manifests are absent", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "scripts", "tool.py"), "print('hello')\n")
-        await Bun.write(path.join(dir, "lib", "worker.rb"), "puts 'hello'\n")
+        await writeFile(path.join(dir, "scripts", "tool.py"), "print('hello')\n")
+        await writeFile(path.join(dir, "lib", "worker.rb"), "puts 'hello'\n")
       },
     })
 
@@ -223,7 +223,7 @@ describe("scan coverage notices", () => {
   test("marks dedup scan as symbol-limited in Rust workspaces", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
+        await writeFile(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
       },
     })
 

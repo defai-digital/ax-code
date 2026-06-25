@@ -41,13 +41,13 @@ describe("LSPClient interop", () => {
   })
 
   test("registers close and error handlers for dead LSP connections", async () => {
-    const clientSrc = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/client.ts")).text()
+    const clientSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/client.ts"), "utf-8")
     expect(clientSrc).toContain("connection.onClose")
     expect(clientSrc).toContain("connection.onError")
     expect(clientSrc).toContain("input.onClose?.")
     expect(clientSrc).toContain("get closed()")
 
-    const indexSrc = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/index.ts")).text()
+    const indexSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/index-impl.ts"), "utf-8")
     expect(indexSrc).toContain("onClose: () => {")
     expect(indexSrc).toContain("LSPBrokenServer.markBroken(s.broken, key)")
     expect(indexSrc).toContain("s.clients.splice(idx, 1)")
@@ -90,7 +90,7 @@ describe("LSPClient interop", () => {
     await using tmp = await tmpdir()
     const file = "file.ts"
     const input = { path: file }
-    await Bun.write(path.join(tmp.path, file), "export const x = 1\n")
+    await fs.writeFile(path.join(tmp.path, file), "export const x = 1\n")
     const handle = spawnFakeServer() as any
 
     await Instance.provide({
@@ -188,7 +188,7 @@ describe("LSPClient interop", () => {
   test("skips diagnostics wait for unchanged file content", async () => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "file.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await fs.writeFile(file, "export const x = 1\n")
     const handle = spawnFakeServer() as any
 
     const client = await Instance.provide({
@@ -214,7 +214,7 @@ describe("LSPClient interop", () => {
   })
 
   test("starts diagnostics timeout only after didOpen or didChange is sent", async () => {
-    const clientSrc = await Bun.file(path.join(import.meta.dirname, "../../src/lsp/client.ts")).text()
+    const clientSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/lsp/client.ts"), "utf-8")
 
     expect(clientSrc).toContain("wait?.start()")
     expect(clientSrc).toContain("await wait?.promise")
@@ -227,7 +227,7 @@ describe("LSPClient interop", () => {
   test("notify.close clears per-file state", async () => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "file.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await fs.writeFile(file, "export const x = 1\n")
     const handle = spawnFakeServer() as any
 
     const client = await Instance.provide({
@@ -264,7 +264,7 @@ describe("LSPClient interop", () => {
   test("notify.open short-circuits to close when file no longer exists", async () => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "transient.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await fs.writeFile(file, "export const x = 1\n")
     const handle = spawnFakeServer() as any
 
     const client = await Instance.provide({
@@ -310,7 +310,7 @@ describe("LSPClient interop", () => {
   test("notify.open propagates filesystem errors when checking tracked files", async () => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "private.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await fs.writeFile(file, "export const x = 1\n")
     const handle = spawnFakeServer() as any
 
     const client = await Instance.provide({
@@ -350,7 +350,7 @@ describe("LSPClient interop", () => {
     const relativePath = path.join("src", "index.ts")
     const absolutePath = path.join(tmp.path, relativePath)
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-    await Bun.write(absolutePath, "export const x = 1\n")
+    await fs.writeFile(absolutePath, "export const x = 1\n")
 
     const handle = spawnFakeServer() as any
     await Instance.provide({
@@ -375,7 +375,7 @@ describe("LSPClient interop", () => {
         await client.notify.open({ path: relativePath })
         sent.length = 0
 
-        await Bun.write(absolutePath, "export const x = 1\nexport const y = 2\n")
+        await fs.writeFile(absolutePath, "export const x = 1\nexport const y = 2\n")
         const changed = await client.notify.open({ path: relativePath })
         expect(changed).toBe(true)
 
@@ -393,7 +393,7 @@ describe("LSPClient interop", () => {
   test("notify.open serializes concurrent updates for the same file", async () => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "file.ts")
-    await Bun.write(file, "export const x = 1\n")
+    await fs.writeFile(file, "export const x = 1\n")
     const handle = spawnFakeServer() as any
 
     await Instance.provide({
@@ -425,7 +425,7 @@ describe("LSPClient interop", () => {
           return originalSendNotification(method, params)
         }) as typeof conn.sendNotification
 
-        await Bun.write(file, "export const x = 1\nexport const y = 2\n")
+        await fs.writeFile(file, "export const x = 1\nexport const y = 2\n")
         const first = client.notify.open({ path: file })
         const second = client.notify.open({ path: file })
 
@@ -447,8 +447,8 @@ describe("LSPClient interop", () => {
     await using tmp = await tmpdir()
     const dockerfilePath = path.join(tmp.path, "Dockerfile")
     const makefilePath = path.join(tmp.path, "Makefile")
-    await Bun.write(dockerfilePath, "FROM node:20-alpine\n")
-    await Bun.write(makefilePath, "all:\n\t@echo hi\n")
+    await fs.writeFile(dockerfilePath, "FROM node:20-alpine\n")
+    await fs.writeFile(makefilePath, "all:\n\t@echo hi\n")
 
     const handle = spawnFakeServer() as any
     await Instance.provide({
@@ -487,7 +487,7 @@ describe("LSPClient interop", () => {
   test("notify.open allows a server-specific languageId override", async () => {
     await using tmp = await tmpdir()
     const playbookPath = path.join(tmp.path, "playbook.yml")
-    await Bun.write(playbookPath, "- hosts: all\n  tasks: []\n")
+    await fs.writeFile(playbookPath, "- hosts: all\n  tasks: []\n")
 
     const handle = spawnFakeServer() as any
     await Instance.provide({

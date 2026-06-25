@@ -202,7 +202,7 @@ describe("WorkflowTemplate", () => {
     const file = path.join(tmp.path, ".ax-code", "workflow-template", "local-noop.json")
     const malformed = "{not json"
     await fs.mkdir(path.dirname(file), { recursive: true })
-    await Bun.write(file, malformed)
+    await fs.writeFile(file, malformed)
 
     await Instance.provide({
       directory: tmp.path,
@@ -211,7 +211,7 @@ describe("WorkflowTemplate", () => {
       },
     })
 
-    expect(await Bun.file(file).text()).toBe(malformed)
+    expect(await fs.readFile(file, "utf-8")).toBe(malformed)
   })
 
   test("does not overwrite invalid project workflow template schema when saving", async () => {
@@ -225,7 +225,7 @@ describe("WorkflowTemplate", () => {
     const file = path.join(tmp.path, ".ax-code", "workflow-template", "local-noop.json")
     const invalid = JSON.stringify({ schemaVersion: 1, revision: 1, trust: "candidate" })
     await fs.mkdir(path.dirname(file), { recursive: true })
-    await Bun.write(file, invalid)
+    await fs.writeFile(file, invalid)
 
     await Instance.provide({
       directory: tmp.path,
@@ -234,7 +234,7 @@ describe("WorkflowTemplate", () => {
       },
     })
 
-    expect(await Bun.file(file).text()).toBe(invalid)
+    expect(await fs.readFile(file, "utf-8")).toBe(invalid)
   })
 
   test("rejects unknown templates", async () => {

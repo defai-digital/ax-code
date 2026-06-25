@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { writeFile, readFile } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
@@ -25,7 +26,7 @@ describe("isolation route", () => {
   test("defaults to workspace-write when config has no isolation setting", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
 
       await Instance.provide({
         directory: tmp.path,
@@ -43,7 +44,7 @@ describe("isolation route", () => {
       await using tmp = await tmpdir({ git: true })
       // Config says workspace-write. Even though the env says full-access,
       // the GET endpoint reconciles from config, so the UI sees workspace-write.
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ isolation: { mode: "workspace-write" } }))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ isolation: { mode: "workspace-write" } }))
       process.env.AX_CODE_ISOLATION_MODE = "full-access"
 
       await Instance.provide({
@@ -62,7 +63,7 @@ describe("isolation route", () => {
   test("config read-only is honored even when env says workspace-write", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ isolation: { mode: "read-only" } }))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ isolation: { mode: "read-only" } }))
       process.env.AX_CODE_ISOLATION_MODE = "workspace-write"
 
       await Instance.provide({
@@ -80,7 +81,7 @@ describe("isolation route", () => {
   test("full-access implies network true", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ isolation: { mode: "full-access" } }))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ isolation: { mode: "full-access" } }))
 
       await Instance.provide({
         directory: tmp.path,
@@ -97,7 +98,7 @@ describe("isolation route", () => {
   test("GET reconciles env vars to match config", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(
+      await writeFile(
         path.join(tmp.path, "ax-code.json"),
         JSON.stringify({ isolation: { mode: "workspace-write", network: true } }),
       )
@@ -119,7 +120,7 @@ describe("isolation route", () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       const configPath = path.join(tmp.path, "ax-code.json")
-      await Bun.write(configPath, JSON.stringify({}))
+      await writeFile(configPath, JSON.stringify({}))
 
       await Instance.provide({
         directory: tmp.path,
@@ -133,7 +134,7 @@ describe("isolation route", () => {
           expect(await put.json()).toEqual({ mode: "read-only", network: false })
 
           // Config file is updated
-          const updated = JSON.parse(await Bun.file(configPath).text())
+          const updated = JSON.parse(await readFile(configPath, "utf-8"))
           expect(updated.isolation).toEqual({ mode: "read-only", network: false })
 
           // Env vars are set
@@ -152,7 +153,7 @@ describe("isolation route", () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       const configPath = path.join(tmp.path, "ax-code.json")
-      await Bun.write(configPath, JSON.stringify({}))
+      await writeFile(configPath, JSON.stringify({}))
 
       await Instance.provide({
         directory: tmp.path,
@@ -175,7 +176,7 @@ describe("isolation route", () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       const configPath = path.join(tmp.path, "ax-code.json")
-      await Bun.write(configPath, JSON.stringify({}))
+      await writeFile(configPath, JSON.stringify({}))
 
       await Instance.provide({
         directory: tmp.path,
@@ -188,7 +189,7 @@ describe("isolation route", () => {
 
           expect(put.status).toBe(200)
           expect(await put.json()).toEqual({ mode: "workspace-write", network: false })
-          const updated = JSON.parse(await Bun.file(configPath).text())
+          const updated = JSON.parse(await readFile(configPath, "utf-8"))
           expect(updated.isolation).toEqual({ mode: "workspace-write", network: false })
           expect(process.env.AX_CODE_ISOLATION_NETWORK).toBe("false")
         },
@@ -200,7 +201,7 @@ describe("isolation route", () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       const configPath = path.join(tmp.path, "ax-code.json")
-      await Bun.write(configPath, JSON.stringify({}))
+      await writeFile(configPath, JSON.stringify({}))
       // Simulate a stale env var from --sandbox full-access at startup.
       // The PUT requests workspace-write; the response must report
       // workspace-write (the requested value), not full-access (stale).

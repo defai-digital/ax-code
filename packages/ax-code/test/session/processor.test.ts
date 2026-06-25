@@ -199,7 +199,7 @@ describe("session.processor", () => {
   })
 
   test("prompt loop resolves provider errors before processor stop decisions", async () => {
-    const src = await readFile(path.join(import.meta.dirname, "../../src/session/prompt.ts"), "utf-8")
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/prompt-impl.ts"), "utf-8")
     const errorTransitionStart = src.indexOf("const errorTransition = await resolvePromptLoopErrorTransition")
     const processorDecisionStart = src.indexOf("const processorDecision = processorLoopDecision")
 

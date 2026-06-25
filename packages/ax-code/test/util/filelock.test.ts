@@ -14,7 +14,7 @@ describe("util.filelock", () => {
     const lock = await FileLock.acquire(filepath)
     lock[Symbol.dispose]()
 
-    expect(await Bun.file(lockpath).exists()).toBe(false)
+    expect(await fs.access(lockpath).then(() => true, () => false)).toBe(false)
   })
 
   test("does not delete a lock after ownership changes", async () => {
@@ -28,10 +28,10 @@ describe("util.filelock", () => {
       host: currentLockHost(),
     }
 
-    await Bun.write(lockpath, JSON.stringify(otherOwner))
+    await fs.writeFile(lockpath, JSON.stringify(otherOwner))
     lock[Symbol.dispose]()
 
-    expect(JSON.parse(await Bun.file(lockpath).text())).toEqual(otherOwner)
+    expect(JSON.parse(await fs.readFile(lockpath, "utf-8"))).toEqual(otherOwner)
   })
 
   test("does not steal a lock when its body cannot be read", async () => {
@@ -43,14 +43,14 @@ describe("util.filelock", () => {
       startedAt: Date.now(),
       host: currentLockHost(),
     }
-    await Bun.write(lockpath, JSON.stringify(otherOwner))
+    await fs.writeFile(lockpath, JSON.stringify(otherOwner))
 
     const readError = Object.assign(new Error("lock body is unreadable"), { code: "EACCES" })
     const readSpy = vi.spyOn(fs, "readFile").mockRejectedValueOnce(readError)
 
     try {
       await expect(FileLock.acquire(filepath, { timeoutMs: 5 })).rejects.toThrow("lock body is unreadable")
-      expect(JSON.parse(await Bun.file(lockpath).text())).toEqual(otherOwner)
+      expect(JSON.parse(await fs.readFile(lockpath, "utf-8"))).toEqual(otherOwner)
     } finally {
       readSpy.mockRestore()
     }
@@ -64,7 +64,7 @@ describe("util.filelock", () => {
     let unrefCalls = 0
     let nowCalls = 0
 
-    await Bun.write(
+    await fs.writeFile(
       lockpath,
       JSON.stringify({
         pid: process.pid + 1,

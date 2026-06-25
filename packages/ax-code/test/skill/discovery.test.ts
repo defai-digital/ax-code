@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll, vi, type MockInstance } fr
 import { Discovery } from "../../src/skill/discovery"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
-import { rm, readFile } from "fs/promises"
+import { rm, readFile, readdir } from "fs/promises"
 import path from "path"
 import dns from "dns/promises"
 import { createHash } from "crypto"
@@ -220,7 +220,10 @@ describe("Discovery.pull", () => {
       const refs = path.join(agentsSdk, "references")
       expect(await Filesystem.exists(path.join(agentsSdk, "SKILL.md"))).toBe(true)
       // agents-sdk has reference files per the index
-      const refDir = await Array.fromAsync(new Bun.Glob("**/*.md").scan({ cwd: refs, onlyFiles: true }))
+      const entries = await readdir(refs, { recursive: true })
+      const refDir = entries
+        .filter((e) => typeof e === "string" && e.endsWith(".md"))
+        .map((e) => path.join(refs, String(e)))
       expect(refDir.length).toBeGreaterThan(0)
     }
   })

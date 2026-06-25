@@ -1,5 +1,6 @@
 import path from "path"
 import { describe, expect, test } from "vitest"
+import { readFile } from "node:fs/promises"
 
 const DEBUG_WORKFLOW_PROMPTS = [
   "src/session/prompt/default.txt",
@@ -25,7 +26,7 @@ function promptPath(relativePath: string) {
 describe("runtime debug prompt guidance", () => {
   for (const relativePath of DEBUG_WORKFLOW_PROMPTS) {
     test(`${relativePath} keeps debug verification explicit`, async () => {
-      const text = await Bun.file(promptPath(relativePath)).text()
+      const text = await readFile(promptPath(relativePath), "utf-8")
 
       for (const claim of OVERCONFIDENT_FRAME_CLAIMS) {
         expect(text).not.toMatch(claim)
@@ -41,7 +42,7 @@ describe("runtime debug prompt guidance", () => {
   }
 
   test("beast prompt does not call absent DRE tools mandatory", async () => {
-    const text = await Bun.file(promptPath("src/session/prompt/beast.txt")).text()
+    const text = await readFile(promptPath("src/session/prompt/beast.txt"), "utf-8")
 
     expect(text).toContain("When these tools are present in the active tool list")
     expect(text).toContain("Do not call DRE tools that are absent from the active tool list")

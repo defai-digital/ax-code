@@ -1,22 +1,16 @@
 import { describe, expect, test } from "vitest"
 import path from "node:path"
+import { spawnSync } from "node:child_process"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const structureScript = path.join(repoRoot, "script/structure.ts")
 
 async function runStructureScript() {
-  const proc = Bun.spawn({
-    cmd: ["bun", "run", structureScript],
+  const result = spawnSync("tsx", [structureScript], {
     cwd: repoRoot,
-    stdout: "pipe",
-    stderr: "pipe",
+    encoding: "utf-8",
   })
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
-  return { stdout, stderr, exitCode }
+  return { stdout: result.stdout, stderr: result.stderr, exitCode: result.status ?? 1 }
 }
 
 describe("root structure script", () => {

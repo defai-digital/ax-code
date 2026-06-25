@@ -2,6 +2,7 @@ import { NamedError } from "@ax-code/util/error"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import os from "os"
 import path from "path"
+import { readFile } from "node:fs/promises"
 import z from "zod"
 import { cliBooleanFlagValue } from "../../src/cli/boolean-flag"
 import { clearForcedExitTimer, scheduleForcedExit } from "../../src/cli/boot"
@@ -337,7 +338,7 @@ describe("cli.boot.fatal", () => {
 
 describe("cli.boot.forced-exit", () => {
   test("uncaught exception flush timer stays referenced", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/cli/boot.ts")).text()
+    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/boot.ts"), "utf-8")
     const start = src.indexOf("function onUncaughtException")
     const end = src.indexOf("\n}\n\nexport function clearForcedExitTimer", start)
     expect(start).toBeGreaterThan(-1)

@@ -417,7 +417,7 @@ describe("perf.gate", () => {
   test("loads optional baseline summary sidecar", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-perf-"))
     const file = path.join(dir, "base-summary.json")
-    await Bun.write(
+    await fs.writeFile(
       file,
       JSON.stringify({
         ok: true,
@@ -495,7 +495,7 @@ describe("perf.gate", () => {
   test("loads jsonc config file", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-perf-"))
     const file = path.join(dir, "perf-index.jsonc")
-    await Bun.write(
+    await fs.writeFile(
       file,
       `{
         "bench": { "limit": 12, "repeat": 4, "nativeProfile": true },
@@ -536,7 +536,7 @@ describe("perf.gate", () => {
 
   test("reads default config from cwd", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-perf-"))
-    await Bun.write(path.join(dir, "perf-index.jsonc"), `{"bench":{"repeat":2}}`)
+    await fs.writeFile(path.join(dir, "perf-index.jsonc"), `{"bench":{"repeat":2}}`)
 
     const prev = process.argv
     process.argv = ["bun", "script/perf-index.ts"]

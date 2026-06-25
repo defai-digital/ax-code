@@ -76,7 +76,7 @@ describe("isolation.assertWrite", () => {
   })
 
   test("canWrite checks protected paths with the original input path", async () => {
-    const src = await Bun.file(path.join(import.meta.dirname, "../../src/isolation/index.ts")).text()
+    const src = await fs.readFile(path.join(import.meta.dirname, "../../src/isolation/index.ts"), "utf-8")
     const start = src.indexOf("export function canWrite(")
     const end = src.indexOf("export function assertWrite(", start)
     expect(start).toBeGreaterThan(-1)

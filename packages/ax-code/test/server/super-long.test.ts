@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { writeFile, readFile } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
@@ -35,7 +36,7 @@ describe("super-long route", () => {
   test("defaults on for Qwen3.7-Max when project config has no explicit setting", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "alibaba-coding-plan/qwen3.7-max" }))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "alibaba-coding-plan/qwen3.7-max" }))
 
       await Instance.provide({
         directory: tmp.path,
@@ -59,7 +60,7 @@ describe("super-long route", () => {
       // though the base env says "true", the GET endpoint reconciles
       // from config (model default is off for non-Qwen), so the UI
       // sees false. The base env is then updated to match.
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "anthropic/claude-opus-4-8" }))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "anthropic/claude-opus-4-8" }))
       process.env.AX_CODE_SUPER_LONG = "true"
 
       await Instance.provide({
@@ -81,7 +82,7 @@ describe("super-long route", () => {
       // Config explicitly enables super_long. Even though the base env
       // says false, the config is the authority for the UI, so GET
       // returns true. The base env is then reconciled to match.
-      await Bun.write(
+      await writeFile(
         path.join(tmp.path, "ax-code.json"),
         JSON.stringify({ model: "alibaba-coding-plan/qwen3.7-max", super_long: true }),
       )
@@ -102,7 +103,7 @@ describe("super-long route", () => {
   test("does not default on when autonomous mode is disabled", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(
+      await writeFile(
         path.join(tmp.path, "ax-code.json"),
         JSON.stringify({ model: "alibaba-coding-plan/qwen3.7-max", autonomous: false }),
       )
@@ -121,7 +122,7 @@ describe("super-long route", () => {
   test("uses explicit query model when project config has no model", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
 
       await Instance.provide({
         directory: tmp.path,
@@ -141,7 +142,7 @@ describe("super-long route", () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       const configPath = path.join(tmp.path, "ax-code.json")
-      await Bun.write(configPath, JSON.stringify({ model: "qwen3.7-max" }))
+      await writeFile(configPath, JSON.stringify({ model: "qwen3.7-max" }))
 
       await Instance.provide({
         directory: tmp.path,
@@ -157,7 +158,7 @@ describe("super-long route", () => {
           const get = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
           expect(await get.json()).toEqual({ enabled: false })
           // PUT now persists to config, so the file should be updated.
-          const updated = JSON.parse(await Bun.file(configPath).text())
+          const updated = JSON.parse(await readFile(configPath, "utf-8"))
           expect(updated.super_long).toBe(false)
         },
       })
@@ -168,7 +169,7 @@ describe("super-long route", () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       const configPath = path.join(tmp.path, "ax-code.json")
-      await Bun.write(configPath, JSON.stringify({ model: "qwen3.7-max" }))
+      await writeFile(configPath, JSON.stringify({ model: "qwen3.7-max" }))
 
       await Instance.provide({
         directory: tmp.path,
@@ -192,7 +193,7 @@ describe("super-long route", () => {
           expect(putAutonomous.status).toBe(200)
           expect(await putAutonomous.json()).toEqual({ enabled: true })
 
-          const updated = JSON.parse(await Bun.file(configPath).text())
+          const updated = JSON.parse(await readFile(configPath, "utf-8"))
           expect(updated.super_long).toBe(false)
           expect(updated.autonomous).toBe(true)
         },
@@ -203,7 +204,7 @@ describe("super-long route", () => {
   test("rejects enabling Super-Long when autonomous mode is disabled", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "qwen3.7-max", autonomous: false }))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "qwen3.7-max", autonomous: false }))
 
       await Instance.provide({
         directory: tmp.path,
@@ -234,7 +235,7 @@ describe("super-long route", () => {
       const previousStore = process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE
       process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE = storePath
       try {
-        await Bun.write(
+        await writeFile(
           path.join(tmp.path, "ax-code.json"),
           JSON.stringify({
             model: "anthropic/claude-opus-4-8",
@@ -248,7 +249,7 @@ describe("super-long route", () => {
           fn: async () => {
             const session = await Session.create({ title: "super-long-status-session" })
             try {
-              await Bun.write(
+              await writeFile(
                 storePath,
                 JSON.stringify({ runs: { [session.id]: { startedAt, lastSeenAt: startedAt } } }),
               )
@@ -292,7 +293,7 @@ describe("super-long route", () => {
       process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE = storePath
       let otherSessionID: SessionID | undefined
       try {
-        await Bun.write(
+        await writeFile(
           path.join(current.path, "ax-code.json"),
           JSON.stringify({
             model: "anthropic/claude-opus-4-8",
@@ -307,7 +308,7 @@ describe("super-long route", () => {
           },
         })
         const startedAt = Date.now() - 60_000
-        await Bun.write(
+        await writeFile(
           storePath,
           JSON.stringify({ runs: { [otherSessionID!]: { startedAt, lastSeenAt: startedAt } } }),
         )
@@ -340,7 +341,7 @@ describe("super-long route", () => {
   test("status reports null timing when the session has no durable run", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "anthropic/claude-opus-4-8" }))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "anthropic/claude-opus-4-8" }))
 
       await Instance.provide({
         directory: tmp.path,
@@ -386,7 +387,7 @@ describe("super-long route", () => {
   test("disabling autonomous suppresses super-long; re-enabling restores config state", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
 
       await Instance.provide({
         directory: tmp.path,

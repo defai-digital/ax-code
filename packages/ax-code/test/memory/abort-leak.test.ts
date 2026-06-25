@@ -3,7 +3,6 @@ import { describe, test, expect } from "vitest"
 const MB = 1024 * 1024
 
 const getHeapMB = () => {
-  Bun.gc(true)
   return process.memoryUsage().heapUsed / MB
 }
 
@@ -13,9 +12,8 @@ describe("memory: closure vs bind pattern", () => {
 
     // OLD pattern: arrow function closure retains surrounding scope
     const closureMap = new Map<number, () => void>()
-    const timers: Timer[] = []
+    const timers: NodeJS.Timeout[] = []
 
-    Bun.gc(true)
     const baseline = getHeapMB()
 
     for (let i = 0; i < ITERATIONS; i++) {
@@ -28,7 +26,6 @@ describe("memory: closure vs bind pattern", () => {
       timers.push(setTimeout(handler, 30000))
     }
 
-    Bun.gc(true)
     const oldGrowth = getHeapMB() - baseline
 
     // Cleanup
@@ -36,10 +33,9 @@ describe("memory: closure vs bind pattern", () => {
     closureMap.clear()
 
     // NEW pattern: bind doesn't capture surrounding scope
-    Bun.gc(true)
     const baseline2 = getHeapMB()
     const handlers: (() => void)[] = []
-    const timers2: Timer[] = []
+    const timers2: NodeJS.Timeout[] = []
 
     for (let i = 0; i < ITERATIONS; i++) {
       const _content = "x".repeat(50 * 1024) // 50KB NOT captured
@@ -49,7 +45,6 @@ describe("memory: closure vs bind pattern", () => {
       timers2.push(setTimeout(handler, 30000))
     }
 
-    Bun.gc(true)
     const newGrowth = getHeapMB() - baseline2
 
     // Cleanup

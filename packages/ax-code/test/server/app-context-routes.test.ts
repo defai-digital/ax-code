@@ -11,7 +11,7 @@ function directoryUrl(route: string, directory: string) {
 
 test("GET /context returns project context metadata", async () => {
   await using tmp = await tmpdir({ git: true })
-  await Bun.write(
+  await fs.writeFile(
     path.join(tmp.path, "package.json"),
     JSON.stringify({
       scripts: {
@@ -42,7 +42,7 @@ test("GET /context returns project context metadata", async () => {
 
 test("GET /context ignores non-string package scripts", async () => {
   await using tmp = await tmpdir({ git: true })
-  await Bun.write(
+  await fs.writeFile(
     path.join(tmp.path, "package.json"),
     JSON.stringify({
       scripts: {
@@ -70,7 +70,7 @@ test("context checks surface unreadable package.json files", async () => {
 
   await using tmp = await tmpdir({ git: true })
   const pkg = path.join(tmp.path, "package.json")
-  await Bun.write(pkg, JSON.stringify({ scripts: { test: "vitest run" } }))
+  await fs.writeFile(pkg, JSON.stringify({ scripts: { test: "vitest run" } }))
   await fs.chmod(pkg, 0)
 
   try {
@@ -85,7 +85,7 @@ test("context checks surface unreadable Makefiles", async () => {
 
   await using tmp = await tmpdir({ git: true })
   const makefile = path.join(tmp.path, "Makefile")
-  await Bun.write(makefile, "test:\n\techo test\n")
+  await fs.writeFile(makefile, "test:\n\techo test\n")
   await fs.chmod(makefile, 0)
 
   try {
@@ -114,5 +114,5 @@ test("POST /context/template creates the requested context template", async () =
     path: expectedPath,
     exists: true,
   })
-  expect(await Bun.file(expectedPath).text()).toContain("# Project Instructions")
+  expect(await fs.readFile(expectedPath, "utf-8")).toContain("# Project Instructions")
 })

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest"
 import path from "path"
+import { readFile, readdir } from "node:fs/promises"
 import {
   SessionBackupProjectCommand,
   SessionClearProjectCommand,
@@ -49,9 +50,10 @@ describe("session clear-project", () => {
       },
     })
 
-    const entries = Array.from(new Bun.Glob("session-project-*.json").scanSync({ cwd: backup.path }))
+    const allFiles = await readdir(backup.path)
+    const entries = allFiles.filter((f) => f.startsWith("session-project-") && f.endsWith(".json"))
     expect(entries.length).toBe(1)
-    const exported = await Bun.file(path.join(backup.path, entries[0]!)).json()
+    const exported = JSON.parse(await readFile(path.join(backup.path, entries[0]!), "utf-8"))
     expect(exported.type).toBe("ax-code.project-session-backup")
     expect(exported.version).toBe(1)
     expect(exported.scope).toBe("current-project-id-only")
@@ -109,9 +111,10 @@ describe("session clear-project", () => {
       } as never),
     )
 
-    const entries = Array.from(new Bun.Glob("session-project-*.json").scanSync({ cwd: backup.path }))
+    const allFiles = await readdir(backup.path)
+    const entries = allFiles.filter((f) => f.startsWith("session-project-") && f.endsWith(".json"))
     expect(entries.length).toBe(1)
-    const exported = await Bun.file(path.join(backup.path, entries[0]!)).json()
+    const exported = JSON.parse(await readFile(path.join(backup.path, entries[0]!), "utf-8"))
     expect(exported.scope).toBe("current-project-id-only")
     expect(exported.projectID).toBe(session.projectID)
     expect(exported.sessions[0].info.id).toBe(session.id)

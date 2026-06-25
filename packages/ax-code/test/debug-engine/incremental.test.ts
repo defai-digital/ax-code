@@ -1,5 +1,6 @@
-import { $ } from "bun"
+import { execFileSync } from "node:child_process"
 import { describe, expect, test } from "vitest"
+import { writeFile } from "node:fs/promises"
 import path from "path"
 import { Incremental } from "../../src/debug-engine"
 import { Instance } from "../../src/project/instance"
@@ -10,17 +11,17 @@ describe("debug-engine incremental file selection", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
-        await Bun.write(path.join(dir, "src", "app.ts"), "export const app = 1\n")
-        await Bun.write(path.join(dir, "scripts", "tool.js"), "export const tool = 1\n")
-        await Bun.write(path.join(dir, "README.md"), "# demo\n")
+        await writeFile(path.join(dir, "src", "app.ts"), "export const app = 1\n")
+        await writeFile(path.join(dir, "scripts", "tool.js"), "export const tool = 1\n")
+        await writeFile(path.join(dir, "README.md"), "# demo\n")
       },
     })
-    await $`git add .`.cwd(tmp.path).quiet()
-    await $`git commit -m "seed files"`.cwd(tmp.path).quiet()
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "ignore" })
+    execFileSync("git", ["commit", "-m", "seed files"], { cwd: tmp.path, stdio: "ignore" })
 
-    await Bun.write(path.join(tmp.path, "src", "app.ts"), "export const app = 2\n")
-    await Bun.write(path.join(tmp.path, "scripts", "tool.js"), "export const tool = 2\n")
-    await Bun.write(path.join(tmp.path, "README.md"), "# changed\n")
+    await writeFile(path.join(tmp.path, "src", "app.ts"), "export const app = 2\n")
+    await writeFile(path.join(tmp.path, "scripts", "tool.js"), "export const tool = 2\n")
+    await writeFile(path.join(tmp.path, "README.md"), "# changed\n")
 
     await Instance.provide({
       directory: tmp.path,

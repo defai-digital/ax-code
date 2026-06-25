@@ -11,16 +11,16 @@ import { tmpdir } from "../../fixture/fixture"
 
 describe("tui optional state errors", () => {
   test("suppresses read-only and missing-file state errors from user-facing toasts", () => {
-    expect(isOptionalStateUnavailableError({ code: "ENOENT" })).toBeTrue()
-    expect(isOptionalStateUnavailableError({ code: "EACCES" })).toBeTrue()
-    expect(isOptionalStateUnavailableError({ code: "EPERM" })).toBeTrue()
-    expect(isOptionalStateUnavailableError({ code: "EROFS" })).toBeTrue()
-    expect(shouldSurfaceOptionalStateError({ code: "EPERM" })).toBeFalse()
+    expect(isOptionalStateUnavailableError({ code: "ENOENT" })).toBe(true)
+    expect(isOptionalStateUnavailableError({ code: "EACCES" })).toBe(true)
+    expect(isOptionalStateUnavailableError({ code: "EPERM" })).toBe(true)
+    expect(isOptionalStateUnavailableError({ code: "EROFS" })).toBe(true)
+    expect(shouldSurfaceOptionalStateError({ code: "EPERM" })).toBe(false)
   })
 
   test("still surfaces unexpected state errors", () => {
-    expect(isOptionalStateUnavailableError(new Error("boom"))).toBeFalse()
-    expect(shouldSurfaceOptionalStateError(new Error("boom"))).toBeTrue()
+    expect(isOptionalStateUnavailableError(new Error("boom"))).toBe(false)
+    expect(shouldSurfaceOptionalStateError(new Error("boom"))).toBe(true)
   })
 
   test("formats fallback messages for non-error values", () => {

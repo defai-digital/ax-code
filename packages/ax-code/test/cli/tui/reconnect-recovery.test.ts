@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { setTimeout as sleep } from "node:timers/promises"
 import { createReconnectRecoveryGate, RECONNECT_STABILIZE_MS } from "../../../src/cli/cmd/tui/util/reconnect-recovery"
 
 // Wait long enough for the stabilization timer to fire.
@@ -19,7 +20,7 @@ describe("createReconnectRecoveryGate", () => {
 
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     await gate.waitForIdle()
 
     expect(calls).toBe(1)
@@ -47,7 +48,7 @@ describe("createReconnectRecoveryGate", () => {
     gate.onConnectionChange(true)
 
     // Stabilization timer fires only for the last reconnect
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     expect(calls).toBe(1)
 
     // Release first recovery — no second queued because the flaps
@@ -59,7 +60,7 @@ describe("createReconnectRecoveryGate", () => {
     // A new clean reconnect cycle triggers a fresh recovery
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     await gate.waitForIdle()
 
     expect(calls).toBe(2)
@@ -82,14 +83,14 @@ describe("createReconnectRecoveryGate", () => {
     gate.onConnectionChange(true)
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     expect(calls).toEqual(["recover:1"])
 
     // Second reconnect while first recovery is in-flight — queues
     // a pendingReconnect that runs after the first recovery completes.
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     // Still blocked on first recovery
     expect(calls).toEqual(["recover:1"])
 
@@ -118,11 +119,11 @@ describe("createReconnectRecoveryGate", () => {
     gate.onConnectionChange(true)
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
 
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
 
     releaseFirst?.()
     await expect(gate.waitForIdle()).resolves.toBeUndefined()
@@ -142,11 +143,11 @@ describe("createReconnectRecoveryGate", () => {
     gate.onConnectionChange(true) // reconnect — starts stabilization timer
 
     // Drop connection before stabilization completes
-    await Bun.sleep(RECONNECT_STABILIZE_MS / 2)
+    await sleep(RECONNECT_STABILIZE_MS / 2)
     gate.onConnectionChange(false)
 
     // Wait past where the timer would have fired
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     await gate.waitForIdle()
 
     // Recovery should NOT have run — connection dropped during stabilization
@@ -166,13 +167,13 @@ describe("createReconnectRecoveryGate", () => {
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
 
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     await expect(gate.waitForIdle()).rejects.toThrow("sync recover failed")
     expect(calls).toBe(1)
 
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     await expect(gate.waitForIdle()).rejects.toThrow("sync recover failed")
     expect(calls).toBe(2)
   })
@@ -190,7 +191,7 @@ describe("createReconnectRecoveryGate", () => {
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
 
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     await expect(gate.waitForIdle()).rejects.toThrow("async recover failed")
     expect(calls).toBe(1)
   })
@@ -207,10 +208,10 @@ describe("createReconnectRecoveryGate", () => {
     gate.onConnectionChange(false)
     gate.onConnectionChange(true)
 
-    await Bun.sleep(RECONNECT_STABILIZE_MS / 2)
+    await sleep(RECONNECT_STABILIZE_MS / 2)
     gate.dispose()
 
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     await gate.waitForIdle()
 
     expect(calls).toBe(0)
@@ -229,7 +230,7 @@ describe("createReconnectRecoveryGate", () => {
     oldRouteGate.onConnectionChange(false)
     oldRouteGate.onConnectionChange(true)
 
-    await Bun.sleep(RECONNECT_STABILIZE_MS / 2)
+    await sleep(RECONNECT_STABILIZE_MS / 2)
 
     oldRouteGate.dispose()
     oldSessionID = "session-stale"
@@ -244,7 +245,7 @@ describe("createReconnectRecoveryGate", () => {
     newRouteGate.onConnectionChange(false)
     newRouteGate.onConnectionChange(true)
 
-    await Bun.sleep(STABILIZE_WAIT)
+    await sleep(STABILIZE_WAIT)
     await oldRouteGate.waitForIdle()
     await newRouteGate.waitForIdle()
 

@@ -707,7 +707,7 @@ describe("tool.edit", () => {
     const apply = async (input: Input) => {
       await using tmp = await tmpdir({
         init: async (dir) => {
-          await Bun.write(path.join(dir, "test.txt"), input.content)
+          await fs.writeFile(path.join(dir, "test.txt"), input.content)
         },
       })
 
@@ -726,7 +726,7 @@ describe("tool.edit", () => {
             },
             ctx,
           )
-          return await Bun.file(filePath).text()
+          return await fs.readFile(filePath, "utf-8")
         },
       })
     }
@@ -933,7 +933,7 @@ describe("tool.edit", () => {
   })
 
   test("keeps symlink validation inside the FileTime lock", async () => {
-    const source = await Bun.file(path.join(__dirname, "../../src/tool/edit.ts")).text()
+    const source = await fs.readFile(path.join(__dirname, "../../src/tool/edit-impl.ts"), "utf-8")
     const lockStart = source.indexOf("await FileTime.withLock(filePath, async () => {")
     expect(lockStart).toBeGreaterThan(-1)
     const preLock = source.slice(0, lockStart)
@@ -944,7 +944,7 @@ describe("tool.edit", () => {
   })
 
   test("only retries normalized replacement when the converted match is absent", async () => {
-    const source = await Bun.file(path.join(__dirname, "../../src/tool/edit.ts")).text()
+    const source = await fs.readFile(path.join(__dirname, "../../src/tool/edit-impl.ts"), "utf-8")
     const replaceStart = source.indexOf("replaced = replace(contentOld, old, next, params.replaceAll)")
     expect(replaceStart).toBeGreaterThan(-1)
 
