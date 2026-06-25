@@ -15,7 +15,7 @@ import type { ProjectID } from "../project/schema"
 import { INDEXER_SEMANTIC_METHODS } from "../lsp/prewarm-profile"
 import { KeyedSerialQueue } from "../util/queue"
 import { toErrorMessage } from "../util/error-message"
-import { createHash } from "crypto"
+import { hash as bunCompatHash } from "../bun/node-compat"
 
 const log = Log.create({ service: "code-intelligence.builder" })
 // Line weight for the innermost-container size metric (lines * SCALE + chars).
@@ -600,7 +600,7 @@ export namespace CodeGraphBuilder {
     }
     timings.readFile = performance.now() - tRead
 
-        const sha = createHash("sha256").update(text).digest("hex")
+    const sha = bunCompatHash(text).toString()
     const size = text.length
 
     // Fast path: if the stored row for this path has the same content

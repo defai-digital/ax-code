@@ -160,7 +160,7 @@ function makeShell(base: ShellOpts = {}) {
   return tag
 }
 
-function hash(input: string | Uint8Array | ArrayBuffer) {
+export function hash(input: string | Uint8Array | ArrayBuffer) {
   const value =
     typeof input === "string"
       ? Buffer.from(input)
