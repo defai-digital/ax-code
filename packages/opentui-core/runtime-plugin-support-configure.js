@@ -33,4 +33,3 @@ export function ensureRuntimePluginSupport(options = {}) {
     return true;
 }
 export { createRuntimePlugin, runtimeModuleIdForSpecifier } from "./runtime-plugin.js";
-//# sourceMappingURL=runtime-plugin-support-configure.js.map

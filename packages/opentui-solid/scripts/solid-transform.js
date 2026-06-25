@@ -63,4 +63,3 @@ export async function transformSolidSource(code, options) {
     });
     return transformed?.code ?? code;
 }
-//# sourceMappingURL=solid-transform.js.map

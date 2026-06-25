@@ -10055,4 +10055,3 @@ Captured external output:
 export { h, isVNode, maybeMakeRenderable, wrapWithDelegates, instantiate, delegate, LayoutEvents, RenderableEvents, isRenderable, BaseRenderable, Renderable, RootRenderable, TextBufferView, EditBuffer, EditorView, convertThemeToStyles, SyntaxStyle, ANSI, BoxRenderable, TextBufferRenderable, CodeRenderable, isTextNodeRenderable, TextNodeRenderable, RootTextNodeRenderable, TextRenderable, NativeSpanFeed, defaultKeyAliases, mergeKeyAliases, mergeKeyBindings, getKeyBindingAction, buildKeyBindingsMap, capture, ConsolePosition, TerminalConsole, getObjectsInViewport, EditBufferRenderableEvents, isEditBufferRenderable, EditBufferRenderable, buildKittyKeyboardFlags, MouseEvent, MouseButton, createCliRenderer, CliRenderEvents, RendererControlState, CliRenderer };
 
 //# debugId=D566D64CFF69CBEF64756E2164756E21
-//# sourceMappingURL=index-07zpr2dg.js.map

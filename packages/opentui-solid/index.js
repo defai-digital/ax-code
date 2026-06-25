@@ -204,9 +204,45 @@ var useTimeline = (options = {}) => {
 import { createEffect, createMemo as createMemo2, getOwner, onCleanup as onCleanup2, runWithOwner, splitProps, untrack as untrack2 } from "solid-js/dist/solid.js";
 
 // src/reconciler.ts
-import { BaseRenderable, createTextAttributes, InputRenderable as InputRenderable2, InputRenderableEvents, isTextNodeRenderable, parseColor, Renderable, RootTextNodeRenderable, ScrollBoxRenderable as ScrollBoxRenderable2, SelectRenderable as SelectRenderable2, SelectRenderableEvents, TabSelectRenderable as TabSelectRenderable2, TabSelectRenderableEvents, TextNodeRenderable as TextNodeRenderable2, TextRenderable as TextRenderable2 } from "@ax-code/opentui-core";
-import { decodeHTML } from "entities";
+import { BaseRenderable, createTextAttributes as _createTextAttributes, InputRenderable as InputRenderable2, InputRenderableEvents, isTextNodeRenderable, parseColor as _parseColor, Renderable, RootTextNodeRenderable, ScrollBoxRenderable as ScrollBoxRenderable2, SelectRenderable as SelectRenderable2, SelectRenderableEvents, TabSelectRenderable as TabSelectRenderable2, TabSelectRenderableEvents, TextNodeRenderable as TextNodeRenderable2, TextRenderable as TextRenderable2 } from "@ax-code/opentui-core";
+import { decodeHTML as _decodeHTML } from "entities";
 import { useContext as useContext2 } from "solid-js/dist/solid.js";
+
+// Cached wrappers for hot-path functions to reduce repeated parsing
+const decodeHTMLCache = new Map();
+const DECODE_HTML_MAX_CACHE = 500;
+function decodeHTML(str) {
+  if (typeof str !== "string") return str;
+  if (decodeHTMLCache.has(str)) return decodeHTMLCache.get(str);
+  const result = _decodeHTML(str);
+  if (decodeHTMLCache.size >= DECODE_HTML_MAX_CACHE) decodeHTMLCache.clear();
+  decodeHTMLCache.set(str, result);
+  return result;
+}
+
+const parseColorCache = new Map();
+const PARSE_COLOR_MAX_CACHE = 100;
+function parseColor(color) {
+  if (color == null) return color;
+  if (parseColorCache.has(color)) return parseColorCache.get(color);
+  const result = _parseColor(color);
+  if (parseColorCache.size >= PARSE_COLOR_MAX_CACHE) parseColorCache.clear();
+  parseColorCache.set(color, result);
+  return result;
+}
+
+const textAttrsCache = new Map();
+const TEXT_ATTRS_MAX_CACHE = 50;
+function createTextAttributes(style) {
+  if (style == null) return 0;
+  // Create a stable key from the style object
+  const key = JSON.stringify(style);
+  if (textAttrsCache.has(key)) return textAttrsCache.get(key);
+  const result = _createTextAttributes(style);
+  if (textAttrsCache.size >= TEXT_ATTRS_MAX_CACHE) textAttrsCache.clear();
+  textAttrsCache.set(key, result);
+  return result;
+}
 
 // src/renderer/universal.js
 import { createRoot, createRenderEffect, createMemo, createComponent, untrack, mergeProps } from "solid-js/dist/solid.js";

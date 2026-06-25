@@ -73,4 +73,3 @@ export function createSolidTransformPlugin(input = {}) {
 }
 const solidTransformPlugin = createSolidTransformPlugin();
 export default solidTransformPlugin;
-//# sourceMappingURL=solid-plugin.js.map

@@ -64,4 +64,3 @@ export function ensureRuntimePluginSupport(options = {}) {
     };
     return true;
 }
-//# sourceMappingURL=runtime-plugin-support-configure.js.map

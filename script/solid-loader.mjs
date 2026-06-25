@@ -14,11 +14,18 @@ const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../p
 // Babel + presets come from @ax-code/opentui-solid's own dependency tree. Resolve
 // @ax-code/opentui-solid from the ax-code package (where it's a dependency), then
 // resolve its nested babel deps relative to its entry.
+// Lazy-load Babel only when a .tsx file is encountered (optimizes startup time).
 const pkgRequire = createRequire(pathToFileURL(path.join(pkgRoot, "package.json")).href)
 const osRequire = createRequire(pkgRequire.resolve("@ax-code/opentui-solid"))
-const babel = osRequire("@babel/core")
-const solidPreset = osRequire("babel-preset-solid")
-const tsPreset = osRequire("@babel/preset-typescript")
+let babel, solidPreset, tsPreset
+function getBabel() {
+  if (!babel) {
+    babel = osRequire("@babel/core")
+    solidPreset = osRequire("babel-preset-solid")
+    tsPreset = osRequire("@babel/preset-typescript")
+  }
+  return { babel, solidPreset, tsPreset }
+}
 
 const aliases = new Map([
   ["#db", pathToFileURL(path.join(pkgRoot, "src/storage/db.node.ts")).href],
@@ -68,6 +75,7 @@ registerHooks({
     if (url.startsWith("file:") && /\.tsx(\?|$)/.test(url)) {
       const file = fileURLToPath(url.replace(/\?.*$/, ""))
       const code = readFileSync(file, "utf8")
+      const { babel, solidPreset, tsPreset } = getBabel()
       const out = babel.transformSync(code, {
         filename: file,
         configFile: false,

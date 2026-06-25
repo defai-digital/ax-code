@@ -2,4 +2,3 @@ import { ensureRuntimePluginSupport } from "./runtime-plugin-support-configure.j
 export { ensureRuntimePluginSupport };
 export { createRuntimePlugin, runtimeModuleIdForSpecifier, } from "./runtime-plugin-support-configure.js";
 ensureRuntimePluginSupport();
-//# sourceMappingURL=runtime-plugin-support.js.map

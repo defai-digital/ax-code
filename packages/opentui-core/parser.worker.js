@@ -1396,4 +1396,3 @@ if (isWorkerRuntime) {
 }
 
 //# debugId=0D88AD8518CAE38D64756E2164756E21
-//# sourceMappingURL=parser.worker.js.map

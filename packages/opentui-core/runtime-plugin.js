@@ -470,4 +470,3 @@ export function createRuntimePlugin(input = {}) {
         },
     };
 }
-//# sourceMappingURL=runtime-plugin.js.map
