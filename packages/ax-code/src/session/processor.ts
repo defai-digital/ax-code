@@ -267,6 +267,12 @@ export namespace SessionProcessor {
           // intentionally do not reset.
           BlastRadius.resetToolCalls(input.sessionID)
         }
+        // Capture initial git snapshot before the first step so that
+        // step-start parts carry a baseline for computeDiff.  Without
+        // this, computeDiff never finds a `from` snapshot and always
+        // returns [], causing /diff to show "No file changes" even when
+        // files were modified.  See GitHub issue #301.
+        snapshot = await Snapshot.track()
         while (true) {
           blocked = false
           let currentText: MessageV2.TextPart | undefined
@@ -787,7 +793,12 @@ export namespace SessionProcessor {
                 case "start-step":
                   usedTools = false
                   receivedFinish = false
-                  snapshot = undefined
+                  // Do NOT reset `snapshot` here — it must carry forward from
+                  // the previous step-finish (or the initial track before the
+                  // loop) so that step-start parts record a valid baseline
+                  // for computeDiff.  Previously `snapshot = undefined` caused
+                  // every step-start to have no snapshot, making /diff always
+                  // empty (GitHub issue #301).
                   stepStartTime = Date.now()
                   stepParts = []
                   stepToolCallCount = 0
@@ -867,7 +878,12 @@ export namespace SessionProcessor {
                     },
                   }
                   if (usedTools) snapshot = await Snapshot.track()
-                  // Resolve async snapshot patch before batching synchronous DB writes
+                  // Save the current snapshot for the step-finish part.
+                  // Do NOT reset `snapshot` here — it must carry forward as
+                  // the baseline for the next step-start so that per-step
+                  // diffs and computeDiff always have valid from/to pairs.
+                  // Previously `snapshot = undefined` here caused step 2+
+                  // step-starts to lose their baseline (related to #301).
                   const stepSnapshot = snapshot
                   let patchData: { hash: string; files: string[] } | undefined
                   if (snapshot) {
@@ -877,7 +893,6 @@ export namespace SessionProcessor {
                     } catch (err) {
                       log.warn("snapshot patch failed", { error: err })
                     }
-                    snapshot = undefined
                   }
                   // Batch step-finish + message update + patch in one transaction
                   Database.transaction(() => {

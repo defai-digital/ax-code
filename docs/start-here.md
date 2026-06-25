@@ -97,7 +97,7 @@ ax-code mcp add
 ax-code doctor
 ```
 
-For Grok, choose the provider plan intentionally: `Grok Cloud API` uses an `XAI_API_KEY`; `Grok Build CLI` uses the local `grok` command and its CLI login/session.
+For Grok, `/connect` defaults to `Grok Build CLI`, which uses the local `grok` command and its CLI login/session. The hosted `Grok Cloud API` provider still works for explicit `xai` configuration or existing credentials, but is hidden from the default provider list.
 
 ## Doc Map
 

@@ -32,7 +32,6 @@ const NATIVE_PROVIDERS = new Set([
   "alibaba-token-plan",
   "alibaba-token-plan-cn",
   "github-copilot",
-  "xai",
   "zai-coding-plan",
   "claude-code",
   "gemini-cli",

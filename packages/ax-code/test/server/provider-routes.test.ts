@@ -3,7 +3,7 @@ import { Auth } from "../../src/auth"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { redactProviderInfo } from "../../src/server/routes/config"
-import { AxEnginePrepareBody, AxEngineStartBody } from "../../src/server/routes/provider"
+import { AxEnginePrepareBody, AxEngineStartBody, shouldShowProviderInList } from "../../src/server/routes/provider"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -42,7 +42,7 @@ describe("provider routes", () => {
     expect(await del.json()).toBe(true)
   })
 
-  test("shows x.ai, z.ai, and CLI providers on fresh config", async () => {
+  test("hides Grok Cloud API while showing z.ai and CLI providers on fresh config", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -53,13 +53,29 @@ describe("provider routes", () => {
 
         const body = (await response.json()) as { all: Array<{ id: string }> }
         const ids = body.all.map((provider) => provider.id)
-        expect(ids).toContain("xai")
+        expect(ids).not.toContain("xai")
         expect(ids).toContain("zai-coding-plan")
         expect(ids).toContain("grok-build-cli")
         expect(ids).toContain("qoder-cli")
         expect(ids).toContain("antigravity-cli")
       },
     })
+  })
+
+  test("allows explicitly enabled Grok Cloud API in provider list", () => {
+    expect(
+      shouldShowProviderInList({
+        key: "xai",
+        disabled: new Set(),
+      }),
+    ).toBe(false)
+    expect(
+      shouldShowProviderInList({
+        key: "xai",
+        disabled: new Set(),
+        enabled: new Set(["xai"]),
+      }),
+    ).toBe(true)
   })
 
   test("oauth authorize with invalid method index returns 400 not 500", async () => {

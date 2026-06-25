@@ -77,7 +77,7 @@ pnpm run desktop:build      # Must succeed
 
 ## Project Structure
 
-```
+```text
 desktop/packages/
   ui/        Shared React components, hooks, stores, and theme system
   web/       Web server (Express) + frontend (Vite) + CLI

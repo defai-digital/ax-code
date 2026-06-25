@@ -239,7 +239,6 @@ export function resolvePluginProviders(input: {
 
 export const DEFAULT_LOGIN_PROVIDER_IDS = new Set([
   "ax-code",
-  "xai",
   "zai-coding-plan",
   "alibaba-coding-plan",
   "alibaba-coding-plan-cn",
@@ -613,8 +612,7 @@ export const ProvidersLoginCommand = cmd({
         const priority: Record<string, number> = {
           "ax-code": 0,
           google: 1,
-          xai: 2,
-          "grok-build-cli": 3,
+          "grok-build-cli": 2,
         }
         const pluginProviders = resolvePluginProviders({
           hooks: await Plugin.list(),

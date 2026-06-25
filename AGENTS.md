@@ -12,7 +12,7 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 ## Toolchain
 
 - Package manager: pnpm `10.33.4` (`preinstall` enforces `only-allow pnpm`).
-- Runtime: Node.js `>=22` (`>=26` for the TUI / `--experimental-ffi`). Bun has been removed; scripts run via `tsx`.
+- Runtime: Node.js `>=24` (`>=26` for the TUI / `--experimental-ffi`). Bun has been removed; scripts run via `tsx`.
 - Rust toolchain: stable channel from `rust-toolchain.toml`, edition 2024, used for napi-rs crates under `crates/`.
 - Type checker: `tsgo` (TypeScript native preview) for `--noEmit` checks.
 - Formatting: Prettier with `semi: false` and `printWidth: 120`; run `tsx script/format.ts` when formatting is needed.
@@ -31,6 +31,16 @@ Run these from the repository root unless noted:
 - `pnpm run check:structure` - enforce repository structure guardrails.
 - `pnpm run setup:cli` - install the local `ax-code` launcher for this checkout. Use `pnpm run setup:cli -- --source` for a checkout-bound source launcher.
 - `ax-code doctor` - diagnose install, runtime, storage, and auth issues. Useful when debugging setup or environment problems.
+
+Desktop development (from repo root):
+
+- `pnpm run desktop:dev` — launch the Electron app in dev mode (via Turbo, depends on SDK build).
+- `pnpm run desktop:build` — build the Electron app for production.
+- `pnpm run desktop:typecheck` — typecheck all desktop packages (builds SDK first).
+- `pnpm run desktop:lint` — lint desktop packages.
+- `pnpm run desktop:test` — run desktop tests (builds SDK first).
+- `pnpm run check:desktop-boundaries` — check desktop package import boundaries (append `:strict` to fail on violation).
+- Desktop web dev servers: `cd desktop && pnpm run dev:web:hmr` (Vite HMR on port 5180 + Express API on port 3902) or `pnpm run dev:web:full` (Express-only on port 3001, no HMR).
 
 Do not run tests from the repository root:
 
@@ -155,6 +165,24 @@ A session-first terminal UI that connects to a headless ax-code server via HTTP/
 - **Multi-question support**: A single `question.asked` event can contain multiple sub-questions. `QuestionAnswerProgress` collects answers across sub-questions before sending the reply.
 - **UTF-8 safe cursor**: `cursor_position` is a char index (not byte index). `byte_index_at_char()` converts for `String::insert`/`String::remove` which require byte indices on code-point boundaries.
 
+## Desktop (`desktop/`)
+
+The Desktop app is an Electron + React workspace under `desktop/packages/`:
+
+| Package | Purpose |
+| --- | --- |
+| `packages/ui` | Shared React component library, hooks, stores, and theme system (source-level, no dev server). |
+| `packages/web` | Express API server + Vite frontend + CLI. Primary web development target. |
+| `packages/electron` | Electron app shell and native packaging. Depends on `ui` and `web`. |
+
+Turbo orchestrates the build graph: `@ax-code/sdk` → `ax-code-desktop` (ui+web) → `@ax-code/electron`. The SDK must be built before the desktop packages.
+
+**Desktop code style**: functional React components only, TypeScript strict mode (no `any` without justification), Tailwind v4 for styling, theme colors/typography from `packages/ui/src/lib/theme/` (do not add new ones), components must support light and dark themes.
+
+**Branding**: use "AX Code Desktop" for public product names and user-facing UI. Keep `openchamber` names only where required for compatibility with existing data, APIs, or package internals.
+
+**Boundary checks**: `script/check-desktop-boundaries.ts` enforces import restrictions between desktop packages. Run `pnpm run check:desktop-boundaries:strict` before submitting desktop changes.
+
 ## `packages/ax-code` Architecture
 
 **Entry point**: `src/index.ts` loads the OpenTUI SolidJS preload, then calls `cli/boot.ts` which sets up yargs, registers all commands (from `src/cli/cmd/`), and runs middleware (env init → DB migration → command dispatch). For the Node+TUI development path, `src/index-node-tui.ts` is the entry used by `pnpm dev` (it pre-imports the SolidJS loader and TUI conditions). A separate `src/index-compiled.ts` is used for standalone binary builds to avoid bundling Babel transforms.
@@ -272,6 +300,10 @@ Useful feature flags:
 - `AX_CODE_NATIVE_FS=1` - walker, glob, grep, and watcher paths.
 - `AX_CODE_NATIVE_DIFF=1` - edit replacer and fuzzy match paths.
 - `AX_CODE_NATIVE_PARSER=1` - tree-sitter symbol extraction paths.
+
+## VS Code Configuration
+
+The workspace `.vscode/settings.json` sets `typescript.tsserver.maxTsServerMemory: 8192` because `packages/ax-code` is large enough to exhaust the default TS server heap, causing phantom errors like "Cannot find module 'hono'". It also pins `typescript.tsdk` to the workspace TypeScript and enables `tsgo` (TypeScript Native Preview) as the language server when the extension is installed. The repo typecheck (`pnpm typecheck`) runs `tsgo`, so these settings make the in-editor experience match.
 
 ## Contribution Boundary
 
