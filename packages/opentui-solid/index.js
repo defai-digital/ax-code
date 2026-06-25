@@ -236,7 +236,14 @@ const TEXT_ATTRS_MAX_CACHE = 50;
 function createTextAttributes(style) {
   if (style == null) return 0;
   // Create a stable key from the style object
-  const key = JSON.stringify(style);
+  let key;
+  try {
+    key = JSON.stringify(style);
+  } catch {
+    // Circular or non-serializable object - skip cache
+    return _createTextAttributes(style);
+  }
+  if (key === undefined) return _createTextAttributes(style);
   if (textAttrsCache.has(key)) return textAttrsCache.get(key);
   const result = _createTextAttributes(style);
   if (textAttrsCache.size >= TEXT_ATTRS_MAX_CACHE) textAttrsCache.clear();

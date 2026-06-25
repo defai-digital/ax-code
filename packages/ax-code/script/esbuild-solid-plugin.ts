@@ -35,8 +35,18 @@ export function solidEsbuildPlugin(options: { moduleName?: string } = {}): Plugi
       build.onLoad({ filter: /\.tsx$/ }, async (args) => {
         if (args.path.includes("node_modules")) return null
         
-        // Check file cache
-        const stat = statSync(args.path)
+        // Check file cache (skip if stat fails)
+        let stat
+        try {
+          stat = statSync(args.path)
+        } catch {
+          // File may have been deleted or is inaccessible - skip caching
+          const code = await fs.readFile(args.path, "utf8")
+          const transform = await getTransform()
+          const result = await transform(code, { moduleName, filename: args.path })
+          return { contents: typeof result === "string" ? result : (result.code ?? ""), loader: "js" }
+        }
+        
         const cached = fileCache.get(args.path)
         if (cached && cached.mtime === stat.mtimeMs) {
           return { contents: cached.contents, loader: "js" }
