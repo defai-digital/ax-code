@@ -4,6 +4,7 @@ import { useDialog } from "./dialog"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import { useKeybind } from "@tui/context/keybind"
 import { createMemo, For } from "solid-js"
+import { dialogHelpBodyHeight } from "./dialog-help-view-model"
 
 const GROUPS = [
   {
@@ -67,7 +68,15 @@ export function DialogHelp() {
   const { theme } = useTheme()
   const keybind = useKeybind()
   const dimensions = useTerminalDimensions()
-  const maxBodyHeight = createMemo(() => Math.max(1, Math.min(GROUPS.length * 8, dimensions().height - 8)))
+  const contentRows = createMemo(() => {
+    return GROUPS.reduce((rows, group) => {
+      const visibleBinds = group.binds.filter((bind) => keybind.print(bind.key)).length
+      return rows + 1 + visibleBinds
+    }, 0)
+  })
+  const maxBodyHeight = createMemo(() =>
+    dialogHelpBodyHeight({ contentRows: contentRows(), terminalHeight: dimensions().height }),
+  )
   let scroll: ScrollBoxRenderable | undefined
 
   useKeyboard((evt) => {
