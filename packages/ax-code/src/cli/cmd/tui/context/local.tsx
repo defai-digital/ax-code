@@ -393,6 +393,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const val = recent[next]
           if (!val) return
           setModelStore("model", agent.current().name, { ...val })
+          save()
         },
         cycleFavorite(direction: 1 | -1) {
           const favorites = modelStore.favorite.filter((item) => isModelValid(item))
