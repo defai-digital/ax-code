@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.6] - 2026-06-25
+
+### Fixed
+
+- Runtime: replaced direct `Bun.*` API usage in shared CLI paths with Node-native compatibility helpers so bundled Node runtime surfaces stay Bun-free.
+
 ## [6.7.5] - 2026-06-25
 
 ### Fixed
