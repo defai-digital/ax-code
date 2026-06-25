@@ -28,6 +28,7 @@ import { ProjectIdentity } from "../../project/project-identity"
 import { isLoopbackHostname } from "../../runtime/listen-security"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import type { Isolation as IsolationConfig } from "../../config/schema"
+import { access } from "fs/promises"
 import { Isolation } from "../../isolation"
 import { toErrorMessage } from "@/util/error-message"
 import { isPlausiblySupportedHost } from "@/provider/ax-engine/platform"
@@ -44,7 +45,7 @@ export function getRuntimeCheck(): DoctorCheck {
     // not), so node-source/source runs report Node, not a shimmed `Bun.version`
     // that is really the Node version.
     detail: process.versions.bun
-      ? `Bun ${Bun.version} (${runtimeMode()})`
+      ? `Bun ${process.versions.bun} (${runtimeMode()})`
       : `Node ${process.version} (${runtimeMode()})`,
   }
 }
@@ -142,7 +143,12 @@ export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEn
 }
 
 async function exists(file: string) {
-  return Bun.file(file).exists()
+  try {
+    await access(file)
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function findAncestor(start: string, predicate: (dir: string) => Promise<boolean>) {
@@ -334,7 +340,7 @@ export const DoctorCommand: CommandModule = {
     // 8. Git
     const gitExists =
       project.projectRoot !== project.callerCwd ||
-      (await Bun.file(path.join(project.callerCwd, ".git", "HEAD")).exists())
+      (await exists(path.join(project.callerCwd, ".git", "HEAD")))
     checks.push({
       name: "Git repository",
       status: gitExists ? "ok" : "warn",
@@ -430,16 +436,23 @@ export const DoctorCommand: CommandModule = {
         })
       } else {
         // Check if something else owns the port
-        const portBlocked = await Bun.connect({
-          hostname: "127.0.0.1",
-          port: tuiPort,
-          socket: { open() {}, data() {}, close() {}, error() {} },
-        })
-          .then((s) => {
-            s.end()
-            return true
+        const portBlocked = await new Promise<boolean>((resolve) => {
+          const net = require("net")
+          const socket = new net.Socket()
+          socket.setTimeout(1000)
+          socket.on("connect", () => {
+            socket.end()
+            resolve(true)
           })
-          .catch(() => false)
+          socket.on("error", () => {
+            resolve(false)
+          })
+          socket.on("timeout", () => {
+            socket.destroy()
+            resolve(false)
+          })
+          socket.connect(tuiPort, "127.0.0.1")
+        })
 
         checks.push({
           name: "TUI server",
@@ -463,7 +476,7 @@ export const DoctorCommand: CommandModule = {
     // 12. Code intelligence index status
     try {
       const indexDb = path.join(Global.Path.data, "ax-code-index.db")
-      const indexExists = await Bun.file(indexDb).exists()
+      const indexExists = await exists(indexDb)
       if (indexExists) {
         checks.push({
           name: "Code index",

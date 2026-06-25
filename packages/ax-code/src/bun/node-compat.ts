@@ -276,7 +276,7 @@ function charWidth(cp: number): number {
   return 1
 }
 
-function stringWidth(input: string) {
+export function stringWidth(input: string) {
   let width = 0
   for (const ch of stripAnsi(input)) width += charWidth(ch.codePointAt(0) ?? 0)
   return width
@@ -286,7 +286,7 @@ function which(command: string): string | null {
   return whichLib.sync(command, { nothrow: true })
 }
 
-function resolveSync(id: string, parent: string): string {
+export function resolveSync(id: string, parent: string): string {
   // Bun.resolveSync(id, dir) resolves relative to a directory. createRequire
   // needs a "from" path; a (possibly non-existent) file inside the dir gives
   // node the right resolution base. Throws on failure, like Bun.resolveSync.

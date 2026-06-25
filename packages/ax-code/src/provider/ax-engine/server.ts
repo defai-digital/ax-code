@@ -148,16 +148,24 @@ async function waitForReady(baseURL: string, signal?: AbortSignal) {
 }
 
 async function portOpen(port: number) {
-  return Bun.connect({
-    hostname: "127.0.0.1",
-    port,
-    socket: { open() {}, data() {}, close() {}, error() {} },
-  })
-    .then((socket) => {
+  return new Promise<boolean>((resolve) => {
+    const net = require("net")
+    const socket = new net.Socket()
+    
+    socket.setTimeout(1000)
+    socket.on("connect", () => {
       socket.end()
-      return true
+      resolve(true)
     })
-    .catch(() => false)
+    socket.on("error", () => {
+      resolve(false)
+    })
+    socket.on("timeout", () => {
+      socket.destroy()
+      resolve(false)
+    })
+    socket.connect(port, "127.0.0.1")
+  })
 }
 
 async function selectPort(preferredPort?: number) {

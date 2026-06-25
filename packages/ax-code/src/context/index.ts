@@ -10,6 +10,7 @@ import path from "path"
 import { analyze, type DepthLevel, type ProjectInfo } from "./analyzer"
 import { generate } from "./generator"
 import { Log } from "../util/log"
+import { readFile, writeFile, access } from "fs/promises"
 
 export { type DepthLevel, type ProjectInfo } from "./analyzer"
 
@@ -39,17 +40,22 @@ export namespace Context {
 
     log.info("analyzing project", { root, depth })
 
-    const file = Bun.file(outputPath)
-    if ((await file.exists()) && !opts.force) {
-      log.info("AGENTS.md already exists, use --force to regenerate")
-      const content = await file.text()
-      const info = await analyze(root)
-      return {
-        path: outputPath,
-        content,
-        info,
-        created: false,
+    let existingContent: string | undefined
+    try {
+      await access(outputPath)
+      if (!opts.force) {
+        log.info("AGENTS.md already exists, use --force to regenerate")
+        existingContent = await readFile(outputPath, "utf-8")
+        const info = await analyze(root)
+        return {
+          path: outputPath,
+          content: existingContent,
+          info,
+          created: false,
+        }
       }
+    } catch {
+      // File doesn't exist, continue
     }
 
     const info = await analyze(root)
@@ -65,7 +71,7 @@ export namespace Context {
       }
     }
 
-    await Bun.write(outputPath, content)
+    await writeFile(outputPath, content, "utf-8")
     log.info("wrote AGENTS.md", { path: outputPath, lines: content.split("\n").length })
 
     return {
@@ -77,9 +83,13 @@ export namespace Context {
   }
 
   export async function read(root: string): Promise<string | null> {
-    const primary = Bun.file(path.join(root, OUTPUT_FILENAME))
-    if (await primary.exists()) return primary.text()
-    return null
+    const outputPath = path.join(root, OUTPUT_FILENAME)
+    try {
+      await access(outputPath)
+      return await readFile(outputPath, "utf-8")
+    } catch {
+      return null
+    }
   }
 
   export async function refresh(root: string, depth?: DepthLevel): Promise<InitResult> {

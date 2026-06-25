@@ -957,8 +957,10 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(prompt).toContain("function stringIndexFromDisplayOffset(")
     expect(prompt).toContain("const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)")
-    expect(prompt).toContain("input.cursorOffset === Bun.stringWidth(input.plainText)")
-    expect(prompt).toContain("input.cursorOffset = Bun.stringWidth(input.plainText)")
+    // stringWidth is now imported from @/bun/node-compat (Bun→Node migration),
+    // so the guard checks the imported helper rather than the Bun global.
+    expect(prompt).toContain("input.cursorOffset === stringWidth(input.plainText)")
+    expect(prompt).toContain("input.cursorOffset = stringWidth(input.plainText)")
     expect(prompt).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
     expect(prompt).toContain("if (!sessionChanged && msg.model) local.model.set(msg.model)")
     expect(prompt).toContain("raw.replace(/(?:<)?\\d+;\\d+;\\d+[Mm]/g")
@@ -1089,7 +1091,9 @@ describe("tui OpenTUI stability guardrails", () => {
   test("keeps doctor checking the OpenTUI preload dependency with bundled-runtime awareness", async () => {
     const doctor = await fs.readFile(DOCTOR_PRELOAD_SRC, "utf8")
 
-    expect(doctor).toContain("Bun.resolveSync")
+    // resolveSync is now imported from ../../bun/node-compat (Bun→Node
+    // migration) instead of the Bun global.
+    expect(doctor).toContain("resolveFn(")
     expect(doctor).toContain('"@opentui/solid/preload"')
     expect(doctor).toContain("Bundled runtime")
     expect(doctor).toContain("source/dev TUI may fail to start")

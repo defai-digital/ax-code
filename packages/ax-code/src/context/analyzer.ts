@@ -12,6 +12,7 @@ import { toErrorMessage } from "../util/error-message"
 import { Log } from "../util/log"
 import { isNonEmptyRecord } from "../util/record"
 import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../util/package-json"
+import { Glob } from "@/bun/node-compat"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
 export type DepthLevel = "basic" | "standard" | "full" | "security"
@@ -403,7 +404,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
   const sourceDir = info.directories.source
   if (sourceDir) {
     try {
-      const glob = new Bun.Glob("**/*.{ts,tsx,js,jsx,py,go,rs}")
+      const glob = new Glob("**/*.{ts,tsx,js,jsx,py,go,rs}")
       const batch: string[] = []
       const cwd = path.join(root, sourceDir)
       for await (const file of glob.scan({ cwd, onlyFiles: true })) {
@@ -412,9 +413,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
           const batchToRead = batch.splice(0, Math.max(0, 5000 - fileCount))
           const results = await Promise.all(
             batchToRead.map((f) =>
-              Bun.file(path.join(cwd, f))
-                .text()
-                .catch(() => ""),
+              readFile(path.join(cwd, f), "utf-8").catch(() => ""),
             ),
           )
           for (const content of results) {
@@ -429,9 +428,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
         const batchToRead = batch.slice(0, 5000 - fileCount)
         const results = await Promise.all(
           batchToRead.map((f) =>
-            Bun.file(path.join(cwd, f))
-              .text()
-              .catch(() => ""),
+            readFile(path.join(cwd, f), "utf-8").catch(() => ""),
           ),
         )
         for (const content of results) {

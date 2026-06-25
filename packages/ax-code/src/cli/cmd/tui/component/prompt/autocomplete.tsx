@@ -25,6 +25,7 @@ import { commandAutocompleteSuffix } from "./autocomplete-command"
 import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
+import { stringWidth } from "@/bun/node-compat"
 
 export type AutocompleteGroupEntry =
   | { type: "header"; label: string }
@@ -200,7 +201,7 @@ export function Autocomplete(props: {
 
     const virtualText = "@" + text
     const extmarkStart = store.index
-    const extmarkEnd = extmarkStart + Bun.stringWidth(virtualText)
+    const extmarkEnd = extmarkStart + stringWidth(virtualText)
 
     const styleId = part.type === "file" ? props.fileStyleId : part.type === "agent" ? props.agentStyleId : undefined
 
@@ -419,7 +420,7 @@ export function Autocomplete(props: {
           const cursor = props.input().logicalCursor
           props.input().deleteRange(0, 0, cursor.row, cursor.col)
           props.input().insertText(newText)
-          props.input().cursorOffset = Bun.stringWidth(newText)
+          props.input().cursorOffset = stringWidth(newText)
         },
       })
     }

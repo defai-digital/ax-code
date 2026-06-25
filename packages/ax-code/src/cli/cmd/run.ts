@@ -406,7 +406,13 @@ export const RunCommand = cmd({
       }
     }
 
-    if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
+    if (!process.stdin.isTTY) {
+      const chunks: Buffer[] = []
+      for await (const chunk of process.stdin) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      }
+      message += "\n" + Buffer.concat(chunks).toString("utf8")
+    }
 
     if (message.trim().length === 0 && !args.command) {
       exitEarly("You must provide a message or a command")

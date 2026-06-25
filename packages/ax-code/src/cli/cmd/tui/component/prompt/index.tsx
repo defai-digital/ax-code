@@ -28,6 +28,7 @@ import {
 } from "solid-js"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
+import { stringWidth } from "@/bun/node-compat"
 import { providerModelKey } from "@/provider/model-key"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
@@ -141,7 +142,7 @@ function stringIndexFromDisplayOffset(text: string, displayOffset: number) {
   let index = 0
   for (const char of text) {
     if (width >= displayOffset) break
-    width += Bun.stringWidth(char)
+    width += stringWidth(char)
     index += char.length
   }
   return index
@@ -835,7 +836,7 @@ export function Prompt(props: PromptProps) {
             parts: updatedNonTextParts,
           })
           restoreExtmarksFromParts(updatedNonTextParts)
-          input.cursorOffset = Bun.stringWidth(content)
+          input.cursorOffset = stringWidth(content)
         },
       },
       {
@@ -1738,7 +1739,7 @@ export function Prompt(props: PromptProps) {
                 if (!autocomplete?.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
-                    (keybind.match("history_next", e) && input.cursorOffset === Bun.stringWidth(input.plainText))
+                    (keybind.match("history_next", e) && input.cursorOffset === stringWidth(input.plainText))
                   ) {
                     const direction = keybind.match("history_previous", e) ? -1 : 1
                     const item = history.move(direction, input.plainText)
@@ -1750,14 +1751,14 @@ export function Prompt(props: PromptProps) {
                       restoreExtmarksFromParts(item.parts)
                       e.preventDefault()
                       if (direction === -1) input.cursorOffset = 0
-                      if (direction === 1) input.cursorOffset = Bun.stringWidth(input.plainText)
+                      if (direction === 1) input.cursorOffset = stringWidth(input.plainText)
                     }
                     return
                   }
 
                   if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
                   if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
-                    input.cursorOffset = Bun.stringWidth(input.plainText)
+                    input.cursorOffset = stringWidth(input.plainText)
                 }
               }}
               onPaste={async (event: PasteEvent) => {

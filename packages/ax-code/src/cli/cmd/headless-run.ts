@@ -123,7 +123,13 @@ export const HeadlessRunCommand = cmd({
     })()
 
     let message = [...args.message, ...(args["--"] || [])].join(" ")
-    if (!process.stdin.isTTY) message += "\n" + (await Bun.stdin.text())
+    if (!process.stdin.isTTY) {
+      const chunks: Buffer[] = []
+      for await (const chunk of process.stdin) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+      }
+      message += "\n" + Buffer.concat(chunks).toString("utf8")
+    }
     if (!message.trim() && !args.command && !args.transportSmoke && !args.commandSmoke) {
       throw new Error("headless-run requires a message, --command, --transport-smoke, or --command-smoke")
     }

@@ -5,6 +5,8 @@ import { Flag } from "../flag/flag"
 import { Instance } from "../project/instance"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
+import { createHash } from "crypto"
+import { readFile } from "fs/promises"
 
 export namespace LSPCache {
   const log = Log.create({ service: "lsp.cache" })
@@ -64,9 +66,10 @@ export namespace LSPCache {
 
   export async function hashFile(file: string): Promise<string | undefined> {
     try {
-      // Keep Bun.hash for compatibility with cache entries written by older versions.
-      const buf = await Bun.file(file).arrayBuffer()
-      return Bun.hash(new Uint8Array(buf)).toString()
+      // Node.js compatible replacement for Bun.file/hash
+      const content = await readFile(file)
+      const hash = createHash("sha256").update(content).digest("hex")
+      return hash
     } catch (err) {
       log.warn("cache: failed to hash file; skipping cache", { file, err: toErrorMessage(err) })
       return undefined

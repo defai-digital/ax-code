@@ -2,6 +2,7 @@ import path from "path"
 import { createRequire } from "module"
 import { Installation } from "../../installation"
 import { runtimeMode, type RuntimeMode } from "../../installation/runtime-mode"
+import { resolveSync } from "../../bun/node-compat"
 
 export type DoctorCheck = {
   name: string
@@ -57,7 +58,8 @@ export function getTuiPreloadCheck(input: TuiPreloadCheckInput = {}): DoctorChec
   }
 
   try {
-    const preloadPath = (input.resolveSync ?? Bun.resolveSync)(
+    const resolveFn = input.resolveSync ?? resolveSync
+    const preloadPath = resolveFn(
       "@opentui/solid/preload",
       input.importMetaDir ?? import.meta.dirname,
     )
