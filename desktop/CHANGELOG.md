@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.5] - 2026-06-25
+
+### Fixed
+
+- Prompt: clarified `@` autocomplete grouping for files, resources, and subagents, and hardened subagent instruction generation for malformed permission rulesets.
+- Session: restored the `/diff` baseline snapshot so `/diff` reports file changes made during the agent step.
+- Providers: hid Grok Cloud API from the default provider connection lists while preserving explicit configuration support.
+
 ## [6.7.4] - 2026-06-24
 
 ### Fixed
