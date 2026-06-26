@@ -3,11 +3,11 @@ import * as coreRuntime from "@ax-code/opentui-core";
 import { createRuntimePlugin, isCoreRuntimeModuleSpecifier, runtimeModuleIdForSpecifier, } from "@ax-code/opentui-core/runtime-plugin";
 import * as solidJsRuntime from "solid-js";
 import * as solidJsStoreRuntime from "solid-js/store";
-import * as solidRuntime from "@opentui/solid";
+import * as solidRuntime from "@ax-code/opentui-solid";
 import { ensureSolidTransformPlugin } from "./solid-plugin.js";
 const runtimePluginSupportInstalledKey = Symbol.for("opentui.solid.runtime-plugin-support");
 const defaultRuntimeModules = {
-    "@opentui/solid": solidRuntime,
+    "@ax-code/opentui-solid": solidRuntime,
     "solid-js": solidJsRuntime,
     "solid-js/store": solidJsStoreRuntime,
 };
@@ -23,7 +23,7 @@ function createRuntimeModules(options) {
 function assertCompatibleInstall(install, modules, options) {
     for (const specifier of Object.keys(modules)) {
         if (!install.specifiers.has(specifier)) {
-            throw new Error(`OpenTUI Solid runtime plugin support is already installed without ${specifier}. Call ensureRuntimePluginSupport({ additional }) from @opentui/solid/runtime-plugin-support/configure before importing @opentui/solid/runtime-plugin-support.`);
+            throw new Error(`OpenTUI Solid runtime plugin support is already installed without ${specifier}. Call ensureRuntimePluginSupport({ additional }) from @ax-code/opentui-solid/runtime-plugin-support/configure before importing @ax-code/opentui-solid/runtime-plugin-support.`);
         }
     }
     if (options?.core && options.core !== install.core) {
@@ -44,7 +44,7 @@ export function ensureRuntimePluginSupport(options = {}) {
         return false;
     }
     ensureSolidTransformPlugin({
-        moduleName: runtimeModuleIdForSpecifier("@opentui/solid"),
+        moduleName: runtimeModuleIdForSpecifier("@ax-code/opentui-solid"),
         resolvePath(specifier) {
             if (!isCoreRuntimeModuleSpecifier(specifier) && !modules[specifier]) {
                 return null;

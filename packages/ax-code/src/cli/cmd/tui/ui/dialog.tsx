@@ -1,7 +1,7 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
 import { batch, createContext, onCleanup, Show, useContext, type JSX, type ParentProps } from "solid-js"
 import { useTheme } from "@tui/context/theme"
-import { MouseButton, Renderable, RGBA } from "@ax-code/opentui-core"
+import { MouseButton, Renderable, RGBA, type MouseEvent } from "@ax-code/opentui-core"
 import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
 import { RoundedBorder } from "./primitives/card"
@@ -43,11 +43,11 @@ export function Dialog(
       backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
     >
       <box
-        onMouseDown={(e) => {
+        onMouseDown={(e: MouseEvent) => {
           dismiss = false
           e.stopPropagation()
         }}
-        onMouseUp={(e) => {
+        onMouseUp={(e: MouseEvent) => {
           dismiss = false
           e.stopPropagation()
         }}
@@ -172,7 +172,7 @@ export function DialogProvider(props: ParentProps) {
       {props.children}
       <box
         position="absolute"
-        onMouseDown={(evt) => {
+        onMouseDown={(evt: MouseEvent) => {
           if (!Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
           if (evt.button !== MouseButton.RIGHT) return
 

@@ -1,4 +1,4 @@
-import { createComponent, createElement, spread } from "@opentui/solid";
+import { createComponent, createElement, spread } from "@ax-code/opentui-solid";
 function normalizeProps(props) {
     if (!props) {
         return {};

@@ -284,7 +284,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           <input
             onSubmit={confirmSelected}
             keyBindings={[{ name: "return", action: "submit" }]}
-            onInput={(e) => {
+            onInput={(e: string) => {
               batch(() => {
                 setStore("filter", e)
                 props.onFilter?.(e)
@@ -293,7 +293,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             focusedBackgroundColor={theme.backgroundElement}
             cursorColor={theme.primary}
             focusedTextColor={theme.textMuted}
-            ref={(r) => {
+            ref={(r: InputRenderable) => {
               input = r
               const cancel = scheduleMicrotaskTask(() => {
                 if (!input) return

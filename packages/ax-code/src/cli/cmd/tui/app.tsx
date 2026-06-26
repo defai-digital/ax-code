@@ -1,7 +1,7 @@
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
-import { MouseButton, TextAttributes } from "@ax-code/opentui-core"
+import { MouseButton, TextAttributes, type MouseEvent } from "@ax-code/opentui-core"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import {
   type Component,
@@ -1285,7 +1285,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       width={dimensions().width}
       height={dimensions().height}
       backgroundColor={theme.background}
-      onMouseDown={(evt) => {
+      onMouseDown={(evt: MouseEvent) => {
         if (!Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
         if (evt.button !== MouseButton.RIGHT) return
 

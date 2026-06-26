@@ -291,7 +291,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         .getPalette({
           size: 16,
         })
-        .then((colors) => {
+        .then((colors: TerminalColors) => {
           const detectedMode = detectTerminalMode(colors)
           const nextMode = store.lock ? store.mode : (detectedMode ?? mode)
           if (!store.lock && detectedMode && store.mode !== detectedMode) {

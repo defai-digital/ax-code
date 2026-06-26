@@ -1610,7 +1610,7 @@ export function Prompt(props: PromptProps) {
         agentStyleId={agentStyleId}
         promptPartTypeId={() => promptPartTypeId}
       />
-      <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
+      <box ref={(r: BoxRenderable) => (anchor = r)} visible={props.visible !== false}>
         <Card accentColor={highlight()}>
           <box paddingLeft={2} paddingRight={2} flexShrink={0} backgroundColor={theme.backgroundElement} flexGrow={1}>
             <textarea
@@ -1635,7 +1635,7 @@ export function Prompt(props: PromptProps) {
                 syncExtmarksWithPromptParts()
               }}
               keyBindings={textareaKeybindings()}
-              onKeyDown={async (e) => {
+              onKeyDown={async (e: KeyEvent) => {
                 const pendingIntent = pendingSubmitKeyIntent({
                   pending: submitPending() || submitInFlight,
                   appExit: keybind.match("app_exit", e),

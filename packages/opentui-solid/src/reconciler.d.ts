@@ -1,4 +1,4 @@
-import { BaseRenderable } from "@opentui/core";
+import { BaseRenderable } from "@ax-code/opentui-core";
 import { SlotRenderable } from "./elements/index.js";
 export type DomNode = BaseRenderable;
 export declare function createSlotNode(): SlotRenderable;

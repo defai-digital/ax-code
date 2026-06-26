@@ -46,7 +46,7 @@ export async function transformSolidSource(code, options) {
         presets.push([
             solid,
             {
-                moduleName: options.moduleName ?? "@opentui/solid",
+                moduleName: options.moduleName ?? "@ax-code/opentui-solid",
                 generate: "universal",
             },
         ]);

@@ -1,8 +1,8 @@
-import { CliRenderer, type CliRendererConfig } from "@opentui/core";
-import { type TestRendererOptions } from "@opentui/core/testing";
+import { CliRenderer, type CliRendererConfig } from "@ax-code/opentui-core";
+import { type TestRendererOptions } from "@ax-code/opentui-core/testing";
 import type { JSX } from "./jsx-runtime.js";
 export declare const render: (node: () => JSX.Element, rendererOrConfig?: CliRenderer | CliRendererConfig) => Promise<void>;
-export declare const testRender: (node: () => JSX.Element, renderConfig?: TestRendererOptions) => Promise<import("@opentui/core/testing").TestRendererSetup>;
+export declare const testRender: (node: () => JSX.Element, renderConfig?: TestRendererOptions) => Promise<import("@ax-code/opentui-core/testing").TestRendererSetup>;
 export * from "./src/reconciler.js";
 export * from "./src/elements/index.js";
 export * from "./src/scrollback.js";

@@ -68,8 +68,8 @@ export function InlineTool(props: {
         if (renderer.getSelection()?.getSelectedText()) return
         props.onClick?.()
       }}
-      renderBefore={function () {
-        const el = this as BoxRenderable
+      renderBefore={function (this: BoxRenderable) {
+        const el = this
         const parent = el.parent
         if (!parent) {
           return

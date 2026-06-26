@@ -1,4 +1,4 @@
-import { type RuntimeModuleEntry, type RuntimePluginRewriteOptions } from "@opentui/core/runtime-plugin";
+import { type RuntimeModuleEntry, type RuntimePluginRewriteOptions } from "@ax-code/opentui-core/runtime-plugin";
 export interface SolidRuntimePluginSupportOptions {
     additional?: Record<string, RuntimeModuleEntry>;
     core?: RuntimeModuleEntry;

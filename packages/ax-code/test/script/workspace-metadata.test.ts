@@ -29,11 +29,19 @@ describe("script.workspace-metadata", () => {
   test("OpenTUI dependencies stay on the validated renderer set", async () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
+    const tsconfig = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/tsconfig.json"), "utf8"))
     const dependencies = packageJson.dependencies ?? {}
 
     expect(dependencies["@ax-code/opentui-core"]).toBe("workspace:*")
     expect(dependencies["@ax-code/opentui-solid"]).toBe("workspace:*")
     expect(dependencies["@ax-code/opentui-keymap"]).toBeUndefined()
     expect(dependencies["@ax-code/opentui-spinner"]).toBe("workspace:*")
+    expect(tsconfig.compilerOptions?.jsxImportSource).toBe("@ax-code/opentui-solid")
+  })
+
+  test("vendored OpenTUI JSX runtime resolves through the scoped workspace package", async () => {
+    await expect(import("@ax-code/opentui-solid/jsx-runtime")).resolves.toMatchObject({
+      jsx: expect.any(Function),
+    })
   })
 })

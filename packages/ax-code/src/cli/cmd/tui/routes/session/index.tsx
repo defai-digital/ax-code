@@ -1024,7 +1024,7 @@ export function Session() {
               </box>
             </Show>
             <scrollbox
-              ref={(r) => (scroll = r)}
+              ref={(r: ScrollBoxRenderable) => (scroll = r)}
               viewportOptions={{
                 paddingRight: showScrollbar() ? 1 : 0,
               }}

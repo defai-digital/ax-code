@@ -1,4 +1,4 @@
-import { type CliRenderer, type ScrollbackRenderContext, type ScrollbackWriter } from "@opentui/core";
+import { type CliRenderer, type ScrollbackRenderContext, type ScrollbackWriter } from "@ax-code/opentui-core";
 import { type JSX } from "solid-js";
 export interface SolidScrollbackWriterOptions {
     width?: number;

@@ -1,4 +1,4 @@
-import { SlotRegistry, type CliRenderer, type Plugin, type PluginContext, type PluginErrorEvent, type SlotMode, type SlotRegistryOptions } from "@opentui/core";
+import { SlotRegistry, type CliRenderer, type Plugin, type PluginContext, type PluginErrorEvent, type SlotMode, type SlotRegistryOptions } from "@ax-code/opentui-core";
 import { type JSX } from "solid-js";
 export type { SlotMode };
 type SlotMap = Record<string, object>;

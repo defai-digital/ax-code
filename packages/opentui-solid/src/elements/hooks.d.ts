@@ -1,4 +1,4 @@
-import { PasteEvent, Selection, Timeline, type CliRenderer, type KeyEvent, type TimelineOptions } from "@opentui/core";
+import { PasteEvent, Selection, Timeline, type CliRenderer, type KeyEvent, type TimelineOptions } from "@ax-code/opentui-core";
 export declare const RendererContext: import("solid-js").Context<CliRenderer | undefined>;
 export declare const useRenderer: () => CliRenderer;
 export declare const onResize: (callback: (width: number, height: number) => void) => void;

@@ -6,7 +6,7 @@ const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 const structureScript = path.join(repoRoot, "script/structure.ts")
 
 async function runStructureScript() {
-  const result = spawnSync("tsx", [structureScript], {
+  const result = spawnSync(process.execPath, ["--import", "tsx", structureScript], {
     cwd: repoRoot,
     encoding: "utf-8",
   })

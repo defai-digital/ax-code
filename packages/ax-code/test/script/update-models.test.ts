@@ -4,20 +4,25 @@ import path from "path"
 import { readFile, writeFile } from "node:fs/promises"
 import { spawnSync } from "node:child_process"
 
+const packageRoot = path.join(import.meta.dirname, "../..")
+const updateModelsScript = path.join(packageRoot, "script/update-models.ts")
+
+function runUpdateModels(env: NodeJS.ProcessEnv) {
+  return spawnSync(process.execPath, ["--import", "tsx", updateModelsScript], {
+    env,
+    cwd: packageRoot,
+  })
+}
+
 describe("update-models script", () => {
   test("fetches models and writes snapshot", async () => {
     await using tmp = await tmpdir()
     const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
 
-    const result = spawnSync("tsx",
-      [path.join(import.meta.dirname, "../../script/update-models.ts")],
-      {
-      env: {
-        ...process.env,
-        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
-        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
-      },
-      cwd: path.join(import.meta.dirname, "../.."),
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
     })
 
     const stdout = result.output?.[1]?.toString()
@@ -77,15 +82,10 @@ describe("update-models script", () => {
       ),
     )
 
-    const result = spawnSync("tsx",
-      [path.join(import.meta.dirname, "../../script/update-models.ts")],
-      {
-      env: {
-        ...process.env,
-        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
-        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
-      },
-      cwd: path.join(import.meta.dirname, "../.."),
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
     })
 
     expect(result.status).toBe(0)
@@ -123,15 +123,10 @@ describe("update-models script", () => {
       }),
     )
 
-    const result = spawnSync("tsx",
-      [path.join(import.meta.dirname, "../../script/update-models.ts")],
-      {
-      env: {
-        ...process.env,
-        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
-        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
-      },
-      cwd: path.join(import.meta.dirname, "../.."),
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
     })
 
     expect(result.status).toBe(0)
@@ -151,20 +146,10 @@ describe("update-models script", () => {
       AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
     }
 
-    spawnSync("tsx",
-      [path.join(import.meta.dirname, "../../script/update-models.ts")],
-      {
-      env,
-      cwd: path.join(import.meta.dirname, "../.."),
-    })
+    runUpdateModels(env)
     const before = await readFile(snapshotPath, "utf-8")
 
-    const result = spawnSync("tsx",
-      [path.join(import.meta.dirname, "../../script/update-models.ts")],
-      {
-      env,
-      cwd: path.join(import.meta.dirname, "../.."),
-    })
+    const result = runUpdateModels(env)
 
     expect(result.status).toBe(0)
     const stdout = result.output?.[1]?.toString()
@@ -175,14 +160,9 @@ describe("update-models script", () => {
   })
 
   test("handles network failure gracefully", async () => {
-    const result = spawnSync("tsx",
-      [path.join(import.meta.dirname, "../../script/update-models.ts")],
-      {
-      env: {
-        ...process.env,
-        AX_CODE_MODELS_URL: "http://localhost:19999", // unreachable
-      },
-      cwd: path.join(import.meta.dirname, "../.."),
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_URL: "http://localhost:19999", // unreachable
     })
 
     // Should exit 0 (not block commits) even on network failure
