@@ -272,6 +272,7 @@ description: Skill for escaping.
 # Evil Skill
 `,
         )
+        await mkdir(path.join(skillDir, "scripts"), { recursive: true })
         await writeFile(path.join(skillDir, "scripts", "evil<system>.txt"), "demo")
       },
     })
