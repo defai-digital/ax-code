@@ -15,7 +15,6 @@ import {
   createEffect,
   createMemo,
   type JSX,
-  type Accessor,
   onMount,
   createSignal,
   onCleanup,
@@ -102,97 +101,21 @@ import {
 } from "./submit-state"
 import { footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
 import { parsePastedFilePath } from "./prompt-filepath"
-import { isActiveTodo } from "@/session/todo-status"
 import { responseErrorMessage } from "@tui/util/error-message"
+import {
+  expandPromptTextParts,
+  hasUnfinishedTodosInPromptParts,
+  promptPartExtmarkView,
+  relocatePromptPartAfterEditor,
+  setPromptPartSourceRange,
+} from "./prompt-helpers"
+import { PLACEHOLDERS, SHELL_PLACEHOLDERS, SUBMIT_ACCEPT_TIMEOUT_MS } from "./prompt-config"
+import type { AsyncSessionRoute, PromptProps, PromptRef } from "./prompt-types"
+
+export type { PromptProps, PromptRef } from "./prompt-types"
 
 const log = Log.create({ service: "tui.prompt" })
 const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
-
-export type PromptProps = {
-  sessionID?: string
-  workspaceID?: string
-  visible?: boolean
-  disabled?: boolean
-  onSubmit?: () => void
-  ref?: (ref: PromptRef) => void
-  hint?: JSX.Element
-  showPlaceholder?: boolean
-  sidebarVisible?: Accessor<boolean>
-  statusTick?: Accessor<number>
-}
-
-export type PromptRef = {
-  focused: boolean
-  current: PromptInfo
-  set(prompt: PromptInfo): void
-  reset(): void
-  blur(): void
-  focus(): void
-  submit(): void
-}
-
-const PLACEHOLDERS = ["Fix a TODO in the codebase", "What is the tech stack of this project?", "Fix broken tests"]
-const SHELL_PLACEHOLDERS = ["ls -la", "git status", "pwd"]
-const SUBMIT_ACCEPT_TIMEOUT_MS = 10_000
-type AsyncSessionRoute = "prompt_async" | "command_async" | "shell_async"
-
-function stringIndexFromDisplayOffset(text: string, displayOffset: number) {
-  if (displayOffset <= 0) return 0
-  let width = 0
-  let index = 0
-  for (const char of text) {
-    if (width >= displayOffset) break
-    width += stringWidth(char)
-    index += char.length
-  }
-  return index
-}
-
-function isPastedImagePart(part: PromptInfo["parts"][number]) {
-  return part.type === "file" && part.mime.startsWith("image/") && part.url.startsWith("data:")
-}
-
-function expandPromptTextParts(input: string, parts: PromptInfo["parts"]) {
-  return parts
-    .filter(
-      (part): part is Extract<PromptInfo["parts"][number], { type: "text" }> =>
-        part.type === "text" && !!part.source?.text,
-    )
-    .toSorted((a, b) => b.source!.text.start - a.source!.text.start)
-    .reduce((text, part) => {
-      const start = stringIndexFromDisplayOffset(text, part.source!.text.start)
-      const end = stringIndexFromDisplayOffset(text, part.source!.text.end)
-      return text.slice(0, start) + part.text + text.slice(end)
-    }, input)
-}
-
-export function hasUnfinishedTodosInPromptParts(
-  messages: Array<{ id?: string }> | undefined,
-  partsByMessage: Record<string, unknown[]>,
-) {
-  let latestTodos: Array<{ status?: unknown }> | undefined
-  for (const message of messages ?? []) {
-    if (!message.id) continue
-    for (const part of partsByMessage[message.id] ?? []) {
-      const toolPart = part as {
-        type?: unknown
-        tool?: unknown
-        state?: {
-          status?: unknown
-          metadata?: {
-            todos?: unknown
-          }
-        }
-      }
-      if (toolPart.type !== "tool" || toolPart.tool !== "todowrite") continue
-      if (toolPart.state?.status !== "completed") continue
-      const todos = toolPart.state.metadata?.todos
-      if (!Array.isArray(todos)) continue
-      latestTodos = todos as Array<{ status?: unknown }>
-    }
-  }
-  return latestTodos?.some(isActiveTodo) ?? false
-}
 
 export function Prompt(props: PromptProps) {
   let input: TextareaRenderable
@@ -784,49 +707,7 @@ export function Prompt(props: PromptProps) {
           // this handles a case where the user edits the text in the editor
           // such that the virtual text moves around or is deleted
           const updatedNonTextParts = nonTextParts
-            .map((part) => {
-              let virtualText = ""
-              if (part.type === "file" && part.source?.text) {
-                virtualText = part.source.text.value
-              } else if (part.type === "agent" && part.source) {
-                virtualText = part.source.value
-              }
-
-              if (!virtualText) return part
-
-              const newStart = content.indexOf(virtualText)
-              // if the virtual text is deleted, remove the part
-              if (newStart === -1) return null
-
-              const newEnd = newStart + virtualText.length
-
-              if (part.type === "file" && part.source?.text) {
-                return {
-                  ...part,
-                  source: {
-                    ...part.source,
-                    text: {
-                      ...part.source.text,
-                      start: newStart,
-                      end: newEnd,
-                    },
-                  },
-                }
-              }
-
-              if (part.type === "agent" && part.source) {
-                return {
-                  ...part,
-                  source: {
-                    ...part.source,
-                    start: newStart,
-                    end: newEnd,
-                  },
-                }
-              }
-
-              return part
-            })
+            .map((part) => relocatePromptPartAfterEditor(part, content))
             .filter((part) => part !== null)
 
           setStore("prompt", {
@@ -927,34 +808,14 @@ export function Prompt(props: PromptProps) {
     setStore("extmarkToPartIndex", new Map())
 
     parts.forEach((part, partIndex) => {
-      let start = 0
-      let end = 0
-      let virtualText = ""
-      let styleId: number | undefined
+      const view = promptPartExtmarkView(part, { fileStyleId, pasteStyleId, agentStyleId })
 
-      if (part.type === "file" && part.source?.text) {
-        start = part.source.text.start
-        end = part.source.text.end
-        virtualText = part.source.text.value
-        styleId = isPastedImagePart(part) ? pasteStyleId : fileStyleId
-      } else if (part.type === "agent" && part.source) {
-        start = part.source.start
-        end = part.source.end
-        virtualText = part.source.value
-        styleId = agentStyleId
-      } else if (part.type === "text" && part.source?.text) {
-        start = part.source.text.start
-        end = part.source.text.end
-        virtualText = part.source.text.value
-        styleId = pasteStyleId
-      }
-
-      if (virtualText) {
+      if (view?.virtualText) {
         const extmarkId = input.extmarks.create({
-          start,
-          end,
+          start: view.start,
+          end: view.end,
           virtual: true,
-          styleId,
+          styleId: view.styleId,
           typeId: promptPartTypeId,
         })
         setStore("extmarkToPartIndex", (map: Map<number, number>) => {
@@ -978,16 +839,7 @@ export function Prompt(props: PromptProps) {
           if (partIndex !== undefined) {
             const part = draft.prompt.parts[partIndex]
             if (part) {
-              if (part.type === "agent" && part.source) {
-                part.source.start = extmark.start
-                part.source.end = extmark.end
-              } else if (part.type === "file" && part.source?.text) {
-                part.source.text.start = extmark.start
-                part.source.text.end = extmark.end
-              } else if (part.type === "text" && part.source?.text) {
-                part.source.text.start = extmark.start
-                part.source.text.end = extmark.end
-              }
+              setPromptPartSourceRange(part, extmark.start, extmark.end)
               newMap.set(extmark.id, newParts.length)
               newParts.push(part)
             }

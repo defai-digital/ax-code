@@ -36,6 +36,7 @@ const DIALOG_COMMAND_SRC = path.join(TUI_ROOT, "component/dialog-command.tsx")
 const THEME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-theme-list.tsx")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")
 const PROMPT_SRC = path.join(TUI_ROOT, "component/prompt/index.tsx")
+const PROMPT_HELPERS_SRC = path.join(TUI_ROOT, "component/prompt/prompt-helpers.ts")
 const AUTOCOMPLETE_SRC = path.join(TUI_ROOT, "component/prompt/autocomplete.tsx")
 const PROMPT_HISTORY_SRC = path.join(TUI_ROOT, "component/prompt/history.tsx")
 const PROMPT_FRECENCY_SRC = path.join(TUI_ROOT, "component/prompt/frecency.tsx")
@@ -952,10 +953,12 @@ describe("tui OpenTUI stability guardrails", () => {
 
   test("keeps prompt editing and navigation resilient across duplicate summaries and wide characters", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const promptHelpers = await fs.readFile(PROMPT_HELPERS_SRC, "utf8")
     const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
     const question = await fs.readFile(QUESTION_PROMPT_SRC, "utf8")
 
-    expect(prompt).toContain("function stringIndexFromDisplayOffset(")
+    expect(promptHelpers).toContain("function stringIndexFromDisplayOffset(")
+    expect(promptHelpers).toContain("export function expandPromptTextParts(")
     expect(prompt).toContain("const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)")
     // stringWidth is now imported from @/bun/node-compat (Bun→Node migration),
     // so the guard checks the imported helper rather than the Bun global.
