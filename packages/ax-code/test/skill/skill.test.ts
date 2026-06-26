@@ -36,6 +36,7 @@ test("discovers skills from .ax-code/skill/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "test-skill")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -69,6 +70,7 @@ test("discovers optional skill agent metadata", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "debug-helper")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -155,6 +157,7 @@ test("returns skill directories from Skill.dirs", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "dir-skill")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -191,7 +194,9 @@ test("discovers multiple skills from .ax-code/skill/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir1 = path.join(dir, ".ax-code", "skill", "skill-one")
+      await fs.mkdir(skillDir1, { recursive: true })
       const skillDir2 = path.join(dir, ".ax-code", "skill", "skill-two")
+      await fs.mkdir(skillDir2, { recursive: true })
       await fs.writeFile(
         path.join(skillDir1, "SKILL.md"),
         `---
@@ -231,6 +236,7 @@ test("skips skills with missing frontmatter", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "no-frontmatter")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `# No Frontmatter
@@ -255,6 +261,7 @@ test("discovers skills from .claude/skills/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".claude", "skills", "claude-skill")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -320,6 +327,7 @@ test("discovers skills from .agents/skills/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".agents", "skills", "agent-skill")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -350,6 +358,7 @@ test("discovers skills from .opencode/skills/ directory", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".opencode", "skills", "opencode-skill")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -457,7 +466,9 @@ test("discovers skills from both .claude/skills/ and .agents/skills/", async () 
     git: true,
     init: async (dir) => {
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
+      await fs.mkdir(claudeDir, { recursive: true })
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
+      await fs.mkdir(agentDir, { recursive: true })
       await fs.writeFile(
         path.join(claudeDir, "SKILL.md"),
         `---
@@ -540,6 +551,7 @@ test("parses paths from YAML array in frontmatter", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "ts-skill")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -571,6 +583,7 @@ test("parses paths from comma-separated string in frontmatter", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "css-skill")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -600,6 +613,7 @@ test("parses portable Agent Skills metadata without requiring it", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "release-notes")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -640,6 +654,7 @@ test("keeps non-standard skills available while surfacing standard issues", asyn
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "different-name")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -676,6 +691,7 @@ test("skills without paths have no paths field", async () => {
     git: true,
     init: async (dir) => {
       const skillDir = path.join(dir, ".ax-code", "skill", "plain-skill")
+      await fs.mkdir(skillDir, { recursive: true })
       await fs.writeFile(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -821,10 +837,15 @@ test("properly resolves directories that skills live in", async () => {
     git: true,
     init: async (dir) => {
       const opencodeSkillDir = path.join(dir, ".ax-code", "skill", "agent-skill")
+      await fs.mkdir(opencodeSkillDir, { recursive: true })
       const opencodeSkillsDir = path.join(dir, ".ax-code", "skills", "agent-skill")
+      await fs.mkdir(opencodeSkillsDir, { recursive: true })
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
+      await fs.mkdir(claudeDir, { recursive: true })
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
+      await fs.mkdir(agentDir, { recursive: true })
       const opencodeDir = path.join(dir, ".opencode", "skills", "external-opencode-skill")
+      await fs.mkdir(opencodeDir, { recursive: true })
       await fs.writeFile(
         path.join(claudeDir, "SKILL.md"),
         `---

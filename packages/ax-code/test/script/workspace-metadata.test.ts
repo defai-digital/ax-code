@@ -20,13 +20,10 @@ describe("script.workspace-metadata", () => {
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"))
     const allowedVersions = packageJson.pnpm?.peerDependencyRules?.allowedVersions ?? {}
     const opentuiRules = Object.fromEntries(
-      Object.entries(allowedVersions).filter(([selector]) => selector.includes("@opentui/")),
+      Object.entries(allowedVersions).filter(([selector]) => selector.includes("@ax-code/opentui")),
     )
 
-    expect(opentuiRules).toEqual({
-      "opentui-spinner@0.0.6>@opentui/core": "0.4.1",
-      "opentui-spinner@0.0.6>@opentui/solid": "0.4.1",
-    })
+    expect(opentuiRules).toEqual({})
   })
 
   test("OpenTUI dependencies stay on the validated renderer set", async () => {
@@ -34,9 +31,9 @@ describe("script.workspace-metadata", () => {
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
     const dependencies = packageJson.dependencies ?? {}
 
-    expect(dependencies["@opentui/core"]).toBe("0.4.1")
-    expect(dependencies["@opentui/solid"]).toBe("0.4.1")
-    expect(dependencies["@opentui/keymap"]).toBeUndefined()
-    expect(dependencies["opentui-spinner"]).toBe("0.0.6")
+    expect(dependencies["@ax-code/opentui-core"]).toBe("workspace:*")
+    expect(dependencies["@ax-code/opentui-solid"]).toBe("workspace:*")
+    expect(dependencies["@ax-code/opentui-keymap"]).toBeUndefined()
+    expect(dependencies["@ax-code/opentui-spinner"]).toBe("workspace:*")
   })
 })

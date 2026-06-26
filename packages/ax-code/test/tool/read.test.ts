@@ -50,6 +50,7 @@ describe("tool.read external_directory permission", () => {
   test("allows reading file in subdirectory inside project directory", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await mkdir(path.join(dir, "subdir"), { recursive: true })
         await writeFile(path.join(dir, "subdir", "test.txt"), "nested content")
       },
     })
@@ -116,6 +117,7 @@ describe("tool.read external_directory permission", () => {
   test("asks for directory-scoped external_directory permission when reading external directory", async () => {
     await using outerTmp = await tmpdir({
       init: async (dir) => {
+        await mkdir(path.join(dir, "external"), { recursive: true })
         await writeFile(path.join(dir, "external", "a.txt"), "a")
       },
     })
@@ -483,6 +485,7 @@ describe("tool.read truncation", () => {
   test("does not mark final directory page as truncated", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await mkdir(path.join(dir, "dir"), { recursive: true })
         await Promise.all(
           Array.from({ length: 10 }, (_, i) => writeFile(path.join(dir, "dir", `file-${i + 1}.txt`), `line${i}`)),
         )
@@ -759,6 +762,8 @@ describe("tool.read loaded instructions", () => {
   test("loads AGENTS.md from parent directory and includes in metadata", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await mkdir(path.join(dir, "subdir"), { recursive: true })
+        await mkdir(path.join(dir, "subdir", "nested"), { recursive: true })
         await writeFile(path.join(dir, "subdir", "AGENTS.md"), "# Test Instructions\nDo something special.")
         await writeFile(path.join(dir, "subdir", "nested", "test.txt"), "test content")
       },

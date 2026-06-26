@@ -1,6 +1,6 @@
 import { test, expect } from "vitest"
-import { createTestRenderer } from "@opentui/core/testing"
-import { TextareaRenderable } from "@opentui/core"
+import { createTestRenderer } from "@ax-code/opentui-core/testing"
+import { TextareaRenderable } from "@ax-code/opentui-core"
 
 // Regression coverage for the prompt's Enter handling.
 //

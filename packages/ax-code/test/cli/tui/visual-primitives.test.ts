@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { RGBA } from "@opentui/core"
+import { RGBA } from "@ax-code/opentui-core"
 import { lerpRgba, gradientLineRuns } from "@/cli/cmd/tui/ui/primitives/color"
 import { resolveVisualCapability } from "@/cli/cmd/tui/ui/primitives/capability"
 

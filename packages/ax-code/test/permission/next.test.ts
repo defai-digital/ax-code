@@ -1,6 +1,6 @@
 import { afterEach, test, expect, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
-import { writeFile } from "node:fs/promises"
+import { writeFile, mkdir } from "node:fs/promises"
 import os from "os"
 import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
@@ -297,6 +297,7 @@ test("loadPolicy - malformed policy returns empty ruleset and does not block too
   // that everything should be denied. Returning [] (no policy) keeps the
   // tool usable while the user fixes the file; the error is logged clearly.
   await using tmp = await tmpdir({ git: true })
+  await mkdir(`${tmp.path}/.ax-code`, { recursive: true })
   await writeFile(`${tmp.path}/.ax-code/policy.json`, "{")
 
   const ruleset = await Permission.loadPolicy(tmp.path)

@@ -64,6 +64,8 @@ describe("scan coverage notices", () => {
       init: async (dir) => {
         await writeFile(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
         await mkdir(path.join(dir, "scripts"), { recursive: true })
+        await mkdir(path.join(dir, "scripts"), { recursive: true })
+        await mkdir(path.join(dir, "lib"), { recursive: true })
         await writeFile(path.join(dir, "scripts", "tool.py"), "print('hello')\n")
       },
     })
@@ -202,6 +204,8 @@ describe("scan coverage notices", () => {
   test("detects Python and Ruby workspaces from source files when manifests are absent", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await mkdir(path.join(dir, "scripts"), { recursive: true })
+        await mkdir(path.join(dir, "lib"), { recursive: true })
         await writeFile(path.join(dir, "scripts", "tool.py"), "print('hello')\n")
         await writeFile(path.join(dir, "lib", "worker.rb"), "puts 'hello'\n")
       },

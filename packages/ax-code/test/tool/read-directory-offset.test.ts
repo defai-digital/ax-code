@@ -25,6 +25,7 @@ describe("tool.read directory offsets", () => {
   test("throws when directory offset is beyond the last entry", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await fs.mkdir(path.join(dir, "dir"), { recursive: true })
         await fs.writeFile(path.join(dir, "dir", "one.txt"), "one")
         await fs.writeFile(path.join(dir, "dir", "two.txt"), "two")
       },

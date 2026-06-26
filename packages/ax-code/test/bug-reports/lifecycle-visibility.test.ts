@@ -25,7 +25,7 @@ describe("bug report lifecycle visibility guards", () => {
   })
 
   test("keeps process termination cleanup failures observable", async () => {
-    const bash = await source("tool/bash.ts")
+    const bash = await source("tool/bash-impl.ts")
     const prompt = await source("session/prompt-shell-command.ts")
 
     expect(bash).toContain('log.warn("bash abort kill failed"')
@@ -75,7 +75,7 @@ describe("bug report lifecycle visibility guards", () => {
   })
 
   test("keeps MCP status updates race-safe", async () => {
-    const mcp = await source("mcp/index.ts")
+    const mcp = await source("mcp/impl.ts")
 
     expect(mcp).toContain('s.status[name] = {\n          status: "failed" as const')
     expect(mcp).toContain('if (s.status[clientName]?.status !== "disabled")')
@@ -94,7 +94,7 @@ describe("bug report lifecycle visibility guards", () => {
   })
 
   test("keeps worktree cleanup ordered before deleting directories", async () => {
-    const worktree = await source("worktree/index.ts")
+    const worktree = await source("worktree/index-impl.ts")
 
     expect(worktree).toContain("await fs.rm(info.directory, { recursive: true, force: true })")
     expect(worktree).not.toContain("fs.rmdir(info.directory)")
@@ -109,7 +109,7 @@ describe("bug report lifecycle visibility guards", () => {
 
   test("keeps Rust daemon and watcher send failures visible", async () => {
     const daemon = await repoSource("crates/ax-code-daemon/src/daemon.rs")
-    const fsNative = await repoSource("crates/ax-code-fs/src/lib.rs")
+    const fsNative = await repoSource("crates/ax-code-fs/src/watcher.rs")
 
     expect(daemon).toContain('eprintln!("daemon: failed to write response body')
     expect(daemon).toContain('eprintln!("daemon: failed to flush response')

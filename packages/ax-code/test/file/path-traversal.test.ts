@@ -112,6 +112,7 @@ describe("File.list path traversal protection", () => {
   test("allows valid subdirectory listing", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await fs.mkdir(path.join(dir, "subdir"), { recursive: true })
         await fs.writeFile(path.join(dir, "subdir", "file.txt"), "content")
       },
     })

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { writeFile } from "node:fs/promises"
+import { writeFile, mkdir } from "node:fs/promises"
 import path from "path"
 import {
   collectScannerFileBatch,
@@ -64,6 +64,7 @@ describe("debug-engine scanner utils", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
+        await mkdir(path.join(dir, "src"), { recursive: true })
         await writeFile(path.join(dir, "src", "app.ts"), "export const app = true\n")
       },
     })
@@ -129,8 +130,11 @@ describe("debug-engine scanner utils", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
+        await mkdir(path.join(dir, "src"), { recursive: true })
         await writeFile(path.join(dir, "src", "app.ts"), "export const app = true\n")
+        await mkdir(path.join(dir, "node_modules", "pkg"), { recursive: true })
         await writeFile(path.join(dir, "node_modules", "pkg", "index.ts"), "export const dependency = true\n")
+        await mkdir(path.join(dir, "src", ".next"), { recursive: true })
         await writeFile(path.join(dir, "src", ".next", "server.ts"), "export const generated = true\n")
       },
     })

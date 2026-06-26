@@ -16,6 +16,7 @@ describe("InstructionPrompt.resolve", () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await fs.writeFile(path.join(dir, "AGENTS.md"), "# Root Instructions")
+        await fs.mkdir(path.join(dir, "src"), { recursive: true })
         await fs.writeFile(path.join(dir, "src", "file.ts"), "const x = 1")
       },
     })
@@ -34,7 +35,9 @@ describe("InstructionPrompt.resolve", () => {
   test("returns AGENTS.md from subdirectory (not in systemPaths)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await fs.mkdir(path.join(dir, "subdir"), { recursive: true })
         await fs.writeFile(path.join(dir, "subdir", "AGENTS.md"), "# Subdir Instructions")
+        await fs.mkdir(path.join(dir, "subdir", "nested"), { recursive: true })
         await fs.writeFile(path.join(dir, "subdir", "nested", "file.ts"), "const x = 1")
       },
     })
@@ -80,7 +83,9 @@ describe("InstructionPrompt.resolve", () => {
   test("doesn't reload AGENTS.md when reading it directly", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await fs.mkdir(path.join(dir, "subdir"), { recursive: true })
         await fs.writeFile(path.join(dir, "subdir", "AGENTS.md"), "# Subdir Instructions")
+        await fs.mkdir(path.join(dir, "subdir", "nested"), { recursive: true })
         await fs.writeFile(path.join(dir, "subdir", "nested", "file.ts"), "const x = 1")
       },
     })
@@ -102,6 +107,7 @@ describe("InstructionPrompt.resolve", () => {
       init: async (dir) => {
         await fs.writeFile(path.join(dir, "AX.md"), "# Legacy AX Instructions")
         await fs.writeFile(path.join(dir, "CONTEXT.md"), "# Legacy Context Instructions")
+        await fs.mkdir(path.join(dir, "src"), { recursive: true })
         await fs.writeFile(path.join(dir, "src", "file.ts"), "const x = 1")
       },
     })
@@ -127,7 +133,9 @@ describe("InstructionPrompt.resolve", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await fs.mkdir(path.join(dir, "subdir"), { recursive: true })
         await fs.writeFile(path.join(dir, "subdir", "AGENTS.md"), "# Subdir Instructions")
+        await fs.mkdir(path.join(dir, "subdir", "nested"), { recursive: true })
         await fs.writeFile(path.join(dir, "subdir", "nested", "file.ts"), "const x = 1")
       },
     })
@@ -281,6 +289,7 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
       },
     })
     const fakeHome = path.join(tmp.path, "home")
+    await fs.mkdir(fakeHome, { recursive: true })
     await fs.writeFile(path.join(fakeHome, "rules.md"), "# home rules")
     const homedir = vi.spyOn(os, "homedir").mockReturnValue(fakeHome)
 

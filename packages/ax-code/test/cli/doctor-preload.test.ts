@@ -21,13 +21,13 @@ describe("doctor TUI preload checks", () => {
     const check = getTuiPreloadCheck({
       bundled: false,
       importMetaDir: "/repo/packages/ax-code/src/cli/cmd",
-      resolveSync: () => "/repo/node_modules/@opentui/solid/preload.ts",
+      resolveSync: () => "/repo/node_modules/@ax-code/opentui-solid/preload.ts",
     })
 
     expect(check).toEqual({
       name: "TUI preload",
       status: "ok",
-      detail: "@opentui/solid/preload resolved (solid)",
+      detail: "@ax-code/opentui-solid/preload resolved (opentui-solid)",
     })
   })
 
@@ -75,7 +75,7 @@ describe("doctor TUI preload checks", () => {
     expect(check).toEqual({
       name: "TUI preload",
       status: "fail",
-      detail: "@opentui/solid/preload not found — source/dev TUI may fail to start. Run: pnpm install",
+      detail: "@ax-code/opentui-solid/preload not found — source/dev TUI may fail to start. Run: pnpm install",
     })
   })
 })

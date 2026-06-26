@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
-import { writeFile } from "node:fs/promises"
+import { writeFile, mkdir } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import {
   compareCoverage,
@@ -69,6 +69,7 @@ describe("script.test-coverage", () => {
 
     try {
       const lcovFile = path.join(tmp.path, "coverage", "lcov.info")
+      await mkdir(path.join(tmp.path, "coverage"), { recursive: true })
       const summaryFile = path.join(tmp.path, "coverage-summary.json")
       const reportFile = path.join(tmp.path, "coverage-report.md")
       const baselineFile = path.join(tmp.path, "coverage-baseline-summary.json")
@@ -180,6 +181,7 @@ describe("script.test-coverage", () => {
 
     try {
       const lcovFile = path.join(tmp.path, "coverage", "lcov.info")
+      await mkdir(path.join(tmp.path, "coverage"), { recursive: true })
       const summaryFile = path.join(tmp.path, "coverage-summary.json")
       const reportFile = path.join(tmp.path, "coverage-report.md")
       const externalFile = path.join(tmp.path, "..", "external.ts")
@@ -311,6 +313,7 @@ describe("script.test-coverage", () => {
 
     try {
       const lcovFile = path.join(tmp.path, "coverage", "lcov.info")
+      await mkdir(path.join(tmp.path, "coverage"), { recursive: true })
       const summaryFile = path.join(tmp.path, "coverage-summary.json")
       const reportFile = path.join(tmp.path, "coverage-report.md")
       const baselineFile = path.join(tmp.path, "coverage-baseline-summary.json")

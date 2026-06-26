@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest"
 import path from "path"
-import { writeFile } from "fs/promises"
+import { writeFile, mkdir } from "fs/promises"
 import { pathToFileURL } from "url"
 import z from "zod"
 import type { Permission } from "../../src/permission"
@@ -33,6 +33,7 @@ describe("tool.skill", () => {
       git: true,
       init: async (dir) => {
         const skillDir = path.join(dir, ".ax-code", "skill", "tool-skill")
+        await mkdir(skillDir, { recursive: true })
         await writeFile(
           path.join(skillDir, "SKILL.md"),
           `---
@@ -73,6 +74,7 @@ description: Skill for tool tests.
           ["middle-skill", "Middle skill."],
         ]) {
           const skillDir = path.join(dir, ".ax-code", "skill", name)
+        await mkdir(skillDir, { recursive: true })
           await writeFile(
             path.join(skillDir, "SKILL.md"),
             `---
@@ -118,6 +120,7 @@ description: ${description}
       git: true,
       init: async (dir) => {
         const skillDir = path.join(dir, ".ax-code", "skill", "tool-skill")
+        await mkdir(skillDir, { recursive: true })
         await writeFile(
           path.join(skillDir, "SKILL.md"),
           `---
@@ -130,6 +133,7 @@ description: Skill for tool tests.
 Use this skill.
 `,
         )
+        await mkdir(path.join(skillDir, "scripts"), { recursive: true })
         await writeFile(path.join(skillDir, "scripts", "demo.txt"), "demo")
         await writeFile(path.join(skillDir, "scripts", "ABOUT_SKILL.md.txt"), "about")
       },
@@ -257,6 +261,7 @@ Use this skill.
       git: true,
       init: async (dir) => {
         const skillDir = path.join(dir, ".ax-code", "skill", "evil-skill")
+        await mkdir(skillDir, { recursive: true })
         await writeFile(
           path.join(skillDir, "SKILL.md"),
           `---

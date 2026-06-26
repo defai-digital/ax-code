@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
-import { writeFile } from "node:fs/promises"
+import { writeFile, mkdir } from "node:fs/promises"
 import path from "path"
 import { Env } from "../../src/util/env"
 import { tmpdir } from "../fixture/fixture"
@@ -52,6 +52,7 @@ describe("node-compat Bun.$ shell", () => {
   test("Glob.scan accepts a string cwd like Bun", async () => {
     await using dir = await tmpdir({
       init: async (root) => {
+        await mkdir(path.join(root, "src"), { recursive: true })
         await writeFile(path.join(root, "src", "app.ts"), "export const app = true\n")
         await writeFile(path.join(root, "outside.ts"), "export const outside = true\n")
       },
@@ -80,6 +81,7 @@ describe("node-compat Bun.$ shell", () => {
     await using dir = await tmpdir({
       init: async (root) => {
         await writeFile(path.join(root, "file.txt"), "")
+        await mkdir(path.join(root, "subdir"), { recursive: true })
         await writeFile(path.join(root, "subdir", "nested.txt"), "")
       },
     })
@@ -96,6 +98,7 @@ describe("node-compat Bun.$ shell", () => {
     await using dir = await tmpdir({
       init: async (root) => {
         await writeFile(path.join(root, "file.txt"), "")
+        await mkdir(path.join(root, "subdir"), { recursive: true })
         await writeFile(path.join(root, "subdir", "nested.txt"), "")
       },
     })

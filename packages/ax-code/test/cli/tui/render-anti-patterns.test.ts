@@ -68,7 +68,7 @@ const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "context/theme.tsx"),
 ]
 const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/doctor-preload.ts")
-const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/debug/explain.ts")
+const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/debug/explain-impl.ts")
 const BUILD_NODE_TUI_SRC = path.join(PACKAGE_ROOT, "script/build-node-tui.ts")
 const TUI_STARTUP_SMOKE_SRC = path.join(PACKAGE_ROOT, "script/tui-startup-smoke.ts")
 const SOURCE_SOLID_LOADER_SRC = path.join(REPO_ROOT, "script/solid-loader.mjs")
@@ -81,7 +81,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).toContain('from "./renderer"')
     expect(app).toContain("getTuiRenderProfile")
     expect(app).not.toMatch(/runNativeTuiSlice|AX_CODE_TUI_NATIVE/i)
-    expect(renderer).toContain('from "@opentui/solid"')
+    expect(renderer).toContain('from "@ax-code/opentui-solid"')
     expect(renderer).toContain("render(root, createTuiRenderOptions(options))")
   })
 
@@ -1094,7 +1094,7 @@ describe("tui OpenTUI stability guardrails", () => {
     // resolveSync is now imported from ../../bun/node-compat (Bun→Node
     // migration) instead of the Bun global.
     expect(doctor).toContain("resolveFn(")
-    expect(doctor).toContain('"@opentui/solid/preload"')
+    expect(doctor).toContain('"@ax-code/opentui-solid/preload"')
     expect(doctor).toContain("Bundled runtime")
     expect(doctor).toContain("source/dev TUI may fail to start")
   })

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process"
 import { describe, expect, test } from "vitest"
-import { writeFile } from "node:fs/promises"
+import { writeFile, mkdir } from "node:fs/promises"
 import path from "path"
 import { Incremental } from "../../src/debug-engine"
 import { Instance } from "../../src/project/instance"
@@ -11,6 +11,8 @@ describe("debug-engine incremental file selection", () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
+        await mkdir(path.join(dir, "src"), { recursive: true })
+        await mkdir(path.join(dir, "scripts"), { recursive: true })
         await writeFile(path.join(dir, "src", "app.ts"), "export const app = 1\n")
         await writeFile(path.join(dir, "scripts", "tool.js"), "export const tool = 1\n")
         await writeFile(path.join(dir, "README.md"), "# demo\n")

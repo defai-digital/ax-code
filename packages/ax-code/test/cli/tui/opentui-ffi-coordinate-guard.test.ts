@@ -20,14 +20,14 @@ import path from "node:path"
 // before the crash can ship again.
 
 function ffiSource(): string {
-  const entry = fileURLToPath(import.meta.resolve("@opentui/core"))
+  const entry = fileURLToPath(import.meta.resolve("@ax-code/opentui-core"))
   const dir = path.dirname(entry)
   const file = fs
     .readdirSync(dir)
     .filter((f) => /^index-.*\.js$/.test(f))
     .map((f) => path.join(dir, f))
     .find((f) => fs.readFileSync(f, "utf8").includes("bufferFillRect(buffer, x, y, width, height, color)"))
-  if (!file) throw new Error("Could not locate the @opentui/core FFI render module")
+  if (!file) throw new Error("Could not locate the @ax-code/opentui-core FFI render module")
   return fs.readFileSync(file, "utf8")
 }
 
