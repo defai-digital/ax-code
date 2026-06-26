@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
 import { pathToFileURL } from "url"
-import { writeFile, readFile } from "node:fs/promises"
-import { createHash } from "node:crypto"
+import { writeFile } from "node:fs/promises"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
@@ -10,6 +9,7 @@ import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { Flag } from "../../src/flag/flag"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
+import { LSPCache } from "../../src/lsp/cache"
 
 Log.init({ print: false })
 
@@ -117,16 +117,14 @@ describe("LSP cache integration", () => {
         setCacheFlag(true)
         configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
-        // Pre-seed the cache for a known content hash. We compute it the
-        // same way the production path does.
-        const buf = await readFile(file)
-        const contentHash = createHash("sha256").update(new Uint8Array(buf)).digest("hex")
+        const contentHash = await LSPCache.hashFile(file)
+        expect(contentHash).toBeDefined()
 
         CodeGraphQuery.upsertLspCache({
           projectID: Instance.project.id,
           operation: "references",
           filePath: file,
-          contentHash,
+          contentHash: contentHash!,
           line: 5,
           character: 2,
           payload: [{ uri: pathToFileURL(file).href, range: { start: { line: 5, character: 2 } } }],
@@ -161,14 +159,14 @@ describe("LSP cache integration", () => {
         setCacheFlag(false)
         configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
 
-        const buf = await readFile(file)
-        const contentHash = createHash("sha256").update(new Uint8Array(buf)).digest("hex")
+        const contentHash = await LSPCache.hashFile(file)
+        expect(contentHash).toBeDefined()
 
         CodeGraphQuery.upsertLspCache({
           projectID: Instance.project.id,
           operation: "documentSymbol",
           filePath: file,
-          contentHash,
+          contentHash: contentHash!,
           line: -1,
           character: -1,
           payload: [

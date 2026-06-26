@@ -1,6 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
 import { writeFile } from "node:fs/promises"
-import { createHash } from "node:crypto"
 import path from "path"
 import { pathToFileURL } from "url"
 import { tmpdir } from "../fixture/fixture"
@@ -17,6 +16,7 @@ import {
 } from "../../src/code-intelligence/builder"
 import { CodeNodeID, CodeFileID } from "../../src/code-intelligence/id"
 import type { ProjectID } from "../../src/project/schema"
+import { hash as bunCompatHash } from "../../src/bun/node-compat"
 
 Log.init({ print: false })
 
@@ -551,7 +551,7 @@ async function writeAndSeedFile(
   completeness: "full" | "partial" | "lsp-only" = "full",
 ): Promise<string> {
   await writeFile(filePath, content)
-  const sha = createHash("sha256").update(content).digest("hex")
+  const sha = bunCompatHash(content).toString()
   const t = Date.now()
   CodeGraphQuery.upsertFile({
     id: CodeFileID.ascending(),

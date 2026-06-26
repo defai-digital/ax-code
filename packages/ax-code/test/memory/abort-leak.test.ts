@@ -1,59 +1,63 @@
-import { describe, test, expect } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
+import { abortAfter, abortAfterAny } from "../../src/util/abort"
 
-const MB = 1024 * 1024
+type TimeoutHandler = Parameters<typeof setTimeout>[0]
+type TimeoutID = ReturnType<typeof setTimeout>
 
-const getHeapMB = () => {
-  return process.memoryUsage().heapUsed / MB
+function captureTimeout() {
+  let handler: TimeoutHandler | undefined
+  const timeoutID = { id: "timer" } as unknown as TimeoutID
+  const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((nextHandler: TimeoutHandler) => {
+    handler = nextHandler
+    return timeoutID
+  }) as typeof setTimeout)
+  const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout").mockImplementation(() => undefined)
+
+  return {
+    timeoutID,
+    setTimeoutSpy,
+    clearTimeoutSpy,
+    getHandler: () => handler,
+  }
 }
 
-describe("memory: closure vs bind pattern", () => {
-  test("bind pattern does not retain closure scope", () => {
-    const ITERATIONS = 200
+describe("memory: abort timeout callbacks", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
-    // OLD pattern: arrow function closure retains surrounding scope
-    const closureMap = new Map<number, () => void>()
-    const timers: NodeJS.Timeout[] = []
+  test("abortAfter schedules a bound abort callback without closure capture", () => {
+    const timer = captureTimeout()
+    const timeout = abortAfter(1000)
 
-    const baseline = getHeapMB()
+    expect(timer.setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000)
+    const handler = timer.getHandler()
+    expect(typeof handler).toBe("function")
+    const handlerFn = handler as (() => void) & { name: string }
+    expect(handlerFn.name).toBe("bound abort")
 
-    for (let i = 0; i < ITERATIONS; i++) {
-      const content = "x".repeat(50 * 1024) // 50KB captured by closure
-      const controller = new AbortController()
-      const handler = () => {
-        if (content.length > 1e9) controller.abort()
-      }
-      closureMap.set(i, handler)
-      timers.push(setTimeout(handler, 30000))
-    }
+    handlerFn()
+    expect(timeout.signal.aborted).toBe(true)
+  })
 
-    const oldGrowth = getHeapMB() - baseline
+  test("abortAfter clearTimeout cancels the scheduled timer", () => {
+    const timer = captureTimeout()
+    const timeout = abortAfter(1000)
 
-    // Cleanup
-    timers.forEach(clearTimeout)
-    closureMap.clear()
+    timeout.clearTimeout()
 
-    // NEW pattern: bind doesn't capture surrounding scope
-    const baseline2 = getHeapMB()
-    const handlers: (() => void)[] = []
-    const timers2: NodeJS.Timeout[] = []
+    expect(timer.clearTimeoutSpy).toHaveBeenCalledWith(timer.timeoutID)
+  })
 
-    for (let i = 0; i < ITERATIONS; i++) {
-      const _content = "x".repeat(50 * 1024) // 50KB NOT captured
-      const controller = new AbortController()
-      const handler = controller.abort.bind(controller)
-      handlers.push(handler)
-      timers2.push(setTimeout(handler, 30000))
-    }
+  test("abortAfterAny aborts when an input signal aborts", () => {
+    const timer = captureTimeout()
+    const parent = new AbortController()
+    const timeout = abortAfterAny(1000, parent.signal)
 
-    const newGrowth = getHeapMB() - baseline2
+    parent.abort()
 
-    // Cleanup
-    timers2.forEach(clearTimeout)
-    handlers.length = 0
-
-    console.log(`Closure pattern: ${oldGrowth.toFixed(2)} MB growth`)
-    console.log(`Bind pattern: ${newGrowth.toFixed(2)} MB growth`)
-
-    expect(newGrowth).toBeLessThanOrEqual(oldGrowth)
+    expect(timeout.signal.aborted).toBe(true)
+    timeout.clearTimeout()
+    expect(timer.clearTimeoutSpy).toHaveBeenCalledWith(timer.timeoutID)
   })
 })
