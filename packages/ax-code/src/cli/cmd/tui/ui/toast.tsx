@@ -6,6 +6,7 @@ import { RoundedBorder } from "./primitives/card"
 import { TextAttributes } from "@ax-code/opentui-core"
 import z from "zod"
 import { NotificationEvent } from "@/notification/events"
+import { scheduleTuiTimeout } from "@tui/util/timer"
 
 export type ToastOptions = z.infer<typeof NotificationEvent.ToastShow.properties>
 
@@ -63,21 +64,28 @@ function init() {
     queue: [] as ToastOptions[],
   })
 
-  let timeoutHandle: NodeJS.Timeout | null = null
+  let cancelToastTimeout: (() => void) | undefined
 
   function scheduleNextToast(options: ToastOptions) {
     setStore("currentToast", options)
-    if (timeoutHandle) clearTimeout(timeoutHandle)
-    timeoutHandle = setTimeout(() => {
-      timeoutHandle = null
-      const [nextToast, ...remaining] = store.queue
-      setStore("queue", remaining)
-      if (nextToast) {
-        scheduleNextToast(nextToast)
-        return
-      }
-      setStore("currentToast", null)
-    }, options.duration ?? 5000).unref()
+    cancelToastTimeout?.()
+    cancelToastTimeout = scheduleTuiTimeout(
+      () => {
+        cancelToastTimeout = undefined
+        const [nextToast, ...remaining] = store.queue
+        setStore("queue", remaining)
+        if (nextToast) {
+          scheduleNextToast(nextToast)
+          return
+        }
+        setStore("currentToast", null)
+      },
+      {
+        name: "toast-auto-dismiss",
+        delayMs: options.duration ?? 5000,
+        unref: true,
+      },
+    )
   }
 
   const toast = {
@@ -104,10 +112,8 @@ function init() {
       return store.currentToast
     },
     dispose() {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle)
-        timeoutHandle = null
-      }
+      cancelToastTimeout?.()
+      cancelToastTimeout = undefined
       setStore("currentToast", null)
       setStore("queue", [])
     },

@@ -64,6 +64,7 @@ const HOME_SRC = path.join(TUI_ROOT, "routes/home.tsx")
 const STARTUP_TRACE_SRC = path.join(TUI_ROOT, "util/startup-trace.ts")
 const BACKGROUND_TASK_SRC = path.join(TUI_ROOT, "util/background-task.ts")
 const MICRO_TASK_SRC = path.join(TUI_ROOT, "util/microtask.ts")
+const TIMER_SRC = path.join(TUI_ROOT, "util/timer.ts")
 const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "component/prompt/history.tsx"),
   path.join(TUI_ROOT, "component/prompt/frecency.tsx"),
@@ -661,11 +662,12 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(app).toContain("const RETRY_DELAY_MS = 250")
     expect(app).toContain("const MAX_SESSION_FORK_ATTEMPTS = 3")
-    expect(app).toContain("const retryTimers = new Set<ReturnType<typeof setTimeout>>()")
+    expect(app).toContain("const retryTimers = new Set<() => void>()")
     expect(app).toContain("let forkRetryDisposed = false")
-    expect(app).toContain("for (const timer of retryTimers) clearTimeout(timer)")
+    expect(app).toContain("for (const cancel of retryTimers) cancel()")
     expect(app).toContain("retryTimers.clear()")
-    expect(app).toContain("retryTimers.delete(timer)")
+    expect(app).toContain("retryTimers.delete(cancel)")
+    expect(app).toContain('name: "app-session-fork-retry"')
     expect(app).toContain("if (forkRetryDisposed) return")
     expect(app).toContain('toast.show({ message: "Failed to fork session", variant: "error" })')
     expect(app).toContain("if (continued || !sync.data.session_loaded || !args.continue) return")
@@ -730,6 +732,37 @@ describe("tui OpenTUI stability guardrails", () => {
     }
   })
 
+  test("keeps TUI component timers behind the named timer boundary", async () => {
+    const timer = await fs.readFile(TIMER_SRC, "utf8")
+    const app = await fs.readFile(APP_SRC, "utf8")
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+    const toast = await fs.readFile(TOAST_SRC, "utf8")
+    const keybind = await fs.readFile(path.join(TUI_ROOT, "context/keybind.tsx"), "utf8")
+    const pulse = await fs.readFile(path.join(TUI_ROOT, "routes/session/autonomous-pulse.ts"), "utf8")
+
+    expect(timer).toContain("runTuiBackgroundTask")
+    expect(timer).toContain("clearTimeout(timer)")
+    expect(timer).toContain("clearInterval(timer)")
+    expect(timer).toContain("handle.unref?.()")
+
+    for (const [text, name] of [
+      [app, "app-session-fork-retry"],
+      [prompt, "prompt-status-tick"],
+      [prompt, "prompt-interrupt-reset"],
+      [prompt, "prompt-route-handoff"],
+      [prompt, "prompt-retry-countdown"],
+      [session, "session-status-tick"],
+      [session, "session-sync-retry"],
+      [session, "session-scroll-to-bottom"],
+      [toast, "toast-auto-dismiss"],
+      [keybind, "keybind-leader-timeout"],
+      [pulse, "autonomous-pulse"],
+    ]) {
+      expect(text).toContain(`name: "${name}"`)
+    }
+  })
+
   test("prioritizes file attachment suggestions for bare @ autocomplete", async () => {
     const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
 
@@ -756,7 +789,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("new AbortController()")
     expect(prompt).toContain("let submitInFlight = false")
     expect(prompt).toContain("submitRunID++")
-    expect(prompt).toContain("routeHandoffTimer = undefined")
+    expect(prompt).toContain("cancelRouteHandoff = undefined")
     expect(prompt).toContain("if (startingNewSession) sessionID = SessionID.descending()")
     expect(prompt).toContain("setSubmitPending(true)")
     expect(prompt).toContain('setSubmitStage("dispatching")')
@@ -835,9 +868,10 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("function settlePromptLocally(options: { clearPrompt: boolean })")
     expect(prompt).toContain("finishPendingSubmit()")
     expect(prompt).toContain("routeToSession(sessionID)")
-    expect(prompt).toContain("let routeHandoffTimer: ReturnType<typeof setTimeout> | undefined")
+    expect(prompt).toContain("let cancelRouteHandoff: (() => void) | undefined")
     expect(prompt).toContain("if (input && !input.isDestroyed) input.blur()")
-    expect(prompt).toContain("routeHandoffTimer = setTimeout(() => {")
+    expect(prompt).toContain("cancelRouteHandoff = scheduleTuiTimeout(")
+    expect(prompt).toContain('name: "prompt-route-handoff"')
     expect(prompt).toContain("if (submitRunID !== runID) return")
     expect(prompt).toContain("sdk.client.session.create({ id: sessionID }")
     expect(prompt).toContain("upsertSessionInStore(createdSession)")
@@ -1125,8 +1159,8 @@ describe("tui OpenTUI stability guardrails", () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
     expect(prompt).toContain("upsertSessionInStore")
-    expect(prompt).toContain("routeHandoffTimer = setTimeout(() => {")
-    expect(prompt).toContain("if (routeHandoffTimer) clearTimeout(routeHandoffTimer)")
+    expect(prompt).toContain("cancelRouteHandoff = scheduleTuiTimeout(")
+    expect(prompt).toContain("cancelRouteHandoff?.()")
     expect(prompt).toContain('type: "session"')
     expect(prompt).not.toContain("temporary hack to make sure the message is sent")
     expect(prompt).not.toContain("navigationTimer = setTimeout")

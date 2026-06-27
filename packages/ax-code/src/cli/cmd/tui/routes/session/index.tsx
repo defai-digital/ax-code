@@ -24,6 +24,7 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { Header } from "./header"
 import { useDialog } from "../../ui/dialog"
 import { DialogMessage } from "./dialog-message"
@@ -255,14 +256,19 @@ export function Session() {
 
   createEffect(() => {
     const sessionID = route.sessionID
-    const timer = setInterval(() => {
-      const candidate = sync.data.session_status?.[sessionID]
-      if (footerSessionStatusOrIdle(candidate).type === "idle") return
-      setStatusTick((value) => value + 1)
-    }, 1000)
-    // Status polling must not prevent process exit during teardown.
-    timer.unref?.()
-    onCleanup(() => clearInterval(timer))
+    const cancel = scheduleTuiInterval(
+      () => {
+        const candidate = sync.data.session_status?.[sessionID]
+        if (footerSessionStatusOrIdle(candidate).type === "idle") return
+        setStatusTick((value) => value + 1)
+      },
+      {
+        name: "session-status-tick",
+        delayMs: 1000,
+        unref: true,
+      },
+    )
+    onCleanup(cancel)
   })
 
   const scrollAcceleration = createMemo(() => {
@@ -284,14 +290,21 @@ export function Session() {
   })
 
   let sessionSyncGeneration = 0
-  const sessionSyncRetryTimers = new Set<ReturnType<typeof setTimeout>>()
+  const sessionSyncRetryTimers = new Set<() => void>()
 
   function scheduleSessionSyncRetry(fn: () => void, delay: number) {
-    const timer = setTimeout(() => {
-      sessionSyncRetryTimers.delete(timer)
-      fn()
-    }, delay)
-    sessionSyncRetryTimers.add(timer)
+    const cancel = scheduleTuiTimeout(
+      () => {
+        sessionSyncRetryTimers.delete(cancel)
+        fn()
+      },
+      {
+        name: "session-sync-retry",
+        delayMs: delay,
+        unref: true,
+      },
+    )
+    sessionSyncRetryTimers.add(cancel)
   }
 
   function runInitialSessionSync(
@@ -338,7 +351,7 @@ export function Session() {
   )
   onCleanup(() => {
     sessionSyncGeneration++
-    for (const timer of sessionSyncRetryTimers) clearTimeout(timer)
+    for (const cancel of sessionSyncRetryTimers) cancel()
     sessionSyncRetryTimers.clear()
   })
 
@@ -454,15 +467,22 @@ export function Session() {
     dialog.clear()
   }
 
-  let scrollTimer: ReturnType<typeof setTimeout> | undefined
+  let cancelScrollTimer: (() => void) | undefined
   function toBottom() {
-    clearTimeout(scrollTimer)
-    scrollTimer = setTimeout(() => {
-      if (!scroll || scroll.isDestroyed) return
-      scroll.scrollTo(scroll.scrollHeight)
-    }, 50)
+    cancelScrollTimer?.()
+    cancelScrollTimer = scheduleTuiTimeout(
+      () => {
+        cancelScrollTimer = undefined
+        if (!scroll || scroll.isDestroyed) return
+        scroll.scrollTo(scroll.scrollHeight)
+      },
+      {
+        name: "session-scroll-to-bottom",
+        delayMs: 50,
+      },
+    )
   }
-  onCleanup(() => clearTimeout(scrollTimer))
+  onCleanup(() => cancelScrollTimer?.())
 
   const local = useLocal()
 

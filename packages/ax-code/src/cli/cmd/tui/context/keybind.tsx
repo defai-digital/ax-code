@@ -7,6 +7,7 @@ import { createStore } from "solid-js/store"
 import { useKeyboard, useRenderer } from "@ax-code/opentui-solid"
 import { createSimpleContext } from "./helper"
 import { useTuiConfig } from "./tui-config"
+import { scheduleTuiTimeout } from "@tui/util/timer"
 
 export type KeybindKey = keyof NonNullable<TuiConfig.Info["keybinds"]> & string
 
@@ -26,7 +27,7 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
     const renderer = useRenderer()
 
     let focus: Renderable | null = null
-    let timeout: NodeJS.Timeout | undefined
+    let cancelLeaderTimeout: (() => void) | undefined
     let disposed = false
     function leader(active: boolean) {
       if (disposed) return
@@ -34,13 +35,20 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
         setStore("leader", true)
         focus = renderer.currentFocusedRenderable
         focus?.blur()
-        if (timeout) clearTimeout(timeout)
-        timeout = setTimeout(() => {
-          if (!store.leader) return
-          leader(false)
-          if (!focus || focus.isDestroyed) return
-          focus.focus()
-        }, 2000)
+        cancelLeaderTimeout?.()
+        cancelLeaderTimeout = scheduleTuiTimeout(
+          () => {
+            cancelLeaderTimeout = undefined
+            if (!store.leader) return
+            leader(false)
+            if (!focus || focus.isDestroyed) return
+            focus.focus()
+          },
+          {
+            name: "keybind-leader-timeout",
+            delayMs: 2000,
+          },
+        )
         return
       }
 
@@ -98,7 +106,7 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
 
     onCleanup(() => {
       disposed = true
-      if (timeout) clearTimeout(timeout)
+      cancelLeaderTimeout?.()
     })
 
     const result = {

@@ -71,6 +71,7 @@ import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
 import { formatTuiLogError } from "./util/log-error"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
+import { scheduleTuiTimeout } from "@tui/util/timer"
 import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { responseErrorMessage, unknownErrorMessage } from "@tui/util/error-message"
 import { resolveSessionFirstRoute } from "./navigation/launch-policy"
@@ -439,12 +440,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
 
   onMount(() => {
-    const cancel = scheduleDeferredStartupTask(() =>
-      ensureSessionRouteLoaded("startup-preload")
-        .then(() => undefined)
-        .catch((error) => {
-          handleSessionRouteLoadFailure(error, { source: "startup-preload" })
-        }),
+    const cancel = scheduleDeferredStartupTask(
+      () =>
+        ensureSessionRouteLoaded("startup-preload")
+          .then(() => undefined)
+          .catch((error) => {
+            handleSessionRouteLoadFailure(error, { source: "startup-preload" })
+          }),
       {
         name: "session-route-startup-preload",
       },
@@ -489,7 +491,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   const RETRY_DELAY_MS = 250
   const MAX_SESSION_FORK_ATTEMPTS = 3
-  const retryTimers = new Set<ReturnType<typeof setTimeout>>()
+  const retryTimers = new Set<() => void>()
   let forkRetryDisposed = false
   let sandboxPutController: AbortController | undefined
 
@@ -578,7 +580,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   onCleanup(() => {
     forkRetryDisposed = true
-    for (const timer of retryTimers) clearTimeout(timer)
+    for (const cancel of retryTimers) cancel()
     retryTimers.clear()
     smartLlmToggle.dispose()
     runModeController?.abort()
@@ -586,11 +588,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
 
   function scheduleRetry(fn: () => void, delay = RETRY_DELAY_MS) {
-    const timer = setTimeout(() => {
-      retryTimers.delete(timer)
-      fn()
-    }, delay)
-    retryTimers.add(timer)
+    const cancel = scheduleTuiTimeout(
+      () => {
+        retryTimers.delete(cancel)
+        fn()
+      },
+      {
+        name: "app-session-fork-retry",
+        delayMs: delay,
+        unref: true,
+      },
+    )
+    retryTimers.add(cancel)
   }
 
   function forkSessionWithRetries(input: { sessionID: string; source: "continue" | "startup" }) {

@@ -57,6 +57,7 @@ import { useCommandDialog } from "../dialog-command"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
 import { Editor } from "@tui/util/editor"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
 import type { FilePart } from "@ax-code/sdk/v2"
@@ -187,7 +188,7 @@ export function Prompt(props: PromptProps) {
   let submitAbort: AbortController | undefined
   let submitRunID = 0
   let submitInFlight = false
-  let routeHandoffTimer: ReturnType<typeof setTimeout> | undefined
+  let cancelRouteHandoff: (() => void) | undefined
   let lastDraftEscapeAt: number | undefined
 
   function upsertSessionInStore(session: (typeof sync.data.session)[number]) {
@@ -420,13 +421,18 @@ export function Prompt(props: PromptProps) {
 
   onMount(() => {
     if (props.statusTick) return
-    const timer = setInterval(() => {
-      if (status().type === "idle") return
-      setLocalStatusTick((value) => value + 1)
-    }, 1000)
-    // Status polling must not prevent process exit during teardown.
-    timer.unref?.()
-    onCleanup(() => clearInterval(timer))
+    const cancel = scheduleTuiInterval(
+      () => {
+        if (status().type === "idle") return
+        setLocalStatusTick((value) => value + 1)
+      },
+      {
+        name: "prompt-status-tick",
+        delayMs: 1000,
+        unref: true,
+      },
+    )
+    onCleanup(cancel)
   })
 
   const lastUserMessage = createMemo(() => {
@@ -452,7 +458,7 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
   })
-  let interruptTimer: ReturnType<typeof setTimeout> | undefined
+  let cancelInterruptTimer: (() => void) | undefined
 
   createEffect(
     on(
@@ -467,9 +473,9 @@ export function Prompt(props: PromptProps) {
   function cancelPendingSubmit(message = "Prompt submission cancelled") {
     if (!submitPending() && !submitInFlight) return false
     submitRunID++
-    if (routeHandoffTimer) {
-      clearTimeout(routeHandoffTimer)
-      routeHandoffTimer = undefined
+    if (cancelRouteHandoff) {
+      cancelRouteHandoff()
+      cancelRouteHandoff = undefined
     }
     const abort = submitAbort
     submitAbort = undefined
@@ -652,9 +658,9 @@ export function Prompt(props: PromptProps) {
           const nextInterrupt = store.interrupt + 1
           setStore("interrupt", nextInterrupt)
 
-          if (interruptTimer) {
-            clearTimeout(interruptTimer)
-            interruptTimer = undefined
+          if (cancelInterruptTimer) {
+            cancelInterruptTimer()
+            cancelInterruptTimer = undefined
           }
 
           if (nextInterrupt >= 2) {
@@ -677,10 +683,17 @@ export function Prompt(props: PromptProps) {
               })
             setStore("interrupt", 0)
           } else {
-            interruptTimer = setTimeout(() => {
-              interruptTimer = undefined
-              setStore("interrupt", 0)
-            }, 5000)
+            cancelInterruptTimer = scheduleTuiTimeout(
+              () => {
+                cancelInterruptTimer = undefined
+                setStore("interrupt", 0)
+              },
+              {
+                name: "prompt-interrupt-reset",
+                delayMs: 5000,
+                unref: true,
+              },
+            )
           }
           dialog.clear()
         },
@@ -1101,21 +1114,27 @@ export function Prompt(props: PromptProps) {
       })
       setDraftSessionID(undefined)
       if (input && !input.isDestroyed) input.blur()
-      if (routeHandoffTimer) clearTimeout(routeHandoffTimer)
-      routeHandoffTimer = setTimeout(() => {
-        routeHandoffTimer = undefined
-        if (submitRunID !== runID) return
-        DiagnosticLog.recordProcess("tui.promptSubmitRouteNavigateStarted", {
-          sessionID: nextSessionID,
-        })
-        route.navigate({
-          type: "session",
-          sessionID: nextSessionID,
-        })
-        DiagnosticLog.recordProcess("tui.promptSubmitRouteNavigateDispatched", {
-          sessionID: nextSessionID,
-        })
-      }, 0)
+      cancelRouteHandoff?.()
+      cancelRouteHandoff = scheduleTuiTimeout(
+        () => {
+          cancelRouteHandoff = undefined
+          if (submitRunID !== runID) return
+          DiagnosticLog.recordProcess("tui.promptSubmitRouteNavigateStarted", {
+            sessionID: nextSessionID,
+          })
+          route.navigate({
+            type: "session",
+            sessionID: nextSessionID,
+          })
+          DiagnosticLog.recordProcess("tui.promptSubmitRouteNavigateDispatched", {
+            sessionID: nextSessionID,
+          })
+        },
+        {
+          name: "prompt-route-handoff",
+          delayMs: 0,
+        },
+      )
     }
 
     // ADR-028: while the session is busy, buffer plain follow-up prompts in the
@@ -1260,8 +1279,8 @@ export function Prompt(props: PromptProps) {
   }
   const exit = useExit()
   onCleanup(() => {
-    if (interruptTimer) clearTimeout(interruptTimer)
-    if (routeHandoffTimer) clearTimeout(routeHandoffTimer)
+    cancelInterruptTimer?.()
+    cancelRouteHandoff?.()
     submitAbort?.abort(createSubmitAbortError())
   })
 
@@ -1906,16 +1925,19 @@ export function Prompt(props: PromptProps) {
                     })
                     const [seconds, setSeconds] = createSignal(0)
                     onMount(() => {
-                      const timer = setInterval(() => {
-                        const next = retry()?.next
-                        if (next) setSeconds(Math.round((next - Date.now()) / 1000))
-                      }, 1000)
-                      // Retry countdown must not prevent process exit.
-                      timer.unref?.()
+                      const cancel = scheduleTuiInterval(
+                        () => {
+                          const next = retry()?.next
+                          if (next) setSeconds(Math.round((next - Date.now()) / 1000))
+                        },
+                        {
+                          name: "prompt-retry-countdown",
+                          delayMs: 1000,
+                          unref: true,
+                        },
+                      )
 
-                      onCleanup(() => {
-                        clearInterval(timer)
-                      })
+                      onCleanup(cancel)
                     })
                     const handleMessageClick = () => {
                       const r = retry()

@@ -84,8 +84,12 @@ must still run before the original destroy error is rethrown.
 Deferred startup work in the TUI must use `scheduleDeferredStartupTask()` with a
 stable task name. Microtask handoffs and other fire-and-forget UI work must use
 the shared TUI background-task boundary instead of ad hoc `void promise.catch`
-patterns. Optional startup state, delayed hydration, focus restoration, and
-layout refresh work are allowed to fail, but failures must stay inside that
-named background-task boundary: callers may handle expected degradation locally,
-and otherwise the helper logs the named failure instead of creating an
-unhandled rejection or crashing the TUI.
+patterns. Solid/OpenTUI component timers that touch renderables or reactive
+state must use the named TUI timer helpers instead of raw `setTimeout` or
+`setInterval`, so they are cancellable on cleanup, can opt out of keeping the
+process alive, and run callbacks through the same background failure boundary.
+Optional startup state, delayed hydration, focus restoration, layout refresh,
+polling, and countdown work are allowed to fail, but failures must stay inside
+that named boundary: callers may handle expected degradation locally, and
+otherwise the helper logs the named failure instead of creating an unhandled
+rejection or crashing the TUI.

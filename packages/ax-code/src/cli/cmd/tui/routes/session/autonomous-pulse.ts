@@ -1,5 +1,6 @@
 import { createEffect, createSignal, onCleanup } from "solid-js"
 import { shouldUseTuiAnimations } from "../../component/spinner-profile"
+import { scheduleTuiInterval } from "@tui/util/timer"
 
 // Breathing-pulse driver used to signal "an autonomous step is in flight"
 // on the assistant text bubble, the transcript outer border, and the
@@ -21,7 +22,7 @@ const TICK_MS = 80
 const STATIC_PHASE = 0.5
 
 const [phase, setPhase] = createSignal(STATIC_PHASE)
-let timer: ReturnType<typeof setInterval> | undefined
+let cancelTimer: (() => void) | undefined
 let startTime = 0
 let refCount = 0
 
@@ -37,17 +38,18 @@ function start() {
   if (refCount > 1) return
   startTime = Date.now()
   tick()
-  timer = setInterval(tick, TICK_MS)
-  timer.unref?.()
+  cancelTimer = scheduleTuiInterval(tick, {
+    name: "autonomous-pulse",
+    delayMs: TICK_MS,
+    unref: true,
+  })
 }
 
 function stop() {
   refCount = Math.max(0, refCount - 1)
   if (refCount > 0) return
-  if (timer) {
-    clearInterval(timer)
-    timer = undefined
-  }
+  cancelTimer?.()
+  cancelTimer = undefined
   setPhase(STATIC_PHASE)
 }
 
