@@ -99173,6 +99173,7 @@
         "name": "DeepSeek R1",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": false,
         "structured_output": false,
         "release_date": "2025-01-20",
@@ -109379,6 +109380,18 @@
         "name": "DeepSeek V4 Flash",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-04-24",
@@ -109403,6 +109416,15 @@
         "name": "DeepSeek V4 Flash (Thinking)",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-04-24",
@@ -109427,6 +109449,15 @@
         "name": "DeepSeek V4 Pro Cheaper (Thinking)",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-04-25",
@@ -109476,6 +109507,15 @@
         "name": "DeepSeek Latest",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-05-03",
@@ -109500,6 +109540,18 @@
         "name": "DeepSeek V4 Pro",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-04-24",
@@ -109524,6 +109576,15 @@
         "name": "DeepSeek V4 Pro (Thinking)",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-04-24",
@@ -109574,6 +109635,18 @@
         "name": "DeepSeek V4 Pro Cheaper",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-04-25",
@@ -109599,6 +109672,7 @@
         "family": "deepseek",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2025-12-01",

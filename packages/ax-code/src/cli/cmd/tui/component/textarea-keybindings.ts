@@ -60,26 +60,30 @@ function mapTextareaKeybindings(
 
 export function useTextareaKeybindings(input: { submit?: boolean; interceptEnter?: boolean } = {}) {
   const keybind = useKeybind()
+
+  return createMemo(() => textareaKeybindingsForConfig(keybind.all, input))
+}
+
+export function textareaKeybindingsForConfig(
+  keybinds: Record<string, Keybind.Info[]>,
+  input: { submit?: boolean; interceptEnter?: boolean } = {},
+): KeyBinding[] {
   const submit = input.submit ?? true
   const interceptEnter = input.interceptEnter ?? false
 
-  return createMemo(() => {
-    const keybinds = keybind.all
-
-    return [
-      ...(submit || interceptEnter
-        ? ([
-            { name: "return", action: "submit" },
-            { name: "linefeed", action: "submit" },
-            // Keypad Enter: intercept it as "submit" too, otherwise OpenTUI's
-            // default `kpenter` -> "newline" binding inserts a blank line.
-            { name: "kpenter", action: "submit" },
-          ] as const)
-        : []),
-      { name: "return", meta: true, action: "newline" },
-      ...TEXTAREA_ACTIONS.flatMap((action) =>
-        submit || action !== "submit" ? mapTextareaKeybindings(keybinds, action) : [],
-      ),
-    ] satisfies KeyBinding[]
-  })
+  return [
+    ...(submit || interceptEnter
+      ? ([
+          { name: "return", action: "submit" },
+          { name: "linefeed", action: "submit" },
+          // Keypad Enter: intercept it as "submit" too, otherwise OpenTUI's
+          // default `kpenter` -> "newline" binding inserts a blank line.
+          { name: "kpenter", action: "submit" },
+        ] as const)
+      : []),
+    { name: "return", meta: true, action: "newline" },
+    ...TEXTAREA_ACTIONS.flatMap((action) =>
+      submit || action !== "submit" ? mapTextareaKeybindings(keybinds, action) : [],
+    ),
+  ]
 }

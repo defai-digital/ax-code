@@ -217,9 +217,44 @@ async function waitForTuiStartup(
   )
 }
 
+export function isNodePtyDebugFallbackNoise(args: readonly unknown[]) {
+  if (args[0] !== "innerError") return false
+  const error = args[1]
+  if (!(error instanceof Error)) return false
+
+  const text = `${error.message}\n${error.stack ?? ""}`
+  return text.includes("../build/Debug/pty.node") && text.includes("node-pty-prebuilt-multiarch")
+}
+
+async function suppressNodePtyDebugFallbackNoise<T>(fn: () => Promise<T>): Promise<T> {
+  const originalError = console.error
+  console.error = (...args: Parameters<typeof console.error>) => {
+    if (isNodePtyDebugFallbackNoise(args)) return
+    originalError(...args)
+  }
+  try {
+    return await fn()
+  } finally {
+    console.error = originalError
+  }
+}
+
+function suppressNodePtyDebugFallbackNoiseSync<T>(fn: () => T): T {
+  const originalError = console.error
+  console.error = (...args: Parameters<typeof console.error>) => {
+    if (isNodePtyDebugFallbackNoise(args)) return
+    originalError(...args)
+  }
+  try {
+    return fn()
+  } finally {
+    console.error = originalError
+  }
+}
+
 async function loadNodePty() {
   try {
-    return await import("node-pty-prebuilt-multiarch")
+    return await suppressNodePtyDebugFallbackNoise(() => import("node-pty-prebuilt-multiarch"))
   } catch (error) {
     const bundled = loadBundledNodePty()
     if (bundled) return bundled
@@ -250,7 +285,7 @@ function loadBundledNodePty(): NodePtyModule | undefined {
     "node-pty-prebuilt-multiarch",
   )
   try {
-    return require(moduleDir) as NodePtyModule
+    return suppressNodePtyDebugFallbackNoiseSync(() => require(moduleDir) as NodePtyModule)
   } catch {
     return undefined
   }

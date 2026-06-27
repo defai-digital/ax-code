@@ -1,6 +1,6 @@
 import { test, expect } from "vitest"
-import { createTestRenderer } from "@ax-code/opentui-core/testing"
-import { TextareaRenderable } from "@ax-code/opentui-core"
+import { textareaKeybindingsForConfig } from "../../../src/cli/cmd/tui/component/textarea-keybindings"
+import type { Keybind } from "../../../src/util/keybind"
 
 // Regression coverage for the prompt's Enter handling.
 //
@@ -12,71 +12,66 @@ import { TextareaRenderable } from "@ax-code/opentui-core"
 // kitty keyboard protocol) fell through to OpenTUI's default `kpenter -> newline`
 // binding: pressing it inserted a blank line and never submitted.
 
-// Mirrors the intercept bindings produced by
-// useTextareaKeybindings({ submit: false, interceptEnter: true }).
-const interceptKeyBindings = [
-  { name: "return", action: "submit" },
-  { name: "linefeed", action: "submit" },
-  { name: "kpenter", action: "submit" },
-  // input_newline defaults — none of these is a bare Enter key.
-  { name: "return", shift: true, action: "newline" },
-  { name: "return", ctrl: true, action: "newline" },
-  { name: "return", meta: true, action: "newline" },
-  { name: "j", ctrl: true, action: "newline" },
-] as const
-
 // Mirrors isPromptSubmitKey() for an unmodified key.
 function isPromptSubmitKey(name: string) {
   return name === "return" || name === "linefeed" || name === "kpenter"
 }
 
-async function setup() {
-  const t = await createTestRenderer({ width: 40, height: 12, kittyKeyboard: true })
-  const ta = new TextareaRenderable(t.renderer as any, { keyBindings: interceptKeyBindings as any })
-  t.renderer.root.add(ta)
-  let submits = 0
-  t.renderer.keyInput.on("keypress", (e: any) => {
-    if (e.ctrl || e.meta || e.shift || e.super || e.hyper) return
-    if (!isPromptSubmitKey(e.name)) return
-    e.preventDefault()
-    e.stopPropagation()
-    submits++
-  })
-  ta.focus()
-  await t.flush()
-  await t.mockInput.typeText("hello")
-  await t.flush()
-  return { t, ta, getSubmits: () => submits }
+function key(name: string, modifiers: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {}): Keybind.Info {
+  return {
+    name,
+    ctrl: modifiers.ctrl ?? false,
+    meta: modifiers.meta ?? false,
+    shift: modifiers.shift ?? false,
+    super: false,
+    leader: false,
+  }
 }
 
-// Sends a bare keypad-Enter via the kitty keyboard protocol (CSI 57414 u).
-function pressKeypadEnter(t: Awaited<ReturnType<typeof setup>>["t"]) {
-  t.renderer.stdin.emit("data", Buffer.from("\x1b[57414u"))
+function actionFor(name: string, modifiers: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {}) {
+  return textareaKeybindingsForConfig(
+    {
+      input_newline: [key("return", { shift: true }), key("return", { ctrl: true }), key("j", { ctrl: true })],
+    },
+    { submit: false, interceptEnter: true },
+  ).find(
+    (binding) =>
+      binding.name === name &&
+      Boolean(binding.ctrl) === Boolean(modifiers.ctrl) &&
+      Boolean(binding.meta) === Boolean(modifiers.meta) &&
+      Boolean(binding.shift) === Boolean(modifiers.shift),
+  )?.action
+}
+
+function applyPromptKey(
+  draft: string,
+  name: string,
+  modifiers: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {},
+) {
+  const action = actionFor(name, modifiers)
+  if (!modifiers.ctrl && !modifiers.meta && !modifiers.shift && isPromptSubmitKey(name) && action === "submit") {
+    return { draft, submits: 1 }
+  }
+  if (action === "newline") return { draft: `${draft}\n`, submits: 0 }
+  return { draft, submits: 0 }
 }
 
 test("keypad Enter submits instead of inserting a blank line", async () => {
-  const { t, ta, getSubmits } = await setup()
-  pressKeypadEnter(t)
-  await t.flush()
-  expect(ta.plainText).toBe("hello")
-  expect(getSubmits()).toBe(1)
+  const result = applyPromptKey("hello", "kpenter")
+  expect(actionFor("kpenter")).toBe("submit")
+  expect(result.draft).toBe("hello")
+  expect(result.submits).toBe(1)
 })
 
 test("keypad Enter still submits when the draft already has trailing blank lines", async () => {
-  const { t, ta, getSubmits } = await setup()
-  t.mockInput.pressEnter({ shift: true } as any) // add a trailing newline (input_newline)
-  await t.flush()
-  expect(ta.plainText).toBe("hello\n")
-  pressKeypadEnter(t)
-  await t.flush()
-  expect(ta.plainText).toBe("hello\n")
-  expect(getSubmits()).toBe(1)
+  const result = applyPromptKey("hello\n", "kpenter")
+  expect(result.draft).toBe("hello\n")
+  expect(result.submits).toBe(1)
 })
 
 test("main Enter (return) keeps submitting without inserting a newline", async () => {
-  const { t, ta, getSubmits } = await setup()
-  t.mockInput.pressEnter()
-  await t.flush()
-  expect(ta.plainText).toBe("hello")
-  expect(getSubmits()).toBe(1)
+  const submit = applyPromptKey("hello", "return")
+  const newline = applyPromptKey("hello", "return", { shift: true })
+  expect(submit).toEqual({ draft: "hello", submits: 1 })
+  expect(newline).toEqual({ draft: "hello\n", submits: 0 })
 })

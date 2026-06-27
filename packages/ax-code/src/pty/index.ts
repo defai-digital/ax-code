@@ -11,6 +11,7 @@ import { Plugin } from "@/plugin"
 import { Env } from "@/util/env"
 import { JsonNumber } from "@/util/schema"
 import { PtyID } from "./schema"
+import { createRequire } from "node:module"
 import fs from "fs/promises"
 import path from "path"
 import { NamedError } from "@ax-code/util/error"
@@ -39,6 +40,7 @@ export namespace Pty {
     "LD_LIBRARY_PATH",
   ])
   const encoder = new TextEncoder()
+  const require = createRequire(import.meta.url)
 
   type Socket = {
     readyState: number
@@ -144,12 +146,75 @@ export namespace Pty {
     return out
   }
 
-  // PTY backend is node-pty (a prebuilt napi addon loaded lazily so the rest of
-  // the module stays import-light and the addon is only required when a terminal
-  // is actually opened).
+  type NodePtyModule = typeof import("node-pty-prebuilt-multiarch")
+
+  function isNodePtyDebugFallbackNoise(args: readonly unknown[]) {
+    if (args[0] !== "innerError") return false
+    const error = args[1]
+    if (!(error instanceof Error)) return false
+
+    const text = `${error.message}\n${error.stack ?? ""}`
+    return text.includes("../build/Debug/pty.node") && text.includes("node-pty-prebuilt-multiarch")
+  }
+
+  async function suppressNodePtyDebugFallbackNoise<T>(fn: () => Promise<T>): Promise<T> {
+    const originalError = console.error
+    console.error = (...args: Parameters<typeof console.error>) => {
+      if (isNodePtyDebugFallbackNoise(args)) return
+      originalError(...args)
+    }
+    try {
+      return await fn()
+    } finally {
+      console.error = originalError
+    }
+  }
+
+  function suppressNodePtyDebugFallbackNoiseSync<T>(fn: () => T): T {
+    const originalError = console.error
+    console.error = (...args: Parameters<typeof console.error>) => {
+      if (isNodePtyDebugFallbackNoise(args)) return
+      originalError(...args)
+    }
+    try {
+      return fn()
+    } finally {
+      console.error = originalError
+    }
+  }
+
+  function distPlatform() {
+    return process.platform === "win32" ? "windows" : process.platform
+  }
+
+  function loadBundledNodePty(): NodePtyModule | undefined {
+    const distRoot = path.join(import.meta.dirname, "..", "..", "dist")
+    const candidates = [`ax-code-${distPlatform()}-${process.arch}`, "ax-code-node-tui"]
+    for (const candidate of candidates) {
+      const moduleDir = path.join(distRoot, candidate, "node_modules", "node-pty-prebuilt-multiarch")
+      try {
+        return suppressNodePtyDebugFallbackNoiseSync(() => require(moduleDir) as NodePtyModule)
+      } catch {}
+    }
+    return undefined
+  }
+
+  async function loadNodePtySpawn() {
+    try {
+      return (await suppressNodePtyDebugFallbackNoise(() => import("node-pty-prebuilt-multiarch"))).spawn
+    } catch (error) {
+      const bundled = loadBundledNodePty()
+      if (bundled) return bundled.spawn
+      throw error
+    }
+  }
+
+  // PTY backend is node-pty (a native addon loaded lazily so the rest of the
+  // module stays import-light and the addon is only required when a terminal is
+  // actually opened). Source-mode runs can reuse the bundled build output when
+  // the workspace dependency has no prebuild for the active Node ABI.
   const pty = lazy(async () => {
-    const { spawn } = await import("node-pty-prebuilt-multiarch")
-    return spawn
+    return loadNodePtySpawn()
   })
 
   export const Info = z

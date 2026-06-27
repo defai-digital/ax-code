@@ -160,6 +160,7 @@ describe("script.test-ci", () => {
   test("defaults to deterministic when no positional group is provided", () => {
     expect(resolveTestCIGroup()).toBe("deterministic")
     expect(resolveTestCIGroup(["--dir", ".tmp/test-report"])).toBe("deterministic")
+    expect(resolveTestCIGroup(["--", "--dir", ".tmp/test-report"])).toBe("deterministic")
   })
 
   test("defaults to deterministic when positional group is empty", () => {
@@ -169,6 +170,7 @@ describe("script.test-ci", () => {
   test("uses the first positional group when provided", () => {
     expect(resolveTestCIGroup(["deterministic"])).toBe("deterministic")
     expect(resolveTestCIGroup(["recovery", "--rerun-on-fail", "1"])).toBe("recovery")
+    expect(resolveTestCIGroup(["--", "recovery", "--rerun-on-fail", "1"])).toBe("recovery")
   })
 
   test("falls back to failure tag counts when failures attribute is invalid", async () => {

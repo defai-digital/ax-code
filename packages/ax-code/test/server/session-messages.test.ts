@@ -198,7 +198,7 @@ describe("session.prompt_async error handling", () => {
 
   test("task queue executor defers detached work to the next tick without unref", async () => {
     const detached = await extractFrom(
-      "../../src/session/task-queue-executor.ts",
+      "../../src/session/task-queue-executor-impl.ts",
       "function startDetachedQueueTask",
       "async function shouldWaitForIdle",
     )
@@ -211,7 +211,7 @@ describe("session.prompt_async error handling", () => {
 
   test("task queue executor records detached failures on the queue item", async () => {
     const execute = await extractFrom(
-      "../../src/session/task-queue-executor.ts",
+      "../../src/session/task-queue-executor-impl.ts",
       "async function executeClaimedItem",
       "async function finishIfRunning",
     )

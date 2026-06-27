@@ -40,7 +40,8 @@ function flag(name: string) {
 }
 
 export function resolveTestCIGroup(argv = process.argv.slice(2)) {
-  const group = argv[0]
+  const args = argv[0] === "--" ? argv.slice(1) : argv
+  const group = args[0]
   if (!group || group.startsWith("-")) return "deterministic"
   return group
 }
