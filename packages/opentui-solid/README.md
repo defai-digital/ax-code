@@ -8,6 +8,8 @@ This package is consumed via the `solid-loader.mjs` (source dev) and `esbuild-so
 
 See [`../opentui-core/MAINTENANCE.md`](../opentui-core/MAINTENANCE.md) for the shared vendored OpenTUI ownership boundary and update workflow.
 
+Build scripts should use the stable `@ax-code/opentui-solid/transform` export for Solid JSX transforms. Do not resolve internal files next to `./bun-plugin`.
+
 ```tsx
 import { render, useKeyboard, useTerminalDimensions } from "@ax-code/opentui-solid"
 

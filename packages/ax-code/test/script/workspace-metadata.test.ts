@@ -44,4 +44,35 @@ describe("script.workspace-metadata", () => {
       jsx: expect.any(Function),
     })
   })
+
+  test("vendored OpenTUI transform is a stable exported build API", async () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../../../../")
+    const solidPackage = JSON.parse(await readFile(path.join(repoRoot, "packages/opentui-solid/package.json"), "utf8"))
+    const corePackage = JSON.parse(await readFile(path.join(repoRoot, "packages/opentui-core/package.json"), "utf8"))
+
+    expect(solidPackage.exports["./transform"]).toMatchObject({
+      types: "./scripts/solid-transform.d.ts",
+      import: "./scripts/solid-transform.js",
+    })
+    expect(Object.keys(corePackage.optionalDependencies ?? {}).sort()).toEqual([
+      "@opentui/core-darwin-arm64",
+      "@opentui/core-darwin-x64",
+      "@opentui/core-linux-arm64",
+      "@opentui/core-linux-arm64-musl",
+      "@opentui/core-linux-x64",
+      "@opentui/core-linux-x64-musl",
+      "@opentui/core-win32-arm64",
+      "@opentui/core-win32-x64",
+    ])
+
+    const { transformSolidSource } = await import("@ax-code/opentui-solid/transform")
+    const output = await transformSolidSource("export const View = () => <text>Hello</text>", {
+      filename: "/tmp/opentui-view.tsx",
+      moduleName: "@ax-code/opentui-solid",
+    })
+
+    expect(output).toContain('from "@ax-code/opentui-solid"')
+    expect(output).toContain('createElement("text")')
+    expect(output).not.toContain("<text>")
+  })
 })

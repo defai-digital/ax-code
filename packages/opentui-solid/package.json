@@ -26,6 +26,11 @@
       "node": "./scripts/solid-plugin.node.js",
       "default": "./scripts/solid-plugin.node.js"
     },
+    "./transform": {
+      "types": "./scripts/solid-transform.d.ts",
+      "import": "./scripts/solid-transform.js",
+      "default": "./scripts/solid-transform.js"
+    },
     "./runtime-plugin-support": {
       "types": "./scripts/runtime-plugin-support.d.ts",
       "bun": "./scripts/runtime-plugin-support.js",

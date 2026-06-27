@@ -20,6 +20,9 @@ in `packages/opentui-core/package.json`.
 
 `@ax-code/opentui-solid` contains the vendored SolidJS renderer and the Node/Bun
 preload and plugin support used by source and bundled TUI builds.
+Its `./transform` export is the supported API for build-time Solid JSX
+transforms; build scripts should not resolve internal files next to
+`./bun-plugin`.
 
 `@ax-code/opentui-spinner` contains the spinner renderable used by the TUI. It
 is maintained with the other vendored OpenTUI packages because it depends on the
