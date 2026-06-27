@@ -1,1 +1,4 @@
-import{t as e}from"./src-DzmVtD7N.mjs";import{extend as t}from"@ax-code/opentui-solid";t({spinner:e});export{};
+import { SpinnerRenderable } from "./index.mjs";
+import { extend } from "@ax-code/opentui-solid";
+
+extend({ spinner: SpinnerRenderable });
