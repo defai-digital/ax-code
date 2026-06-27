@@ -42,7 +42,6 @@
   },
   "devDependencies": {
     "@ax-code/script": "workspace:*",
-    "@babel/core": "7.29.6",
     "@octokit/webhooks-types": "catalog:",
     "@parcel/watcher-darwin-arm64": "2.5.1",
     "@parcel/watcher-linux-arm64-glibc": "2.5.1",
@@ -51,7 +50,6 @@
     "@parcel/watcher-linux-x64-musl": "2.5.1",
     "@parcel/watcher-win32-arm64": "2.5.1",
     "@parcel/watcher-win32-x64": "2.5.1",
-    "@types/babel__core": "7.20.5",
     "@types/cross-spawn": "6.0.6",
     "@types/node": "catalog:",
     "@types/mime-types": "catalog:",
