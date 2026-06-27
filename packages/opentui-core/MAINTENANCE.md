@@ -1,0 +1,66 @@
+# Vendored OpenTUI Maintenance
+
+This workspace owns the `@ax-code/opentui-*` packages used by the shipping
+TUI:
+
+- `@ax-code/opentui-core`
+- `@ax-code/opentui-solid`
+- `@ax-code/opentui-spinner`
+
+These packages are vendored forks, not direct upstream dependencies. The
+application should import the `@ax-code/opentui-*` packages only.
+
+## Ownership Boundary
+
+`@ax-code/opentui-core` contains the vendored JavaScript, type declarations,
+runtime-plugin glue, tree-sitter assets, and ax-code-specific renderer fixes.
+It does not vendor the compiled Zig native libraries. Those still come from the
+upstream `@opentui/core-<platform>` optional dependency packages and are pinned
+in `packages/opentui-core/package.json`.
+
+`@ax-code/opentui-solid` contains the vendored SolidJS renderer and the Node/Bun
+preload and plugin support used by source and bundled TUI builds.
+
+`@ax-code/opentui-spinner` contains the spinner renderable used by the TUI. It
+is maintained with the other vendored OpenTUI packages because it depends on the
+core and Solid renderer contracts.
+
+## Required Local Fixes
+
+The vendored core must preserve ax-code's FFI geometry guard. Node's
+`--experimental-ffi` marshalling rejects negative, fractional, or non-finite
+`u32` coordinates. The guard drops or clips invalid draw geometry before it
+reaches native OpenTUI symbols, preventing render-loop crashes when content is
+partially off-screen.
+
+The regression test for this guard is:
+
+```sh
+pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts
+```
+
+## Update Workflow
+
+When syncing from upstream OpenTUI:
+
+1. Update the vendored package contents in `packages/opentui-core` and
+   `packages/opentui-solid`.
+2. Keep the `@ax-code/opentui-*` package names and exports stable unless the
+   TUI build scripts are updated in the same change.
+3. Update the upstream native `@opentui/core-<platform>` optional dependency
+   versions in `packages/opentui-core/package.json` if the core ABI changes.
+4. Re-apply ax-code-specific fixes, especially the FFI geometry guard.
+5. Verify source, bundled, and startup paths before merging.
+
+Minimum verification for an OpenTUI sync or local renderer fix:
+
+```sh
+pnpm --dir packages/ax-code run check:tui-layering
+pnpm --dir packages/ax-code run check:tui-snapshot
+pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts test/cli/tui/opentui-spinner.test.ts test/script/tui-startup-smoke.test.ts test/script/check-tui-layering.test.ts
+pnpm --dir packages/ax-code run tui:startup-smoke
+```
+
+Run `pnpm --dir packages/ax-code run build -- --single` as well when the change
+affects package exports, runtime-plugin loading, native dependency resolution,
+or distribution packaging.

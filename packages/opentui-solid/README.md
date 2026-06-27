@@ -6,6 +6,8 @@ Vendored fork of [@opentui/solid](https://github.com/anomalyco/opentui) — Soli
 
 This package is consumed via the `solid-loader.mjs` (source dev) and `esbuild-solid-plugin.ts` (build). Both configure the Babel + Solid JSX transform with `moduleName: "@ax-code/opentui-solid"` so `.tsx` files compile to OpenTUI universal renderer calls.
 
+See [`../opentui-core/MAINTENANCE.md`](../opentui-core/MAINTENANCE.md) for the shared vendored OpenTUI ownership boundary and update workflow.
+
 ```tsx
 import { render, useKeyboard, useTerminalDimensions } from "@ax-code/opentui-solid"
 

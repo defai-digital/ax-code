@@ -11,13 +11,12 @@ import path from "node:path"
 // scrolled above the viewport produces a negative y, and a gutter wider than its
 // container a negative width — either threw on every frame.
 //
-// We fix it by patching @opentui/core (patches/@opentui__core@0.4.1.patch) to
-// sanitize geometry at the FFI boundary. The native path needs --experimental-ffi
+// The fix lives in the vendored @ax-code/opentui-core package, which sanitizes
+// geometry at the FFI boundary. The native path needs --experimental-ffi
 // (absent in the default suite), so instead of driving real FFI this test loads
 // the *actual shipped* guard code from the installed package and executes it
-// against the exact crash inputs. If the patch is ever dropped (e.g. an opentui
-// bump that doesn't re-apply it), extraction fails and this test goes red —
-// before the crash can ship again.
+// against the exact crash inputs. If a vendored OpenTUI sync drops the guard,
+// extraction fails and this test goes red before the crash can ship again.
 
 function ffiSource(): string {
   const entry = fileURLToPath(import.meta.resolve("@ax-code/opentui-core"))
@@ -47,7 +46,7 @@ const POINT_DRAW_METHODS = [
 // Extract the shared origin guard and run it as real code.
 function loadFfiCellOrigin(): (x: number, y: number) => { x: number; y: number } | null {
   const match = SRC.match(/function ffiCellOrigin\(x, y\) \{[\s\S]*?\n\}/)
-  if (!match) throw new Error("patch missing: ffiCellOrigin() not found in @opentui/core")
+  if (!match) throw new Error("vendored OpenTUI guard missing: ffiCellOrigin() not found in @ax-code/opentui-core")
   return new Function(`${match[0]}\nreturn ffiCellOrigin`)() as never
 }
 
@@ -63,7 +62,10 @@ function loadFillRectSanitizer(): (
   const match = SRC.match(
     /bufferFillRect\(buffer, x, y, width, height, color\) \{\n([\s\S]*?)\n {4}const bg2 = rgbaPtr\(color\);/,
   )
-  if (!match) throw new Error("patch missing: bufferFillRect sanitization not found in @opentui/core")
+  if (!match)
+    throw new Error(
+      "vendored OpenTUI guard missing: bufferFillRect sanitization not found in @ax-code/opentui-core",
+    )
   const body = `${match[1]}\nreturn { x, y, width, height };`
   const fn = new Function("x", "y", "width", "height", body) as (
     x: number,
@@ -76,8 +78,8 @@ function loadFillRectSanitizer(): (
 
 const isU32 = (n: number) => Number.isInteger(n) && n >= 0 && n < 2 ** 32
 
-describe("OpenTUI FFI coordinate guard (patch regression)", () => {
-  test("the patch is present in the installed @opentui/core", () => {
+describe("OpenTUI FFI coordinate guard (vendored core regression)", () => {
+  test("the guard is present in the installed @ax-code/opentui-core", () => {
     expect(SRC).toContain("function ffiCellOrigin(x, y)")
     // Every u32 point-draw method routes its origin through the guard.
     for (const method of POINT_DRAW_METHODS) {

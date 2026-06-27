@@ -20,6 +20,10 @@ renderer.root.add(obj)
 
 This package dynamically loads the matching native binary from `@opentui/core-<platform>` via `optionalDependencies`. Those upstream packages contain the compiled Zig `.dylib`/`.so`/`.dll` and are not renamed.
 
+## Maintenance
+
+See [MAINTENANCE.md](./MAINTENANCE.md) for the vendored fork ownership boundary, required ax-code fixes, and update verification workflow.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).

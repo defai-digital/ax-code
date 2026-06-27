@@ -18,6 +18,8 @@ pnpm add @ax-code/opentui-spinner
 
 Requires `@ax-code/opentui-core` and `@ax-code/opentui-solid` as workspace dependencies.
 
+See [`../opentui-core/MAINTENANCE.md`](../opentui-core/MAINTENANCE.md) for the shared vendored OpenTUI ownership boundary and update workflow.
+
 ## Usage
 
 ```ts
