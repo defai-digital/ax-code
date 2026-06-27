@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.7] - 2026-06-27
+
+### Fixed
+
+- Model picker navigation now skips unavailable memory-blocked models in Desktop.
+- Favorite-model shortcuts no longer select unavailable models in Desktop.
+
 ## [6.7.6] - 2026-06-25
 
 ### Fixed
