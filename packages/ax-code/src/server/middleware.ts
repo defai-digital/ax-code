@@ -5,11 +5,25 @@ import { rateLimited } from "./error"
 
 const RATE_SWEEP_INTERVAL_MS = 30_000
 
+type NodeServerConnBinding = {
+  incoming?: {
+    socket?: unknown
+  }
+}
+
+function hasNodeServerConnBinding(context: Parameters<MiddlewareHandler>[0]) {
+  const env = context.env as (NodeServerConnBinding & { server?: NodeServerConnBinding }) | undefined
+  const binding = env?.server ?? env
+  return binding?.incoming?.socket !== undefined
+}
+
 export function resolveRateLimitClientIP(input: {
   context: Parameters<MiddlewareHandler>[0]
   log: Log.Logger
   warnOnce: () => boolean
 }) {
+  if (!hasNodeServerConnBinding(input.context)) return undefined
+
   try {
     const nodeAddress = getConnInfo(input.context).remote.address
     if (typeof nodeAddress === "string" && nodeAddress.length > 0) return nodeAddress

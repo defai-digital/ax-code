@@ -68,7 +68,6 @@
     "esbuild": "^0.28.1",
     "tsx": "^4.22.4",
     "typescript": "catalog:",
-    "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.9",
     "vscode-languageserver-types": "3.17.5",
     "why-is-node-running": "3.2.2"

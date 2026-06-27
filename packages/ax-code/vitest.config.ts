@@ -1,6 +1,5 @@
 import { defineConfig } from "vitest/config"
 import type { Plugin } from "vitest/config"
-import tsconfigPaths from "vite-tsconfig-paths"
 import { transform as esbuildTransform } from "esbuild"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -108,8 +107,9 @@ const includeFiles = process.env.AX_TEST_FILES
   : undefined
 
 export default defineConfig({
-  plugins: [txtAsText, forceEsbuildTs, tsconfigPaths()],
+  plugins: [txtAsText, forceEsbuildTs],
   resolve: {
+    tsconfigPaths: true,
     alias: {
       // Vite doesn't apply the "node" import condition by default, so pin #db
       // to the node-sqlite backend explicitly.

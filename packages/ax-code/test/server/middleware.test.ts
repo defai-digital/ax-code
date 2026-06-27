@@ -28,4 +28,21 @@ describe("server middleware", () => {
     ).toBe("203.0.113.10")
     expect(warn).not.toHaveBeenCalled()
   })
+
+  test("skips client IP resolution without a Hono node-server binding", () => {
+    const warn = vi.fn()
+    const context = {
+      env: {},
+      req: { raw: {} },
+    }
+
+    expect(
+      resolveRateLimitClientIP({
+        context: context as any,
+        log: { warn } as any,
+        warnOnce: () => true,
+      }),
+    ).toBeUndefined()
+    expect(warn).not.toHaveBeenCalled()
+  })
 })

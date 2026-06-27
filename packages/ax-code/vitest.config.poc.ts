@@ -1,5 +1,4 @@
 import { defineConfig } from "vitest/config"
-import tsconfigPaths from "vite-tsconfig-paths"
 import path from "node:path"
 import { createRequire } from "node:module"
 
@@ -8,8 +7,8 @@ const dir = __dirname
 
 // Mirror the resolve overrides from script/build-node.ts so the Node path is exercised.
 export default defineConfig({
-  plugins: [tsconfigPaths()],
   resolve: {
+    tsconfigPaths: true,
     alias: {
       "#db": path.join(dir, "src/storage/db.node.ts"),
       bun: path.join(dir, "test-vitest/poc-bun-shim.ts"),
