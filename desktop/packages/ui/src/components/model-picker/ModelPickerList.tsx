@@ -8,6 +8,7 @@ import { ProviderLogo } from "@/components/ui/ProviderLogo"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { mergeModelMetadataWithLiveModel } from "@/lib/modelMetadata"
+import { getNextSelectableModelPickerIndex, normalizeModelPickerSelectionIndex } from "@/lib/modelPickerSelection"
 import { getProviderModelDisabledReason } from "@/lib/providerModelAvailability"
 import { cn } from "@/lib/utils"
 import type { ModelMetadata } from "@/types"
@@ -457,10 +458,6 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
     [filteredFavorites],
   )
 
-  React.useEffect(() => {
-    selectionStore.set(0)
-  }, [searchQuery, selectionStore])
-
   const selectIndex = React.useCallback(
     (index: number) => {
       selectionStore.set(index)
@@ -476,6 +473,12 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
     [disabled],
   )
 
+  React.useEffect(() => {
+    const nextIndex = normalizeModelPickerSelectionIndex(flatModelList, 0, isEntryDisabled)
+    selectionStore.set(nextIndex)
+    onActiveEntryChange?.(nextIndex >= 0 ? flatModelList[nextIndex] : undefined)
+  }, [flatModelList, isEntryDisabled, onActiveEntryChange, searchQuery, selectionStore])
+
   const moveSelection = React.useCallback(
     (direction: 1 | -1) => {
       const total = flatModelList.length
@@ -483,17 +486,14 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
       keyboardOwnsSelectionRef.current = true
       lastMousePositionRef.current = null
       const currentIndex = selectionStore.getSnapshot()
-      const nextIndex = (currentIndex + direction + total) % total
+      const nextIndex = getNextSelectableModelPickerIndex(flatModelList, currentIndex, direction, isEntryDisabled)
+      if (nextIndex < 0) return
       selectionStore.set(nextIndex)
       onActiveEntryChange?.(flatModelList[nextIndex])
       requestAnimationFrame(() => scrollIntoView(scrollRef.current, itemRefs.current[nextIndex]))
     },
-    [flatModelList, onActiveEntryChange, selectionStore],
+    [flatModelList, isEntryDisabled, onActiveEntryChange, selectionStore],
   )
-
-  React.useEffect(() => {
-    onActiveEntryChange?.(flatModelList[selectionStore.getSnapshot()])
-  }, [flatModelList, onActiveEntryChange, selectionStore])
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent) => {

@@ -13,6 +13,7 @@ import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from 
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { getCycledPrimaryAgentName } from "@/lib/modelControlUtils"
+import { getNextSelectableFavoriteModel } from "@/lib/modelPickerSelection"
 
 export const useKeyboardShortcuts = () => {
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft)
@@ -423,16 +424,14 @@ export const useKeyboardShortcuts = () => {
           return
         }
 
-        e.preventDefault()
-
-        const { currentProviderId, currentModelId, setProvider, setModel } = useConfigStore.getState()
-        const len = favoriteModels.length
-        const currentIdx = favoriteModels.findIndex(
-          (f) => f.providerID === currentProviderId && f.modelID === currentModelId,
-        )
+        const { currentProviderId, currentModelId, providers, setProvider, setModel } = useConfigStore.getState()
         const delta = eventMatchesShortcut(e, combo("cycle_favorite_model_forward")) ? 1 : -1
-        const next = favoriteModels[(currentIdx + delta + len) % len]
+        const next = getNextSelectableFavoriteModel(favoriteModels, providers, currentProviderId, currentModelId, delta)
+        if (!next) {
+          return
+        }
 
+        e.preventDefault()
         setProvider(next.providerID)
         setModel(next.modelID)
         addRecentModel(next.providerID, next.modelID)

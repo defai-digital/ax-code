@@ -7,6 +7,7 @@ import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useUIStore } from "@/stores/useUIStore"
 import { useSelectionStore } from "@/sync/selection-store"
 import { useSessionUIStore } from "@/sync/session-ui-store"
+import { getNextSelectableFavoriteModel } from "@/lib/modelPickerSelection"
 
 const focusChatInput = () => {
   const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]')
@@ -90,14 +91,14 @@ export const useMiniChatKeyboardShortcuts = () => {
           return
         }
 
-        event.preventDefault()
-        const { currentProviderId, currentModelId, setProvider, setModel } = useConfigStore.getState()
-        const currentIndex = favoriteModels.findIndex(
-          (favorite) => favorite.providerID === currentProviderId && favorite.modelID === currentModelId,
-        )
+        const { currentProviderId, currentModelId, providers, setProvider, setModel } = useConfigStore.getState()
         const delta = cyclesForward ? 1 : -1
-        const next = favoriteModels[(currentIndex + delta + favoriteModels.length) % favoriteModels.length]
+        const next = getNextSelectableFavoriteModel(favoriteModels, providers, currentProviderId, currentModelId, delta)
+        if (!next) {
+          return
+        }
 
+        event.preventDefault()
         setProvider(next.providerID)
         setModel(next.modelID)
         addRecentModel(next.providerID, next.modelID)
