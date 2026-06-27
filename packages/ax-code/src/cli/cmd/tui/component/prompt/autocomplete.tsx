@@ -10,6 +10,7 @@ import { useTheme, selectedForeground } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { findRenderableChild, isRenderableAlive } from "@tui/util/renderable-safety"
 import { useTerminalDimensions } from "@ax-code/opentui-solid"
 import { Agent } from "@/agent/agent"
 import { Locale } from "@/util/locale"
@@ -204,7 +205,7 @@ export function Autocomplete(props: {
     cursorTick()
 
     const input = props.input()
-    if (!input || input.isDestroyed) return
+    if (!isRenderableAlive(input)) return
     return input.getTextRange(store.index + 1, input.cursorOffset)
   })
 
@@ -554,7 +555,13 @@ export function Autocomplete(props: {
   function moveTo(next: number) {
     setStore("selected", next)
     if (!scroll) return
-    const target = scroll.getChildren().find((child) => child.id === autocompleteOptionID(next))
+    const target = findRenderableChild<{ id?: string; y: number }>(
+      scroll,
+      (child) => child.id === autocompleteOptionID(next),
+      {
+        name: "autocomplete-option-target",
+      },
+    )
     const scrollDelta = autocompleteSelectionScrollDelta({
       selectedIndex: next,
       viewportY: scroll.y,

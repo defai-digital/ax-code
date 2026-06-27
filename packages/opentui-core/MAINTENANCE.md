@@ -90,9 +90,12 @@ state must use the named TUI timer helpers instead of raw `setTimeout` or
 process alive, and run callbacks through the same background failure boundary.
 Event listeners, abort forwarding, external event subscriptions, and process
 handlers must use named lifecycle helpers so reconnects, route switches, worker
-restarts, and teardown paths unregister exactly once. Optional startup state,
-delayed hydration, focus restoration, layout refresh, polling, countdown,
-subscription cleanup, and reconnect recovery work are allowed to fail, but
+restarts, and teardown paths unregister exactly once. OpenTUI renderable access
+that focuses, blurs, or walks children must use named renderable-safety helpers
+so stale or destroyed renderables degrade without throwing during route changes
+or dialog handoffs. Optional startup state, delayed hydration, focus
+restoration, layout refresh, polling, countdown, subscription cleanup,
+renderable lookup, and reconnect recovery work are allowed to fail, but
 failures must stay inside that named boundary: callers may handle expected
 degradation locally, and otherwise the helper logs the named failure instead of
 creating an unhandled rejection or crashing the TUI.

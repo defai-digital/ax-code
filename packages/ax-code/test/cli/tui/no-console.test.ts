@@ -143,7 +143,7 @@ describe("tui console hygiene", () => {
   test("autocomplete scroll follows child positions instead of a stale raw scrollTop snapshot", async () => {
     const autocomplete = await fs.readFile(path.join(TUI_SRC, "component/prompt/autocomplete.tsx"), "utf8")
 
-    expect(autocomplete).toContain("scroll.getChildren()")
+    expect(autocomplete).toContain("findRenderableChild<{")
     expect(autocomplete).toContain("scroll.y")
     expect(autocomplete).not.toContain("scroll.scrollTop")
   })

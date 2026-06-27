@@ -5,6 +5,7 @@ import { createStore } from "solid-js/store"
 import { onMount, onCleanup, Show } from "solid-js"
 import { useKeyboard } from "@ax-code/opentui-solid"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { focusRenderable } from "@tui/util/renderable-safety"
 
 export type DialogExportOptionsProps = {
   defaultFilename: string
@@ -96,8 +97,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
     dialog.setSize("medium")
     const cancel = scheduleMicrotaskTask(
       () => {
-        if (!textarea || textarea.isDestroyed) return
-        textarea.focus()
+        focusRenderable(textarea, { name: "export-options-focus" })
       },
       {
         name: "export-options-focus",

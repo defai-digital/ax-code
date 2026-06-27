@@ -11,6 +11,7 @@ import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
+import { focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 
 const log = Log.create({ service: "tui.question" })
 
@@ -437,8 +438,8 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                         ref={(val: TextareaRenderable) => {
                           textarea = val
                           queueMicrotask(() => {
-                            if (val.isDestroyed) return
-                            val.focus()
+                            if (!isRenderableAlive(val)) return
+                            focusRenderable(val, { name: "question-textarea-focus" })
                             val.gotoLineEnd()
                           })
                         }}

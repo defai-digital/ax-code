@@ -8,6 +8,7 @@ import { useTheme } from "@tui/context/theme"
 import type { ToolPart } from "@ax-code/sdk/v2"
 import type { Tool } from "@/tool/tool"
 import { useSessionRouteContext } from "../context"
+import { renderableChildren } from "@tui/util/renderable-safety"
 
 export type ToolProps<T extends Tool.Info> = {
   input: Partial<Tool.InferParameters<T>>
@@ -78,7 +79,7 @@ export function InlineTool(props: {
           setMargin(1)
           return
         }
-        const children = parent.getChildren()
+        const children = renderableChildren<BoxRenderable>(parent, { name: "tool-renderer-parent-children" })
         const index = children.indexOf(el)
         const previous = children[index - 1]
         if (!previous) {

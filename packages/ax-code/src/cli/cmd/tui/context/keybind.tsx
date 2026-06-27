@@ -8,6 +8,7 @@ import { useKeyboard, useRenderer } from "@ax-code/opentui-solid"
 import { createSimpleContext } from "./helper"
 import { useTuiConfig } from "./tui-config"
 import { scheduleTuiTimeout } from "@tui/util/timer"
+import { blurRenderable, focusRenderable } from "@tui/util/renderable-safety"
 
 export type KeybindKey = keyof NonNullable<TuiConfig.Info["keybinds"]> & string
 
@@ -34,15 +35,14 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
       if (active) {
         setStore("leader", true)
         focus = renderer.currentFocusedRenderable
-        focus?.blur()
+        blurRenderable(focus, { name: "keybind-leader-blur-focus" })
         cancelLeaderTimeout?.()
         cancelLeaderTimeout = scheduleTuiTimeout(
           () => {
             cancelLeaderTimeout = undefined
             if (!store.leader) return
             leader(false)
-            if (!focus || focus.isDestroyed) return
-            focus.focus()
+            focusRenderable(focus, { name: "keybind-leader-timeout-focus" })
           },
           {
             name: "keybind-leader-timeout",
@@ -54,7 +54,7 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
 
       if (!active) {
         if (focus && !renderer.currentFocusedRenderable) {
-          focus.focus()
+          focusRenderable(focus, { name: "keybind-leader-restore-focus" })
         }
         setStore("leader", false)
       }
@@ -97,7 +97,7 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
         setImmediate(() => {
           if (disposed) return
           if (focus && renderer.currentFocusedRenderable === focus) {
-            focus.focus()
+            focusRenderable(focus, { name: "keybind-leader-key-focus" })
           }
           leader(false)
         })

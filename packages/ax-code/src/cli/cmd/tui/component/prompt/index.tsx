@@ -57,6 +57,7 @@ import { useCommandDialog } from "../dialog-command"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
 import { Editor } from "@tui/util/editor"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { blurRenderable, focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
@@ -239,7 +240,7 @@ export function Prompt(props: PromptProps) {
   function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean } = {}) {
     scheduleMicrotaskTask(
       () => {
-        if (!input || input.isDestroyed) return
+        if (!isRenderableAlive(input)) return
         input.getLayoutNode().markDirty()
         if (options.gotoBufferEnd) input.gotoBufferEnd()
         renderer.requestRender()
@@ -265,7 +266,7 @@ export function Prompt(props: PromptProps) {
     const color = inputBlocked() ? theme.backgroundElement : theme.text
     scheduleMicrotaskTask(
       () => {
-        if (!input || input.isDestroyed) return
+        if (!isRenderableAlive(input)) return
         input.cursorColor = color
       },
       {
@@ -354,7 +355,7 @@ export function Prompt(props: PromptProps) {
   }
 
   useKeyboard((evt) => {
-    if (!input || input.isDestroyed || !input.focused) return
+    if (!isRenderableAlive(input) || !input.focused) return
     if (!isPromptSubmitKey(evt)) return
     if (autocomplete?.visible) return
     evt.preventDefault()
@@ -368,7 +369,7 @@ export function Prompt(props: PromptProps) {
   let promptPartTypeId = 0
 
   const unsubPromptAppend = sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
-    if (!input || input.isDestroyed) return
+    if (!isRenderableAlive(input)) return
     input.insertText(evt.properties.text)
     requestInputLayoutRefresh({ gotoBufferEnd: true })
   })
@@ -388,7 +389,7 @@ export function Prompt(props: PromptProps) {
       // Remove from the queue only once the text actually lands in the composer,
       // so a request that arrives while the input is unavailable doesn't lose
       // the message (it stays queued and can be edited again).
-      if (input && !input.isDestroyed) {
+      if (isRenderableAlive(input)) {
         input.insertText(request.text)
         requestInputLayoutRefresh({ gotoBufferEnd: true })
         removeQueuedFollowUp(request.sessionID, request.id)
@@ -797,10 +798,10 @@ export function Prompt(props: PromptProps) {
       return store.prompt
     },
     focus() {
-      input.focus()
+      focusRenderable(input, { name: "prompt-ref-focus" })
     },
     blur() {
-      input.blur()
+      blurRenderable(input, { name: "prompt-ref-blur" })
     },
     set(prompt) {
       input.setText(prompt.input)
@@ -824,8 +825,8 @@ export function Prompt(props: PromptProps) {
   }
 
   createEffect(() => {
-    if (props.visible !== false) input?.focus()
-    if (props.visible === false) input?.blur()
+    if (props.visible !== false) focusRenderable(input, { name: "prompt-visible-focus" })
+    if (props.visible === false) blurRenderable(input, { name: "prompt-hidden-blur" })
   })
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
@@ -1113,7 +1114,7 @@ export function Prompt(props: PromptProps) {
         sessionID: nextSessionID,
       })
       setDraftSessionID(undefined)
-      if (input && !input.isDestroyed) input.blur()
+      blurRenderable(input, { name: "prompt-route-handoff-blur" })
       cancelRouteHandoff?.()
       cancelRouteHandoff = scheduleTuiTimeout(
         () => {
@@ -1733,7 +1734,7 @@ export function Prompt(props: PromptProps) {
                 syncInputCursorColor()
               }}
               onMouseDown={(r: MouseEvent) => {
-                r.target?.focus()
+                focusRenderable(r.target, { name: "prompt-mouse-target-focus" })
                 if (r.button !== MouseButton.RIGHT || process.platform !== "win32") return
 
                 r.preventDefault()

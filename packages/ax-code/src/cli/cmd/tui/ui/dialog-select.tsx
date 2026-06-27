@@ -7,6 +7,7 @@ import { isDeepEqual } from "remeda"
 import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { findRenderableChild, focusRenderable } from "@tui/util/renderable-safety"
 import { useToast } from "@tui/ui/toast"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
@@ -169,7 +170,9 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     const option = selected()
     if (option) props.onMove?.(option)
     if (!scroll) return
-    const target = scroll.getChildren().find((child) => child.id === optionID(next))
+    const target = findRenderableChild<{ id?: string; y: number }>(scroll, (child) => child.id === optionID(next), {
+      name: "dialog-select-option-target",
+    })
     if (!target) return
     const y = target.y - scroll.y
     if (center) {
@@ -302,9 +305,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               input = r
               const cancel = scheduleMicrotaskTask(
                 () => {
-                  if (!input) return
-                  if (input.isDestroyed) return
-                  input.focus()
+                  focusRenderable(input, { name: "dialog-select-filter-focus" })
                 },
                 {
                   name: "dialog-select-filter-focus",

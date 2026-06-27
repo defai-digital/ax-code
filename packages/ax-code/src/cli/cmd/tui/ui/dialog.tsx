@@ -8,6 +8,7 @@ import { RoundedBorder } from "./primitives/card"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { Flag } from "@/flag/flag"
 import { Selection } from "@tui/util/selection"
+import { blurRenderable, focusRenderable, isRenderableAlive, renderableChildren } from "@tui/util/renderable-safety"
 
 export function Dialog(
   props: ParentProps<{
@@ -105,10 +106,9 @@ function init() {
     cancelRefocus?.()
     cancelRefocus = scheduleMicrotaskTask(
       () => {
-        if (!focus) return
-        if (focus.isDestroyed) return
+        if (!isRenderableAlive(focus)) return
         function find(item: Renderable) {
-          for (const child of item.getChildren()) {
+          for (const child of renderableChildren<Renderable>(item, { name: "dialog-refocus-tree" })) {
             if (child === focus) return true
             if (find(child)) return true
           }
@@ -116,7 +116,7 @@ function init() {
         }
         const found = find(renderer.root)
         if (!found) return
-        focus.focus()
+        focusRenderable(focus, { name: "dialog-refocus" })
       },
       {
         name: "dialog-refocus",
@@ -139,7 +139,7 @@ function init() {
     replace(input: any, onClose?: () => void) {
       if (store.stack.length === 0) {
         focus = renderer.currentFocusedRenderable
-        focus?.blur()
+        blurRenderable(focus, { name: "dialog-open-blur-current-focus" })
       }
       for (const item of store.stack) {
         closeItem(item)

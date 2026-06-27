@@ -24,6 +24,12 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import {
+  findRenderableChild,
+  focusRenderable,
+  isRenderableAlive,
+  renderableChildren,
+} from "@tui/util/renderable-safety"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { Header } from "./header"
 import { useDialog } from "../../ui/dialog"
@@ -96,6 +102,11 @@ import { toolRendererComponent } from "./tool-renderers"
 addDefaultParsers(parsers.parsers)
 
 const log = Log.create({ service: "tui.session" })
+
+type ScrollChild = {
+  id?: string
+  y: number
+}
 
 class CustomSpeedScroll implements ScrollAcceleration {
   constructor(private speed: number) {}
@@ -447,15 +458,20 @@ export function Session() {
   })
 
   const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => {
-    if (!scroll || scroll.isDestroyed) return
+    if (!isRenderableAlive(scroll)) return
+    const children = renderableChildren<ScrollChild>(scroll, { name: "session-scroll-message-children" })
     const targetID = nextVisibleMessage({
       direction,
-      children: scroll.getChildren(),
+      children,
       messages: messages(),
       parts: sync.data.part,
       scrollTop: scroll.y,
     })
-    const child = targetID ? scroll.getChildren().find((item) => item.id === targetID) : undefined
+    const child = targetID
+      ? findRenderableChild<ScrollChild>(scroll, (item) => item.id === targetID, {
+          name: "session-scroll-message-target",
+        })
+      : undefined
     scroll.scrollBy(
       messageScroll({
         direction,
@@ -473,7 +489,7 @@ export function Session() {
     cancelScrollTimer = scheduleTuiTimeout(
       () => {
         cancelScrollTimer = undefined
-        if (!scroll || scroll.isDestroyed) return
+        if (!isRenderableAlive(scroll)) return
         scroll.scrollTo(scroll.scrollHeight)
       },
       {
@@ -520,7 +536,7 @@ export function Session() {
     })
     scheduleMicrotaskTask(
       () => {
-        promptRef.current?.focus()
+        focusRenderable(promptRef.current, { name: "session-continue-branch-focus" })
       },
       {
         name: "session-continue-branch-focus",
@@ -543,7 +559,7 @@ export function Session() {
             goal={sync.data.session_goal[route.sessionID]}
             setPrompt={(value) => {
               prompt.set({ input: value, parts: [] })
-              prompt.focus()
+              focusRenderable(prompt, { name: "session-goal-prompt-focus" })
             }}
           />
         )),
@@ -554,7 +570,7 @@ export function Session() {
             setPrompt={(promptInfo) => {
               if (!prompt) return
               prompt.set(promptInfo)
-              prompt.focus()
+              focusRenderable(prompt, { name: "session-quality-prompt-focus" })
             }}
           />
         )),
@@ -622,7 +638,10 @@ export function Session() {
         dialog.replace(() => (
           <DialogTimeline
             onMove={(messageID) => {
-              const child = messageTarget(scroll.getChildren(), messageID)
+              const child = messageTarget(
+                renderableChildren<ScrollChild>(scroll, { name: "session-timeline-message-children" }),
+                messageID,
+              )
               if (child) scroll.scrollBy(child.y - scroll.y - 1)
             }}
             sessionID={route.sessionID}
@@ -633,7 +652,10 @@ export function Session() {
         dialog.replace(() => (
           <DialogForkFromTimeline
             onMove={(messageID) => {
-              const child = messageTarget(scroll.getChildren(), messageID)
+              const child = messageTarget(
+                renderableChildren<ScrollChild>(scroll, { name: "session-fork-message-children" }),
+                messageID,
+              )
               if (child) scroll.scrollBy(child.y - scroll.y - 1)
             }}
             sessionID={route.sessionID}
@@ -643,7 +665,10 @@ export function Session() {
       jumpToLastUser: () => {
         const list = sync.data.message[route.sessionID] ?? []
         const id = lastUserMessageID(list, sync.data.part)
-        const child = messageTarget(scroll.getChildren(), id)
+        const child = messageTarget(
+          renderableChildren<ScrollChild>(scroll, { name: "session-last-user-message-children" }),
+          id,
+        )
         if (child) scroll.scrollBy(child.y - scroll.y - 1)
       },
       messages,
@@ -686,7 +711,7 @@ export function Session() {
       onSelect: (dialog: DialogContext) => {
         if (prompt) {
           prompt.set(action.prompt)
-          prompt.focus()
+          focusRenderable(prompt, { name: "session-quality-action-prompt-focus" })
         }
         dialog.clear()
       },
@@ -710,7 +735,7 @@ export function Session() {
             "Debug this error using debug_analyze. Paste the error message and stack trace after this line.\n\nError: ",
           parts: [],
         })
-        promptRef.current?.focus()
+        focusRenderable(promptRef.current, { name: "session-dre-debug-prompt-focus" })
         dialog.clear()
       },
     },
@@ -726,7 +751,7 @@ export function Session() {
             "Use impact_analyze to show the blast radius of changing <symbol or file>. Report the risk label before making any edits.",
           parts: [],
         })
-        promptRef.current?.focus()
+        focusRenderable(promptRef.current, { name: "session-dre-impact-prompt-focus" })
         dialog.clear()
       },
     },
@@ -741,7 +766,7 @@ export function Session() {
           input: "Run dedup_scan on this project and report the top clusters ranked by extraction value.",
           parts: [],
         })
-        promptRef.current?.focus()
+        focusRenderable(promptRef.current, { name: "session-dre-dedup-prompt-focus" })
         dialog.clear()
       },
     },
@@ -757,7 +782,7 @@ export function Session() {
             "Run hardcode_scan and list findings grouped by severity. Focus on inline_secret_shape and inline_url first.",
           parts: [],
         })
-        promptRef.current?.focus()
+        focusRenderable(promptRef.current, { name: "session-dre-hardcode-prompt-focus" })
         dialog.clear()
       },
     },
@@ -773,7 +798,7 @@ export function Session() {
             "Use refactor_plan to draft a plan for <describe the refactor>. Do not apply anything until I review the plan.",
           parts: [],
         })
-        promptRef.current?.focus()
+        focusRenderable(promptRef.current, { name: "session-dre-refactor-prompt-focus" })
         dialog.clear()
       },
     },
@@ -809,7 +834,7 @@ export function Session() {
           input: lines.join("\n"),
           parts: [],
         })
-        promptRef.current?.focus()
+        focusRenderable(promptRef.current, { name: "session-dre-plans-prompt-focus" })
         dialog.clear()
       },
     },

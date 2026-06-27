@@ -3,6 +3,7 @@ import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { onCleanup, onMount, Show, type JSX } from "solid-js"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { focusRenderable } from "@tui/util/renderable-safety"
 import { useToast } from "./toast"
 import { Log } from "@/util/log"
 
@@ -52,8 +53,7 @@ export function DialogPrompt(props: DialogPromptProps) {
     dialog.setSize("medium")
     const cancel = scheduleMicrotaskTask(
       () => {
-        if (!textarea || textarea.isDestroyed) return
-        textarea.focus()
+        focusRenderable(textarea, { name: "dialog-prompt-focus" })
       },
       {
         name: "dialog-prompt-focus",
