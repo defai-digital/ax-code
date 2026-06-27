@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { isNodePtyDebugFallbackNoise } from "../../script/tui-startup-smoke"
+import { isNodePtyDebugFallbackNoise, rendererProfileFromStartupEvents } from "../../script/tui-startup-smoke"
 
 describe("tui startup smoke", () => {
   test("identifies node-pty debug fallback loader noise", () => {
@@ -18,5 +18,29 @@ describe("tui startup smoke", () => {
     expect(isNodePtyDebugFallbackNoise(["innerError", error])).toBe(false)
     expect(isNodePtyDebugFallbackNoise(["innerError", new Error("different failure")])).toBe(false)
     expect(isNodePtyDebugFallbackNoise(["other", error])).toBe(false)
+  })
+
+  test("extracts the renderer profile from startup diagnostics", () => {
+    expect(
+      rendererProfileFromStartupEvents([
+        { eventType: "tui.backendReady", data: {} },
+        {
+          eventType: "tui.startup.rendererProfile",
+          data: {
+            profile: "advanced",
+            useThread: true,
+            screenMode: "alternate-screen",
+          },
+        },
+      ]),
+    ).toBe("advanced")
+  })
+
+  test("ignores malformed renderer profile diagnostics", () => {
+    expect(rendererProfileFromStartupEvents([])).toBeUndefined()
+    expect(rendererProfileFromStartupEvents([{ eventType: "tui.startup.rendererProfile", data: null }])).toBeUndefined()
+    expect(
+      rendererProfileFromStartupEvents([{ eventType: "tui.startup.rendererProfile", data: { profile: 1 } }]),
+    ).toBeUndefined()
   })
 })

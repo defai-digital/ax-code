@@ -62,8 +62,15 @@ pnpm --dir packages/ax-code run check:tui-layering
 pnpm --dir packages/ax-code run check:tui-snapshot
 pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts test/cli/tui/opentui-spinner.test.ts test/script/tui-startup-smoke.test.ts test/script/check-tui-layering.test.ts
 pnpm --dir packages/ax-code run tui:startup-smoke
+pnpm --dir packages/ax-code run tui:startup-smoke -- --terminal-profile advanced
 ```
 
 Run `pnpm --dir packages/ax-code run build -- --single` as well when the change
 affects package exports, runtime-plugin loading, native dependency resolution,
 or distribution packaging.
+
+The compatible renderer profile is the production default. The advanced profile
+is opt-in (`AX_CODE_TUI_ADVANCED_TERMINAL=1`) and enables alternate-screen,
+Kitty keyboard negotiation, and OpenTUI's render thread. Any change that touches
+renderer options, terminal cleanup, startup diagnostics, or native OpenTUI
+integration must keep both startup-smoke profiles passing.

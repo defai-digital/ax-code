@@ -28,6 +28,8 @@ type ProcessEvent = {
   data?: unknown
 }
 
+type TuiStartupRendererProfile = "compatible" | "advanced"
+
 type SmokePty = {
   readonly pid: number
   write(data: string): void
@@ -44,6 +46,7 @@ export type TuiStartupSmokeOptions = {
   debugBaseDir: string
   homeDir: string
   backendTransport?: "worker" | "process"
+  terminalProfile?: TuiStartupRendererProfile
   timeoutMs?: number
   label?: string
 }
@@ -183,6 +186,29 @@ function eventNames(events: ProcessEvent[]) {
   return [...new Set(events.map((event) => event.eventType).filter((event): event is string => !!event))]
 }
 
+function recordData(input: unknown): Record<string, unknown> | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
+  return input as Record<string, unknown>
+}
+
+export function rendererProfileFromStartupEvents(events: readonly ProcessEvent[]) {
+  const event = events.find((item) => item.eventType === "tui.startup.rendererProfile")
+  const data = recordData(event?.data)
+  return typeof data?.profile === "string" ? data.profile : undefined
+}
+
+function assertRendererProfile(events: readonly ProcessEvent[], expected: TuiStartupRendererProfile) {
+  const actual = rendererProfileFromStartupEvents(events)
+  if (actual === expected) return
+
+  const seen = eventNames([...events])
+  throw new Error(
+    `TUI startup expected renderer profile ${expected}, got ${actual ?? "none"}; seen events: ${
+      seen.length ? seen.join(", ") : "none"
+    }`,
+  )
+}
+
 async function waitForTuiStartup(
   debugBaseDir: string,
   timeoutMs: number,
@@ -315,6 +341,8 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
     AX_CODE_DISABLE_PROJECT_CONFIG: "1",
     AX_CODE_EXPERIMENTAL_DISABLE_FILEWATCHER: "1",
     AX_CODE_TUI_BACKEND_TRANSPORT: input.backendTransport,
+    AX_CODE_TUI_ADVANCED_TERMINAL:
+      input.terminalProfile === "advanced" ? "1" : input.terminalProfile === "compatible" ? "0" : undefined,
     AX_CODE_TUI_UPGRADE_CHECK_DELAY_MS: "0",
     AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: "5000",
     COLORTERM: "truecolor",
@@ -350,10 +378,11 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
     if (missing.length) {
       throw new Error(`installed TUI startup smoke missed required events: ${missing.join(", ")}`)
     }
+    if (input.terminalProfile) assertRendererProfile(events, input.terminalProfile)
     console.log(
       `${label}: installed TUI startup reached ${TUI_STARTUP_SUCCESS_EVENT} (${TUI_STARTUP_REQUIRED_EVENTS.join(
         " -> ",
-      )})`,
+      )}${input.terminalProfile ? `; renderer profile ${input.terminalProfile}` : ""})`,
     )
   } catch (error) {
     startupFailed = true
@@ -402,6 +431,10 @@ async function main() {
   if (backendTransport !== undefined && backendTransport !== "worker" && backendTransport !== "process") {
     throw new Error(`--backend-transport must be worker or process, got ${backendTransport}`)
   }
+  const terminalProfile = args.includes("--advanced-terminal") ? "advanced" : argValue(args, "--terminal-profile")
+  if (terminalProfile !== undefined && terminalProfile !== "compatible" && terminalProfile !== "advanced") {
+    throw new Error(`--terminal-profile must be compatible or advanced, got ${terminalProfile}`)
+  }
 
   try {
     await runTuiStartupSmoke({
@@ -410,6 +443,7 @@ async function main() {
       debugBaseDir: path.resolve(argValue(args, "--debug-dir") ?? path.join(tempRoot, "debug")),
       homeDir: path.resolve(argValue(args, "--home-dir") ?? path.join(tempRoot, "home")),
       backendTransport,
+      terminalProfile,
       label: "tui-startup-smoke",
       timeoutMs: Number(argValue(args, "--timeout-ms")) || undefined,
     })
