@@ -5,6 +5,7 @@ import { fileURLToPath } from "url"
 import { spawnSync } from "node:child_process"
 import esbuild from "esbuild"
 import { SkillLint } from "./check-skills"
+import { collectPackageRuntimeDependencies } from "./build-deps"
 import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
 import { WINDOWS_UTF8_WARNING } from "./source-launcher"
@@ -155,12 +156,23 @@ await writeText(
 const deps = pkg.dependencies as Record<string, string>
 // Read the vendored opentui-core's optionalDependencies to find the native platform packages.
 const opentuiCorePkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-core", "package.json"), "utf8")) as {
+  dependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
   optionalDependencies?: Record<string, string>
+}
+const opentuiSolidPkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-solid", "package.json"), "utf8")) as {
+  dependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+}
+const opentuiSpinnerPkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-spinner", "package.json"), "utf8")) as {
+  dependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
 }
 const currentNativePkg = Object.keys(opentuiCorePkg.optionalDependencies ?? {}).find(
   (name) => name.includes(`-${process.platform}-${process.arch}`)
 )
 const distDeps: Record<string, string> = {
+  ...collectPackageRuntimeDependencies([opentuiCorePkg, opentuiSolidPkg, opentuiSpinnerPkg]),
   "node-pty-prebuilt-multiarch": deps["node-pty-prebuilt-multiarch"],
   // .wasm files are kept external (esbuild) and resolved at runtime via
   // createRequire — ship the tree-sitter packages beside the bundle so the bash
@@ -237,7 +249,11 @@ for (const [pkgName, srcDir] of vendoredOpentuiPackages) {
     console.warn(`Vendored package missing: ${srcDir} — ${pkgName} will be unavailable in the distribution`)
     continue
   }
-  fs.cpSync(srcDir, destDir, { recursive: true, dereference: true })
+  fs.cpSync(srcDir, destDir, {
+    recursive: true,
+    dereference: true,
+    filter: (src) => path.basename(src) !== "node_modules",
+  })
   console.log(`Copied vendored ${pkgName} into the distribution`)
 }
 // node-pty ships a node-gyp addon; build it for this platform (no abi prebuild
