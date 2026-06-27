@@ -1,0 +1,1 @@
+import{t as e}from"./src-DzmVtD7N.mjs";import{extend as t}from"@opentui/react";t({spinner:e});export{};

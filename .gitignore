@@ -13,6 +13,8 @@ tmp
 .tmp/
 **/.tmp/
 dist
+!packages/opentui-spinner/dist/
+!packages/opentui-spinner/dist/*
 dist-source
 ts-dist
 desktop/packages/electron/resources/web-dist/
