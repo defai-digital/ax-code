@@ -126,6 +126,7 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           }
         },
         {
+          name: "file-frecency-load",
           delayMs: FRECENCY_LOAD_DELAY_MS,
         },
       )

@@ -272,6 +272,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           }
           setStore("ready", false)
           const cancel = scheduleDeferredStartupTask(() => resolveSystemTheme(store.mode), {
+            name: "system-theme-discovery",
             delayMs: THEME_DISCOVERY_DELAY_MS,
           })
           onCleanup(cancel)
@@ -281,6 +282,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
 
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(() => ensureCustomThemesLoaded(), {
+        name: "custom-theme-hydration",
         delayMs: THEME_DISCOVERY_DELAY_MS,
       })
       onCleanup(cancel)

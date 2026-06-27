@@ -445,6 +445,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         .catch((error) => {
           handleSessionRouteLoadFailure(error, { source: "startup-preload" })
         }),
+      {
+        name: "session-route-startup-preload",
+      },
     )
     onCleanup(cancel)
   })

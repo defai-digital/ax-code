@@ -82,6 +82,7 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
           }
         },
         {
+          name: "prompt-stash-load",
           delayMs: STASH_LOAD_DELAY_MS,
         },
       )

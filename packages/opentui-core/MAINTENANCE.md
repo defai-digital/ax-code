@@ -80,3 +80,9 @@ Terminal teardown must remain best-effort and ordered. Title cleanup,
 flush are separate failure domains; a failure in one step must not prevent later
 terminal recovery steps from running. If `renderer.destroy()` fails, cleanup
 must still run before the original destroy error is rethrown.
+
+Deferred startup work in the TUI must use `scheduleDeferredStartupTask()` with a
+stable task name. Optional startup state and delayed hydration tasks are allowed
+to fail, but failures must stay inside the deferred-task boundary: callers may
+handle expected degradation locally, and otherwise the helper logs the named
+failure instead of creating an unhandled rejection or crashing the TUI.

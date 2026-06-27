@@ -78,6 +78,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
           await refreshProjectHistory({ directory: sdk.directory, mergeLocal: true })
         },
         {
+          name: "prompt-history-load",
           delayMs: HISTORY_LOAD_DELAY_MS,
         },
       )
