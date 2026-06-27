@@ -236,12 +236,17 @@ export function Prompt(props: PromptProps) {
   }
 
   function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean } = {}) {
-    scheduleMicrotaskTask(() => {
-      if (!input || input.isDestroyed) return
-      input.getLayoutNode().markDirty()
-      if (options.gotoBufferEnd) input.gotoBufferEnd()
-      renderer.requestRender()
-    })
+    scheduleMicrotaskTask(
+      () => {
+        if (!input || input.isDestroyed) return
+        input.getLayoutNode().markDirty()
+        if (options.gotoBufferEnd) input.gotoBufferEnd()
+        renderer.requestRender()
+      },
+      {
+        name: "prompt-input-layout-refresh",
+      },
+    )
   }
 
   function clearPromptDraft() {
@@ -257,10 +262,15 @@ export function Prompt(props: PromptProps) {
 
   function syncInputCursorColor() {
     const color = inputBlocked() ? theme.backgroundElement : theme.text
-    scheduleMicrotaskTask(() => {
-      if (!input || input.isDestroyed) return
-      input.cursorColor = color
-    })
+    scheduleMicrotaskTask(
+      () => {
+        if (!input || input.isDestroyed) return
+        input.cursorColor = color
+      },
+      {
+        name: "prompt-input-cursor-color-sync",
+      },
+    )
   }
 
   const promptContentWidth = createMemo(() => {

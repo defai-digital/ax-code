@@ -101,10 +101,7 @@ export type AutocompleteOption = {
 }
 
 const normalizeSlashAutocompleteQuery = (value: string): string =>
-  removeLineRange(value)
-    .trim()
-    .replace(/^\//, "")
-    .toLowerCase()
+  removeLineRange(value).trim().replace(/^\//, "").toLowerCase()
 
 const slashAutocompleteTokens = (option: AutocompleteOption): string[] => {
   const tokens = new Set<string>()
@@ -612,9 +609,14 @@ export function Autocomplete(props: {
   }
 
   function refreshCursorAfterKey() {
-    scheduleMicrotaskTask(() => {
-      setCursorTick((tick) => tick + 1)
-    })
+    scheduleMicrotaskTask(
+      () => {
+        setCursorTick((tick) => tick + 1)
+      },
+      {
+        name: "autocomplete-cursor-refresh",
+      },
+    )
   }
 
   function hide() {

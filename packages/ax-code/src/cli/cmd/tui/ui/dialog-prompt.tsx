@@ -50,10 +50,15 @@ export function DialogPrompt(props: DialogPromptProps) {
 
   onMount(() => {
     dialog.setSize("medium")
-    const cancel = scheduleMicrotaskTask(() => {
-      if (!textarea || textarea.isDestroyed) return
-      textarea.focus()
-    })
+    const cancel = scheduleMicrotaskTask(
+      () => {
+        if (!textarea || textarea.isDestroyed) return
+        textarea.focus()
+      },
+      {
+        name: "dialog-prompt-focus",
+      },
+    )
     onCleanup(cancel)
     textarea.gotoLineEnd()
   })

@@ -1,38 +1,30 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { scheduleDeferredStartupTask } from "../../../src/cli/cmd/tui/util/startup-task"
+import { describe, expect, test, vi } from "vitest"
+import { setTimeout as sleep } from "node:timers/promises"
+import { runTuiBackgroundTask } from "../../../src/cli/cmd/tui/util/background-task"
 
-describe("tui deferred startup tasks", () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  test("logs synchronous task failures without throwing from the timer callback", async () => {
+describe("tui background tasks", () => {
+  test("logs synchronous task failures without leaking unhandled rejections", async () => {
     const error = new Error("sync task failed")
     const logger = { warn: vi.fn() }
 
-    scheduleDeferredStartupTask(
+    runTuiBackgroundTask(
       () => {
         throw error
       },
       { name: "sync-task", logger },
     )
-
-    await vi.runAllTimersAsync()
+    await Promise.resolve()
+    await Promise.resolve()
 
     expect(logger.warn).toHaveBeenCalledWith("tui background task failed", { taskName: "sync-task", error })
   })
 
-  test("logs asynchronous task rejections without leaking unhandled rejections", async () => {
+  test("logs asynchronous task rejections", async () => {
     const error = new Error("async task failed")
     const logger = { warn: vi.fn() }
 
-    scheduleDeferredStartupTask(() => Promise.reject(error), { name: "async-task", logger })
-
-    await vi.runAllTimersAsync()
+    runTuiBackgroundTask(() => Promise.reject(error), { name: "async-task", logger })
+    await sleep(0)
 
     expect(logger.warn).toHaveBeenCalledWith("tui background task failed", { taskName: "async-task", error })
   })
@@ -42,32 +34,30 @@ describe("tui deferred startup tasks", () => {
     const logger = { warn: vi.fn() }
     const onError = vi.fn()
 
-    scheduleDeferredStartupTask(() => Promise.reject(error), {
+    runTuiBackgroundTask(() => Promise.reject(error), {
       name: "handled-task",
       logger,
       onError,
     })
-
-    await vi.runAllTimersAsync()
+    await sleep(0)
 
     expect(onError).toHaveBeenCalledWith(error)
     expect(logger.warn).not.toHaveBeenCalled()
   })
 
-  test("keeps handler failures inside the deferred task boundary", async () => {
+  test("keeps handler failures inside the background task boundary", async () => {
     const originalError = new Error("task failed")
     const handlerError = new Error("handler failed")
     const logger = { warn: vi.fn() }
 
-    scheduleDeferredStartupTask(() => Promise.reject(originalError), {
+    runTuiBackgroundTask(() => Promise.reject(originalError), {
       name: "handler-task",
       logger,
       onError() {
         throw handlerError
       },
     })
-
-    await vi.runAllTimersAsync()
+    await sleep(0)
 
     expect(logger.warn).toHaveBeenCalledWith("tui background task error handler failed", {
       taskName: "handler-task",
@@ -76,15 +66,15 @@ describe("tui deferred startup tasks", () => {
     })
   })
 
-  test("does not log after cancellation", async () => {
+  test("does not report failures after cancellation", async () => {
     const logger = { warn: vi.fn() }
-    const cancel = scheduleDeferredStartupTask(() => Promise.reject(new Error("cancelled")), {
+    const cancel = runTuiBackgroundTask(() => Promise.reject(new Error("cancelled")), {
       name: "cancelled-task",
       logger,
     })
 
     cancel()
-    await vi.runAllTimersAsync()
+    await sleep(0)
 
     expect(logger.warn).not.toHaveBeenCalled()
   })

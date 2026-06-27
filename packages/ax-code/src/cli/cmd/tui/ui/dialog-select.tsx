@@ -128,16 +128,21 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   createEffect(
     on([() => store.filter, () => props.current], ([filter, current]) => {
-      const cancel = scheduleMicrotaskTask(() => {
-        if (filter.length > 0) {
-          moveTo(0, true)
-        } else if (current) {
-          const currentIndex = flat().findIndex((opt) => isDeepEqual(opt.value, current))
-          if (currentIndex >= 0) {
-            moveTo(currentIndex, true)
+      const cancel = scheduleMicrotaskTask(
+        () => {
+          if (filter.length > 0) {
+            moveTo(0, true)
+          } else if (current) {
+            const currentIndex = flat().findIndex((opt) => isDeepEqual(opt.value, current))
+            if (currentIndex >= 0) {
+              moveTo(currentIndex, true)
+            }
           }
-        }
-      })
+        },
+        {
+          name: "dialog-select-current-option",
+        },
+      )
       onCleanup(cancel)
     }),
   )
@@ -295,11 +300,16 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
             focusedTextColor={theme.textMuted}
             ref={(r: InputRenderable) => {
               input = r
-              const cancel = scheduleMicrotaskTask(() => {
-                if (!input) return
-                if (input.isDestroyed) return
-                input.focus()
-              })
+              const cancel = scheduleMicrotaskTask(
+                () => {
+                  if (!input) return
+                  if (input.isDestroyed) return
+                  input.focus()
+                },
+                {
+                  name: "dialog-select-filter-focus",
+                },
+              )
               onCleanup(cancel)
             }}
             placeholder={props.placeholder ?? "Search"}

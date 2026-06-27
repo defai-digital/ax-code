@@ -103,20 +103,25 @@ function init() {
   }
   function refocus() {
     cancelRefocus?.()
-    cancelRefocus = scheduleMicrotaskTask(() => {
-      if (!focus) return
-      if (focus.isDestroyed) return
-      function find(item: Renderable) {
-        for (const child of item.getChildren()) {
-          if (child === focus) return true
-          if (find(child)) return true
+    cancelRefocus = scheduleMicrotaskTask(
+      () => {
+        if (!focus) return
+        if (focus.isDestroyed) return
+        function find(item: Renderable) {
+          for (const child of item.getChildren()) {
+            if (child === focus) return true
+            if (find(child)) return true
+          }
+          return false
         }
-        return false
-      }
-      const found = find(renderer.root)
-      if (!found) return
-      focus.focus()
-    })
+        const found = find(renderer.root)
+        if (!found) return
+        focus.focus()
+      },
+      {
+        name: "dialog-refocus",
+      },
+    )
   }
   onCleanup(() => cancelRefocus?.())
 

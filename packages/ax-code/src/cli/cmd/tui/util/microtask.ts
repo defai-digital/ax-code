@@ -1,22 +1,12 @@
+import { runTuiBackgroundTask, type TuiBackgroundTaskLogger } from "./background-task"
+
 export function scheduleMicrotaskTask(
   task: () => void | Promise<void>,
   input: {
+    name: string
     onError?: (error: unknown) => void
-  } = {},
+    logger?: TuiBackgroundTaskLogger
+  },
 ) {
-  let cancelled = false
-
-  void Promise.resolve()
-    .then(() => {
-      if (cancelled) return
-      return task()
-    })
-    .catch((error) => {
-      if (cancelled) return
-      input.onError?.(error)
-    })
-
-  return () => {
-    cancelled = true
-  }
+  return runTuiBackgroundTask(task, input)
 }

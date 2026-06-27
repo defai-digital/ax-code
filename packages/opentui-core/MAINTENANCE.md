@@ -82,7 +82,10 @@ terminal recovery steps from running. If `renderer.destroy()` fails, cleanup
 must still run before the original destroy error is rethrown.
 
 Deferred startup work in the TUI must use `scheduleDeferredStartupTask()` with a
-stable task name. Optional startup state and delayed hydration tasks are allowed
-to fail, but failures must stay inside the deferred-task boundary: callers may
-handle expected degradation locally, and otherwise the helper logs the named
-failure instead of creating an unhandled rejection or crashing the TUI.
+stable task name. Microtask handoffs and other fire-and-forget UI work must use
+the shared TUI background-task boundary instead of ad hoc `void promise.catch`
+patterns. Optional startup state, delayed hydration, focus restoration, and
+layout refresh work are allowed to fail, but failures must stay inside that
+named background-task boundary: callers may handle expected degradation locally,
+and otherwise the helper logs the named failure instead of creating an
+unhandled rejection or crashing the TUI.

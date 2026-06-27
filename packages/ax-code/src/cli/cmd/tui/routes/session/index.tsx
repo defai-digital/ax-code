@@ -498,9 +498,14 @@ export function Session() {
       type: "session",
       sessionID,
     })
-    scheduleMicrotaskTask(() => {
-      promptRef.current?.focus()
-    })
+    scheduleMicrotaskTask(
+      () => {
+        promptRef.current?.focus()
+      },
+      {
+        name: "session-continue-branch-focus",
+      },
+    )
   }
 
   const command = useCommandDialog()

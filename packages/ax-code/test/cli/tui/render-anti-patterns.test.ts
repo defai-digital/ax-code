@@ -62,6 +62,8 @@ const SYNC_BOOTSTRAP_REQUEST_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-r
 const SYNC_BOOTSTRAP_RUNNER_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-runner.ts")
 const HOME_SRC = path.join(TUI_ROOT, "routes/home.tsx")
 const STARTUP_TRACE_SRC = path.join(TUI_ROOT, "util/startup-trace.ts")
+const BACKGROUND_TASK_SRC = path.join(TUI_ROOT, "util/background-task.ts")
+const MICRO_TASK_SRC = path.join(TUI_ROOT, "util/microtask.ts")
 const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "component/prompt/history.tsx"),
   path.join(TUI_ROOT, "component/prompt/frecency.tsx"),
@@ -698,6 +700,34 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(autocomplete).toContain("scheduleMicrotaskTask")
     expect(autocomplete).not.toContain("setInterval(")
+  })
+
+  test("keeps TUI microtasks behind the named background task boundary", async () => {
+    const backgroundTask = await fs.readFile(BACKGROUND_TASK_SRC, "utf8")
+    const microtask = await fs.readFile(MICRO_TASK_SRC, "utf8")
+    const files = [
+      AUTOCOMPLETE_SRC,
+      DIALOG_EXPORT_OPTIONS_SRC,
+      DIALOG_PROMPT_SRC,
+      DIALOG_SELECT_SRC,
+      DIALOG_SRC,
+      PROMPT_SRC,
+      SESSION_ROUTE_SRC,
+    ]
+
+    expect(backgroundTask).toContain('Log.create({ service: "tui.background-task" })')
+    expect(backgroundTask).toContain("taskName: input.name")
+    expect(backgroundTask).toContain('"tui background task failed"')
+    expect(backgroundTask).toContain('"tui background task error handler failed"')
+    expect(microtask).toContain("return runTuiBackgroundTask(task, input)")
+
+    for (const file of files) {
+      const text = await fs.readFile(file, "utf8")
+      for (const match of text.matchAll(/scheduleMicrotaskTask\(/g)) {
+        const call = text.slice(match.index, match.index + 500)
+        expect(call, file).toContain("name:")
+      }
+    }
   })
 
   test("prioritizes file attachment suggestions for bare @ autocomplete", async () => {
