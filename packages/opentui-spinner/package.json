@@ -1,9 +1,12 @@
 {
   "name": "@ax-code/opentui-spinner",
-  "version": "0.0.6",
-  "description": "Vendored fork of opentui-spinner — spinner library for OpenTUI",
+  "version": "1.0.0",
+  "description": "Vendored fork of @opentui/spinner — animated spinner renderable for terminal UIs. Independently maintained in the ax-code workspace.",
   "license": "MIT",
   "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "import": {
@@ -18,9 +21,12 @@
       }
     }
   },
+  "files": [
+    "dist",
+    "src"
+  ],
   "dependencies": {
     "@ax-code/opentui-core": "workspace:*",
-    "@ax-code/opentui-solid": "workspace:*",
-    "cli-spinners": "^3.3.0"
+    "@ax-code/opentui-solid": "workspace:*"
   }
 }

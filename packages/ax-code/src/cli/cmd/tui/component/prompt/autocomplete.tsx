@@ -452,11 +452,27 @@ export function Autocomplete(props: {
   })
 
   const commands = createMemo((): AutocompleteOption[] => {
-    const results: AutocompleteOption[] = [...command.slashes()]
+    const clientSlashes = command.slashes()
+    const results: AutocompleteOption[] = [...clientSlashes]
     const defaultCommandSlashAllowlist = new Set(["init", "review", "impact", "goal"])
+
+    // Collect slash names already registered client-side so we skip duplicates
+    // from the server list. A duplicate would show two identical suggestions
+    // with different onSelect behaviour: the client-side one triggers the
+    // command action directly (e.g. open provider dialog), while the
+    // server-side one only inserts text — and the trailing space it adds
+    // causes slashHasArguments to be true, bypassing the client-side slash
+    // dispatch and sending the command to the server instead.
+    const clientSlashNames = new Set(
+      clientSlashes.flatMap((s) => {
+        const name = s.display.trim().replace(/^\//, "").split(/\s/)[0]
+        return name ? [name] : []
+      }),
+    )
 
     for (const serverCommand of sync.data.command) {
       if (serverCommand.source === "command" && !defaultCommandSlashAllowlist.has(serverCommand.name)) continue
+      if (clientSlashNames.has(serverCommand.name)) continue
       const label = commandAutocompleteSuffix(serverCommand)
       results.push({
         display: "/" + serverCommand.name + label,

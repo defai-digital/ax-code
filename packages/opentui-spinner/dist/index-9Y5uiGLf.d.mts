@@ -1,5 +1,4 @@
-import { ColorInput, LayoutOptions, OptimizedBuffer, RenderContext, Renderable, RenderableOptions } from "@opentui/core";
-import spinners from "cli-spinners";
+import { ColorInput, LayoutOptions, OptimizedBuffer, RenderContext, Renderable, RenderableOptions } from "@ax-code/opentui-core";
 
 //#region src/utils.d.ts
 
@@ -28,9 +27,26 @@ declare function createPulse(colors: ColorInput[], speed?: number): ColorGenerat
  * ```
  */
 declare function createWave(colors: ColorInput[]): ColorGenerator;
+/**
+ * Creates a static color generator that always returns the same color.
+ */
+declare function createStatic(color: ColorInput): ColorGenerator;
+/**
+ * Creates a rainbow gradient that cycles through the spectrum across characters.
+ */
+declare function createRainbow(): ColorGenerator;
+//#endregion
+//#region src/presets.d.ts
+interface SpinnerPreset {
+  readonly interval: number;
+  readonly frames: readonly string[];
+}
+type SpinnerName = "dots" | "dots2" | "dots3" | "dots4" | "dots5" | "dots9" | "dots10" | "dots11" | "line" | "line2" | "pipe" | "simpleDots" | "star" | "star2" | "flip" | "hamburger" | "growVertical" | "growHorizontal" | "balloon" | "balloon2" | "bounce" | "boxBounce" | "boxBounce2" | "triangle" | "arc" | "circle" | "squareCorners" | "circleQuarters" | "circleHalves" | "squish" | "toggle" | "toggle2" | "toggle3" | "toggle4" | "toggle5" | "arrow" | "arrow3" | "bouncingBar" | "bouncingBall" | "aesthetic";
+declare function getSpinnerPreset(name: SpinnerName): SpinnerPreset | undefined;
+declare function getSpinnerNames(): SpinnerName[];
+declare function randomSpinner(): SpinnerPreset;
 //#endregion
 //#region src/index.d.ts
-type SpinnerName = keyof typeof spinners;
 interface SpinnerOptions extends Omit<RenderableOptions<SpinnerRenderable>, "width" | "height" | "buffered" | "live" | keyof LayoutOptions> {
   name?: SpinnerName;
   frames?: string[];
@@ -73,8 +89,17 @@ declare class SpinnerRenderable extends Renderable {
   set backgroundColor(value: ColorInput);
   start(): void;
   stop(): void;
+  /** Whether the spinner animation is currently running. */
+  get running(): boolean;
+  /** Current frame index in the animation cycle. */
+  get currentFrameIndex(): number;
+  /** Reset the animation to the first frame. */
+  reset(): void;
   protected renderSelf(buffer: OptimizedBuffer): void;
   protected destroySelf(): void;
 }
 //#endregion
-export { createWave as a, createPulse as i, SpinnerRenderable as n, ColorGenerator as r, SpinnerOptions as t };
+//#region presets default export
+declare const presets: Record<string, SpinnerPreset>;
+//#endregion
+export { createWave as a, createPulse as i, SpinnerRenderable as n, ColorGenerator as r, SpinnerOptions as t, createStatic as c, createRainbow as d, SpinnerPreset as p, SpinnerName as s, getSpinnerPreset as g, getSpinnerNames as j, randomSpinner as b, presets as x };

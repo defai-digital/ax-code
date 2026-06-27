@@ -607,7 +607,15 @@ export const TuiThreadCommand = cmd({
           DiagnosticLog.recordProcess("tui.workerError", { error: e, target: backend.target })
           Log.Default.error(e)
           UI.error(formatWorkerLoadError(backend.target, e))
-          process.exit(1)
+          // Attempt graceful backend termination before exit so the child
+          // process (if any) is cleaned up and the terminal state is restored.
+          backend.terminate()
+            .catch((err) => {
+              log.warn("failed to terminate backend after worker error", { error: toErrorMessage(err) })
+            })
+            .finally(() => {
+              process.exit(1)
+            })
         }
         worker.onmessageerror = (e) => {
           DiagnosticLog.recordProcess("tui.workerMessageError", { error: e })

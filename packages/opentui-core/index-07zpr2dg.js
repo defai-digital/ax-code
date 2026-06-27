@@ -117,7 +117,7 @@ function isSizeType(value) {
 }
 
 // src/Renderable.ts
-var BrandedRenderable = Symbol.for("@opentui/core/Renderable");
+var BrandedRenderable = Symbol.for("@ax-code/opentui-core/Renderable");
 var LayoutEvents;
 ((LayoutEvents2) => {
   LayoutEvents2["LAYOUT_CHANGED"] = "layout-changed";
@@ -1486,7 +1486,7 @@ class RootRenderable extends Renderable {
 
 // src/renderables/composition/vnode.ts
 import util from "node:util";
-var BrandedVNode = Symbol.for("@opentui/core/VNode");
+var BrandedVNode = Symbol.for("@ax-code/opentui-core/VNode");
 function isRenderableConstructor(value) {
   return typeof value === "function" && value.prototype && Renderable.prototype.isPrototypeOf(value.prototype);
 }
@@ -3555,7 +3555,7 @@ class CodeRenderable extends TextBufferRenderable {
 }
 
 // src/renderables/TextNode.ts
-var BrandedTextNodeRenderable = Symbol.for("@opentui/core/TextNodeRenderable");
+var BrandedTextNodeRenderable = Symbol.for("@ax-code/opentui-core/TextNodeRenderable");
 function isTextNodeRenderable(obj) {
   return !!obj?.[BrandedTextNodeRenderable];
 }
@@ -5358,7 +5358,7 @@ class TerminalConsole extends EventEmitter4 {
 }
 
 // src/renderables/EditBufferRenderable.ts
-var BrandedEditBufferRenderable = Symbol.for("@opentui/core/EditBufferRenderable");
+var BrandedEditBufferRenderable = Symbol.for("@ax-code/opentui-core/EditBufferRenderable");
 var EditBufferRenderableEvents;
 ((EditBufferRenderableEvents2) => {
   EditBufferRenderableEvents2["TRAITS_CHANGED"] = "traits-changed";

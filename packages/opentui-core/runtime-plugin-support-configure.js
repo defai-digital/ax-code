@@ -7,7 +7,7 @@ function normalizeRewriteKey(rewrite) {
 function assertCompatibleInstall(install, options) {
     for (const specifier of Object.keys(options.additional ?? {})) {
         if (!install.additionalSpecifiers.has(specifier)) {
-            throw new Error(`OpenTUI Core runtime plugin support is already installed without ${specifier}. Call ensureRuntimePluginSupport({ additional }) from @opentui/core/runtime-plugin-support/configure before importing @opentui/core/runtime-plugin-support.`);
+            throw new Error(`OpenTUI Core runtime plugin support is already installed without ${specifier}. Call ensureRuntimePluginSupport({ additional }) from @ax-code/opentui-core/runtime-plugin-support/configure before importing @ax-code/opentui-core/runtime-plugin-support.`);
         }
     }
     if (options.core && options.core !== install.core) {

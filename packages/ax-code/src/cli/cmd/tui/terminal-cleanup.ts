@@ -24,6 +24,12 @@ export function clearTuiMainScreen(stream: FlushableStream = process.stdout) {
   return true
 }
 
+// Cap how long teardown waits for the final stdout write. If the stream is in
+// a degraded state (broken pipe that hasn't surfaced as `destroyed` yet) the
+// write callback never fires and the exit promise would otherwise hang forever,
+// leaving the terminal stuck in raw/alt-screen mode.
+const FLUSH_TIMEOUT_MS = 500
+
 export function flushTuiStdout(stream: FlushableStream = process.stdout) {
   if (stream.writable === false || stream.destroyed) return Promise.resolve()
   return new Promise<void>((resolve) => {
@@ -33,6 +39,9 @@ export function flushTuiStdout(stream: FlushableStream = process.stdout) {
       settled = true
       resolve()
     }
+    // Safety net: resolve even if the write callback is lost.
+    const timer = setTimeout(done, FLUSH_TIMEOUT_MS)
+    timer.unref?.()
     try {
       stream.write("", done)
     } catch {

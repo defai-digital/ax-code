@@ -9,7 +9,7 @@ import { resolveDesktopHandoff } from "../../../src/cli/cmd/tui/navigation/deskt
 const SRC_ROOT = path.resolve(import.meta.dirname, "../../../src")
 const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
 const OPENTUI_RE = /(?:from\s+["'](?:@opentui\/|opentui-spinner)|import\s+["'](?:@opentui\/|opentui-spinner))/
-const SPINNER_SOLID_RE = /(?:from\s+["']opentui-spinner\/solid["']|import\s+["']opentui-spinner\/solid["'])/
+const SPINNER_SOLID_RE = /(?:from\s+["'](?:@ax-code\/)?opentui-spinner\/solid["']|import\s+["'](?:@ax-code\/)?opentui-spinner\/solid["'])/
 const OPENTUI_ALLOWED_OUTSIDE_TUI = new Set([
   path.join(SRC_ROOT, "cli/cmd/doctor.ts"),
   // Entry point must register the OpenTUI Solid transform plugin before
@@ -87,9 +87,13 @@ describe("tui renderer replacement contract", () => {
   })
 
   test("detects every opentui-spinner solid import form", () => {
+    // Bare specifier (legacy / upstream)
     expect(SPINNER_SOLID_RE.test('import "opentui-spinner/solid"')).toBe(true)
     expect(SPINNER_SOLID_RE.test('import spinner from "opentui-spinner/solid"')).toBe(true)
     expect(SPINNER_SOLID_RE.test('import { spinner } from "opentui-spinner/solid"')).toBe(true)
+    // Scoped vendored specifier (actual form used in ax-code)
+    expect(SPINNER_SOLID_RE.test('import "@ax-code/opentui-spinner/solid"')).toBe(true)
+    expect(SPINNER_SOLID_RE.test("import '@ax-code/opentui-spinner/solid'")).toBe(true)
   })
 
   test("keeps renderer-neutral planning helpers independent of OpenTUI", async () => {

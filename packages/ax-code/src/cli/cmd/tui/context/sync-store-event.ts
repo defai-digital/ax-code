@@ -144,9 +144,6 @@ function dispatchHeadlessProjectionEvent<
     case "message.part.updated":
     case "message.part.delta":
     case "message.part.removed":
-    case "server.connected":
-    case "server.heartbeat":
-    case "server.instance.disposed":
     case "vcs.branch.updated":
     case "mcp.tools.changed":
     case "lsp.updated":

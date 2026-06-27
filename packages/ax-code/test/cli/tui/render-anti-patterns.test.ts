@@ -777,6 +777,17 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(displayCommands).not.toContain('name: "goal"')
   })
 
+  test("deduplicates server commands that match client-side slash names in autocomplete", async () => {
+    const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
+
+    // The commands memo must collect client-side slash names and skip
+    // server-side commands whose name collides, preventing a duplicate
+    // entry whose onSelect only inserts text (trailing space bypasses
+    // the prompt's slash dispatch and routes to the server instead).
+    expect(autocomplete).toContain("clientSlashNames")
+    expect(autocomplete).toContain("clientSlashNames.has(serverCommand.name)")
+  })
+
   test("hides assistant thinking spinner once the message has an error", async () => {
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
 

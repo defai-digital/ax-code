@@ -414,6 +414,8 @@ export function Prompt(props: PromptProps) {
       if (status().type === "idle") return
       setLocalStatusTick((value) => value + 1)
     }, 1000)
+    // Status polling must not prevent process exit during teardown.
+    timer.unref?.()
     onCleanup(() => clearInterval(timer))
   })
 
@@ -1898,6 +1900,8 @@ export function Prompt(props: PromptProps) {
                         const next = retry()?.next
                         if (next) setSeconds(Math.round((next - Date.now()) / 1000))
                       }, 1000)
+                      // Retry countdown must not prevent process exit.
+                      timer.unref?.()
 
                       onCleanup(() => {
                         clearInterval(timer)

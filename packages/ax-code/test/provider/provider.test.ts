@@ -642,7 +642,7 @@ test("getModel throws ModelNotFoundError for invalid model", async () => {
       Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      expect(Provider.getModel(ProviderID.xai, ModelID.make("nonexistent-model"))).rejects.toThrow()
+      await expect(Provider.getModel(ProviderID.xai, ModelID.make("nonexistent-model"))).rejects.toThrow()
     },
   })
 })
@@ -661,7 +661,7 @@ test("getModel throws ModelNotFoundError for invalid provider", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      expect(Provider.getModel(ProviderID.make("nonexistent-provider"), ModelID.make("some-model"))).rejects.toThrow()
+      await expect(Provider.getModel(ProviderID.make("nonexistent-provider"), ModelID.make("some-model"))).rejects.toThrow()
     },
   })
 })

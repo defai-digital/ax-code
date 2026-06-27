@@ -1,5 +1,5 @@
 /*
- * Exposes runtime-only modules (for example `@opentui/core`, `@opentui/solid`,
+ * Exposes runtime-only modules (for example `@ax-code/opentui-core`, `@ax-code/opentui-solid`,
  * `solid-js`) to externally loaded plugins by rewriting matching imports to
  * virtual `opentui:runtime-module:*` ids.
  *
@@ -38,8 +38,8 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as coreRuntime from "./index.js";
-const CORE_RUNTIME_SPECIFIER = "@opentui/core";
-const CORE_TESTING_RUNTIME_SPECIFIER = "@opentui/core/testing";
+const CORE_RUNTIME_SPECIFIER = "@ax-code/opentui-core";
+const CORE_TESTING_RUNTIME_SPECIFIER = "@ax-code/opentui-core/testing";
 const RUNTIME_MODULE_PREFIX = "opentui:runtime-module:";
 const MAX_RUNTIME_RESOLVE_PARENTS = 64;
 const DEFAULT_RUNTIME_PLUGIN_REWRITE_OPTIONS = {
@@ -79,6 +79,7 @@ const sourcePath = (path) => {
     const end = [searchIndex, hashIndex].filter((index) => index >= 0).sort((a, b) => a - b)[0];
     return end === undefined ? path : path.slice(0, end);
 };
+const MAX_NORMALIZED_PATH_CACHE = 4096;
 const normalizedSourcePathByPath = new Map();
 const normalizeSourcePath = (path) => {
     const cleanPath = sourcePath(path);
@@ -92,6 +93,12 @@ const normalizeSourcePath = (path) => {
     }
     catch {
         normalizedPath = cleanPath;
+    }
+    // Evict oldest entries when the cache exceeds its limit to prevent
+    // unbounded memory growth in long-running Bun plugin processes.
+    if (normalizedSourcePathByPath.size >= MAX_NORMALIZED_PATH_CACHE) {
+        const firstKey = normalizedSourcePathByPath.keys().next().value;
+        if (firstKey !== undefined) normalizedSourcePathByPath.delete(firstKey);
     }
     normalizedSourcePathByPath.set(cleanPath, normalizedPath);
     return normalizedPath;

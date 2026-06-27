@@ -4,8 +4,8 @@
   "main": "index.js",
   "types": "index.d.ts",
   "type": "module",
-  "version": "0.4.1",
-  "description": "Vendored fork of @opentui/core - native Zig core TypeScript bindings for building terminal UIs",
+  "version": "1.0.0",
+  "description": "Vendored fork of @opentui/core — native Zig core TypeScript bindings for building terminal UIs. Independently maintained in the ax-code workspace.",
   "license": "MIT",
   "exports": {
     ".": {

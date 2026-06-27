@@ -134,7 +134,7 @@ describe("follow-up-queue-store", () => {
 
   test("dispatchFollowUp throws on a server error result (so callers can surface it)", async () => {
     const sdk = { client: { session: { promptAsync: async () => ({ error: { data: { message: "boom" } } }) } } } as any
-    expect(dispatchFollowUp(sdk, "ses_err", item("1"))).rejects.toThrow("boom")
+    await expect(dispatchFollowUp(sdk, "ses_err", item("1"))).rejects.toThrow("boom")
   })
 
   test("edit channel carries a pending request (with item id) and clears", () => {

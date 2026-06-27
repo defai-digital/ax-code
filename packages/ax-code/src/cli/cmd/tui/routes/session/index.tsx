@@ -260,6 +260,8 @@ export function Session() {
       if (footerSessionStatusOrIdle(candidate).type === "idle") return
       setStatusTick((value) => value + 1)
     }, 1000)
+    // Status polling must not prevent process exit during teardown.
+    timer.unref?.()
     onCleanup(() => clearInterval(timer))
   })
 

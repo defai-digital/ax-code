@@ -1,57 +1,23 @@
-# @opentui/solid
+# @ax-code/opentui-solid
 
-Solid.js support for [OpenTUI](https://github.com/anomalyco/opentui).
+Vendored fork of [@opentui/solid](https://github.com/anomalyco/opentui) — SolidJS renderer for the OpenTUI terminal rendering framework. Independently maintained in the ax-code workspace.
 
-## Installation
+## Usage in ax-code
 
-```bash
-bun install solid-js @opentui/solid
-```
-
-## Usage
-
-1. Add jsx config to tsconfig.json:
-
-```json
-{
-  "compilerOptions": {
-    "jsx": "preserve",
-    "jsxImportSource": "@opentui/solid"
-  }
-}
-```
-
-2. Add preload script to bunfig.toml:
-
-```toml
-preload = ["@opentui/solid/preload"]
-```
-
-3. Add render function to index.tsx:
+This package is consumed via the `solid-loader.mjs` (source dev) and `esbuild-solid-plugin.ts` (build). Both configure the Babel + Solid JSX transform with `moduleName: "@ax-code/opentui-solid"` so `.tsx` files compile to OpenTUI universal renderer calls.
 
 ```tsx
-import { render } from "@opentui/solid"
+import { render, useKeyboard, useTerminalDimensions } from "@ax-code/opentui-solid"
 
 render(() => <text>Hello, World!</text>)
 ```
 
-4. Run with `bun index.tsx`.
+Custom renderables are registered via `extend()`:
 
-5. To build use [Bun.build](https://bun.com/docs/bundler) ([source](https://github.com/anomalyco/opentui/issues/122)):
+```tsx
+import { extend } from "@ax-code/opentui-solid"
 
-```ts
-import solidPlugin from "@opentui/solid/bun-plugin"
-
-await Bun.build({
-  entrypoints: ["./index.tsx"],
-  target: "bun",
-  outdir: "./build",
-  plugins: [solidPlugin],
-  compile: {
-    target: "bun-darwin-arm64",
-    outfile: "app-macos",
-  },
-})
+extend({ customBox: CustomBoxRenderable })
 ```
 
 ## Table of Contents
@@ -90,7 +56,7 @@ OpenTUI Solid exposes intrinsic JSX elements that map to OpenTUI renderables:
 Render a Solid component tree into a CLI renderer. If `rendererOrConfig` is omitted, a renderer is created with default options.
 
 ```tsx
-import { render } from "@opentui/solid"
+import { render } from "@ax-code/opentui-solid"
 
 render(() => <App />)
 ```
@@ -105,7 +71,7 @@ render(() => <App />)
 Create a test renderer for snapshots and interaction tests.
 
 ```tsx
-import { testRender } from "@opentui/solid"
+import { testRender } from "@ax-code/opentui-solid"
 
 const testSetup = await testRender(() => <App />, { width: 40, height: 10 })
 ```
@@ -115,7 +81,7 @@ const testSetup = await testRender(() => <App />, { width: 40, height: 10 })
 Register custom renderables as JSX intrinsic elements.
 
 ```tsx
-import { extend } from "@opentui/solid"
+import { extend } from "@ax-code/opentui-solid"
 
 extend({ customBox: CustomBoxRenderable })
 ```
@@ -141,7 +107,7 @@ Returns the current component catalogue that powers JSX tag lookup.
 Render children into a different mount node, useful for overlays and tooltips.
 
 ```tsx
-import { Portal } from "@opentui/solid"
+import { Portal } from "@ax-code/opentui-solid"
 ;<Portal mount={renderer.root}>
   <box border>Overlay</box>
 </Portal>
@@ -152,7 +118,7 @@ import { Portal } from "@opentui/solid"
 Render arbitrary intrinsic elements or components dynamically.
 
 ```tsx
-import { Dynamic } from "@opentui/solid"
+import { Dynamic } from "@ax-code/opentui-solid"
 ;<Dynamic component={isMultiline() ? "textarea" : "input"} />
 ```
 

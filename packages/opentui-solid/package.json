@@ -4,8 +4,8 @@
   "main": "index.js",
   "types": "index.d.ts",
   "type": "module",
-  "version": "0.4.1",
-  "description": "Vendored fork of @opentui/solid - SolidJS renderer for OpenTUI",
+  "version": "1.0.0",
+  "description": "Vendored fork of @opentui/solid — SolidJS renderer for OpenTUI. Independently maintained in the ax-code workspace.",
   "license": "MIT",
   "exports": {
     ".": {

@@ -372,10 +372,10 @@ test("revert with empty patches", async () => {
     directory: tmp.path,
     fn: async () => {
       // Should not crash with empty patches
-      expect(Snapshot.revert([])).resolves.toBeUndefined()
+      await expect(Snapshot.revert([])).resolves.toBeUndefined()
 
       // Should not crash with patches that have empty file lists
-      expect(Snapshot.revert([{ hash: "dummy", files: [] }])).resolves.toBeUndefined()
+      await expect(Snapshot.revert([{ hash: "dummy", files: [] }])).resolves.toBeUndefined()
     },
   })
 })
@@ -472,7 +472,7 @@ test("revert non-existent file", async () => {
 
       // Try to revert a file that doesn't exist in the snapshot
       // This should not crash
-      expect(
+      await expect(
         Snapshot.revert([
           {
             hash: before!,

@@ -283,14 +283,7 @@ export interface KnightRiderOptions {
   minAlpha?: number
 }
 
-/**
- * Creates frame strings for a Knight Rider style scanner animation
- * @param options Configuration options for the Knight Rider effect
- * @returns Array of frame strings
- */
-export function createFrames(options: KnightRiderOptions = {}): string[] {
-  const width = options.width ?? 8
-  const style = options.style ?? "diamonds"
+function buildKnightRiderOptions(options: KnightRiderOptions = {}) {
   const holdStart = options.holdStart ?? 30
   const holdEnd = options.holdEnd ?? 9
 
@@ -311,15 +304,30 @@ export function createFrames(options: KnightRiderOptions = {}): string[] {
     options.defaultColor ??
     (options.color ? deriveInactiveColor(options.color, options.inactiveFactor) : RGBA.fromHex("#330000"))
 
-  const trailOptions = {
-    colors,
-    trailLength: colors.length,
-    defaultColor,
-    direction: "bidirectional" as const,
-    holdFrames: { start: holdStart, end: holdEnd },
-    enableFading: options.enableFading,
-    minAlpha: options.minAlpha,
+  return {
+    holdStart,
+    holdEnd,
+    trailOptions: {
+      colors,
+      trailLength: colors.length,
+      defaultColor,
+      direction: "bidirectional" as const,
+      holdFrames: { start: holdStart, end: holdEnd },
+      enableFading: options.enableFading,
+      minAlpha: options.minAlpha,
+    },
   }
+}
+
+/**
+ * Creates frame strings for a Knight Rider style scanner animation
+ * @param options Configuration options for the Knight Rider effect
+ * @returns Array of frame strings
+ */
+export function createFrames(options: KnightRiderOptions = {}): string[] {
+  const width = options.width ?? 8
+  const style = options.style ?? "diamonds"
+  const { holdStart, holdEnd, trailOptions } = buildKnightRiderOptions(options)
 
   // Bidirectional cycle: Forward (width) + Hold End + Backward (width-1) + Hold Start
   const totalFrames = width + holdEnd + (width - 1) + holdStart
@@ -353,35 +361,6 @@ export function createFrames(options: KnightRiderOptions = {}): string[] {
  * @returns ColorGenerator function
  */
 export function createColors(options: KnightRiderOptions = {}): ColorGenerator {
-  const holdStart = options.holdStart ?? 30
-  const holdEnd = options.holdEnd ?? 9
-
-  const colors =
-    options.colors ??
-    (options.color
-      ? deriveTrailColors(options.color, options.trailSteps)
-      : [
-          RGBA.fromHex("#ff0000"), // Brightest Red (Center)
-          RGBA.fromHex("#ff5555"), // Glare/Bloom
-          RGBA.fromHex("#dd0000"), // Trail 1
-          RGBA.fromHex("#aa0000"), // Trail 2
-          RGBA.fromHex("#770000"), // Trail 3
-          RGBA.fromHex("#440000"), // Trail 4
-        ])
-
-  const defaultColor =
-    options.defaultColor ??
-    (options.color ? deriveInactiveColor(options.color, options.inactiveFactor) : RGBA.fromHex("#330000"))
-
-  const trailOptions = {
-    colors,
-    trailLength: colors.length,
-    defaultColor,
-    direction: "bidirectional" as const,
-    holdFrames: { start: holdStart, end: holdEnd },
-    enableFading: options.enableFading,
-    minAlpha: options.minAlpha,
-  }
-
+  const { trailOptions } = buildKnightRiderOptions(options)
   return createKnightRiderTrail(trailOptions)
 }

@@ -4305,7 +4305,7 @@ function visualizeRenderableTree(renderable, maxDepth = 10) {
 }
 
 // src/lib/styled-text.ts
-var BrandedStyledText = Symbol.for("@opentui/core/StyledText");
+var BrandedStyledText = Symbol.for("@ax-code/opentui-core/StyledText");
 function isStyledText(obj) {
   return obj && obj[BrandedStyledText];
 }
@@ -5893,7 +5893,7 @@ class ASCIIFontSelectionHelper {
   }
 }
 // src/lib/singleton.ts
-var singletonCacheSymbol = Symbol.for("@opentui/core/singleton");
+var singletonCacheSymbol = Symbol.for("@ax-code/opentui-core/singleton");
 function singleton(key, factory) {
   const bag = globalThis[singletonCacheSymbol] ??= {};
   if (!(key in bag)) {

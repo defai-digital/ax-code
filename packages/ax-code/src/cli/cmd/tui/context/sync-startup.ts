@@ -54,6 +54,10 @@ export function createSyncStartupCoordinator(input: {
         if (input.debugEngineEnabled) input.pollDebugEngine()
         if (pollWorkflow) input.pollWorkflowDashboard?.()
       }, pollIntervalMs)
+      // Runtime polling must not prevent process exit during teardown.
+      if (typeof (runtimePoll as { unref?: () => void }).unref === "function") {
+        (runtimePoll as { unref: () => void }).unref()
+      }
     },
     stop() {
       started = false

@@ -6,6 +6,11 @@ import { runResilientStream, type StreamConnectionStatus } from "../util/resilie
 import { NotificationEvent } from "@/notification/events"
 import type { z } from "zod"
 
+import { Log } from "@/util/log"
+import { toErrorMessage } from "@/util/error-message"
+
+const log = Log.create({ service: "tui.sdk" })
+
 export type TuiRuntimeEvent =
   | Event
   | {
@@ -62,12 +67,18 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       queue = []
       timer = undefined
       last = Date.now()
-      // Batch all event emissions so all store updates result in a single render
-      batch(() => {
-        for (const event of events) {
-          emitter.emit(event.type, event)
-        }
-      })
+      // Batch all event emissions so all store updates result in a single render.
+      // If an emission throws, log and continue — a single bad event must not
+      // poison the queue or leave the TUI permanently out of sync.
+      try {
+        batch(() => {
+          for (const event of events) {
+            emitter.emit(event.type, event)
+          }
+        })
+      } catch (error) {
+        log.warn("event batch emission failed", { error: toErrorMessage(error), dropped: events.length })
+      }
     }
 
     const handleEvent = (event: TuiRuntimeEvent) => {
@@ -108,6 +119,14 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         onStatus: (status) => {
           if (!isCurrentStream()) return
           setSseConnected(status.connected)
+        },
+        onError: (error, status) => {
+          if (!isCurrentStream()) return
+          log.warn("SSE stream error, reconnecting", {
+            error: toErrorMessage(error),
+            reason: status.reason,
+            attempt: status.attempt,
+          })
         },
       }).finally(() => {
         abort.signal.removeEventListener("abort", abortOuter)
