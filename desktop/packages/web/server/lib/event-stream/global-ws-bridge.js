@@ -152,6 +152,7 @@ export function createGlobalMessageStreamWsBridge({
         socket.ping()
       } catch {}
     }, heartbeatIntervalMs)
+    if (typeof pingInterval.unref === "function") pingInterval.unref()
 
     const heartbeatInterval = setInterval(() => {
       // Only send to ready clients — the heartbeat is an event frame, and the
@@ -167,6 +168,7 @@ export function createGlobalMessageStreamWsBridge({
         { directory: "global" },
       )
     }, heartbeatIntervalMs)
+    if (typeof heartbeatInterval.unref === "function") heartbeatInterval.unref()
 
     socket.on("close", () => {
       clearInterval(pingInterval)
@@ -175,8 +177,11 @@ export function createGlobalMessageStreamWsBridge({
       stopHubIfUnused()
     })
 
-    socket.on("error", () => {
-      void 0
+    socket.on("error", (error) => {
+      // The `ws` library emits "error" before "close" for recoverable
+      // transport errors, but an unhandled "error" event crashes the Node
+      // process. Log and rely on the "close" handler for interval cleanup.
+      console.warn("[global-ws-bridge] socket error:", error?.message ?? error)
     })
 
     clients.add(socket)

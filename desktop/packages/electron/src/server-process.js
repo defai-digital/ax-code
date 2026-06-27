@@ -17,6 +17,19 @@ const { startWebUiServer } = require("./server.js")
 let serverHandle = null
 let stopping = false
 
+// Safety nets: the utility process runs the full web server including
+// user-facing SSE, WebSocket, and SQLite paths. An unhandled rejection
+// would otherwise terminate the process with no cleanup, leaving the
+// ax-code child it spawned orphaned and the port bound.
+process.on("unhandledRejection", (reason) => {
+  console.error("[server-process] unhandled rejection:", reason)
+})
+process.on("uncaughtException", (error) => {
+  console.error("[server-process] uncaught exception:", error)
+  // Best-effort graceful shutdown before exit.
+  void stop()
+})
+
 function parseStartupSnapshot() {
   const raw = process.env.AX_CODE_DESKTOP_STARTUP_SNAPSHOT
   if (!raw) return null

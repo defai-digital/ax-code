@@ -23,6 +23,9 @@ function waitForReconnectDelay(ms, signal) {
       resolve()
     }
     const timeout = setTimeout(finish, Math.max(0, ms))
+    // Reconnect delays must not prevent the server process from
+    // exiting during graceful shutdown.
+    if (typeof timeout.unref === "function") timeout.unref()
     const onAbort = () => {
       clearTimeout(timeout)
       finish()
@@ -119,6 +122,9 @@ export function createUpstreamSseReader({
             abortReason = "upstream_stalled"
             controller.abort()
           }, currentStallTimeoutMs)
+          // Stall timers must not prevent the Node.js server process from
+          // exiting during graceful shutdown.
+          if (typeof stallTimer.unref === "function") stallTimer.unref()
         }
 
         try {

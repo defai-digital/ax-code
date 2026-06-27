@@ -38,6 +38,9 @@ export function acceptDirectoryMessageStreamWsConnection({
       socket.ping()
     } catch {}
   }, heartbeatIntervalMs)
+  // Intervals must not prevent the server process from exiting
+  // during graceful shutdown.
+  if (typeof pingInterval.unref === "function") pingInterval.unref()
 
   const heartbeatInterval = setInterval(() => {
     if (!upstreamConnected) {
@@ -46,6 +49,7 @@ export function acceptDirectoryMessageStreamWsConnection({
 
     sendMessageStreamWsEvent(socket, { type: "openchamber:heartbeat", timestamp: Date.now() }, { directory: "global" })
   }, heartbeatIntervalMs)
+  if (typeof heartbeatInterval.unref === "function") heartbeatInterval.unref()
 
   socket.on("close", () => {
     clearInterval(pingInterval)
@@ -54,8 +58,11 @@ export function acceptDirectoryMessageStreamWsConnection({
     cleanup()
   })
 
-  socket.on("error", () => {
-    void 0
+  socket.on("error", (error) => {
+    // The `ws` library emits "error" before "close" for recoverable
+    // transport errors, but an unhandled "error" event crashes the Node
+    // process. Log and rely on the "close" handler for interval cleanup.
+    console.warn("[directory-ws-bridge] socket error:", error?.message ?? error)
   })
 
   const run = async () => {

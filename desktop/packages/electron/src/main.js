@@ -113,6 +113,22 @@ function recordStartupEvent(name, details = {}, options = {}) {
 
 recordStartupEvent("electron.process.start")
 
+// Install process-level safety nets before any async work. Without these,
+// an unhandled rejection in Node >=18 terminates the main process with no
+// graceful shutdown — the server utility process stays alive holding its
+// port, and the next launch fails to bind.
+process.on("unhandledRejection", (reason) => {
+  console.error("[electron] unhandled rejection:", reason)
+})
+process.on("uncaughtException", (error) => {
+  console.error("[electron] uncaught exception:", error)
+  // Give the log a moment to flush, then exit. The before-quit handler
+  // will still fire and shut down the server process cleanly.
+  setTimeout(() => {
+    if (!isQuitting) app.quit()
+  }, 100)
+})
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) {
   app.quit()
@@ -143,6 +159,8 @@ app.on("open-file", (event, filePath) => {
 // loopback exactly as before — only where the server runs changes.
 const SERVER_START_TIMEOUT_MS = 30_000
 const SERVER_STOP_TIMEOUT_MS = 5_000
+const MAX_SERVER_CRASH_RESTARTS = 5
+let serverCrashRestarts = 0
 
 function launchServer() {
   return new Promise((resolve, reject) => {
@@ -216,10 +234,20 @@ function launchServer() {
 
 async function restartServerAfterCrash() {
   if (isRelaunchingServer || isQuitting) return
+  serverCrashRestarts += 1
+  if (serverCrashRestarts > MAX_SERVER_CRASH_RESTARTS) {
+    console.error(
+      "[electron] server process crashed too many times (%d), giving up on restart",
+      serverCrashRestarts,
+    )
+    return
+  }
   isRelaunchingServer = true
   try {
     serverPort = 0
     await launchServer()
+    // Successful launch resets the crash counter.
+    serverCrashRestarts = 0
     if (mainWindow && !mainWindow.isDestroyed()) {
       await mainWindow.loadURL(`http://localhost:${serverPort}`)
     }

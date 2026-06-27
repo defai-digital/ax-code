@@ -426,16 +426,29 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
 
     d.last = Date.now()
     syncDebug.pipeline.flush(events.length)
-    for (const payload of events) {
-      onEvent(directory, payload)
+    try {
+      for (const payload of events) {
+        onEvent(directory, payload)
+      }
+    } catch (error) {
+      // A reducer/handler throw must not prevent the buffer from being
+      // cleared — otherwise the same events would be re-delivered on the
+      // next flush, and if the throw is deterministic the pipeline enters
+      // an infinite re-delivery loop.
+      console.error("[event-pipeline] event handler threw during flush", error)
+    } finally {
+      d.buffer.length = 0
     }
-
-    d.buffer.length = 0
   }
 
   const flushAll = () => {
     for (const directory of directories.keys()) {
-      flushDir(directory)
+      try {
+        flushDir(directory)
+      } catch (error) {
+        // One directory's failure must not prevent others from flushing.
+        console.error("[event-pipeline] flushDir failed for directory", directory, error)
+      }
     }
   }
 
