@@ -1736,6 +1736,21 @@ export function Prompt(props: PromptProps) {
                 </box>
               </Show>
             </box>
+            <Show when={keybind.leader}>
+              <box
+                flexDirection="row"
+                flexShrink={0}
+                paddingTop={1}
+                paddingBottom={0}
+                gap={1}
+                backgroundColor={theme.backgroundElement}
+              >
+                <text>
+                  <span style={{ fg: theme.warning, bold: true }}>Leader active</span>
+                </text>
+                <text fg={theme.textMuted}>press shortcut key or wait to cancel</text>
+              </box>
+            </Show>
             <Show when={pasteViews().length > 0}>
               <box flexDirection="column" gap={1} paddingTop={1}>
                 <For each={pasteViews()}>

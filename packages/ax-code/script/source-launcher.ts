@@ -25,8 +25,8 @@ export type SourceLauncherInput = {
 export const WINDOWS_UTF8_WARNING = `for /f "tokens=2 delims=:" %%A in ('chcp') do set "AX_CODE_ACTIVE_CODEPAGE=%%A"
 set "AX_CODE_ACTIVE_CODEPAGE=%AX_CODE_ACTIVE_CODEPAGE: =%"
 if not "%AX_CODE_ACTIVE_CODEPAGE%"=="65001" (
-  echo AX Code warning: your terminal code page is %AX_CODE_ACTIVE_CODEPAGE%, not UTF-8 ^(65001^). Box drawing may render incorrectly. 1^>^&2
-  echo Run chcp 65001, set LANG=en_US.UTF-8, or use Windows Terminal / VS Code Terminal. 1^>^&2
+  chcp 65001 >nul
+  echo AX Code warning: switched terminal code page from %AX_CODE_ACTIVE_CODEPAGE% to UTF-8 ^(65001^) for TUI rendering. 1^>^&2
 )
 `
 

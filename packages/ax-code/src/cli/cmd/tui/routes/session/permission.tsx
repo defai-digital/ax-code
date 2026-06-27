@@ -24,6 +24,7 @@ import { Global } from "@/global"
 const log = Log.create({ service: "tui.permission" })
 
 type PermissionStage = "permission" | "always" | "reject"
+const CONFIRM_KEYS = new Set(["return", "linefeed", "kpenter"])
 
 function normalizePath(input?: string) {
   return normalizePathValue(input, Global.Path.home)
@@ -611,7 +612,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
       props.onCancel()
       return
     }
-    if (evt.name === "return") {
+    if (CONFIRM_KEYS.has(evt.name)) {
       evt.preventDefault()
       if (!input || input.isDestroyed) return
       props.onConfirm(input.plainText)
@@ -705,7 +706,7 @@ function Prompt<const T extends Record<string, string>>(props: {
       setStore("selected", next)
     }
 
-    if (evt.name === "return") {
+    if (CONFIRM_KEYS.has(evt.name)) {
       evt.preventDefault()
       props.onSelect(store.selected)
     }

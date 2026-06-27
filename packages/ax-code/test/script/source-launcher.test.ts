@@ -18,7 +18,8 @@ describe("script.source-launcher", () => {
     expect(out).toContain('set "AX_CODE_SOURCE_CWD=C:\\repo\\packages\\ax-code"')
     expect(out).toContain('set "AX_CODE_SOURCE_ENTRY=C:\\repo\\packages\\ax-code\\src\\index-node-tui.ts"')
     expect(out).toContain("chcp")
-    expect(out).toContain("not UTF-8")
+    expect(out).toContain("chcp 65001 >nul")
+    expect(out).toContain("switched terminal code page")
     expect(out).toContain("node --experimental-ffi")
   })
 

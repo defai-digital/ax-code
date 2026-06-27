@@ -57,6 +57,11 @@ const REHYDRATED_STREAM_OPTIONS = {
   connectionTimeoutMs: 1_500,
 }
 
+export const DEFAULT_TERMINAL_CREATE_SIZE = { cols: 120, rows: 30 } as const
+
+export const resolveTerminalCreateSize = (size: { cols: number; rows: number } | null | undefined) =>
+  size ?? DEFAULT_TERMINAL_CREATE_SIZE
+
 const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | null => {
   if (modifier) {
     switch (key) {
@@ -503,10 +508,7 @@ export const TerminalView: React.FC = () => {
           return
         }
 
-        const size = lastViewportSizeRef.current
-        if (!size && isTerminalVisibleRef.current) {
-          return
-        }
+        const size = resolveTerminalCreateSize(lastViewportSizeRef.current)
 
         setConnectionError(null)
         setIsFatalError(false)
@@ -1170,6 +1172,11 @@ export const TerminalView: React.FC = () => {
             />
           ) : null}
         </div>
+        {isConnecting && bufferChunks.length === 0 ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--surface-background)]/80 typography-micro text-muted-foreground">
+            {t("common.loading")}
+          </div>
+        ) : null}
         {!isReconnectPending && connectionError && (
           <div className="absolute inset-x-0 bottom-0 bg-[var(--status-error-background)] px-3 py-2 text-xs text-[var(--status-error-foreground)] flex items-center justify-between gap-2">
             <span>{connectionError}</span>

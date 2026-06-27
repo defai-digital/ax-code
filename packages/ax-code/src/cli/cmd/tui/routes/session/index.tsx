@@ -404,7 +404,8 @@ export function Session() {
   }
 
   createEffect(() => {
-    const title = Locale.truncate(session()?.title ?? "", 50)
+    const currentSession = session()
+    const title = Locale.truncate(currentSession?.title ?? "", 50)
     const pad = (text: string) => text.padEnd(10, " ")
     const weak = (text: string) => UI.Style.TEXT_DIM + pad(text) + UI.Style.TEXT_NORMAL
     const logo = UI.logo("  ").split(/\r?\n/)
@@ -413,9 +414,13 @@ export function Session() {
         ...logo,
         ``,
         `  ${weak("Session")}${UI.Style.TEXT_NORMAL_BOLD}${title}${UI.Style.TEXT_NORMAL}`,
-        `  ${weak("Continue")}${UI.Style.TEXT_NORMAL_BOLD}ax-code -s ${session()?.id}${UI.Style.TEXT_NORMAL}`,
+        currentSession?.id
+          ? `  ${weak("Continue")}${UI.Style.TEXT_NORMAL_BOLD}ax-code -s ${currentSession.id}${UI.Style.TEXT_NORMAL}`
+          : undefined,
         ``,
-      ].join("\n"),
+      ]
+        .filter((line): line is string => line !== undefined)
+        .join("\n"),
     )
   })
 

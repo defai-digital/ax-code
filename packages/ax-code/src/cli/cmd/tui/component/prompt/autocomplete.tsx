@@ -100,6 +100,50 @@ export type AutocompleteOption = {
   group?: string
 }
 
+const normalizeSlashAutocompleteQuery = (value: string): string =>
+  removeLineRange(value)
+    .trim()
+    .replace(/^\//, "")
+    .toLowerCase()
+
+const slashAutocompleteTokens = (option: AutocompleteOption): string[] => {
+  const tokens = new Set<string>()
+  const add = (value?: string) => {
+    if (!value) return
+    const token = value.trim().split(/\s+/)[0]?.replace(/^\//, "").toLowerCase()
+    if (token) tokens.add(token)
+  }
+
+  add(option.value)
+  add(option.display)
+  for (const alias of option.aliases ?? []) add(alias)
+  return [...tokens]
+}
+
+export function rankSlashAutocompleteOptions(options: AutocompleteOption[], query: string): AutocompleteOption[] {
+  const normalizedQuery = normalizeSlashAutocompleteQuery(query)
+  if (!normalizedQuery) return options
+
+  const ranked = options
+    .map((option) => {
+      const tokens = slashAutocompleteTokens(option)
+      const description = option.description?.toLowerCase() ?? ""
+      let rank = Number.POSITIVE_INFINITY
+
+      if (tokens.some((token) => token === normalizedQuery)) rank = 0
+      else if (tokens.some((token) => token.startsWith(normalizedQuery))) rank = 1
+      else if (tokens.some((token) => token.includes(normalizedQuery))) rank = 2
+      else if (description.includes(normalizedQuery)) rank = 3
+
+      return { option, rank }
+    })
+    .filter((entry) => Number.isFinite(entry.rank))
+
+  return ranked
+    .sort((a, b) => a.rank - b.rank || a.option.display.trim().localeCompare(b.option.display.trim()))
+    .map((entry) => entry.option)
+}
+
 export function Autocomplete(props: {
   value: string
   sessionID?: string
@@ -453,6 +497,10 @@ export function Autocomplete(props: {
 
     if (files.loading && prev && prev.length > 0) {
       return prev
+    }
+
+    if (store.visible === "/") {
+      return rankSlashAutocompleteOptions(mixed, searchValue).slice(0, 10)
     }
 
     const result = fuzzysort.go(removeLineRange(searchValue), mixed, {

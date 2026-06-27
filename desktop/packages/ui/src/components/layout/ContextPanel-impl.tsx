@@ -375,7 +375,7 @@ const DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT = `(() => {
   }, true);
 })()`
 
-const normalizeBrowserUrl = (value: string): string => {
+export const normalizeBrowserUrl = (value: string): string => {
   const trimmed = value.trim()
   if (!trimmed) return "about:blank"
   try {
@@ -1725,9 +1725,9 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
   const [urlInput, setUrlInput] = React.useState(startUrl)
   const [currentUrl, setCurrentUrl] = React.useState(startUrl)
   const [isInspecting, setIsInspecting] = React.useState(false)
-  const [isLoading, setIsLoading] = React.useState(true)
+  const [isLoading, setIsLoading] = React.useState(Boolean(startUrl))
   const loadingTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const showLoading = isLoading
+  const showLoading = isLoading && Boolean(currentUrl)
 
   const persistUrl = React.useCallback(
     (url: string) => {
@@ -1876,15 +1876,21 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
   }, [directory, tabID, setContextPanelTabTargetPath])
 
   const loadUrl = React.useCallback((value: string) => {
+    const nextUrl = normalizeBrowserUrl(value)
+    const visibleUrl = nextUrl !== "about:blank" ? nextUrl : ""
+    setCurrentUrl(visibleUrl)
+    setUrlInput(visibleUrl)
+    setIsLoading(Boolean(visibleUrl))
+    persistUrl(visibleUrl)
+
     const webview = webviewRef.current
     if (typeof webview?.loadURL !== "function") return
-    const nextUrl = normalizeBrowserUrl(value)
     try {
       webview.loadURL(nextUrl)
     } catch {
       /* webview may not be ready */
     }
-  }, [])
+  }, [persistUrl])
 
   const handleInspect = React.useCallback(() => {
     const webview = webviewRef.current
@@ -2051,7 +2057,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
       <div className="relative min-h-0 flex-1 bg-background">
         <webview
           ref={webviewRef}
-          src={normalizeBrowserUrl(initialUrl)}
+          src={currentUrl || "about:blank"}
           partition="persist:openchamber-browser"
           allowpopups
           style={{ width: "100%", height: "100%", border: "none" }}
