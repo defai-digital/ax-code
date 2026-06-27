@@ -27,6 +27,7 @@ import {
   providerDialogConnected,
   providerDialogProviders,
   providerModelSelectable,
+  selectableProviderDefaultModelID,
 } from "./dialog-provider-options"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
@@ -238,20 +239,11 @@ export function createDialogProviderOptions() {
       }
     }
 
-    const models = Object.values(provider?.models ?? {})
-    const defaultModel = sync.data.provider_default[providerID]
-    const selectableDefault =
-      defaultModel &&
-      provider?.models[defaultModel] &&
-      providerModelSelectable({
-        providerID,
-        toolcall: provider.models[defaultModel].capabilities.toolcall,
-      })
-        ? defaultModel
-        : undefined
-    const modelID =
-      selectableDefault ??
-      models.find((model) => providerModelSelectable({ providerID, toolcall: model.capabilities.toolcall }))?.id
+    const modelID = selectableProviderDefaultModelID({
+      providerID,
+      models: provider?.models ?? {},
+      defaultModel: sync.data.provider_default[providerID],
+    })
 
     if (!modelID) {
       throw new Error(`${providerName} connected, but no selectable models are available yet`)

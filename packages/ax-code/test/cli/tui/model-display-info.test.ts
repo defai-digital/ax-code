@@ -3,7 +3,14 @@ import { modelDisplayInfo, supportsWebSearch } from "../../../src/cli/cmd/tui/co
 
 describe("modelDisplayInfo", () => {
   test("adds web search marker for CLI providers with built-in web search", () => {
-    for (const providerID of ["claude-code", "codex-cli", "gemini-cli"]) {
+    for (const providerID of [
+      "claude-code",
+      "codex-cli",
+      "gemini-cli",
+      "grok-build-cli",
+      "qoder-cli",
+      "antigravity-cli",
+    ]) {
       const display = modelDisplayInfo(providerID, {
         providerID,
         name: providerID,

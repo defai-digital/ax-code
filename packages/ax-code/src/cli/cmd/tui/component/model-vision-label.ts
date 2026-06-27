@@ -1,5 +1,13 @@
 export const MODEL_VISION_MARKER = "👀"
 export const MODEL_WEB_SEARCH_MARKER = "🌐"
+const CLI_WEB_SEARCH_PROVIDER_IDS = new Set([
+  "claude-code",
+  "codex-cli",
+  "gemini-cli",
+  "grok-build-cli",
+  "qoder-cli",
+  "antigravity-cli",
+])
 
 export type DisplayCapableModel = {
   id?: string
@@ -19,7 +27,7 @@ export function supportsWebSearch(model: DisplayCapableModel | undefined) {
   const apiID = model.api?.id?.toLowerCase() ?? model.id?.toLowerCase() ?? ""
   const apiNpm = model.api?.npm
 
-  if (providerID === "claude-code" || providerID === "codex-cli" || providerID === "gemini-cli") return true
+  if (providerID && CLI_WEB_SEARCH_PROVIDER_IDS.has(providerID)) return true
   if (apiNpm === "@ai-sdk/xai" && !apiID.includes("multi-agent") && apiID.includes("grok-4")) return true
   if (
     apiNpm === "@ai-sdk/openai-compatible" &&

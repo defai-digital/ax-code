@@ -48,12 +48,14 @@ export function insertGroupHeaders(opts: AutocompleteOption[]): AutocompleteGrou
   return entries
 }
 
-function removeLineRange(input: string) {
+export function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
-  return hashIndex !== -1 ? input.substring(0, hashIndex) : input
+  if (hashIndex === -1) return input
+  const linePart = input.substring(hashIndex + 1)
+  return /^(\d+)(?:-(\d*))?$/.test(linePart) ? input.substring(0, hashIndex) : input
 }
 
-function extractLineRange(input: string) {
+export function extractLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
   if (hashIndex === -1) {
     return { baseQuery: input }
@@ -64,7 +66,7 @@ function extractLineRange(input: string) {
   const lineMatch = linePart.match(/^(\d+)(?:-(\d*))?$/)
 
   if (!lineMatch) {
-    return { baseQuery: baseName }
+    return { baseQuery: input }
   }
 
   const startLine = Number(lineMatch[1])
@@ -719,9 +721,7 @@ export function Autocomplete(props: {
             if (entry.type === "header") {
               return (
                 <box paddingLeft={1} paddingRight={1} paddingTop={index > 0 ? 1 : 0} flexShrink={0}>
-                  <text fg={theme.textMuted}>
-                    {entry.label}
-                  </text>
+                  <text fg={theme.textMuted}>{entry.label}</text>
                 </box>
               )
             }

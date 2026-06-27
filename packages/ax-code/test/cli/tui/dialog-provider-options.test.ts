@@ -9,6 +9,7 @@ import {
   providerDialogConnected,
   providerDialogProviders,
   providerModelSelectable,
+  selectableProviderDefaultModelID,
 } from "../../../src/cli/cmd/tui/component/dialog-provider-options"
 
 function provider(id: string, name = id) {
@@ -160,5 +161,47 @@ describe("provider dialog options", () => {
     expect(providerModelSelectable({ providerID: "antigravity-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "xai", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "xai", toolcall: true })).toBe(true)
+  })
+
+  test("selects the configured default model when it is fully selectable", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "xai",
+        defaultModel: "default",
+        models: {
+          default: { id: "default", capabilities: { toolcall: true } },
+          fallback: { id: "fallback", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("default")
+  })
+
+  test("skips memory-blocked local defaults when selecting a connected provider model", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "ax-engine",
+        defaultModel: "huge",
+        models: {
+          huge: {
+            id: "huge",
+            capabilities: { toolcall: true },
+            options: { minMemoryBytes: Number.MAX_SAFE_INTEGER },
+          },
+          small: { id: "small", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("small")
+  })
+
+  test("returns undefined when no provider model is selectable", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "xai",
+        defaultModel: "text",
+        models: {
+          text: { id: "text", capabilities: { toolcall: false } },
+        },
+      }),
+    ).toBeUndefined()
   })
 })

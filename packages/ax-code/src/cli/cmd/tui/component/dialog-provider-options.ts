@@ -1,5 +1,5 @@
 import { filter, pipe, sortBy } from "remeda"
-import { providerModelSelectable } from "@/provider/model-selectability"
+import { modelSelectableForProvider, providerModelSelectable } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
 import type { ProviderListResponse } from "@ax-code/sdk/v2"
 
@@ -99,4 +99,21 @@ export function providerDialogConnected(input: {
   return (
     input.connected.includes(input.providerID) || input.configured.some((provider) => provider.id === input.providerID)
   )
+}
+
+type SelectableProviderModel = {
+  id: string
+  tool_call?: boolean
+  capabilities?: { toolcall?: boolean }
+  options?: { minMemoryBytes?: unknown }
+}
+
+export function selectableProviderDefaultModelID(input: {
+  providerID: string
+  models: Record<string, SelectableProviderModel>
+  defaultModel?: string
+}) {
+  const defaultInfo = input.defaultModel ? input.models[input.defaultModel] : undefined
+  if (input.defaultModel && modelSelectableForProvider(input.providerID, defaultInfo)) return input.defaultModel
+  return Object.values(input.models).find((model) => modelSelectableForProvider(input.providerID, model))?.id
 }

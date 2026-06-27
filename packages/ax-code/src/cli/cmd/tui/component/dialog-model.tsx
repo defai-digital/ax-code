@@ -12,6 +12,7 @@ import { modelDisplayInfo } from "./model-vision-label"
 import { CLI_PROVIDERS, providerModelSelectable } from "./dialog-provider-options"
 import { modelMemoryBlockReason } from "@/provider/model-selectability"
 import { useTheme } from "../context/theme"
+import { dialogModelOptionDisabled } from "./dialog-model-options"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
@@ -50,7 +51,7 @@ export function DialogModel(props: { providerID?: string }) {
             description: blockReason ?? provider.name,
             descriptionFg: blockReason ? theme.warning : undefined,
             category,
-            disabled: !!blockReason || (provider.id === "opencode" && model.id.includes("-nano")),
+            disabled: dialogModelOptionDisabled(provider.id, model.id, model),
             onSelect: () => {
               dialog.clear()
               local.model.set({ providerID: provider.id, modelID: model.id }, { recent: true })
@@ -97,7 +98,7 @@ export function DialogModel(props: { providerID?: string }) {
                   : undefined),
               descriptionFg: blockReason ? theme.warning : undefined,
               category: connected() ? provider.name : undefined,
-              disabled: !!blockReason || (provider.id === "opencode" && model.includes("-nano")),
+              disabled: dialogModelOptionDisabled(provider.id, model, info),
               onSelect() {
                 dialog.clear()
                 local.model.set({ providerID: provider.id, modelID: model }, { recent: true })
