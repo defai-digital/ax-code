@@ -61,7 +61,7 @@
   },
   "dependencies": {
     "@ax-code/opentui-core": "workspace:*",
-    "@babel/core": "7.28.0",
+    "@babel/core": "7.29.6",
     "@babel/preset-typescript": "7.27.1",
     "babel-plugin-module-resolver": "5.0.2",
     "babel-preset-solid": "1.9.12",
