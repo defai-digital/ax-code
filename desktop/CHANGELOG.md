@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.9] - 2026-06-27
+
+### Fixed
+
+- TUI: improved leader-key feedback, slash-command filtering, permission prompt Enter handling, and deleted-session exit text.
+- Desktop: fixed browser address navigation and prevented the terminal dock from opening as a blank unusable panel.
+- Windows: switches the CLI launcher to UTF-8 code page before rendering the TUI.
+
 ## [6.7.7] - 2026-06-27
 
 ### Fixed
