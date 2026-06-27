@@ -355,6 +355,7 @@ export const GlobalRoutes = lazy(() =>
               },
             })
           }, 10_000)
+          heartbeat.unref?.()
 
           function handler(event: any) {
             push(event)

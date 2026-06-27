@@ -525,6 +525,7 @@ export const IndexCommand = cmd({
               )
               lastNodeCount = current
             }, 5_000)
+        heartbeat?.unref?.()
 
         const start = Date.now()
         let result: Awaited<ReturnType<typeof CodeIntelligence.indexFiles>>

@@ -312,6 +312,7 @@ export const createSessionRuntime = ({ writeSseEvent, getNotificationClients, br
   }
 
   const cleanupInterval = setInterval(cleanupOldSessionStates, SESSION_STATE_CLEANUP_INTERVAL_MS)
+  if (typeof cleanupInterval.unref === "function") cleanupInterval.unref()
 
   const processAxCodeSsePayload = (payload) => {
     const transitions = deriveSessionActivityTransitions(payload)

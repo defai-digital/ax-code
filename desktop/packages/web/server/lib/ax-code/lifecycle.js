@@ -1215,6 +1215,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
         console.error(`Health check error: ${error.message}`)
       }
     }, effectiveIntervalMs)
+    if (typeof state.healthCheckInterval.unref === "function") state.healthCheckInterval.unref()
   }
 
   const shutdown = () => {

@@ -65,6 +65,7 @@ export namespace WorkspaceServer {
             if (q.size >= SSE_MAX_QUEUE) return
             q.push(JSON.stringify({ type: "server.heartbeat", properties: {} }))
           }, 10_000)
+          heartbeat.unref?.()
 
           const stop = () => {
             if (done) return

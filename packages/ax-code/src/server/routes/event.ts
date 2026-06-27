@@ -83,6 +83,7 @@ export const EventRoutes = lazy(() =>
             properties: {},
           })
         }, HEARTBEAT_INTERVAL_MS)
+        heartbeat.unref?.()
 
         const shouldForward = (event: { properties?: { directory?: string } }) => {
           const directory = event.properties?.directory

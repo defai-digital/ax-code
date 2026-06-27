@@ -206,6 +206,7 @@ export namespace FileWatcher {
           }),
           50,
         )
+        pollInterval.unref?.()
 
         handles.push(async () => {
           clearInterval(pollInterval)
@@ -291,6 +292,7 @@ export namespace FileWatcher {
               }
             })
           }, POLL_MS)
+          id.unref?.()
 
           handles.push(async () => {
             clearInterval(id)

@@ -223,6 +223,7 @@ export const registerScheduledTaskRoutes = (app, dependencies) => {
         clients.delete(res)
       }
     }, 25_000)
+    if (typeof heartbeat.unref === "function") heartbeat.unref()
 
     req.on("close", () => {
       clearInterval(heartbeat)

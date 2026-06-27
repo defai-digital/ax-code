@@ -265,6 +265,7 @@ export function createTerminalRuntime({
         socket.ping()
       } catch {}
     }, TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS)
+    if (typeof heartbeatInterval.unref === "function") heartbeatInterval.unref()
 
     socket.on("pong", () => {
       connectionState.lastActivityAt = Date.now()
@@ -386,7 +387,10 @@ export function createTerminalRuntime({
     })
 
     socket.on("error", (error) => {
-      void error
+      // The `ws` library emits "error" before "close" for recoverable
+      // transport errors. Logging here for observability; the "close"
+      // handler performs actual cleanup.
+      console.warn("[terminal-ws] socket error:", error?.message ?? error)
     })
   })
 
@@ -492,6 +496,7 @@ export function createTerminalRuntime({
     },
     5 * 60 * 1000,
   )
+  if (typeof idleSweepInterval.unref === "function") idleSweepInterval.unref()
 
   app.post("/api/terminal/create", async (req, res) => {
     try {
@@ -583,6 +588,7 @@ export function createTerminalRuntime({
         cleanup()
       }
     }, 15000)
+    if (typeof heartbeatInterval.unref === "function") heartbeatInterval.unref()
 
     let cleanedUp = false
     let paused = false
