@@ -28,6 +28,7 @@ import { parseIntegerEnv } from "./util/env"
 import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
 import { hasExplicitNetworkBindFlag } from "./util/network-flags"
+import { registerTuiProcessHandler } from "./util/lifecycle"
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
@@ -609,7 +610,8 @@ export const TuiThreadCommand = cmd({
           UI.error(formatWorkerLoadError(backend.target, e))
           // Attempt graceful backend termination before exit so the child
           // process (if any) is cleaned up and the terminal state is restored.
-          backend.terminate()
+          backend
+            .terminate()
             .catch((err) => {
               log.warn("failed to terminate backend after worker error", { error: toErrorMessage(err) })
             })
@@ -696,17 +698,17 @@ export const TuiThreadCommand = cmd({
           })
         })
       }
-      process.on("uncaughtException", error)
-      process.on("unhandledRejection", error)
-      process.on("SIGUSR2", reload)
+      const unregisterProcessHandlers = [
+        registerTuiProcessHandler("uncaughtException", error, { name: "thread-uncaught-exception" }),
+        registerTuiProcessHandler("unhandledRejection", error, { name: "thread-unhandled-rejection" }),
+        registerTuiProcessHandler("SIGUSR2", reload, { name: "thread-sigusr2-reload" }),
+      ]
 
       let stopped = false
       const stop = async () => {
         if (stopped) return
         stopped = true
-        process.off("uncaughtException", error)
-        process.off("unhandledRejection", error)
-        process.off("SIGUSR2", reload)
+        for (const unregister of unregisterProcessHandlers) unregister()
         await withTimeout(client.call("shutdown", undefined), DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS).catch(
           (error) => {
             Log.Default.warn("backend shutdown failed", {

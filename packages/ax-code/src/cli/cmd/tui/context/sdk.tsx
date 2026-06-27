@@ -8,6 +8,8 @@ import type { z } from "zod"
 
 import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
+import { registerTuiEventListener, runTuiCleanup } from "../util/lifecycle"
+import { scheduleTuiTimeout } from "../util/timer"
 
 const log = Log.create({ service: "tui.sdk" })
 
@@ -57,7 +59,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     }>()
 
     let queue: TuiRuntimeEvent[] = []
-    let timer: Timer | undefined
+    let cancelFlushTimer: (() => void) | undefined
     let last = 0
     let sseGeneration = 0
 
@@ -65,7 +67,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       if (queue.length === 0) return
       const events = queue
       queue = []
-      timer = undefined
+      cancelFlushTimer = undefined
       last = Date.now()
       // Batch all event emissions so all store updates result in a single render.
       // If an emission throws, log and continue — a single bad event must not
@@ -86,19 +88,22 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       queue.push(event)
       const elapsed = Date.now() - last
 
-      if (timer) return
+      if (cancelFlushTimer) return
       // If we just flushed recently (within 16ms), batch this with future events
       // Otherwise, process immediately to avoid latency
       if (elapsed < 16) {
-        timer = setTimeout(flush, 16)
+        cancelFlushTimer = scheduleTuiTimeout(flush, {
+          name: "sdk-event-batch-flush",
+          delayMs: 16,
+        })
         return
       }
       flush()
     }
 
     function startSSE() {
-      if (timer) clearTimeout(timer)
-      timer = undefined
+      cancelFlushTimer?.()
+      cancelFlushTimer = undefined
       if (queue.length > 0) flush()
       sse?.abort()
       const ctrl = new AbortController()
@@ -106,8 +111,14 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       sse = ctrl
       const outer = new AbortController()
       const abortOuter = () => outer.abort()
-      abort.signal.addEventListener("abort", abortOuter, { once: true })
-      ctrl.signal.addEventListener("abort", abortOuter, { once: true })
+      const removeRootAbortListener = registerTuiEventListener(abort.signal, "abort", abortOuter, {
+        name: "sdk-root-abort-forward",
+        options: { once: true },
+      })
+      const removeStreamAbortListener = registerTuiEventListener(ctrl.signal, "abort", abortOuter, {
+        name: "sdk-stream-abort-forward",
+        options: { once: true },
+      })
       const isCurrentStream = () => generation === sseGeneration && sse === ctrl
       void runResilientStream<TuiRuntimeEvent>({
         signal: outer.signal,
@@ -129,10 +140,11 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
           })
         },
       }).finally(() => {
-        abort.signal.removeEventListener("abort", abortOuter)
-        ctrl.signal.removeEventListener("abort", abortOuter)
+        removeRootAbortListener()
+        removeStreamAbortListener()
         if (!isCurrentStream()) return
-        if (timer) clearTimeout(timer)
+        cancelFlushTimer?.()
+        cancelFlushTimer = undefined
         if (queue.length > 0) flush()
       })
     }
@@ -145,8 +157,8 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         })
         if (!props.events.onStatus) setSseConnected(true)
         onCleanup(() => {
-          unsub()
-          unsubStatus?.()
+          runTuiCleanup(unsub, { name: "sdk-external-event-unsubscribe" })
+          if (unsubStatus) runTuiCleanup(unsubStatus, { name: "sdk-external-status-unsubscribe" })
         })
       } else {
         startSSE()
@@ -156,7 +168,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     onCleanup(() => {
       abort.abort()
       sse?.abort()
-      if (timer) clearTimeout(timer)
+      cancelFlushTimer?.()
     })
 
     return {

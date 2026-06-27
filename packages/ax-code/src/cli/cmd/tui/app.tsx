@@ -74,6 +74,7 @@ import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { scheduleTuiTimeout } from "@tui/util/timer"
 import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { responseErrorMessage, unknownErrorMessage } from "@tui/util/error-message"
+import { registerTuiEventListener } from "@tui/util/lifecycle"
 import { resolveSessionFirstRoute } from "./navigation/launch-policy"
 import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 
@@ -462,10 +463,14 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   ) {
     const ctrl = new AbortController()
     const onAbort = () => ctrl.abort()
+    let removeAbortListener: (() => void) | undefined
     if (options?.signal?.aborted) {
       onAbort()
     } else if (options?.signal) {
-      options.signal.addEventListener("abort", onAbort, { once: true })
+      removeAbortListener = registerTuiEventListener(options.signal, "abort", onAbort, {
+        name: "app-put-json-timeout-abort-forward",
+        options: { once: true },
+      })
     }
     const timer = setTimeout(() => ctrl.abort(), 10_000)
     try {
@@ -483,9 +488,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       }
     } finally {
       clearTimeout(timer)
-      if (options?.signal) {
-        options.signal.removeEventListener("abort", onAbort)
-      }
+      removeAbortListener?.()
     }
   }
 

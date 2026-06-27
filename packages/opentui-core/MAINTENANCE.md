@@ -88,8 +88,11 @@ patterns. Solid/OpenTUI component timers that touch renderables or reactive
 state must use the named TUI timer helpers instead of raw `setTimeout` or
 `setInterval`, so they are cancellable on cleanup, can opt out of keeping the
 process alive, and run callbacks through the same background failure boundary.
-Optional startup state, delayed hydration, focus restoration, layout refresh,
-polling, and countdown work are allowed to fail, but failures must stay inside
-that named boundary: callers may handle expected degradation locally, and
-otherwise the helper logs the named failure instead of creating an unhandled
-rejection or crashing the TUI.
+Event listeners, abort forwarding, external event subscriptions, and process
+handlers must use named lifecycle helpers so reconnects, route switches, worker
+restarts, and teardown paths unregister exactly once. Optional startup state,
+delayed hydration, focus restoration, layout refresh, polling, countdown,
+subscription cleanup, and reconnect recovery work are allowed to fail, but
+failures must stay inside that named boundary: callers may handle expected
+degradation locally, and otherwise the helper logs the named failure instead of
+creating an unhandled rejection or crashing the TUI.

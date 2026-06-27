@@ -63,7 +63,11 @@ const SYNC_BOOTSTRAP_RUNNER_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-ru
 const HOME_SRC = path.join(TUI_ROOT, "routes/home.tsx")
 const STARTUP_TRACE_SRC = path.join(TUI_ROOT, "util/startup-trace.ts")
 const BACKGROUND_TASK_SRC = path.join(TUI_ROOT, "util/background-task.ts")
+const LIFECYCLE_SRC = path.join(TUI_ROOT, "util/lifecycle.ts")
 const MICRO_TASK_SRC = path.join(TUI_ROOT, "util/microtask.ts")
+const RECONNECT_RECOVERY_SRC = path.join(TUI_ROOT, "util/reconnect-recovery.ts")
+const RESILIENT_STREAM_SRC = path.join(TUI_ROOT, "util/resilient-stream.ts")
+const SDK_SRC = path.join(TUI_ROOT, "context/sdk.tsx")
 const TIMER_SRC = path.join(TUI_ROOT, "util/timer.ts")
 const DEFERRED_STARTUP_SRCS = [
   path.join(TUI_ROOT, "component/prompt/history.tsx"),
@@ -761,6 +765,43 @@ describe("tui OpenTUI stability guardrails", () => {
     ]) {
       expect(text).toContain(`name: "${name}"`)
     }
+  })
+
+  test("keeps TUI listener and process handlers behind named lifecycle cleanup", async () => {
+    const lifecycle = await fs.readFile(LIFECYCLE_SRC, "utf8")
+    const sdk = await fs.readFile(SDK_SRC, "utf8")
+    const resilientStream = await fs.readFile(RESILIENT_STREAM_SRC, "utf8")
+    const bootstrapRunner = await fs.readFile(SYNC_BOOTSTRAP_RUNNER_SRC, "utf8")
+    const thread = await fs.readFile(THREAD_SRC, "utf8")
+    const worker = await fs.readFile(WORKER_SRC, "utf8")
+    const reconnect = await fs.readFile(RECONNECT_RECOVERY_SRC, "utf8")
+
+    expect(lifecycle).toContain('Log.create({ service: "tui.lifecycle" })')
+    expect(lifecycle).toContain("target.addEventListener(type, listener, input.options)")
+    expect(lifecycle).toContain("target.removeEventListener(type, listener, input.options)")
+    expect(lifecycle).toContain("process.on(event, handler)")
+    expect(lifecycle).toContain("process.off(event, handler)")
+
+    expect(sdk).toContain("scheduleTuiTimeout(flush")
+    expect(sdk).toContain('name: "sdk-event-batch-flush"')
+    expect(sdk).toContain("registerTuiEventListener(abort.signal")
+    expect(sdk).toContain("registerTuiEventListener(ctrl.signal")
+    expect(sdk).toContain("runTuiCleanup(unsub")
+    expect(resilientStream).toContain("registerTuiEventListener(options.signal")
+    expect(bootstrapRunner).toContain("registerTuiEventListener(signal")
+    expect(reconnect).toContain("scheduleTuiTimeout(")
+    expect(reconnect).toContain('name: "reconnect-recovery-stabilize"')
+
+    expect(thread).toContain("registerTuiProcessHandler")
+    expect(thread).toContain('name: "thread-uncaught-exception"')
+    expect(thread).toContain('name: "thread-unhandled-rejection"')
+    expect(thread).toContain('name: "thread-sigusr2-reload"')
+    expect(thread).not.toContain('process.on("uncaughtException"')
+    expect(thread).not.toContain('process.off("uncaughtException"')
+    expect(worker).toContain("registerTuiProcessHandler")
+    expect(worker).toContain('name: "worker-unhandled-rejection"')
+    expect(worker).toContain('name: "worker-uncaught-exception"')
+    expect(worker).not.toContain('process.on("unhandledRejection"')
   })
 
   test("prioritizes file attachment suggestions for bare @ autocomplete", async () => {

@@ -21,6 +21,7 @@ import { runResilientStream, type StreamConnectionStatus } from "./util/resilien
 import { registerShutdownSignals } from "@/util/signals"
 import { toErrorMessage } from "@/util/error-message"
 import { stopServer as stopAxEngineServer } from "@/provider/ax-engine"
+import { registerTuiProcessHandler } from "./util/lifecycle"
 
 type GlobalEvent = {
   directory?: string
@@ -54,26 +55,34 @@ await Log.init({
   ...(debugDir ? { dir: debugDir, name: "tui-worker" } : { name: Log.stampedName("tui-worker") }),
 })
 
-process.on("unhandledRejection", (e) => {
-  DiagnosticLog.recordProcess("worker.unhandledRejection", { error: e })
-  const error = e as Error
-  Log.Default.error("rejection", {
-    message: toErrorMessage(error),
-    stack: error instanceof Error ? error.stack : undefined,
-    code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
-  })
-})
+registerTuiProcessHandler(
+  "unhandledRejection",
+  (e) => {
+    DiagnosticLog.recordProcess("worker.unhandledRejection", { error: e })
+    const error = e as Error
+    Log.Default.error("rejection", {
+      message: toErrorMessage(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
+    })
+  },
+  { name: "worker-unhandled-rejection" },
+)
 
-process.on("uncaughtException", (e) => {
-  DiagnosticLog.recordProcess("worker.uncaughtException", { error: e })
-  const error = e as Error
-  Log.Default.error("exception", {
-    message: toErrorMessage(error),
-    stack: error instanceof Error ? error.stack : undefined,
-    code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
-  })
-  setTimeout(() => process.exit(1), 100)
-})
+registerTuiProcessHandler(
+  "uncaughtException",
+  (e) => {
+    DiagnosticLog.recordProcess("worker.uncaughtException", { error: e })
+    const error = e as Error
+    Log.Default.error("exception", {
+      message: toErrorMessage(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
+    })
+    setTimeout(() => process.exit(1), 100)
+  },
+  { name: "worker-uncaught-exception" },
+)
 
 const handleGlobalEvent = (event: GlobalEvent) => {
   Rpc.emit("global.event", event)

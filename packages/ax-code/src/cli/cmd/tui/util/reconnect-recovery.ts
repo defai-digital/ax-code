@@ -1,3 +1,5 @@
+import { scheduleTuiTimeout } from "./timer"
+
 export const RECONNECT_STABILIZE_MS = 2_000
 
 export function createReconnectRecoveryGate(input: { recover: () => void | Promise<void> }) {
@@ -7,7 +9,7 @@ export function createReconnectRecoveryGate(input: { recover: () => void | Promi
   let inFlight: Promise<void> | undefined
   let pendingError: unknown | undefined
   let pendingReconnect = false
-  let stabilizeTimer: ReturnType<typeof setTimeout> | undefined
+  let cancelStabilizeTimer: (() => void) | undefined
 
   const runRecovery = () => {
     if (disposed || !connected || !pendingReconnect || inFlight) return inFlight
@@ -32,10 +34,8 @@ export function createReconnectRecoveryGate(input: { recover: () => void | Promi
       if (!connected) {
         // Connection dropped — cancel any pending stabilization so we
         // don't trigger recovery on a stale reconnect.
-        if (stabilizeTimer) {
-          clearTimeout(stabilizeTimer)
-          stabilizeTimer = undefined
-        }
+        cancelStabilizeTimer?.()
+        cancelStabilizeTimer = undefined
         return
       }
       if (!hasConnectedOnce) {
@@ -45,22 +45,27 @@ export function createReconnectRecoveryGate(input: { recover: () => void | Promi
       // Wait for connection to stabilize before triggering recovery.
       // Prevents rapid reconnect cycles from network flaps (e.g.
       // laptop switching between WiFi and cellular during travel).
-      if (stabilizeTimer) clearTimeout(stabilizeTimer)
-      stabilizeTimer = setTimeout(() => {
-        stabilizeTimer = undefined
-        if (!connected) return
-        pendingReconnect = true
-        void runRecovery()
-      }, RECONNECT_STABILIZE_MS)
+      cancelStabilizeTimer?.()
+      cancelStabilizeTimer = scheduleTuiTimeout(
+        () => {
+          cancelStabilizeTimer = undefined
+          if (!connected) return
+          pendingReconnect = true
+          void runRecovery()
+        },
+        {
+          name: "reconnect-recovery-stabilize",
+          delayMs: RECONNECT_STABILIZE_MS,
+          unref: true,
+        },
+      )
     },
     dispose() {
       disposed = true
       connected = false
       pendingReconnect = false
-      if (stabilizeTimer) {
-        clearTimeout(stabilizeTimer)
-        stabilizeTimer = undefined
-      }
+      cancelStabilizeTimer?.()
+      cancelStabilizeTimer = undefined
     },
     async waitForIdle() {
       while (inFlight) {

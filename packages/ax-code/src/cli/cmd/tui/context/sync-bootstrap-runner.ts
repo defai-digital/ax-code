@@ -1,5 +1,6 @@
 import { formatBootstrapError, settleBootstrapPhase, type BootstrapPhaseSummary } from "./sync-bootstrap-phase"
 import type { BootstrapTask } from "./sync-bootstrap-task"
+import { registerTuiEventListener } from "../util/lifecycle"
 
 export type BootstrapSpan = ((data?: Record<string, unknown>) => void) | undefined
 
@@ -117,20 +118,27 @@ function waitBootstrapPhaseDelay(delayMs: number, signal?: AbortSignal) {
     }
 
     let timer: ReturnType<typeof setTimeout>
+    let removeAbortListener: (() => void) | undefined
     const onAbort = () => {
       clearTimeout(timer)
       cleanup()
       resolve(false)
     }
     const cleanup = () => {
-      signal?.removeEventListener("abort", onAbort)
+      removeAbortListener?.()
+      removeAbortListener = undefined
     }
 
     timer = setTimeout(() => {
       cleanup()
       resolve(true)
     }, delayMs)
-    signal?.addEventListener("abort", onAbort, { once: true })
+    if (signal) {
+      removeAbortListener = registerTuiEventListener(signal, "abort", onAbort, {
+        name: "sync-bootstrap-phase-delay-abort",
+        options: { once: true },
+      })
+    }
   })
 }
 

@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises"
 import { toErrorMessage } from "@/util/error-message"
+import { registerTuiEventListener, runTuiCleanup } from "./lifecycle"
 
 export type StreamDisconnectReason = "connect-timeout" | "watchdog-timeout" | "stream-ended" | "error"
 
@@ -62,7 +63,10 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
 
     const connectionAbort = new AbortController()
     const forwardAbort = () => connectionAbort.abort()
-    options.signal.addEventListener("abort", forwardAbort, { once: true })
+    const removeAbortListener = registerTuiEventListener(options.signal, "abort", forwardAbort, {
+      name: "resilient-stream-abort-forward",
+      options: { once: true },
+    })
 
     let connectTimer: ReturnType<typeof setTimeout> | undefined
     let watchdog: ReturnType<typeof setTimeout> | undefined
@@ -119,7 +123,7 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
       }
       if (connectTimer) clearTimeout(connectTimer)
       if (watchdog) clearTimeout(watchdog)
-      options.signal.removeEventListener("abort", forwardAbort)
+      runTuiCleanup(removeAbortListener, { name: "resilient-stream-abort-listener-cleanup" })
     }
 
     if (options.signal.aborted) break
