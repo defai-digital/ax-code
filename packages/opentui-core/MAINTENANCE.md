@@ -74,3 +74,9 @@ is opt-in (`AX_CODE_TUI_ADVANCED_TERMINAL=1`) and enables alternate-screen,
 Kitty keyboard negotiation, and OpenTUI's render thread. Any change that touches
 renderer options, terminal cleanup, startup diagnostics, or native OpenTUI
 integration must keep both startup-smoke profiles passing.
+
+Terminal teardown must remain best-effort and ordered. Title cleanup,
+`renderer.destroy()`, mouse-tracking reset, main-screen clearing, and stdout
+flush are separate failure domains; a failure in one step must not prevent later
+terminal recovery steps from running. If `renderer.destroy()` fails, cleanup
+must still run before the original destroy error is rethrown.

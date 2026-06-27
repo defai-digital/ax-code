@@ -14,14 +14,22 @@ export const TUI_MAIN_SCREEN_CLEAR_SEQUENCE = "\x1b[H\x1b[2J"
 
 export function disableTuiMouseTracking(stream: FlushableStream = process.stdout) {
   if (stream.writable === false || stream.destroyed) return false
-  stream.write(TUI_MOUSE_TRACKING_DISABLE_SEQUENCE)
-  return true
+  try {
+    stream.write(TUI_MOUSE_TRACKING_DISABLE_SEQUENCE)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function clearTuiMainScreen(stream: FlushableStream = process.stdout) {
   if (stream.writable === false || stream.destroyed) return false
-  stream.write(TUI_MAIN_SCREEN_CLEAR_SEQUENCE)
-  return true
+  try {
+    stream.write(TUI_MAIN_SCREEN_CLEAR_SEQUENCE)
+    return true
+  } catch {
+    return false
+  }
 }
 
 // Cap how long teardown waits for the final stdout write. If the stream is in

@@ -7,6 +7,7 @@ import {
   setTuiTerminalTitle,
 } from "../../../src/cli/cmd/tui/renderer"
 import {
+  clearTuiMainScreen,
   disableTuiMouseTracking,
   flushTuiStdout,
   TUI_MAIN_SCREEN_CLEAR_SEQUENCE,
@@ -95,6 +96,19 @@ describe("tui renderer profile", () => {
     expect(writes).toEqual([TUI_MOUSE_TRACKING_DISABLE_SEQUENCE, ""])
   })
 
+  test("terminal cleanup writes are best-effort when stdout is degraded", async () => {
+    const stream = {
+      writable: true,
+      write() {
+        throw new Error("broken stdout")
+      },
+    }
+
+    expect(disableTuiMouseTracking(stream)).toBe(false)
+    expect(clearTuiMainScreen(stream)).toBe(false)
+    await expect(flushTuiStdout(stream)).resolves.toBeUndefined()
+  })
+
   test("destroyTuiRenderer resets terminal state before resolving", async () => {
     const calls: string[] = []
     const renderer = {
@@ -176,5 +190,66 @@ describe("tui renderer profile", () => {
 
     // Alternate-screen restores the prior view automatically, so no clear.
     expect(writes).not.toContain(TUI_MAIN_SCREEN_CLEAR_SEQUENCE)
+  })
+
+  test("destroyTuiRenderer continues cleanup when terminal title clearing fails", async () => {
+    const calls: string[] = []
+    const renderer = {
+      setTerminalTitle() {
+        calls.push("title")
+        throw new Error("title failed")
+      },
+      destroy() {
+        calls.push("destroy")
+      },
+    }
+    const originalWrite = process.stdout.write
+    process.stdout.write = ((chunk: string, callback?: () => void) => {
+      calls.push(chunk === "" ? "flush" : chunk === TUI_MAIN_SCREEN_CLEAR_SEQUENCE ? "clear" : "mouse-disable")
+      if (callback) queueMicrotask(callback)
+      return true
+    }) as typeof process.stdout.write
+    try {
+      const profile = resolveTuiRenderProfile({
+        advancedTerminal: false,
+        terminalTitleDisabled: false,
+      })
+      await destroyTuiRenderer(renderer, { ...profile, allowTerminalTitle: true })
+    } finally {
+      process.stdout.write = originalWrite
+    }
+
+    expect(calls).toEqual(["title", "destroy", "mouse-disable", "clear", "flush"])
+  })
+
+  test("destroyTuiRenderer preserves renderer destroy errors after terminal cleanup", async () => {
+    const calls: string[] = []
+    const destroyError = new Error("destroy failed")
+    const renderer = {
+      setTerminalTitle() {
+        calls.push("title")
+      },
+      destroy() {
+        calls.push("destroy")
+        throw destroyError
+      },
+    }
+    const originalWrite = process.stdout.write
+    process.stdout.write = ((chunk: string, callback?: () => void) => {
+      calls.push(chunk === "" ? "flush" : chunk === TUI_MAIN_SCREEN_CLEAR_SEQUENCE ? "clear" : "mouse-disable")
+      if (callback) queueMicrotask(callback)
+      return true
+    }) as typeof process.stdout.write
+    try {
+      const profile = resolveTuiRenderProfile({
+        advancedTerminal: false,
+        terminalTitleDisabled: false,
+      })
+      await expect(destroyTuiRenderer(renderer, { ...profile, allowTerminalTitle: true })).rejects.toBe(destroyError)
+    } finally {
+      process.stdout.write = originalWrite
+    }
+
+    expect(calls).toEqual(["title", "destroy", "mouse-disable", "clear", "flush"])
   })
 })
