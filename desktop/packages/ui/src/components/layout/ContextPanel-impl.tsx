@@ -375,7 +375,7 @@ const DESKTOP_BROWSER_SAME_WEBVIEW_NAVIGATION_SCRIPT = `(() => {
   }, true);
 })()`
 
-export const normalizeBrowserUrl = (value: string): string => {
+const normalizeBrowserUrl = (value: string): string => {
   const trimmed = value.trim()
   if (!trimmed) return "about:blank"
   try {

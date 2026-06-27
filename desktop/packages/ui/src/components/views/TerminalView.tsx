@@ -57,9 +57,9 @@ const REHYDRATED_STREAM_OPTIONS = {
   connectionTimeoutMs: 1_500,
 }
 
-export const DEFAULT_TERMINAL_CREATE_SIZE = { cols: 120, rows: 30 } as const
+const DEFAULT_TERMINAL_CREATE_SIZE = { cols: 120, rows: 30 } as const
 
-export const resolveTerminalCreateSize = (size: { cols: number; rows: number } | null | undefined) =>
+const resolveTerminalCreateSize = (size: { cols: number; rows: number } | null | undefined) =>
   size ?? DEFAULT_TERMINAL_CREATE_SIZE
 
 const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | null => {
