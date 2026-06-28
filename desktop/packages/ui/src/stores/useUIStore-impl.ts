@@ -10,7 +10,7 @@ import type { TimeFormatPreference } from "@/lib/timeFormat"
 
 export type MainTab = "chat" | "plan" | "git" | "diff" | "terminal" | "files" | "context"
 export type RightSidebarTab = "git" | "files" | "context"
-export type ContextPanelMode = "diff" | "file" | "context" | "plan" | "chat" | "preview" | "browser"
+export type ContextPanelMode = "diff" | "file" | "context" | "plan" | "chat" | "preview" | "browser" | "canvas"
 export type MermaidRenderingMode = "svg" | "ascii"
 export type UserMessageRenderingMode = "markdown" | "plain"
 export type ChatRenderMode = "sorted" | "live"
@@ -162,6 +162,10 @@ const buildDefaultContextPanelTabDedupeKey = (mode: ContextPanelMode, targetPath
     return targetPath || mode
   }
 
+  if (mode === "canvas") {
+    return mode
+  }
+
   return mode
 }
 
@@ -249,7 +253,8 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       candidate.mode !== "plan" &&
       candidate.mode !== "chat" &&
       candidate.mode !== "preview" &&
-      candidate.mode !== "browser"
+      candidate.mode !== "browser" &&
+      candidate.mode !== "canvas"
     ) {
       continue
     }
@@ -446,7 +451,8 @@ const sanitizeContextPanelByDirectory = (value: unknown): Record<string, Context
         candidate.mode === "file" ||
         candidate.mode === "context" ||
         candidate.mode === "plan" ||
-        candidate.mode === "chat")
+        candidate.mode === "chat" ||
+        candidate.mode === "canvas")
     ) {
       tabs = [
         createContextPanelTab({
@@ -636,6 +642,7 @@ interface UIStore {
   openContextPlan: (directory: string) => void
   openContextPreview: (directory: string, url: string) => void
   openContextBrowser: (directory: string, url?: string) => void
+  openContextCanvas: (directory: string) => void
   setContextPanelTabTargetPath: (directory: string, tabID: string, targetPath: string) => void
   setActiveContextPanelTab: (directory: string, tabID: string) => void
   reorderContextPanelTabs: (directory: string, activeTabID: string, overTabID: string) => void
@@ -1086,6 +1093,16 @@ export const useUIStore = create<UIStore>()(
             targetPath: targetUrl,
             dedupeKey: "desktop-browser",
             label: "Browser",
+          })
+        },
+
+        openContextCanvas: (directory) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || "").trim())
+          if (!normalizedDirectory) return
+          get().openContextPanelTab(normalizedDirectory, {
+            mode: "canvas",
+            dedupeKey: "canvas",
+            label: "Canvas",
           })
         },
 

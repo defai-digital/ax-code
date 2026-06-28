@@ -41,6 +41,9 @@ const FilesView = lazyWithChunkRecovery(() =>
 const PlanView = lazyWithChunkRecovery(() =>
   import("@/components/views/PlanView").then((m) => ({ default: m.PlanView })),
 )
+const CanvasPanel = lazyWithChunkRecovery(() =>
+  import("@/components/canvas/CanvasPanel").then((m) => ({ default: m.CanvasPanel })),
+)
 
 const CONTEXT_PANEL_MIN_WIDTH = 380
 const CONTEXT_PANEL_MAX_WIDTH = 1400
@@ -152,6 +155,7 @@ const getModeLabel = (mode: ContextPanelMode, t: TranslateFn): string => {
   if (mode === "plan") return t("contextPanel.mode.plan")
   if (mode === "preview") return t("contextPanel.mode.preview")
   if (mode === "browser") return t("contextPanel.mode.browser")
+  if (mode === "canvas") return "Canvas"
   return t("contextPanel.mode.context")
 }
 
@@ -232,6 +236,10 @@ const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }):
 
   if (tab.mode === "browser") {
     return <Icon name="global" className="h-3.5 w-3.5" />
+  }
+
+  if (tab.mode === "canvas") {
+    return <Icon name="sticky-note" className="h-3.5 w-3.5" />
   }
 
   return undefined
@@ -1875,22 +1883,25 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
     }
   }, [directory, tabID, setContextPanelTabTargetPath])
 
-  const loadUrl = React.useCallback((value: string) => {
-    const nextUrl = normalizeBrowserUrl(value)
-    const visibleUrl = nextUrl !== "about:blank" ? nextUrl : ""
-    setCurrentUrl(visibleUrl)
-    setUrlInput(visibleUrl)
-    setIsLoading(Boolean(visibleUrl))
-    persistUrl(visibleUrl)
+  const loadUrl = React.useCallback(
+    (value: string) => {
+      const nextUrl = normalizeBrowserUrl(value)
+      const visibleUrl = nextUrl !== "about:blank" ? nextUrl : ""
+      setCurrentUrl(visibleUrl)
+      setUrlInput(visibleUrl)
+      setIsLoading(Boolean(visibleUrl))
+      persistUrl(visibleUrl)
 
-    const webview = webviewRef.current
-    if (typeof webview?.loadURL !== "function") return
-    try {
-      webview.loadURL(nextUrl)
-    } catch {
-      /* webview may not be ready */
-    }
-  }, [persistUrl])
+      const webview = webviewRef.current
+      if (typeof webview?.loadURL !== "function") return
+      try {
+        webview.loadURL(nextUrl)
+      } catch {
+        /* webview may not be ready */
+      }
+    },
+    [persistUrl],
+  )
 
   const handleInspect = React.useCallback(() => {
     const webview = webviewRef.current
@@ -2413,6 +2424,10 @@ export const ContextPanel: React.FC = () => {
         rawUrl={activeTab.targetPath ?? ""}
         onNavigate={(url) => openContextPreview(effectiveDirectory, url)}
       />
+    ) : activeTab?.mode === "canvas" ? (
+      <React.Suspense fallback={null}>
+        <CanvasPanel directory={effectiveDirectory} />
+      </React.Suspense>
     ) : (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <Icon name="global" className="h-12 w-12 text-muted-foreground/50" />

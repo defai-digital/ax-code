@@ -779,6 +779,7 @@ export const Header: React.FC = () => {
   const openContextOverview = useUIStore((state) => state.openContextOverview)
   const openContextPlan = useUIStore((state) => state.openContextPlan)
   const openContextBrowser = useUIStore((state) => state.openContextBrowser)
+  const openContextCanvas = useUIStore((state) => state.openContextCanvas)
   const closeContextPanel = useUIStore((state) => state.closeContextPanel)
   const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory)
   const activeMainTab = useUIStore((state) => state.activeMainTab)
@@ -1460,6 +1461,21 @@ export const Header: React.FC = () => {
     openContextBrowser(directory)
   }, [closeContextPanel, contextPanelByDirectory, openContextBrowser, openDirectory])
 
+  const handleOpenContextCanvas = React.useCallback(() => {
+    const directory = normalize(openDirectory || "")
+    if (!directory) {
+      return
+    }
+
+    const panelState = contextPanelByDirectory[directory]
+    if (getActiveContextMode(panelState) === "canvas") {
+      closeContextPanel(directory)
+      return
+    }
+
+    openContextCanvas(directory)
+  }, [closeContextPanel, contextPanelByDirectory, openContextCanvas, openDirectory])
+
   const isContextPlanActive = React.useMemo(() => {
     const directory = normalize(openDirectory || "")
     if (!directory) {
@@ -1476,6 +1492,15 @@ export const Header: React.FC = () => {
     }
     const panelState = contextPanelByDirectory[directory]
     return getActiveContextMode(panelState) === "browser"
+  }, [contextPanelByDirectory, openDirectory])
+
+  const isContextCanvasActive = React.useMemo(() => {
+    const directory = normalize(openDirectory || "")
+    if (!directory) {
+      return false
+    }
+    const panelState = contextPanelByDirectory[directory]
+    return getActiveContextMode(panelState) === "canvas"
   }, [contextPanelByDirectory, openDirectory])
 
   const desktopHeaderIconButtonClass = DESKTOP_HEADER_ICON_BUTTON_CLASS
@@ -1845,6 +1870,13 @@ export const Header: React.FC = () => {
         onClick={handleOpenContextBrowser}
         pressed={isContextBrowserActive}
         Icon={"global"}
+      />
+      <HeaderIconActionButton
+        title="Open Canvas"
+        ariaLabel="Open Canvas"
+        onClick={handleOpenContextCanvas}
+        pressed={isContextCanvasActive}
+        Icon={"sticky-note"}
       />
       <HeaderIconActionButton
         title={t("header.actions.rightSidebarWithShortcut", { shortcut: shortcutLabel("toggle_right_sidebar") })}
