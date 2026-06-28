@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 # TUI rendering
-ratatui = "0.29"
+ratatui = "0.30.0"
 crossterm = "0.28"
 
 # HTTP/SSE client for headless server
