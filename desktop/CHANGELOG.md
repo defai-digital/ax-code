@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.12] - 2026-06-28
+
+### Fixed
+
+- CLI: refreshed provider catalog filtering and TUI command aliases for the current release line.
+- Desktop: aligned provider connection UX and remote install defaults with the Node runtime release path.
+- Release: republished signed CLI and Desktop assets with Homebrew formula and cask updates.
+
 ## [6.7.11] - 2026-06-28
 
 ### Fixed
