@@ -5,17 +5,24 @@ import { constants as fsConstants } from "node:fs"
 import http from "node:http"
 import os from "node:os"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
 const desktopRoot = path.resolve(new URL("../../..", import.meta.url).pathname)
 const execFileAsync = promisify(execFile)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const DEFAULT_TIMEOUT_MS = 45_000
 
-const parseArgs = (argv) => {
+const parseTimeoutMs = (value, fallback = DEFAULT_TIMEOUT_MS) => {
+  const parsed = Number(String(value || "").trim())
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+export const parseArgs = (argv, env = process.env) => {
   const result = {
-    app: process.env.AX_CODE_DESKTOP_SMOKE_APP || "",
-    artifacts: process.env.AX_CODE_DESKTOP_SMOKE_ARTIFACTS || "",
-    timeoutMs: Number.parseInt(process.env.AX_CODE_DESKTOP_SMOKE_TIMEOUT_MS || "45000", 10),
+    app: env.AX_CODE_DESKTOP_SMOKE_APP || "",
+    artifacts: env.AX_CODE_DESKTOP_SMOKE_ARTIFACTS || "",
+    timeoutMs: parseTimeoutMs(env.AX_CODE_DESKTOP_SMOKE_TIMEOUT_MS),
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -27,7 +34,7 @@ const parseArgs = (argv) => {
       result.artifacts = argv[index + 1] || ""
       index += 1
     } else if (arg === "--timeout-ms") {
-      result.timeoutMs = Number.parseInt(argv[index + 1] || "", 10)
+      result.timeoutMs = parseTimeoutMs(argv[index + 1], result.timeoutMs)
       index += 1
     }
   }
@@ -285,9 +292,7 @@ const main = async () => {
     const eventNames = await waitFor(
       async () => {
         const diagnostics = await fetchJson(`http://127.0.0.1:${serverPort}/api/desktop/diagnostics/startup`)
-        const names = Array.isArray(diagnostics.body?.events)
-          ? diagnostics.body.events.map((event) => event?.name)
-          : []
+        const names = Array.isArray(diagnostics.body?.events) ? diagnostics.body.events.map((event) => event?.name) : []
         return requiredStartupEvents.every((required) => names.includes(required)) ? names : null
       },
       args.timeoutMs,
@@ -346,7 +351,9 @@ const main = async () => {
   }
 }
 
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
+}
