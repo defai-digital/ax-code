@@ -20,12 +20,14 @@ import {
   fetchProviderJsonWithRetry,
   fetchProviderSources,
   getCurrentDirectory,
+  isCliProvider,
   isRecord,
   isRestartingError,
   normalizeAuthType,
   parseAuthMethodsPayload,
   parseAvailableProvidersPayload,
   PROVIDER_RESTART_POLL_MS,
+  saveProviderAuth,
   type AuthMethod,
   type ProviderOption,
 } from "@/lib/ax-code/providerApi"
@@ -247,6 +249,20 @@ export const ProvidersPage: React.FC = () => {
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId)
   const selectedSources = selectedProviderId ? providerSources[selectedProviderId] : undefined
 
+  const reloadAfterProviderAuthSave = async (successMessage: string) => {
+    try {
+      await reloadAxCodeConfiguration({
+        message: "Restarting AX Code to load provider credentials...",
+        scopes: ["providers"],
+        mode: "active",
+      })
+      toast.success(successMessage)
+    } catch (reloadError) {
+      console.error("Provider auth was saved, but AX Code reload failed:", reloadError)
+      toast.warning(t("settings.providers.page.toast.apiKeySavedRestartFailed"))
+    }
+  }
+
   const handleSaveApiKey = async (providerId: string) => {
     const apiKey = apiKeyInputs[providerId]?.trim() ?? ""
     if (!apiKey) {
@@ -258,36 +274,30 @@ export const ProvidersPage: React.FC = () => {
     setAuthBusyKey(busyKey)
 
     try {
-      await fetchProviderJsonWithRetry(
-        buildDirectoryUrl(
-          replacePathParams(API_ENDPOINTS.provider.authByProvider, {
-            providerId,
-          }),
-          directory,
-        ),
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "api", key: apiKey }),
-        },
-      )
+      await saveProviderAuth(providerId, apiKey, directory)
 
       setApiKeyInputs((prev) => ({ ...prev, [providerId]: "" }))
-      try {
-        await reloadAxCodeConfiguration({
-          message: "Restarting AX Code to load provider credentials...",
-          scopes: ["providers"],
-          mode: "active",
-        })
-        toast.success(t("settings.providers.page.toast.apiKeySaved"))
-      } catch (reloadError) {
-        console.error("API key was saved, but AX Code reload failed:", reloadError)
-        toast.warning(t("settings.providers.page.toast.apiKeySavedRestartFailed"))
-      }
+      await reloadAfterProviderAuthSave(t("settings.providers.page.toast.apiKeySaved"))
       setSelectedProvider(providerId)
     } catch (error) {
       console.error("Failed to save API key:", error)
       toast.error(t("settings.providers.page.toast.apiKeySaveFailed"))
+    } finally {
+      setAuthBusyKey(null)
+    }
+  }
+
+  const handleUseCliProvider = async (providerId: string) => {
+    const busyKey = `cli:${providerId}`
+    setAuthBusyKey(busyKey)
+
+    try {
+      await saveProviderAuth(providerId, "cli", directory)
+      await reloadAfterProviderAuthSave(t("settings.providers.page.toast.cliProviderConnected"))
+      setSelectedProvider(providerId)
+    } catch (error) {
+      console.error("Failed to connect CLI provider:", error)
+      toast.error(t("settings.providers.page.toast.cliProviderConnectFailed"))
     } finally {
       setAuthBusyKey(null)
     }
@@ -628,43 +638,58 @@ export const ProvidersPage: React.FC = () => {
                 </p>
               ) : (
                 <section className="px-2 pb-2 pt-0 space-y-4">
-                  <div className="py-1.5">
-                    <label className="typography-ui-label text-foreground flex items-center gap-1.5">
-                      {t("settings.providers.page.auth.apiKeyLabel")}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={8} className="max-w-xs">
-                          {t("settings.providers.page.auth.apiKeyTooltip")}
-                        </TooltipContent>
-                      </Tooltip>
-                    </label>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1.5">
-                      <Input
-                        type="password"
-                        value={apiKeyInputs[candidateProviderId] ?? ""}
-                        onChange={(event) =>
-                          setApiKeyInputs((prev) => ({
-                            ...prev,
-                            [candidateProviderId]: event.target.value,
-                          }))
-                        }
-                        placeholder={t("settings.providers.page.auth.apiKeyPlaceholder")}
-                        className="flex-1 font-mono text-xs"
-                      />
+                  {isCliProvider(candidateProviderId) ? (
+                    <div className="py-1.5">
                       <Button
                         size="xs"
-                        className="!font-normal shrink-0"
-                        onClick={() => handleSaveApiKey(candidateProviderId)}
-                        disabled={authBusyKey === `api:${candidateProviderId}`}
+                        className="!font-normal"
+                        onClick={() => handleUseCliProvider(candidateProviderId)}
+                        disabled={authBusyKey === `cli:${candidateProviderId}`}
                       >
-                        {authBusyKey === `api:${candidateProviderId}`
+                        {authBusyKey === `cli:${candidateProviderId}`
                           ? t("settings.providers.page.actions.saving")
-                          : t("settings.providers.page.actions.saveKey")}
+                          : t("settings.providers.page.actions.useCli")}
                       </Button>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="py-1.5">
+                      <label className="typography-ui-label text-foreground flex items-center gap-1.5">
+                        {t("settings.providers.page.auth.apiKeyLabel")}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent sideOffset={8} className="max-w-xs">
+                            {t("settings.providers.page.auth.apiKeyTooltip")}
+                          </TooltipContent>
+                        </Tooltip>
+                      </label>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1.5">
+                        <Input
+                          type="password"
+                          value={apiKeyInputs[candidateProviderId] ?? ""}
+                          onChange={(event) =>
+                            setApiKeyInputs((prev) => ({
+                              ...prev,
+                              [candidateProviderId]: event.target.value,
+                            }))
+                          }
+                          placeholder={t("settings.providers.page.auth.apiKeyPlaceholder")}
+                          className="flex-1 font-mono text-xs"
+                        />
+                        <Button
+                          size="xs"
+                          className="!font-normal shrink-0"
+                          onClick={() => handleSaveApiKey(candidateProviderId)}
+                          disabled={authBusyKey === `api:${candidateProviderId}`}
+                        >
+                          {authBusyKey === `api:${candidateProviderId}`
+                            ? t("settings.providers.page.actions.saving")
+                            : t("settings.providers.page.actions.saveKey")}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   {(() => {
                     const candidateAuthMethods = authMethodsByProvider[candidateProviderId] ?? []
@@ -878,43 +903,58 @@ export const ProvidersPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="py-1.5">
-                  <label className="typography-ui-label text-foreground flex items-center gap-1.5">
-                    {t("settings.providers.page.auth.apiKeyLabel")}
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent sideOffset={8} className="max-w-xs">
-                        {t("settings.providers.page.auth.apiKeyTooltip")}
-                      </TooltipContent>
-                    </Tooltip>
-                  </label>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1.5">
-                    <Input
-                      type="password"
-                      value={apiKeyInputs[selectedProvider.id] ?? ""}
-                      onChange={(event) =>
-                        setApiKeyInputs((prev) => ({
-                          ...prev,
-                          [selectedProvider.id]: event.target.value,
-                        }))
-                      }
-                      placeholder={t("settings.providers.page.auth.apiKeyPlaceholder")}
-                      className="flex-1 font-mono text-xs"
-                    />
+                {isCliProvider(selectedProvider.id) ? (
+                  <div className="py-1.5">
                     <Button
                       size="xs"
-                      className="!font-normal shrink-0"
-                      onClick={() => handleSaveApiKey(selectedProvider.id)}
-                      disabled={authBusyKey === `api:${selectedProvider.id}`}
+                      className="!font-normal"
+                      onClick={() => handleUseCliProvider(selectedProvider.id)}
+                      disabled={authBusyKey === `cli:${selectedProvider.id}`}
                     >
-                      {authBusyKey === `api:${selectedProvider.id}`
+                      {authBusyKey === `cli:${selectedProvider.id}`
                         ? t("settings.providers.page.actions.saving")
-                        : t("settings.providers.page.actions.saveKey")}
+                        : t("settings.providers.page.actions.useCli")}
                     </Button>
                   </div>
-                </div>
+                ) : (
+                  <div className="py-1.5">
+                    <label className="typography-ui-label text-foreground flex items-center gap-1.5">
+                      {t("settings.providers.page.auth.apiKeyLabel")}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Icon name="information" className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={8} className="max-w-xs">
+                          {t("settings.providers.page.auth.apiKeyTooltip")}
+                        </TooltipContent>
+                      </Tooltip>
+                    </label>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1.5">
+                      <Input
+                        type="password"
+                        value={apiKeyInputs[selectedProvider.id] ?? ""}
+                        onChange={(event) =>
+                          setApiKeyInputs((prev) => ({
+                            ...prev,
+                            [selectedProvider.id]: event.target.value,
+                          }))
+                        }
+                        placeholder={t("settings.providers.page.auth.apiKeyPlaceholder")}
+                        className="flex-1 font-mono text-xs"
+                      />
+                      <Button
+                        size="xs"
+                        className="!font-normal shrink-0"
+                        onClick={() => handleSaveApiKey(selectedProvider.id)}
+                        disabled={authBusyKey === `api:${selectedProvider.id}`}
+                      >
+                        {authBusyKey === `api:${selectedProvider.id}`
+                          ? t("settings.providers.page.actions.saving")
+                          : t("settings.providers.page.actions.saveKey")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {oauthAuthMethods.length > 0 && (
                   <div className="space-y-4 border-t border-[var(--surface-subtle)] pt-2">

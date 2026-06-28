@@ -13,7 +13,7 @@ describe("tui command autocomplete", () => {
 
   test("filters slash commands by the typed query and ranks prefix matches first", () => {
     const options = [
-      { display: "/agents    ", description: "Manage agents" },
+      { display: "/agent     ", description: "Manage agents", aliases: ["/agents"] },
       { display: "/connect   ", description: "Connect provider" },
       { display: "/mcp       ", description: "Manage MCP servers" },
       { display: "/new       ", description: "Create a new session", aliases: ["/n"] },
@@ -23,5 +23,15 @@ describe("tui command autocomplete", () => {
     expect(rankSlashAutocompleteOptions(options, "/mcp").map((option) => option.display.trim())).toEqual(["/mcp"])
     expect(rankSlashAutocompleteOptions(options, "n").map((option) => option.display.trim())[0]).toBe("/new")
     expect(rankSlashAutocompleteOptions(options, "does-not-exist")).toEqual([])
+  })
+
+  test("matches slash command aliases without changing the visible command name", () => {
+    const options = [
+      { display: "/model     ", value: "/model", description: "Switch model", aliases: ["/models"] },
+      { display: "/agent     ", value: "/agent", description: "Switch agent", aliases: ["/agents"] },
+    ]
+
+    expect(rankSlashAutocompleteOptions(options, "models").map((option) => option.display.trim())).toEqual(["/model"])
+    expect(rankSlashAutocompleteOptions(options, "/agents").map((option) => option.display.trim())).toEqual(["/agent"])
   })
 })

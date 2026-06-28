@@ -2,7 +2,7 @@ import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable }
 import { pathToFileURL } from "url"
 import fuzzysort from "fuzzysort"
 import { firstBy } from "remeda"
-import { createMemo, createResource, createEffect, onMount, Index, Show, createSignal } from "solid-js"
+import { createMemo, createResource, createEffect, onMount, For, Show, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
@@ -781,7 +781,7 @@ export function Autocomplete(props: {
         height={placement().height}
         scrollbarOptions={{ visible: false }}
       >
-        <Index
+        <For
           each={optionsWithGroupHeaders()}
           fallback={
             <box paddingLeft={1} paddingRight={1}>
@@ -789,11 +789,10 @@ export function Autocomplete(props: {
             </box>
           }
         >
-          {(item, index) => {
-            const entry = item()
+          {(entry, index) => {
             if (entry.type === "header") {
               return (
-                <box paddingLeft={1} paddingRight={1} paddingTop={index > 0 ? 1 : 0} flexShrink={0}>
+                <box paddingLeft={1} paddingRight={1} paddingTop={index() > 0 ? 1 : 0} flexShrink={0}>
                   <text fg={theme.textMuted}>{entry.label}</text>
                 </box>
               )
@@ -837,7 +836,7 @@ export function Autocomplete(props: {
               </box>
             )
           }}
-        </Index>
+        </For>
       </scrollbox>
     </box>
   )

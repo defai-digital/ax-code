@@ -268,10 +268,11 @@ for (const id of [
 // hosting variants. Probes match against family, id, and name because
 // models.dev tags inconsistently across providers.
 //
-//   - Kimi (Moonshot): only the kimi-k2.6 version via the Alibaba plan.
+//   - Kimi (Moonshot): only the current Kimi coding SKU via Alibaba/Kimi plans.
 //   - Grok: only grok-4.3 plus the Grok Build coding model aliases.
 //     All other Grok variants (4.2/4.1, 4.0, beta aliases, 2/3) drop.
-//   - GLM (Z.AI): only non-vision v5+ (glm-5v and every glm-4.x / glm-3.x drop).
+//   - GLM (Z.AI): only non-vision selected v5+ SKUs (glm-5.1, glm-5.1[1m],
+//     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop).
 //   - Gemini: only v3+ (Gemini 1.x/2.x drops from ax-code's model picker).
 //   - GPT-5.5: hidden from API/provider model pickers; use Codex CLI default instead.
 //
@@ -315,9 +316,13 @@ function isAllowedGrokProbe(probe: string): boolean {
 // versions that we want to surface (these are served through Alibaba's coding/token
 // plan). The allow-list match is exact on the final id segment so partial aliases
 // (kimi-k2.6-vision-preview, etc.) keep getting filtered out.
-const KIMI_ALLOWED_FINAL_SEGMENTS = new Set<string>(["kimi-k2.6"])
+const KIMI_ALLOWED_FINAL_SEGMENTS = new Set<string>(["kimi-k2.7-code"])
 function isAllowedKimiProbe(probe: string): boolean {
   return KIMI_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? "")
+}
+const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>(["glm-5.1", "glm-5-1", "glm-5.1[1m]", "glm-5.1-1m", "glm-5-turbo"])
+function isHiddenGlmProbe(probe: string): boolean {
+  return GLM_HIDDEN_FINAL_SEGMENTS.has(probe.split("/").pop() ?? "")
 }
 function isUnsupportedModel(m: RawModel): boolean {
   const probes = probesOf(m)
@@ -330,6 +335,7 @@ function isUnsupportedModel(m: RawModel): boolean {
     if (!probes.some(isAllowedGrokProbe)) return true
   }
   // GLM: drop if any probe mentions glm-N where N < 5.
+  if (probes.some(isHiddenGlmProbe)) return true
   if (probes.some((p) => p.includes("glm-5v") || p.includes("glm5v"))) return true
   if (probes.some((p) => /\bglm-[0-4]\b/.test(p))) return true
   // Gemini: drop any Gemini generation before 3.
@@ -554,7 +560,7 @@ const alibabaModels = [
   "deepseek-v4-pro",
   "deepseek-v4-flash",
   // Other vendors aggregated under the Alibaba plan
-  "kimi-k2.6",
+  "kimi-k2.7-code",
   // Qwen image generation
   "qwen-image-2.0",
   "qwen-image-2.0-pro",
@@ -567,13 +573,41 @@ const alibabaModelFallbackProviders: Record<string, string[]> = {
   "qwen3.6-flash": ["aihubmix"],
   "deepseek-v4-pro": ["auriko", "cortecs", "302ai", "llmgateway"],
   "deepseek-v4-flash": ["cortecs", "auriko", "302ai", "llmgateway"],
-  "kimi-k2.6": ["moonshot", "moonshot-cn", "302ai", "llmgateway"],
+  "kimi-k2.7-code": ["moonshot", "moonshot-cn", "302ai", "llmgateway"],
 }
 const alibabaModelFallbackDefaults: Record<string, RawModel> = {
+  "kimi-k2.7-code": kimiCodingModel("kimi-k2.7-code", "Kimi K2.7 Code"),
   "qwen-image-2.0": alibabaImageModel("qwen-image-2.0", "Qwen Image 2.0", "qwen-image"),
   "qwen-image-2.0-pro": alibabaImageModel("qwen-image-2.0-pro", "Qwen Image 2.0 Pro", "qwen-image"),
   "wan2.7-image": alibabaImageModel("wan2.7-image", "Wan 2.7 Image", "wan"),
   "wan2.7-image-pro": alibabaImageModel("wan2.7-image-pro", "Wan 2.7 Image Pro", "wan"),
+}
+function kimiCodingModel(id: string, name: string): RawModel {
+  return {
+    id,
+    name,
+    family: id,
+    attachment: true,
+    reasoning: true,
+    tool_call: true,
+    interleaved: {
+      field: "reasoning_content",
+    },
+    structured_output: true,
+    temperature: true,
+    release_date: "2026-06-28",
+    last_updated: "2026-06-28",
+    modalities: {
+      input: ["text", "image", "video"],
+      output: ["text"],
+    },
+    open_weights: true,
+    limit: {
+      context: 262144,
+      output: 262144,
+    },
+    status: "active",
+  } as RawModel
 }
 function alibabaImageModel(id: string, name: string, family: string): RawModel {
   return {
@@ -636,9 +670,9 @@ for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-toke
 // provider. Keep it separate from the generic upstream Moonshot provider so the
 // picker only shows the currently validated coding model instead of every legacy
 // Kimi alias published by models.dev.
-const kimiCloudPlanModels = ["kimi-k2.6"]
+const kimiCloudPlanModels = ["kimi-k2.7-code"]
 const kimiCloudPlanFallbackProviders: Record<string, string[]> = {
-  "kimi-k2.6": [
+  "kimi-k2.7-code": [
     "moonshotai",
     "moonshotai-cn",
     "kimi-for-coding",
@@ -658,12 +692,21 @@ for (const mid of kimiCloudPlanModels) {
       removedProviderSources[fallbackID]?.models?.[mid]
     if (!fallback) continue
     kimiCloudPlanKept[mid] = {
+      ...JSON.parse(JSON.stringify(kimiCodingModel(mid, "Kimi K2.7 Code"))),
       ...JSON.parse(JSON.stringify(fallback)),
       id: mid,
-      name: "Kimi K2.6",
-      family: "kimi-k2.6",
+      name: "Kimi K2.7 Code",
+      family: "kimi-k2.7-code",
     }
     break
+  }
+  if (!kimiCloudPlanKept[mid] && alibabaModelFallbackDefaults[mid]) {
+    kimiCloudPlanKept[mid] = {
+      ...JSON.parse(JSON.stringify(alibabaModelFallbackDefaults[mid])),
+      id: mid,
+      name: "Kimi K2.7 Code",
+      family: "kimi-k2.7-code",
+    }
   }
 }
 if (Object.keys(kimiCloudPlanKept).length > 0) {
@@ -723,8 +766,8 @@ if (fetched["xai"]?.models) {
 // OpenAI-compatible `model` field, so it is just another model id to ax-code.
 // models.dev publishes only the 200K base ids and GLM-5.2 is coding-plan-only
 // at launch (general API / open weights ship later), so re-inject the GLM-5.2
-// flagship plus the glm-5.2[1m] and glm-5.1[1m] long-context variants on every
-// regeneration. Prefer the upstream entry when models.dev catches up; fall back
+// flagship plus the glm-5.2[1m] long-context variant on every regeneration.
+// Prefer the upstream entry when models.dev catches up; fall back
 // to the template otherwise. Scoped to the coding providers where the [1m]
 // suffix is documented (https://docs.z.ai/devpack/latest-model).
 const GLM_CODING_PROVIDER_IDS = ["zai-coding-plan", "zhipuai-coding-plan"]
@@ -750,7 +793,6 @@ function glmCodingModel(id: string, name: string, context: number, releaseDate: 
 const glmInjectedModels: Array<{ id: string; name: string; context: number; release: string }> = [
   { id: "glm-5.2", name: "GLM-5.2", context: 200000, release: "2026-06-13" },
   { id: "glm-5.2[1m]", name: "GLM-5.2 (1M context)", context: 1000000, release: "2026-06-13" },
-  { id: "glm-5.1[1m]", name: "GLM-5.1 (1M context)", context: 1000000, release: "2026-03-27" },
 ]
 for (const providerID of GLM_CODING_PROVIDER_IDS) {
   const provider = fetched[providerID]

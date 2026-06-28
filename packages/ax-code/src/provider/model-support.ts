@@ -1,4 +1,5 @@
 const GLM_MAJOR_VERSION = /glm-(\d+)/
+const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>(["glm-5.1", "glm-5-1", "glm-5.1[1m]", "glm-5.1-1m", "glm-5-turbo"])
 const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
   "grok-4.3",
   "grok-4-3",
@@ -77,7 +78,8 @@ export function supportsGrok41OrAllowedCodingModel(probes: readonly string[]) {
 
 export function supportsGlmModels(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("glm"))) return true
+  if (probes.some((probe) => GLM_HIDDEN_FINAL_SEGMENTS.has(probe.split("/").pop() ?? ""))) return false
   if (probes.some((probe) => probe.includes("glm-5v") || probe.includes("glm5v"))) return false
-  // Allow non-vision GLM 5 and any future GLM N≥5. Drops glm-5v and glm-3.x / glm-4.x.
+  // Allow selected non-vision GLM 5 and any future GLM N≥5. Drops hidden SKUs, glm-5v, and glm-3.x / glm-4.x.
   return hasGlmMajorVersionAtLeastFive(probes)
 }

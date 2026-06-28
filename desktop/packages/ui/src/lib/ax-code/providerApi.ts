@@ -4,11 +4,21 @@ import type { ProviderSources } from "@/components/sections/providers/types"
 
 const PROVIDER_REQUEST_RETRY_DELAYS_MS = [250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3000, 3000]
 const PROVIDER_RESTART_POLL_MS = 2000
+const CLI_PROVIDER_IDS = new Set([
+  "claude-code",
+  "gemini-cli",
+  "codex-cli",
+  "grok-build-cli",
+  "qoder-cli",
+  "antigravity-cli",
+])
 
 export { PROVIDER_REQUEST_RETRY_DELAYS_MS, PROVIDER_RESTART_POLL_MS }
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null
+
+export const isCliProvider = (providerId: string): boolean => CLI_PROVIDER_IDS.has(providerId)
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -218,6 +228,22 @@ export const fetchProviderSources = async (providerId: string, directory: string
     headers: { Accept: "application/json" },
   })
   return (payload?.sources ?? payload?.data?.sources) as ProviderSources | undefined
+}
+
+export const saveProviderAuth = async (providerId: string, key: string, directory: string | null) => {
+  return fetchProviderJsonWithRetry(
+    buildDirectoryUrl(
+      replacePathParams(API_ENDPOINTS.provider.authByProvider, {
+        providerId,
+      }),
+      directory,
+    ),
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "api", key }),
+    },
+  )
 }
 
 export const disconnectProviderAuth = async (providerId: string, directory: string | null, scope = "all") => {

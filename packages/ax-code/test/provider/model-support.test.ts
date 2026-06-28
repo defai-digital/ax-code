@@ -80,7 +80,11 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("xai", "grok-4.3")).toBe(true)
     expect(isModelSupportedForProvider("xai", "grok-build-0.1")).toBe(true)
     expect(isModelSupportedForProvider("xai", "grok-4.2")).toBe(false)
-    expect(isModelSupportedForProvider("zai", "glm-5.1")).toBe(true)
+    expect(isModelSupportedForProvider("zai", "glm-5.2")).toBe(true)
+    expect(isModelSupportedForProvider("zai", "glm-5")).toBe(true)
+    expect(isModelSupportedForProvider("zai", "glm-5.1")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "glm-5.1[1m]")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "glm-5-turbo")).toBe(false)
     expect(isModelSupportedForProvider("zhipuai", "glm-4.5")).toBe(false)
   })
 

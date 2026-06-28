@@ -1121,7 +1121,7 @@ export namespace Provider {
     if (provider) {
       let priority = ["gemini-3-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
       if (providerID.startsWith("zai")) {
-        priority = ["glm-5-turbo", "glm-5"]
+        priority = ["glm-5.2", "glm-5"]
       }
       if (providerID === ProviderID.xai) {
         priority = ["grok-4.3", "grok-code-fast-1", "grok-build-0.1"]

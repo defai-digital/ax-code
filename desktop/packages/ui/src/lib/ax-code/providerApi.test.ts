@@ -8,10 +8,12 @@ import {
   disconnectProviderAuth,
   fetchProviderJsonWithRetry,
   fetchProviderSources,
+  isCliProvider,
   isRestartingError,
   parseAuthMethodsPayload,
   parseAvailableProvidersPayload,
   normalizeAuthType,
+  saveProviderAuth,
 } from "./providerApi"
 
 const setWindowStub = (stub: unknown): void => {
@@ -81,7 +83,41 @@ describe("isRestartingError", () => {
   })
 })
 
+describe("isCliProvider", () => {
+  test("recognizes CLI-backed providers", () => {
+    expect(isCliProvider("claude-code")).toBe(true)
+    expect(isCliProvider("gemini-cli")).toBe(true)
+    expect(isCliProvider("codex-cli")).toBe(true)
+    expect(isCliProvider("grok-build-cli")).toBe(true)
+    expect(isCliProvider("qoder-cli")).toBe(true)
+    expect(isCliProvider("antigravity-cli")).toBe(true)
+    expect(isCliProvider("openai")).toBe(false)
+  })
+})
+
 describe("provider requests", () => {
+  test("saveProviderAuth sends the auth key payload through the shared auth route", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const originalFetch = globalThis.fetch
+    setFetchStub((async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init })
+      return new Response(JSON.stringify(true), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }) as typeof fetch)
+
+    try {
+      await saveProviderAuth("claude-code", "cli", "/home/user/project")
+      expect(calls).toHaveLength(1)
+      expect(calls[0]?.url).toBe("/api/auth/claude-code?directory=%2Fhome%2Fuser%2Fproject")
+      expect(calls[0]?.init?.method).toBe("PUT")
+      expect(calls[0]?.init?.body).toBe(JSON.stringify({ type: "api", key: "cli" }))
+    } finally {
+      setFetchStub(originalFetch)
+    }
+  })
+
   test("disconnectProviderAuth resolves through the desktop server origin and preserves directory", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = []
     const originalFetch = globalThis.fetch

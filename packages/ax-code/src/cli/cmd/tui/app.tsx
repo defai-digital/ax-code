@@ -805,7 +805,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       suggested: true,
       category: "Agent",
       slash: {
-        name: "models",
+        name: "model",
+        aliases: ["models"],
       },
       onSelect: () => {
         void showModelDialog()
@@ -857,7 +858,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       keybind: "agent_list",
       category: "Agent",
       slash: {
-        name: "agents",
+        name: "agent",
+        aliases: ["agents"],
       },
       onSelect: () => {
         void showAgentDialog()

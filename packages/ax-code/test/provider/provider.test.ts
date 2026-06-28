@@ -1598,7 +1598,7 @@ test("getSmallModel respects config small_model override", async () => {
   })
 })
 
-test("config-defined Z.AI Coding Plan models filter GLM <5 and keep GLM 5+", async () => {
+test("config-defined Z.AI Coding Plan models filter unsupported GLM variants", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -1621,6 +1621,14 @@ test("config-defined Z.AI Coding Plan models filter GLM <5 and keep GLM 5+", asy
                   provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
                   limit: { context: 200000, output: 131072 },
                 },
+                "glm-5.1": {
+                  provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
+                  limit: { context: 200000, output: 131072 },
+                },
+                "glm-5": {
+                  provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
+                  limit: { context: 200000, output: 131072 },
+                },
               },
             },
           },
@@ -1636,8 +1644,10 @@ test("config-defined Z.AI Coding Plan models filter GLM <5 and keep GLM 5+", asy
       // Pre-5 SKUs are filtered.
       expect(zai.models["glm-4-plus"]).toBeUndefined()
       expect(zai.models["glm-4.5-flash"]).toBeUndefined()
-      // GLM 5+ is kept.
-      expect(zai.models["glm-5-turbo"]).toBeDefined()
+      // Selected GLM 5 SKUs are hidden from the picker.
+      expect(zai.models["glm-5-turbo"]).toBeUndefined()
+      expect(zai.models["glm-5.1"]).toBeUndefined()
+      expect(zai.models["glm-5"]).toBeDefined()
     },
   })
 })
@@ -1661,14 +1671,13 @@ test("bundled Z.AI coding plan providers expose GLM flagship and long-context va
     },
     fn: async () => {
       const providers = await Provider.list()
-      const expected = ["glm-5.2", "glm-5.2[1m]", "glm-5.1[1m]"]
+      const expected = ["glm-5.2", "glm-5.2[1m]"]
       // The "[1m]" suffix is a client-side context-window selector; the z.ai API
       // only accepts the bare model name, so api.id must drop the suffix while
       // the lookup id keeps it.
       const expectedApiID: Record<string, string> = {
         "glm-5.2": "glm-5.2",
         "glm-5.2[1m]": "glm-5.2",
-        "glm-5.1[1m]": "glm-5.1",
       }
 
       for (const providerID of ["zai-coding-plan", "zhipuai-coding-plan"]) {
@@ -2022,7 +2031,7 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       const expectedAlibabaPlanModels = [
         "deepseek-v4-flash",
         "deepseek-v4-pro",
-        "kimi-k2.6",
+        "kimi-k2.7-code",
         "qwen-image-2.0",
         "qwen-image-2.0-pro",
         "qwen3.6-flash",
@@ -2069,8 +2078,8 @@ test("Kimi Cloud Plan exposes only the current validated Kimi coding model", asy
       expect(kimiCloudPlan).toBeDefined()
       expect(kimiCloudPlan.name).toBe("Kimi Cloud Plan")
       expect(kimiCloudPlan.key).toBe("test-kimi-cloud-plan-key")
-      expect(Object.keys(kimiCloudPlan.models).sort()).toEqual(["kimi-k2.6"])
-      expect(kimiCloudPlan.models["kimi-k2.6"].api.url).toBe("https://api.moonshot.ai/v1")
+      expect(Object.keys(kimiCloudPlan.models).sort()).toEqual(["kimi-k2.7-code"])
+      expect(kimiCloudPlan.models["kimi-k2.7-code"].api.url).toBe("https://api.moonshot.ai/v1")
     },
   })
 })
