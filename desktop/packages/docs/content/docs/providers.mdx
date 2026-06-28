@@ -7,6 +7,8 @@ description: Connect AI providers, pick models, and set up agents.
 
 Before AX Code Desktop can do anything, it needs at least one AI provider connected. This page covers connecting a provider, choosing a model, and tailoring agents.
 
+AX Code supports Cloud API providers, local CLI provider bridges, and AX Engine local models. For the exact provider ids, credential variables, and model ids, see [Supported Providers and Models](https://github.com/defai-digital/ax-code/blob/main/docs/supported-providers.md).
+
 ## Connect a provider
 
 1. Open **Settings → Providers**.
@@ -24,6 +26,8 @@ To disconnect, open the provider and choose to remove its sign-in.
 AX Engine is available only on eligible Apple Silicon Macs. It does not run as a local provider in Windows Desktop builds.
 
 On macOS, connect AX Engine from **Settings -> Providers** after the AX Code CLI reports the local provider as available. On Windows, use hosted providers, an OpenAI-compatible gateway, or connect AX Code Desktop to a remote AX Code server running on a supported Mac if you need AX Engine.
+
+The built-in AX Engine provider exposes `qwen3.6-27b-6bit`, `qwen3.6-35b-a3b`, `gemma-4-12b`, `gemma-4-26b`, `gemma-4-31b`, and `glm-4.7-flash`. The default is `qwen3.6-27b-6bit`.
 
 ## Pick a model
 

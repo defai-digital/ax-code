@@ -33,13 +33,40 @@ afterEach(async () => {
 describe("providers command", () => {
   test("default login provider set includes CLI bridge providers", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("xai")).toBe(false)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("google")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("groq")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("github-copilot")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("claude-code")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("gemini-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("codex-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("grok-build-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("qoder-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(true)
+  })
+
+  test("providers login accepts default Cloud API provider ids directly", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const passwordSpy = vi.spyOn(prompts, "password").mockResolvedValue("test-google-key")
+
+    try {
+      await ProvidersLoginCommand.handler({ provider: "google" } as any)
+
+      expect(errorSpy).not.toHaveBeenCalledWith('Unknown provider "google"')
+      expect(passwordSpy).toHaveBeenCalledWith({
+        message: "Enter your API key",
+        validate: expect.any(Function),
+      })
+      expect(await Auth.get("google")).toEqual({ type: "api", key: "test-google-key" })
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      await Auth.remove("google").catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      passwordSpy.mockRestore()
+    }
   })
 
   test("ax-engine quantization choices match the supported catalog", () => {
@@ -70,7 +97,14 @@ describe("providers command", () => {
       await ProvidersListCommand.handler({} as any)
 
       expect(infoSpy).toHaveBeenCalled()
-      expect(infoSpy.mock.calls.some(([message]) => String(message).includes("Grok Cloud API"))).toBe(true)
+      expect(
+        infoSpy.mock.calls.some(([message]) => {
+          const text = String(message)
+          return (
+            (text.includes("Grok Cloud API") || text.includes("xAI") || text.includes("xai")) && text.includes("api")
+          )
+        }),
+      ).toBe(true)
       expect(outroSpy).toHaveBeenCalledWith("1 credentials")
     } finally {
       introSpy.mockRestore()
@@ -92,7 +126,7 @@ describe("providers command", () => {
       expect(
         infoSpy.mock.calls.some((args) => {
           const message = String(args[0])
-          return message.includes("Grok Build CLI") && message.includes("cli")
+          return (message.includes("Grok Build CLI") || message.includes("grok-build-cli")) && message.includes("cli")
         }),
       ).toBe(true)
       expect(

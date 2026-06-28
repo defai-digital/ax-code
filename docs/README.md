@@ -28,6 +28,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | [Autonomous Mode](autonomous.md)                          | Unattended execution, approval behavior, headless usage, and safeguards                                  |
 | [MCP Integrations](mcp.md)                                | MCP trust, permissions, prompt/resource handling, and server-route security                              |
 | [Auto-Route](auto-route.md)                               | Keyword-based specialist routing (active by default) and optional fast-model complexity routing          |
+| [Supported Providers and Models](supported-providers.md)  | Default Cloud API providers, CLI providers, and AX Engine local models                                   |
 | [Custom and Gateway Providers](custom-provider.md)        | Connect any OpenAI- or Anthropic-compatible endpoint or self-hosted gateway via custom provider config   |
 | [AX Engine Model Selection](ax-engine-model-selection.md) | Local AX Engine model ranking, memory guidance, and practical default choices                            |
 

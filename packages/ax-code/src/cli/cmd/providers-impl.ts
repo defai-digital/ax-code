@@ -239,12 +239,14 @@ export function resolvePluginProviders(input: {
 
 export const DEFAULT_LOGIN_PROVIDER_IDS = new Set([
   "ax-code",
+  "google",
   "groq",
   "zai-coding-plan",
   "alibaba-coding-plan",
   "alibaba-coding-plan-cn",
   "alibaba-token-plan",
   "alibaba-token-plan-cn",
+  "github-copilot",
   "claude-code",
   "gemini-cli",
   "codex-cli",
