@@ -7,6 +7,7 @@ import { getSafeStorage } from "./utils/safeStorage"
 import { sleep, waitForAxCodeConnection } from "./utils/axCodeConnection"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
+import { streamDebugEnabled } from "@/stores/utils/streamDebug"
 
 export type CommandScope = "user" | "project"
 
@@ -229,7 +230,9 @@ export const useCommandsStore = create<CommandsStore>()(
           startConfigUpdate("Creating command configuration…")
           let requiresReload = false
           try {
-            console.log("[CommandsStore] Creating command:", config.name)
+            if (streamDebugEnabled()) {
+              console.log("[CommandsStore] Creating command:", config.name)
+            }
 
             const commandConfig: Record<string, unknown> = {
               template: config.template || "",
@@ -240,7 +243,9 @@ export const useCommandsStore = create<CommandsStore>()(
             if (config.model) commandConfig.model = config.model
             if (config.scope) commandConfig.scope = config.scope
 
-            console.log("[CommandsStore] Command config to save:", commandConfig)
+            if (streamDebugEnabled()) {
+              console.log("[CommandsStore] Command config to save:", commandConfig)
+            }
 
             const directory = getRequestDirectory()
             const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : ""
@@ -265,7 +270,9 @@ export const useCommandsStore = create<CommandsStore>()(
               throw new Error(message)
             }
 
-            console.log("[CommandsStore] Command created successfully")
+            if (streamDebugEnabled()) {
+              console.log("[CommandsStore] Command created successfully")
+            }
 
             const needsReload = payload?.requiresReload ?? true
             if (needsReload) {
@@ -296,8 +303,10 @@ export const useCommandsStore = create<CommandsStore>()(
           startConfigUpdate("Updating command configuration…")
           let requiresReload = false
           try {
-            console.log("[CommandsStore] Updating command:", name)
-            console.log("[CommandsStore] Config received:", config)
+            if (streamDebugEnabled()) {
+              console.log("[CommandsStore] Updating command:", name)
+              console.log("[CommandsStore] Config received:", config)
+            }
 
             const commandConfig: Record<string, unknown> = {}
 
@@ -306,7 +315,9 @@ export const useCommandsStore = create<CommandsStore>()(
             if (config.model !== undefined) commandConfig.model = config.model
             if (config.template !== undefined) commandConfig.template = config.template
 
-            console.log("[CommandsStore] Command config to update:", commandConfig)
+            if (streamDebugEnabled()) {
+              console.log("[CommandsStore] Command config to update:", commandConfig)
+            }
 
             const directory = getRequestDirectory()
             const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : ""
@@ -331,7 +342,9 @@ export const useCommandsStore = create<CommandsStore>()(
               throw new Error(message)
             }
 
-            console.log("[CommandsStore] Command updated successfully")
+            if (streamDebugEnabled()) {
+              console.log("[CommandsStore] Command updated successfully")
+            }
 
             const needsReload = payload?.requiresReload ?? true
             if (needsReload) {
@@ -382,7 +395,9 @@ export const useCommandsStore = create<CommandsStore>()(
               throw new Error(message)
             }
 
-            console.log("[CommandsStore] Command deleted successfully")
+            if (streamDebugEnabled()) {
+              console.log("[CommandsStore] Command deleted successfully")
+            }
 
             const needsReload = payload?.requiresReload ?? true
             if (needsReload) {

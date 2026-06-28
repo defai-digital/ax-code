@@ -12,6 +12,7 @@ import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
+import { streamDebugEnabled } from "@/stores/utils/streamDebug"
 
 const getCurrentDirectory = (): string | null => {
   const axCodeDirectory = axCodeClient.getDirectory()
@@ -281,7 +282,9 @@ export const useAgentsStore = create<AgentsStore>()(
           startConfigUpdate("Creating agent configuration…")
           let requiresReload = false
           try {
-            console.log("[AgentsStore] Creating agent:", config.name)
+            if (streamDebugEnabled()) {
+              console.log("[AgentsStore] Creating agent:", config.name)
+            }
 
             const agentConfig: Record<string, unknown> = {
               mode: config.mode || "subagent",
@@ -296,7 +299,9 @@ export const useAgentsStore = create<AgentsStore>()(
             if (config.disable !== undefined) agentConfig.disable = config.disable
             if (config.scope) agentConfig.scope = config.scope
 
-            console.log("[AgentsStore] Agent config to save:", agentConfig)
+            if (streamDebugEnabled()) {
+              console.log("[AgentsStore] Agent config to save:", agentConfig)
+            }
 
             const configDirectory = getConfigDirectory()
             const queryParams = configDirectory ? `?directory=${encodeURIComponent(configDirectory)}` : ""
