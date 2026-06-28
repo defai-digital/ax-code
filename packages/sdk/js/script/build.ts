@@ -4,6 +4,7 @@ import { createRequire } from "module"
 import { createWriteStream, readFileSync } from "fs"
 import fs from "fs/promises"
 import path from "path"
+import { setTimeout as sleep } from "timers/promises"
 import { createClient } from "@hey-api/openapi-ts"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
@@ -14,6 +15,9 @@ const repoRoot = path.resolve(dir, "../../..")
 const axCodeDir = path.resolve(dir, "../../ax-code")
 const solidLoader = pathToFileURL(path.join(repoRoot, "script", "solid-loader.mjs")).href
 const tsxLoader = pathToFileURL(require.resolve("tsx")).href
+const buildLockDir = path.join(repoRoot, "node_modules", ".cache", "ax-code-sdk-build.lock")
+const buildLockStaleMs = 20 * 60 * 1000
+const buildLockPollMs = 250
 
 // Resolve JavaScript CLI entrypoints and run them through Node. Directly
 // spawning package-manager shims is not portable on Windows.
@@ -39,7 +43,41 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.Pro
   })
 }
 
+async function acquireBuildLock() {
+  let announcedWait = false
+  await fs.mkdir(path.dirname(buildLockDir), { recursive: true })
+
+  while (true) {
+    try {
+      await fs.mkdir(buildLockDir, { recursive: false })
+      await fs.writeFile(
+        path.join(buildLockDir, "owner.json"),
+        JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }, null, 2),
+      )
+      return async () => {
+        await fs.rm(buildLockDir, { recursive: true, force: true })
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+
+      const stat = await fs.stat(buildLockDir).catch(() => undefined)
+      const ageMs = stat ? Date.now() - stat.mtimeMs : 0
+      if (stat && ageMs > buildLockStaleMs) {
+        await fs.rm(buildLockDir, { recursive: true, force: true })
+        continue
+      }
+
+      if (!announcedWait) {
+        console.error(`Another SDK build is running; waiting for ${buildLockDir}`)
+        announcedWait = true
+      }
+      await sleep(buildLockPollMs)
+    }
+  }
+}
+
 const tmp = path.join(dir, ".tmp", "xdg")
+const releaseBuildLock = await acquireBuildLock()
 
 try {
   await fs.mkdir(path.join(tmp, "data"), { recursive: true })
@@ -117,4 +155,5 @@ try {
   await fs.rm(path.join(dir, "openapi.json"), { force: true })
 } finally {
   await fs.rm(path.join(dir, ".tmp"), { recursive: true, force: true })
+  await releaseBuildLock()
 }

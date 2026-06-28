@@ -56,6 +56,7 @@ void Promise.allSettled([
   fs.mkdir(Global.Path.data, { recursive: true }),
   fs.mkdir(Global.Path.config, { recursive: true }),
   fs.mkdir(Global.Path.state, { recursive: true }),
+  fs.mkdir(Global.Path.cache, { recursive: true }),
   fs.mkdir(Global.Path.log, { recursive: true }),
   fs.mkdir(Global.Path.bin, { recursive: true }),
 ]).then((results) => {
@@ -63,6 +64,7 @@ void Promise.allSettled([
     ["data", Global.Path.data],
     ["config", Global.Path.config],
     ["state", Global.Path.state],
+    ["cache", Global.Path.cache],
     ["log", Global.Path.log],
     ["bin", Global.Path.bin],
   ] as const
@@ -96,6 +98,7 @@ void (async () => {
     // starts if the process exits first).
     let cleaned = true
     try {
+      await fs.mkdir(Global.Path.cache, { recursive: true })
       const contents = await fs.readdir(Global.Path.cache)
       // Never wipe `ax-engine/`: it can hold (or, for legacy layouts, still
       // hold) many-GiB local MLX model weights that are NOT regenerable cache.
