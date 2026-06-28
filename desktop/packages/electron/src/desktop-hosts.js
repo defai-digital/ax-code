@@ -8,6 +8,9 @@ const normalizeHostUrl = (raw) => {
   try {
     const parsed = new URL(trimmed)
     if (!["http:", "https:"].includes(parsed.protocol)) return null
+    parsed.username = ""
+    parsed.password = ""
+    parsed.search = ""
     parsed.hash = ""
     return parsed.toString()
   } catch {
@@ -62,10 +65,18 @@ const applyDesktopHostsConfigToRoot = (root, config) => {
           const existing = existingById.get(id)
           const hasApiUrl = Object.prototype.hasOwnProperty.call(entry, "apiUrl")
           const hasClientToken = Object.prototype.hasOwnProperty.call(entry, "clientToken")
-          const apiUrl = hasApiUrl ? sanitizeHostUrlForStorage(entry?.apiUrl) || url : existing?.apiUrl || url
+          const existingUrl = sanitizeHostUrlForStorage(existing?.url)
+          const existingApiUrl = sanitizeHostUrlForStorage(existing?.apiUrl) || existingUrl
+          const apiUrl = hasApiUrl
+            ? sanitizeHostUrlForStorage(entry?.apiUrl) || url
+            : existingUrl === url
+              ? existingApiUrl || url
+              : url
           const clientToken = hasClientToken
             ? sanitizeClientTokenForStorage(entry?.clientToken)
-            : sanitizeClientTokenForStorage(existing?.clientToken)
+            : existingUrl === url && existingApiUrl === apiUrl
+              ? sanitizeClientTokenForStorage(existing?.clientToken)
+              : null
 
           return {
             id,
