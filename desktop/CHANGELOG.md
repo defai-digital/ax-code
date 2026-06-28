@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.17] - 2026-06-28
+
+### Fixed
+
+- CLI: publishes Groq output reservation and Qwen 3.7 capability updates.
+- Desktop: hardens host IPC token handling, tray actions, canvas saves, and release minisign tests.
+- Release: refreshes signed CLI and Desktop assets with Homebrew formula and cask updates.
+
 ## [6.7.16] - 2026-06-28
 
 ### Fixed
