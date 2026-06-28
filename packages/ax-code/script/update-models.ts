@@ -351,6 +351,80 @@ for (const [providerID, provider] of Object.entries(fetched) as Array<
   }
 }
 
+function groqModel(input: {
+  id: string
+  name: string
+  family: string
+  attachment: boolean
+  reasoning: boolean
+  structuredOutput: boolean
+  context: number
+  output: number
+  releaseDate: string
+  inputModalities?: string[]
+}) {
+  return {
+    id: input.id,
+    name: input.name,
+    family: input.family,
+    attachment: input.attachment,
+    reasoning: input.reasoning,
+    reasoning_options: input.reasoning ? [{ type: "effort", values: ["low", "medium", "high"] }] : [],
+    tool_call: true,
+    structured_output: input.structuredOutput,
+    temperature: true,
+    release_date: input.releaseDate,
+    last_updated: input.releaseDate,
+    modalities: {
+      input: input.inputModalities ?? ["text"],
+      output: ["text"],
+    },
+    open_weights: true,
+    limit: {
+      context: input.context,
+      output: input.output,
+    },
+    status: "active",
+  } as RawModel
+}
+
+// GroqCloud is not yet published by models.dev in this snapshot line. Keep the
+// first-party OpenAI-compatible Groq provider narrow and docs-backed so it
+// survives snapshot regeneration without pulling in stale Groq model aliases.
+fetched["groq"] = {
+  id: "groq",
+  name: "GroqCloud",
+  env: ["GROQ_API_KEY"],
+  npm: "@ai-sdk/openai-compatible",
+  api: "https://api.groq.com/openai/v1",
+  doc: "https://console.groq.com/docs/models",
+  models: {
+    "qwen/qwen3.6-27b": groqModel({
+      id: "qwen/qwen3.6-27b",
+      name: "Qwen/Qwen3.6-27B",
+      family: "qwen",
+      attachment: true,
+      reasoning: true,
+      structuredOutput: false,
+      context: 131_072,
+      output: 32_768,
+      releaseDate: "2026-04-27",
+      inputModalities: ["text", "image"],
+    }),
+    "openai/gpt-oss-120b": groqModel({
+      id: "openai/gpt-oss-120b",
+      name: "GPT OSS 120B",
+      family: "gpt-oss",
+      attachment: false,
+      reasoning: true,
+      structuredOutput: true,
+      context: 131_072,
+      output: 65_536,
+      releaseDate: "2025-08-05",
+    }),
+  },
+}
+
 if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
   fetched["grok-build-cli"].models = {
     ...(fetched["grok-build-cli"].models ?? {}),

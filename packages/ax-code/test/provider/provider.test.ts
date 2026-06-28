@@ -60,6 +60,25 @@ test("provider loaded from env variable", async () => {
   })
 })
 
+test("GroqCloud provider exposes documented Qwen and GPT-OSS models", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("GROQ_API_KEY", "test-groq")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const groq = providers[ProviderID.make("groq")]
+
+      expect(groq?.name).toBe("GroqCloud")
+      expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]?.api.url).toBe("https://api.groq.com/openai/v1")
+      expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]?.limit).toEqual({ context: 131_072, output: 32_768 })
+      expect(groq?.models[ModelID.make("openai/gpt-oss-120b")]?.limit).toEqual({ context: 131_072, output: 65_536 })
+    },
+  })
+})
+
 test("Provider.invalidate clears SDK cache as well as pending loads", async () => {
   const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
   const start = src.indexOf("export async function invalidate()")
