@@ -68,6 +68,39 @@ describe("Model Capability Registry", () => {
       expect(caps.rateLimitTier).toBe("unlimited")
       expect(caps.contextWindow).toBe(32_000)
     })
+
+    it("should return GLM 5.x capabilities (1M context, reasoning) for Z.AI providers", () => {
+      for (const providerID of ["zai", "zai-coding-plan", "zhipuai", "zhipuai-coding-plan"]) {
+        const caps = getModelCapabilities("glm-5.2", providerID)
+        expect(caps.contextWindow).toBe(1_000_000)
+        expect(caps.thinking).toBe("supported")
+        expect(caps.preserveThinking).toBe("experimental")
+        expect(caps.promptCache).toBe("experimental")
+        expect(caps.toolCalling).toBe("supported")
+        expect(caps.structuredOutput).toBe("supported")
+        expect(caps.webOrBuiltInTools).toBe("blocked")
+        expect(caps.rateLimitTier).toBe("standard")
+      }
+    })
+
+    it("should fall back to the GLM entry on an unknown provider (not DEFAULT_CAPABILITIES)", () => {
+      const caps = getModelCapabilities("glm-5.2", "some-gateway")
+      expect(caps.contextWindow).toBe(1_000_000)
+      expect(caps.thinking).toBe("supported")
+    })
+
+    it("should match GLM 5.x id variations (glm-5, glm_5_2, glm5.2, [1m] suffix)", () => {
+      for (const id of ["glm-5", "glm_5_2", "glm5.2", "glm-5.2[1m]", "GLM-5.2"]) {
+        const caps = getModelCapabilities(id, "zai-coding-plan")
+        expect(caps.contextWindow).toBe(1_000_000)
+      }
+    })
+
+    it("should not match GLM 4.x (collapses to DEFAULT_CAPABILITIES)", () => {
+      const caps = getModelCapabilities("glm-4.7-flash", "ax-engine")
+      expect(caps.contextWindow).toBe(32_000)
+      expect(caps.thinking).toBe("blocked")
+    })
   })
 
   describe("supportsLongAgent", () => {
@@ -98,6 +131,15 @@ describe("Model Capability Registry", () => {
     it("should return true for GPT-5", () => {
       expect(supportsLongAgent("gpt-5", "openai")).toBe(true)
     })
+
+    it("should return true for GLM 5.x on Z.AI providers", () => {
+      expect(supportsLongAgent("glm-5.2", "zai-coding-plan")).toBe(true)
+      expect(supportsLongAgent("glm-5.2[1m]", "zai")).toBe(true)
+    })
+
+    it("should return true for GLM 5.x on an unknown provider (fallback entry)", () => {
+      expect(supportsLongAgent("glm-5.2", "some-gateway")).toBe(true)
+    })
   })
 
   describe("getContextPackBudget", () => {
@@ -115,6 +157,10 @@ describe("Model Capability Registry", () => {
 
     it("should return 8k for unknown models", () => {
       expect(getContextPackBudget("unknown-model")).toBe(8_000)
+    })
+
+    it("should return 128k for GLM 5.x", () => {
+      expect(getContextPackBudget("glm-5.2", "zai-coding-plan")).toBe(128_000)
     })
   })
 

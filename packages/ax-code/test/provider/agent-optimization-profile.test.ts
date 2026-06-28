@@ -116,6 +116,41 @@ describe("longAgentProfileForModel", () => {
     })
   })
 
+  describe("GLM 5.x profiles", () => {
+    test("returns wide profile for glm-5.2 on Z.AI (1M context window)", () => {
+      const profile = longAgentProfileForModel("glm-5.2", "zai-coding-plan")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.contextPackTokenBudget).toBe(128_000)
+      expect(profile.thinkingEnabled).toBe(true)
+      expect(profile.preserveThinkingEligible).toBe(true)
+      expect(profile.promptCacheEligible).toBe(true)
+      expect(profile.verificationLoopEnabled).toBe(true)
+      expect(profile.strictRepeatedFailureDetection).toBe(true)
+    })
+
+    test("returns wide profile for the [1m] suffix variant", () => {
+      const profile = longAgentProfileForModel("glm-5.2[1m]", "zai")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.contextPackTokenBudget).toBe(128_000)
+    })
+
+    test("returns wide profile on Zhipu providers", () => {
+      const profile = longAgentProfileForModel("glm-5.2", "zhipuai-coding-plan")
+      expect(profile.contextPackingBudget).toBe("wide")
+    })
+
+    test("uses the fallback entry on an unknown provider (still wide)", () => {
+      const profile = longAgentProfileForModel("glm-5.2", "some-gateway")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.thinkingEnabled).toBe(true)
+    })
+
+    test("is case-insensitive", () => {
+      const profile = longAgentProfileForModel("GLM-5.2", "zai-coding-plan")
+      expect(profile.contextPackingBudget).toBe("wide")
+    })
+  })
+
   describe("Default profiles", () => {
     test("returns narrow profile for unknown models", () => {
       const profile = longAgentProfileForModel("unknown-model")

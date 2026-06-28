@@ -265,6 +265,50 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
+  // GLM 5.x — Z.AI / Zhipu (official routes)
+  // models-snapshot.json declares GLM-5.2 as a 1M-context reasoning model
+  // (reasoning + effort high/xhigh, tool_call, structured_output). Without
+  // this entry the capability registry collapsed it to DEFAULT_CAPABILITIES
+  // (32k, non-reasoning), so the long-agent profile and Super-Long
+  // model-default treated a 1M reasoning model as an 8k non-reasoning one.
+  // preserveThinking/promptCache are `experimental` because z.ai's cross-turn
+  // reasoning carry-over and explicit cache support are not probe-verified;
+  // the profile treats experimental as enabled, so the long-agent code path
+  // activates. See ADR-040.
+  {
+    pattern: /glm[\.\-_]?5/i,
+    providerIds: ["zai", "zai-coding-plan", "zhipuai", "zhipuai-coding-plan"],
+    capabilities: {
+      contextWindow: 1_000_000,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // GLM 5.x — gateway / reseller fallback.
+  // When the provider is unknown, still recognize GLM 5.x as a large-context
+  // reasoning model rather than collapsing to the 32k default. Selectability
+  // (which SKUs are offered) is governed separately by model-support.ts, so a
+  // registry match here only affects capability bookkeeping.
+  {
+    pattern: /glm[\.\-_]?5/i,
+    capabilities: {
+      contextWindow: 1_000_000,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
   // Gemini 2.5 Pro - Google
   {
     pattern: /gemini[\.\-_]?2[\.\-_]?5[\.\-_]?pro/i,
