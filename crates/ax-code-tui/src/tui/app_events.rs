@@ -3,7 +3,10 @@
 //! This module extends `App` with event dispatch and message management methods,
 //! split from `app.rs` to keep file sizes manageable.
 
-use super::app::{App, AppMode, Message, MessageTextPart, PermissionRequest, QuestionRequest, SessionStatus, ToolCall, ToolCallStatus};
+use super::app::{
+    App, AppMode, Message, MessageTextPart, PermissionRequest, QuestionRequest, SessionStatus,
+    ToolCall, ToolCallStatus,
+};
 use crate::events::{MessageRole, RuntimeEvent};
 
 impl App {
@@ -311,7 +314,10 @@ impl App {
         }
     }
 
-    pub(crate) fn event_targets_current_session_option(&self, event_session_id: Option<&str>) -> bool {
+    pub(crate) fn event_targets_current_session_option(
+        &self,
+        event_session_id: Option<&str>,
+    ) -> bool {
         event_session_id
             .map(|session_id| self.event_targets_current_session(session_id))
             .unwrap_or_else(|| self.session_id.is_none())
@@ -362,7 +368,12 @@ impl App {
         self.rebuild_message_content(message_id);
     }
 
-    pub(crate) fn append_message_text_delta(&mut self, message_id: &str, part_id: &str, delta: &str) {
+    pub(crate) fn append_message_text_delta(
+        &mut self,
+        message_id: &str,
+        part_id: &str,
+        delta: &str,
+    ) {
         self.ensure_message(message_id);
         if let Some(part) = self
             .message_text_parts

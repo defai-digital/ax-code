@@ -83,7 +83,12 @@ pub(crate) fn line_byte_offset(lines: &[&str], idx: usize) -> usize {
 }
 
 /// Extract the substring from `content` that spans lines[start..=end].
-pub(crate) fn extract_lines<'a>(content: &'a str, lines: &[&str], start: usize, end: usize) -> &'a str {
+pub(crate) fn extract_lines<'a>(
+    content: &'a str,
+    lines: &[&str],
+    start: usize,
+    end: usize,
+) -> &'a str {
     let byte_start = line_byte_offset(lines, start);
     let mut byte_end = byte_start;
     for (k, line) in lines.iter().enumerate().take(end + 1).skip(start) {
@@ -535,7 +540,11 @@ pub(crate) const STRATEGIES: &[StrategyFn] = &[
 
 // ── Unified diff generation ──────────────────────────────────────────────────
 
-pub(crate) fn generate_unified_diff(file_path: &str, old_content: &str, new_content: &str) -> String {
+pub(crate) fn generate_unified_diff(
+    file_path: &str,
+    old_content: &str,
+    new_content: &str,
+) -> String {
     let diff = TextDiff::from_lines(old_content, new_content);
     let mut out = String::new();
     out.push_str(&format!("--- {}\n", file_path));

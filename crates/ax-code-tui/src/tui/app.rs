@@ -176,7 +176,7 @@ impl App {
     pub fn current_session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
     }
-    
+
     /// Set a status message to display.
     pub fn set_status(&mut self, message: String) {
         self.status_message = Some(message);
@@ -186,7 +186,6 @@ impl App {
     pub fn quit(&mut self) {
         self.should_quit = true;
     }
-
 
     /// Insert a character at the cursor position.
     pub fn insert_char(&mut self, c: char) {
@@ -419,7 +418,6 @@ impl App {
         self.status_message = Some(format!("Switched to session: {}", summary.id));
     }
 
-
     // === Interrupt/Abort ===
 
     /// Request to abort the current session.
@@ -644,7 +642,6 @@ fn byte_index_at_char(s: &str, char_idx: usize) -> usize {
         .map(|(byte_idx, _)| byte_idx)
         .unwrap_or_else(|| s.len())
 }
-
 
 #[cfg(test)]
 mod tests {
