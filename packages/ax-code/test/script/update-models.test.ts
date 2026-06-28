@@ -145,6 +145,63 @@ describe("update-models script", () => {
     expect(data["ax-studio"]?.doc).toBe("https://github.com/defai-digital/ax-studio")
   })
 
+  test("filters hidden GLM 5.1 variants from generated snapshots", async () => {
+    await using tmp = await tmpdir()
+    const fixturePath = path.join(tmp.path, "models-fixture.json")
+    const snapshotPath = path.join(tmp.path, "models-snapshot.json")
+    await writeFile(
+      fixturePath,
+      JSON.stringify({
+        chutes: {
+          id: "chutes",
+          name: "Chutes",
+          models: {
+            "zai-org/glm-5.1-tee": {
+              id: "zai-org/glm-5.1-tee",
+              name: "GLM 5.1 TEE",
+              family: "glm",
+            },
+            "zai-org/glm-5.1:thinking": {
+              id: "zai-org/glm-5.1:thinking",
+              name: "GLM 5.1 Thinking",
+              family: "glm",
+            },
+            "coding-glm-5.1-free": {
+              id: "coding-glm-5.1-free",
+              name: "Coding GLM 5.1 Free",
+              family: "glm",
+            },
+            "zai-glm-5-1": {
+              id: "zai-glm-5-1",
+              name: "Z.AI GLM-5.1",
+              family: "glm",
+            },
+            "zai-org/glm-5.2-tee": {
+              id: "zai-org/glm-5.2-tee",
+              name: "GLM 5.2 TEE",
+              family: "glm",
+            },
+          },
+        },
+      }),
+    )
+    await writeFile(snapshotPath, "{}\n")
+
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    expect(data.chutes?.models?.["zai-org/glm-5.1-tee"]).toBeUndefined()
+    expect(data.chutes?.models?.["zai-org/glm-5.1:thinking"]).toBeUndefined()
+    expect(data.chutes?.models?.["coding-glm-5.1-free"]).toBeUndefined()
+    expect(data.chutes?.models?.["zai-glm-5-1"]).toBeUndefined()
+    expect(data.chutes?.models?.["zai-org/glm-5.2-tee"]).toBeDefined()
+  })
+
   test("idempotent — running twice produces same result", async () => {
     await using tmp = await tmpdir()
     const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)

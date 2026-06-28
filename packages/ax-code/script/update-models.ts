@@ -321,8 +321,10 @@ function isAllowedKimiProbe(probe: string): boolean {
   return KIMI_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? "")
 }
 const GLM_HIDDEN_FINAL_SEGMENTS = new Set<string>(["glm-5.1", "glm-5-1", "glm-5.1[1m]", "glm-5.1-1m", "glm-5-turbo"])
+const GLM_HIDDEN_FINAL_PATTERN = /(?:^|[^a-z0-9])glm-5[.-]1(?:$|[^0-9])/
 function isHiddenGlmProbe(probe: string): boolean {
-  return GLM_HIDDEN_FINAL_SEGMENTS.has(probe.split("/").pop() ?? "")
+  const finalSegment = probe.split("/").pop() ?? ""
+  return GLM_HIDDEN_FINAL_SEGMENTS.has(finalSegment) || GLM_HIDDEN_FINAL_PATTERN.test(finalSegment)
 }
 function isUnsupportedModel(m: RawModel): boolean {
   const probes = probesOf(m)

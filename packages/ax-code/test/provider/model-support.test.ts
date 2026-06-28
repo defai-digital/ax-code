@@ -84,7 +84,12 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("zai", "glm-5")).toBe(true)
     expect(isModelSupportedForProvider("zai", "glm-5.1")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5.1[1m]")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "zai-org/glm-5.1-tee")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "zai-org/glm-5.1:thinking")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "coding-glm-5.1-free")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "zai-glm-5-1")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5-turbo")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "glm-5.10")).toBe(true)
     expect(isModelSupportedForProvider("zhipuai", "glm-4.5")).toBe(false)
   })
 

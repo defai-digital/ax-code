@@ -15884,38 +15884,6 @@
           "output": 131072
         }
       },
-      "accounts/fireworks/routers/glm-5p1-fast": {
-        "id": "accounts/fireworks/routers/glm-5p1-fast",
-        "name": "GLM 5.1 Fast",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "temperature": true,
-        "release_date": "2026-04-01",
-        "last_updated": "2026-04-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 202800,
-          "output": 131072
-        }
-      },
       "accounts/fireworks/models/deepseek-v4-flash": {
         "id": "accounts/fireworks/models/deepseek-v4-flash",
         "name": "DeepSeek V4 Flash",
@@ -36543,30 +36511,6 @@
           "output": 262128
         }
       },
-      "glm-5.1-fast": {
-        "id": "glm-5.1-fast",
-        "name": "GLM 5.1 Fast",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-07",
-        "last_updated": "2026-04-07",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 202736,
-          "output": 202736
-        }
-      },
       "qwen3.6-35b-fast": {
         "id": "qwen3.6-35b-fast",
         "name": "Qwen3.6 35B Fast",
@@ -36719,38 +36663,6 @@
         "limit": {
           "context": 262128,
           "output": 262128
-        }
-      },
-      "zai-org/GLM-5.1-FP8": {
-        "id": "zai-org/GLM-5.1-FP8",
-        "name": "GLM 5.1 FP8",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "temperature": true,
-        "release_date": "2026-04-07",
-        "last_updated": "2026-04-07",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 202736,
-          "output": 202736
         }
       }
     }
@@ -46599,39 +46511,6 @@
         "limit": {
           "context": 1000000,
           "output": 64000
-        }
-      },
-      "zai-org/GLM-5.1-FP8": {
-        "id": "zai-org/GLM-5.1-FP8",
-        "name": "GLM-5.1 FP8",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-03-27",
-        "last_updated": "2026-03-27",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 202752,
-          "output": 131072
         }
       },
       "black-forest-labs/FLUX.2-klein-4B": {
@@ -88195,31 +88074,6 @@
           "output": 8192
         }
       },
-      "zai-glm-5-1": {
-        "id": "zai-glm-5-1",
-        "name": "Z.AI GLM-5.1",
-        "family": "glm",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2024-10",
-        "release_date": "2025-01-20",
-        "last_updated": "2025-02-22",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 198000,
-          "output": 8192
-        }
-      },
       "grok-code-fast-1": {
         "id": "grok-code-fast-1",
         "name": "Grok 4.1 Fast (Reasoning)",
@@ -93635,35 +93489,6 @@
           "output": 131072
         }
       },
-      "route/glm-5.1-6bit": {
-        "id": "route/glm-5.1-6bit",
-        "name": "GLM 5.1 6bit",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-07",
-        "last_updated": "2026-04-07",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 202752,
-          "output": 65536
-        }
-      },
       "route/minimax-m2.5": {
         "id": "route/minimax-m2.5",
         "name": "MiniMax M2.5",
@@ -94208,39 +94033,6 @@
           "output": 128100
         }
       },
-      "alicloud-glm-5.1": {
-        "id": "alicloud-glm-5.1",
-        "name": "GLM-5.1 (Alibaba Cloud)",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-03-27",
-        "last_updated": "2026-03-27",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 200000,
-          "output": 128000
-        }
-      },
       "claude-sonnet-4-6-think": {
         "id": "claude-sonnet-4-6-think",
         "name": "Claude Sonnet 4.6 Thinking",
@@ -94744,39 +94536,6 @@
         "open_weights": false,
         "limit": {
           "context": 1000000,
-          "output": 128000
-        }
-      },
-      "coding-glm-5.1-free": {
-        "id": "coding-glm-5.1-free",
-        "name": "Coding GLM 5.1 (free)",
-        "family": "glm-free",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-11",
-        "last_updated": "2026-04-11",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 200000,
           "output": 128000
         }
       },
@@ -95364,39 +95123,6 @@
           "output": 128000
         }
       },
-      "coding-glm-5.1": {
-        "id": "coding-glm-5.1",
-        "name": "Coding GLM 5.1",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-11",
-        "last_updated": "2026-04-11",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 200000,
-          "output": 128000
-        }
-      },
       "coding-minimax-m2.7-free": {
         "id": "coding-minimax-m2.7-free",
         "name": "Coding MiniMax M2.7 (Free)",
@@ -95648,39 +95374,6 @@
         "limit": {
           "context": 1000000,
           "output": 384000
-        }
-      },
-      "zai-glm-5.1": {
-        "id": "zai-glm-5.1",
-        "name": "GLM-5.1 (Z.ai)",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-03-27",
-        "last_updated": "2026-03-27",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 200000,
-          "output": 128000
         }
       },
       "claude-sonnet-4-6": {
@@ -108254,32 +107947,6 @@
           "output": 128000
         }
       },
-      "zai-org/glm-5.1:thinking": {
-        "id": "zai-org/glm-5.1:thinking",
-        "name": "GLM 5.1 Thinking",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-03-27",
-        "last_updated": "2026-03-27",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 200000,
-          "input": 200000,
-          "output": 131072
-        }
-      },
       "zai-org/glm-5:thinking": {
         "id": "zai-org/glm-5:thinking",
         "name": "GLM 5 Thinking",
@@ -111195,31 +110862,6 @@
           "output": 65535
         }
       },
-      "TEE/glm-5.1-thinking": {
-        "id": "TEE/glm-5.1-thinking",
-        "name": "GLM 5.1 Thinking TEE",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-04-20",
-        "last_updated": "2026-04-20",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 202752,
-          "input": 202752,
-          "output": 65535
-        }
-      },
       "TEE/deepseek-v3.2": {
         "id": "TEE/deepseek-v3.2",
         "name": "DeepSeek V3.2 TEE",
@@ -113009,35 +112651,6 @@
         "temperature": true,
         "release_date": "2026-02-12",
         "last_updated": "2026-02-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 202752,
-          "output": 65535
-        }
-      },
-      "zai-org/GLM-5.1-TEE": {
-        "id": "zai-org/GLM-5.1-TEE",
-        "name": "GLM 5.1 TEE",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-07",
-        "last_updated": "2026-04-07",
         "modalities": {
           "input": [
             "text"
