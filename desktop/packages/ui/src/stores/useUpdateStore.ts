@@ -35,6 +35,7 @@ interface UpdateStore extends UpdateState {
 type ClientRuntime = "desktop" | "web"
 const UPDATE_FAILED_MESSAGE = "Update failed. Please try again or open the release page."
 const RESTART_FAILED_MESSAGE = "Failed to restart AX Code Desktop."
+let updateCheckRequestId = 0
 
 function mapRuntimeParams(runtime: ClientRuntime): URLSearchParams {
   const params = new URLSearchParams()
@@ -109,6 +110,8 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
     const runtime = detectRuntimeType()
     if (!runtime) return null
 
+    const requestId = ++updateCheckRequestId
+    const isCurrentRequest = () => requestId === updateCheckRequestId
     set({ checking: true, error: null, runtimeType: runtime })
 
     try {
@@ -122,6 +125,7 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
         // update API here, or the dialog would surface OpenChamber's package
         // version and changelog instead of AX Code's.
         const desktopInfo = await checkForDesktopUpdates()
+        if (!isCurrentRequest()) return null
         if (desktopInfo?.error) {
           console.warn("Desktop update check failed:", desktopInfo.error)
           set({
@@ -144,6 +148,7 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
         return null
       } else if (runtime === "web") {
         info = await checkForWebUpdates("web")
+        if (!isCurrentRequest()) return null
         suggestedSec = info?.nextSuggestedCheckInSec ?? null
       }
 
@@ -156,6 +161,7 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
       })
       return suggestedSec
     } catch {
+      if (!isCurrentRequest()) return null
       set({
         checking: false,
         error: UPDATE_FAILED_MESSAGE,
@@ -172,6 +178,7 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
       return
     }
 
+    updateCheckRequestId += 1
     set({ downloading: true, error: null, progress: null })
 
     try {
@@ -239,6 +246,7 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
   },
 
   reset: () => {
+    updateCheckRequestId += 1
     set(initialState)
   },
 }))
