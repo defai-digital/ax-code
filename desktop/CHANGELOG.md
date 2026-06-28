@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.15] - 2026-06-28
+
+### Fixed
+
+- CLI: strips provider-specific reasoning content from Groq assistant history before sending OpenAI-compatible requests.
+- CLI: publishes Groq Qwen 3.6 27B and GPT-OSS 120B message-shape compatibility fixes.
+- Desktop: republished signed Desktop assets from the current monorepo release line.
+
 ## [6.7.14] - 2026-06-28
 
 ### Fixed
