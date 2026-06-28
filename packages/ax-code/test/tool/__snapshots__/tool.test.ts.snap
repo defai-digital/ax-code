@@ -1,9 +1,0 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`tool.ls basic 1`] = `
-"packages/opencode/test/fixtures/example/
-  broken.ts
-  cli.ts
-  ink.tsx
-"
-`;
