@@ -104,6 +104,7 @@ const MCP_LOAD_CACHE_TTL_MS = 5000
 const DEFAULT_MCP_CACHE_KEY = "__default__"
 const mcpLastLoadedAt = new Map<string, number>()
 const mcpLoadInFlight = new Map<string, Promise<boolean>>()
+const mcpLoadRequestIds = new Map<string, number>()
 
 const getMcpCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_MCP_CACHE_KEY
@@ -159,6 +160,10 @@ export const useMcpConfigStore = create<McpConfigStore>()(
             return inFlight
           }
 
+          const requestId = (mcpLoadRequestIds.get(cacheKey) ?? 0) + 1
+          mcpLoadRequestIds.set(cacheKey, requestId)
+          const isCurrentLoad = () => mcpLoadRequestIds.get(cacheKey) === requestId
+
           const request = (async () => {
             set({ isLoading: true })
             try {
@@ -170,12 +175,15 @@ export const useMcpConfigStore = create<McpConfigStore>()(
                 throw new Error("Failed to load MCP configs")
               }
               const data: McpServerWithScope[] = await response.json()
+              if (!isCurrentLoad()) return true
               set({ mcpServers: data, isLoading: false })
               mcpLastLoadedAt.set(cacheKey, Date.now())
               return true
             } catch (error) {
               console.error("[McpConfigStore] Failed to load MCP configs:", error)
-              set({ isLoading: false })
+              if (isCurrentLoad()) {
+                set({ isLoading: false })
+              }
               return false
             }
           })()
@@ -184,7 +192,9 @@ export const useMcpConfigStore = create<McpConfigStore>()(
           try {
             return await request
           } finally {
-            mcpLoadInFlight.delete(cacheKey)
+            if (mcpLoadInFlight.get(cacheKey) === request) {
+              mcpLoadInFlight.delete(cacheKey)
+            }
           }
         },
 

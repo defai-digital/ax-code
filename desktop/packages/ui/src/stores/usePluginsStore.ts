@@ -146,6 +146,10 @@ export const PLUGINS_LOAD_CACHE_TTL_MS = 5000
 const DEFAULT_PLUGINS_CACHE_KEY = "__default__"
 const pluginsLastLoadedAt = new Map<string, number>()
 const pluginsLoadInFlight = new Map<string, Promise<boolean>>()
+const pluginsLoadRequestIds = new Map<string, number>()
+const pluginRegistrySpecRequestIds = new Map<string, number>()
+let pluginRegistryRequestSequence = 0
+let pluginRegistryActiveLoads = 0
 const REGISTRY_SPECS_CHUNK_LIMIT = 1500
 
 const getPluginCacheKey = (directory: string | null): string => {
@@ -188,6 +192,10 @@ export const usePluginsStore = create<PluginsStore>()(
             return inFlight
           }
 
+          const requestId = (pluginsLoadRequestIds.get(cacheKey) ?? 0) + 1
+          pluginsLoadRequestIds.set(cacheKey, requestId)
+          const isCurrentLoad = () => pluginsLoadRequestIds.get(cacheKey) === requestId
+
           const request = (async () => {
             set({ isLoading: true })
             try {
@@ -198,6 +206,7 @@ export const usePluginsStore = create<PluginsStore>()(
                 throw new Error("Failed to load plugins")
               }
               const data = await readJson<PluginsListResponse>(response)
+              if (!isCurrentLoad()) return true
               set({ entries: data.entries ?? [], files: data.files ?? [], isLoading: false })
               pluginsLastLoadedAt.set(cacheKey, Date.now())
               if (!options?.force) {
@@ -206,7 +215,9 @@ export const usePluginsStore = create<PluginsStore>()(
               return true
             } catch (error) {
               console.error("[PluginsStore] Failed to load plugins:", error)
-              set({ isLoading: false })
+              if (isCurrentLoad()) {
+                set({ isLoading: false })
+              }
               return false
             }
           })()
@@ -215,21 +226,30 @@ export const usePluginsStore = create<PluginsStore>()(
           try {
             return await request
           } finally {
-            pluginsLoadInFlight.delete(cacheKey)
+            if (pluginsLoadInFlight.get(cacheKey) === request) {
+              pluginsLoadInFlight.delete(cacheKey)
+            }
           }
         },
 
         loadRegistryInfo: async (opts) => {
           const specs = dedupeSpecs(opts?.specs ?? get().entries.map((entry) => entry.spec))
           if (specs.length === 0) {
-            set({ isLoadingRegistry: false })
+            if (pluginRegistryActiveLoads === 0) {
+              set({ isLoadingRegistry: false })
+            }
             return
           }
 
+          const requestId = ++pluginRegistryRequestSequence
+          for (const spec of specs) {
+            pluginRegistrySpecRequestIds.set(spec, requestId)
+          }
+          pluginRegistryActiveLoads += 1
           set({ isLoadingRegistry: true })
           try {
             const configDirectory = getConfigDirectory()
-            const nextRegistryInfo: Record<string, RegistryResult> = { ...get().registryInfo }
+            const results: RegistryResult[] = []
             for (const chunk of chunkSpecs(specs)) {
               const response = await fetch(buildRegistryUrl(chunk, opts?.force === true, configDirectory), {
                 headers: buildDirectoryHeaders(configDirectory),
@@ -239,13 +259,27 @@ export const usePluginsStore = create<PluginsStore>()(
               }
               const data = await readJson<RegistryInfoResponse>(response)
               for (const result of data.results ?? []) {
-                nextRegistryInfo[result.spec] = result
+                results.push(result)
               }
             }
-            set({ registryInfo: nextRegistryInfo, isLoadingRegistry: false })
+
+            const currentResults = results.filter((result) => pluginRegistrySpecRequestIds.get(result.spec) === requestId)
+            if (currentResults.length > 0) {
+              set((state) => {
+                const nextRegistryInfo: Record<string, RegistryResult> = { ...state.registryInfo }
+                for (const result of currentResults) {
+                  if (pluginRegistrySpecRequestIds.get(result.spec) === requestId) {
+                    nextRegistryInfo[result.spec] = result
+                  }
+                }
+                return { registryInfo: nextRegistryInfo }
+              })
+            }
           } catch (error) {
             console.error("[PluginsStore] Failed to load plugin registry info:", error)
-            set({ isLoadingRegistry: false })
+          } finally {
+            pluginRegistryActiveLoads = Math.max(0, pluginRegistryActiveLoads - 1)
+            set({ isLoadingRegistry: pluginRegistryActiveLoads > 0 })
           }
         },
 

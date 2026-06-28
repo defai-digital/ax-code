@@ -87,15 +87,28 @@ type PluginRegistryFetchCall = {
   init?: RequestInit
 }
 
+type Deferred<T> = {
+  promise: Promise<T>
+  resolve: (value: T) => void
+}
+
+const createDeferred = <T>(): Deferred<T> => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
+
 const fetchCalls: PluginRegistryFetchCall[] = []
-let queuedResponses: Response[] = []
+let queuedResponses: Array<Response | Promise<Response>> = []
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   fetchCalls.push({ input, init })
   return queuedResponses.shift() ?? jsonResponse(pluginListPayload)
 })
 
-const queueFetchResponses = (responses: Response[]) => {
+const queueFetchResponses = (responses: Array<Response | Promise<Response>>) => {
   queuedResponses = [...responses]
 }
 
@@ -160,6 +173,29 @@ describe("usePluginsStore", () => {
     await usePluginsStore.getState().loadPlugins({ force: true })
 
     expect(fetchCalls).toHaveLength(3)
+  })
+
+  test("keeps the newest forced plugin list when refreshes overlap", async () => {
+    const staleRefresh = createDeferred<Response>()
+    const latestRefresh = createDeferred<Response>()
+    const staleEntry: PluginEntry = { ...entry, id: "config:user:stale-plugin", spec: "stale-plugin" }
+    const latestEntry: PluginEntry = { ...entry, id: "config:user:latest-plugin", spec: "latest-plugin" }
+    queueFetchResponses([staleRefresh.promise, latestRefresh.promise])
+
+    const firstLoad = usePluginsStore.getState().loadPlugins({ force: true })
+    const secondLoad = usePluginsStore.getState().loadPlugins({ force: true })
+    await Promise.resolve()
+
+    latestRefresh.resolve(jsonResponse({ entries: [latestEntry], files: [] }))
+    await secondLoad
+
+    staleRefresh.resolve(jsonResponse({ entries: [staleEntry], files: [] }))
+    await firstLoad
+
+    expect(fetchCalls).toHaveLength(2)
+    expect(usePluginsStore.getState().entries).toEqual([latestEntry])
+    expect(usePluginsStore.getState().files).toEqual([])
+    expect(usePluginsStore.getState().isLoading).toBe(false)
   })
 
   test("createEntry posts spec and scope in request body", async () => {
@@ -287,6 +323,44 @@ describe("usePluginsStore", () => {
     await usePluginsStore.getState().loadRegistryInfo({ specs: ["foo@1"], force: true })
 
     expect(String(fetchCalls[0]?.input)).toContain("refresh=true")
+  })
+
+  test("keeps the newest registry metadata when refreshes overlap", async () => {
+    const staleRefresh = createDeferred<Response>()
+    const latestRefresh = createDeferred<Response>()
+    const staleResult: RegistryResult = {
+      kind: "npm-ok",
+      spec: "plugin-a",
+      name: "plugin-a",
+      currentVersion: "1.0.0",
+      latestVersion: "1.1.0",
+      versions: ["1.0.0", "1.1.0"],
+      hasUpdate: true,
+    }
+    const latestResult: RegistryResult = {
+      kind: "npm-ok",
+      spec: "plugin-a",
+      name: "plugin-a",
+      currentVersion: "1.1.0",
+      latestVersion: "1.1.0",
+      versions: ["1.0.0", "1.1.0"],
+      hasUpdate: false,
+    }
+    queueFetchResponses([staleRefresh.promise, latestRefresh.promise])
+
+    const firstLoad = usePluginsStore.getState().loadRegistryInfo({ specs: ["plugin-a"], force: true })
+    const secondLoad = usePluginsStore.getState().loadRegistryInfo({ specs: ["plugin-a"], force: true })
+    await Promise.resolve()
+
+    latestRefresh.resolve(jsonResponse({ results: [latestResult] }))
+    await secondLoad
+
+    staleRefresh.resolve(jsonResponse({ results: [staleResult] }))
+    await firstLoad
+
+    expect(fetchCalls).toHaveLength(2)
+    expect(usePluginsStore.getState().registryInfo["plugin-a"]).toEqual(latestResult)
+    expect(usePluginsStore.getState().isLoadingRegistry).toBe(false)
   })
 
   test("loadRegistryInfo accepts explicit comma-joined specs", async () => {
