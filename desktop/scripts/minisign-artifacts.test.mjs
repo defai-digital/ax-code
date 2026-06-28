@@ -12,9 +12,49 @@ function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "ax-code-desktop-minisign-test-"))
 }
 
-function writeExecutable(file, body) {
-  fs.writeFileSync(file, body)
-  fs.chmodSync(file, 0o755)
+function shellQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function writeFakeCommandEnv(
+  fixture,
+  {
+    unameBody = "printf 'Linux\\n'",
+    securityBody = "return 1",
+  } = {},
+) {
+  fs.writeFileSync(
+    fixture.bashEnv,
+    `
+minisign() {
+  local sig=""
+  local mode="sign"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -V) mode="verify"; shift ;;
+      -x) sig="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  if [ "$mode" = "sign" ] && [ -n "$sig" ]; then
+    local stdin
+    stdin="$(cat || true)"
+    if [ -n "$stdin" ]; then
+      printf '%s' "$stdin" >> ${shellQuote(fixture.stdinLog)}
+    fi
+    printf 'fake signature\\n' > "$sig"
+  fi
+}
+
+uname() {
+  ${unameBody}
+}
+
+security() {
+  ${securityBody}
+}
+`,
+  )
 }
 
 function createFixture() {
@@ -26,6 +66,7 @@ function createFixture() {
   const publicKey = path.join(dir, "ax-code-desktop.minisign.pub")
   const asset = path.join(dir, "asset.zip")
   const stdinLog = path.join(dir, "minisign-stdin.log")
+  const bashEnv = path.join(dir, "fake-commands.sh")
 
   fs.writeFileSync(secretKey, "secret")
   fs.chmodSync(secretKey, 0o600)
@@ -35,42 +76,10 @@ function createFixture() {
   )
   fs.writeFileSync(asset, "asset")
 
-  writeExecutable(
-    path.join(bin, "minisign"),
-    `#!/usr/bin/env bash
-set -euo pipefail
-sig=""
-mode="sign"
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -V) mode="verify"; shift ;;
-    -x) sig="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-if [ "$mode" = "sign" ] && [ -n "$sig" ]; then
-  stdin="$(cat || true)"
-  if [ -n "$stdin" ]; then
-    printf '%s' "$stdin" >> "${stdinLog}"
-  fi
-  printf 'fake signature\\n' > "$sig"
-fi
-`,
-  )
-  writeExecutable(
-    path.join(bin, "uname"),
-    `#!/usr/bin/env bash
-printf 'Linux\\n'
-`,
-  )
-  writeExecutable(
-    path.join(bin, "security"),
-    `#!/usr/bin/env bash
-exit 1
-`,
-  )
+  const fixture = { dir, bin, secretKey, publicKey, asset, stdinLog, bashEnv }
+  writeFakeCommandEnv(fixture)
 
-  return { dir, bin, secretKey, publicKey, asset, stdinLog }
+  return fixture
 }
 
 function runScript(args, fixture, env = {}) {
@@ -96,6 +105,7 @@ function runScript(args, fixture, env = {}) {
       MINISIGN_PASSWORD: "",
       AX_CODE_DESKTOP_MINISIGN_KEYCHAIN_SERVICE: "",
       AX_CODE_DESKTOP_MINISIGN_KEYCHAIN_ACCOUNT: "",
+      BASH_ENV: fixture.bashEnv,
       PATH: `${fixture.bin}${path.delimiter}${process.env.PATH ?? ""}`,
       ...env,
     },
@@ -148,22 +158,16 @@ describe("minisign-artifacts.sh", () => {
   test("uses macOS Keychain passphrase when no password env is set", () => {
     const fixture = createFixture()
     try {
-      writeExecutable(
-        path.join(fixture.bin, "uname"),
-        `#!/usr/bin/env bash
-printf 'Darwin\\n'
-`,
-      )
-      writeExecutable(
-        path.join(fixture.bin, "security"),
-        `#!/usr/bin/env bash
+      writeFakeCommandEnv(fixture, {
+        unameBody: "printf 'Darwin\\n'",
+        securityBody: `
 if [ "$1" = "find-generic-password" ]; then
   printf 'from-keychain\\n'
-  exit 0
+  return 0
 fi
-exit 1
+return 1
 `,
-      )
+      })
 
       const result = runScript(
         ["--secret-key", fixture.secretKey, "--public-key", fixture.publicKey, fixture.asset],
@@ -233,15 +237,9 @@ exit 1
   test("--keychain-service/--keychain-account route the Keychain lookup", () => {
     const fixture = createFixture()
     try {
-      writeExecutable(
-        path.join(fixture.bin, "uname"),
-        `#!/usr/bin/env bash
-printf 'Darwin\\n'
-`,
-      )
-      writeExecutable(
-        path.join(fixture.bin, "security"),
-        `#!/usr/bin/env bash
+      writeFakeCommandEnv(fixture, {
+        unameBody: "printf 'Darwin\\n'",
+        securityBody: `
 if [ "$1" = "find-generic-password" ]; then
   svc=""; acct=""
   while [ "$#" -gt 0 ]; do
@@ -252,11 +250,11 @@ if [ "$1" = "find-generic-password" ]; then
     esac
   done
   printf 'kc:%s/%s\\n' "$svc" "$acct"
-  exit 0
+  return 0
 fi
-exit 1
+return 1
 `,
-      )
+      })
 
       const result = runScript(
         [
