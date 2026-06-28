@@ -3,10 +3,15 @@ import { createEventPipeline } from "../event-pipeline"
 
 const savedDocument = globalThis.document
 const savedWindow = globalThis.window
+const savedNavigator = globalThis.navigator
 
 afterEach(() => {
   globalThis.document = savedDocument
   globalThis.window = savedWindow
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: savedNavigator,
+  })
 })
 
 describe("createEventPipeline — system resume reconnect", () => {
@@ -117,5 +122,77 @@ describe("createEventPipeline — system resume reconnect", () => {
     expect(eventCalls.length).toBe(2)
     // Disconnect reason should include system_resume.
     expect(disconnectReasons.some((r) => r.includes("system_resume"))).toBe(true)
+  })
+
+  it("wakes a disconnected retry sleep on openchamber:system-resume event", async () => {
+    const winListeners = {}
+    globalThis.document = {
+      visibilityState: "hidden",
+      addEventListener() {},
+      removeEventListener() {},
+    }
+    globalThis.window = {
+      location: {
+        href: "http://127.0.0.1:3000/",
+        origin: "http://127.0.0.1:3000",
+      },
+      addEventListener(event, handler) {
+        winListeners[event] = handler
+      },
+      removeEventListener(event) {
+        delete winListeners[event]
+      },
+    }
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { onLine: false },
+    })
+
+    let cleanup = () => {}
+    let sdkCallCount = 0
+    let resolveSecondAttempt
+    const secondAttemptStarted = new Promise((resolve) => {
+      resolveSecondAttempt = resolve
+    })
+
+    const sdk = {
+      global: {
+        event: async () => {
+          sdkCallCount += 1
+          if (sdkCallCount === 1) {
+            throw new Error("offline")
+          }
+          resolveSecondAttempt()
+          return {
+            stream: (async function* () {
+              await new Promise(() => {})
+            })(),
+          }
+        },
+      },
+    }
+
+    try {
+      ;({ cleanup } = createEventPipeline({
+        sdk,
+        transport: "sse",
+        heartbeatTimeoutMs: 60_000,
+        reconnectDelayMs: 60_000,
+        onEvent: () => {},
+      }))
+
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      const handler = winListeners["openchamber:system-resume"]
+      if (handler) handler()
+
+      await Promise.race([
+        secondAttemptStarted,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("resume did not wake retry sleep")), 250)),
+      ])
+
+      expect(sdkCallCount).toBe(2)
+    } finally {
+      cleanup()
+    }
   })
 })

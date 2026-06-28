@@ -538,6 +538,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
   /**
    * Wait between reconnect attempts. Resolves early when:
    *   - the browser fires `online` (network came back — probe immediately),
+   *   - the desktop shell fires `openchamber:system-resume` (wake from sleep),
    *   - the tab becomes visible (user came back — probe immediately),
    *   - the pipeline is being torn down (cleanup aborts).
    * Otherwise resolves after `ms` like a plain timer.
@@ -556,6 +557,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
         }
         if (typeof globalThis.window !== "undefined") {
           globalThis.window.removeEventListener("online", onInterrupt)
+          globalThis.window.removeEventListener("openchamber:system-resume", onInterrupt)
         }
         if (typeof document !== "undefined") {
           document.removeEventListener("visibilitychange", onVisibilityInterrupt)
@@ -575,6 +577,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(onInterrupt, ms)
       if (typeof globalThis.window !== "undefined") {
         globalThis.window.addEventListener("online", onInterrupt, { once: true })
+        globalThis.window.addEventListener("openchamber:system-resume", onInterrupt, { once: true })
       }
       if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", onVisibilityInterrupt)
