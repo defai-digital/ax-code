@@ -1026,7 +1026,7 @@ export const RemoteInstancesPage: React.FC = () => {
                     remoteOpenchamber: {
                       ...current.remoteOpenchamber,
                       installMethod:
-                        value === "npm" || value === "download_release" || value === "upload_bundle" ? value : "bun",
+                        value === "npm" || value === "download_release" || value === "upload_bundle" ? value : "npm",
                     },
                   }))
                 }
@@ -1035,7 +1035,6 @@ export const RemoteInstancesPage: React.FC = () => {
                   <SelectValue placeholder={t("settings.remoteInstances.page.field.selectInstallMethodPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bun">bun</SelectItem>
                   <SelectItem value="npm">npm</SelectItem>
                   <SelectItem value="download_release">
                     {t("settings.remoteInstances.page.field.installMethodDownloadRelease")}

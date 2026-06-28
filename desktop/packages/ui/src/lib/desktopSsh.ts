@@ -3,7 +3,7 @@ import { getTauriGlobal } from "@/lib/tauriGlobal"
 import type { TauriInvoke } from "@/lib/tauriGlobal"
 
 export type DesktopSshRemoteMode = "managed" | "external"
-export type DesktopSshInstallMethod = "npm" | "bun" | "download_release" | "upload_bundle"
+export type DesktopSshInstallMethod = "npm" | "download_release" | "upload_bundle"
 export type DesktopSshSecretStore = "never" | "settings"
 
 export type DesktopSshStoredSecret = {
@@ -194,7 +194,7 @@ const parseInstance = (value: unknown): DesktopSshInstance | null => {
   const installMethod: DesktopSshInstallMethod =
     rawInstallMethod === "npm" || rawInstallMethod === "download_release" || rawInstallMethod === "upload_bundle"
       ? rawInstallMethod
-      : "bun"
+      : "npm"
 
   const bindHostRaw = readString(localRaw, "bindHost") || readString(localRaw, "bind_host") || "127.0.0.1"
   const bindHost: "127.0.0.1" | "localhost" | "0.0.0.0" =
@@ -310,7 +310,7 @@ export const createDesktopSshInstance = (id: string, sshCommand: string): Deskto
     remoteOpenchamber: {
       mode: "managed",
       keepRunning: true,
-      installMethod: "bun",
+      installMethod: "npm",
       uploadBundleOverSsh: false,
     },
     localForward: {
