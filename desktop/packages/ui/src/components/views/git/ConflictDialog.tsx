@@ -113,51 +113,65 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   }
 
   const handleResolveInCurrentSession = async () => {
-    const context = await buildConflictContext()
-    if (!context) {
-      toast.error(t("gitView.conflict.noDetailsAvailable"))
-      return
-    }
+    try {
+      const context = await buildConflictContext()
+      if (!context) {
+        toast.error(t("gitView.conflict.noDetailsAvailable"))
+        return
+      }
 
-    if (!currentSessionId) {
-      toast.error(t("gitView.conflict.noActiveSession"), {
-        description: t("gitView.conflict.noActiveSessionDescription"),
+      if (!currentSessionId) {
+        toast.error(t("gitView.conflict.noActiveSession"), {
+          description: t("gitView.conflict.noActiveSessionDescription"),
+        })
+        return
+      }
+
+      // Set the visible text in the input and the synthetic parts for when user sends
+      setPendingInputText(context.visibleText, "replace")
+      setPendingSyntheticParts([
+        { text: context.instructionsText, synthetic: true },
+        { text: context.payloadText, synthetic: true },
+      ])
+
+      setActiveMainTab("chat")
+      onClearState?.()
+      onOpenChange(false)
+    } catch (error) {
+      console.error("[ConflictDialog] Resolve in current session failed:", error)
+      toast.error("Failed to resolve conflict", {
+        description: error instanceof Error ? error.message : "Please try again",
       })
-      return
     }
-
-    // Set the visible text in the input and the synthetic parts for when user sends
-    setPendingInputText(context.visibleText, "replace")
-    setPendingSyntheticParts([
-      { text: context.instructionsText, synthetic: true },
-      { text: context.payloadText, synthetic: true },
-    ])
-
-    setActiveMainTab("chat")
-    onClearState?.()
-    onOpenChange(false)
   }
 
   const handleResolveInNewSession = async () => {
-    const context = await buildConflictContext()
-    if (!context) {
-      toast.error(t("gitView.conflict.noDetailsAvailable"))
-      return
-    }
+    try {
+      const context = await buildConflictContext()
+      if (!context) {
+        toast.error(t("gitView.conflict.noDetailsAvailable"))
+        return
+      }
 
-    // Open new session with the conflict context as initial prompt + synthetic parts
-    openNewSessionDraft({
-      directoryOverride: directory,
-      initialPrompt: context.visibleText,
-      syntheticParts: [
-        { text: context.instructionsText, synthetic: true },
-        { text: context.payloadText, synthetic: true },
-      ],
-    })
-    // Navigate to chat tab so user sees the new session
-    setActiveMainTab("chat")
-    onClearState?.()
-    onOpenChange(false)
+      // Open new session with the conflict context as initial prompt + synthetic parts
+      openNewSessionDraft({
+        directoryOverride: directory,
+        initialPrompt: context.visibleText,
+        syntheticParts: [
+          { text: context.instructionsText, synthetic: true },
+          { text: context.payloadText, synthetic: true },
+        ],
+      })
+      // Navigate to chat tab so user sees the new session
+      setActiveMainTab("chat")
+      onClearState?.()
+      onOpenChange(false)
+    } catch (error) {
+      console.error("[ConflictDialog] Resolve in new session failed:", error)
+      toast.error("Failed to resolve conflict", {
+        description: error instanceof Error ? error.message : "Please try again",
+      })
+    }
   }
 
   const operationLabel = operation === "merge" ? t("gitView.operation.merge") : t("gitView.operation.rebase")

@@ -12,6 +12,7 @@ import { Icon } from "@/components/icon/Icon"
 import { DiffPreview, WritePreview } from "./DiffPreview"
 import { AllowPatternBuilder } from "./AllowPatternBuilder"
 import { useI18n } from "@/lib/i18n"
+import { toast } from "@/components/ui"
 
 const PERMISSION_BASH_CUSTOM_STYLE: React.CSSProperties = {
   margin: 0,
@@ -98,6 +99,14 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onRe
   const respondToPermission = sessionActions.respondToPermission
   const sessions = useSessions()
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  // Synchronous ref guard prevents double-submission races that React state
+  // cannot protect against (setState is async, so two rapid clicks can both
+  // read isResponding=false before either sets it to true). The TUI uses the
+  // same pattern via a SolidJS store `submitting` flag.
+  const submittingRef = React.useRef(false)
+  // Tracks unmount so we don't call setState on an unmounted component if
+  // the API call resolves after the card is removed from the DOM.
+  const unmountedRef = React.useRef(false)
   const isFromSubagent = React.useMemo(() => {
     if (!currentSessionId || permission.sessionID === currentSessionId) return false
     const sourceSession = sessions.find((session) => session.id === permission.sessionID)
@@ -106,16 +115,41 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onRe
   const { currentTheme } = useThemeSystem()
   const syntaxTheme = React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme])
 
+  React.useEffect(() => {
+    unmountedRef.current = false
+    return () => {
+      unmountedRef.current = true
+    }
+  }, [])
+
   const handleResponse = async (response: PermissionResponse) => {
+    // Idempotent guard: block re-entry synchronously before any async work.
+    if (submittingRef.current) return
+    submittingRef.current = true
     setIsResponding(true)
 
     try {
       await respondToPermission(permission.sessionID, permission.id, response)
+      if (unmountedRef.current) return
       setHasResponded(true)
       onResponse?.(response)
     } catch (error) {
       console.error("[PermissionCard] Failed to respond to permission:", error)
-    } finally {
+      if (!unmountedRef.current) {
+        // Surface the failure to the user so they can retry instead of
+        // silently believing the permission was granted/denied.
+        toast.error("Permission response failed", {
+          description: error instanceof Error ? error.message : "Please try again",
+        })
+        // Reset guard on failure so the user can retry.
+        submittingRef.current = false
+        setIsResponding(false)
+      }
+      return
+    }
+
+    if (!unmountedRef.current) {
+      submittingRef.current = false
       setIsResponding(false)
     }
   }

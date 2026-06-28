@@ -326,6 +326,11 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
       setForkingId(messageId)
       try {
         await forkFromMessage(sessionId, messageId)
+      } catch (error) {
+        console.error("[ChatInput] Fork failed:", error)
+        toast.error("Fork failed", {
+          description: error instanceof Error ? error.message : "Please try again",
+        })
       } finally {
         setForkingId(null)
       }

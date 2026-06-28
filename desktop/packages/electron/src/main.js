@@ -1982,7 +1982,13 @@ const dispatchTrayAction = async (action) => {
   }
   if (action.type === "respond-permission") {
     const target = mainWindow && !mainWindow.isDestroyed() ? mainWindow : await revealMainWindow()
-    if (target && !target.isDestroyed()) target.webContents.send("openchamber:tray-action", action)
+    // Use sendDesktopEvent so the tray action reaches the renderer via both
+    // the literal IPC channel (for __TAURI__.event.listen) AND the
+    // ax-code:dom-event envelope (for window.addEventListener). Raw
+    // webContents.send only delivers on the literal channel, where no
+    // listener exists for openchamber:tray-action — causing the click to
+    // silently do nothing. See #tray-permission-stability.
+    if (target && !target.isDestroyed()) sendDesktopEvent(target.webContents, "openchamber:tray-action", action)
     return
   }
   if (action.type === "new-mini-chat") {
@@ -1993,7 +1999,9 @@ const dispatchTrayAction = async (action) => {
   if (action.type === "focus-session") {
     const target = await revealMainWindow()
     if (target && !target.isDestroyed() && action.sessionId) {
-      target.webContents.send("openchamber:open-session", {
+      // Use sendDesktopEvent so the open-session event reaches the renderer
+      // via the ax-code:dom-event envelope (window.addEventListener path).
+      sendDesktopEvent(target.webContents, "openchamber:open-session", {
         sessionId: action.sessionId,
         directory: action.directory || "",
       })
@@ -2003,7 +2011,7 @@ const dispatchTrayAction = async (action) => {
   const target = await revealMainWindow()
   if (!target || target.isDestroyed()) return
   if (action.type === "new-session") {
-    target.webContents.send("openchamber:open-draft-session", { directory: "", projectId: "" })
+    sendDesktopEvent(target.webContents, "openchamber:open-draft-session", { directory: "", projectId: "" })
   }
   // show-main-window: revealing the window above is the whole action.
 }

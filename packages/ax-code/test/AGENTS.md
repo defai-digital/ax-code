@@ -44,7 +44,7 @@ await using tmp = await tmpdir({
 ```typescript
 await using tmp = await tmpdir<string>({
   init: async (dir) => {
-    await Bun.write(path.join(dir, "file.txt"), "content")
+    await fs.writeFile(path.join(dir, "file.txt"), "content")
     return "extra data"
   },
 })

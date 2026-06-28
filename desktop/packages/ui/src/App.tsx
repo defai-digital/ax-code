@@ -49,6 +49,9 @@ import { SyncAppEffects } from "@/apps/AppEffects"
 import { useAppFontEffects } from "@/apps/useAppFontEffects"
 import { AxCodeUpdateToast } from "@/components/update/AxCodeUpdateToast"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
+import { toast } from "@/components/ui"
+import * as sessionActions from "@/sync/session-actions"
+import { getTauriGlobal } from "@/lib/tauriGlobal"
 import {
   OPEN_DRAFT_SESSION_EVENT,
   OPEN_PROJECT_EVENT,
@@ -590,6 +593,92 @@ function App({ apis }: AppProps) {
 
     window.addEventListener(OPEN_SESSION_EVENT, handler)
     return () => window.removeEventListener(OPEN_SESSION_EVENT, handler)
+  }, [])
+
+  // Listen for tray permission actions dispatched from the Electron main
+  // process. The system tray menu sends "openchamber:tray-action" when the
+  // user clicks Allow/Deny on a pending permission request. Without this
+  // listener, tray permission responses are silently dropped.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+
+    type TrayPermissionAction = {
+      type: string
+      sessionId?: string
+      id?: string
+      response?: "once" | "always" | "reject"
+    }
+
+    const handleTrayAction = (event: Event) => {
+      const action = (event as CustomEvent<TrayPermissionAction>).detail
+      if (!action || action.type !== "respond-permission") return
+      const { sessionId, id, response } = action
+      if (!sessionId || !id || !response) return
+      void sessionActions
+        .respondToPermission(sessionId, id, response)
+        .catch((error: unknown) => {
+          console.error("[App] tray permission action failed", error)
+          toast.error("Permission response failed", {
+            description: error instanceof Error ? error.message : "Could not respond to permission from tray",
+          })
+        })
+    }
+
+    window.addEventListener("openchamber:tray-action", handleTrayAction)
+    return () => window.removeEventListener("openchamber:tray-action", handleTrayAction)
+  }, [])
+
+  // Also listen via the Tauri-compatible event bridge so tray actions work
+  // regardless of which delivery path the main process uses.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const tauri = getTauriGlobal()
+    const listen = tauri?.event?.listen
+    if (typeof listen !== "function") return
+
+    type TrayPermissionPayload = {
+      type: string
+      sessionId?: string
+      id?: string
+      response?: "once" | "always" | "reject"
+    }
+
+    let unlisten: (() => void | Promise<void>) | null = null
+
+    listen("openchamber:tray-action", (evt: { payload?: unknown }) => {
+      const action = evt?.payload as TrayPermissionPayload | undefined
+      if (!action || action.type !== "respond-permission") return
+      const { sessionId, id, response } = action
+      if (!sessionId || !id || !response) return
+      void sessionActions
+        .respondToPermission(sessionId, id, response)
+        .catch((error: unknown) => {
+          console.error("[App] tray permission action failed", error)
+          toast.error("Permission response failed", {
+            description: error instanceof Error ? error.message : "Could not respond to permission from tray",
+          })
+        })
+    })
+      .then((fn) => {
+        unlisten = fn
+      })
+      .catch(() => {
+        // Tauri event bridge not available — DOM event path is sufficient.
+      })
+
+    return () => {
+      const fn = unlisten
+      if (!fn) return
+      const cleanup = async () => {
+        try {
+          const result = fn()
+          if (result instanceof Promise) await result
+        } catch {
+          // ignore
+        }
+      }
+      void cleanup()
+    }
   }, [])
 
   React.useEffect(() => {

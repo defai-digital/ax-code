@@ -1,6 +1,7 @@
 import React from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { toast } from "@/components/ui"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSessionMessageRecords } from "@/sync/sync-context"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -142,6 +143,11 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
     try {
       await forkFromMessage(currentSessionId, messageId)
       onOpenChange(false)
+    } catch (error) {
+      console.error("[TimelineDialog] Fork failed:", error)
+      toast.error("Fork failed", {
+        description: error instanceof Error ? error.message : "Please try again",
+      })
     } finally {
       setForkingMessageId(null)
     }
@@ -236,8 +242,15 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
                             className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                             onClick={async (e) => {
                               e.stopPropagation()
-                              await revertToMessage(currentSessionId, message.info.id)
-                              onOpenChange(false)
+                              try {
+                                await revertToMessage(currentSessionId, message.info.id)
+                                onOpenChange(false)
+                              } catch (error) {
+                                console.error("[TimelineDialog] Revert failed:", error)
+                                toast.error("Revert failed", {
+                                  description: error instanceof Error ? error.message : "Please try again",
+                                })
+                              }
                             }}
                           >
                             <Icon name="arrow-go-back" className="h-4 w-4" />

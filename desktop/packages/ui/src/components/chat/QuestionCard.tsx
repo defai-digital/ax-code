@@ -42,6 +42,15 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
   const [customMode, setCustomMode] = React.useState<Record<number, boolean>>({})
   const [customText, setCustomText] = React.useState<Record<number, string>>({})
 
+  // Synchronous ref guard prevents double-submission races that React state
+  // cannot protect against (setState is async, so two rapid clicks can both
+  // read isResponding=false before either sets it to true). Matches the
+  // PermissionCard pattern.
+  const submittingRef = React.useRef(false)
+  // Tracks unmount so we don't call setState on an unmounted component if
+  // the API call resolves after the card is removed from the DOM.
+  const unmountedRef = React.useRef(false)
+
   const questions = React.useMemo(() => question.questions ?? [], [question.questions])
   const isSummaryTab = activeTab === SUMMARY_TAB
   const activeIndex = isSummaryTab ? -1 : Math.max(0, Math.min(questions.length - 1, Number(activeTab) || 0))
@@ -51,6 +60,13 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
     const header = activeQuestion?.header?.trim()
     return header && header.length > 0 ? header : null
   }, [activeQuestion?.header, isSummaryTab])
+
+  React.useEffect(() => {
+    unmountedRef.current = false
+    return () => {
+      unmountedRef.current = true
+    }
+  }, [])
 
   React.useEffect(() => {
     setActiveTab("0")
@@ -171,15 +187,31 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
 
   const handleConfirm = React.useCallback(async () => {
     if (!requiredSatisfied) return
-
+    // Idempotent guard: block re-entry synchronously before any async work.
+    if (submittingRef.current) return
+    submittingRef.current = true
     setIsResponding(true)
+
     try {
       const answers = buildAnswersPayload()
       await respondToQuestion(question.sessionID, question.id, answers)
+      if (unmountedRef.current) return
       setHasResponded(true)
-    } catch {
-      // ignored
-    } finally {
+    } catch (error) {
+      console.error("[QuestionCard] Failed to respond to question:", error)
+      if (!unmountedRef.current) {
+        toast.error("Question response failed", {
+          description: error instanceof Error ? error.message : "Please try again",
+        })
+        // Reset guard on failure so the user can retry.
+        submittingRef.current = false
+        setIsResponding(false)
+      }
+      return
+    }
+
+    if (!unmountedRef.current) {
+      submittingRef.current = false
       setIsResponding(false)
     }
   }, [buildAnswersPayload, question.id, question.sessionID, requiredSatisfied, respondToQuestion])
@@ -201,13 +233,29 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
   )
 
   const handleDismiss = React.useCallback(async () => {
+    // Idempotent guard: same as handleConfirm.
+    if (submittingRef.current) return
+    submittingRef.current = true
     setIsResponding(true)
+
     try {
       await rejectQuestion(question.sessionID, question.id)
+      if (unmountedRef.current) return
       setHasResponded(true)
-    } catch {
-      // ignored
-    } finally {
+    } catch (error) {
+      console.error("[QuestionCard] Failed to dismiss question:", error)
+      if (!unmountedRef.current) {
+        toast.error("Question dismiss failed", {
+          description: error instanceof Error ? error.message : "Please try again",
+        })
+        submittingRef.current = false
+        setIsResponding(false)
+      }
+      return
+    }
+
+    if (!unmountedRef.current) {
+      submittingRef.current = false
       setIsResponding(false)
     }
   }, [question.id, question.sessionID, rejectQuestion])

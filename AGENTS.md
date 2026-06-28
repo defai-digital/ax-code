@@ -40,6 +40,10 @@ Desktop development (from repo root):
 - `pnpm run desktop:lint` — lint desktop packages.
 - `pnpm run desktop:test` — run desktop tests (builds SDK first).
 - `pnpm run check:desktop-boundaries` — check desktop package import boundaries (append `:strict` to fail on violation).
+- `pnpm run check:desktop-electron-runtime` — verify Electron runtime compatibility.
+- `pnpm run check:desktop-endpoint-contracts` — validate API endpoint contracts between desktop packages.
+- `pnpm run check:desktop-ipc-contracts` — validate desktop IPC contract consistency.
+- `pnpm run check:desktop-package-tests` — validate desktop package test script configurations.
 - Desktop web dev servers: `cd desktop && pnpm run dev:web:hmr` (Vite HMR on port 5180 + Express API on port 3902) or `pnpm run dev:web:full` (Express-only on port 3001, no HMR).
 
 Do not run tests from the repository root:
@@ -70,6 +74,7 @@ Test groups are defined in `script/test-group.ts`. The `unit` group is the faste
 - `pnpm db` - Drizzle Kit for schema migrations.
 - `pnpm run check:tui-layering` - TUI renderer-adapter layering guard.
 - `pnpm run check:tui-snapshot` - TUI snapshot consistency check.
+- `pnpm run check:bun-compat` - detect residual Bun API usage in the Node.js codebase (Bun was removed; any remaining `Bun.*` references are bugs).
 - `pnpm run check:skills` - validate discovered Agent Skills.
 - `pnpm run check:skills:all` - validate all skill definitions.
 - `pnpm run perf:index` - indexing/LSP perf harness.
@@ -239,6 +244,8 @@ Turbo orchestrates the build graph: `@ax-code/sdk` → `ax-code-desktop` (ui+web
 **Plugin system** (`src/plugin/`): Plugins can register custom tools, hooks, and event handlers. Custom tools from `{tool,tools}/*.{js,ts}` in config directories are auto-discovered and registered in `tool/registry.ts`.
 
 **Configuration** (`src/config/config.ts`): Hierarchical config merging from defaults → global config → project `ax-code.json` → env vars → wellknown remote configs. The `Config` namespace exposes the merged result. The root `ax-code.json` is the project-level config; `~/.config/ax-code/` holds global config. Key `ax-code.json` fields include `provider` (provider routing), `autonomous` (boolean), `isolation` (mode/network/protected), `mcp` (server definitions), `permission` (tool rules), `routing` (LLM routing), `model`, and `skills`.
+
+**Key environment variables**: `AX_CODE_ISOLATION_MODE` (sandbox mode override), `AX_CODE_AUTONOMOUS` (unattended execution toggle), `AX_CODE_SERVER_PASSWORD` (required for non-localhost server binding), `AX_CODE_NATIVE_{INDEX,FS,DIFF,PARSER}=1` (enable Rust addon fast paths), `AX_CODE_EXPERIMENTAL_LSP_TOOL`, `AX_CODE_EXPERIMENTAL_DEBUG_ENGINE` (gate experimental tools).
 
 **Hotspot guardrails**:
 
