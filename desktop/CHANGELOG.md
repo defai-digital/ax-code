@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.13] - 2026-06-28
+
+### Fixed
+
+- CLI: published the current provider setup and supported-provider documentation updates.
+- Desktop: republished signed Desktop assets from the current monorepo release line.
+- Release: refreshed signed CLI and Desktop assets with Homebrew formula and cask updates.
+
 ## [6.7.12] - 2026-06-28
 
 ### Fixed
