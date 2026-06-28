@@ -33,6 +33,7 @@ afterEach(async () => {
 describe("providers command", () => {
   test("default login provider set includes CLI bridge providers", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("xai")).toBe(false)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("groq")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("claude-code")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("gemini-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("codex-cli")).toBe(true)

@@ -27,6 +27,7 @@ const log = Log.create({ service: "server" })
 const NATIVE_PROVIDERS = new Set([
   "ax-engine",
   "google",
+  "groq",
   "alibaba-coding-plan",
   "alibaba-coding-plan-cn",
   "alibaba-token-plan",
