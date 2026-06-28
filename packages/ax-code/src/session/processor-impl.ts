@@ -958,7 +958,7 @@ export namespace SessionProcessor {
                       profile.contextPackingBudget === "wide" ? "premium" : "cheap"
                     const failureDetect = AgentOptimizationTrace.detectRepeatedFailure(stepErrorSurfaces)
                     const contextPack = LongAgentContextPacker.pack({
-                      tokenBudget: profile.contextPackingBudget === "wide" ? 32_000 : 8_000,
+                      tokenBudget: profile.contextPackTokenBudget,
                       touchedFiles: stepTouchedFiles,
                       toolConstraints:
                         stepToolCallCount > 0 ? `${stepToolCallCount} tool call(s) observed in this step.` : undefined,
