@@ -11,6 +11,7 @@ import { sessionEvents } from "@/lib/sessionEvents"
 import { createWorktreeSession } from "@/lib/worktreeSessionCreator"
 import { showAxCodeStatus } from "@/lib/axCodeStatus"
 import { getTauriGlobal } from "@/lib/tauriGlobal"
+import { listenToTauriEvent } from "@/lib/tauriEventListener"
 
 const getActiveElementSelectedText = (): string => {
   if (typeof document === "undefined") {
@@ -339,47 +340,19 @@ export const useMenuActions = (onToggleMemoryDebug?: () => void) => {
     const listen = tauri?.event?.listen
     if (typeof listen !== "function") return
 
-    let unlistenMenu: null | (() => void | Promise<void>) = null
-    let unlistenUpdate: null | (() => void | Promise<void>) = null
-
-    listen("openchamber:menu-action", (evt) => {
+    const cleanupMenu = listenToTauriEvent(listen, "openchamber:menu-action", (evt) => {
       const action = evt?.payload
       if (typeof action !== "string") return
       handleAction(action as MenuAction)
     })
-      .then((fn) => {
-        unlistenMenu = fn
-      })
-      .catch(() => {
-        // ignore
-      })
 
-    listen("openchamber:check-for-updates", () => {
+    const cleanupUpdate = listenToTauriEvent(listen, "openchamber:check-for-updates", () => {
       window.dispatchEvent(new Event(CHECK_FOR_UPDATES_EVENT))
     })
-      .then((fn) => {
-        unlistenUpdate = fn
-      })
-      .catch(() => {
-        // ignore
-      })
 
     return () => {
-      const cleanup = async () => {
-        try {
-          const a = unlistenMenu?.()
-          if (a instanceof Promise) await a
-        } catch {
-          // ignore
-        }
-        try {
-          const b = unlistenUpdate?.()
-          if (b instanceof Promise) await b
-        } catch {
-          // ignore
-        }
-      }
-      void cleanup()
+      cleanupMenu()
+      cleanupUpdate()
     }
   }, [handleAction])
 }

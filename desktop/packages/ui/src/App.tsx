@@ -53,6 +53,7 @@ import { toast } from "@/components/ui"
 import * as sessionActions from "@/sync/session-actions"
 import { getTauriGlobal } from "@/lib/tauriGlobal"
 import { createTrayPermissionActionDeduper } from "@/lib/trayActions"
+import { listenToTauriEvent } from "@/lib/tauriEventListener"
 import {
   OPEN_DRAFT_SESSION_EVENT,
   OPEN_PROJECT_EVENT,
@@ -635,9 +636,7 @@ function App({ apis }: AppProps) {
     const listen = tauri?.event?.listen
     if (typeof listen !== "function") return
 
-    let unlisten: (() => void | Promise<void>) | null = null
-
-    listen("openchamber:tray-action", (evt: { payload?: unknown }) => {
+    return listenToTauriEvent(listen, "openchamber:tray-action", (evt: { payload?: unknown }) => {
       const action = dedupeTrayPermissionAction(evt?.payload)
       if (!action) return
 
@@ -651,26 +650,6 @@ function App({ apis }: AppProps) {
           })
         })
     })
-      .then((fn) => {
-        unlisten = fn
-      })
-      .catch(() => {
-        // Tauri event bridge not available — DOM event path is sufficient.
-      })
-
-    return () => {
-      const fn = unlisten
-      if (!fn) return
-      const cleanup = async () => {
-        try {
-          const result = fn()
-          if (result instanceof Promise) await result
-        } catch {
-          // ignore
-        }
-      }
-      void cleanup()
-    }
   }, [dedupeTrayPermissionAction])
 
   React.useEffect(() => {
