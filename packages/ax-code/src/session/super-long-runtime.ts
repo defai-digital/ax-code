@@ -22,6 +22,14 @@ export namespace SuperLongRuntime {
   const STORE_PATH_ENV = "AX_CODE_SUPER_LONG_RUNTIME_STORE"
   const RUN_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
   const LOCK_TIMEOUT_MS = 2_000
+  // Stale locks from crashed processes should clear well within the lock
+  // timeout window, otherwise a crash mid-write blocks durable pacing for the
+  // FileLock default (5 min) even though each acquire only waits 2s. A normal
+  // store update is sub-second, so anything older than a few timeouts is a
+  // dead holder. The caller (llm-impl.applySuperLongPacing) already falls
+  // back to process-local pacing on a lock failure, so this is about how fast
+  // cross-process pacing coordination recovers, not about loop survival.
+  const LOCK_STALE_MS = 30_000
 
   export async function sessionStartedAt(input: { sessionID: string; now: number }): Promise<number> {
     return updateStore((store) => {
@@ -92,7 +100,7 @@ export namespace SuperLongRuntime {
 
   async function updateStore<T>(fn: (store: Store) => T, now: number): Promise<T> {
     const filepath = storePath()
-    const lock = await FileLock.acquire(filepath, { timeoutMs: LOCK_TIMEOUT_MS })
+    const lock = await FileLock.acquire(filepath, { timeoutMs: LOCK_TIMEOUT_MS, staleMs: LOCK_STALE_MS })
     try {
       const store = await readStore()
       prune(store, now)

@@ -1900,3 +1900,87 @@ describe("ProviderTransform.options - promptCacheKey for Alibaba longAgent (Phas
     expect(result.promptCacheKey).toBe("sess-set-cache")
   })
 })
+
+// Snapshot guard for z.ai / Zhipu-served GLM 5.x. transform.ts deliberately
+// sends NO provider-specific options for z.ai (see the v3.1.0->v3.1.2 revert
+// note at the z.ai branch): thinking enablement is gated on a live wire probe
+// (ADR-040 M2). This test locks the current output shape so a future @ai-sdk
+// bump that silently reintroduces a `thinking`/`reasoning_effort` field — the
+// exact churn documented in the codebase — fails at PR time instead of
+// silently changing wire behavior.
+describe("ProviderTransform.options - z.ai / Zhipu GLM snapshot guard", () => {
+  function createZaiModel(providerID: string, modelID = "glm-5.2") {
+    return {
+      id: `${providerID}/${modelID}`,
+      family: "glm",
+      providerID: ProviderID.make(providerID),
+      api: {
+        id: modelID,
+        url: "https://api.z.ai/api/paas/v4/",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      capabilities: {
+        reasoning: true,
+      },
+      limit: {
+        output: 131_072,
+      },
+    } as any
+  }
+
+  test("z.ai-coding-plan glm-5.2 sends NO thinking/reasoning/cache params by default", () => {
+    const model = createZaiModel("zai-coding-plan")
+    const result = ProviderTransform.options({
+      model,
+      sessionID: "sess-zai",
+      providerOptions: {},
+    })
+
+    // The locked shape: z.ai intentionally gets no provider options.
+    // If any of these become defined, a wire-param change slipped in —
+    // confirm it was intended (ADR-040 M2 probe result) before updating.
+    expect(result).toEqual({})
+    expect(result.thinking).toBeUndefined()
+    expect(result.enable_thinking).toBeUndefined()
+    expect(result.thinking_budget).toBeUndefined()
+    expect(result.reasoning_effort).toBeUndefined()
+    expect(result.reasoningEffort).toBeUndefined()
+    expect(result.preserve_thinking).toBeUndefined()
+    expect(result.promptCacheKey).toBeUndefined()
+  })
+
+  test("z.ai glm-5.2[1m] variant and Zhipu providers share the no-op shape", () => {
+    for (const [providerID, id] of [
+      ["zai", "glm-5.2[1m]"],
+      ["zhipuai-coding-plan", "glm-5.2"],
+      ["zhipuai", "glm-5"],
+    ] as const) {
+      const result = ProviderTransform.options({
+        model: createZaiModel(providerID, id),
+        sessionID: "sess-zai",
+        providerOptions: {},
+      })
+      expect(result).toEqual({})
+    }
+  })
+
+  test("longAgent does NOT add z.ai preserve_thinking/promptCacheKey (deferred to ADR-040 M2)", () => {
+    const result = ProviderTransform.options({
+      model: createZaiModel("zai-coding-plan"),
+      sessionID: "sess-zai-long",
+      providerOptions: {},
+      longAgent: true,
+    })
+    // Unlike Alibaba, the z.ai longAgent path is intentionally a no-op until
+    // a wire probe confirms the accepted param shape. This guards against
+    // accidentally wiring the Alibaba branch onto z.ai.
+    expect(result).toEqual({})
+    expect(result.preserve_thinking).toBeUndefined()
+    expect(result.promptCacheKey).toBeUndefined()
+  })
+
+  test("smallOptions does not add z.ai-specific thinking opt-out", () => {
+    const result = ProviderTransform.smallOptions(createZaiModel("zai-coding-plan"))
+    expect(result).toEqual({})
+  })
+})
