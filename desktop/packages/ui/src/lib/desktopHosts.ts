@@ -12,6 +12,7 @@ export type DesktopHostsConfig = {
   hosts: DesktopHost[]
   defaultHostId: string | null
   initialHostChoiceCompleted: boolean
+  localOrigin?: string | null
 }
 
 /** Backward-compatible input type — callers may omit `initialHostChoiceCompleted`. */
@@ -129,12 +130,12 @@ const getInvoke = (): TauriInvoke | null => {
 export const desktopHostsGet = async (): Promise<DesktopHostsConfig> => {
   const invoke = getInvoke()
   if (!invoke) {
-    return { hosts: [], defaultHostId: "local", initialHostChoiceCompleted: false }
+    return { hosts: [], defaultHostId: "local", initialHostChoiceCompleted: false, localOrigin: null }
   }
 
   const raw = await invoke("desktop_hosts_get")
   if (!isRecord(raw)) {
-    return { hosts: [], defaultHostId: null, initialHostChoiceCompleted: false }
+    return { hosts: [], defaultHostId: null, initialHostChoiceCompleted: false, localOrigin: null }
   }
 
   const hostsRaw = raw.hosts
@@ -146,7 +147,12 @@ export const desktopHostsGet = async (): Promise<DesktopHostsConfig> => {
   const initialHostChoiceCompleted =
     raw.initialHostChoiceCompleted === true || raw.initial_host_choice_completed === true
 
-  return { hosts, defaultHostId, initialHostChoiceCompleted }
+  const localOrigin = readString(raw, "localOrigin") || readString(raw, "local_origin")
+  if (typeof window !== "undefined" && localOrigin) {
+    window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ = localOrigin
+  }
+
+  return { hosts, defaultHostId, initialHostChoiceCompleted, localOrigin }
 }
 
 export const desktopHostsSet = async (config: DesktopHostsConfigInput): Promise<void> => {

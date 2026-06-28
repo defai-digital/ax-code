@@ -31,6 +31,7 @@ const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const {
   applyDesktopHostsConfigToRoot,
+  isAllowedDesktopHostTargetUrl,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
   sanitizeClientTokenForStorage,
@@ -2355,7 +2356,19 @@ handleCommand("desktop_hosts_set", async (args) => {
 
 handleCommand(
   "desktop_host_probe",
-  async (args) => probeHostWithTimeout(String(args.url || ""), 2_000, String(args.clientToken || "")),
+  async (args, event) => {
+    const targetUrl = String(args.url || "")
+    if (
+      !isLocalSender(event.sender) &&
+      !isAllowedDesktopHostTargetUrl(targetUrl, {
+        localOrigin: localOriginUrl(),
+        hosts: readDesktopHostsConfig().hosts,
+      })
+    ) {
+      throw new Error("Host URL is not configured for this desktop session")
+    }
+    return probeHostWithTimeout(targetUrl, 2_000, String(args.clientToken || ""))
+  },
   { safeForRemote: true },
 )
 
@@ -2399,6 +2412,14 @@ handleCommand(
   async (args) => {
     const targetUrl = normalizeHostUrl(String(args.url || ""))
     if (!targetUrl) throw new Error("Invalid URL")
+    if (
+      !isAllowedDesktopHostTargetUrl(targetUrl, {
+        localOrigin: localOriginUrl(),
+        hosts: readDesktopHostsConfig().hosts,
+      })
+    ) {
+      throw new Error("Host URL is not configured for this desktop session")
+    }
     await createAdditionalWindow(targetUrl)
     return null
   },

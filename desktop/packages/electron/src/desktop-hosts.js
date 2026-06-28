@@ -25,6 +25,37 @@ const sanitizeClientTokenForStorage = (raw) => {
   return token.length > 0 ? token : null
 }
 
+const normalizePathForHostMatch = (pathname) => {
+  const normalized = typeof pathname === "string" ? pathname.replace(/\/+$/, "") : ""
+  return normalized || "/"
+}
+
+const targetMatchesHostUrl = (targetRaw, hostRaw) => {
+  const target = normalizeHostUrl(targetRaw)
+  const host = normalizeHostUrl(hostRaw)
+  if (!target || !host) return false
+
+  try {
+    const targetUrl = new URL(target)
+    const hostUrl = new URL(host)
+    if (targetUrl.origin !== hostUrl.origin) return false
+
+    const hostPath = normalizePathForHostMatch(hostUrl.pathname)
+    const targetPath = normalizePathForHostMatch(targetUrl.pathname)
+    if (hostPath === "/") return true
+    return targetPath === hostPath || targetPath.startsWith(`${hostPath}/`)
+  } catch {
+    return false
+  }
+}
+
+const isAllowedDesktopHostTargetUrl = (targetRaw, { localOrigin, hosts } = {}) => {
+  if (targetMatchesHostUrl(targetRaw, localOrigin)) return true
+
+  const hostList = Array.isArray(hosts) ? hosts : []
+  return hostList.some((host) => targetMatchesHostUrl(targetRaw, host?.url))
+}
+
 const readDesktopHostsConfigFromRoot = (root, { includeSecrets = false } = {}) => {
   const hostsRaw = Array.isArray(root?.desktopHosts) ? root.desktopHosts : []
   const hosts = hostsRaw
@@ -106,6 +137,7 @@ const applyDesktopHostsConfigToRoot = (root, config) => {
 
 module.exports = {
   applyDesktopHostsConfigToRoot,
+  isAllowedDesktopHostTargetUrl,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
   sanitizeClientTokenForStorage,

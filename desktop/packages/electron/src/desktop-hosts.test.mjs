@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest"
 const require = createRequire(import.meta.url)
 const {
   applyDesktopHostsConfigToRoot,
+  isAllowedDesktopHostTargetUrl,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
 } = require("./desktop-hosts.js")
@@ -216,5 +217,43 @@ describe("desktop hosts config", () => {
         apiUrl: "https://api2.remote.example.com/",
       },
     ])
+  })
+
+  test("allows local and configured host navigation targets only", () => {
+    const hosts = [
+      { id: "remote-a", label: "Remote A", url: "https://remote.example.com/app" },
+      { id: "remote-b", label: "Remote B", url: "https://root.example.com/" },
+    ]
+
+    expect(
+      isAllowedDesktopHostTargetUrl("http://localhost:3910/session/abc", {
+        localOrigin: "http://localhost:3910",
+        hosts,
+      }),
+    ).toBe(true)
+    expect(
+      isAllowedDesktopHostTargetUrl("https://remote.example.com/app/session/abc", {
+        localOrigin: "http://localhost:3910",
+        hosts,
+      }),
+    ).toBe(true)
+    expect(
+      isAllowedDesktopHostTargetUrl("https://root.example.com/anything", {
+        localOrigin: "http://localhost:3910",
+        hosts,
+      }),
+    ).toBe(true)
+    expect(
+      isAllowedDesktopHostTargetUrl("https://remote.example.com/app2", {
+        localOrigin: "http://localhost:3910",
+        hosts,
+      }),
+    ).toBe(false)
+    expect(
+      isAllowedDesktopHostTargetUrl("https://attacker.example.com/app", {
+        localOrigin: "http://localhost:3910",
+        hosts,
+      }),
+    ).toBe(false)
   })
 })
