@@ -156,6 +156,42 @@ AX Code is designed for enterprise use with the following hardening features:
 - **Server Hardening**: Localhost-only by default; password-protected remote access with Basic Auth.
 - **Code Intelligence & Scanning**: Built-in secret/hardcode detection, dependency impact analysis.
 
+### CodeQL-Assisted Coding Feedback
+
+The repository runs CodeQL as a background security analysis layer for pull
+requests, pushes to `dev`, scheduled scans, and manual dispatches. CodeQL is not
+part of the live LSP or code-intelligence path; it is a slower, deeper evidence
+source for data-flow, taint, and security-quality findings that are better
+handled after source changes have stabilized.
+
+The current workflow analyzes:
+
+- JavaScript and TypeScript product, SDK, integration, script, and desktop code.
+- GitHub Actions workflows and local composite actions.
+- Rust crates under `crates/` with a manual Cargo build so native-addon and TUI
+  code is extracted consistently.
+
+The intended developer experience is:
+
+1. PR authors get CodeQL alerts in GitHub code scanning alongside existing
+   typecheck, deterministic tests, OSV dependency scanning, and repo-structure
+   guards.
+2. Maintainers triage initial results before treating CodeQL as a hard merge
+   gate, so new findings are useful rather than noisy.
+3. Future AX Code review/debug flows can ingest CodeQL SARIF or GitHub code
+   scanning alerts as explicit security evidence with provenance fields such as
+   `source: "codeql"`, rule id, severity, file, line, data-flow trace, and
+   analyzed commit SHA.
+4. CodeQL evidence should be shown beside local `security_scan`,
+   `hardcode_scan`, LSP diagnostics, and graph-backed impact analysis, not as a
+   hidden replacement for any of them.
+
+When adding custom CodeQL queries, prefer repository-specific security
+boundaries over broad lint-style checks. High-value targets include sandbox
+escape paths, command execution with unsanitized arguments, path traversal
+around workspace containment, secret/env propagation to child processes,
+missing server route validation, and unsafe Electron IPC bridges.
+
 For full enterprise governance (RBAC, policy-as-code, SIEM export, cryptographic audit), integrate with **AX Trust** (roadmap item).
 
 See [docs/sandbox.md](docs/sandbox.md) for isolation configuration and runtime behavior.
