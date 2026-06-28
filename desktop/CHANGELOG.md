@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.16] - 2026-06-28
+
+### Fixed
+
+- CLI: excludes Groq OpenAI-compatible models from unsupported reasoning-effort variants.
+- CLI: improves tool-only turn convergence with a nudge before hard limits.
+- Desktop: republished signed Desktop assets from the current monorepo release line.
+
 ## [6.7.15] - 2026-06-28
 
 ### Fixed
