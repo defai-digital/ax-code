@@ -64,6 +64,9 @@ export async function handlePromptLoopTodoContinuation(
       sessionID: input.sessionID,
       assistant: input.assistant,
       message: decision.message,
+      // Pending todos exhausted retries; surface the stop reason as visible
+      // text so the user understands why the session halted.
+      surfaceAsText: true,
     })
     return { action: "stop", reason: decision.reason }
   }
@@ -81,6 +84,7 @@ export async function handlePromptLoopTodoContinuation(
       sessionID: input.sessionID,
       assistant: input.assistant,
       message: decision.message,
+      surfaceAsText: true,
     })
     return { action: "stop", reason: decision.reason }
   }

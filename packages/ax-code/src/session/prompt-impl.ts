@@ -683,6 +683,9 @@ export namespace SessionPrompt {
             sessionID,
             assistant: processor.message,
             message: completionGate.message,
+            // The model finished with text but the completion gate rejected it;
+            // surface the rejection reason so the transcript ends clearly.
+            surfaceAsText: true,
           })
           reason = "stalled"
           break
@@ -835,6 +838,10 @@ export namespace SessionPrompt {
               `calling tools without producing a final text response. ` +
               `The model appears stuck in a tool-calling loop. ` +
               `Try rephrasing the request or breaking it into smaller steps.`,
+            // Tool-only turns leave no visible text in the transcript; surface
+            // the stop reason as a synthetic text part so the user sees a clear
+            // terminal message instead of a bare tool-call row.
+            surfaceAsText: true,
           })
           reason = "stalled"
           break
