@@ -39,10 +39,6 @@ function createFixture() {
     path.join(bin, "minisign"),
     `#!/usr/bin/env bash
 set -euo pipefail
-stdin="$(cat || true)"
-if [ -n "$stdin" ]; then
-  printf '%s' "$stdin" >> "${stdinLog}"
-fi
 sig=""
 mode="sign"
 while [ "$#" -gt 0 ]; do
@@ -53,8 +49,24 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 if [ "$mode" = "sign" ] && [ -n "$sig" ]; then
+  stdin="$(cat || true)"
+  if [ -n "$stdin" ]; then
+    printf '%s' "$stdin" >> "${stdinLog}"
+  fi
   printf 'fake signature\\n' > "$sig"
 fi
+`,
+  )
+  writeExecutable(
+    path.join(bin, "uname"),
+    `#!/usr/bin/env bash
+printf 'Linux\\n'
+`,
+  )
+  writeExecutable(
+    path.join(bin, "security"),
+    `#!/usr/bin/env bash
+exit 1
 `,
   )
 
@@ -65,8 +77,25 @@ function runScript(args, fixture, env = {}) {
   return spawnSync("bash", [script, ...args], {
     cwd: repoRoot,
     encoding: "utf8",
+    input: "",
+    timeout: 5000,
     env: {
       ...process.env,
+      SIGNKEY_DIR: "",
+      AX_CODE_DESKTOP_MINISIGN_SECRET_KEY: "",
+      MINISIGN_SECRET_KEY: "",
+      AX_CODE_DESKTOP_MINISIGN_PUBLIC_KEY: "",
+      MINISIGN_PUBLIC_KEY: "",
+      AX_CODE_DESKTOP_MINISIGN_PUBLIC_KEY_STRING: "",
+      AX_CODE_DESKTOP_MINISIGN_PINNED_PUBLIC_KEY: "",
+      AX_CODE_DESKTOP_MINISIGN_TRUSTED_COMMENT: "",
+      MINISIGN_TRUSTED_COMMENT: "",
+      AX_CODE_DESKTOP_MINISIGN_UNTRUSTED_COMMENT: "",
+      MINISIGN_UNTRUSTED_COMMENT: "",
+      AX_CODE_DESKTOP_MINISIGN_PASSWORD: "",
+      MINISIGN_PASSWORD: "",
+      AX_CODE_DESKTOP_MINISIGN_KEYCHAIN_SERVICE: "",
+      AX_CODE_DESKTOP_MINISIGN_KEYCHAIN_ACCOUNT: "",
       PATH: `${fixture.bin}${path.delimiter}${process.env.PATH ?? ""}`,
       ...env,
     },

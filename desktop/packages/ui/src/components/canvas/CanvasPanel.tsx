@@ -90,6 +90,7 @@ const noteColorClass = (color: CanvasNoteElement["color"]): string => {
 export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
   const [document, setDocument] = React.useState<CanvasDocument>(() => emptyDocument())
   const [saveState, setSaveState] = React.useState<SaveState>("loading")
+  const [isLoaded, setIsLoaded] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const mountedRef = React.useRef(true)
@@ -146,6 +147,11 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
     const scope = saveScopeRef.current
     loadedRef.current = false
     hasPendingSaveRef.current = false
+    const initialDocument = emptyDocument()
+    latestDocumentRef.current = initialDocument
+    setDocument(initialDocument)
+    setSelectedId(null)
+    setIsLoaded(false)
     setSaveState("loading")
     setError(null)
 
@@ -166,10 +172,12 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
           setDocument(nextDocument)
           setSaveState("idle")
           loadedRef.current = true
+          setIsLoaded(true)
         }
       })
       .catch((loadError: unknown) => {
         if (!disposed && saveScopeRef.current === scope) {
+          setIsLoaded(false)
           setSaveState("error")
           setError(loadError instanceof Error ? loadError.message : "Failed to load canvas")
         }
@@ -197,6 +205,8 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
     }
   }, [directory])
 
+  const canEdit = isLoaded
+
   const saveDocument = React.useCallback(
     (nextDocument: CanvasDocument) => {
       void saveQueueRef.current?.enqueue({
@@ -210,6 +220,9 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
 
   const updateDocument = React.useCallback(
     (updater: (current: CanvasDocument) => CanvasDocument) => {
+      if (!loadedRef.current) {
+        return
+      }
       setDocument((current) => {
         const next = updater(current)
         latestDocumentRef.current = next
@@ -230,6 +243,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
   )
 
   const addNote = React.useCallback(() => {
+    if (!loadedRef.current) return
     const id = createCanvasId()
     updateDocument((current) => ({
       ...current,
@@ -251,6 +265,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
   }, [updateDocument])
 
   const addImageSlot = React.useCallback(() => {
+    if (!loadedRef.current) return
     const id = createCanvasId()
     updateDocument((current) => ({
       ...current,
@@ -285,7 +300,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
   )
 
   const deleteSelected = React.useCallback(() => {
-    if (!selectedId) return
+    if (!selectedId || !loadedRef.current) return
     updateDocument((current) => ({
       ...current,
       elements: current.elements.filter((element) => element.id !== selectedId),
@@ -295,6 +310,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
 
   const handlePointerMove = React.useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!loadedRef.current) return
       const drag = dragRef.current
       if (!drag) return
       const dx = event.clientX - drag.startX
@@ -344,15 +360,22 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/40 bg-[var(--surface-background)] px-2">
-        <Button type="button" size="xs" variant="outline" className="gap-1" onClick={addNote}>
+        <Button type="button" size="xs" variant="outline" className="gap-1" disabled={!canEdit} onClick={addNote}>
           <Icon name="sticky-note" className="h-3.5 w-3.5" />
           Note
         </Button>
-        <Button type="button" size="xs" variant="outline" className="gap-1" onClick={addImageSlot}>
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          className="gap-1"
+          disabled={!canEdit}
+          onClick={addImageSlot}
+        >
           <Icon name="file-image" className="h-3.5 w-3.5" />
           Image slot
         </Button>
-        <Button type="button" size="xs" variant="ghost" disabled={!selectedElement} onClick={deleteSelected}>
+        <Button type="button" size="xs" variant="ghost" disabled={!canEdit || !selectedElement} onClick={deleteSelected}>
           Delete
         </Button>
         <div className="ml-auto min-w-0 truncate typography-micro text-muted-foreground">
@@ -368,9 +391,18 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
           onPointerMove={handlePointerMove}
           onPointerUp={stopDrag}
           onPointerCancel={stopDrag}
-          onPointerDown={() => setSelectedId(null)}
+          onPointerDown={() => {
+            if (canEdit) setSelectedId(null)
+          }}
         >
-          {document.elements.length === 0 ? (
+          {!isLoaded && saveState === "loading" ? (
+            <div className="absolute left-16 top-16 max-w-sm rounded-md border border-dashed border-border bg-background/85 p-4 shadow-sm">
+              <div className="flex items-center gap-2 typography-ui-label text-foreground">
+                <Icon name="sticky-note" className="h-4 w-4" />
+                Loading canvas
+              </div>
+            </div>
+          ) : document.elements.length === 0 ? (
             <div className="absolute left-16 top-16 max-w-sm rounded-md border border-dashed border-border bg-background/85 p-4 shadow-sm">
               <div className="flex items-center gap-2 typography-ui-label text-foreground">
                 <Icon name="sticky-note" className="h-4 w-4" />
@@ -396,6 +428,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
                 )}
                 style={{ left: element.x, top: element.y, width: element.width, height: element.height }}
                 onPointerDown={(event) => {
+                  if (!canEdit) return
                   event.stopPropagation()
                   setSelectedId(element.id)
                   dragRef.current = {
@@ -417,6 +450,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
                     value={element.text}
                     onChange={(event) => updateElement(element.id, { text: event.target.value })}
                     onPointerDown={(event) => event.stopPropagation()}
+                    disabled={!canEdit}
                     className="h-full w-full resize-none rounded-md bg-transparent p-3 typography-body outline-none"
                     spellCheck
                   />
@@ -427,6 +461,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
                       value={element.label}
                       onChange={(event) => updateElement(element.id, { label: event.target.value })}
                       onPointerDown={(event) => event.stopPropagation()}
+                      disabled={!canEdit}
                       className="w-full rounded border border-border/60 bg-background px-2 py-1 text-center typography-micro outline-none focus:border-[var(--interactive-focus-ring)]"
                     />
                     <span className="typography-micro text-muted-foreground">

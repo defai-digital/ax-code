@@ -3,6 +3,7 @@ import { CanvasValidationError, createDefaultCanvasDocument, sanitizeCanvasDocum
 
 const CANVAS_DIR_NAME = ".ax-code/canvas"
 const CANVAS_FILE_NAME = "main.canvas.json"
+const writeQueuesByDocumentPath = new Map()
 
 export const getCanvasPaths = ({ path, projectDirectory }) => {
   const canvasDir = path.join(projectDirectory, CANVAS_DIR_NAME)
@@ -35,8 +36,7 @@ export const readCanvasDocument = async ({ fsPromises, path, projectDirectory })
   }
 }
 
-export const writeCanvasDocument = async ({ fsPromises, path, projectDirectory, document }) => {
-  const paths = getCanvasPaths({ path, projectDirectory })
+const writeCanvasDocumentNow = async ({ fsPromises, paths, document }) => {
   const sanitized = sanitizeCanvasDocument(document)
   const tempPath = `${paths.documentPath}.tmp-${process.pid}-${Date.now()}-${crypto.randomUUID()}`
 
@@ -57,4 +57,28 @@ export const writeCanvasDocument = async ({ fsPromises, path, projectDirectory, 
     document: sanitized,
     path: paths.documentPath,
   }
+}
+
+export const writeCanvasDocument = async ({ fsPromises, path, projectDirectory, document }) => {
+  const paths = getCanvasPaths({ path, projectDirectory })
+  const previousWrite = writeQueuesByDocumentPath.get(paths.documentPath) ?? Promise.resolve()
+  const write = previousWrite.then(() =>
+    writeCanvasDocumentNow({
+      fsPromises,
+      paths,
+      document,
+    }),
+  )
+
+  const queuedWrite = write
+    .catch(() => undefined)
+    .finally(() => {
+      if (writeQueuesByDocumentPath.get(paths.documentPath) === queuedWrite) {
+        writeQueuesByDocumentPath.delete(paths.documentPath)
+      }
+    })
+
+  writeQueuesByDocumentPath.set(paths.documentPath, queuedWrite)
+
+  return write
 }
