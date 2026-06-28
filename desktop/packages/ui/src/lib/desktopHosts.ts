@@ -22,8 +22,16 @@ export type DesktopHostsConfigInput = {
   initialHostChoiceCompleted?: boolean
 }
 
+export type HostProbeStatus =
+  | "ok"
+  | "auth"
+  | "wrong-service"
+  | "unreachable"
+  | "incompatible"
+  | "update-recommended"
+
 export type HostProbeResult = {
-  status: "ok" | "auth" | "wrong-service" | "unreachable"
+  status: HostProbeStatus
   latencyMs: number
 }
 
@@ -112,6 +120,29 @@ const readNumber = (obj: Record<string, unknown>, key: string): number | null =>
   return typeof val === "number" && Number.isFinite(val) ? val : null
 }
 
+const readHostProbeStatus = (value: unknown): HostProbeStatus => {
+  if (
+    value === "ok" ||
+    value === "auth" ||
+    value === "wrong-service" ||
+    value === "unreachable" ||
+    value === "incompatible" ||
+    value === "update-recommended"
+  ) {
+    return value
+  }
+  return "unreachable"
+}
+
+export const isBlockingHostProbeStatus = (status: HostProbeStatus | null | undefined): boolean => {
+  return (
+    status === "wrong-service" ||
+    status === "unreachable" ||
+    status === "incompatible" ||
+    status === "update-recommended"
+  )
+}
+
 const parseHost = (value: unknown): DesktopHost | null => {
   if (!isRecord(value)) return null
   const id = readString(value, "id")
@@ -178,12 +209,7 @@ export const desktopHostProbe = async (url: string): Promise<HostProbeResult> =>
     return { status: "unreachable", latencyMs: 0 }
   }
 
-  const rawStatus = raw.status
-  const status: HostProbeResult["status"] =
-    rawStatus === "ok" || rawStatus === "auth" || rawStatus === "wrong-service" || rawStatus === "unreachable"
-      ? rawStatus
-      : "unreachable"
-
+  const status = readHostProbeStatus(raw.status)
   const latencyMs = readNumber(raw, "latencyMs") ?? readNumber(raw, "latency_ms") ?? 0
   return { status, latencyMs }
 }

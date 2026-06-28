@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
-import { desktopHostsGet } from "./desktopHosts"
+import { desktopHostProbe, desktopHostsGet, isBlockingHostProbeStatus } from "./desktopHosts"
 
 type MockDesktopWindowOptions = {
   invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>
@@ -48,5 +48,33 @@ describe("desktopHostsGet", () => {
       localOrigin: "http://localhost:3910",
     })
     expect(window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__).toBe("http://localhost:3910")
+  })
+})
+
+describe("desktopHostProbe", () => {
+  test("preserves compatibility probe statuses from Electron", async () => {
+    const statuses = ["incompatible", "update-recommended"] as const
+
+    for (const status of statuses) {
+      mockDesktopWindow({
+        invoke: async (command) => {
+          expect(command).toBe("desktop_host_probe")
+          return { status, latencyMs: 42 }
+        },
+      })
+
+      await expect(desktopHostProbe("https://remote.example.com")).resolves.toEqual({ status, latencyMs: 42 })
+      restoreWindow()
+    }
+  })
+
+  test("treats compatibility failures as blocking host probe statuses", () => {
+    expect(isBlockingHostProbeStatus("ok")).toBe(false)
+    expect(isBlockingHostProbeStatus("auth")).toBe(false)
+    expect(isBlockingHostProbeStatus("wrong-service")).toBe(true)
+    expect(isBlockingHostProbeStatus("unreachable")).toBe(true)
+    expect(isBlockingHostProbeStatus("incompatible")).toBe(true)
+    expect(isBlockingHostProbeStatus("update-recommended")).toBe(true)
+    expect(isBlockingHostProbeStatus(null)).toBe(false)
   })
 })

@@ -3,6 +3,7 @@ import {
   desktopHostsGet,
   desktopHostsSet,
   desktopHostProbe,
+  isBlockingHostProbeStatus,
   normalizeHostUrl,
   type HostProbeResult,
 } from "@/lib/desktopHosts"
@@ -41,13 +42,13 @@ function getProbeStatusMessageKey(status: ProbeStatus): string | null {
       return "onboarding.remoteConnection.probe.wrongServiceMessage"
     case "unreachable":
       return "onboarding.remoteConnection.probe.unreachableMessage"
+    case "incompatible":
+      return "onboarding.remoteConnection.probe.incompatibleMessage"
+    case "update-recommended":
+      return "onboarding.remoteConnection.probe.updateRecommendedMessage"
     default:
       return null
   }
-}
-
-function isBlockingStatus(status: ProbeStatus): boolean {
-  return status === "wrong-service" || status === "unreachable"
 }
 
 export function RemoteConnectionForm({
@@ -108,7 +109,7 @@ export function RemoteConnectionForm({
       setProbeResult(probe)
 
       // Block connection on wrong-service or unreachable
-      if (isBlockingStatus(probe.status)) {
+      if (isBlockingHostProbeStatus(probe.status)) {
         setState("error")
         return
       }
@@ -155,12 +156,12 @@ export function RemoteConnectionForm({
 
   const isTesting = state === "testing"
   const canTest = normalizedUrl !== null && !isTesting
-  const canConnect = normalizedUrl !== null && !isTesting && !isBlockingStatus(probeResult?.status ?? null)
+  const canConnect = normalizedUrl !== null && !isTesting && !isBlockingHostProbeStatus(probeResult?.status ?? null)
 
   const probeMessageKey = getProbeStatusMessageKey(probeResult?.status ?? null)
   const isSuccess = probeResult?.status === "ok"
   const isAuth = probeResult?.status === "auth"
-  const isBlocking = isBlockingStatus(probeResult?.status ?? null)
+  const isBlocking = isBlockingHostProbeStatus(probeResult?.status ?? null)
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-8">
@@ -252,7 +253,9 @@ export function RemoteConnectionForm({
             <div className="text-xs opacity-80">
               {probeResult.status === "unreachable"
                 ? t("onboarding.remoteConnection.status.suggestionsUnreachable")
-                : t("onboarding.remoteConnection.status.suggestionsWrongService")}
+                : probeResult.status === "wrong-service"
+                  ? t("onboarding.remoteConnection.status.suggestionsWrongService")
+                  : t("onboarding.remoteConnection.status.suggestionsIncompatible")}
             </div>
           </div>
         )}

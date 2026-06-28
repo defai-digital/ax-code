@@ -2100,6 +2100,8 @@ export const dict = {
   "desktopHostSwitcher.status.authRequired": "Auth required",
   "desktopHostSwitcher.status.wrongService": "Wrong service",
   "desktopHostSwitcher.status.unreachable": "Unreachable",
+  "desktopHostSwitcher.status.incompatible": "Incompatible",
+  "desktopHostSwitcher.status.updateRecommended": "Update required",
   "desktopHostSwitcher.status.unknown": "Unknown",
   "desktopHostSwitcher.status.ping": " · {ms}ms ping",
   "desktopHostSwitcher.statusAria": "Instance status",
@@ -2284,6 +2286,8 @@ export const dict = {
     "Suggestions: Check the server address, verify the server is running, or check your network connection.",
   "onboarding.remoteConnection.status.suggestionsWrongService":
     "Suggestions: Verify the URL points to an AX Code Desktop server, or contact the server administrator.",
+  "onboarding.remoteConnection.status.suggestionsIncompatible":
+    "Suggestions: Update AX Code Desktop or use a server version compatible with this client.",
   "onboarding.remoteConnection.actions.testing": "Testing…",
   "onboarding.remoteConnection.actions.testConnection": "Test Connection",
   "onboarding.remoteConnection.actions.connectAndRestart": "Connect & Restart",
@@ -2296,6 +2300,10 @@ export const dict = {
     "Server responded but is not running AX Code Desktop. Verify the address points to an AX Code Desktop server.",
   "onboarding.remoteConnection.probe.unreachableMessage":
     "Server is unreachable. Check your network connection and verify the server address.",
+  "onboarding.remoteConnection.probe.incompatibleMessage":
+    "Server responded but is not compatible with this AX Code Desktop version.",
+  "onboarding.remoteConnection.probe.updateRecommendedMessage":
+    "Server requires a newer AX Code Desktop client before connecting.",
   "onboarding.desktopRecovery.localUnavailable.title": "Local AX Code Unavailable",
   "onboarding.desktopRecovery.localUnavailable.description":
     "AX Code CLI could not be started or is not installed. Install AX Code or connect to a remote server instead.",

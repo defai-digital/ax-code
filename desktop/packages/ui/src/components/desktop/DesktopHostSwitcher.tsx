@@ -15,6 +15,7 @@ import {
   desktopHostsGet,
   desktopHostsSet,
   desktopOpenNewWindowAtUrl,
+  isBlockingHostProbeStatus,
   locationMatchesHost,
   normalizeHostUrl,
   redactSensitiveUrl,
@@ -72,6 +73,8 @@ const statusDotClass = (status: HostProbeResult["status"] | null): string => {
   if (status === "auth") return "bg-status-warning"
   if (status === "wrong-service") return "bg-status-error"
   if (status === "unreachable") return "bg-status-error"
+  if (status === "incompatible") return "bg-status-error"
+  if (status === "update-recommended") return "bg-status-warning"
   return "bg-muted-foreground/40"
 }
 
@@ -82,11 +85,15 @@ const statusLabelKey = (
   | "desktopHostSwitcher.status.authRequired"
   | "desktopHostSwitcher.status.wrongService"
   | "desktopHostSwitcher.status.unreachable"
+  | "desktopHostSwitcher.status.incompatible"
+  | "desktopHostSwitcher.status.updateRecommended"
   | "desktopHostSwitcher.status.unknown" => {
   if (status === "ok") return "desktopHostSwitcher.status.connected"
   if (status === "auth") return "desktopHostSwitcher.status.authRequired"
   if (status === "wrong-service") return "desktopHostSwitcher.status.wrongService"
   if (status === "unreachable") return "desktopHostSwitcher.status.unreachable"
+  if (status === "incompatible") return "desktopHostSwitcher.status.incompatible"
+  if (status === "update-recommended") return "desktopHostSwitcher.status.updateRecommended"
   return "desktopHostSwitcher.status.unknown"
 }
 
@@ -95,6 +102,8 @@ const statusIcon = (status: HostProbeResult["status"] | null) => {
   if (status === "auth") return <Icon name="shield-keyhole" className="h-4 w-4" />
   if (status === "wrong-service") return <Icon name="cloud-off" className="h-4 w-4" />
   if (status === "unreachable") return <Icon name="cloud-off" className="h-4 w-4" />
+  if (status === "incompatible") return <Icon name="cloud-off" className="h-4 w-4" />
+  if (status === "update-recommended") return <Icon name="cloud-off" className="h-4 w-4" />
   return <Icon name="earth" className="h-4 w-4" />
 }
 
@@ -528,7 +537,7 @@ export function DesktopHostSwitcherDialog({
           [host.id]: { status: probe.status, latencyMs: probe.latencyMs },
         }))
 
-        if (probe.status === "unreachable" || probe.status === "wrong-service") {
+        if (isBlockingHostProbeStatus(probe.status)) {
           toast.error(t("desktopHostSwitcher.toast.instanceUnreachable", { host: redactSensitiveUrl(host.label) }))
           setSwitchingHostId(null)
           return
@@ -811,6 +820,7 @@ export function DesktopHostSwitcherDialog({
               const status = statusById[host.id] || null
               const sshStatus = sshStatusesById[host.id] || null
               const statusKind = isSsh ? sshPhaseToHostStatus(sshStatus?.phase) : (status?.status ?? null)
+              const hostBlocked = isBlockingHostProbeStatus(statusKind)
               const isEditing = editingId === host.id
               const effectiveUrl = isLocal ? getLocalOrigin() : normalizeHostUrl(host.url) || host.url
               const displayLabel =
@@ -953,9 +963,7 @@ export function DesktopHostSwitcherDialog({
                               ? t("desktopHostSwitcher.actions.defaultInstanceAria")
                               : t("desktopHostSwitcher.actions.setAsDefaultAria")
                           }
-                          disabled={
-                            isSaving || (!isDefault && (statusKind === "unreachable" || statusKind === "wrong-service"))
-                          }
+                          disabled={isSaving || (!isDefault && hostBlocked)}
                         >
                           {isDefault ? (
                             <Icon name="star-fill" className="h-4 w-4" />
@@ -977,7 +985,7 @@ export function DesktopHostSwitcherDialog({
                           type="button"
                           className={cn(
                             "h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-interactive-hover transition-colors",
-                            statusKind === "unreachable" || statusKind === "wrong-service"
+                            hostBlocked
                               ? "text-muted-foreground/30 cursor-not-allowed"
                               : "text-muted-foreground/60 hover:text-foreground",
                           )}
@@ -985,14 +993,14 @@ export function DesktopHostSwitcherDialog({
                             e.stopPropagation()
                             openInNewWindow(host)
                           }}
-                          disabled={statusKind === "unreachable" || statusKind === "wrong-service"}
+                          disabled={hostBlocked}
                           aria-label={t("desktopHostSwitcher.actions.openInNewWindowAria")}
                         >
                           <Icon name="window" className="h-4 w-4" />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent sideOffset={6}>
-                        {statusKind === "unreachable" || statusKind === "wrong-service"
+                        {hostBlocked
                           ? t("desktopHostSwitcher.state.instanceUnreachable")
                           : t("desktopHostSwitcher.actions.openInNewWindow")}
                       </TooltipContent>
