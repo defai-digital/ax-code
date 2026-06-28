@@ -6,6 +6,7 @@ on:
       - ".github/workflows/repo-structure.yml"
       - ".github/**"
       - ".internal/**"
+      - "ax-internal/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -22,6 +23,7 @@ on:
       - ".github/workflows/repo-structure.yml"
       - ".github/**"
       - ".internal/**"
+      - "ax-internal/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -31,6 +33,10 @@ on:
       - "desktop/**"
       - "packages/**"
       - "tools/**"
+  merge_group:
+    types:
+      - checks_requested
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -45,6 +51,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Lint GitHub workflows
+        uses: raven-actions/actionlint@v2.2.0
+
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
         with:
@@ -56,13 +65,13 @@ jobs:
       - name: Check repo structure
         run: pnpm run check:structure
 
-      - name: Ensure .internal is not tracked
+      - name: Ensure internal planning files are not tracked
         run: |
-          tracked_internal="$(git ls-files .internal | tr '\n' ' ')"
+          tracked_internal="$(git ls-files .internal ax-internal | tr '\n' ' ')"
           if [ -n "$tracked_internal" ]; then
-            echo "Error: .internal is tracked and must stay local-only."
+            echo "Error: internal planning files are tracked and must stay local-only."
             echo "Tracked files:"
-            git ls-files .internal
+            git ls-files .internal ax-internal
             exit 1
           fi
 
