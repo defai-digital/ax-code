@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import fs from "node:fs/promises"
 import { constants as fsConstants } from "node:fs"
 import http from "node:http"
 import os from "node:os"
 import path from "node:path"
+import { promisify } from "node:util"
 
 const desktopRoot = path.resolve(new URL("../../..", import.meta.url).pathname)
+const execFileAsync = promisify(execFile)
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const parseArgs = (argv) => {
   const result = {
@@ -134,6 +137,34 @@ process.on('SIGINT', () => server.close(() => process.exit(0)));
 `
   await fs.writeFile(stubPath, script, { mode: 0o755 })
   return stubPath
+}
+
+const cleanupStubProcesses = async (stubAxCode) => {
+  try {
+    const { stdout } = await execFileAsync("ps", ["-Ao", "pid=,command="])
+    const pids = String(stdout)
+      .split("\n")
+      .map((line) => {
+        const match = line.trim().match(/^(\d+)\s+(.+)$/)
+        if (!match) return null
+        const pid = Number.parseInt(match[1], 10)
+        return Number.isFinite(pid) && match[2].includes(stubAxCode) ? pid : null
+      })
+      .filter((pid) => pid && pid !== process.pid)
+
+    for (const pid of pids) {
+      try {
+        process.kill(pid, "SIGTERM")
+      } catch {}
+    }
+    if (pids.length > 0) await sleep(500)
+    for (const pid of pids) {
+      try {
+        process.kill(pid, 0)
+        process.kill(pid, "SIGKILL")
+      } catch {}
+    }
+  } catch {}
 }
 
 const fetchJson = async (url, timeoutMs = 3000) => {
@@ -309,6 +340,7 @@ const main = async () => {
     throw error
   } finally {
     child.kill("SIGTERM")
+    await cleanupStubProcesses(stubAxCode)
     setTimeout(() => child.kill("SIGKILL"), 3000).unref()
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {})
   }

@@ -319,6 +319,11 @@ const recordStartupEvent = (name, details = {}, options = {}) => {
   return startupDiagnosticsRuntime.markOnce(name, details, options)
 }
 
+const REPEATABLE_DESKTOP_STARTUP_EVENTS = new Set([
+  "server.utilityProcess.launch",
+  "server.utilityProcess.ready",
+])
+
 const projectConfigRuntime = createProjectConfigRuntime({
   fsPromises,
   path,
@@ -1390,6 +1395,7 @@ async function main(options = {}) {
       return recordStartupEvent(event.name, event.details ?? {}, {
         source: typeof event.source === "string" ? event.source : "electron-main",
         atEpochMs: Number.isFinite(event.atEpochMs) ? event.atEpochMs : undefined,
+        once: REPEATABLE_DESKTOP_STARTUP_EVENTS.has(event.name) ? false : undefined,
         milestone: event.name,
       })
     },

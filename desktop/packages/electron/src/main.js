@@ -484,6 +484,9 @@ handleCommand("desktop_set_launch_at_login", async (args) => {
 })
 
 handleCommand("desktop_check_for_updates", async () => {
+  if (!shouldCheckForUpdatesOnStartup()) {
+    return { available: false, currentVersion: app.getVersion(), disabled: true }
+  }
   try {
     const result = await autoUpdater.checkForUpdates()
     if (!result?.updateInfo) return { available: false, currentVersion: app.getVersion() }
