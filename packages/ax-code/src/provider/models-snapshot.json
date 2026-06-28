@@ -115877,9 +115877,7 @@
           {
             "type": "effort",
             "values": [
-              "low",
-              "medium",
-              "high"
+              "default"
             ]
           }
         ],
@@ -115914,9 +115912,7 @@
           {
             "type": "effort",
             "values": [
-              "low",
-              "medium",
-              "high"
+              "default"
             ]
           }
         ],

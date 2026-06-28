@@ -2,13 +2,21 @@ import type { Config } from "@/config/config"
 import { GLOBAL_STEP_LIMIT } from "@/constants/session"
 
 export const MAX_EMPTY_MODEL_TURN_RETRIES = 1
-// Maximum consecutive outer-loop turns where the model only produces tool
+// Nudge threshold: after this many consecutive tool-only turns, inject a
+// continuation message telling the model to synthesize its findings and
+// produce a final text response. This gives the model a chance to self-correct
+// before the hard circuit-breaker fires.
+export const TOOL_ONLY_TURN_NUDGE = 15
+// Hard limit on consecutive outer-loop turns where the model only produces tool
 // calls (finish="tool-calls") without ever finishing with a text response.
 // Normal agentic work involves a handful of tool-calling turns before the
-// model summarizes. 25 consecutive tool-only turns without convergence
-// strongly indicates a model stuck in a read-only exploration loop (e.g.
-// repeatedly listing directories or running the same shell commands).
-export const MAX_TOOL_ONLY_TURNS = 25
+// model summarizes. After the nudge at TOOL_ONLY_TURN_NUDGE, give the model
+// additional headroom before breaking out — legitimate deep-research tasks
+// (e.g. reading 30+ files across a large codebase) may need 25-30 turns.
+// 35 consecutive tool-only turns after a nudge strongly indicates the model
+// is stuck in a read-only exploration loop (e.g. repeatedly listing
+// directories or running the same shell commands).
+export const MAX_TOOL_ONLY_TURNS = 35
 // Truncated turns (finish=length) are a normal consequence of output-token
 // limits — the model was actively generating useful content that exceeded its
 // budget. Recovery ("continue from where you left off") is usually effective,

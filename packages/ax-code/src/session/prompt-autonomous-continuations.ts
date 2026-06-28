@@ -112,6 +112,18 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  export function toolOnlyTurnNudge(input: {
+    consecutiveToolOnlyTurns: number
+    maxToolOnlyTurns: number
+  }) {
+    return (
+      `You have made ${input.consecutiveToolOnlyTurns} consecutive turns calling tools without producing any text response. ` +
+      `You are approaching the autonomous tool-calling limit (${input.maxToolOnlyTurns} turns). ` +
+      `Stop broad exploration now. Synthesize what you have learned from the tools you have called, ` +
+      `produce a final text response summarizing your findings, or explain what blocks completion.`
+    )
+  }
+
   export function completionGateRetry(input: { message: string; attempt: number; maxAttempts: number }) {
     return (
       `Control-plane completion gate blocked completion: ${input.message}\n` +

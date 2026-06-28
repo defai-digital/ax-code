@@ -99,6 +99,18 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("credible suspected")
   })
 
+  test("builds tool-only turn nudge guidance", () => {
+    const text = AutonomousContinuationPrompt.toolOnlyTurnNudge({
+      consecutiveToolOnlyTurns: 15,
+      maxToolOnlyTurns: 35,
+    })
+
+    expect(text).toContain("15 consecutive turns calling tools")
+    expect(text).toContain("tool-calling limit (35 turns)")
+    expect(text).toContain("Stop broad exploration")
+    expect(text).toContain("produce a final text response")
+  })
+
   test("builds pending-todo continuation guidance with stagnation detail", () => {
     const text = AutonomousContinuationPrompt.todoContinuation({
       pendingTodos,

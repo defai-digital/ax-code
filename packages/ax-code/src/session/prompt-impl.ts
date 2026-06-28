@@ -60,12 +60,13 @@ import { recordPromptSessionStart } from "./prompt-session-start"
 import { scheduleFirstTurnSummary } from "./prompt-session-summary"
 import { enforceSuperLongDeadline } from "./prompt-super-long"
 import { SuperLongPolicy } from "./super-long-policy"
+import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import { createAutonomousTextContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
-import { MAX_TOOL_ONLY_TURNS, promptLoopLimits } from "./prompt-loop-config"
+import { TOOL_ONLY_TURN_NUDGE, MAX_TOOL_ONLY_TURNS, promptLoopLimits } from "./prompt-loop-config"
 import {
   CommandInput as CommandInputSchema,
   type CommandInput as CommandInputType,
@@ -222,6 +223,9 @@ export namespace SessionPrompt {
     // MAX_TOOL_ONLY_TURNS, the model is stuck in a read-only exploration
     // loop (e.g. endlessly listing directories) and we break out.
     let consecutiveToolOnlyTurns = 0
+    // Whether a nudge continuation has already been injected during the
+    // current streak of tool-only turns. Reset alongside consecutiveToolOnlyTurns.
+    let toolOnlyNudged = false
     const cachedSystemPrompt: PromptRequestCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -252,6 +256,7 @@ export namespace SessionPrompt {
       step = 0
       consecutiveErrors = 0
       consecutiveToolOnlyTurns = 0
+      toolOnlyNudged = false
       fallbackModelOverride = undefined
       failedFallbackProviderIDs.clear()
       cachedMsgs = undefined
@@ -827,8 +832,31 @@ export namespace SessionPrompt {
       // when the count exceeds MAX_TOOL_ONLY_TURNS.
       if (modelFinished) {
         consecutiveToolOnlyTurns = 0
+        toolOnlyNudged = false
       } else {
         consecutiveToolOnlyTurns += 1
+        // Nudge: inject a continuation message after TOOL_ONLY_TURN_NUDGE
+        // consecutive tool-only turns to steer the model toward producing
+        // a final text response. Only fire once per streak.
+        if (!toolOnlyNudged && consecutiveToolOnlyTurns >= TOOL_ONLY_TURN_NUDGE) {
+          log.info("autonomous tool-only turn nudge", {
+            command: "session.prompt.loop",
+            status: "nudge",
+            sessionID,
+            consecutiveToolOnlyTurns,
+          })
+          const latestMessages = await Session.messages({ sessionID })
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: latestMessages,
+            text: AutonomousContinuationPrompt.toolOnlyTurnNudge({
+              consecutiveToolOnlyTurns,
+              maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
+            }),
+          })
+          toolOnlyNudged = true
+          continue
+        }
         if (consecutiveToolOnlyTurns > MAX_TOOL_ONLY_TURNS) {
           log.warn("autonomous tool-only turn convergence limit", {
             command: "session.prompt.loop",
