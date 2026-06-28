@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.14] - 2026-06-28
+
+### Fixed
+
+- CLI: published the current GLM 5.x model capability registry updates.
+- CLI: hardened Super-Long pacing lock recovery and z.ai wire-shape handling.
+- Desktop: republished signed Desktop assets from the current monorepo release line.
+
 ## [6.7.13] - 2026-06-28
 
 ### Fixed
