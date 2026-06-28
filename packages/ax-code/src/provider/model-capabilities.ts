@@ -137,11 +137,14 @@ const DEFAULT_CAPABILITIES: ModelCapabilities = {
  */
 const MODEL_REGISTRY: ModelRegistration[] = [
   // Qwen 3.7 Max - Alibaba Cloud (official routes)
+  // models-snapshot.json declares limit.context: 991k–1M for this model.
+  // The registry value must reflect the true context window so that
+  // long-agent profiles and context-packing budgets activate correctly.
   {
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
     providerIds: ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"],
     capabilities: {
-      contextWindow: 131_072,
+      contextWindow: 1_000_000,
       thinking: "supported",
       preserveThinking: "supported",
       promptCache: "supported",
@@ -157,7 +160,7 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
     providerIds: ["togetherai"],
     capabilities: {
-      contextWindow: 131_072,
+      contextWindow: 1_000_000,
       thinking: "supported",
       preserveThinking: "experimental",
       promptCache: "experimental",
@@ -173,7 +176,7 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
     providerIds: ["llmgateway", "vercel"],
     capabilities: {
-      contextWindow: 131_072,
+      contextWindow: 1_000_000,
       thinking: "experimental",
       preserveThinking: "experimental",
       promptCache: "blocked",
@@ -185,12 +188,75 @@ const MODEL_REGISTRY: ModelRegistration[] = [
   },
 
   // Qwen 3.7 Max - Other providers (fallback)
-  // When provider is unknown, assume reasonable capabilities since Qwen 3.7 Max
-  // is known to support these features on most providers
   {
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
     capabilities: {
-      contextWindow: 131_072,
+      contextWindow: 1_000_000,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // Qwen 3.7 Plus - Alibaba Cloud (official routes)
+  // Same 1M context window as Max; reasoning supported. webOrBuiltInTools
+  // is "blocked" because enable_search evidence is Max-only in the snapshot.
+  {
+    pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?plus/i,
+    providerIds: ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"],
+    capabilities: {
+      contextWindow: 1_000_000,
+      thinking: "supported",
+      preserveThinking: "supported",
+      promptCache: "supported",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "extended",
+    },
+  },
+
+  // Qwen 3.7 Plus - Together AI
+  {
+    pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?plus/i,
+    providerIds: ["togetherai"],
+    capabilities: {
+      contextWindow: 1_000_000,
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // Qwen 3.7 Plus - Gateway routes (Vercel, LLM Gateway)
+  {
+    pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?plus/i,
+    providerIds: ["llmgateway", "vercel"],
+    capabilities: {
+      contextWindow: 1_000_000,
+      thinking: "experimental",
+      preserveThinking: "experimental",
+      promptCache: "blocked",
+      toolCalling: "experimental",
+      structuredOutput: "experimental",
+      webOrBuiltInTools: "blocked",
+      rateLimitTier: "standard",
+    },
+  },
+
+  // Qwen 3.7 Plus - Other providers (fallback)
+  {
+    pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?plus/i,
+    capabilities: {
+      contextWindow: 1_000_000,
       thinking: "supported",
       preserveThinking: "experimental",
       promptCache: "experimental",
@@ -472,6 +538,31 @@ export function getContextPackBudget(modelId: string, providerId?: string): numb
 export function isQwen37MaxModel(modelId: string): boolean {
   const normalized = normalizeModelId(modelId)
   return normalized.includes("qwen37max")
+}
+
+/**
+ * Check if a model is Qwen 3.7 Plus.
+ *
+ * @deprecated Use `getModelCapabilities()` instead. This function is provided
+ * for backward compatibility during the migration period.
+ *
+ * @param modelId - The model identifier
+ * @returns true if the model is Qwen 3.7 Plus
+ */
+export function isQwen37PlusModel(modelId: string): boolean {
+  const normalized = normalizeModelId(modelId)
+  return normalized.includes("qwen37plus")
+}
+
+/**
+ * Check if a model is Qwen 3.7 Max or Plus.
+ * Useful for shared logic that applies to both tiers (e.g. output token caps).
+ *
+ * @param modelId - The model identifier
+ * @returns true if the model is Qwen 3.7 Max or Plus
+ */
+export function isQwen37MaxOrPlusModel(modelId: string): boolean {
+  return isQwen37MaxModel(modelId) || isQwen37PlusModel(modelId)
 }
 
 /**

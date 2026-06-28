@@ -6,7 +6,7 @@ import type { ModelsDev } from "./models"
 import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
 import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
-import { isQwen37MaxModel } from "./qwen37-readiness"
+import { isQwen37MaxOrPlusModel } from "./model-capabilities"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
@@ -40,6 +40,11 @@ export namespace ProviderTransform {
   // to 2048 / 1024 via AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX.
   const ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT = 4_096
   const ALIBABA_OUTPUT_TOKEN_MAX = Flag.AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX || ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT
+  // Qwen 3.7 Max/Plus on Alibaba routes: the generic 4k cap is far too
+  // conservative for models with 64k output capacity. Raise to 16k so
+  // super-long runs get meaningful generation budget while still leaving
+  // headroom for parallel agents on the DashScope short-window quota.
+  const QWEN37_ALIBABA_OUTPUT_TOKEN_MAX = 16_384
   // Cap for `budgetTokens` (Token Plan) and `thinking_budget` (Coding Plan)
   // on Alibaba reasoning models. 8192 matches the value in the upstream
   // OpenCode example. The effective budget is clamped further by
@@ -47,6 +52,10 @@ export namespace ProviderTransform {
   // there is no separate knob for this — adjusting output max already
   // covers throttling needs.
   const ALIBABA_THINKING_BUDGET_TOKENS = 8_192
+  // Qwen 3.7 Max/Plus support up to 262k thinking budget per the snapshot's
+  // reasoning_options. Raise the budget for these models so the reasoning
+  // engine gets meaningful allocation on Alibaba routes.
+  const QWEN37_ALIBABA_THINKING_BUDGET = 16_384
 
   // Maps npm package to the key the AI SDK expects for providerOptions.
   // The Vertex provider uses the same "google" key as the Gemini provider,
@@ -291,7 +300,10 @@ export namespace ProviderTransform {
   function alibabaThinkingBudget(model: Provider.Model, requested?: unknown) {
     const max = maxOutputTokens(model)
     const value = typeof requested === "number" && Number.isFinite(requested) && requested > 0 ? requested : max
-    return Math.min(Math.floor(value), max, ALIBABA_THINKING_BUDGET_TOKENS)
+    const budgetCap = isQwen37MaxOrPlusModel(model.id ?? "")
+      ? QWEN37_ALIBABA_THINKING_BUDGET
+      : ALIBABA_THINKING_BUDGET_TOKENS
+    return Math.min(Math.floor(value), max, budgetCap)
   }
 
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
@@ -300,7 +312,7 @@ export namespace ProviderTransform {
     const id = model.id.toLowerCase()
     if (
       hasFamily(model, "deepseek") ||
-      model.providerID.startsWith("alibaba-token-plan") ||
+      isAlibabaThinkingModel(model) ||
       hasFamily(model, "minimax") ||
       hasFamily(model, "glm") ||
       hasFamily(model, "mistral")
@@ -388,7 +400,10 @@ export namespace ProviderTransform {
     // endpoint, which this provider does not target.
     if (isAlibabaThinkingModel(input.model)) {
       result["enable_thinking"] = true
-      result["thinking_budget"] = alibabaThinkingBudget(input.model, ALIBABA_THINKING_BUDGET_TOKENS)
+      // No explicit `requested` — alibabaThinkingBudget picks the model-aware
+      // default (QWEN37_ALIBABA_THINKING_BUDGET for Max/Plus, generic 8k
+      // otherwise) when requested is undefined.
+      result["thinking_budget"] = alibabaThinkingBudget(input.model)
       if (input.longAgent) {
         // preserve_thinking keeps reasoning state across turns for long-agent execution.
         // Opt-out: set preserveThinking: false in provider options to disable it
@@ -535,10 +550,15 @@ export namespace ProviderTransform {
     // the old `?? OUTPUT_TOKEN_MAX` was dead code.
     if (isAlibabaShortWindowProvider(model)) {
       const limit = model.limit.output > 0 ? model.limit.output : OUTPUT_TOKEN_MAX
-      return Math.min(limit, OUTPUT_TOKEN_MAX, ALIBABA_OUTPUT_TOKEN_MAX)
+      // Qwen 3.7 Max/Plus on Alibaba: lift from the generic 4k cap to 16k
+      // so these models' 64k output capacity is not crushed to 6%.
+      const alibabaCap = isQwen37MaxOrPlusModel(model.id ?? "")
+        ? QWEN37_ALIBABA_OUTPUT_TOKEN_MAX
+        : ALIBABA_OUTPUT_TOKEN_MAX
+      return Math.min(limit, OUTPUT_TOKEN_MAX, alibabaCap)
     }
     const limit = model.limit.output
-    const cap = isQwen37MaxModel(model.id ?? "")
+    const cap = isQwen37MaxOrPlusModel(model.id ?? "")
       ? QWEN37_MAX_OUTPUT_TOKENS
       : hasFamily(model, "glm")
         ? GLM_OUTPUT_TOKEN_MAX

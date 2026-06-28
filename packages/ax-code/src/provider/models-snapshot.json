@@ -24848,7 +24848,15 @@
         "family": "qwen3.7-plus",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens",
+            "max": 262144
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-06-02",
@@ -24878,7 +24886,15 @@
         "family": "qwen3.7-max",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens",
+            "max": 262144
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-05-21",
@@ -24976,7 +24992,15 @@
         "family": "glm",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -25040,7 +25064,15 @@
         "family": "qwen3.5",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens",
+            "max": 81920
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-04",
@@ -25255,7 +25287,15 @@
         "family": "qwen3.6",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens",
+            "max": 81920
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-04",
@@ -56661,6 +56701,48 @@
           "output": 16384
         }
       },
+      "zai-org/GLM-5.2": {
+        "id": "zai-org/GLM-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 32768
+        }
+      },
       "deepseek-ai/DeepSeek-R1-0528": {
         "id": "deepseek-ai/DeepSeek-R1-0528",
         "name": "DeepSeek-R1-0528",
@@ -62776,8 +62858,7 @@
         "reasoning_options": [
           {
             "type": "budget_tokens",
-            "min": 1024,
-            "max": 63999
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -62821,8 +62902,7 @@
           },
           {
             "type": "budget_tokens",
-            "min": 1024,
-            "max": 63999
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -63064,8 +63144,7 @@
         "reasoning_options": [
           {
             "type": "budget_tokens",
-            "min": 1024,
-            "max": 63999
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -63211,7 +63290,15 @@
         "family": "glm",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -63575,6 +63662,7 @@
           {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -63710,8 +63798,7 @@
         "reasoning_options": [
           {
             "type": "budget_tokens",
-            "min": 1024,
-            "max": 31999
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -63831,8 +63918,7 @@
         "reasoning_options": [
           {
             "type": "budget_tokens",
-            "min": 1024,
-            "max": 63999
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -63995,8 +64081,7 @@
           },
           {
             "type": "budget_tokens",
-            "min": 1024,
-            "max": 127999
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -64155,8 +64240,7 @@
           },
           {
             "type": "budget_tokens",
-            "min": 1024,
-            "max": 63999
+            "min": 1024
           }
         ],
         "tool_call": true,
@@ -73623,57 +73707,6 @@
     "name": "Friendli",
     "doc": "https://friendli.ai/docs/guides/serverless_endpoints/introduction",
     "models": {
-      "meta-llama/Llama-3.3-70B-Instruct": {
-        "id": "meta-llama/Llama-3.3-70B-Instruct",
-        "name": "Llama 3.3 70B Instruct",
-        "family": "llama",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-08-01",
-        "last_updated": "2025-12-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        }
-      },
-      "meta-llama/Llama-3.1-8B-Instruct": {
-        "id": "meta-llama/Llama-3.1-8B-Instruct",
-        "name": "Llama 3.1 8B Instruct",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2024-08-01",
-        "last_updated": "2025-12-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 8000
-        }
-      },
       "google/gemma-4-31B-it": {
         "id": "google/gemma-4-31B-it",
         "name": "Gemma 4 31B IT",

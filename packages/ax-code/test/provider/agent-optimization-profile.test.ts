@@ -85,6 +85,40 @@ describe("longAgentProfileForModel", () => {
     })
   })
 
+  describe("Qwen 3.7 Plus profiles", () => {
+    test("returns wide profile for qwen3.7-plus on Alibaba", () => {
+      const profile = longAgentProfileForModel("qwen3.7-plus", "alibaba-coding-plan")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.contextPackTokenBudget).toBe(128_000)
+      expect(profile.thinkingEnabled).toBe(true)
+      expect(profile.preserveThinkingEligible).toBe(true)
+      expect(profile.promptCacheEligible).toBe(true)
+      expect(profile.verificationLoopEnabled).toBe(true)
+      expect(profile.strictRepeatedFailureDetection).toBe(true)
+    })
+
+    test("returns wide profile for qwen3.7-plus on Together AI", () => {
+      const profile = longAgentProfileForModel("qwen3.7-plus", "togetherai")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.thinkingEnabled).toBe(true)
+      expect(profile.preserveThinkingEligible).toBe(true)
+    })
+
+    test("returns wide profile for qwen3.7-plus on unknown provider (fallback)", () => {
+      const profile = longAgentProfileForModel("qwen3.7-plus", "unknown-provider")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.thinkingEnabled).toBe(true)
+    })
+
+    test("handles model ID variations", () => {
+      const profile1 = longAgentProfileForModel("qwen-3-7-plus", "alibaba-coding-plan")
+      const profile2 = longAgentProfileForModel("Qwen3.7-Plus", "alibaba-token-plan")
+
+      expect(profile1.contextPackingBudget).toBe("wide")
+      expect(profile2.contextPackingBudget).toBe("wide")
+    })
+  })
+
   describe("Claude profiles", () => {
     test("returns wide profile for Claude 3.7 Sonnet", () => {
       const profile = longAgentProfileForModel("claude-3-7-sonnet", "anthropic")

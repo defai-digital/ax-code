@@ -4,6 +4,8 @@ import {
   supportsLongAgent,
   getContextPackBudget,
   isQwen37MaxModel,
+  isQwen37PlusModel,
+  isQwen37MaxOrPlusModel,
   listRegisteredModels,
 } from "../../src/provider/model-capabilities.js"
 
@@ -11,7 +13,7 @@ describe("Model Capability Registry", () => {
   describe("getModelCapabilities", () => {
     it("should return Qwen 3.7 Max capabilities for Alibaba Cloud", () => {
       const caps = getModelCapabilities("qwen-3-7-max", "alibaba-coding-plan")
-      expect(caps.contextWindow).toBe(131_072)
+      expect(caps.contextWindow).toBe(1_000_000)
       expect(caps.thinking).toBe("supported")
       expect(caps.preserveThinking).toBe("supported")
       expect(caps.promptCache).toBe("supported")
@@ -21,7 +23,7 @@ describe("Model Capability Registry", () => {
 
     it("should return Qwen 3.7 Max capabilities for Together AI", () => {
       const caps = getModelCapabilities("qwen-3-7-max", "togetherai")
-      expect(caps.contextWindow).toBe(131_072)
+      expect(caps.contextWindow).toBe(1_000_000)
       expect(caps.thinking).toBe("supported")
       expect(caps.preserveThinking).toBe("experimental")
       expect(caps.promptCache).toBe("experimental")
@@ -30,11 +32,46 @@ describe("Model Capability Registry", () => {
 
     it("should return Qwen 3.7 Max capabilities for gateway routes", () => {
       const caps = getModelCapabilities("qwen-3-7-max", "llmgateway")
-      expect(caps.contextWindow).toBe(131_072)
+      expect(caps.contextWindow).toBe(1_000_000)
       expect(caps.thinking).toBe("experimental")
       expect(caps.preserveThinking).toBe("experimental")
       expect(caps.promptCache).toBe("blocked")
       expect(caps.toolCalling).toBe("experimental")
+    })
+
+    it("should return Qwen 3.7 Plus capabilities for Alibaba Cloud", () => {
+      const caps = getModelCapabilities("qwen-3-7-plus", "alibaba-coding-plan")
+      expect(caps.contextWindow).toBe(1_000_000)
+      expect(caps.thinking).toBe("supported")
+      expect(caps.preserveThinking).toBe("supported")
+      expect(caps.promptCache).toBe("supported")
+      expect(caps.toolCalling).toBe("supported")
+      expect(caps.webOrBuiltInTools).toBe("blocked")
+      expect(caps.rateLimitTier).toBe("extended")
+    })
+
+    it("should return Qwen 3.7 Plus capabilities for Together AI", () => {
+      const caps = getModelCapabilities("qwen3.7-plus", "togetherai")
+      expect(caps.contextWindow).toBe(1_000_000)
+      expect(caps.thinking).toBe("supported")
+      expect(caps.preserveThinking).toBe("experimental")
+      expect(caps.promptCache).toBe("experimental")
+    })
+
+    it("should return Qwen 3.7 Plus capabilities for gateway routes", () => {
+      const caps = getModelCapabilities("qwen3.7-plus", "vercel")
+      expect(caps.contextWindow).toBe(1_000_000)
+      expect(caps.thinking).toBe("experimental")
+      expect(caps.preserveThinking).toBe("experimental")
+      expect(caps.promptCache).toBe("blocked")
+    })
+
+    it("should return Qwen 3.7 Plus fallback capabilities on unknown provider", () => {
+      const caps = getModelCapabilities("qwen3.7-plus", "some-unknown")
+      expect(caps.contextWindow).toBe(1_000_000)
+      expect(caps.thinking).toBe("supported")
+      expect(caps.preserveThinking).toBe("experimental")
+      expect(caps.promptCache).toBe("experimental")
     })
 
     it("should return Claude 3.7 Sonnet capabilities for Anthropic", () => {
@@ -58,9 +95,19 @@ describe("Model Capability Registry", () => {
       const caps2 = getModelCapabilities("qwen3_7_max")
       const caps3 = getModelCapabilities("Qwen3-7-Max")
 
-      expect(caps1.contextWindow).toBe(131_072)
-      expect(caps2.contextWindow).toBe(131_072)
-      expect(caps3.contextWindow).toBe(131_072)
+      expect(caps1.contextWindow).toBe(1_000_000)
+      expect(caps2.contextWindow).toBe(1_000_000)
+      expect(caps3.contextWindow).toBe(1_000_000)
+    })
+
+    it("should handle Plus model ID variations", () => {
+      const caps1 = getModelCapabilities("qwen3.7-plus")
+      const caps2 = getModelCapabilities("qwen3_7_plus")
+      const caps3 = getModelCapabilities("Qwen3-7-Plus")
+
+      expect(caps1.contextWindow).toBe(1_000_000)
+      expect(caps2.contextWindow).toBe(1_000_000)
+      expect(caps3.contextWindow).toBe(1_000_000)
     })
 
     it("should handle Ollama models with unlimited rate limit", () => {
@@ -116,6 +163,18 @@ describe("Model Capability Registry", () => {
       expect(supportsLongAgent("qwen-3-7-max", "unknown-provider")).toBe(true)
     })
 
+    it("should return true for Qwen 3.7 Plus on Alibaba", () => {
+      expect(supportsLongAgent("qwen3.7-plus", "alibaba-coding-plan")).toBe(true)
+    })
+
+    it("should return true for Qwen 3.7 Plus on Together AI", () => {
+      expect(supportsLongAgent("qwen3.7-plus", "togetherai")).toBe(true)
+    })
+
+    it("should return true for Qwen 3.7 Plus on unknown providers (fallback)", () => {
+      expect(supportsLongAgent("qwen3.7-plus", "unknown-provider")).toBe(true)
+    })
+
     it("should return false for models without thinking support", () => {
       expect(supportsLongAgent("claude-3-5-sonnet", "anthropic")).toBe(false)
     })
@@ -145,6 +204,10 @@ describe("Model Capability Registry", () => {
   describe("getContextPackBudget", () => {
     it("should return 128k for Qwen 3.7 Max", () => {
       expect(getContextPackBudget("qwen-3-7-max", "alibaba-coding-plan")).toBe(128_000)
+    })
+
+    it("should return 128k for Qwen 3.7 Plus", () => {
+      expect(getContextPackBudget("qwen3.7-plus", "alibaba-coding-plan")).toBe(128_000)
     })
 
     it("should return 128k for Claude 3.7 Sonnet", () => {
@@ -184,6 +247,40 @@ describe("Model Capability Registry", () => {
     it("should not detect other models", () => {
       expect(isQwen37MaxModel("claude-3-7-sonnet")).toBe(false)
       expect(isQwen37MaxModel("gpt-4")).toBe(false)
+    })
+
+    it("should not detect Qwen 3.7 Plus", () => {
+      expect(isQwen37MaxModel("qwen3.7-plus")).toBe(false)
+    })
+  })
+
+  describe("isQwen37PlusModel", () => {
+    it("should detect Qwen 3.7 Plus with hyphens", () => {
+      expect(isQwen37PlusModel("qwen-3-7-plus")).toBe(true)
+    })
+
+    it("should detect Qwen 3.7 Plus with dots", () => {
+      expect(isQwen37PlusModel("qwen3.7-plus")).toBe(true)
+    })
+
+    it("should detect Qwen 3.7 Plus case-insensitive", () => {
+      expect(isQwen37PlusModel("Qwen3.7-Plus")).toBe(true)
+    })
+
+    it("should not detect Qwen 3.7 Max", () => {
+      expect(isQwen37PlusModel("qwen3.7-max")).toBe(false)
+    })
+  })
+
+  describe("isQwen37MaxOrPlusModel", () => {
+    it("should detect both Max and Plus", () => {
+      expect(isQwen37MaxOrPlusModel("qwen3.7-max")).toBe(true)
+      expect(isQwen37MaxOrPlusModel("qwen3.7-plus")).toBe(true)
+    })
+
+    it("should not detect other models", () => {
+      expect(isQwen37MaxOrPlusModel("qwen3.6-plus")).toBe(false)
+      expect(isQwen37MaxOrPlusModel("claude-3-7-sonnet")).toBe(false)
     })
   })
 

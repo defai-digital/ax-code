@@ -1018,6 +1018,22 @@ describe("ProviderTransform.variants", () => {
     expect(result).toEqual({})
   })
 
+  test("Alibaba reasoning models (coding-plan + token-plan) return empty variants", () => {
+    for (const providerID of ["alibaba-coding-plan", "alibaba-token-plan"]) {
+      const model = createMockModel({
+        id: `${providerID}/qwen3.7-max`,
+        providerID,
+        api: {
+          id: "qwen3.7-max",
+          url: "https://dashscope.aliyuncs.com",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result).toEqual({})
+    }
+  })
+
   test("minimax returns empty object", () => {
     const model = createMockModel({
       id: "minimax/minimax-model",
@@ -1336,7 +1352,7 @@ describe("ProviderTransform.variants", () => {
       expect(result).toEqual({})
     })
 
-    test("keeps generic reasoningEffort variants for Alibaba coding plan", () => {
+    test("does not apply generic reasoningEffort variants to Alibaba coding plan", () => {
       const model = createMockModel({
         id: "alibaba-coding-plan/qwen3.6-plus",
         providerID: "alibaba-coding-plan",
@@ -1347,8 +1363,7 @@ describe("ProviderTransform.variants", () => {
         },
       })
       const result = ProviderTransform.variants(model)
-      expect(Object.keys(result)).toEqual(["low", "medium", "high"])
-      expect(result.high).toEqual({ reasoningEffort: "high" })
+      expect(result).toEqual({})
     })
   })
 
@@ -1594,11 +1609,38 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model)).toBe(65_536)
   })
 
-  test("keeps Alibaba quota cap for qwen3.7-max on Alibaba routes", () => {
+  test("raises output cap to 65 536 for qwen3.7-plus on non-Alibaba routes", () => {
+    const model = {
+      id: "qwen3.7-plus",
+      providerID: ProviderID.make("togetherai"),
+      limit: { output: 65_536 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(65_536)
+  })
+
+  test("raises Alibaba quota cap to 16 384 for qwen3.7-max on Alibaba routes", () => {
     const model = {
       id: "qwen3.7-max",
       providerID: ProviderID.make("alibaba-coding-plan"),
       limit: { output: 65_536 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(16_384)
+  })
+
+  test("raises Alibaba quota cap to 16 384 for qwen3.7-plus on Alibaba routes", () => {
+    const model = {
+      id: "qwen3.7-plus",
+      providerID: ProviderID.make("alibaba-token-plan"),
+      limit: { output: 64_000 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(16_384)
+  })
+
+  test("keeps generic 4 096 Alibaba cap for non-Qwen3.7 models", () => {
+    const model = {
+      id: "qwen3.6-plus",
+      providerID: ProviderID.make("alibaba-coding-plan"),
+      limit: { output: 64_000 },
     } as any
     expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
   })
@@ -1665,6 +1707,30 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     expect(result.enable_thinking).toBe(true)
     expect(result.thinking_budget).toBe(4096)
     expect(result.thinking).toBeUndefined()
+  })
+
+  test("raises thinking_budget to 16 384 for qwen3.7-max on Alibaba Token Plan", () => {
+    const result = ProviderTransform.options({
+      model: createModel("qwen3.7-max"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    // Qwen 3.7 Max gets the elevated 16k Alibaba cap, so thinking_budget
+    // is clamped to min(16384, 16384) = 16384.
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(16_384)
+  })
+
+  test("raises thinking_budget to 16 384 for qwen3.7-plus on Alibaba Token Plan", () => {
+    const result = ProviderTransform.options({
+      model: createModel("qwen3.7-plus"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(16_384)
   })
 
   test("keeps thinking_budget at or below a lower configured output limit", () => {
