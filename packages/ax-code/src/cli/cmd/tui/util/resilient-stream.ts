@@ -34,6 +34,15 @@ export const STREAM_WATCHDOG_MS = 60_000
 export const STREAM_RECONNECT_BASE_MS = 2_000
 export const STREAM_RECONNECT_MAX_MS = 30_000
 
+async function unsubscribeStreamSubscription<T>(subscription: StreamSubscription<T> | undefined) {
+  if (!subscription?.unsubscribe) return
+  try {
+    await subscription.unsubscribe()
+  } catch {
+    // Ignore best-effort unsubscribe failures during reconnect/shutdown.
+  }
+}
+
 async function sleepInterruptibly(signal: AbortSignal, ms: number) {
   try {
     await sleep(ms, undefined, { signal })
@@ -83,8 +92,21 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
     }
 
     try {
-      connectTimer = setTimeout(() => abortConnection("connect-timeout"), connectTimeoutMs)
-      subscription = await options.subscribe(connectionAbort.signal)
+      const subscribePromise = options.subscribe(connectionAbort.signal)
+      subscribePromise
+        .then((lateSubscription) => {
+          if (lateSubscription !== subscription && connectionAbort.signal.aborted) {
+            void unsubscribeStreamSubscription(lateSubscription)
+          }
+        })
+        .catch(() => {})
+      const connectTimeout = new Promise<never>((_, reject) => {
+        connectTimer = setTimeout(() => {
+          abortConnection("connect-timeout")
+          reject(new Error("Event stream connection timed out"))
+        }, connectTimeoutMs)
+      })
+      subscription = await Promise.race([subscribePromise, connectTimeout])
       if (connectTimer) clearTimeout(connectTimer)
 
       reconnectDelay = reconnectBaseMs
@@ -114,13 +136,7 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
         error: toErrorMessage(error),
       })
     } finally {
-      if (subscription?.unsubscribe) {
-        try {
-          await subscription.unsubscribe()
-        } catch {
-          // Ignore best-effort unsubscribe failures during reconnect/shutdown.
-        }
-      }
+      await unsubscribeStreamSubscription(subscription)
       if (connectTimer) clearTimeout(connectTimer)
       if (watchdog) clearTimeout(watchdog)
       runTuiCleanup(removeAbortListener, { name: "resilient-stream-abort-listener-cleanup" })

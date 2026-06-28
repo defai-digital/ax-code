@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { setTimeout as sleep } from "node:timers/promises"
 import { runResilientStream, type StreamConnectionStatus } from "../../../src/cli/cmd/tui/util/resilient-stream"
 
 describe("runResilientStream", () => {
@@ -40,6 +41,50 @@ describe("runResilientStream", () => {
     expect(events).toEqual(["recovered"])
     expect(statuses.some((status) => status.reason === "connect-timeout")).toBe(true)
     expect(statuses.filter((status) => status.phase === "connected")).toHaveLength(1)
+  })
+
+  test("enforces connect timeout when subscribe ignores abort", async () => {
+    const abort = new AbortController()
+    const events: string[] = []
+    const statuses: StreamConnectionStatus[] = []
+    let attempts = 0
+
+    const result = await Promise.race([
+      runResilientStream<string>({
+        signal: abort.signal,
+        connectTimeoutMs: 10,
+        watchdogMs: 1_000,
+        reconnectBaseMs: 1,
+        reconnectMaxMs: 2,
+        onEvent: (event) => {
+          events.push(event)
+          abort.abort()
+        },
+        onStatus: (status) => {
+          statuses.push(status)
+        },
+        subscribe: async () => {
+          attempts += 1
+          if (attempts === 1) {
+            return new Promise<never>(() => {})
+          }
+          return {
+            stream: (async function* () {
+              yield "recovered"
+            })(),
+          }
+        },
+      }).then(() => "completed"),
+      sleep(100).then(() => {
+        abort.abort()
+        return "timed-out"
+      }),
+    ])
+
+    expect(result).toBe("completed")
+    expect(attempts).toBe(2)
+    expect(events).toEqual(["recovered"])
+    expect(statuses.some((status) => status.reason === "connect-timeout")).toBe(true)
   })
 
   test("reconnects after a stream error instead of exiting the loop", async () => {
