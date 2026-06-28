@@ -100,6 +100,26 @@ function getPartEndTime(part: Part): number | undefined {
   return typeof timeEnd === "number" ? timeEnd : undefined
 }
 
+function getPartStartTime(part: Part): number | undefined {
+  const stateStart = (part as { state?: { time?: { start?: unknown } } }).state?.time?.start
+  if (typeof stateStart === "number") {
+    return stateStart
+  }
+
+  const timeStart = (part as { time?: { start?: unknown } }).time?.start
+  return typeof timeStart === "number" ? timeStart : undefined
+}
+
+function getValidPartEndTime(part: Part): number | undefined {
+  const endTime = getPartEndTime(part)
+  if (typeof endTime !== "number") return undefined
+
+  const startTime = getPartStartTime(part)
+  if (typeof startTime === "number" && endTime < startTime) return undefined
+
+  return endTime
+}
+
 function getToolStatus(part: Part): string | undefined {
   if (part.type !== "tool") {
     return undefined
@@ -124,8 +144,8 @@ function shouldPreserveExistingPart(previous: Part, next: Part): boolean {
     return true
   }
 
-  const previousEnd = getPartEndTime(previous)
-  const nextEnd = getPartEndTime(next)
+  const previousEnd = getValidPartEndTime(previous)
+  const nextEnd = getValidPartEndTime(next)
   if (typeof previousEnd === "number" && typeof nextEnd !== "number") {
     return true
   }

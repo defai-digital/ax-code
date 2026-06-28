@@ -195,4 +195,49 @@ describe("applyDirectoryEvent", () => {
     expect(state.part[messageID]?.[0]?.state?.status).toBe("completed")
     expect(state.part[messageID]?.[0]?.state?.time?.end).toBe(20)
   })
+
+  it("does not preserve invalid tool end times over newer updates", () => {
+    const state = structuredClone(INITIAL_STATE)
+    const messageID = "msg-6"
+    const partID = "part-6"
+
+    applyDirectoryEvent(state, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          type: "tool",
+          messageID,
+          tool: "apply_patch",
+          state: {
+            time: {
+              start: 20,
+              end: 10,
+            },
+          },
+        },
+      },
+    })
+
+    applyDirectoryEvent(state, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          type: "tool",
+          messageID,
+          tool: "apply_patch",
+          state: {
+            status: "running",
+            time: {
+              start: 20,
+            },
+          },
+        },
+      },
+    })
+
+    expect(state.part[messageID]?.[0]?.state?.status).toBe("running")
+    expect(state.part[messageID]?.[0]?.state?.time?.end).toBeUndefined()
+  })
 })

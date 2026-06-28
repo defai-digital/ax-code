@@ -204,6 +204,7 @@ const main = async () => {
       AX_CODE_DESKTOP_ELECTRON_SERVER_PORT: String(serverPort),
       AX_CODE_DESKTOP_AX_CODE_HEALTH_TIMEOUT_MS: "1500",
       AX_CODE_DESKTOP_AX_CODE_HEALTH_INTERVAL_MS: "0",
+      AX_CODE_DESKTOP_DISABLE_AUTO_UPDATE: "1",
       AX_CODE_DESKTOP_SMOKE_CRASH_ENDPOINT: "true",
     },
     stdio: ["ignore", "pipe", "pipe"],

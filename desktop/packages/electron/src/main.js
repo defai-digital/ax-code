@@ -28,6 +28,7 @@ const { createStartupDiagnostics } = require("./startup-diagnostics")
 const { collectOpenPathCandidates } = require("./open-paths")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy } = require("./server-restart-policy")
+const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
 
@@ -166,7 +167,7 @@ const serverRestartPolicy = createServerRestartPolicy({ maxRestarts: MAX_SERVER_
 function launchServer() {
   return new Promise((resolve, reject) => {
     const serverEntry = path.join(__dirname, "server-process.js")
-    recordStartupEvent("server.utilityProcess.launch")
+    recordStartupEvent("server.utilityProcess.launch", {}, { once: false })
     serverChild = utilityProcess.fork(serverEntry, [], {
       serviceName: "ax-code-server",
       env: {
@@ -207,7 +208,7 @@ function launchServer() {
         settled = true
         clearTimeout(timer)
         serverPort = msg.port
-        recordStartupEvent("server.utilityProcess.ready", { port: serverPort })
+        recordStartupEvent("server.utilityProcess.ready", { port: serverPort }, { once: false })
         resolve()
       } else if (msg?.type === "error") {
         settled = true
@@ -2696,8 +2697,11 @@ app.whenReady().then(async () => {
     // Best-effort update check — failures must not crash the app. With
     // autoDownload disabled, the in-app dialog (driven by the renderer's
     // periodic check) handles surfacing and downloading; checkForUpdates just
-    // warms the cache here.
-    autoUpdater.checkForUpdates().catch(() => {})
+    // warms the cache here. Release smoke runs before updater metadata is
+    // uploaded to the draft release, so it opts out with this environment flag.
+    if (shouldCheckForUpdatesOnStartup()) {
+      autoUpdater.checkForUpdates().catch(() => {})
+    }
 
     // Notify renderer on OS wake-from-sleep so the SSE event pipeline can
     // reconnect immediately instead of waiting for the heartbeat watchdog.

@@ -257,10 +257,12 @@ type CoalescedPart = {
   state?: {
     status?: unknown
     time?: {
+      start?: unknown
       end?: unknown
     }
   }
   time?: {
+    start?: unknown
     end?: unknown
   }
 }
@@ -285,6 +287,14 @@ function getPartEndTime(part: CoalescedPart): number | undefined {
   return typeof timeEnd === "number" ? timeEnd : undefined
 }
 
+function getPartStartTime(part: CoalescedPart): number | undefined {
+  const stateStart = part.state?.time?.start
+  if (typeof stateStart === "number") return stateStart
+
+  const timeStart = part.time?.start
+  return typeof timeStart === "number" ? timeStart : undefined
+}
+
 function isFinalToolPart(part: CoalescedPart | undefined): boolean {
   if (!part || part.type !== "tool") return false
 
@@ -292,7 +302,13 @@ function isFinalToolPart(part: CoalescedPart | undefined): boolean {
   if (status && ACTIVE_TOOL_STATUSES.has(status)) return false
   if (status && FINAL_TOOL_STATUSES.has(status)) return true
 
-  return typeof getPartEndTime(part) === "number"
+  const endTime = getPartEndTime(part)
+  if (typeof endTime !== "number") return false
+
+  const startTime = getPartStartTime(part)
+  if (typeof startTime === "number" && endTime < startTime) return false
+
+  return true
 }
 
 export function coalesceQueuedEvent(previous: Event, next: Event): Event {

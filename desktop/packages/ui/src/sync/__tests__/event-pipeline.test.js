@@ -541,6 +541,51 @@ describe("createEventPipeline", () => {
     expect(received[0].payload.properties.part.state.time.end).toBe(20)
   })
 
+  it("does not treat invalid tool end times as final during coalescing", async () => {
+    const received = await runPipelineWithEvents([
+      {
+        directory: "dir-a",
+        payload: {
+          type: "message.part.updated",
+          properties: {
+            part: {
+              id: "part-1",
+              type: "tool",
+              messageID: "msg-1",
+              tool: "bash",
+              state: {
+                time: { start: 20, end: 10 },
+              },
+            },
+          },
+        },
+      },
+      {
+        directory: "dir-a",
+        payload: {
+          type: "message.part.updated",
+          properties: {
+            part: {
+              id: "part-1",
+              type: "tool",
+              messageID: "msg-1",
+              tool: "bash",
+              state: {
+                status: "running",
+                time: { start: 20 },
+              },
+            },
+          },
+        },
+      },
+    ])
+
+    expect(received).toHaveLength(1)
+    expect(received[0].payload.type).toBe("message.part.updated")
+    expect(received[0].payload.properties.part.state.status).toBe("running")
+    expect(received[0].payload.properties.part.state.time.end).toBeUndefined()
+  })
+
   it("routes events before queueing so coalescing happens on the resolved directory", async () => {
     installDomStubs()
 

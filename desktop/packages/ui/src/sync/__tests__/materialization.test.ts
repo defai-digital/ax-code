@@ -86,6 +86,19 @@ describe("materializeSessionSnapshots", () => {
     expect((result.part.msg_1[0] as { text?: string })?.text).toBe("First chunk ")
   })
 
+  test("preserves live streaming text when a stale snapshot has an invalid end time", () => {
+    const livePart = part("prt_1", "msg_1", "text", "First chunk ")
+    const stalePart = { ...part("prt_1", "msg_1", "text", ""), time: { start: 20, end: 10 } } as Part
+    const state = {
+      message: { ses_1: [message("msg_1")] },
+      part: { msg_1: [livePart] },
+    }
+
+    const result = materializeSessionSnapshots(state, "ses_1", [{ info: message("msg_1"), parts: [stalePart] }])
+
+    expect((result.part.msg_1[0] as { text?: string })?.text).toBe("First chunk ")
+  })
+
   test("preserves live streaming parts omitted by a stale snapshot", () => {
     const livePart = part("prt_1", "msg_1", "text", "First chunk ")
     const state = {
