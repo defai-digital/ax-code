@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  canUseLocalElectronDesktopIPC,
   checkForDesktopUpdates,
   downloadDesktopUpdate,
   openDesktopFileInApp,
@@ -17,13 +18,16 @@ type MockDesktopWindowOptions = {
   invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>
   listen?: (event: string, handler: (evt: { payload?: unknown }) => void) => Promise<() => void>
   exposeTauri?: boolean
+  origin?: string
+  localOrigin?: string
 }
 
 const mockDesktopWindow = (options: MockDesktopWindowOptions = {}) => {
   const exposeTauri = options.exposeTauri ?? true
   ;(globalThis as Record<string, unknown>).window = {
-    location: { origin: "http://localhost:5173" },
+    location: { origin: options.origin ?? "http://localhost:5173" },
     __AX_CODE_DESKTOP_ELECTRON__: { runtime: "electron" },
+    ...(options.localOrigin ? { __AX_CODE_DESKTOP_LOCAL_ORIGIN__: options.localOrigin } : {}),
     ...(exposeTauri
       ? {
           __TAURI__: {
@@ -35,6 +39,22 @@ const mockDesktopWindow = (options: MockDesktopWindowOptions = {}) => {
       : {}),
   }
 }
+
+describe("canUseLocalElectronDesktopIPC", () => {
+  test("allows Electron mini-chat IPC on the local desktop origin", () => {
+    mockDesktopWindow({ origin: "http://localhost:3910", localOrigin: "http://127.0.0.1:3910" })
+
+    expect(canUseLocalElectronDesktopIPC()).toBe(true)
+    restoreWindow()
+  })
+
+  test("blocks local-only Electron mini-chat IPC on remote hosts", () => {
+    mockDesktopWindow({ origin: "https://remote.example.com", localOrigin: "http://localhost:3910" })
+
+    expect(canUseLocalElectronDesktopIPC()).toBe(false)
+    restoreWindow()
+  })
+})
 
 describe("requestDirectoryAccess", () => {
   test("uses the desktop dialog bridge for local Electron directory selection", async () => {

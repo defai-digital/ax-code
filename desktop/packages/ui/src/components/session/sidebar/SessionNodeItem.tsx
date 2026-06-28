@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { canUseElectronDesktopIPC, invokeDesktop } from "@/lib/desktop"
+import { canUseLocalElectronDesktopIPC, invokeDesktop } from "@/lib/desktop"
 import { toast } from "@/components/ui"
 import { Button } from "@/components/ui/button"
 import {
@@ -310,7 +310,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
 
   const displayMode = useSessionDisplayStore((state) => state.displayMode)
   const isMinimalMode = displayMode === "minimal"
-  const isElectron = React.useMemo(() => canUseElectronDesktopIPC(), [])
+  const canOpenMiniChat = React.useMemo(() => canUseLocalElectronDesktopIPC(), [])
   const revealOnHoverClass =
     "group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
   const hideOnHoverClass = "group-hover:opacity-0 group-focus-within:opacity-0"
@@ -967,7 +967,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         </span>
       </DropdownMenuItem>
 
-      {isElectron ? (
+      {canOpenMiniChat ? (
         <DropdownMenuItem disabled={!sessionDirectory} onClick={handleOpenMiniChatWindow} className="[&>svg]:mr-1">
           <Icon name="window" className="mr-1 h-4 w-4" />
           <span className="truncate">{t("sessions.sidebar.session.menu.openMiniChatWindow")}</span>

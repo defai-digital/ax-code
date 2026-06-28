@@ -194,6 +194,8 @@ export const hasDesktopInvoke = (): boolean => {
 
 export const canUseElectronDesktopIPC = (): boolean => isElectronShell() && hasDesktopInvoke()
 
+export const canUseLocalElectronDesktopIPC = (): boolean => canUseElectronDesktopIPC() && isDesktopLocalOriginActive()
+
 export const recordDesktopStartupEvent = async (name: string, details?: Record<string, unknown>): Promise<void> => {
   if (typeof window === "undefined") return
   const recorder = getElectronRuntime()?.recordStartupEvent

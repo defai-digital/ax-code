@@ -60,7 +60,7 @@ import { forceKillTerminal } from "@/lib/terminalApi"
 import { useTerminalStore } from "@/stores/useTerminalStore"
 import { ProjectActionsButton } from "@/components/layout/ProjectActionsButton"
 import { SessionSwitcherDropdown } from "@/components/session/SessionSwitcherDropdown"
-import { canUseElectronDesktopIPC, invokeDesktop, isDesktopShell, startDesktopWindowDrag } from "@/lib/desktop"
+import { canUseLocalElectronDesktopIPC, invokeDesktop, isDesktopShell, startDesktopWindowDrag } from "@/lib/desktop"
 import {
   isDesktopWindowFullscreen as isDesktopWindowFullscreenNative,
   onDesktopWindowResized,
@@ -837,7 +837,7 @@ export const Header: React.FC = () => {
     }
     return isDesktopShell()
   })
-  const hasElectronDesktopIPC = React.useMemo(() => canUseElectronDesktopIPC(), [])
+  const hasLocalElectronDesktopIPC = React.useMemo(() => canUseLocalElectronDesktopIPC(), [])
   const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false)
 
   const isMacPlatform = React.useMemo(() => {
@@ -1895,7 +1895,7 @@ export const Header: React.FC = () => {
     </>
   )
 
-  const showMiniChatHeaderAction = hasElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId))
+  const showMiniChatHeaderAction = hasLocalElectronDesktopIPC && (isNewSessionDraftOpen || Boolean(currentSessionId))
 
   const renderDesktop = () => (
     <div
