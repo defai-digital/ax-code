@@ -94,4 +94,52 @@ describe("useOpenInAppsStore", () => {
       iconDataUrl: "data:image/png;base64,explorer",
     })
   })
+
+  test("keeps installed-app updates that arrive before a stale cache response resolves", async () => {
+    fetchDesktopInstalledAppsMock.mockImplementation(async () => {
+      window.dispatchEvent(
+        new CustomEvent("openchamber:installed-apps-updated", {
+          detail: [{ name: "Cursor", iconDataUrl: "data:image/png;base64,cursor-fresh" }],
+        }),
+      )
+      return {
+        apps: [{ name: "Finder", iconDataUrl: "data:image/png;base64,finder-stale" }],
+        success: true,
+        hasCache: true,
+        isCacheStale: true,
+      }
+    })
+
+    const { useOpenInAppsStore } = await importStore()
+
+    await useOpenInAppsStore.getState().loadInstalledApps(true)
+    await Promise.resolve()
+
+    const cursor = useOpenInAppsStore.getState().availableApps.find((app) => app.id === "cursor")
+    expect(cursor).toMatchObject({
+      appName: "Cursor",
+      iconDataUrl: "data:image/png;base64,cursor-fresh",
+    })
+    expect(useOpenInAppsStore.getState().isCacheStale).toBe(false)
+  })
+
+  test("honors a forced refresh when it is the first store load", async () => {
+    const forceArgs: Array<boolean | undefined> = []
+    fetchDesktopInstalledAppsMock.mockImplementation(async (_apps, force) => {
+      forceArgs.push(force)
+      return {
+        apps: [{ name: "Cursor", iconDataUrl: "data:image/png;base64,cursor" }],
+        success: true,
+        hasCache: true,
+        isCacheStale: false,
+      }
+    })
+
+    const { useOpenInAppsStore } = await importStore()
+
+    await useOpenInAppsStore.getState().loadInstalledApps(true)
+
+    expect(forceArgs).toEqual([undefined, true])
+    expect(useOpenInAppsStore.getState().availableApps.some((app) => app.id === "cursor")).toBe(true)
+  })
 })

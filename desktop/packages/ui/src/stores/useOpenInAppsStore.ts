@@ -55,6 +55,18 @@ const buildInstalledOpenInAppOptions = (installed: InstalledDesktopAppInfo[]): O
   }))
 }
 
+const buildInstalledAppsState = (
+  installed: InstalledDesktopAppInfo[],
+  hasLoadedApps = true,
+): Pick<OpenInAppsState, "availableApps" | "hasLoadedApps"> => {
+  const withIcons = buildInstalledOpenInAppOptions(installed)
+  if (withIcons.length === 0) {
+    return { availableApps: getAlwaysAvailableApps(), hasLoadedApps }
+  }
+
+  return { availableApps: withIcons, hasLoadedApps: true }
+}
+
 const getStoredAppId = (): string => {
   if (typeof window === "undefined") {
     return DEFAULT_OPEN_IN_APP_ID
@@ -73,11 +85,18 @@ let loading = false
 let keepScanning = false
 let retryAttempt = 0
 let retryTimeout: ReturnType<typeof setTimeout> | null = null
+let installedAppsRevision = 0
 
 const clearRetryTimeout = () => {
   if (retryTimeout) {
     clearTimeout(retryTimeout)
     retryTimeout = null
+  }
+}
+
+const waitForActiveLoad = async () => {
+  while (loading) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 25))
   }
 }
 
@@ -95,13 +114,7 @@ export const useOpenInAppsStore = create<OpenInAppsState>()((set, get) => ({
     initialized = true
 
     const applyInstalledApps = (installed: InstalledDesktopAppInfo[], hasLoadedApps = true) => {
-      const withIcons = buildInstalledOpenInAppOptions(installed)
-      if (withIcons.length === 0) {
-        set({ availableApps: getAlwaysAvailableApps(), hasLoadedApps })
-        return
-      }
-
-      set({ availableApps: withIcons, hasLoadedApps: true })
+      set(buildInstalledAppsState(installed, hasLoadedApps))
     }
 
     const loadInstalledApps = async (force?: boolean) => {
@@ -128,9 +141,16 @@ export const useOpenInAppsStore = create<OpenInAppsState>()((set, get) => ({
       loading = true
       keepScanning = false
       set({ isScanning: true })
+      const loadRevision = installedAppsRevision
 
       try {
         const { apps: installed, success, hasCache, isCacheStale } = await fetchDesktopInstalledApps(appNames, force)
+
+        if (loadRevision !== installedAppsRevision) {
+          retryAttempt = 0
+          keepScanning = false
+          return
+        }
 
         const shouldRetryEmptyScan = success && !hasCache && installed.length === 0 && retryAttempt < 3
 
@@ -171,8 +191,6 @@ export const useOpenInAppsStore = create<OpenInAppsState>()((set, get) => ({
       }
     }
 
-    void loadInstalledApps()
-
     const settingsHandler = (event: Event) => {
       const detail = (event as CustomEvent<DesktopSettings>).detail
       const nextId =
@@ -201,6 +219,7 @@ export const useOpenInAppsStore = create<OpenInAppsState>()((set, get) => ({
         return
       }
 
+      installedAppsRevision += 1
       retryAttempt = 3
       keepScanning = false
       set({ isScanning: false, isCacheStale: false })
@@ -210,6 +229,8 @@ export const useOpenInAppsStore = create<OpenInAppsState>()((set, get) => ({
     window.addEventListener("openchamber:settings-synced", settingsHandler)
     window.addEventListener("openchamber:app-ready", appReadyHandler)
     window.addEventListener("openchamber:installed-apps-updated", updateHandler)
+
+    void loadInstalledApps()
 
     const appReady = (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady
     if (appReady) {
@@ -233,7 +254,10 @@ export const useOpenInAppsStore = create<OpenInAppsState>()((set, get) => ({
     }
 
     if (loading) {
-      return
+      if (!force) {
+        return
+      }
+      await waitForActiveLoad()
     }
 
     const state = get()
@@ -251,9 +275,14 @@ export const useOpenInAppsStore = create<OpenInAppsState>()((set, get) => ({
     loading = true
     keepScanning = false
     set({ isScanning: true })
+    const loadRevision = installedAppsRevision
 
     try {
       const { apps: installed, hasCache, isCacheStale } = await fetchDesktopInstalledApps(appNames, force)
+
+      if (loadRevision !== installedAppsRevision) {
+        return
+      }
 
       const withIcons = buildInstalledOpenInAppOptions(installed)
 
