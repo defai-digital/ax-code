@@ -45,7 +45,7 @@ import { markPromptLoopBusy } from "./prompt-loop-status"
 import { handlePromptLoopGlobalStepLimit } from "./prompt-loop-step-limit"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
 import { createStructuredOutputTurn } from "./prompt-structured-output"
-import { publishPromptFailure } from "./prompt-loop-failure"
+import { publishPromptFailure, createSyntheticFailureAssistant } from "./prompt-loop-failure"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
@@ -322,6 +322,17 @@ export namespace SessionPrompt {
         continue
       }
       if (globalStepLimit.action === "stop") {
+        // Create a synthetic failure message so the transcript ends with a
+        // clear explanation rather than just a Bus event / toast.
+        const latestMessages = await Session.messages({ sessionID })
+        const lastUser = latestMessages.findLast((m) => m.info.role === "user")
+        if (lastUser && lastUser.info.role === "user") {
+          await createSyntheticFailureAssistant({
+            sessionID,
+            lastUser: lastUser.info,
+            message: globalStepLimit.message,
+          })
+        }
         reason = globalStepLimit.reason
         break
       }
@@ -683,9 +694,6 @@ export namespace SessionPrompt {
             sessionID,
             assistant: processor.message,
             message: completionGate.message,
-            // The model finished with text but the completion gate rejected it;
-            // surface the rejection reason so the transcript ends clearly.
-            surfaceAsText: true,
           })
           reason = "stalled"
           break
@@ -838,10 +846,6 @@ export namespace SessionPrompt {
               `calling tools without producing a final text response. ` +
               `The model appears stuck in a tool-calling loop. ` +
               `Try rephrasing the request or breaking it into smaller steps.`,
-            // Tool-only turns leave no visible text in the transcript; surface
-            // the stop reason as a synthetic text part so the user sees a clear
-            // terminal message instead of a bare tool-call row.
-            surfaceAsText: true,
           })
           reason = "stalled"
           break

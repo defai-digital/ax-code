@@ -66,9 +66,6 @@ export async function handlePromptLoopCompletionGateRetry(
       sessionID: input.sessionID,
       assistant: input.assistant,
       message: decision.message,
-      // The completion gate blocked after retries; surface the stop reason
-      // as visible text so the transcript ends with a clear explanation.
-      surfaceAsText: true,
     })
     return { action: "stop", reason: decision.reason }
   }

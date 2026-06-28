@@ -28,14 +28,20 @@ export async function publishPromptFailure(input: {
   sessionID: SessionID
   assistant: MessageV2.Assistant
   message: string
-  surfaceAsText?: boolean
+  /**
+   * Set to true when the assistant already has meaningful text content and
+   * adding a duplicate synthetic text part would be confusing. Defaults to
+   * false so terminal failures always surface their stop reason unless the
+   * caller explicitly opts out.
+   */
+  suppressText?: boolean
 }) {
   const error = unknownError(input.message)
   input.assistant.error = error
-  if (input.surfaceAsText) {
-    // The assistant message produced no visible content (e.g. an empty turn).
-    // Persist the stop reason as a synthetic text part so the transcript shows
-    // a concrete terminal message rather than an empty assistant bubble.
+  if (!input.suppressText) {
+    // Persist the stop reason as a synthetic text part so the transcript
+    // shows a concrete terminal message rather than an empty or tool-only
+    // assistant bubble that reads as "still working".
     await Session.updatePart(
       textPart({
         messageID: input.assistant.id,

@@ -9,7 +9,7 @@ const log = Log.create({ service: "session.prompt" })
 type PromptLoopGlobalStepLimitTransition =
   | { action: "ignore" }
   | { action: "continue_autonomous"; text: string }
-  | { action: "stop"; reason: "step_limit" }
+  | { action: "stop"; reason: "step_limit"; message: string }
 
 type PromptLoopGlobalStepLimitDeps = {
   warn?: (message: string, fields: Record<string, unknown>) => void
@@ -53,5 +53,5 @@ export function handlePromptLoopGlobalStepLimit(
     sessionID: input.sessionID,
     message: decision.message,
   })
-  return { action: "stop", reason: decision.reason }
+  return { action: "stop", reason: decision.reason, message: decision.message }
 }

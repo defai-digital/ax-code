@@ -84,7 +84,10 @@ describe("prompt loop global step limit", () => {
       },
     )
 
-    expect(result).toEqual({ action: "stop", reason: "step_limit" })
+    expect(result).toMatchObject({ action: "stop", reason: "step_limit" })
+    if (result.action !== "stop") throw new Error("expected stop")
+    expect(result.message).toContain("10 steps")
+    expect(result.message).toContain("after 3 auto-continuations")
     expect(warnings).toEqual([
       {
         message: "global step limit reached",
