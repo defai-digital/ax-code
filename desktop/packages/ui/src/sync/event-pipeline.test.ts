@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { Event, AxCodeClient } from "@ax-code/sdk/v2/client"
-import { createEventPipeline } from "./event-pipeline"
+import { coalesceQueuedEvent, createEventPipeline } from "./event-pipeline"
 
 const failAfter = (ms: number) =>
   new Promise<never>((_, reject) => {
@@ -34,6 +34,33 @@ function deltaEvent(delta: string): Event {
   } as Event
 }
 
+function toolUpdatedEvent(status: string, end: number): Event {
+  return {
+    type: "message.part.updated",
+    properties: {
+      part: {
+        id: "tool_1",
+        messageID: "msg_1",
+        sessionID: "ses_1",
+        type: "tool",
+        tool: "bash",
+        callID: "call_1",
+        state: {
+          status,
+          input: {},
+          output: status === "completed" ? `output ${end}` : undefined,
+          title: "bash",
+          metadata: {},
+          time: {
+            start: 1,
+            end,
+          },
+        },
+      },
+    },
+  } as Event
+}
+
 function createSdk(events: Event[], streamFinished: () => void): AxCodeClient {
   return {
     global: {
@@ -57,6 +84,13 @@ function createSdk(events: Event[], streamFinished: () => void): AxCodeClient {
 }
 
 describe("createEventPipeline", () => {
+  test("does not coalesce a newer completed tool snapshot behind an older one", () => {
+    const previous = toolUpdatedEvent("completed", 20)
+    const next = toolUpdatedEvent("completed", 10)
+
+    expect(coalesceQueuedEvent(previous, next)).toBe(previous)
+  })
+
   test("preserves part update order around text deltas", async () => {
     let resolveStreamFinished!: () => void
     const streamFinished = new Promise<void>((resolve) => {

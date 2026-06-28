@@ -149,6 +149,9 @@ function shouldPreserveExistingPart(previous: Part, next: Part): boolean {
   if (typeof previousEnd === "number" && typeof nextEnd !== "number") {
     return true
   }
+  if (typeof previousEnd === "number" && typeof nextEnd === "number" && previousEnd > nextEnd) {
+    return true
+  }
 
   return false
 }

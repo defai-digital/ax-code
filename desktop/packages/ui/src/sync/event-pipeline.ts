@@ -295,6 +295,18 @@ function getPartStartTime(part: CoalescedPart): number | undefined {
   return typeof timeStart === "number" ? timeStart : undefined
 }
 
+function getValidPartEndTime(part: CoalescedPart | undefined): number | undefined {
+  if (!part) return undefined
+
+  const endTime = getPartEndTime(part)
+  if (typeof endTime !== "number") return undefined
+
+  const startTime = getPartStartTime(part)
+  if (typeof startTime === "number" && endTime < startTime) return undefined
+
+  return endTime
+}
+
 function isFinalToolPart(part: CoalescedPart | undefined): boolean {
   if (!part || part.type !== "tool") return false
 
@@ -302,13 +314,27 @@ function isFinalToolPart(part: CoalescedPart | undefined): boolean {
   if (status && ACTIVE_TOOL_STATUSES.has(status)) return false
   if (status && FINAL_TOOL_STATUSES.has(status)) return true
 
-  const endTime = getPartEndTime(part)
-  if (typeof endTime !== "number") return false
+  return typeof getValidPartEndTime(part) === "number"
+}
 
-  const startTime = getPartStartTime(part)
-  if (typeof startTime === "number" && endTime < startTime) return false
+function shouldPreservePreviousPartUpdate(previousPart: CoalescedPart | undefined, nextPart: CoalescedPart | undefined) {
+  if (!previousPart || !nextPart || previousPart.type !== "tool" || nextPart.type !== "tool") {
+    return false
+  }
 
-  return true
+  if (isFinalToolPart(previousPart) && !isFinalToolPart(nextPart)) {
+    return true
+  }
+
+  const previousEnd = getValidPartEndTime(previousPart)
+  const nextEnd = getValidPartEndTime(nextPart)
+  if (typeof previousEnd !== "number") {
+    return false
+  }
+  if (typeof nextEnd !== "number") {
+    return true
+  }
+  return previousEnd > nextEnd
 }
 
 export function coalesceQueuedEvent(previous: Event, next: Event): Event {
@@ -318,7 +344,7 @@ export function coalesceQueuedEvent(previous: Event, next: Event): Event {
 
   const previousPart = getUpdatedPart(previous)
   const nextPart = getUpdatedPart(next)
-  if (isFinalToolPart(previousPart) && !isFinalToolPart(nextPart)) {
+  if (shouldPreservePreviousPartUpdate(previousPart, nextPart)) {
     return previous
   }
 

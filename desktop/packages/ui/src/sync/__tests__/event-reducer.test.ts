@@ -11,6 +11,8 @@ import type {
 import { applyDirectoryEvent } from "../event-reducer"
 import { INITIAL_STATE, type State } from "../types"
 
+type ToolPart = Extract<Part, { type: "tool" }>
+
 function state(overrides: Partial<State> = {}): State {
   return {
     ...INITIAL_STATE,
@@ -246,6 +248,49 @@ describe("applyDirectoryEvent", () => {
     expect((draft.part.msg_long?.[0] as Extract<Part, { type: "text" }> | undefined)?.text).toBe(
       `${longPrefix}${longOverlap}ghi`,
     )
+  })
+
+  test("preserves newer completed tool parts when a stale snapshot arrives later", () => {
+    const draft = state()
+    const newerToolPart = {
+      id: "tool_1",
+      messageID: "msg_1",
+      sessionID: "ses_1",
+      type: "tool",
+      tool: "bash",
+      callID: "call_1",
+      state: {
+        status: "completed",
+        input: {},
+        output: "newer",
+        title: "bash",
+        metadata: {},
+        time: { start: 1, end: 20 },
+      },
+    } satisfies ToolPart
+    const staleToolPart = {
+      ...newerToolPart,
+      state: {
+        ...newerToolPart.state,
+        output: "stale",
+        time: { start: 1, end: 10 },
+      },
+    } satisfies ToolPart
+
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: { part: newerToolPart },
+    } as Event)
+    const result = applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: { part: staleToolPart },
+    } as Event)
+
+    expect(result).toBe(false)
+    expect((draft.part.msg_1?.[0] as Extract<Part, { type: "tool" }> | undefined)?.state).toMatchObject({
+      output: "newer",
+      time: { start: 1, end: 20 },
+    })
   })
 
   test("skips duplicate session status events", () => {
