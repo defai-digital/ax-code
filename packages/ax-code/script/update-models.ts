@@ -377,7 +377,7 @@ function groqModel(input: {
     family: input.family,
     attachment: input.attachment,
     reasoning: input.reasoning,
-    reasoning_options: input.reasoning ? [{ type: "effort", values: ["low", "medium", "high"] }] : [],
+    reasoning_options: input.reasoning ? [{ type: "effort", values: ["default"] }] : [],
     tool_call: true,
     structured_output: input.structuredOutput,
     temperature: true,

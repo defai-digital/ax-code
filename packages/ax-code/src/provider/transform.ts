@@ -317,6 +317,15 @@ export namespace ProviderTransform {
       return {}
     }
 
+    // Groq's API only accepts `reasoning_effort` values `none` or `default`
+    // for reasoning-capable models (Qwen3.6-27B, GPT-OSS-120B). The generic
+    // `low`/`medium`/`high` values cause a 400 error: "reasoning_effort must
+    // be one of none or default". Do not auto-generate reasoning-effort
+    // variants; the model still reasons by default without the parameter.
+    if (model.providerID === "groq") {
+      return {}
+    }
+
     switch (model.api.npm) {
       case "venice-ai-sdk-provider":
       // https://docs.venice.ai/overview/guides/reasoning-models#reasoning-effort
@@ -490,9 +499,11 @@ export namespace ProviderTransform {
       return rest
     }
 
-    if (model.api.npm !== "@ai-sdk/xai") return result
-    const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
-    return rest
+    if (model.api.npm === "@ai-sdk/xai" || model.providerID === "groq") {
+      const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
+      return rest
+    }
+    return result
   }
 
   export function smallOptions(model: Provider.Model) {

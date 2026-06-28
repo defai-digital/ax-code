@@ -1167,6 +1167,54 @@ describe("ProviderTransform.variants", () => {
     })
   })
 
+  describe("Groq", () => {
+    test("qwen3.6-27b does not auto-generate reasoningEffort variants", () => {
+      const model = createMockModel({
+        id: "groq/qwen/qwen3.6-27b",
+        providerID: "groq",
+        api: {
+          id: "qwen/qwen3.6-27b",
+          url: "https://api.groq.com/openai/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result).toEqual({})
+    })
+
+    test("gpt-oss-120b does not auto-generate reasoningEffort variants", () => {
+      const model = createMockModel({
+        id: "groq/openai/gpt-oss-120b",
+        providerID: "groq",
+        api: {
+          id: "openai/gpt-oss-120b",
+          url: "https://api.groq.com/openai/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result).toEqual({})
+    })
+
+    test("sanitizes unsupported reasoningEffort from merged options", () => {
+      const model = createMockModel({
+        id: "groq/qwen/qwen3.6-27b",
+        providerID: "groq",
+        api: {
+          id: "qwen/qwen3.6-27b",
+          url: "https://api.groq.com/openai/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      })
+      const result = ProviderTransform.sanitizeOptions(model, {
+        reasoningEffort: "high",
+        reasoning_effort: "high",
+        temperature: 0.7,
+      })
+      expect(result).toEqual({ temperature: 0.7 })
+    })
+  })
+
   describe("Alibaba DashScope internet search", () => {
     const mkQwen = (providerID: string, apiId = "qwen3.6-plus") =>
       createMockModel({
