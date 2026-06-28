@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.11] - 2026-06-28
+
+### Fixed
+
+- CLI: hardened TUI event stream connection timeout handling.
+- Desktop: hardened tool state finalization and packaged release smoke recovery and timeout parsing.
+- Release: refreshed signed Desktop asset publication and Homebrew cask update paths.
+
 ## [6.7.10] - 2026-06-28
 
 ### Fixed
