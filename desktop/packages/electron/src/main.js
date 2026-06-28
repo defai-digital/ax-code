@@ -31,6 +31,10 @@ const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { sendUpdateProgressToWindows } = require("./update-progress")
 const {
+  attachDesktopBrowserWebviewPolicy,
+  createDesktopRendererWebPreferences,
+} = require("./webview-policy")
+const {
   applyDesktopHostsConfigToRoot,
   isAllowedDesktopHostTargetUrl,
   normalizeHostUrl,
@@ -346,13 +350,9 @@ async function createWindow() {
     title: "AX Code",
     backgroundColor: "#151313",
     show: false,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      webSecurity: true,
-    },
+    webPreferences: createDesktopRendererWebPreferences(path.join(__dirname, "preload.js")),
   })
+  attachDesktopBrowserWebviewPolicy(mainWindow.webContents)
 
   // Restore saved geometry before first paint, then persist future changes.
   restoreMainWindowGeometry(mainWindow)
@@ -1579,13 +1579,9 @@ const createAdditionalWindow = async (url) => {
     title: "AX Code",
     backgroundColor: "#151313",
     show: false,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      webSecurity: true,
-    },
+    webPreferences: createDesktopRendererWebPreferences(path.join(__dirname, "preload.js")),
   })
+  attachDesktopBrowserWebviewPolicy(win.webContents)
   win.once("ready-to-show", () => win.show())
   win.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
     if (isTrustedRendererNavigation(targetUrl)) return { action: "allow" }
@@ -2463,13 +2459,9 @@ const createMiniChatWindow = async ({ mode, sessionId, directory, projectId }) =
     title: "AX Code",
     backgroundColor: "#151313",
     show: false,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      webSecurity: true,
-    },
+    webPreferences: createDesktopRendererWebPreferences(path.join(__dirname, "preload.js")),
   })
+  attachDesktopBrowserWebviewPolicy(win.webContents)
   win.once("ready-to-show", () => win.show())
   win.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
     if (isTrustedRendererNavigation(targetUrl)) return { action: "allow" }
