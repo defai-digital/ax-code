@@ -183,7 +183,7 @@ test("TUI worker removes signal handlers during RPC shutdown", async () => {
 
 test("TUI worker always forces exit after uncaught exceptions", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts"), "utf-8")
-  const start = src.indexOf('process.on("uncaughtException"')
+  const start = src.indexOf('registerTuiProcessHandler(\n  "uncaughtException"')
   const end = src.indexOf("const handleGlobalEvent", start)
   expect(start).toBeGreaterThan(-1)
   const block = src.slice(start, end)
@@ -191,6 +191,13 @@ test("TUI worker always forces exit after uncaught exceptions", async () => {
   expect(block).not.toContain(".unref()")
   expect(end).toBeGreaterThan(start)
   expect(block).not.toContain("if (!shutdownPromise) setTimeout")
+
+  const lifecycleSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/util/lifecycle.ts"), "utf-8")
+  const handlerStart = lifecycleSrc.indexOf("export function registerTuiProcessHandler")
+  expect(handlerStart).toBeGreaterThan(-1)
+  const handlerBlock = lifecycleSrc.slice(handlerStart)
+  expect(handlerBlock).toContain("process.on(event, handler)")
+  expect(handlerBlock).toContain("process.off(event, handler)")
 })
 
 test("TUI worker waits for an old event stream before replacing it", async () => {
@@ -208,6 +215,15 @@ test("autonomous pulse timer does not keep the process alive", async () => {
     "utf-8",
   )
 
-  expect(src).toContain("timer = setInterval(tick, TICK_MS)")
-  expect(src).toContain("timer.unref?.()")
+  expect(src).toContain("cancelTimer = scheduleTuiInterval(tick, {")
+  expect(src).toContain("delayMs: TICK_MS")
+  expect(src).toContain("unref: true")
+
+  const timerSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/util/timer.ts"), "utf-8")
+  const intervalStart = timerSrc.indexOf("export function scheduleTuiInterval")
+  expect(intervalStart).toBeGreaterThan(-1)
+  const intervalBlock = timerSrc.slice(intervalStart)
+  expect(intervalBlock).toContain("const timer = setInterval(run, input.delayMs)")
+  expect(intervalBlock).toContain("unrefTimer(timer, input.unref)")
+  expect(intervalBlock).toContain("clearInterval(timer)")
 })
