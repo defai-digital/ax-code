@@ -41,6 +41,59 @@ const byUpdatedAt = (a: DesktopSshInstanceStatus, b: DesktopSshInstanceStatus) =
   return b.updatedAtMs - a.updatedAtMs
 }
 
+const toStatusMap = (statuses: DesktopSshInstanceStatus[]): Record<string, DesktopSshInstanceStatus> => {
+  const statusMap: Record<string, DesktopSshInstanceStatus> = {}
+  for (const status of [...statuses].sort(byUpdatedAt)) {
+    statusMap[status.id] = status
+  }
+  return statusMap
+}
+
+const mergeNewerStatuses = (
+  current: Record<string, DesktopSshInstanceStatus>,
+  incoming: Record<string, DesktopSshInstanceStatus>,
+): Record<string, DesktopSshInstanceStatus> => {
+  let next = current
+  for (const status of Object.values(incoming)) {
+    const existing = next[status.id]
+    if (existing && existing.updatedAtMs > status.updatedAtMs) {
+      continue
+    }
+    if (next === current) {
+      next = { ...current }
+    }
+    next[status.id] = status
+  }
+  return next
+}
+
+const pickStatusMapEntries = (
+  statusesById: Record<string, DesktopSshInstanceStatus>,
+  ids: Set<string>,
+): Record<string, DesktopSshInstanceStatus> => {
+  const picked: Record<string, DesktopSshInstanceStatus> = {}
+  for (const [id, status] of Object.entries(statusesById)) {
+    if (ids.has(id)) {
+      picked[id] = status
+    }
+  }
+  return picked
+}
+
+const upsertNewerStatus = (
+  current: Record<string, DesktopSshInstanceStatus>,
+  status: DesktopSshInstanceStatus,
+): Record<string, DesktopSshInstanceStatus> => {
+  const existing = current[status.id]
+  if (existing && existing.updatedAtMs > status.updatedAtMs) {
+    return current
+  }
+  return {
+    ...current,
+    [status.id]: status,
+  }
+}
+
 export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
   instances: [],
   statusesById: {},
@@ -57,29 +110,24 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
     set({ isLoading: true, error: null })
     try {
       const [config, statuses] = await Promise.all([desktopSshInstancesGet(), desktopSshStatus()])
-      const statusMap: Record<string, DesktopSshInstanceStatus> = {}
-      for (const status of statuses.sort(byUpdatedAt)) {
-        statusMap[status.id] = status
-      }
+      const statusMap = toStatusMap(statuses)
+      const configuredIds = new Set(config.instances.map((instance) => instance.id))
 
       if (!get().listenerReady) {
         await listenDesktopSshStatus((status) => {
           set((state) => ({
-            statusesById: {
-              ...state.statusesById,
-              [status.id]: status,
-            },
+            statusesById: upsertNewerStatus(state.statusesById, status),
           }))
         })
       }
 
-      set({
+      set((state) => ({
         instances: config.instances,
-        statusesById: statusMap,
+        statusesById: mergeNewerStatuses(statusMap, pickStatusMapEntries(state.statusesById, configuredIds)),
         isLoading: false,
         initialized: true,
         listenerReady: true,
-      })
+      }))
     } catch (error) {
       set({
         isLoading: false,
@@ -105,11 +153,7 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
   refreshStatuses: async () => {
     try {
       const statuses = await desktopSshStatus()
-      const statusMap: Record<string, DesktopSshInstanceStatus> = {}
-      for (const status of statuses.sort(byUpdatedAt)) {
-        statusMap[status.id] = status
-      }
-      set({ statusesById: statusMap })
+      set({ statusesById: toStatusMap(statuses) })
     } catch (error) {
       set({ error: error instanceof Error ? error.message : String(error) })
     }
