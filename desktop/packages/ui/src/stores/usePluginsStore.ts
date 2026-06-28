@@ -147,6 +147,7 @@ const DEFAULT_PLUGINS_CACHE_KEY = "__default__"
 const pluginsLastLoadedAt = new Map<string, number>()
 const pluginsLoadInFlight = new Map<string, Promise<boolean>>()
 const pluginsLoadRequestIds = new Map<string, number>()
+let pluginsLoadSequence = 0
 const pluginRegistrySpecRequestIds = new Map<string, number>()
 let pluginRegistryRequestSequence = 0
 let pluginRegistryActiveLoads = 0
@@ -192,9 +193,9 @@ export const usePluginsStore = create<PluginsStore>()(
             return inFlight
           }
 
-          const requestId = (pluginsLoadRequestIds.get(cacheKey) ?? 0) + 1
+          const requestId = ++pluginsLoadSequence
           pluginsLoadRequestIds.set(cacheKey, requestId)
-          const isCurrentLoad = () => pluginsLoadRequestIds.get(cacheKey) === requestId
+          const isCurrentLoad = () => pluginsLoadSequence === requestId && pluginsLoadRequestIds.get(cacheKey) === requestId
 
           const request = (async () => {
             set({ isLoading: true })

@@ -142,6 +142,8 @@ const SKILLS_LOAD_CACHE_TTL_MS = 5000
 const DEFAULT_SKILLS_CACHE_KEY = "__default__"
 const skillsLastLoadedAt = new Map<string, number>()
 const skillsLoadInFlight = new Map<string, Promise<boolean>>()
+const skillsLoadRequestIds = new Map<string, number>()
+let skillsLoadSequence = 0
 
 const getSkillsCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_SKILLS_CACHE_KEY
@@ -180,6 +182,10 @@ export const useSkillsStore = create<SkillsStore>()(
             return inFlight
           }
 
+          const requestId = ++skillsLoadSequence
+          skillsLoadRequestIds.set(cacheKey, requestId)
+          const isCurrentLoad = () => skillsLoadSequence === requestId && skillsLoadRequestIds.get(cacheKey) === requestId
+
           const request = (async () => {
             set({ isLoading: true })
             const previousSkills = get().skills
@@ -205,6 +211,7 @@ export const useSkillsStore = create<SkillsStore>()(
                   group: parseSkillGroup(s.path),
                 }))
 
+                if (!isCurrentLoad()) return true
                 set({ skills: configSkills, isLoading: false })
                 skillsLastLoadedAt.set(cacheKey, Date.now())
                 return true
@@ -216,7 +223,9 @@ export const useSkillsStore = create<SkillsStore>()(
             }
 
             console.error("Failed to load skills:", lastError)
-            set({ skills: previousSkills, isLoading: false })
+            if (isCurrentLoad()) {
+              set({ skills: previousSkills, isLoading: false })
+            }
             return false
           })()
 
@@ -224,7 +233,9 @@ export const useSkillsStore = create<SkillsStore>()(
           try {
             return await request
           } finally {
-            skillsLoadInFlight.delete(cacheKey)
+            if (skillsLoadInFlight.get(cacheKey) === request) {
+              skillsLoadInFlight.delete(cacheKey)
+            }
           }
         },
 

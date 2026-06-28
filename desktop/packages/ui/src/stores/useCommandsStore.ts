@@ -37,6 +37,8 @@ const COMMANDS_LOAD_CACHE_TTL_MS = 5000
 const DEFAULT_COMMANDS_CACHE_KEY = "__default__"
 const commandsLastLoadedAt = new Map<string, number>()
 const commandsLoadInFlight = new Map<string, Promise<boolean>>()
+const commandsLoadRequestIds = new Map<string, number>()
+let commandsLoadSequence = 0
 
 const getCommandsCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_COMMANDS_CACHE_KEY
@@ -136,6 +138,11 @@ export const useCommandsStore = create<CommandsStore>()(
             return inFlight
           }
 
+          const requestId = ++commandsLoadSequence
+          commandsLoadRequestIds.set(cacheKey, requestId)
+          const isCurrentLoad = () =>
+            commandsLoadSequence === requestId && commandsLoadRequestIds.get(cacheKey) === requestId
+
           const request = (async () => {
             set({ isLoading: true })
             const previousCommands = get().commands
@@ -198,6 +205,7 @@ export const useCommandsStore = create<CommandsStore>()(
                   }),
                 )
 
+                if (!isCurrentLoad()) return true
                 const nextSignature = buildCommandsSignature(commandsWithScope)
                 if (previousSignature !== nextSignature) {
                   set({ commands: commandsWithScope, isLoading: false })
@@ -214,7 +222,9 @@ export const useCommandsStore = create<CommandsStore>()(
             }
 
             console.error("Failed to load commands:", lastError)
-            set({ commands: previousCommands, isLoading: false })
+            if (isCurrentLoad()) {
+              set({ commands: previousCommands, isLoading: false })
+            }
             return false
           })()
 
@@ -222,7 +232,9 @@ export const useCommandsStore = create<CommandsStore>()(
           try {
             return await request
           } finally {
-            commandsLoadInFlight.delete(cacheKey)
+            if (commandsLoadInFlight.get(cacheKey) === request) {
+              commandsLoadInFlight.delete(cacheKey)
+            }
           }
         },
 

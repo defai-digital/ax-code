@@ -48,6 +48,8 @@ const AGENTS_LOAD_CACHE_TTL_MS = 5000
 const DEFAULT_AGENTS_CACHE_KEY = "__default__"
 const agentsLastLoadedAt = new Map<string, number>()
 const agentsLoadInFlight = new Map<string, Promise<boolean>>()
+const agentsLoadRequestIds = new Map<string, number>()
+let agentsLoadSequence = 0
 
 const getAgentsCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_AGENTS_CACHE_KEY
@@ -191,6 +193,10 @@ export const useAgentsStore = create<AgentsStore>()(
             return inFlight
           }
 
+          const requestId = ++agentsLoadSequence
+          agentsLoadRequestIds.set(cacheKey, requestId)
+          const isCurrentLoad = () => agentsLoadSequence === requestId && agentsLoadRequestIds.get(cacheKey) === requestId
+
           const request = (async () => {
             set({ isLoading: true })
             const previousAgents = get().agents
@@ -253,6 +259,7 @@ export const useAgentsStore = create<AgentsStore>()(
                   }),
                 )
 
+                if (!isCurrentLoad()) return true
                 const nextSignature = buildAgentsSignature(agentsWithScope)
                 if (previousSignature !== nextSignature) {
                   set({ agents: agentsWithScope, isLoading: false })
@@ -266,7 +273,9 @@ export const useAgentsStore = create<AgentsStore>()(
               }
             }
 
-            set({ isLoading: false })
+            if (isCurrentLoad()) {
+              set({ isLoading: false })
+            }
             return false
           })()
 
@@ -274,7 +283,9 @@ export const useAgentsStore = create<AgentsStore>()(
           try {
             return await request
           } finally {
-            agentsLoadInFlight.delete(cacheKey)
+            if (agentsLoadInFlight.get(cacheKey) === request) {
+              agentsLoadInFlight.delete(cacheKey)
+            }
           }
         },
 

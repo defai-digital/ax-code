@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 import type { PluginEntry, PluginFile, RegistryResult } from "./usePluginsStore"
 import { API_ENDPOINTS } from "@/lib/http"
 
-const activeProjectPath = "/workspace/project"
+let activeProjectPath = "/workspace/project"
 
 const refreshAfterAxCodeRestartMock = vi.fn(async () => undefined)
 const startConfigUpdateMock = vi.fn(() => undefined)
@@ -134,6 +134,7 @@ const requestBody = (callIndex: number): unknown => {
 
 describe("usePluginsStore", () => {
   beforeEach(() => {
+    activeProjectPath = "/workspace/project"
     resetStore()
     fetchCalls.length = 0
     queuedResponses = []
@@ -193,6 +194,34 @@ describe("usePluginsStore", () => {
     await firstLoad
 
     expect(fetchCalls).toHaveLength(2)
+    expect(usePluginsStore.getState().entries).toEqual([latestEntry])
+    expect(usePluginsStore.getState().files).toEqual([])
+    expect(usePluginsStore.getState().isLoading).toBe(false)
+  })
+
+  test("keeps the newest plugin list after switching project directories", async () => {
+    const staleRefresh = createDeferred<Response>()
+    const latestRefresh = createDeferred<Response>()
+    const staleEntry: PluginEntry = { ...entry, id: "config:user:old-project-plugin", spec: "old-project-plugin" }
+    const latestEntry: PluginEntry = { ...entry, id: "config:user:new-project-plugin", spec: "new-project-plugin" }
+    queueFetchResponses([staleRefresh.promise, latestRefresh.promise])
+
+    activeProjectPath = "/workspace/old-project"
+    const oldLoad = usePluginsStore.getState().loadPlugins({ force: true })
+    activeProjectPath = "/workspace/new-project"
+    const newLoad = usePluginsStore.getState().loadPlugins({ force: true })
+    await Promise.resolve()
+
+    latestRefresh.resolve(jsonResponse({ entries: [latestEntry], files: [] }))
+    await newLoad
+
+    staleRefresh.resolve(jsonResponse({ entries: [staleEntry], files: [] }))
+    await oldLoad
+
+    expect(fetchCalls.map((call) => call.input)).toEqual([
+      "/api/config/plugins?directory=%2Fworkspace%2Fold-project",
+      "/api/config/plugins?directory=%2Fworkspace%2Fnew-project",
+    ])
     expect(usePluginsStore.getState().entries).toEqual([latestEntry])
     expect(usePluginsStore.getState().files).toEqual([])
     expect(usePluginsStore.getState().isLoading).toBe(false)

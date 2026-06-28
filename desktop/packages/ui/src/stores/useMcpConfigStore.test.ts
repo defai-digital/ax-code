@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 
 import type { McpServerWithScope } from "./useMcpConfigStore"
 
-const activeProjectPath = "/workspace/project"
+let activeProjectPath = "/workspace/project"
 
 vi.doMock("@/stores/useProjectsStore", () => ({
   useProjectsStore: {
@@ -78,6 +78,7 @@ const resetStore = () => {
 
 describe("useMcpConfigStore", () => {
   beforeEach(() => {
+    activeProjectPath = "/workspace/project"
     resetStore()
     fetchCalls.length = 0
     queuedResponses = []
@@ -115,6 +116,45 @@ describe("useMcpConfigStore", () => {
 
     expect(fetchCalls).toHaveLength(2)
     expect(fetchCalls[0]?.input).toBe("/api/config/mcp?directory=%2Fworkspace%2Fproject")
+    expect(useMcpConfigStore.getState().mcpServers).toEqual([latestServer])
+    expect(useMcpConfigStore.getState().isLoading).toBe(false)
+  })
+
+  test("keeps the newest MCP config list after switching project directories", async () => {
+    const staleRefresh = createDeferred<Response>()
+    const latestRefresh = createDeferred<Response>()
+    const staleServer: McpServerWithScope = {
+      name: "old-project",
+      type: "local",
+      command: ["node", "old-project.js"],
+      enabled: true,
+      scope: "project",
+    }
+    const latestServer: McpServerWithScope = {
+      name: "new-project",
+      type: "local",
+      command: ["node", "new-project.js"],
+      enabled: true,
+      scope: "project",
+    }
+    queueFetchResponses([staleRefresh.promise, latestRefresh.promise])
+
+    activeProjectPath = "/workspace/old-project"
+    const oldLoad = useMcpConfigStore.getState().loadMcpConfigs({ force: true })
+    activeProjectPath = "/workspace/new-project"
+    const newLoad = useMcpConfigStore.getState().loadMcpConfigs({ force: true })
+    await Promise.resolve()
+
+    latestRefresh.resolve(jsonResponse([latestServer]))
+    await newLoad
+
+    staleRefresh.resolve(jsonResponse([staleServer]))
+    await oldLoad
+
+    expect(fetchCalls.map((call) => call.input)).toEqual([
+      "/api/config/mcp?directory=%2Fworkspace%2Fold-project",
+      "/api/config/mcp?directory=%2Fworkspace%2Fnew-project",
+    ])
     expect(useMcpConfigStore.getState().mcpServers).toEqual([latestServer])
     expect(useMcpConfigStore.getState().isLoading).toBe(false)
   })

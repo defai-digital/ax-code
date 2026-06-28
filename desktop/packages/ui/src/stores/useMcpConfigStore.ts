@@ -105,6 +105,7 @@ const DEFAULT_MCP_CACHE_KEY = "__default__"
 const mcpLastLoadedAt = new Map<string, number>()
 const mcpLoadInFlight = new Map<string, Promise<boolean>>()
 const mcpLoadRequestIds = new Map<string, number>()
+let mcpLoadSequence = 0
 
 const getMcpCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_MCP_CACHE_KEY
@@ -160,9 +161,9 @@ export const useMcpConfigStore = create<McpConfigStore>()(
             return inFlight
           }
 
-          const requestId = (mcpLoadRequestIds.get(cacheKey) ?? 0) + 1
+          const requestId = ++mcpLoadSequence
           mcpLoadRequestIds.set(cacheKey, requestId)
-          const isCurrentLoad = () => mcpLoadRequestIds.get(cacheKey) === requestId
+          const isCurrentLoad = () => mcpLoadSequence === requestId && mcpLoadRequestIds.get(cacheKey) === requestId
 
           const request = (async () => {
             set({ isLoading: true })
