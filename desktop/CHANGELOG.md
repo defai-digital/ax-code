@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.18] - 2026-06-28
+
+### Fixed
+
+- CLI: publishes the current stable release line with accumulated Desktop reliability fixes.
+- Desktop: stabilizes update checks, event stream retries, SSH status refreshes, browser navigation, and open-in-app metadata handling.
+- Release: refreshes signed CLI and Desktop assets with Homebrew formula and cask updates.
+
 ## [6.7.17] - 2026-06-28
 
 ### Fixed
