@@ -66,56 +66,91 @@ export namespace ProviderTransform {
     model: Provider.Model,
     options: Record<string, unknown>,
   ): ModelMessage[] {
-    if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field) {
-      const field = model.capabilities.interleaved.field
-      return msgs.map((msg) => {
-        if (msg.role === "assistant" && Array.isArray(msg.content)) {
-          // Single pass: collect reasoning text and the non-reasoning content
-          // simultaneously. The previous impl ran two filter() passes over the
-          // same array — visible on long assistant turns with many parts.
-          let reasoningText = ""
-          const filteredContent: typeof msg.content = []
-          for (const part of msg.content as Array<{ type: string; text?: string }>) {
-            if (part.type === "reasoning") {
-              if (part.text) reasoningText += part.text
-            } else {
-              filteredContent.push(part as (typeof msg.content)[number])
-            }
-          }
+    const interleavedField =
+      typeof model.capabilities.interleaved === "object" ? model.capabilities.interleaved.field : undefined
 
-          // Include reasoning_content | reasoning_details directly on the message for all assistant messages
-          if (reasoningText) {
-            // Read the extension field through a narrow structural
-            // shape instead of `as any`. Keeps the rest of the object
-            // fully type-checked while acknowledging openaiCompatible
-            // is an openai-compatible extension not modelled by the
-            // core ModelMessage type.
-            const existing = (msg.providerOptions as { openaiCompatible?: Record<string, string> } | undefined)
-              ?.openaiCompatible
-            return {
-              ...msg,
-              content: filteredContent,
-              providerOptions: {
-                ...msg.providerOptions,
-                openaiCompatible: {
-                  ...existing,
-                  [field]: reasoningText,
-                },
-              },
-            }
-          }
+    // Whether we need to strip reasoning parts from assistant messages.
+    //
+    // Case 1 — interleaved.field declared (e.g. Kimi/Moonshot,
+    // deepseek-reasoner, GLM on many providers): the model accepts reasoning on
+    // input via a provider-specific top-level field. We strip the reasoning
+    // PARTS and carry their text through providerOptions.openaiCompatible[field]
+    // so the provider receives it in the expected position.
+    //
+    // Case 2 — the provider's API REJECTS `reasoning_content` on input assistant
+    // messages. The @ai-sdk/openai-compatible serializer unconditionally emits
+    // `reasoning_content` whenever a reasoning part is present, so for these
+    // providers we must strip the parts before they reach the wire. Groq is the
+    // known rejecter: "property 'reasoning_content' is unsupported" — even for
+    // reasoning-capable models like gpt-oss and qwen3.6-27b.
+    //
+    // All other openai-compatible models are left untouched: many providers
+    // (DeepSeek, Qwen, etc.) accept reasoning_content on input and benefit from
+    // cross-turn reasoning carry-over. Stripping would silently degrade their
+    // quality, so we do NOT strip by default.
+    const mustStrip = Boolean(interleavedField) || rejectsReasoningContentOnInput(model)
+    if (!mustStrip) return msgs
 
-          return {
-            ...msg,
-            content: filteredContent,
-          }
+    const field = interleavedField
+    return msgs.map((msg) => {
+      if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg
+
+      // Single pass: collect reasoning text and the non-reasoning content
+      // simultaneously. The previous impl ran two filter() passes over the
+      // same array — visible on long assistant turns with many parts.
+      let reasoningText = ""
+      const filteredContent: typeof msg.content = []
+      for (const part of msg.content as Array<{ type: string; text?: string }>) {
+        if (part.type === "reasoning") {
+          if (part.text) reasoningText += part.text
+        } else {
+          filteredContent.push(part as (typeof msg.content)[number])
         }
+      }
 
-        return msg
-      })
-    }
+      // When an interleaved field is declared, carry the reasoning text
+      // through providerOptions so the provider receives it in its expected
+      // top-level position. Otherwise the parts are simply dropped (the
+      // provider rejects reasoning_content, so there is nothing to carry).
+      if (field && reasoningText) {
+        // Read the extension field through a narrow structural
+        // shape instead of `as any`. Keeps the rest of the object
+        // fully type-checked while acknowledging openaiCompatible
+        // is an openai-compatible extension not modelled by the
+        // core ModelMessage type.
+        const existing = (msg.providerOptions as { openaiCompatible?: Record<string, string> } | undefined)
+          ?.openaiCompatible
+        return {
+          ...msg,
+          content: filteredContent,
+          providerOptions: {
+            ...msg.providerOptions,
+            openaiCompatible: {
+              ...existing,
+              [field]: reasoningText,
+            },
+          },
+        }
+      }
 
-    return msgs
+      return {
+        ...msg,
+        content: filteredContent,
+      }
+    })
+  }
+
+  // Providers whose API rejects `reasoning_content` on INPUT assistant messages.
+  // The @ai-sdk/openai-compatible serializer emits this field unconditionally
+  // whenever a reasoning part is present, so for these providers we strip the
+  // reasoning parts in normalizeMessages before they reach the wire. This is an
+  // explicit denylist rather than a broad default because hundreds of
+  // openai-compatible reasoning models (DeepSeek-R1, Qwen, etc. on many
+  // providers) accept and benefit from reasoning_content carry-over; stripping
+  // by default would silently degrade their multi-turn reasoning quality.
+  function rejectsReasoningContentOnInput(model: Provider.Model): boolean {
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    return model.providerID === "groq"
   }
 
   function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {

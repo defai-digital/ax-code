@@ -667,6 +667,162 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
     ])
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
   })
+
+  test("Groq gpt-oss via @ai-sdk/openai-compatible strips reasoning parts from assistant messages", () => {
+    // Groq rejects `reasoning_content` on INPUT assistant messages:
+    // "property 'reasoning_content' is unsupported" — even for reasoning-
+    // capable models like gpt-oss and qwen3.6-27b. The
+    // @ai-sdk/openai-compatible serializer unconditionally emits
+    // reasoning_content whenever a reasoning part is present, so we must
+    // strip those parts before they reach the wire.
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          { type: "reasoning", text: "Let me think about this..." },
+          { type: "text", text: "Here is my answer." },
+          {
+            type: "tool-call",
+            toolCallId: "call_1",
+            toolName: "bash",
+            input: { command: "echo hi" },
+          },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(
+      msgs,
+      {
+        id: ModelID.make("groq/openai/gpt-oss-120b"),
+        providerID: ProviderID.make("groq"),
+        api: {
+          id: "openai/gpt-oss-120b",
+          url: "https://api.groq.com/openai/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        name: "GPT OSS 120B",
+        capabilities: {
+          temperature: true,
+          reasoning: true,
+          attachment: false,
+          toolcall: true,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        limit: { context: 131072, output: 65536 },
+        status: "active",
+        options: {},
+        headers: {},
+        release_date: "2025-08-05",
+      },
+      {},
+    )
+
+    // Reasoning part must be gone so the SDK does not emit reasoning_content.
+    expect(result[0].content).toEqual([
+      { type: "text", text: "Here is my answer." },
+      { type: "tool-call", toolCallId: "call_1", toolName: "bash", input: { command: "echo hi" } },
+    ])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
+  test("Groq qwen3.6-27b via @ai-sdk/openai-compatible strips reasoning parts", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          { type: "reasoning", text: "Thinking step..." },
+          { type: "text", text: "Response." },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(
+      msgs,
+      {
+        id: ModelID.make("groq/qwen/qwen3.6-27b"),
+        providerID: ProviderID.make("groq"),
+        api: {
+          id: "qwen/qwen3.6-27b",
+          url: "https://api.groq.com/openai/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        name: "Qwen3.6-27B",
+        capabilities: {
+          temperature: true,
+          reasoning: true,
+          attachment: true,
+          toolcall: true,
+          input: { text: true, audio: false, image: true, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        limit: { context: 131072, output: 32768 },
+        status: "active",
+        options: {},
+        headers: {},
+        release_date: "2026-04-27",
+      },
+      {},
+    )
+
+    expect(result[0].content).toEqual([{ type: "text", text: "Response." }])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
+  test("non-Groq openai-compatible reasoning models keep reasoning parts (regression guard)", () => {
+    // DeepSeek-R1 / Qwen / GLM on many openai-compatible providers accept
+    // reasoning_content on input and benefit from cross-turn reasoning
+    // carry-over. Stripping would silently degrade their quality, so only
+    // known rejecters (Groq) should have reasoning stripped.
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          { type: "reasoning", text: "Important prior reasoning." },
+          { type: "text", text: "Response." },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(
+      msgs,
+      {
+        id: ModelID.make("huggingface/deepseek-ai/DeepSeek-R1"),
+        providerID: ProviderID.make("huggingface"),
+        api: {
+          id: "deepseek-ai/DeepSeek-R1",
+          url: "https://api-inference.huggingface.co/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        name: "DeepSeek R1",
+        capabilities: {
+          temperature: true,
+          reasoning: true,
+          attachment: false,
+          toolcall: true,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        limit: { context: 131072, output: 32768 },
+        status: "active",
+        options: {},
+        headers: {},
+        release_date: "2025-01-01",
+      },
+      {},
+    )
+
+    // Reasoning parts must be preserved so the SDK can emit reasoning_content.
+    expect(result[0].content).toEqual([
+      { type: "reasoning", text: "Important prior reasoning." },
+      { type: "text", text: "Response." },
+    ])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
 })
 
 describe("ProviderTransform.message - empty image handling", () => {
