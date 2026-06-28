@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/icon/Icon"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import { cn } from "@/lib/utils"
+import { CanvasSaveQueue } from "./canvasAutosave"
 
 type CanvasNoteElement = {
   id: string
@@ -91,10 +92,13 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
   const [saveState, setSaveState] = React.useState<SaveState>("loading")
   const [error, setError] = React.useState<string | null>(null)
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const mountedRef = React.useRef(true)
   const loadedRef = React.useRef(false)
   const latestDocumentRef = React.useRef<CanvasDocument>(emptyDocument())
   const hasPendingSaveRef = React.useRef(false)
   const saveTimerRef = React.useRef<number | null>(null)
+  const saveScopeRef = React.useRef(0)
+  const saveQueueRef = React.useRef<CanvasSaveQueue<CanvasDocument> | null>(null)
   const dragRef = React.useRef<{
     id: string
     startX: number
@@ -103,8 +107,43 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
     elementY: number
   } | null>(null)
 
+  if (saveQueueRef.current === null) {
+    saveQueueRef.current = new CanvasSaveQueue<CanvasDocument>({
+      save: putCanvasDocument,
+      isCurrentScope: (scope) => mountedRef.current && saveScopeRef.current === scope,
+      isLatestDocument: (nextDocument) => latestDocumentRef.current === nextDocument,
+      onLatestSaved: () => {
+        hasPendingSaveRef.current = false
+      },
+      onStatus: (scope, status, statusError) => {
+        if (!mountedRef.current || saveScopeRef.current !== scope) {
+          return
+        }
+        if (status === "saving") {
+          setSaveState("saving")
+          setError(null)
+          return
+        }
+        if (status === "saved") {
+          setSaveState("saved")
+          return
+        }
+        setSaveState("error")
+        setError(statusError instanceof Error ? statusError.message : "Failed to save canvas")
+      },
+    })
+  }
+
+  React.useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   React.useEffect(() => {
     let disposed = false
+    saveScopeRef.current += 1
+    const scope = saveScopeRef.current
     loadedRef.current = false
     hasPendingSaveRef.current = false
     setSaveState("loading")
@@ -121,7 +160,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
         if (!response.ok) {
           throw new Error(typeof body?.error === "string" ? body.error : `HTTP ${response.status}`)
         }
-        if (!disposed) {
+        if (!disposed && saveScopeRef.current === scope) {
           const nextDocument = (body?.document as CanvasDocument | undefined) ?? emptyDocument()
           latestDocumentRef.current = nextDocument
           setDocument(nextDocument)
@@ -130,7 +169,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
         }
       })
       .catch((loadError: unknown) => {
-        if (!disposed) {
+        if (!disposed && saveScopeRef.current === scope) {
           setSaveState("error")
           setError(loadError instanceof Error ? loadError.message : "Failed to load canvas")
         }
@@ -144,27 +183,27 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
       }
       if (loadedRef.current && hasPendingSaveRef.current) {
         hasPendingSaveRef.current = false
-        void putCanvasDocument(directory, latestDocumentRef.current).catch((saveError: unknown) => {
-          console.error("[CanvasPanel] failed to flush pending canvas save", saveError)
-        })
+        void saveQueueRef.current
+          ?.enqueue({
+            scope,
+            directory,
+            document: latestDocumentRef.current,
+            notify: false,
+          })
+          .catch((saveError: unknown) => {
+            console.error("[CanvasPanel] failed to flush pending canvas save", saveError)
+          })
       }
     }
   }, [directory])
 
   const saveDocument = React.useCallback(
-    async (nextDocument: CanvasDocument) => {
-      setSaveState("saving")
-      setError(null)
-      try {
-        await putCanvasDocument(directory, nextDocument)
-        if (latestDocumentRef.current === nextDocument) {
-          hasPendingSaveRef.current = false
-        }
-        setSaveState("saved")
-      } catch (saveError) {
-        setSaveState("error")
-        setError(saveError instanceof Error ? saveError.message : "Failed to save canvas")
-      }
+    (nextDocument: CanvasDocument) => {
+      void saveQueueRef.current?.enqueue({
+        scope: saveScopeRef.current,
+        directory,
+        document: nextDocument,
+      })
     },
     [directory],
   )
@@ -181,7 +220,7 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
           }
           saveTimerRef.current = window.setTimeout(() => {
             saveTimerRef.current = null
-            void saveDocument(next)
+            saveDocument(next)
           }, SAVE_DEBOUNCE_MS)
         }
         return next
@@ -272,7 +311,9 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
     if (!dragRef.current) return
     try {
       event.currentTarget.releasePointerCapture(event.pointerId)
-    } catch {}
+    } catch {
+      // Pointer capture can already be lost when the drag ends outside the canvas.
+    }
     dragRef.current = null
   }, [])
 
@@ -366,7 +407,9 @@ export const CanvasPanel: React.FC<CanvasPanelProps> = ({ directory }) => {
                   }
                   try {
                     event.currentTarget.parentElement?.setPointerCapture(event.pointerId)
-                  } catch {}
+                  } catch {
+                    // Pointer capture is best-effort across browser and Electron gesture paths.
+                  }
                 }}
               >
                 {element.type === "note" ? (
