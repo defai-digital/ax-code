@@ -29,6 +29,12 @@ const { collectOpenPathCandidates } = require("./open-paths")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
+const {
+  applyDesktopHostsConfigToRoot,
+  normalizeHostUrl,
+  readDesktopHostsConfigFromRoot,
+  sanitizeClientTokenForStorage,
+} = require("./desktop-hosts")
 const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
 
@@ -831,93 +837,21 @@ const sshManager = new ElectronSshManager({
 })
 
 // ── Host list (renderer-side switcher; persisted to settings) ──────────────
-const normalizeHostUrl = (raw) => {
-  const trimmed = typeof raw === "string" ? raw.trim() : ""
-  if (!trimmed) return null
-  try {
-    const parsed = new URL(trimmed)
-    if (!["http:", "https:"].includes(parsed.protocol)) return null
-    parsed.hash = ""
-    return parsed.toString()
-  } catch {
-    return null
-  }
-}
-
-const sanitizeHostUrlForStorage = (raw) => normalizeHostUrl(raw)
-const sanitizeClientTokenForStorage = (raw) => {
-  const token = typeof raw === "string" ? raw.trim() : ""
-  return token.length > 0 ? token : null
-}
-
 const readDesktopLocalClientToken = () =>
   sanitizeClientTokenForStorage(readSettingsRoot().desktopLocalClientToken) || ""
 
-const readDesktopHostsConfig = () => {
-  const root = readSettingsRoot()
-  const hostsRaw = Array.isArray(root.desktopHosts) ? root.desktopHosts : []
-  const hosts = hostsRaw
-    .map((entry) => {
-      const id = typeof entry?.id === "string" ? entry.id.trim() : ""
-      const url = sanitizeHostUrlForStorage(entry?.url)
-      if (!id || id === LOCAL_HOST_ID || !url) return null
-      const apiUrl = sanitizeHostUrlForStorage(entry?.apiUrl) || url
-      const clientToken = sanitizeClientTokenForStorage(entry?.clientToken)
-      const label = typeof entry?.label === "string" && entry.label.trim() ? entry.label.trim() : url
-      return { id, label, url, apiUrl, ...(clientToken ? { clientToken } : {}) }
-    })
-    .filter(Boolean)
-
-  return {
-    hosts,
-    defaultHostId:
-      typeof root.desktopDefaultHostId === "string" && root.desktopDefaultHostId.trim()
-        ? root.desktopDefaultHostId.trim()
-        : null,
-    initialHostChoiceCompleted: root.desktopInitialHostChoiceCompleted === true,
-  }
-}
+const readDesktopHostsConfig = (options) => readDesktopHostsConfigFromRoot(readSettingsRoot(), options)
 
 const writeDesktopHostsConfig = async (config) => {
   await mutateSettingsRoot((root) => {
-    root.desktopHosts = Array.isArray(config?.hosts)
-      ? config.hosts
-          .map((entry) => {
-            const id = typeof entry?.id === "string" ? entry.id.trim() : ""
-            const url = sanitizeHostUrlForStorage(entry?.url)
-            if (!id || id === LOCAL_HOST_ID || !url) return null
-            const apiUrl = sanitizeHostUrlForStorage(entry?.apiUrl) || url
-            const clientToken = sanitizeClientTokenForStorage(entry?.clientToken)
-            return {
-              id,
-              label: typeof entry?.label === "string" && entry.label.trim() ? entry.label.trim() : url,
-              url,
-              apiUrl,
-              ...(clientToken ? { clientToken } : {}),
-            }
-          })
-          .filter(Boolean)
-      : []
-    root.desktopDefaultHostId =
-      typeof config?.defaultHostId === "string" && config.defaultHostId.trim() ? config.defaultHostId.trim() : null
-    if (typeof config?.initialHostChoiceCompleted === "boolean") {
-      root.desktopInitialHostChoiceCompleted = config.initialHostChoiceCompleted
-    }
-    if (Object.prototype.hasOwnProperty.call(config || {}, "localClientToken")) {
-      const localClientToken = sanitizeClientTokenForStorage(config.localClientToken)
-      if (localClientToken) {
-        root.desktopLocalClientToken = localClientToken
-      } else {
-        delete root.desktopLocalClientToken
-      }
-    }
+    applyDesktopHostsConfigToRoot(root, config)
   })
 }
 
 // Our local origin is always the loopback server in this single-server model.
 const localOriginUrl = () => `http://localhost:${serverPort}`
 
-const resolveStoredClientTokenForUrl = (targetUrl, config = readDesktopHostsConfig()) => {
+const resolveStoredClientTokenForUrl = (targetUrl, config = readDesktopHostsConfig({ includeSecrets: true })) => {
   const normalizedTarget = normalizeHostUrl(targetUrl)
   if (!normalizedTarget) return ""
   for (const host of config.hosts || []) {
@@ -2407,7 +2341,7 @@ handleCommand("desktop_browser_capture_page", async (args) => {
 handleCommand(
   "desktop_hosts_get",
   async () => ({
-    ...readDesktopHostsConfig(),
+    ...readDesktopHostsConfig({ includeSecrets: false }),
     localOrigin: localOriginUrl(),
   }),
   { safeForRemote: true },
