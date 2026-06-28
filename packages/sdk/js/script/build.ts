@@ -43,6 +43,69 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.Pro
   })
 }
 
+async function patchGeneratedSseClient(outputPath: string) {
+  const file = path.join(dir, outputPath, "core", "serverSentEvents.gen.ts")
+  let source = await fs.readFile(file, "utf8")
+
+  const replacements: Array<[RegExp, string]> = [
+    [
+      /    while \(true\) \{\n      if \(signal\.aborted\) break;\n\n      attempt\+\+;/,
+      `    while (true) {
+      if (signal.aborted) break;`,
+    ],
+    [
+      /        const reader = response\.body\n          \.pipeThrough\(new TextDecoderStream\(\)\)\n          \.getReader\(\);\n\n        let buffer = '';/,
+      `        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+        attempt = 0
+
+        let buffer = ""
+        let completed = false`,
+    ],
+    [
+      /            const \{ done, value \} = await reader\.read\(\);\n            if \(done\) break;/,
+      `            const { done, value } = await reader.read()
+            if (done) {
+              completed = true
+              break
+            }`,
+    ],
+    [
+      /        \} finally \{\n          signal\.removeEventListener\('abort', abortHandler\);\n          reader\.releaseLock\(\);\n        \}/,
+      `        } finally {
+          signal.removeEventListener("abort", abortHandler)
+          if (!completed) {
+            await reader.cancel().catch(() => undefined)
+          }
+          reader.releaseLock()
+        }`,
+    ],
+    [
+      /        onSseError\?\.\(error\);\n\n        if \(\n          sseMaxRetryAttempts !== undefined &&\n          attempt >= sseMaxRetryAttempts\n        \) \{\n          break; \/\/ stop after firing error\n        \}\n\n        \/\/ exponential backoff: double retry each attempt, cap at 30s\n        const backoff = Math\.min\(\n          retryDelay \* 2 \*\* \(attempt - 1\),\n          sseMaxRetryDelay \?\? 30000,\n        \);/,
+      `        onSseError?.(error)
+        attempt += 1
+
+        if (sseMaxRetryAttempts !== undefined && attempt > sseMaxRetryAttempts) {
+          break // stop after firing error
+        }
+
+        // exponential backoff: double retry each attempt, cap at 30s
+        const backoffExponent = Math.max(attempt - 2, 0)
+        const backoff = Math.min(retryDelay * 2 ** backoffExponent, sseMaxRetryDelay ?? 30000)
+`,
+    ],
+  ]
+
+  for (const [pattern, after] of replacements) {
+    const next = source.replace(pattern, after)
+    if (next === source) {
+      throw new Error(`Generated SSE client changed shape; failed to patch ${file}`)
+    }
+    source = next
+  }
+
+  await fs.writeFile(file, source)
+}
+
 async function acquireBuildLock() {
   let announcedWait = false
   await fs.mkdir(path.dirname(buildLockDir), { recursive: true })
@@ -146,6 +209,8 @@ try {
 
   await generateClient("./src/gen")
   await generateClient("./src/v2/gen")
+  await patchGeneratedSseClient("./src/gen")
+  await patchGeneratedSseClient("./src/v2/gen")
 
   await run(process.execPath, [packageBin("prettier"), "--write", "src/gen"])
   await run(process.execPath, [packageBin("prettier"), "--write", "src/v2"])

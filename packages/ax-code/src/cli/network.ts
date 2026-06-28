@@ -33,18 +33,23 @@ const options = {
 }
 
 export type NetworkOptions = InferredOptionTypes<typeof options>
+type NetworkOptionsWithRawArgv = NetworkOptions & { __axCodeRawArgv?: string[] }
 
 export function withNetworkOptions<T>(yargs: Argv<T>) {
   return yargs.options(options)
 }
 
-export async function resolveNetworkOptions(args: NetworkOptions) {
+export async function resolveNetworkOptions(
+  args: NetworkOptions,
+  rawArgv = (args as NetworkOptionsWithRawArgv).__axCodeRawArgv ?? process.argv,
+) {
   const config = await Config.global()
   // Detect both the space form (`--port 80`) and the equals form (`--port=80`).
-  // `process.argv.includes(flag)` only matches the space form, so an explicit
-  // `--port=80` was treated as unset and silently overridden by config/defaults.
+  // Direct callers can pass argv, and CLI handlers receive the parser's raw
+  // argv from boot middleware. This keeps programmatic cli(argv) parsing from
+  // depending on the host process argv.
   const flagExplicitlySet = (flag: string, options?: { boolean?: boolean }) =>
-    process.argv.some((arg) => {
+    rawArgv.some((arg) => {
       if (arg === flag || arg.startsWith(`${flag}=`)) return true
       if (!options?.boolean) return false
       const negated = `--no-${flag.slice(2)}`

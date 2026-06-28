@@ -154,6 +154,7 @@ export function removeHooks() {
 }
 
 export function cli(argv = hideBin(process.argv)) {
+  const rawArgv = argv.slice()
   let cli = yargs(argv)
     .parserConfiguration({ "populate--": true })
     .scriptName("ax-code")
@@ -189,6 +190,10 @@ export function cli(argv = hideBin(process.argv)) {
       type: "boolean",
     })
     .middleware(async (opts) => {
+      Object.defineProperty(opts, "__axCodeRawArgv", {
+        value: rawArgv,
+        enumerable: false,
+      })
       await init(opts)
       await migrate()
     })

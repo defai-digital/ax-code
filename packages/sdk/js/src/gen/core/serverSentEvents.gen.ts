@@ -100,8 +100,6 @@ export const createSseClient = <TData = unknown>({
     while (true) {
       if (signal.aborted) break
 
-      attempt++
-
       const headers =
         options.headers instanceof Headers
           ? options.headers
@@ -133,8 +131,10 @@ export const createSseClient = <TData = unknown>({
         if (!response.body) throw new Error("No body in SSE response")
 
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+        attempt = 0
 
         let buffer = ""
+        let completed = false
 
         const abortHandler = () => {
           try {
@@ -149,7 +149,10 @@ export const createSseClient = <TData = unknown>({
         try {
           while (true) {
             const { done, value } = await reader.read()
-            if (done) break
+            if (done) {
+              completed = true
+              break
+            }
             buffer += value
             // Normalize line endings: CRLF -> LF, then CR -> LF
             buffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
@@ -214,6 +217,9 @@ export const createSseClient = <TData = unknown>({
           }
         } finally {
           signal.removeEventListener("abort", abortHandler)
+          if (!completed) {
+            await reader.cancel().catch(() => undefined)
+          }
           reader.releaseLock()
         }
 
@@ -221,13 +227,16 @@ export const createSseClient = <TData = unknown>({
       } catch (error) {
         // connection failed or aborted; retry after delay
         onSseError?.(error)
+        attempt += 1
 
-        if (sseMaxRetryAttempts !== undefined && attempt >= sseMaxRetryAttempts) {
+        if (sseMaxRetryAttempts !== undefined && attempt > sseMaxRetryAttempts) {
           break // stop after firing error
         }
 
         // exponential backoff: double retry each attempt, cap at 30s
-        const backoff = Math.min(retryDelay * 2 ** (attempt - 1), sseMaxRetryDelay ?? 30000)
+        const backoffExponent = Math.max(attempt - 2, 0)
+        const backoff = Math.min(retryDelay * 2 ** backoffExponent, sseMaxRetryDelay ?? 30000)
+
         await sleep(backoff)
       }
     }
