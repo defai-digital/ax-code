@@ -31,6 +31,10 @@ const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { sendUpdateProgressToWindows } = require("./update-progress")
 const {
+  reloadLocalRendererWindowsAfterServerRestart,
+  resolveServerRestartReloadUrl,
+} = require("./server-window-reload")
+const {
   attachDesktopBrowserWebviewPolicy,
   createDesktopRendererWebPreferences,
 } = require("./webview-policy")
@@ -257,12 +261,28 @@ async function restartServerAfterCrash() {
     return
   }
   isRelaunchingServer = true
+  const oldServerPort = serverPort
   try {
     serverPort = 0
     await launchServer()
     serverRestartPolicy.completeRestart({ successful: true })
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      await mainWindow.loadURL(`http://localhost:${serverPort}`)
+    const willReloadMainWindow = Boolean(
+      mainWindow &&
+        !mainWindow.isDestroyed() &&
+        resolveServerRestartReloadUrl(mainWindow.webContents.getURL(), {
+          oldPort: oldServerPort,
+          newPort: serverPort,
+        }),
+    )
+    if (willReloadMainWindow) {
+      rendererReadyForOpenProject = false
+    }
+    const result = await reloadLocalRendererWindowsAfterServerRestart(BrowserWindow.getAllWindows(), {
+      oldPort: oldServerPort,
+      newPort: serverPort,
+    })
+    if (result.failed > 0) {
+      console.warn("[electron] failed to reload %d renderer window(s) after server restart", result.failed)
     }
   } finally {
     serverRestartPolicy.completeRestart()
