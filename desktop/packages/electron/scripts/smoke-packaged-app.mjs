@@ -142,6 +142,17 @@ const fetchJson = async (url, timeoutMs = 3000) => {
   return { response, body }
 }
 
+const postJson = async (url, timeoutMs = 3000) => {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  const body = await response.json().catch(() => null)
+  return { response, body }
+}
+
 const waitFor = async (fn, timeoutMs, label) => {
   const deadline = Date.now() + timeoutMs
   let lastError = null
@@ -193,6 +204,7 @@ const main = async () => {
       AX_CODE_DESKTOP_ELECTRON_SERVER_PORT: String(serverPort),
       AX_CODE_DESKTOP_AX_CODE_HEALTH_TIMEOUT_MS: "1500",
       AX_CODE_DESKTOP_AX_CODE_HEALTH_INTERVAL_MS: "0",
+      AX_CODE_DESKTOP_SMOKE_CRASH_ENDPOINT: "true",
     },
     stdio: ["ignore", "pipe", "pipe"],
   })
@@ -231,15 +243,54 @@ const main = async () => {
       throw new Error("/api/global/event stream smoke failed")
     }
 
-    const diagnostics = await fetchJson(`http://127.0.0.1:${serverPort}/api/desktop/diagnostics/startup`)
-    const eventNames = Array.isArray(diagnostics.body?.events)
-      ? diagnostics.body.events.map((event) => event?.name)
-      : []
-    for (const required of ["electron.app.ready", "server.utilityProcess.ready", "ax-code.health.ready"]) {
+    const requiredStartupEvents = [
+      "electron.app.ready",
+      "server.utilityProcess.ready",
+      "ax-code.health.ready",
+      "renderer.did-finish-load",
+      "renderer.first-paint",
+    ]
+    const eventNames = await waitFor(
+      async () => {
+        const diagnostics = await fetchJson(`http://127.0.0.1:${serverPort}/api/desktop/diagnostics/startup`)
+        const names = Array.isArray(diagnostics.body?.events)
+          ? diagnostics.body.events.map((event) => event?.name)
+          : []
+        return requiredStartupEvents.every((required) => names.includes(required)) ? names : null
+      },
+      args.timeoutMs,
+      "startup diagnostics",
+    )
+    for (const required of requiredStartupEvents) {
       if (!eventNames.includes(required)) {
         throw new Error(`startup diagnostics missing ${required}`)
       }
     }
+
+    const crash = await postJson(`http://127.0.0.1:${serverPort}/api/desktop/diagnostics/crash`)
+    if (!crash.response.ok || crash.body?.ok !== true) {
+      throw new Error(`/api/desktop/diagnostics/crash failed with status ${crash.response.status}`)
+    }
+
+    await waitFor(
+      async () => {
+        const { response, body } = await fetchJson(`http://127.0.0.1:${serverPort}/health`, 1500)
+        return response.ok && (body?.axCodeRunning === true || body?.isAxCodeReady === true)
+      },
+      args.timeoutMs,
+      "/health readiness after server crash",
+    )
+
+    await waitFor(
+      async () => {
+        const recoveredDiagnostics = await fetchJson(`http://127.0.0.1:${serverPort}/api/desktop/diagnostics/startup`)
+        const recoveredEvents = Array.isArray(recoveredDiagnostics.body?.events) ? recoveredDiagnostics.body.events : []
+        const readyCount = recoveredEvents.filter((event) => event?.name === "server.utilityProcess.ready").length
+        return readyCount >= 2
+      },
+      args.timeoutMs,
+      "server utilityProcess crash recovery",
+    )
 
     const combinedOutput = `${stdout.join("")}\n${stderr.join("")}`
     if (/Cannot find module|Module did not self-register|ERR_DLOPEN_FAILED/i.test(combinedOutput)) {

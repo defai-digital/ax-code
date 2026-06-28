@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 
-const ROOT = process.cwd()
+const ROOT = path.resolve(import.meta.dirname, "..")
 
 const TARGET_ROOTS = ["packages/ui/src", "packages/web/src"]
 

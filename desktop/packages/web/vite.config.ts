@@ -14,8 +14,36 @@ const nodeModulesSegment = "node_modules/"
 const configuredDevServerPort = Number.parseInt(process.env.AX_CODE_DESKTOP_RENDERER_PORT ?? "5173", 10)
 const devServerPort =
   Number.isFinite(configuredDevServerPort) && configuredDevServerPort > 0 ? configuredDevServerPort : 5173
+const highRiskBuildWarningPatterns = [
+  /will produce a circular dependency between chunks/i,
+  /broken execution order/i,
+]
 
 process.noDeprecation = true
+
+function normalizeModuleId(id: string): string {
+  return id.split(path.sep).join("/")
+}
+
+function getAppChunkName(id: string): string | undefined {
+  const normalizedId = normalizeModuleId(id)
+  if (normalizedId.includes("/desktop/packages/ui/src/stores/useConfigStore")) return "app-config-store"
+  return undefined
+}
+
+function getBuildWarningMessage(warning: unknown): string {
+  if (typeof warning === "string") return warning
+  if (warning && typeof warning === "object" && "message" in warning) {
+    const message = (warning as { message?: unknown }).message
+    return typeof message === "string" ? message : String(message ?? warning)
+  }
+  return String(warning)
+}
+
+function isHighRiskBuildWarning(warning: unknown): boolean {
+  const message = getBuildWarningMessage(warning)
+  return highRiskBuildWarningPatterns.some((pattern) => pattern.test(message))
+}
 
 function getPackageNameFromNodeModuleId(id: string): string | null {
   const markerIndex = id.lastIndexOf(nodeModulesSegment)
@@ -139,11 +167,16 @@ export default defineConfig({
       },
       external: ["node:child_process", "node:fs", "node:path", "node:url"],
       onwarn(warning, warn) {
+        if (isHighRiskBuildWarning(warning)) {
+          throw new Error(`High-risk Desktop build warning: ${getBuildWarningMessage(warning)}`)
+        }
         warn(warning)
       },
       output: {
         manualChunks(id) {
           if (id.includes("vite/preload-helper")) return "vite-preload-helper"
+          const appChunkName = getAppChunkName(id)
+          if (appChunkName) return appChunkName
           if (!id.includes("node_modules")) return undefined
 
           const packageName = getPackageNameFromNodeModuleId(id)

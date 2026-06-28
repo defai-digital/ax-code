@@ -51,6 +51,18 @@ case "$ARCH_ARG" in
   "")            BUILDER_ARCH="" ;;
 esac
 
+echo "==> Checking Desktop IPC contracts"
+node desktop/scripts/check-desktop-ipc-contracts.mjs
+
+echo "==> Checking Desktop endpoint contracts"
+node desktop/scripts/check-endpoint-contracts.mjs
+
+echo "==> Checking Desktop package test scripts"
+node desktop/scripts/check-package-test-scripts.mjs
+
+echo "==> Checking Electron runtime syntax"
+node desktop/scripts/check-electron-runtime.mjs
+
 echo "==> Building web assets"
 pnpm --filter ax-code-desktop run build
 

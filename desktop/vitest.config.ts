@@ -35,7 +35,7 @@ export default defineConfig({
         },
       },
       {
-        extends: "./packages/web/vite.config.ts",
+        extends: path.resolve(__dirname, "packages/web/vite.config.ts"),
         test: {
           name: "web",
           root: path.resolve(__dirname, "packages/web"),

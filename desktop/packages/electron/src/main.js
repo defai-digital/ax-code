@@ -27,6 +27,7 @@ const { promisify } = require("util")
 const { createStartupDiagnostics } = require("./startup-diagnostics")
 const { collectOpenPathCandidates } = require("./open-paths")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
+const { createServerRestartPolicy } = require("./server-restart-policy")
 const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
 
@@ -160,7 +161,7 @@ app.on("open-file", (event, filePath) => {
 const SERVER_START_TIMEOUT_MS = 30_000
 const SERVER_STOP_TIMEOUT_MS = 5_000
 const MAX_SERVER_CRASH_RESTARTS = 5
-let serverCrashRestarts = 0
+const serverRestartPolicy = createServerRestartPolicy({ maxRestarts: MAX_SERVER_CRASH_RESTARTS })
 
 function launchServer() {
   return new Promise((resolve, reject) => {
@@ -234,11 +235,10 @@ function launchServer() {
 
 async function restartServerAfterCrash() {
   if (isRelaunchingServer || isQuitting) return
-  serverCrashRestarts += 1
-  if (serverCrashRestarts > MAX_SERVER_CRASH_RESTARTS) {
+  if (!serverRestartPolicy.beginRestart()) {
     console.error(
       "[electron] server process crashed too many times (%d), giving up on restart",
-      serverCrashRestarts,
+      serverRestartPolicy.crashRestarts,
     )
     return
   }
@@ -246,12 +246,12 @@ async function restartServerAfterCrash() {
   try {
     serverPort = 0
     await launchServer()
-    // Successful launch resets the crash counter.
-    serverCrashRestarts = 0
+    serverRestartPolicy.completeRestart({ successful: true })
     if (mainWindow && !mainWindow.isDestroyed()) {
       await mainWindow.loadURL(`http://localhost:${serverPort}`)
     }
   } finally {
+    serverRestartPolicy.completeRestart()
     isRelaunchingServer = false
   }
 }

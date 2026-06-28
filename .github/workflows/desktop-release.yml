@@ -44,7 +44,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check Desktop boundaries
-        run: pnpm run check:desktop-boundaries
+        run: pnpm run check:desktop-boundaries:strict
+
+      - name: Check Desktop IPC contracts
+        run: pnpm run check:desktop-ipc-contracts
+
+      - name: Check Desktop endpoint contracts
+        run: pnpm run check:desktop-endpoint-contracts
+
+      - name: Check Desktop package test scripts
+        run: pnpm run check:desktop-package-tests
 
       - name: Validate Desktop docs
         run: node desktop/scripts/docs/validate-docs.mjs

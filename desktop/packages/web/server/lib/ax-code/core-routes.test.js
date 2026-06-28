@@ -52,6 +52,51 @@ describe("core-routes", () => {
     })
   })
 
+  it("keeps the smoke crash endpoint disabled unless explicitly enabled", async () => {
+    const app = express()
+    registerServerStatusRoutes(app, {
+      gracefulShutdown: vi.fn(),
+      getHealthSnapshot: () => ({ status: "ok" }),
+      openchamberVersion: "1.0.0",
+      runtimeName: "test",
+      express,
+      process: {
+        env: {},
+        exit: vi.fn(),
+      },
+    })
+
+    await request(app).post("/api/desktop/diagnostics/crash").expect(404)
+  })
+
+  it("allows packaged smoke to crash the server process through an env-gated endpoint", async () => {
+    const app = express()
+    const exit = vi.fn()
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation((callback) => {
+      callback()
+      return { unref: vi.fn() }
+    })
+
+    try {
+      registerServerStatusRoutes(app, {
+        gracefulShutdown: vi.fn(),
+        getHealthSnapshot: () => ({ status: "ok" }),
+        openchamberVersion: "1.0.0",
+        runtimeName: "test",
+        express,
+        process: {
+          env: { AX_CODE_DESKTOP_SMOKE_CRASH_ENDPOINT: "true" },
+          exit,
+        },
+      })
+
+      await request(app).post("/api/desktop/diagnostics/crash").expect(200)
+      expect(exit).toHaveBeenCalledWith(1)
+    } finally {
+      setTimeoutSpy.mockRestore()
+    }
+  })
+
   it("should parse JSON bodies for snippet config routes", async () => {
     const app = express()
     registerCommonRequestMiddleware(app, { express })

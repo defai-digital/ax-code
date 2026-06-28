@@ -65,6 +65,12 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     return process.env.AX_CODE_DESKTOP_DEV_SHUTDOWN === "true"
   }
 
+  const isSmokeCrashAllowed = () => {
+    // Packaged-app smoke only. This deliberately exits with a failure code so
+    // the Electron main process exercises its utilityProcess restart path.
+    return process.env.AX_CODE_DESKTOP_SMOKE_CRASH_ENDPOINT === "true"
+  }
+
   const isSameOriginRequest = (req) => {
     const rawOrigin = typeof req.get === "function" ? req.get("origin") : ""
     const rawHost = typeof req.get === "function" ? req.get("host") : ""
@@ -177,6 +183,16 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     }
 
     return res.json(getStartupDiagnosticsSnapshot())
+  })
+
+  app.post("/api/desktop/diagnostics/crash", (_req, res) => {
+    if (!isSmokeCrashAllowed()) {
+      return res.status(404).json({ ok: false, error: "Smoke crash endpoint is disabled" })
+    }
+    res.json({ ok: true })
+    setTimeout(() => {
+      process.exit(1)
+    }, 10).unref?.()
   })
 
   app.post("/api/system/shutdown", async (req, res, next) => {
