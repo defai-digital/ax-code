@@ -29,6 +29,7 @@ const { collectOpenPathCandidates } = require("./open-paths")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
+const { sendUpdateProgressToWindows } = require("./update-progress")
 const {
   applyDesktopHostsConfigToRoot,
   isAllowedDesktopHostTargetUrl,
@@ -425,9 +426,7 @@ autoUpdater.autoInstallOnAppQuit = false
 // event name and payload shape the shared UI expects from the Tauri updater
 // (see downloadDesktopUpdate in packages/ui/src/lib/desktop.ts).
 function sendUpdateProgress(event, data) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("openchamber:update-progress", { event, data })
-  }
+  sendUpdateProgressToWindows(BrowserWindow.getAllWindows(), event, data)
 }
 
 autoUpdater.on("download-progress", (p) => {
