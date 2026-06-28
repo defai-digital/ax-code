@@ -1930,8 +1930,11 @@ const dispatchTrayAction = async (action) => {
     return
   }
   if (action.type === "new-mini-chat") {
-    const target = getMenuTargetWindow() || (await revealMainWindow())
-    if (target && !target.isDestroyed()) target.webContents.send("openchamber:open-mini-chat")
+    try {
+      await createMiniChatWindow({ mode: "draft" })
+    } catch (error) {
+      console.warn("[electron] failed to open mini chat from tray", error)
+    }
     return
   }
   if (action.type === "focus-session") {
