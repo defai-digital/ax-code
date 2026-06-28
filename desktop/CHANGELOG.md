@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.10] - 2026-06-28
+
+### Fixed
+
+- TUI: hardened background task, listener, timer, terminal cleanup, and renderable safety paths.
+- Desktop: added stricter stability checks for IPC, endpoint contracts, package test scripts, and packaged app smoke coverage.
+- Release: refreshed bundled provider model metadata and dependency patch updates.
+
 ## [6.7.9] - 2026-06-27
 
 ### Fixed
