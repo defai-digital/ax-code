@@ -52,6 +52,7 @@ import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import { toast } from "@/components/ui"
 import * as sessionActions from "@/sync/session-actions"
 import { getTauriGlobal } from "@/lib/tauriGlobal"
+import { createTrayPermissionActionDeduper } from "@/lib/trayActions"
 import {
   OPEN_DRAFT_SESSION_EVENT,
   OPEN_PROJECT_EVENT,
@@ -245,6 +246,7 @@ function App({ apis }: AppProps) {
     return outcome !== null ? resolveDesktopBootView({ isDesktopShell: true, bootOutcome: outcome }) : null
   })
   const appReadyDispatchedRef = React.useRef(false)
+  const dedupeTrayPermissionAction = React.useMemo(() => createTrayPermissionActionDeduper(), [])
   const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), [])
   const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible
   const isMcpOAuthCallback = React.useMemo(() => isMcpOAuthCallbackPath(), [])
@@ -602,18 +604,11 @@ function App({ apis }: AppProps) {
   React.useEffect(() => {
     if (typeof window === "undefined") return
 
-    type TrayPermissionAction = {
-      type: string
-      sessionId?: string
-      id?: string
-      response?: "once" | "always" | "reject"
-    }
+    const respondFromTrayAction = (value: unknown) => {
+      const action = dedupeTrayPermissionAction(value)
+      if (!action) return
 
-    const handleTrayAction = (event: Event) => {
-      const action = (event as CustomEvent<TrayPermissionAction>).detail
-      if (!action || action.type !== "respond-permission") return
       const { sessionId, id, response } = action
-      if (!sessionId || !id || !response) return
       void sessionActions
         .respondToPermission(sessionId, id, response)
         .catch((error: unknown) => {
@@ -624,9 +619,13 @@ function App({ apis }: AppProps) {
         })
     }
 
+    const handleTrayAction = (event: Event) => {
+      respondFromTrayAction((event as CustomEvent<unknown>).detail)
+    }
+
     window.addEventListener("openchamber:tray-action", handleTrayAction)
     return () => window.removeEventListener("openchamber:tray-action", handleTrayAction)
-  }, [])
+  }, [dedupeTrayPermissionAction])
 
   // Also listen via the Tauri-compatible event bridge so tray actions work
   // regardless of which delivery path the main process uses.
@@ -636,20 +635,13 @@ function App({ apis }: AppProps) {
     const listen = tauri?.event?.listen
     if (typeof listen !== "function") return
 
-    type TrayPermissionPayload = {
-      type: string
-      sessionId?: string
-      id?: string
-      response?: "once" | "always" | "reject"
-    }
-
     let unlisten: (() => void | Promise<void>) | null = null
 
     listen("openchamber:tray-action", (evt: { payload?: unknown }) => {
-      const action = evt?.payload as TrayPermissionPayload | undefined
-      if (!action || action.type !== "respond-permission") return
+      const action = dedupeTrayPermissionAction(evt?.payload)
+      if (!action) return
+
       const { sessionId, id, response } = action
-      if (!sessionId || !id || !response) return
       void sessionActions
         .respondToPermission(sessionId, id, response)
         .catch((error: unknown) => {
@@ -679,7 +671,7 @@ function App({ apis }: AppProps) {
       }
       void cleanup()
     }
-  }, [])
+  }, [dedupeTrayPermissionAction])
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
