@@ -34,6 +34,7 @@ const {
   isAllowedDesktopHostTargetUrl,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
+  resolveStoredClientTokenForUrl,
   sanitizeClientTokenForStorage,
 } = require("./desktop-hosts")
 const { ElectronSshManager } = require("./ssh-manager.mjs")
@@ -851,19 +852,6 @@ const writeDesktopHostsConfig = async (config) => {
 
 // Our local origin is always the loopback server in this single-server model.
 const localOriginUrl = () => `http://localhost:${serverPort}`
-
-const resolveStoredClientTokenForUrl = (targetUrl, config = readDesktopHostsConfig({ includeSecrets: true })) => {
-  const normalizedTarget = normalizeHostUrl(targetUrl)
-  if (!normalizedTarget) return ""
-  for (const host of config.hosts || []) {
-    const hostUrl = normalizeHostUrl(host?.url || "")
-    const apiUrl = normalizeHostUrl(host?.apiUrl || host?.url || "")
-    if (normalizedTarget === hostUrl || normalizedTarget === apiUrl) {
-      return sanitizeClientTokenForStorage(host?.clientToken) || ""
-    }
-  }
-  return ""
-}
 
 // ── Host probe ─────────────────────────────────────────────────────────────
 const buildVersionUrl = (url) => {
@@ -2358,16 +2346,25 @@ handleCommand(
   "desktop_host_probe",
   async (args, event) => {
     const targetUrl = String(args.url || "")
+    const hostConfig = readDesktopHostsConfig({ includeSecrets: true })
     if (
       !isLocalSender(event.sender) &&
       !isAllowedDesktopHostTargetUrl(targetUrl, {
         localOrigin: localOriginUrl(),
-        hosts: readDesktopHostsConfig().hosts,
+        hosts: hostConfig.hosts,
       })
     ) {
       throw new Error("Host URL is not configured for this desktop session")
     }
-    return probeHostWithTimeout(targetUrl, 2_000, String(args.clientToken || ""))
+    const explicitToken = sanitizeClientTokenForStorage(args.clientToken) || ""
+    const localToken = isAllowedDesktopHostTargetUrl(targetUrl, { localOrigin: localOriginUrl(), hosts: [] })
+      ? readDesktopLocalClientToken()
+      : ""
+    const storedToken =
+      explicitToken ||
+      localToken ||
+      resolveStoredClientTokenForUrl(targetUrl, { hosts: hostConfig.hosts })
+    return probeHostWithTimeout(targetUrl, 2_000, storedToken)
   },
   { safeForRemote: true },
 )

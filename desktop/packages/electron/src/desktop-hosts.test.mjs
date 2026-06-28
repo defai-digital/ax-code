@@ -7,6 +7,7 @@ const {
   isAllowedDesktopHostTargetUrl,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
+  resolveStoredClientTokenForUrl,
 } = require("./desktop-hosts.js")
 
 describe("desktop hosts config", () => {
@@ -84,6 +85,25 @@ describe("desktop hosts config", () => {
       id: "remote-a",
       clientToken: "secret-token",
     })
+  })
+
+  test("resolves stored client tokens for saved host and API URLs", () => {
+    const root = {
+      desktopHosts: [
+        {
+          id: "remote-a",
+          label: "Remote A",
+          url: "https://remote.example.com/app?token=leaked",
+          apiUrl: "https://api.remote.example.com/v1",
+          clientToken: "secret-token",
+        },
+      ],
+    }
+    const config = readDesktopHostsConfigFromRoot(root, { includeSecrets: true })
+
+    expect(resolveStoredClientTokenForUrl("https://remote.example.com/app", config)).toBe("secret-token")
+    expect(resolveStoredClientTokenForUrl("https://api.remote.example.com/v1", config)).toBe("secret-token")
+    expect(resolveStoredClientTokenForUrl("https://remote.example.com/other", config)).toBe("")
   })
 
   test("preserves existing private host metadata when renderer roundtrips public hosts", () => {

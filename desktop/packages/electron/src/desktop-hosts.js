@@ -56,6 +56,21 @@ const isAllowedDesktopHostTargetUrl = (targetRaw, { localOrigin, hosts } = {}) =
   return hostList.some((host) => targetMatchesHostUrl(targetRaw, host?.url))
 }
 
+const resolveStoredClientTokenForUrl = (targetRaw, { hosts } = {}) => {
+  const normalizedTarget = normalizeHostUrl(targetRaw)
+  if (!normalizedTarget) return ""
+
+  const hostList = Array.isArray(hosts) ? hosts : []
+  for (const host of hostList) {
+    const hostUrl = normalizeHostUrl(host?.url)
+    const apiUrl = normalizeHostUrl(host?.apiUrl || host?.url)
+    if (normalizedTarget === hostUrl || normalizedTarget === apiUrl) {
+      return sanitizeClientTokenForStorage(host?.clientToken) || ""
+    }
+  }
+  return ""
+}
+
 const readDesktopHostsConfigFromRoot = (root, { includeSecrets = false } = {}) => {
   const hostsRaw = Array.isArray(root?.desktopHosts) ? root.desktopHosts : []
   const hosts = hostsRaw
@@ -140,5 +155,6 @@ module.exports = {
   isAllowedDesktopHostTargetUrl,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
+  resolveStoredClientTokenForUrl,
   sanitizeClientTokenForStorage,
 }
