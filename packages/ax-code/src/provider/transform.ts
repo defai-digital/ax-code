@@ -40,6 +40,11 @@ export namespace ProviderTransform {
   // to 2048 / 1024 via AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX.
   const ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT = 4_096
   const ALIBABA_OUTPUT_TOKEN_MAX = Flag.AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX || ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT
+  // Groq also rate-limits against the requested output reservation. The public
+  // model ceiling is useful metadata, but using it as the default max_tokens
+  // makes ordinary short prompts reserve 32k+ tokens and trip TPM limits.
+  const GROQ_OUTPUT_TOKEN_MAX_DEFAULT = 4_096
+  const GROQ_OUTPUT_TOKEN_MAX = Flag.AX_CODE_GROQ_OUTPUT_TOKEN_MAX || GROQ_OUTPUT_TOKEN_MAX_DEFAULT
   // Qwen 3.7 Max/Plus on Alibaba routes: the generic 4k cap is far too
   // conservative for models with 64k output capacity. Raise to 16k so
   // super-long runs get meaningful generation budget while still leaving
@@ -556,6 +561,10 @@ export namespace ProviderTransform {
         ? QWEN37_ALIBABA_OUTPUT_TOKEN_MAX
         : ALIBABA_OUTPUT_TOKEN_MAX
       return Math.min(limit, OUTPUT_TOKEN_MAX, alibabaCap)
+    }
+    if (model.providerID === "groq") {
+      const limit = model.limit.output > 0 ? model.limit.output : OUTPUT_TOKEN_MAX
+      return Math.min(limit, OUTPUT_TOKEN_MAX, GROQ_OUTPUT_TOKEN_MAX)
     }
     const limit = model.limit.output
     const cap = isQwen37MaxOrPlusModel(model.id ?? "")

@@ -1600,6 +1600,30 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
   })
 
+  test("caps Groq requests below model output limit to avoid token-reservation rate limits", () => {
+    const model = {
+      id: "groq/qwen/qwen3.6-27b",
+      providerID: ProviderID.make("groq"),
+      limit: {
+        output: 32_768,
+      },
+    } as any
+
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
+  })
+
+  test("honors lower Groq model output limits below the reservation cap", () => {
+    const model = {
+      id: "groq/small",
+      providerID: ProviderID.make("groq"),
+      limit: {
+        output: 512,
+      },
+    } as any
+
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(512)
+  })
+
   test("raises output cap to 65 536 for qwen3.7-max on non-Alibaba routes", () => {
     const model = {
       id: "qwen3.7-max",
