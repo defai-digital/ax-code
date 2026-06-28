@@ -27,7 +27,7 @@ const GROUPS = [
       { label: "Page down", key: "messages_page_down" },
       { label: "First message", key: "messages_first" },
       { label: "Last message", key: "messages_last" },
-      { label: "Toggle sidebar", key: "sidebar_toggle" },
+      { label: "Toggle sidebar (/sidebar)", key: "sidebar_toggle" },
       { label: "Copy message", key: "messages_copy" },
     ],
   },

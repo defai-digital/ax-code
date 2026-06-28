@@ -277,6 +277,10 @@ export function displayCommands(input: {
       value: "session.sidebar.toggle",
       keybind: "sidebar_toggle",
       category: "Session",
+      slash: {
+        name: "sidebar",
+        aliases: ["toggle-sidebar"],
+      },
       onSelect: (dialog: DialogContext) => {
         batch(() => {
           const visible = input.sidebarVisible()
