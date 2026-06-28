@@ -1749,6 +1749,26 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
   const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft)
   const addAttachedFile = useInputStore((state) => state.addAttachedFile)
 
+  const loadUrl = React.useCallback(
+    (value: string) => {
+      const nextUrl = normalizeBrowserUrl(value)
+      const visibleUrl = nextUrl !== "about:blank" ? nextUrl : ""
+      setCurrentUrl(visibleUrl)
+      setUrlInput(visibleUrl)
+      setIsLoading(Boolean(visibleUrl))
+      persistUrl(visibleUrl)
+
+      const webview = webviewRef.current
+      if (typeof webview?.loadURL !== "function") return
+      try {
+        webview.loadURL(nextUrl)
+      } catch {
+        /* webview may not be ready */
+      }
+    },
+    [persistUrl],
+  )
+
   // Listen to webview navigation events
   React.useEffect(() => {
     const webview = webviewRef.current
@@ -1794,9 +1814,8 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
         detail?.disposition === "background-tab"
       ) {
         event.preventDefault()
-        const w = webviewRef.current
-        if (typeof w?.loadURL === "function" && detail.url) {
-          w.loadURL(detail.url)
+        if (detail.url) {
+          loadUrl(detail.url)
         }
       }
     }
@@ -1836,13 +1855,15 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
       webview.removeEventListener("new-window", onNewWindow)
       webview.removeEventListener("dom-ready", installSameWebviewNavigation)
     }
-  }, [persistUrl])
+  }, [loadUrl, persistUrl])
 
-  // Safety timeout: hide loading overlay after 30s even if events fire late
+  // Safety timeout: hide loading overlay after 30s even if events fire late.
+  // This must be tied to every navigation, not only the initial mount.
   React.useEffect(() => {
+    if (!isLoading || !currentUrl) return
     const safety = setTimeout(() => setIsLoading(false), 30_000)
     return () => clearTimeout(safety)
-  }, [])
+  }, [currentUrl, isLoading])
 
   // Escape key cancels inspect mode
   React.useEffect(() => {
@@ -1882,26 +1903,6 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
       }
     }
   }, [directory, tabID, setContextPanelTabTargetPath])
-
-  const loadUrl = React.useCallback(
-    (value: string) => {
-      const nextUrl = normalizeBrowserUrl(value)
-      const visibleUrl = nextUrl !== "about:blank" ? nextUrl : ""
-      setCurrentUrl(visibleUrl)
-      setUrlInput(visibleUrl)
-      setIsLoading(Boolean(visibleUrl))
-      persistUrl(visibleUrl)
-
-      const webview = webviewRef.current
-      if (typeof webview?.loadURL !== "function") return
-      try {
-        webview.loadURL(nextUrl)
-      } catch {
-        /* webview may not be ready */
-      }
-    },
-    [persistUrl],
-  )
 
   const handleInspect = React.useCallback(() => {
     const webview = webviewRef.current

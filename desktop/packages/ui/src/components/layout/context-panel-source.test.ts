@@ -13,4 +13,18 @@ describe("ContextPanel browser source guards", () => {
     expect(source).toContain("setIsLoading(Boolean(visibleUrl))")
     expect(source).toContain('src={currentUrl || "about:blank"}')
   })
+
+  test("desktop browser new-window navigation reuses normalized loading path", async () => {
+    const source = await readFile(sourcePath, "utf8")
+
+    expect(source).toContain("loadUrl(detail.url)")
+    expect(source).not.toContain("w.loadURL(detail.url)")
+  })
+
+  test("desktop browser loading safety timeout is refreshed per navigation", async () => {
+    const source = await readFile(sourcePath, "utf8")
+
+    expect(source).toContain("if (!isLoading || !currentUrl) return")
+    expect(source).toContain("}, [currentUrl, isLoading])")
+  })
 })
