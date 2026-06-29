@@ -1,6 +1,6 @@
 {
   "name": "ax-code-desktop",
-  "version": "6.7.19",
+  "version": "6.7.20",
   "description": "AX Code Desktop local web runtime.",
   "private": false,
   "license": "MIT",
