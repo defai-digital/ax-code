@@ -16,6 +16,7 @@ import { useInlineCommentDraftStore } from "@/stores/useInlineCommentDraftStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useInputStore } from "@/sync/input-store"
 import { ContextPanelContent } from "./ContextSidebarTab"
+import { getContextPanelRelativePathLabel } from "./contextPanelPathLabels"
 import { toast } from "@/components/ui"
 import { Icon } from "@/components/icon/Icon"
 import { AxCodeIcon } from "@/components/ui/AxCodeIcon"
@@ -134,18 +135,6 @@ const clampWidthToAvailableSpace = (width: number, panel: HTMLElement | null): n
   }
 
   return Math.min(clampedWidth, Math.max(1, availableWidth))
-}
-
-const getRelativePathLabel = (filePath: string | null, directory: string): string => {
-  if (!filePath) {
-    return ""
-  }
-  const normalizedFile = filePath.replace(/\\/g, "/")
-  const normalizedDir = directory.replace(/\\/g, "/").replace(/\/+$/, "")
-  if (normalizedDir && normalizedFile.startsWith(normalizedDir + "/")) {
-    return normalizedFile.slice(normalizedDir.length + 1)
-  }
-  return normalizedFile
 }
 
 const getModeLabel = (mode: ContextPanelMode, t: TranslateFn): string => {
@@ -2388,7 +2377,7 @@ export const ContextPanel: React.FC = () => {
       tabs.map((tab) => {
         const rawLabel = getTabLabel(tab, t)
         const label = truncateTabLabel(rawLabel, CONTEXT_TAB_LABEL_MAX_CHARS)
-        const tabPathLabel = getRelativePathLabel(tab.targetPath, effectiveDirectory)
+        const tabPathLabel = getContextPanelRelativePathLabel(tab.targetPath, effectiveDirectory)
         return {
           id: tab.id,
           label,
