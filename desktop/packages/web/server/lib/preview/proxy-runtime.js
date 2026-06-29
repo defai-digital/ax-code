@@ -844,6 +844,42 @@ const buildCookie = ({ name, value, path, maxAgeSeconds, secure }) => {
   return chunks.join("; ")
 }
 
+const stripProxyPrefix = (pathname, id) => {
+  const prefix = `/api/preview/proxy/${id}`
+  if (!pathname.startsWith(prefix)) {
+    return pathname
+  }
+  const rest = pathname.slice(prefix.length)
+  return rest.length === 0 ? "/" : rest
+}
+
+const removeRawQueryParam = (search, paramName) => {
+  if (typeof search !== "string" || search.length <= 1) {
+    return ""
+  }
+  const query = search.startsWith("?") ? search.slice(1) : search
+  const parts = query.split("&").filter((part) => {
+    const name = part.split("=", 1)[0] || ""
+    return decodeURIComponent(name.replace(/\+/g, " ")) !== paramName
+  })
+  return parts.length > 0 ? `?${parts.join("&")}` : ""
+}
+
+export const buildPreviewProxyUpstreamPath = (rawUrl, id) => {
+  const parsed = new URL(rawUrl || "", "http://localhost")
+  const strippedPath = stripProxyPrefix(parsed.pathname, id)
+  return `${strippedPath}${removeRawQueryParam(parsed.search, "ocPreview")}`
+}
+
+export const removeSensitivePreviewProxyHeaders = (proxyReq) => {
+  if (!proxyReq || typeof proxyReq.removeHeader !== "function") {
+    return
+  }
+  proxyReq.removeHeader("cookie")
+  proxyReq.removeHeader("authorization")
+  proxyReq.removeHeader("x-openchamber-ui-session")
+}
+
 // SSRF guard for the `allowExternal` path: refuse to proxy private, loopback and
 // reserved addresses (incl. cloud-metadata 169.254.169.254). Operates on the
 // WHATWG-normalized hostname, so decimal/hex/octal IPv4 forms are already canonical
@@ -1067,27 +1103,6 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
     return { ok: true, id, entry, parsed }
   }
 
-  const stripProxyPrefix = (pathname, id) => {
-    const prefix = `/api/preview/proxy/${id}`
-    if (!pathname.startsWith(prefix)) {
-      return pathname
-    }
-    const rest = pathname.slice(prefix.length)
-    return rest.length === 0 ? "/" : rest
-  }
-
-  const removeRawQueryParam = (search, paramName) => {
-    if (typeof search !== "string" || search.length <= 1) {
-      return ""
-    }
-    const query = search.startsWith("?") ? search.slice(1) : search
-    const parts = query.split("&").filter((part) => {
-      const name = part.split("=", 1)[0] || ""
-      return decodeURIComponent(name.replace(/\+/g, " ")) !== paramName
-    })
-    return parts.length > 0 ? `?${parts.join("&")}` : ""
-  }
-
   // Strip the `frame-ancestors` directive from a CSP header value while
   // preserving every other directive. Returns null if no directives remain.
   const removeFrameAncestorsDirective = (cspValue) => {
@@ -1268,18 +1283,17 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
           return pathValue
         }
 
-        const parsed = new URL(req.originalUrl || req.url || "", "http://localhost")
-        // Never forward our auth cookie token to the dev server.
-        const strippedPath = stripProxyPrefix(parsed.pathname, resolved.id)
-        return `${strippedPath}${removeRawQueryParam(parsed.search, "ocPreview")}`
+        // Never forward our auth cookie token or internal reload nonce to the dev server.
+        return buildPreviewProxyUpstreamPath(req.originalUrl || req.url || "", resolved.id)
       },
       on: {
         proxyReq: (proxyReq) => {
           // Keep local dev servers from receiving OpenChamber credentials.
-          proxyReq.removeHeader("cookie")
-          proxyReq.removeHeader("authorization")
-          proxyReq.removeHeader("x-openchamber-ui-session")
+          removeSensitivePreviewProxyHeaders(proxyReq)
           proxyReq.setHeader("accept-encoding", "identity")
+        },
+        proxyReqWs: (proxyReq) => {
+          removeSensitivePreviewProxyHeaders(proxyReq)
         },
         proxyRes: responseInterceptor(async (responseBuffer, proxyRes, req) => {
           // Allow the dev server response to be framed inside OpenChamber even
@@ -1394,10 +1408,7 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
           // Rewrite req.url to what the dev server expects.
           const rawUrl = req.url || ""
           req.originalUrl = rawUrl
-          const parsed = new URL(rawUrl, "http://localhost")
-          const nextPath = stripProxyPrefix(parsed.pathname, resolved.id)
-          const search = parsed.searchParams.toString()
-          req.url = `${nextPath}${search ? `?${search}` : ""}`
+          req.url = buildPreviewProxyUpstreamPath(rawUrl, resolved.id)
           proxy.upgrade(req, socket, head)
         } catch {
           rejectWebSocketUpgrade(socket, 500, "Upgrade failed")

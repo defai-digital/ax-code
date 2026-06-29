@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
+  buildPreviewProxyUpstreamPath,
   classifyPreviewNavigation,
   classifyPreviewResourceError,
+  createPreviewProxyRuntime,
   normalizeProxyTargetUrl,
+  removeSensitivePreviewProxyHeaders,
   rewritePreviewBody,
 } from "./proxy-runtime.js"
 
@@ -227,5 +230,71 @@ describe("proxy target normalization (SSRF guard)", () => {
 
   it("still blocks private hosts even via IPv4-mapped IPv6", () => {
     expect(normalizeProxyTargetUrl("http://[::ffff:127.0.0.1]/", { allowExternal: true }).ok).toBe(false)
+  })
+})
+
+describe("preview proxy upstream request hygiene", () => {
+  it("strips the preview proxy prefix and internal reload nonce", () => {
+    expect(
+      buildPreviewProxyUpstreamPath(
+        "/api/preview/proxy/f4af70b4261d77706743959516f9cecc/@vite/client?ocPreview=42&x=1",
+        "f4af70b4261d77706743959516f9cecc",
+      ),
+    ).toBe("/@vite/client?x=1")
+
+    expect(
+      buildPreviewProxyUpstreamPath(
+        "/api/preview/proxy/f4af70b4261d77706743959516f9cecc/ws?x=1&ocPreview=42",
+        "f4af70b4261d77706743959516f9cecc",
+      ),
+    ).toBe("/ws?x=1")
+  })
+
+  it("removes Desktop credentials from proxied HTTP and WebSocket requests", () => {
+    const removed = []
+    removeSensitivePreviewProxyHeaders({
+      removeHeader: (name) => {
+        removed.push(name)
+      },
+    })
+
+    expect(removed).toEqual(["cookie", "authorization", "x-openchamber-ui-session"])
+  })
+
+  it("registers the same credential scrubber for WebSocket proxy requests", () => {
+    let capturedOptions = null
+    const runtime = createPreviewProxyRuntime({
+      crypto: {
+        randomBytes: () => Buffer.from("0123456789abcdef"),
+      },
+      URL,
+      createProxyMiddleware: (options) => {
+        capturedOptions = options
+        const middleware = vi.fn()
+        middleware.upgrade = vi.fn()
+        return middleware
+      },
+      responseInterceptor: (handler) => handler,
+    })
+
+    runtime.attach(
+      { post: vi.fn(), use: vi.fn() },
+      {
+        server: { on: vi.fn() },
+        express: { json: vi.fn(() => vi.fn()) },
+        uiAuthController: null,
+        isRequestOriginAllowed: vi.fn(),
+        rejectWebSocketUpgrade: vi.fn(),
+      },
+    )
+
+    const removed = []
+    capturedOptions.on.proxyReqWs({
+      removeHeader: (name) => {
+        removed.push(name)
+      },
+    })
+
+    expect(removed).toEqual(["cookie", "authorization", "x-openchamber-ui-session"])
   })
 })
