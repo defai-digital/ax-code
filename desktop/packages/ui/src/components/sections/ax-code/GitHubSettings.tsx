@@ -11,14 +11,7 @@ import { useI18n } from "@/lib/i18n"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/icon/Icon"
 import { API_ENDPOINTS } from "@/lib/http"
-
-type GitHubUser = {
-  login: string
-  id?: number
-  avatarUrl?: string
-  name?: string
-  email?: string
-}
+import { pollCurrentGitHubDeviceFlow, type DeviceFlowCompleteResponse } from "./githubDeviceFlowPoll"
 
 type DeviceFlowStartResponse = {
   deviceCode: string
@@ -29,10 +22,6 @@ type DeviceFlowStartResponse = {
   interval: number
   scope?: string
 }
-
-type DeviceFlowCompleteResponse =
-  | { connected: true; user: GitHubUser; scope?: string }
-  | { connected: false; status?: string; error?: string }
 
 export const GitHubSettings: React.FC = () => {
   const { t } = useI18n()
@@ -148,34 +137,44 @@ export const GitHubSettings: React.FC = () => {
       return
     }
 
+    let active = true
     pollTimerRef.current = window.setInterval(() => {
       void (async () => {
-        try {
-          const result = await pollOnce(flow.deviceCode)
-          if (result.connected) {
-            toast.success(t("settings.github.page.toast.connected"))
-            setFlow(null)
-            stopPolling()
-            await refreshStatus(runtimeGitHub, { force: true })
-            return
-          }
-
-          if (result.status === "slow_down") {
-            setPollIntervalMs((prev) => (prev ? prev + 5000 : 5000))
-          }
-
-          if (result.status === "expired_token" || result.status === "access_denied") {
-            toast.error(result.error || t("settings.github.page.toast.authorizationFailed"))
-            setFlow(null)
-            stopPolling()
-          }
-        } catch (error) {
-          console.warn("GitHub polling failed:", error)
+        const result = await pollCurrentGitHubDeviceFlow({
+          deviceCode: flow.deviceCode,
+          pollOnce,
+          isCurrent: () => active,
+        })
+        if (!active || result.status === "stale" || result.status === "pending") {
+          return
         }
+
+        if (result.status === "connected") {
+          toast.success(t("settings.github.page.toast.connected"))
+          setFlow(null)
+          stopPolling()
+          await refreshStatus(runtimeGitHub, { force: true })
+          return
+        }
+
+        if (result.status === "slow-down") {
+          setPollIntervalMs((prev) => (prev ? prev + 5000 : 5000))
+          return
+        }
+
+        if (result.status === "authorization-failed") {
+          toast.error(result.error || t("settings.github.page.toast.authorizationFailed"))
+          setFlow(null)
+          stopPolling()
+          return
+        }
+
+        console.warn("GitHub polling failed:", result.error)
       })()
     }, pollIntervalMs)
 
     return () => {
+      active = false
       if (pollTimerRef.current != null) {
         window.clearInterval(pollTimerRef.current)
         pollTimerRef.current = null
