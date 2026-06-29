@@ -6,15 +6,15 @@ import { Icon } from "@/components/icon/Icon"
 import { cn } from "@/lib/utils"
 import type { GitLogEntry, CommitFileEntry } from "@/lib/api/types"
 import { useI18n } from "@/lib/i18n"
-import { getCommitFileDiff, type CommitFileDiffResponse } from "@/lib/gitApi"
+import type { CommitFileDiffResponse } from "@/lib/gitApi"
 import { PierreDiffViewer } from "@/components/views/PierreDiffViewer"
 import { getLanguageFromExtension } from "@/lib/toolHelpers"
 import type { LanedCommit } from "./gitGraph"
 import { GitGraphSegment } from "./GitGraphSegment"
 import * as git from "@/lib/gitApi"
 import { toast } from "@/components/ui/toast"
+import { fetchHistoryCommitFileDiff } from "./historyDiffLoader"
 
-const HISTORY_DIFF_REQUEST_TIMEOUT_MS = 15000
 const HISTORY_DIFF_LARGE_CHANGED_LINES = 500
 const HISTORY_DIFF_CACHE_MAX_ENTRIES = 12
 const HISTORY_DIFF_CACHE_MAX_TOTAL_SIZE_BYTES = 8 * 1024 * 1024
@@ -311,14 +311,7 @@ export const HistoryCommitRow = React.memo(
 
         setDiffCache((prev) => trimHistoryDiffCache(new Map(prev).set(key, "loading")))
         try {
-          const fetchPromise = getCommitFileDiff(directory, entry.hash, file.path, false)
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(
-              () => reject(new Error(`Timed out after ${HISTORY_DIFF_REQUEST_TIMEOUT_MS}ms`)),
-              HISTORY_DIFF_REQUEST_TIMEOUT_MS,
-            )
-          })
-          const result = await Promise.race([fetchPromise, timeoutPromise])
+          const result = await fetchHistoryCommitFileDiff(directory, entry.hash, file.path)
           setDiffCache((prev) => trimHistoryDiffCache(new Map(prev).set(key, result)))
         } catch {
           setDiffCache((prev) => new Map(prev).set(key, "error"))
