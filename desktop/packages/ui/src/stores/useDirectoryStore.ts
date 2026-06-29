@@ -349,7 +349,15 @@ export const useDirectoryStore = create<DirectoryNavigationStore>()(
 
       synchronizeHomeDirectory: (homePath: string) => {
         const state = get()
-        const resolvedHome = homePath
+        const resolvedHome = normalizeHomeCandidate(homePath)
+        if (!resolvedHome) {
+          const existingHomeReady = Boolean(normalizeHomeCandidate(state.homeDirectory))
+          if (!state.isHomeReady && existingHomeReady) {
+            set({ isHomeReady: true })
+          }
+          return
+        }
+
         cachedHomeDirectory = resolvedHome
         const needsUpdate = state.homeDirectory !== resolvedHome
         const savedLastDirectory = safeStorage.getItem("lastDirectory")
