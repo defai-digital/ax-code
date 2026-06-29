@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import {
   extractLoopbackUrls,
+  getExternalFaviconUrl,
   isLoopbackHttpUrl,
   isSafeExternalUrl,
   normalizeLoopbackPreviewUrl,
@@ -45,6 +46,12 @@ describe("safe external URL helpers", () => {
     expect(isSafeExternalUrl("tel:+15551234567")).toBe(true)
     expect(isSafeExternalUrl("file:///Users/test/secret.txt")).toBe(false)
     expect(isSafeExternalUrl("javascript:alert(1)")).toBe(false)
+    expect(isSafeExternalUrl("https://user:pass@example.com/docs")).toBe(false)
+  })
+
+  test("does not build favicons for credential-bearing URLs", () => {
+    expect(getExternalFaviconUrl("https://example.com/docs")).toBe("https://icons.duckduckgo.com/ip3/example.com.ico")
+    expect(getExternalFaviconUrl("https://user:pass@example.com/docs")).toBeNull()
   })
 
   test("opens mailto and tel URLs through the desktop bridge", async () => {
@@ -92,6 +99,7 @@ describe("safe external URL helpers", () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null)
 
     await expect(openExternalUrl("file:///Users/test/secret.txt")).resolves.toBe(false)
+    await expect(openExternalUrl("https://user:pass@example.com/docs")).resolves.toBe(false)
     expect(invoke).not.toHaveBeenCalled()
     expect(open).not.toHaveBeenCalled()
   })

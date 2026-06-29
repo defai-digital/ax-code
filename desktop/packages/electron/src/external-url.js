@@ -7,6 +7,7 @@ function normalizeSafeExternalUrl(value) {
   if (!target) return null
   try {
     const parsed = new URL(target)
+    if (parsed.username || parsed.password) return null
     return SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol) ? parsed.toString() : null
   } catch {
     return null

@@ -26,17 +26,19 @@ export const isExternalHttpUrl = (url: string): boolean => {
 
 const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"])
 
+const hasUrlUserInfo = (parsed: URL): boolean => parsed.username.length > 0 || parsed.password.length > 0
+
 export const isSafeExternalUrl = (url: string): boolean => {
   const parsed = parseUrlSafely(url.trim())
   if (!parsed) {
     return false
   }
-  return SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol)
+  return SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol) && !hasUrlUserInfo(parsed)
 }
 
 export const getExternalFaviconUrl = (url: string): string | null => {
   const parsed = parseUrlSafely(url.trim())
-  if (!parsed || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) {
+  if (!parsed || hasUrlUserInfo(parsed) || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) {
     return null
   }
 
@@ -160,7 +162,7 @@ export const openExternalUrl = async (url: string): Promise<boolean> => {
     return false
   }
 
-  if (!SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol)) {
+  if (!SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol) || hasUrlUserInfo(parsed)) {
     return false
   }
 

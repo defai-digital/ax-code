@@ -35,6 +35,7 @@ import { useEffectiveDirectory } from "@/hooks/useEffectiveDirectory"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import type { EditorAPI } from "@/lib/api/types"
 import { clearCopyResetTimer, replaceCopyResetTimer } from "./copyResetTimer"
+import { getSafeMarkdownHref } from "./markdownLinks"
 
 const useCurrentMermaidTheme = () => {
   const themeSystem = useOptionalThemeSystem()
@@ -1158,19 +1159,19 @@ const buildMarkdownComponents = ({
     )
   },
   a({ href, children, ...props }) {
-    const targetHref = href ?? ""
-    const isExternal = isSafeExternalUrl(targetHref)
-    const isLoopback = onPreviewLoopback ? isLoopbackHttpUrl(targetHref) : false
-    const previewHref = isLoopback ? normalizeLoopbackPreviewUrl(targetHref) : null
+    const targetHref = getSafeMarkdownHref(href)
+    const isExternal = Boolean(targetHref)
+    const isLoopback = Boolean(targetHref && onPreviewLoopback && isLoopbackHttpUrl(targetHref))
+    const previewHref = targetHref && isLoopback ? normalizeLoopbackPreviewUrl(targetHref) : null
     return (
       <>
         <a
           {...props}
-          href={href}
+          href={targetHref}
           target={isExternal ? "_blank" : undefined}
           rel={isExternal ? "noopener noreferrer" : undefined}
         >
-          {isExternal ? <ExternalLinkFavicon href={targetHref} /> : null}
+          {targetHref ? <ExternalLinkFavicon href={targetHref} /> : null}
           {children}
         </a>
         {previewHref && onPreviewLoopback ? (

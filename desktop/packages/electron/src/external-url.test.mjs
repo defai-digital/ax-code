@@ -14,6 +14,7 @@ describe("normalizeSafeExternalUrl", () => {
   test("rejects unsafe or malformed external URLs", () => {
     expect(normalizeSafeExternalUrl("file:///Users/test/secret.txt")).toBeNull()
     expect(normalizeSafeExternalUrl("javascript:alert(1)")).toBeNull()
+    expect(normalizeSafeExternalUrl("https://user:pass@example.com/docs")).toBeNull()
     expect(normalizeSafeExternalUrl("not a url")).toBeNull()
     expect(normalizeSafeExternalUrl("")).toBeNull()
   })
