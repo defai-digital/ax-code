@@ -405,6 +405,71 @@ export const registerFsRoutes = (app, dependencies) => {
   const gitReadCache = new Map()
   const inFlightGitReadCache = new Map()
 
+  const resolveCanonicalBase = async (basePath) => {
+    try {
+      return await realpathCache.resolve(basePath)
+    } catch {
+      return path.resolve(basePath)
+    }
+  }
+
+  const rejectSymlinkEscape = async ({ resolvedPath, basePath }) => {
+    const [canonicalPath, canonicalBase] = await Promise.all([
+      realpathCache.resolve(resolvedPath),
+      resolveCanonicalBase(basePath),
+    ])
+
+    if (!isPathWithinRoot(canonicalPath, canonicalBase, path, os)) {
+      return { ok: false, statusCode: 403, error: "Access to path denied" }
+    }
+
+    return { ok: true, path: canonicalPath, base: canonicalBase }
+  }
+
+  const findExistingParentRealpath = async (targetPath) => {
+    let current = path.resolve(targetPath)
+    while (true) {
+      try {
+        return await fsPromises.realpath(current)
+      } catch (error) {
+        const code = error && typeof error === "object" ? error.code : undefined
+        if (code !== "ENOENT") {
+          throw error
+        }
+
+        const parent = path.dirname(current)
+        if (parent === current) {
+          throw error
+        }
+        current = parent
+      }
+    }
+  }
+
+  const rejectWritableSymlinkEscape = async ({ resolvedPath, basePath }) => {
+    const canonicalBase = await resolveCanonicalBase(basePath)
+
+    try {
+      const canonicalTarget = await fsPromises.realpath(resolvedPath)
+      if (!isPathWithinRoot(canonicalTarget, canonicalBase, path, os)) {
+        return { ok: false, statusCode: 403, error: "Access to path denied" }
+      }
+      return { ok: true, path: resolvedPath, base: canonicalBase }
+    } catch (error) {
+      const code = error && typeof error === "object" ? error.code : undefined
+      if (code !== "ENOENT") {
+        throw error
+      }
+    }
+
+    const canonicalParent = await findExistingParentRealpath(path.dirname(resolvedPath))
+    if (!isPathWithinRoot(canonicalParent, canonicalBase, path, os)) {
+      return { ok: false, statusCode: 403, error: "Access to path denied" }
+    }
+
+    return { ok: true, path: resolvedPath, base: canonicalBase }
+  }
+
   const pruneExecJobs = () => {
     const now = Date.now()
     for (const [jobId, job] of execJobs.entries()) {
@@ -583,7 +648,14 @@ export const registerFsRoutes = (app, dependencies) => {
       if (!resolved.ok) {
         return res.status(400).json({ error: resolved.error })
       }
-      const resolvedPath = resolved.resolved
+      const writable = await rejectWritableSymlinkEscape({
+        resolvedPath: resolved.resolved,
+        basePath: resolved.base,
+      })
+      if (!writable.ok) {
+        return res.status(writable.statusCode).json({ error: writable.error })
+      }
+      const resolvedPath = writable.path
 
       await fsPromises.mkdir(resolvedPath, { recursive: true })
       return res.json({ success: true, path: resolvedPath })
@@ -663,7 +735,14 @@ export const registerFsRoutes = (app, dependencies) => {
       if (!authorizedParent.ok) {
         return res.status(400).json({ error: authorizedParent.error })
       }
-      parentPath = authorizedParent.resolved
+      const writableParent = await rejectWritableSymlinkEscape({
+        resolvedPath: authorizedParent.resolved,
+        basePath: authorizedParent.base,
+      })
+      if (!writableParent.ok) {
+        return res.status(writableParent.statusCode).json({ error: writableParent.error })
+      }
+      parentPath = writableParent.path
       resolvedDestination = path.join(parentPath, directoryName)
 
       await fsPromises.mkdir(parentPath, { recursive: true })
@@ -925,14 +1004,22 @@ export const registerFsRoutes = (app, dependencies) => {
         return res.status(400).json({ error: resolved.error })
       }
 
-      const existing = await fsPromises.readFile(resolved.resolved, "utf8").catch(() => null)
-      if (existing === content) {
-        return res.json({ success: true, path: resolved.resolved })
+      const writable = await rejectWritableSymlinkEscape({
+        resolvedPath: resolved.resolved,
+        basePath: resolved.base,
+      })
+      if (!writable.ok) {
+        return res.status(writable.statusCode).json({ error: writable.error })
       }
 
-      await fsPromises.mkdir(path.dirname(resolved.resolved), { recursive: true })
-      await fsPromises.writeFile(resolved.resolved, content, "utf8")
-      return res.json({ success: true, path: resolved.resolved })
+      const existing = await fsPromises.readFile(writable.path, "utf8").catch(() => null)
+      if (existing === content) {
+        return res.json({ success: true, path: writable.path })
+      }
+
+      await fsPromises.mkdir(path.dirname(writable.path), { recursive: true })
+      await fsPromises.writeFile(writable.path, content, "utf8")
+      return res.json({ success: true, path: writable.path })
     } catch (error) {
       const err = error
       if (err && typeof err === "object" && err.code === "EACCES") {
@@ -961,6 +1048,13 @@ export const registerFsRoutes = (app, dependencies) => {
       })
       if (!resolved.ok) {
         return res.status(400).json({ error: resolved.error })
+      }
+      const canonical = await rejectSymlinkEscape({
+        resolvedPath: resolved.resolved,
+        basePath: resolved.base,
+      })
+      if (!canonical.ok) {
+        return res.status(canonical.statusCode).json({ error: canonical.error })
       }
 
       await fsPromises.rm(resolved.resolved, { recursive: true, force: true })
@@ -1000,6 +1094,13 @@ export const registerFsRoutes = (app, dependencies) => {
       if (!resolvedOld.ok) {
         return res.status(400).json({ error: resolvedOld.error })
       }
+      const canonicalOld = await rejectSymlinkEscape({
+        resolvedPath: resolvedOld.resolved,
+        basePath: resolvedOld.base,
+      })
+      if (!canonicalOld.ok) {
+        return res.status(canonicalOld.statusCode).json({ error: canonicalOld.error })
+      }
 
       const resolvedNew = await resolveWorkspacePathFromContext({
         req,
@@ -1017,9 +1118,16 @@ export const registerFsRoutes = (app, dependencies) => {
       if (resolvedOld.base !== resolvedNew.base) {
         return res.status(400).json({ error: "Source and destination must share the same workspace root" })
       }
+      const writableNew = await rejectWritableSymlinkEscape({
+        resolvedPath: resolvedNew.resolved,
+        basePath: resolvedNew.base,
+      })
+      if (!writableNew.ok) {
+        return res.status(writableNew.statusCode).json({ error: writableNew.error })
+      }
 
-      await fsPromises.rename(resolvedOld.resolved, resolvedNew.resolved)
-      return res.json({ success: true, path: resolvedNew.resolved })
+      await fsPromises.rename(resolvedOld.resolved, writableNew.path)
+      return res.json({ success: true, path: writableNew.path })
     } catch (error) {
       const err = error
       if (err && typeof err === "object" && err.code === "ENOENT") {
@@ -1053,7 +1161,14 @@ export const registerFsRoutes = (app, dependencies) => {
       if (!resolved.ok) {
         return res.status(400).json({ error: resolved.error })
       }
-      const resolvedPath = resolved.resolved
+      const canonical = await rejectSymlinkEscape({
+        resolvedPath: resolved.resolved,
+        basePath: resolved.base,
+      })
+      if (!canonical.ok) {
+        return res.status(canonical.statusCode).json({ error: canonical.error })
+      }
+      const resolvedPath = canonical.path
       await fsPromises.access(resolvedPath)
 
       const platform = process.platform
@@ -1126,7 +1241,14 @@ export const registerFsRoutes = (app, dependencies) => {
       if (!authorizedCwd.ok) {
         return res.status(400).json({ error: authorizedCwd.error })
       }
-      const resolvedCwd = authorizedCwd.resolved
+      const canonicalCwd = await rejectSymlinkEscape({
+        resolvedPath: authorizedCwd.resolved,
+        basePath: authorizedCwd.base,
+      })
+      if (!canonicalCwd.ok) {
+        return res.status(canonicalCwd.statusCode).json({ error: canonicalCwd.error })
+      }
+      const resolvedCwd = canonicalCwd.path
       const stats = await fsPromises.stat(resolvedCwd)
       if (!stats.isDirectory()) {
         return res.status(400).json({ error: "Specified cwd is not a directory" })
@@ -1234,7 +1356,14 @@ export const registerFsRoutes = (app, dependencies) => {
       if (!authorized.ok) {
         return res.status(400).json({ error: authorized.error })
       }
-      resolvedPath = await realpathCache.resolve(authorized.resolved)
+      const canonical = await rejectSymlinkEscape({
+        resolvedPath: authorized.resolved,
+        basePath: authorized.base,
+      })
+      if (!canonical.ok) {
+        return res.status(canonical.statusCode).json({ error: canonical.error })
+      }
+      resolvedPath = canonical.path
 
       const stats = await fsPromises.stat(resolvedPath)
       if (!stats.isDirectory()) {

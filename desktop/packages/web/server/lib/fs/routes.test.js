@@ -298,6 +298,47 @@ describe("fs outside workspace authorization", () => {
     expect(fsPromises.readFile).toHaveBeenCalledWith("/tmp/approved/image.png")
   })
 
+  it("rejects directory listing through a workspace symlink that resolves outside the workspace", async () => {
+    const fsPromises = {
+      realpath: vi.fn(async (targetPath) => {
+        if (targetPath === "/repo/link") return "/outside"
+        if (targetPath === "/repo") return "/repo"
+        return targetPath
+      }),
+      stat: vi.fn(async () => ({ isDirectory: () => true })),
+      readdir: vi.fn(async () => []),
+    }
+    const { getRoute } = registerFs(fsPromises)
+
+    const res = await callRoute(getRoute("GET", "/api/fs/list"), {
+      query: { path: "/repo/link" },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body).toEqual({ error: "Access to path denied" })
+    expect(fsPromises.readdir).not.toHaveBeenCalled()
+  })
+
+  it("rejects writes through a workspace symlink that resolves outside the workspace", async () => {
+    const fsPromises = {
+      realpath: vi.fn(async (targetPath) => {
+        if (targetPath === "/repo/link/file.txt") return "/outside/file.txt"
+        if (targetPath === "/repo") return "/repo"
+        return targetPath
+      }),
+      readFile: vi.fn(async () => "old"),
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+    }
+    const handler = registerWrite(fsPromises)
+
+    const res = await callWrite(handler, { path: "/repo/link/file.txt", content: "new" })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body).toEqual({ error: "Access to path denied" })
+    expect(fsPromises.writeFile).not.toHaveBeenCalled()
+  })
+
   it("rejects mkdir outside workspace when the directory was not approved", async () => {
     const fsPromises = {
       mkdir: vi.fn(async () => undefined),
