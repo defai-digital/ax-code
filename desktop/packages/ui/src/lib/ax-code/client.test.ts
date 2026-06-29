@@ -1,6 +1,10 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test } from "vitest"
 
-import { formatPromptSendError } from "./client"
+import { axCodeClient, formatPromptSendError } from "./client"
+
+afterEach(() => {
+  axCodeClient.setDirectory(undefined)
+})
 
 describe("formatPromptSendError", () => {
   test("maps ProviderModelNotFoundError to an actionable message", () => {
@@ -59,5 +63,30 @@ describe("formatPromptSendError", () => {
   test("returns a bare status message when the body is empty", () => {
     expect(formatPromptSendError(400, "")).toBe("Failed to send message (400)")
     expect(formatPromptSendError(400, "   ")).toBe("Failed to send message (400)")
+  })
+})
+
+describe("axCodeClient directory normalization", () => {
+  test("preserves Windows drive roots as absolute paths", () => {
+    axCodeClient.setDirectory("c:/")
+
+    expect(axCodeClient.getDirectory()).toBe("C:/")
+
+    axCodeClient.setDirectory("C:")
+
+    expect(axCodeClient.getDirectory()).toBe("C:/")
+  })
+
+  test("reports Windows drive-root homes as absolute paths", async () => {
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async () => new Response("{}", { status: 500 })
+
+    try {
+      axCodeClient.setDirectory("c:/")
+
+      await expect(axCodeClient.getSystemInfo()).resolves.toMatchObject({ homeDirectory: "C:/" })
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   })
 })

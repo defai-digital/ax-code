@@ -327,6 +327,13 @@ class AxCodeService {
     const normalized = trimmed
       .replace(/\\/g, "/")
       .replace(/^([a-z]):/, (_, letter: string) => letter.toUpperCase() + ":")
+    const driveRoot = normalized.match(/^([A-Z]:)\/+$/)
+    if (driveRoot) {
+      return `${driveRoot[1]}/`
+    }
+    if (/^[A-Z]:$/.test(normalized)) {
+      return `${normalized}/`
+    }
     const withoutTrailingSlash = normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized
 
     return withoutTrailingSlash || null
@@ -349,7 +356,7 @@ class AxCodeService {
         return { homeDirectory, username: segments[0] }
       }
 
-      return { homeDirectory: drive, username: undefined }
+      return { homeDirectory: `${drive}/`, username: undefined }
     }
 
     const absolute = path.startsWith("/")

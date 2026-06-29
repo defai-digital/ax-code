@@ -43,6 +43,13 @@ const normalizeDirectoryPath = (value: string): string => {
     return trimmed
   }
   const normalized = trimmed.replace(/\\/g, "/").replace(/^([a-z]):/, (_, letter: string) => letter.toUpperCase() + ":")
+  const driveRoot = normalized.match(/^([A-Z]:)\/+$/)
+  if (driveRoot) {
+    return `${driveRoot[1]}/`
+  }
+  if (/^[A-Z]:$/.test(normalized)) {
+    return `${normalized}/`
+  }
   if (normalized.length > 1) {
     return normalized.replace(/\/+$/, "")
   }
@@ -67,6 +74,8 @@ const resolveDirectoryPath = (path: string, homeDir?: string | null): string => 
   const expanded = resolveTildePath(path, homeDir)
   return normalizeDirectoryPath(expanded)
 }
+
+const isFilesystemRoot = (path: string): boolean => path === "/" || /^[A-Z]:\/$/.test(path)
 
 const getStoredHomeDirectory = (): string | null => {
   const raw = safeStorage.getItem("homeDirectory")
@@ -148,21 +157,11 @@ const normalizeHomeCandidate = (value?: string | null) => {
   if (typeof value !== "string") {
     return null
   }
-  const trimmed = value.trim()
-  if (!trimmed) {
+  const normalized = normalizeDirectoryPath(value)
+  if (!normalized) {
     return null
   }
-  const normalized = trimmed.replace(/\\/g, "/")
-  if (normalized.length > 1) {
-    const withoutTrailingSlash = normalized.replace(/\/+$/, "")
-    if (withoutTrailingSlash && withoutTrailingSlash.length > 0) {
-      if (withoutTrailingSlash === "/") {
-        return null
-      }
-      return withoutTrailingSlash
-    }
-  }
-  if (normalized === "/" || normalized.length === 0) {
+  if (normalized === "/") {
     return null
   }
   return normalized
@@ -324,12 +323,19 @@ export const useDirectoryStore = create<DirectoryNavigationStore>()(
       goToParent: () => {
         const { currentDirectory, setDirectory } = get()
         const homeDir = cachedHomeDirectory || get().homeDirectory || getHomeDirectory()
+        const normalizedCurrentDirectory = normalizeDirectoryPath(currentDirectory)
+        const normalizedHomeDirectory = normalizeDirectoryPath(homeDir)
 
-        if (currentDirectory === homeDir || currentDirectory === "/") {
+        if (
+          normalizedCurrentDirectory === normalizedHomeDirectory ||
+          isFilesystemRoot(normalizedCurrentDirectory)
+        ) {
           return
         }
 
-        const cleanPath = currentDirectory.endsWith("/") ? currentDirectory.slice(0, -1) : currentDirectory
+        const cleanPath = normalizedCurrentDirectory.endsWith("/")
+          ? normalizedCurrentDirectory.slice(0, -1)
+          : normalizedCurrentDirectory
 
         const lastSlash = cleanPath.lastIndexOf("/")
         if (lastSlash === -1) {

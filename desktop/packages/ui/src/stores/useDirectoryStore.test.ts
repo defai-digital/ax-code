@@ -134,4 +134,45 @@ describe("useDirectoryStore", () => {
     })
     expect(updateDesktopSettingsMock).toHaveBeenCalledWith({ homeDirectory: "/Users/alice-new" })
   })
+
+  test("keeps Windows drive-root parents absolute", async () => {
+    const { setDirectoryMock, useDirectoryStore, values } = await importStore()
+    values.set("homeDirectory", "C:/Users/alice")
+    useDirectoryStore.setState({
+      currentDirectory: "C:/Users",
+      directoryHistory: ["C:/Users/alice", "C:/Users"],
+      historyIndex: 1,
+      homeDirectory: "C:/Users/alice",
+      hasPersistedDirectory: true,
+      isHomeReady: true,
+      isSwitchingDirectory: false,
+    })
+
+    useDirectoryStore.getState().goToParent()
+
+    expect(useDirectoryStore.getState().currentDirectory).toBe("C:/")
+    expect(setDirectoryMock).toHaveBeenCalledWith("C:/")
+    expect(values.get("lastDirectory")).toBe("C:/")
+  })
+
+  test("does not navigate above Windows drive roots", async () => {
+    const { setDirectoryMock, useDirectoryStore, values } = await importStore()
+    values.set("homeDirectory", "C:/Users/alice")
+    useDirectoryStore.setState({
+      currentDirectory: "C:/",
+      directoryHistory: ["C:/Users/alice", "C:/"],
+      historyIndex: 1,
+      homeDirectory: "C:/Users/alice",
+      hasPersistedDirectory: true,
+      isHomeReady: true,
+      isSwitchingDirectory: false,
+    })
+    setDirectoryMock.mockClear()
+
+    useDirectoryStore.getState().goToParent()
+
+    expect(useDirectoryStore.getState().currentDirectory).toBe("C:/")
+    expect(setDirectoryMock).not.toHaveBeenCalled()
+    expect(values.get("lastDirectory")).toBeUndefined()
+  })
 })
