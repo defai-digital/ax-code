@@ -11,7 +11,7 @@ import { ScrollShadow } from "@/components/ui/ScrollShadow"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { generatePullRequestDescription } from "@/lib/gitApi"
 import { renderMagicPrompt } from "@/lib/magicPrompts"
-import { openExternalUrl } from "@/lib/url"
+import { getSafeExternalUrl, openExternalUrl } from "@/lib/url"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import { useDeviceInfo } from "@/lib/device"
 import { MobileOverlayPanel } from "@/components/ui/MobileOverlayPanel"
@@ -732,6 +732,7 @@ export const PullRequestSection: React.FC<{
       const conclusion = run.conclusion ?? undefined
       const statusText = conclusion ? `${status} / ${conclusion}` : status
       const appName = run.app?.name || run.app?.slug
+      const safeDetailsUrl = run.detailsUrl ? getSafeExternalUrl(run.detailsUrl) : null
       return (
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-3">
@@ -742,12 +743,16 @@ export const PullRequestSection: React.FC<{
               </div>
             </div>
 
-            {run.detailsUrl ? (
-              <Button variant="outline" size="sm" asChild className="flex-shrink-0">
-                <a href={run.detailsUrl} target="_blank" rel="noopener noreferrer">
-                  <Icon name="external-link" className="size-4" />
-                  Open
-                </a>
+            {safeDetailsUrl ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-shrink-0"
+                onClick={() => void openExternal(safeDetailsUrl)}
+              >
+                <Icon name="external-link" className="size-4" />
+                Open
               </Button>
             ) : null}
           </div>
@@ -1444,6 +1449,7 @@ export const PullRequestSection: React.FC<{
 
   const originRepoUrl = status?.repo?.url || null
   const repoUrl = useDetectedUpstream && detectedUpstream?.url ? detectedUpstream.url : originRepoUrl
+  const safeRepoUrl = repoUrl ? getSafeExternalUrl(repoUrl) : null
   const checks = status?.checks ?? null
   const canMerge = Boolean(status?.canMerge)
   const isConnected = Boolean(status?.connected)
@@ -1567,12 +1573,16 @@ export const PullRequestSection: React.FC<{
           <div className="space-y-2">
             <div className="typography-ui-label text-foreground">{t("gitView.pr.statusUnavailable")}</div>
             <div className="typography-meta text-muted-foreground break-words">{error}</div>
-            {repoUrl ? (
-              <Button variant="outline" size="sm" asChild className="w-fit">
-                <a href={repoUrl} target="_blank" rel="noopener noreferrer">
-                  <Icon name="external-link" className="size-4" />
-                  Open Repo
-                </a>
+            {safeRepoUrl ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-fit"
+                onClick={() => void openExternal(safeRepoUrl)}
+              >
+                <Icon name="external-link" className="size-4" />
+                Open Repo
               </Button>
             ) : null}
           </div>
@@ -1863,12 +1873,10 @@ export const PullRequestSection: React.FC<{
                   </span>
                 </div>
               </div>
-              {repoUrl ? (
-                <Button variant="outline" size="sm" asChild>
-                  <a href={repoUrl} target="_blank" rel="noopener noreferrer">
-                    <Icon name="external-link" className="size-4" />
-                    {t("gitView.pr.actions.repo")}
-                  </a>
+              {safeRepoUrl ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => void openExternal(safeRepoUrl)}>
+                  <Icon name="external-link" className="size-4" />
+                  {t("gitView.pr.actions.repo")}
                 </Button>
               ) : null}
             </div>
