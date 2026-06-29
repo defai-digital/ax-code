@@ -28,6 +28,7 @@ import { JsonTreeView } from "@/components/ui/JsonTreeView"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
 import { API_ENDPOINTS } from "@/lib/http"
+import { loadMermaidDataUrlSource } from "./toolOutputDialogMermaidSource"
 
 export interface ToolOutputDialogProps {
   popup: ToolPopupContent
@@ -710,20 +711,6 @@ const MermaidPreviewDialog: React.FC<{
     return isSafeLocalPath(decoded) ? decoded : isSafeLocalPath(stripped) ? stripped : null
   }, [])
 
-  const decodeDataUrl = React.useCallback((value: string): string => {
-    const commaIndex = value.indexOf(",")
-    if (commaIndex < 0) {
-      throw new Error("Malformed data URL")
-    }
-
-    const metadata = value.slice(0, commaIndex).toLowerCase()
-    const payload = value.slice(commaIndex + 1)
-    if (metadata.includes(";base64")) {
-      return atob(payload)
-    }
-    return decodeURIComponent(payload)
-  }, [])
-
   const loadMermaidSource = React.useCallback(async () => {
     const target = popup.mermaid
     if (!target?.url) {
@@ -747,7 +734,7 @@ const MermaidPreviewDialog: React.FC<{
 
     let sourcePromise: Promise<string>
     if (target.url.startsWith("data:")) {
-      sourcePromise = Promise.resolve(decodeDataUrl(target.url))
+      sourcePromise = loadMermaidDataUrlSource(target.url)
     } else if (target.url.toLowerCase().startsWith("file://")) {
       const normalizedPath = normalizeFilePath(target.url)
       if (!normalizedPath) {
@@ -792,7 +779,7 @@ const MermaidPreviewDialog: React.FC<{
         setStatus("error")
         setErrorMessage(error instanceof Error ? error.message : t("chat.toolOutputDialog.mermaid.loadFailed"))
       })
-  }, [decodeDataUrl, normalizeFilePath, popup.mermaid, t])
+  }, [normalizeFilePath, popup.mermaid, t])
 
   React.useEffect(() => {
     if (!popup.open || !popup.mermaid) {
