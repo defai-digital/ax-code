@@ -46,21 +46,26 @@ type ExecutionModeStore = ExecutionModeState & ExecutionModeActions
  * after super-long is disabled). Returns the derived mode the server settled
  * on, or null if any call failed.
  */
-const applyMode = async (directory: string | null | undefined, mode: ExecutionMode): Promise<ExecutionMode | null> =>
-  axCodeClient.withDirectory(directory ?? null, async () => {
-    if (mode === "manual") {
-      const superLong = await axCodeClient.setSuperLongEnabled(false)
-      const autonomous = await axCodeClient.setAutonomousEnabled(false)
-      if (superLong === null || autonomous === null) return null
-      return deriveMode(autonomous, superLong)
-    }
+const applyMode = async (directory: string | null | undefined, mode: ExecutionMode): Promise<ExecutionMode | null> => {
+  try {
+    return await axCodeClient.withDirectory(directory ?? null, async () => {
+      if (mode === "manual") {
+        const superLong = await axCodeClient.setSuperLongEnabled(false)
+        const autonomous = await axCodeClient.setAutonomousEnabled(false)
+        if (superLong === null || autonomous === null) return null
+        return deriveMode(autonomous, superLong)
+      }
 
-    const autonomous = await axCodeClient.setAutonomousEnabled(true)
-    if (autonomous === null) return null
-    const superLong = await axCodeClient.setSuperLongEnabled(mode === "long-run")
-    if (superLong === null) return null
-    return deriveMode(autonomous, superLong)
-  })
+      const autonomous = await axCodeClient.setAutonomousEnabled(true)
+      if (autonomous === null) return null
+      const superLong = await axCodeClient.setSuperLongEnabled(mode === "long-run")
+      if (superLong === null) return null
+      return deriveMode(autonomous, superLong)
+    })
+  } catch {
+    return null
+  }
+}
 
 export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => ({
   modeByDirectory: {},
@@ -77,13 +82,18 @@ export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => 
 
     set((s) => ({ pendingByDirectory: { ...s.pendingByDirectory, [key]: true } }))
 
-    const flags = await axCodeClient.withDirectory(directory ?? null, async () => {
-      const [autonomous, superLong] = await Promise.all([
-        axCodeClient.getAutonomousEnabled(),
-        axCodeClient.getSuperLongEnabled(),
-      ])
-      return { autonomous, superLong }
-    })
+    let flags: { autonomous: boolean | null; superLong: boolean | null } = { autonomous: null, superLong: null }
+    try {
+      flags = await axCodeClient.withDirectory(directory ?? null, async () => {
+        const [autonomous, superLong] = await Promise.all([
+          axCodeClient.getAutonomousEnabled(),
+          axCodeClient.getSuperLongEnabled(),
+        ])
+        return { autonomous, superLong }
+      })
+    } catch {
+      flags = { autonomous: null, superLong: null }
+    }
 
     set((s) => {
       const next: Partial<ExecutionModeState> = {
