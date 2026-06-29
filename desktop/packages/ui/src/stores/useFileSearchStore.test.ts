@@ -23,9 +23,9 @@ const searchFilesMock = vi.fn(() => {
   searchRequests.push(request)
   return request.promise
 })
-const nativeSearchRequests: Array<{ directory: string; query: string }> = []
-const searchFilesNativeMock = vi.fn(async (directory: string, query: string) => {
-  nativeSearchRequests.push({ directory, query })
+const nativeSearchRequests: Array<{ directory: string; query: string; options?: Record<string, unknown> }> = []
+const searchFilesNativeMock = vi.fn(async (directory: string, query: string, options?: Record<string, unknown>) => {
+  nativeSearchRequests.push({ directory, query, options })
   return nativeSearchResult
 })
 const recordDesktopStartupEventMock = vi.fn(async () => {}) as (() => Promise<void>) & { mockClear: () => void }
@@ -162,14 +162,35 @@ describe("useFileSearchStore", () => {
     expect(useFileSearchStore.getState().cacheKeys).toEqual([])
   })
 
-  test("uses native file search on the local Electron desktop origin", async () => {
+  test("keeps default gitignore-respecting local Electron searches on the indexed search path", async () => {
     isTauriShellValue = true
     isElectronShellValue = true
     nativeSearchResult = [{ path: "from-native.ts" }]
 
     const searchPromise = useFileSearchStore.getState().searchFiles("/project", "foo", 10, { type: "file" })
 
-    expect(nativeSearchRequests).toEqual([{ directory: "/project", query: "foo" }])
+    expect(nativeSearchRequests).toEqual([])
+    expect(searchRequests).toHaveLength(1)
+    searchRequests[0].resolve([{ path: "from-ax-code.ts" }])
+    expect(await searchPromise).toEqual([{ path: "from-ax-code.ts" }])
+  })
+
+  test("uses native file search on the local Electron desktop origin when gitignored files are requested", async () => {
+    isTauriShellValue = true
+    isElectronShellValue = true
+    nativeSearchResult = [{ path: "from-native.ts" }]
+
+    const searchPromise = useFileSearchStore
+      .getState()
+      .searchFiles("/project", "foo", 10, { type: "file", respectGitignore: false })
+
+    expect(nativeSearchRequests).toEqual([
+      {
+        directory: "/project",
+        query: "foo",
+        options: { limit: 10, includeHidden: false, respectGitignore: false, type: "file" },
+      },
+    ])
     expect(searchRequests).toHaveLength(0)
     expect(await searchPromise).toEqual([{ path: "from-native.ts" }])
   })

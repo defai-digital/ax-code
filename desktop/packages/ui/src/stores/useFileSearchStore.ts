@@ -70,7 +70,15 @@ const cacheKeyMatchesDirectory = (cacheKey: string, directory: string) => {
   }
 }
 
-const canUseNativeFileSearch = (): boolean => isTauriShell() && (!isElectronShell() || isDesktopLocalOriginActive())
+const canUseNativeFileSearch = (options: { respectGitignore: boolean }): boolean => {
+  if (!isTauriShell()) return false
+  if (!isElectronShell()) return true
+  // Electron's local desktop_search_files implementation is a lightweight
+  // filesystem walk and does not evaluate .gitignore rules. Keep the native
+  // path for explicit "show gitignored" searches, but use AX Code's indexed
+  // search for the default gitignore-respecting mode.
+  return isDesktopLocalOriginActive() && !options.respectGitignore
+}
 let firstFileSearchResultRecorded = false
 
 export const useFileSearchStore = create<FileSearchStoreState>()(
@@ -107,7 +115,7 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
         // stay on the AX Code HTTP search path.
         const searchStartedAt = Date.now()
         const fetchFiles: Promise<ProjectFileSearchHit[]> =
-          type === "file" && canUseNativeFileSearch()
+          type === "file" && canUseNativeFileSearch({ respectGitignore })
             ? searchFilesNative(normalizedDirectory, normalizedQuery, {
                 limit,
                 includeHidden,
