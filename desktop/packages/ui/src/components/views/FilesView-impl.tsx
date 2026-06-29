@@ -76,6 +76,12 @@ import {
   type JsonViewMode,
   type PreviewViewMode,
 } from "@/lib/viewerModePreferences"
+import {
+  getFilesViewAncestorPaths as getAncestorPaths,
+  getFilesViewDisplayPath as getDisplayPath,
+  isFilesViewPathWithinRoot as isPathWithinRoot,
+  normalizeFilesViewPath as normalizePath,
+} from "./filesViewPathUtils"
 
 type FileStatSnapshot = {
   path: string
@@ -133,78 +139,8 @@ const sortNodes = (items: FileNode[]) =>
     return a.name.localeCompare(b.name)
   })
 
-const normalizePath = (value: string): string => {
-  if (!value) return ""
-
-  const raw = value.replace(/\\/g, "/")
-  const hadUncPrefix = raw.startsWith("//")
-
-  let normalized = raw.replace(/\/+/g, "/")
-  if (hadUncPrefix && !normalized.startsWith("//")) {
-    normalized = `/${normalized}`
-  }
-
-  const isUnixRoot = normalized === "/"
-  const isWindowsDriveRoot = /^[A-Za-z]:\/$/.test(normalized)
-  if (!isUnixRoot && !isWindowsDriveRoot) {
-    normalized = normalized.replace(/\/+$/, "")
-  }
-
-  return normalized
-}
-
 const isAbsolutePath = (value: string): boolean => {
   return value.startsWith("/") || value.startsWith("//") || /^[A-Za-z]:\//.test(value)
-}
-
-const toComparablePath = (value: string): string => {
-  if (/^[A-Za-z]:\//.test(value)) {
-    return value.toLowerCase()
-  }
-  return value
-}
-
-const isPathWithinRoot = (path: string, root: string): boolean => {
-  const normalizedRoot = normalizePath(root)
-  const normalizedPath = normalizePath(path)
-  if (!normalizedRoot || !normalizedPath) return false
-
-  const comparableRoot = toComparablePath(normalizedRoot)
-  const comparablePath = toComparablePath(normalizedPath)
-  return comparablePath === comparableRoot || comparablePath.startsWith(`${comparableRoot}/`)
-}
-
-const getAncestorPaths = (filePath: string, root: string): string[] => {
-  const normalizedRoot = normalizePath(root)
-  const normalizedFile = normalizePath(filePath)
-
-  // Ensure file is within root
-  if (!isPathWithinRoot(normalizedFile, normalizedRoot)) return []
-
-  const relative = normalizedFile.slice(normalizedRoot.length).replace(/^\//, "")
-  const parts = relative.split("/")
-  const ancestors: string[] = []
-  let current = normalizedRoot
-
-  for (let i = 0; i < parts.length - 1; i++) {
-    current = current ? `${current}/${parts[i]}` : parts[i]
-    ancestors.push(current)
-  }
-  return ancestors
-}
-
-const getDisplayPath = (root: string | null, path: string): string => {
-  if (!path) {
-    return ""
-  }
-
-  const normalizedFilePath = normalizePath(path)
-  if (!root || !isPathWithinRoot(normalizedFilePath, root)) {
-    return normalizedFilePath
-  }
-
-  const relative = normalizedFilePath.slice(root.length)
-  return relative.startsWith("/") ? relative.slice(1) : relative
 }
 
 const DEFAULT_IGNORED_DIR_NAMES = new Set(["node_modules"])
