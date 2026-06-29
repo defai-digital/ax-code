@@ -158,4 +158,47 @@ describe("useUpdateStore runtime detection", () => {
       restoreWindow()
     }
   })
+
+  test("does not let a concurrent update check strand an active desktop download", async () => {
+    const download = createDeferred<unknown>()
+    mockElectronUpdaterWindow(async (command) => {
+      invokedCommands.push(command)
+      if (command === "desktop_check_for_updates") {
+        return {
+          available: true,
+          version: "1.1.2",
+          currentVersion: "1.1.1",
+        }
+      }
+      if (command === "desktop_download_and_install_update") {
+        return download.promise
+      }
+      return null
+    })
+
+    try {
+      await useUpdateStore.getState().checkForUpdates()
+      const downloadUpdate = useUpdateStore.getState().downloadUpdate()
+      await waitForCommand("desktop_download_and_install_update")
+
+      await useUpdateStore.getState().checkForUpdates()
+      download.resolve(null)
+      await downloadUpdate
+
+      expect(invokedCommands).toEqual([
+        "desktop_check_for_updates",
+        "desktop_check_for_updates",
+        "desktop_download_and_install_update",
+        "desktop_check_for_updates",
+      ])
+      expect(useUpdateStore.getState()).toMatchObject({
+        available: true,
+        downloading: false,
+        downloaded: true,
+        error: null,
+      })
+    } finally {
+      restoreWindow()
+    }
+  })
 })

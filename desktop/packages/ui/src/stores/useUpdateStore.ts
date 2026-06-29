@@ -36,6 +36,7 @@ type ClientRuntime = "desktop" | "web"
 const UPDATE_FAILED_MESSAGE = "Update failed. Please try again or open the release page."
 const RESTART_FAILED_MESSAGE = "Failed to restart AX Code Desktop."
 let updateCheckRequestId = 0
+let updateDownloadRequestId = 0
 
 function mapRuntimeParams(runtime: ClientRuntime): URLSearchParams {
   const params = new URLSearchParams()
@@ -178,8 +179,8 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
       return
     }
 
-    const requestId = ++updateCheckRequestId
-    const isCurrentRequest = () => requestId === updateCheckRequestId
+    const requestId = ++updateDownloadRequestId
+    const isCurrentRequest = () => requestId === updateDownloadRequestId
     set({ downloading: true, error: null, progress: null })
 
     try {
@@ -252,6 +253,7 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
 
   reset: () => {
     updateCheckRequestId += 1
+    updateDownloadRequestId += 1
     set(initialState)
   },
 }))
