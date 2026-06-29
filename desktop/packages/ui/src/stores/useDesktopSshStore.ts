@@ -80,6 +80,15 @@ const pickStatusMapEntries = (
   return picked
 }
 
+const configuredInstanceIds = new Set<string>()
+
+const replaceConfiguredInstanceIds = (instances: DesktopSshInstance[]) => {
+  configuredInstanceIds.clear()
+  for (const instance of instances) {
+    configuredInstanceIds.add(instance.id)
+  }
+}
+
 const upsertNewerStatus = (
   current: Record<string, DesktopSshInstanceStatus>,
   status: DesktopSshInstanceStatus,
@@ -112,9 +121,13 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
       const [config, statuses] = await Promise.all([desktopSshInstancesGet(), desktopSshStatus()])
       const statusMap = toStatusMap(statuses)
       const configuredIds = new Set(config.instances.map((instance) => instance.id))
+      replaceConfiguredInstanceIds(config.instances)
 
       if (!get().listenerReady) {
         await listenDesktopSshStatus((status) => {
+          if (!configuredInstanceIds.has(status.id)) {
+            return
+          }
           set((state) => ({
             statusesById: upsertNewerStatus(state.statusesById, status),
           }))
@@ -155,9 +168,12 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
       const statuses = await desktopSshStatus()
       const statusMap = toStatusMap(statuses)
       set((state) => {
-        const knownIds = new Set([...Object.keys(statusMap), ...state.instances.map((instance) => instance.id)])
+        const knownIds = new Set(state.instances.map((instance) => instance.id))
         return {
-          statusesById: mergeNewerStatuses(statusMap, pickStatusMapEntries(state.statusesById, knownIds)),
+          statusesById: mergeNewerStatuses(
+            pickStatusMapEntries(statusMap, knownIds),
+            pickStatusMapEntries(state.statusesById, knownIds),
+          ),
         }
       })
     } catch (error) {
@@ -169,6 +185,7 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
     set({ isSaving: true, error: null })
     try {
       await desktopSshInstancesSet({ instances })
+      replaceConfiguredInstanceIds(instances)
       set({ instances, isSaving: false })
       await get().refreshStatuses()
     } catch (error) {

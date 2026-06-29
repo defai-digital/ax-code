@@ -131,4 +131,19 @@ describe("useDesktopSshStore", () => {
       updatedAtMs: 200,
     })
   })
+
+  test("ignores live SSH status events for removed instances", async () => {
+    const readySnapshot = createStatus("ready", 200)
+    const removedEvent = createStatus("forwarding", 300)
+    const { emitStatus, useDesktopSshStore } = await importStore({
+      snapshot: [readySnapshot],
+    })
+
+    await useDesktopSshStore.getState().load()
+    await useDesktopSshStore.getState().removeInstance("remote-1")
+    emitStatus(removedEvent)
+
+    expect(useDesktopSshStore.getState().instances).toEqual([])
+    expect(useDesktopSshStore.getState().statusesById["remote-1"]).toBeUndefined()
+  })
 })
