@@ -23,6 +23,7 @@ import { axCodeClient } from "@/lib/ax-code/client"
 import { API_ENDPOINTS } from "@/lib/http"
 import { setDirectoryShowHidden, useDirectoryShowHidden } from "@/lib/directoryShowHidden"
 import { useI18n } from "@/lib/i18n"
+import { normalizeDirectoryExplorerProjectPathKey as normalizeDirectoryPath } from "./DirectoryExplorerDialog-paths"
 
 interface DirectoryExplorerDialogProps {
   open: boolean
@@ -87,13 +88,6 @@ const canNavigateUp = (value: string): boolean => hasTrailingPathSeparator(value
 
 const appendBrowsePathSegment = (currentPath: string, segment: string): string =>
   `${getBrowseDirectoryPath(currentPath)}${segment}/`
-
-const normalizeDirectoryPath = (path: string | null | undefined): string | null => {
-  if (!path) return null
-  const normalized = trimTrailingSeparators(normalizeSeparators(path.trim()))
-  if (!normalized) return null
-  return normalized.toLowerCase()
-}
 
 const displayPathToAbsolutePath = (value: string, homeDirectory: string): string => {
   const trimmed = value.trim()
