@@ -25,7 +25,7 @@ const dgram = require("dgram")
 const { execFile, spawn, spawnSync } = require("child_process")
 const { promisify } = require("util")
 const { createStartupDiagnostics } = require("./startup-diagnostics")
-const { collectOpenPathCandidates } = require("./open-paths")
+const { assertShellOpenPathSucceeded, collectOpenPathCandidates } = require("./open-paths")
 const { assertDesktopReadFileAllowed } = require("./desktop-read-file-policy")
 const { toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
@@ -37,10 +37,7 @@ const {
   reloadLocalRendererWindowsAfterServerRestart,
   resolveServerRestartReloadUrl,
 } = require("./server-window-reload")
-const {
-  attachDesktopBrowserWebviewPolicy,
-  createDesktopRendererWebPreferences,
-} = require("./webview-policy")
+const { attachDesktopBrowserWebviewPolicy, createDesktopRendererWebPreferences } = require("./webview-policy")
 const {
   applyDesktopHostsConfigToRoot,
   isAllowedDesktopHostTargetUrl,
@@ -1987,7 +1984,7 @@ handleCommand("desktop_open_path", async (args) => {
     spawn("open", openArgs, { detached: true, stdio: "ignore" }).unref()
     return null
   }
-  await shell.openPath(targetPath)
+  assertShellOpenPathSucceeded(await shell.openPath(targetPath))
   return null
 })
 
@@ -2336,9 +2333,7 @@ handleCommand(
       ? readDesktopLocalClientToken()
       : ""
     const storedToken =
-      explicitToken ||
-      localToken ||
-      resolveStoredClientTokenForUrl(targetUrl, { hosts: hostConfig.hosts })
+      explicitToken || localToken || resolveStoredClientTokenForUrl(targetUrl, { hosts: hostConfig.hosts })
     return probeHostWithTimeout(targetUrl, 2_000, storedToken)
   },
   { safeForRemote: true },

@@ -2,7 +2,7 @@ import { createRequire } from "node:module"
 import { describe, expect, test } from "vitest"
 
 const require = createRequire(import.meta.url)
-const { collectOpenPathCandidates, normalizeCandidate } = require("./open-paths.js")
+const { assertShellOpenPathSucceeded, collectOpenPathCandidates, normalizeCandidate } = require("./open-paths.js")
 
 describe("normalizeCandidate", () => {
   test("resolves relative paths against cwd", () => {
@@ -68,5 +68,18 @@ describe("collectOpenPathCandidates", () => {
         },
       ),
     ).toEqual(["C:\\Users\\Example\\Repo", "C:\\Users\\Example\\nested"])
+  })
+})
+
+describe("assertShellOpenPathSucceeded", () => {
+  test("accepts Electron shell.openPath success values", () => {
+    expect(() => assertShellOpenPathSucceeded("")).not.toThrow()
+    expect(() => assertShellOpenPathSucceeded(undefined)).not.toThrow()
+  })
+
+  test("throws Electron shell.openPath failure messages", () => {
+    expect(() => assertShellOpenPathSucceeded("The system cannot find the file specified.")).toThrow(
+      "The system cannot find the file specified.",
+    )
   })
 })

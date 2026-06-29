@@ -63,7 +63,14 @@ const collectOpenPathCandidates = (argv, options = {}) => {
   return result
 }
 
+const assertShellOpenPathSucceeded = (errorMessage) => {
+  if (typeof errorMessage === "string" && errorMessage.trim()) {
+    throw new Error(errorMessage.trim())
+  }
+}
+
 module.exports = {
+  assertShellOpenPathSucceeded,
   collectOpenPathCandidates,
   normalizeCandidate,
 }
