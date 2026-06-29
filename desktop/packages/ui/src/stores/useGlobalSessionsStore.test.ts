@@ -38,6 +38,26 @@ describe("useGlobalSessionsStore", () => {
     expect(useGlobalSessionsStore.getState().activeSessions[0]?.share?.url).toBe("https://share.example/b")
   })
 
+  test("does not let an older active snapshot overwrite a newer live session update", () => {
+    const staleSnapshot = makeSession("ses_a", {
+      title: "Older title",
+      time: { created: 1, updated: 10 },
+    })
+    const liveUpdate = makeSession("ses_a", {
+      title: "Newer title",
+      time: { created: 1, updated: 20 },
+    })
+
+    useGlobalSessionsStore.getState().upsertSession(liveUpdate)
+    useGlobalSessionsStore.getState().applySnapshot([staleSnapshot], [])
+
+    expect(useGlobalSessionsStore.getState().activeSessions[0]).toMatchObject({
+      id: "ses_a",
+      title: "Newer title",
+      time: { updated: 20 },
+    })
+  })
+
   describe("pending removal", () => {
     test("markPendingRemoval hides the session from active and archived lists", () => {
       const active = makeSession("ses_a")

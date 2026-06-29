@@ -106,6 +106,29 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
   return true
 }
 
+const getSessionFreshness = (session: Session): number => {
+  return Math.max(session.time?.created ?? 0, session.time?.updated ?? 0, session.time?.archived ?? 0)
+}
+
+const preserveNewerSessions = (incoming: Session[], current: Session[]): Session[] => {
+  if (incoming.length === 0 || current.length === 0) {
+    return incoming
+  }
+
+  const currentById = new Map(current.map((session) => [session.id, session]))
+  let changed = false
+  const next = incoming.map((session) => {
+    const existing = currentById.get(session.id)
+    if (!existing || getSessionFreshness(existing) <= getSessionFreshness(session)) {
+      return session
+    }
+    changed = true
+    return existing
+  })
+
+  return changed ? next : incoming
+}
+
 const upsertSessionIntoList = (sessions: Session[], session: Session): Session[] => {
   const index = sessions.findIndex((candidate) => candidate.id === session.id)
   if (index === -1) {
@@ -175,8 +198,14 @@ const applySnapshot = (
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
   // Snapshots from the server may still contain sessions the user just
   // soft-removed; keep them hidden until the removal commits or is undone.
-  const incomingActive = withoutPendingRemoval(activeSessions, state.pendingRemoval)
-  const incomingArchived = withoutPendingRemoval(archivedSessions, state.pendingRemoval)
+  const incomingActive = withoutPendingRemoval(
+    preserveNewerSessions(activeSessions, state.activeSessions),
+    state.pendingRemoval,
+  )
+  const incomingArchived = withoutPendingRemoval(
+    preserveNewerSessions(archivedSessions, state.archivedSessions),
+    state.pendingRemoval,
+  )
   const nextActiveSessions = sameSessionList(state.activeSessions, incomingActive)
     ? state.activeSessions
     : incomingActive
