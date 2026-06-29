@@ -532,6 +532,10 @@ interface UIStore {
   pendingFileFocusPath: string | null
   isMobile: boolean
   isCommandPaletteOpen: boolean
+  isCommandPaletteSearchMode: boolean
+  splitPaneEnabled: boolean
+  splitPaneRatio: number
+  splitPaneRightTab: Exclude<MainTab, "chat">
   isHelpDialogOpen: boolean
   isAboutDialogOpen: boolean
   isAxCodeStatusDialogOpen: boolean
@@ -625,6 +629,8 @@ interface UIStore {
   showSplitAssistantMessageActions: boolean
   isExpandedInput: boolean
   shortcutOverrides: Record<string, ShortcutCombo>
+  hasCompletedTour: boolean
+  tourStep: number
 
   setTheme: (theme: "light" | "dark" | "system") => void
   toggleSidebar: () => void
@@ -668,6 +674,12 @@ interface UIStore {
   setIsMobile: (isMobile: boolean) => void
   toggleCommandPalette: () => void
   setCommandPaletteOpen: (open: boolean) => void
+  toggleCommandPaletteSearchMode: () => void
+  setCommandPaletteSearchMode: (open: boolean) => void
+  toggleSplitPane: () => void
+  setSplitPaneEnabled: (enabled: boolean) => void
+  setSplitPaneRatio: (ratio: number) => void
+  setSplitPaneRightTab: (tab: Exclude<MainTab, "chat">) => void
   toggleHelpDialog: () => void
   setHelpDialogOpen: (open: boolean) => void
   setAboutDialogOpen: (open: boolean) => void
@@ -799,6 +811,10 @@ export const useUIStore = create<UIStore>()(
         pendingFileFocusPath: null,
         isMobile: false,
         isCommandPaletteOpen: false,
+        isCommandPaletteSearchMode: false,
+        splitPaneEnabled: false,
+        splitPaneRatio: 0.5,
+        splitPaneRightTab: "files",
         isHelpDialogOpen: false,
         isAboutDialogOpen: false,
         isAxCodeStatusDialogOpen: false,
@@ -885,6 +901,8 @@ export const useUIStore = create<UIStore>()(
         showSplitAssistantMessageActions: false,
         isExpandedInput: false,
         shortcutOverrides: {},
+        hasCompletedTour: false,
+        tourStep: 0,
 
         setTheme: (theme) => {
           set({ theme })
@@ -1412,6 +1430,30 @@ export const useUIStore = create<UIStore>()(
 
         setCommandPaletteOpen: (open) => {
           set({ isCommandPaletteOpen: open })
+        },
+
+        toggleCommandPaletteSearchMode: () => {
+          set((state) => ({ isCommandPaletteSearchMode: !state.isCommandPaletteSearchMode }))
+        },
+
+        setCommandPaletteSearchMode: (open) => {
+          set({ isCommandPaletteSearchMode: open })
+        },
+
+        toggleSplitPane: () => {
+          set((state) => ({ splitPaneEnabled: !state.splitPaneEnabled }))
+        },
+
+        setSplitPaneEnabled: (enabled) => {
+          set({ splitPaneEnabled: enabled })
+        },
+
+        setSplitPaneRatio: (ratio) => {
+          set({ splitPaneRatio: Math.max(0.2, Math.min(0.8, ratio)) })
+        },
+
+        setSplitPaneRightTab: (tab) => {
+          set({ splitPaneRightTab: tab })
         },
 
         toggleHelpDialog: () => {
@@ -2192,6 +2234,11 @@ export const useUIStore = create<UIStore>()(
           stickyUserHeader: state.stickyUserHeader,
           showSplitAssistantMessageActions: state.showSplitAssistantMessageActions,
           shortcutOverrides: state.shortcutOverrides,
+          hasCompletedTour: state.hasCompletedTour,
+          tourStep: state.tourStep,
+          splitPaneEnabled: state.splitPaneEnabled,
+          splitPaneRatio: state.splitPaneRatio,
+          splitPaneRightTab: state.splitPaneRightTab,
         }),
       },
     ),

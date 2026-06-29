@@ -22,6 +22,8 @@ export const useKeyboardShortcuts = () => {
   const currentSessionId = useSessionUIStore((s) => s.currentSessionId)
   const abortCurrentOperation = sessionActions.abortCurrentOperation
   const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette)
+  const setCommandPaletteSearchMode = useUIStore((s) => s.setCommandPaletteSearchMode)
+  const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen)
   const toggleHelpDialog = useUIStore((s) => s.toggleHelpDialog)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const toggleRightSidebar = useUIStore((s) => s.toggleRightSidebar)
@@ -108,7 +110,15 @@ export const useKeyboardShortcuts = () => {
 
       if (eventMatchesShortcut(e, combo("open_command_palette"))) {
         e.preventDefault()
+        setCommandPaletteSearchMode(false)
         toggleCommandPalette()
+        return
+      }
+
+      if (eventMatchesShortcut(e, combo("open_search_mode"))) {
+        e.preventDefault()
+        setCommandPaletteSearchMode(true)
+        setCommandPaletteOpen(true)
         return
       }
 

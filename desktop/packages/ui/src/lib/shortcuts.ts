@@ -119,6 +119,13 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
     customizable: true,
   },
   {
+    id: "open_search_mode",
+    defaultCombo: "mod+shift+f",
+    label: "Open search mode",
+    description: "Open the command palette in search mode",
+    customizable: true,
+  },
+  {
     id: "focus_input",
     defaultCombo: "mod+i",
     label: "Focus input",

@@ -71,6 +71,10 @@ import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from "@/lib/
 import { resolveSessionDiffStats } from "@/components/session/sidebar/utils"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
+import { SyncStatusIndicator } from "@/components/ui/SyncStatusIndicator"
+import { ExportSessionButton } from "@/components/session/ExportSessionButton"
+import { NotificationCenter } from "@/components/notifications/NotificationCenter"
+import { useNotificationStore } from "@/stores/useNotificationStore"
 import type { Session } from "@ax-code/sdk/v2/client"
 import type { IconName } from "@/components/icon/icons"
 
@@ -776,6 +780,8 @@ export const Header: React.FC = () => {
   const { t } = useI18n()
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
   const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal)
+  const toggleSplitPane = useUIStore((state) => state.toggleSplitPane)
+  const splitPaneEnabled = useUIStore((state) => state.splitPaneEnabled)
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar)
   const openContextOverview = useUIStore((state) => state.openContextOverview)
   const openContextPlan = useUIStore((state) => state.openContextPlan)
@@ -1858,11 +1864,27 @@ export const Header: React.FC = () => {
         isDevShutdownInFlight={isDevShutdownInFlight}
         onDevShutdown={handleDevShutdown}
       />
+      <SyncStatusIndicator />
+      <ExportSessionButton />
+      <HeaderIconActionButton
+        title={t("notificationCenter.title")}
+        ariaLabel={t("notificationCenter.title")}
+        onClick={() => useNotificationStore.getState().toggleOpen()}
+        Icon={"notification-3"}
+      />
+      <NotificationCenter />
       <HeaderIconActionButton
         title={t("header.actions.terminalPanelWithShortcut", { shortcut: shortcutLabel("toggle_terminal") })}
         ariaLabel={t("header.actions.toggleTerminalPanelAria")}
         onClick={toggleBottomTerminal}
         Icon={"terminal-box"}
+      />
+      <HeaderIconActionButton
+        title={t("splitPane.toggle.title")}
+        ariaLabel={t("splitPane.toggle.title")}
+        onClick={toggleSplitPane}
+        pressed={splitPaneEnabled}
+        Icon={"layout-column"}
       />
       <HeaderIconActionButton
         title={t("contextPanel.browser.open")}
@@ -2023,6 +2045,7 @@ export const Header: React.FC = () => {
   return (
     <header
       ref={headerRef}
+      data-tour-target="command-palette"
       className={headerClassName}
       style={{ ["--padding-scale" as string]: "1" } as React.CSSProperties}
     >

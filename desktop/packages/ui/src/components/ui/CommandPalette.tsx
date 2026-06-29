@@ -63,6 +63,8 @@ export const CommandPalette: React.FC = () => {
 
   const isCommandPaletteOpen = useUIStore((s) => s.isCommandPaletteOpen)
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen)
+  const isSearchMode = useUIStore((s) => s.isCommandPaletteSearchMode)
+  const setCommandPaletteSearchMode = useUIStore((s) => s.setCommandPaletteSearchMode)
   const setActiveMainTab = useUIStore((s) => s.setActiveMainTab)
   const setSettingsDialogOpen = useUIStore((s) => s.setSettingsDialogOpen)
   const setSettingsPage = useUIStore((s) => s.setSettingsPage)
@@ -101,6 +103,11 @@ export const CommandPalette: React.FC = () => {
   React.useEffect(() => {
     if (isCommandPaletteOpen) setQuery("")
   }, [isCommandPaletteOpen])
+
+  // Reset search mode when palette closes
+  React.useEffect(() => {
+    if (!isCommandPaletteOpen) setCommandPaletteSearchMode(false)
+  }, [isCommandPaletteOpen, setCommandPaletteSearchMode])
 
   // Lazy-load git status for every session directory we plan to display so that
   // branch labels become available across all projects, not only the active one.
@@ -431,18 +438,32 @@ export const CommandPalette: React.FC = () => {
         <DialogDescription>{t("commandPalette.description")}</DialogDescription>
       </DialogHeader>
       <DialogContent className="overflow-hidden p-0" showCloseButton>
+        {isSearchMode ? (
+          <div className="flex items-center gap-2 border-b border-border/40 px-3 py-1.5">
+            <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              {t("commandPalette.searchMode.badge")}
+            </span>
+            <span className="typography-meta text-muted-foreground">
+              {t("commandPalette.description")}
+            </span>
+          </div>
+        ) : null}
         <Command
           shouldFilter={false}
           className="[&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4 [&_[cmdk-input]]:h-8 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4 [&_[cmdk-item]]:typography-meta"
         >
-          <CommandInput value={query} onValueChange={setQuery} placeholder={t("commandPalette.input.placeholder")} />
+          <CommandInput
+            value={query}
+            onValueChange={setQuery}
+            placeholder={isSearchMode ? t("commandPalette.searchMode.placeholder") : t("commandPalette.input.placeholder")}
+          />
           <CommandList>
             <CommandEmpty>{t("commandPalette.empty.noResults")}</CommandEmpty>
 
             {groupOrder.map((groupKey) => {
               if (groupKey === "commands" && visibleCommands.length > 0) {
                 return (
-                  <CommandGroup key="commands">
+                  <CommandGroup key="commands" heading={t("commandPalette.group.commands")}>
                     {visibleCommands.map((cmd) => (
                       <CommandItem key={cmd.id} value={cmd.id} onSelect={cmd.onSelect}>
                         {cmd.icon}
@@ -455,7 +476,7 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === "settings" && visibleSettings.length > 0) {
                 return (
-                  <CommandGroup key="settings">
+                  <CommandGroup key="settings" heading={t("commandPalette.group.settings")}>
                     {visibleSettings.map((cmd) => (
                       <CommandItem key={cmd.id} value={cmd.id} onSelect={cmd.onSelect}>
                         {cmd.icon}
@@ -467,7 +488,7 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === "sessions" && visibleSessions.length > 0) {
                 return (
-                  <CommandGroup key="sessions">
+                  <CommandGroup key="sessions" heading={t("commandPalette.group.sessions")}>
                     {visibleSessions.map((session) => {
                       const title = session.title || t("commandPalette.session.untitled")
                       const dir = resolveGlobalSessionDirectory(session)
@@ -494,7 +515,7 @@ export const CommandPalette: React.FC = () => {
               }
               if (groupKey === "files" && visibleFiles.length > 0) {
                 return (
-                  <CommandGroup key="files">
+                  <CommandGroup key="files" heading={t("commandPalette.group.files")}>
                     {visibleFiles.map((file) => {
                       const display = truncatePathMiddle(file.relativePath || file.name, {
                         maxLength: 80,

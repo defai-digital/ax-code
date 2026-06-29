@@ -120,6 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
   return (
     <aside
       ref={sidebarRef}
+      data-tour-target="sidebar"
       className={cn(
         "relative flex h-full overflow-hidden border-r border-border/40 will-change-[width] motion-reduce:transition-none",
         "bg-sidebar",

@@ -12708,7 +12708,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-04-23",
-        "last_updated": "2026-04-23",
+        "last_updated": "2026-06-29",
         "modalities": {
           "input": [
             "text"
@@ -27767,6 +27767,51 @@
         "limit": {
           "context": 0,
           "output": 0
+        }
+      }
+    }
+  },
+  "subconscious": {
+    "id": "subconscious",
+    "env": [
+      "SUBCONSCIOUS_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.subconscious.dev/v1",
+    "name": "Subconscious",
+    "doc": "https://docs.subconscious.dev",
+    "models": {
+      "subconscious/tim-qwen3.6-27b": {
+        "id": "subconscious/tim-qwen3.6-27b",
+        "name": "TIM-Qwen3.6 27B",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-05-11",
+        "last_updated": "2026-05-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "input": 8192,
+          "output": 5000
         }
       }
     }
@@ -49654,6 +49699,33 @@
           "output": 64000
         }
       },
+      "claude-haiku-4-5-free": {
+        "id": "claude-haiku-4-5-free",
+        "name": "Claude Haiku 4.5 (latest)",
+        "family": "claude-haiku",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-02-28",
+        "release_date": "2025-10-15",
+        "last_updated": "2025-10-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 200000
+        }
+      },
       "minimax-m2.1-lightning": {
         "id": "minimax-m2.1-lightning",
         "name": "MiniMax M2.1 Lightning",
@@ -60256,7 +60328,7 @@
         "temperature": true,
         "knowledge": "2024-12",
         "release_date": "2026-04-22",
-        "last_updated": "2026-04-22",
+        "last_updated": "2026-06-24",
         "modalities": {
           "input": [
             "text",
@@ -60292,7 +60364,7 @@
         "temperature": true,
         "knowledge": "2024-12",
         "release_date": "2026-03-18",
-        "last_updated": "2026-03-18",
+        "last_updated": "2026-06-24",
         "modalities": {
           "input": [
             "text",
@@ -60330,7 +60402,7 @@
         "temperature": true,
         "knowledge": "2024-12-01",
         "release_date": "2025-12-16",
-        "last_updated": "2026-02-04",
+        "last_updated": "2026-06-24",
         "modalities": {
           "input": [
             "text"
@@ -60364,7 +60436,7 @@
         "temperature": true,
         "knowledge": "2024-12",
         "release_date": "2026-03-18",
-        "last_updated": "2026-03-18",
+        "last_updated": "2026-06-24",
         "modalities": {
           "input": [
             "text"
@@ -60398,7 +60470,7 @@
         "temperature": true,
         "knowledge": "2024-12",
         "release_date": "2026-04-22",
-        "last_updated": "2026-04-22",
+        "last_updated": "2026-06-24",
         "modalities": {
           "input": [
             "text"
@@ -66128,7 +66200,7 @@
         "temperature": true,
         "knowledge": "2026-01-01",
         "release_date": "2026-05-29",
-        "last_updated": "2026-05-29",
+        "last_updated": "2026-06-29",
         "modalities": {
           "input": [
             "text",
@@ -115205,6 +115277,44 @@
     "name": "Synthetic",
     "doc": "https://synthetic.new/pricing",
     "models": {
+      "hf:zai-org/GLM-5.2": {
+        "id": "hf:zai-org/GLM-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 524288,
+          "output": 65536
+        }
+      },
       "hf:MiniMaxAI/MiniMax-M3": {
         "id": "hf:MiniMaxAI/MiniMax-M3",
         "name": "MiniMax-M3",
@@ -115274,25 +115384,35 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 128000,
+          "context": 131072,
           "output": 32768
         }
       },
-      "hf:Qwen/Qwen3.5-397B-A17B": {
-        "id": "hf:Qwen/Qwen3.5-397B-A17B",
-        "name": "Qwen3.5-97B-A17B",
+      "hf:Qwen/Qwen3.6-27B": {
+        "id": "hf:Qwen/Qwen3.6-27B",
+        "name": "Qwen3.6 27B",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
         },
         "structured_output": true,
         "temperature": true,
-        "release_date": "2026-02-11",
-        "last_updated": "2026-02-11",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
         "modalities": {
           "input": [
             "text",
@@ -115306,8 +115426,41 @@
         "limit": {
           "context": 262144,
           "output": 65536
+        }
+      },
+      "hf:Qwen/Qwen3.5-397B-A17B": {
+        "id": "hf:Qwen/Qwen3.5-397B-A17B",
+        "name": "Qwen3.5 397B-A17B",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
         },
-        "status": "beta"
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-02-15",
+        "last_updated": "2026-02-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
       },
       "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4": {
         "id": "hf:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",

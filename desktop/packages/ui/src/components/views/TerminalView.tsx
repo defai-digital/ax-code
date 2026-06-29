@@ -923,8 +923,10 @@ export const TerminalView: React.FC = () => {
 
   if (!hasActiveContext) {
     return (
-      <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
-        {t("terminalView.empty.selectSession")}
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+        <Icon name="terminal-box" className="size-8 text-muted-foreground/50" />
+        <p className="typography-ui-label font-semibold text-foreground">{t("emptyState.terminal.title")}</p>
+        <p className="typography-meta text-muted-foreground">{t("emptyState.terminal.description")}</p>
       </div>
     )
   }

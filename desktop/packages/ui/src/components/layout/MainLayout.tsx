@@ -5,6 +5,7 @@ import { Sidebar, SIDEBAR_CONTENT_WIDTH } from "./Sidebar"
 import { RightSidebar, RIGHT_SIDEBAR_CONTENT_WIDTH } from "./RightSidebar"
 import { ProjectContextPanel, RightSidebarTabs } from "./RightSidebarTabs"
 import { ContextPanel } from "./ContextPanel"
+import { SplitPaneLayout } from "./SplitPaneLayout"
 import { ErrorBoundary } from "../ui/ErrorBoundary"
 import { CommandPalette } from "../ui/CommandPalette"
 import { HelpDialog } from "../ui/HelpDialog"
@@ -61,6 +62,8 @@ export const MainLayout: React.FC = () => {
   const setRightSidebarOpen = useUIStore((state) => state.setRightSidebarOpen)
   const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen)
   const activeMainTab = useUIStore((state) => state.activeMainTab)
+  const splitPaneEnabled = useUIStore((state) => state.splitPaneEnabled)
+  const splitPaneRightTab = useUIStore((state) => state.splitPaneRightTab)
   const setIsMobile = useUIStore((state) => state.setIsMobile)
   const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen)
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen)
@@ -235,6 +238,50 @@ export const MainLayout: React.FC = () => {
     }
   }, [isMobile, isTablet, setBottomTerminalOpen, setRightSidebarOpen])
 
+  const splitRightContent = React.useMemo(() => {
+    if (!splitPaneEnabled) return null
+    switch (splitPaneRightTab) {
+      case "files":
+        return (
+          <React.Suspense fallback={null}>
+            <FilesView />
+          </React.Suspense>
+        )
+      case "diff":
+        return (
+          <React.Suspense fallback={null}>
+            <DiffView />
+          </React.Suspense>
+        )
+      case "git":
+        return (
+          <React.Suspense fallback={null}>
+            <GitView />
+          </React.Suspense>
+        )
+      case "terminal":
+        return (
+          <React.Suspense fallback={null}>
+            <TerminalView />
+          </React.Suspense>
+        )
+      case "plan":
+        return (
+          <React.Suspense fallback={null}>
+            <PlanView />
+          </React.Suspense>
+        )
+      case "context":
+        return (
+          <React.Suspense fallback={null}>
+            <ProjectContextPanel />
+          </React.Suspense>
+        )
+      default:
+        return null
+    }
+  }, [splitPaneEnabled, splitPaneRightTab])
+
   const secondaryView = React.useMemo(() => {
     switch (activeMainTab) {
       case "plan":
@@ -357,23 +404,25 @@ export const MainLayout: React.FC = () => {
               )}
               data-page-scroll-lock="true"
             >
-              <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true">
-                <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true">
-                  <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
-                    <div className={cn("absolute inset-0", !isChatActive && "invisible")}>
-                      <ErrorBoundary>
-                        <ChatView />
-                      </ErrorBoundary>
-                    </div>
-                    {secondaryView && (
-                      <div className="absolute inset-0">
-                        <ErrorBoundary>{secondaryView}</ErrorBoundary>
+              <SplitPaneLayout rightContent={splitRightContent}>
+                <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true">
+                  <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true">
+                    <main className="flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true" data-tour-target="main-content">
+                      <div className={cn("absolute inset-0", !isChatActive && "invisible")} data-tour-target="chat-input">
+                        <ErrorBoundary>
+                          <ChatView />
+                        </ErrorBoundary>
                       </div>
-                    )}
-                  </main>
-                  <ContextPanel />
+                      {secondaryView && (
+                        <div className="absolute inset-0">
+                          <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                        </div>
+                      )}
+                    </main>
+                    <ContextPanel />
+                  </div>
                 </div>
-              </div>
+              </SplitPaneLayout>
               <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
                 {isBottomTerminalOpen ? (
                   <ErrorBoundary>

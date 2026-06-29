@@ -1695,16 +1695,20 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
     if (isGitRepo === false) {
       return (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          {t("diffView.state.notGitRepository")}
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
+          <Icon name="git-branch" className="size-8 text-muted-foreground/50" />
+          <p className="typography-ui-label font-semibold text-foreground">{t("diffView.state.notGitRepository")}</p>
+          <p className="typography-meta text-muted-foreground">{t("emptyState.git.description")}</p>
         </div>
       )
     }
 
     if (changedFiles.length === 0) {
       return (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          {t("diffView.state.cleanWorkingTree")}
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
+          <Icon name="check" className="size-8 text-status-success/50" />
+          <p className="typography-ui-label font-semibold text-foreground">{t("emptyState.diff.title")}</p>
+          <p className="typography-meta text-muted-foreground">{t("emptyState.diff.description")}</p>
         </div>
       )
     }

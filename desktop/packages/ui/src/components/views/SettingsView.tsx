@@ -27,6 +27,7 @@ import { RemoteInstancesSidebar } from "@/components/sections/remote-instances/R
 import { RemoteInstancesPage } from "@/components/sections/remote-instances/RemoteInstancesPage"
 import { ProvidersSidebar } from "@/components/sections/providers/ProvidersSidebar"
 import { ProvidersPage } from "@/components/sections/providers/ProvidersPage"
+import { LocalModelsPage } from "@/components/sections/models/LocalModelsPage"
 import { MagicPromptsSidebar } from "@/components/sections/magic-prompts/MagicPromptsSidebar"
 import { MagicPromptsPage } from "@/components/sections/magic-prompts/MagicPromptsPage"
 import { SnippetsSidebar } from "@/components/sections/snippets/SnippetsSidebar"
@@ -72,6 +73,7 @@ interface SettingsViewProps {
 }
 
 const pageOrder: SettingsPageSlug[] = [
+  "models",
   "appearance",
   "chat",
   "notifications",
@@ -378,6 +380,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
   const getPageTitle = React.useCallback(
     (slug: SettingsPageSlug): string => {
       switch (slug) {
+        case "models":
+          return t("settings.page.models.title")
         case "projects":
           return t("settings.page.projects.title")
         case "remote-instances":
@@ -472,6 +476,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
       switch (slug) {
         case "home":
           return <SettingsHome onOpen={openPage} />
+        case "models":
+          return <LocalModelsPage />
         case "projects":
           return <ProjectsPage />
         case "remote-instances":

@@ -2500,6 +2500,7 @@ export const ContextPanel: React.FC = () => {
   return (
     <aside
       ref={panelRef}
+      data-tour-target="context-panel"
       data-context-panel="true"
       tabIndex={-1}
       inert={!isOpen || undefined}
