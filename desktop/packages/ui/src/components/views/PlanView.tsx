@@ -55,6 +55,7 @@ import {
   resolveTildePlanPath,
   toPlanDisplayPath,
 } from "./planViewPaths"
+import { PlanSaveQueue, type PlanSaveQueueEntry } from "./planAutosave"
 
 type PlanViewProps = {
   targetPath?: string | null
@@ -135,6 +136,49 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
   const [copiedContent, setCopiedContent] = React.useState(false)
   const [mdViewMode, setMdViewMode] = React.useState<PreviewViewMode>("edit")
   const copiedContentTimeoutRef = React.useRef<number | null>(null)
+  const mountedRef = React.useRef(true)
+  const resolvedPathRef = React.useRef<string | null>(null)
+  const contentRef = React.useRef("")
+  const runtimeApisRef = React.useRef(runtimeApis)
+  const tRef = React.useRef(t)
+  const saveQueueRef = React.useRef<PlanSaveQueue | null>(null)
+
+  resolvedPathRef.current = resolvedPath
+  contentRef.current = content
+  runtimeApisRef.current = runtimeApis
+  tRef.current = t
+
+  if (saveQueueRef.current === null) {
+    saveQueueRef.current = new PlanSaveQueue({
+      save: async (path, nextContent) => {
+        const runtimeFiles = runtimeApisRef.current.files
+        if (runtimeFiles?.writeFile) {
+          const result = await runtimeFiles.writeFile(path, nextContent)
+          if (!result?.success) {
+            throw new Error(tRef.current("planView.error.writeFailed"))
+          }
+          return
+        }
+
+        const response = await fetch(API_ENDPOINTS.fs.write, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path, content: nextContent }),
+        })
+        if (!response.ok) {
+          throw new Error(tRef.current("planView.error.writePlanFileFailed", { status: response.status }))
+        }
+      },
+      isLatestEntry: (entry: PlanSaveQueueEntry) =>
+        mountedRef.current && resolvedPathRef.current === entry.path && contentRef.current === entry.content,
+      onLatestSaved: () => {
+        setSaveError(null)
+      },
+      onLatestError: (_entry, error) => {
+        setSaveError(error instanceof Error ? error.message : tRef.current("planView.error.saveFailed"))
+      },
+    })
+  }
 
   const [lineSelection, setLineSelection] = React.useState<LineRange | null>(null)
   const editorViewRef = React.useRef<EditorView | null>(null)
@@ -394,34 +438,17 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
 
     const controller = window.setTimeout(async () => {
       setSaveError(null)
-      try {
-        if (runtimeApis.files?.writeFile) {
-          const result = await runtimeApis.files.writeFile(resolvedPath, content)
-          if (!result?.success) {
-            throw new Error(t("planView.error.writeFailed"))
-          }
-        } else {
-          const response = await fetch(API_ENDPOINTS.fs.write, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: resolvedPath, content }),
-          })
-          if (!response.ok) {
-            throw new Error(t("planView.error.writePlanFileFailed", { status: response.status }))
-          }
-        }
-      } catch (error) {
-        setSaveError(error instanceof Error ? error.message : t("planView.error.saveFailed"))
-      }
+      void saveQueueRef.current?.enqueue({ path: resolvedPath, content })
     }, 350)
 
     return () => {
       window.clearTimeout(controller)
     }
-  }, [content, resolvedPath, runtimeApis.files, t])
+  }, [content, resolvedPath])
 
   React.useEffect(() => {
     return () => {
+      mountedRef.current = false
       if (copiedContentTimeoutRef.current !== null) {
         window.clearTimeout(copiedContentTimeoutRef.current)
       }
