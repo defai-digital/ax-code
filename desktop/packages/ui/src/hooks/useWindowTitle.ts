@@ -24,6 +24,24 @@ const buildWindowTitle = (projectLabel: string | null, instanceLabel: string | n
   return parts.join(" | ")
 }
 
+export const resolveDesktopWindowInstanceLabel = ({
+  currentHref,
+  localOrigin,
+  hosts,
+}: {
+  currentHref: string
+  localOrigin?: string | null
+  hosts: Array<{ label: string; url: string }>
+}): string | null => {
+  const knownLocalOrigin = typeof localOrigin === "string" && localOrigin.trim().length > 0 ? localOrigin : null
+  if (knownLocalOrigin && locationMatchesHost(currentHref, knownLocalOrigin)) {
+    return null
+  }
+
+  const match = hosts.find((host) => locationMatchesHost(currentHref, host.url))
+  return match?.label?.trim() ? redactSensitiveUrl(match.label.trim()) : "Instance"
+}
+
 export const useWindowTitle = () => {
   const activeProject = useProjectsStore((state) => {
     if (!state.activeProjectId) {
@@ -63,18 +81,12 @@ export const useWindowTitle = () => {
     const refreshInstanceLabel = async () => {
       try {
         const currentHref = window.location.href
-        const localOrigin = window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ || window.location.origin
-
-        if (locationMatchesHost(currentHref, localOrigin)) {
-          if (!cancelled) {
-            setInstanceLabel(null)
-          }
-          return
-        }
-
         const cfg = await desktopHostsGet()
-        const match = cfg.hosts.find((host) => locationMatchesHost(currentHref, host.url))
-        const nextLabel = match?.label?.trim() ? redactSensitiveUrl(match.label.trim()) : "Instance"
+        const nextLabel = resolveDesktopWindowInstanceLabel({
+          currentHref,
+          localOrigin: cfg.localOrigin || window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ || null,
+          hosts: cfg.hosts,
+        })
         if (!cancelled) {
           setInstanceLabel(nextLabel)
         }
