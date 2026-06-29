@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils"
 import { EditorView } from "@codemirror/view"
 import type { Extension } from "@codemirror/state"
 import { runSettingsDeleteMutation } from "../settingsDeleteMutation"
+import { loadCurrentSkillDetail } from "./skillDetailLoad"
 
 export interface SkillsPageProps {
   view?: "installed" | "catalog"
@@ -155,6 +156,7 @@ const SkillsInstalledPage: React.FC = () => {
   const [originalFileContent, setOriginalFileContent] = React.useState("")
   const [deleteFilePath, setDeleteFilePath] = React.useState<string | null>(null)
   const [isDeletingFile, setIsDeletingFile] = React.useState(false)
+  const skillDetailRequestRef = React.useRef(0)
   const fileLoadRequestRef = React.useRef(0)
 
   const hasSkillChanges = isNewSkill
@@ -206,6 +208,7 @@ const SkillsInstalledPage: React.FC = () => {
   React.useEffect(() => {
     const loadSkillDetails = async () => {
       if (isNewSkill && skillDraft) {
+        skillDetailRequestRef.current += 1
         const nextDescription = skillDraft.description || ""
         const nextInstructions = skillDraft.instructions || ""
         setDraftName(skillDraft.name || "")
@@ -219,25 +222,33 @@ const SkillsInstalledPage: React.FC = () => {
         setSupportingFiles([])
         setPendingFiles(skillDraft.pendingFiles || [])
       } else if (selectedSkillName && selectedSkill) {
+        const requestId = skillDetailRequestRef.current + 1
+        skillDetailRequestRef.current = requestId
         setIsLoading(true)
-        try {
-          const detail = await getSkillDetail(selectedSkillName)
-          if (detail) {
-            const md = detail.sources.md
-            const nextDescription = md.description || ""
-            const nextInstructions = md.instructions || ""
-            setDescription(nextDescription)
-            setInstructions(nextInstructions)
-            setSkillMarkdown(buildSkillMarkdown(nextDescription, nextInstructions))
-            setOriginalDescription(nextDescription)
-            setOriginalInstructions(nextInstructions)
-            setSupportingFiles(md.supportingFiles || [])
-          }
-        } catch (error) {
-          console.error("Failed to load skill details:", error)
-        } finally {
+        const result = await loadCurrentSkillDetail({
+          skillName: selectedSkillName,
+          getSkillDetail,
+          isCurrent: () => skillDetailRequestRef.current === requestId,
+        })
+        if (result.status === "loaded") {
+          const md = result.detail.sources.md
+          const nextDescription = md.description || ""
+          const nextInstructions = md.instructions || ""
+          setDescription(nextDescription)
+          setInstructions(nextInstructions)
+          setSkillMarkdown(buildSkillMarkdown(nextDescription, nextInstructions))
+          setOriginalDescription(nextDescription)
+          setOriginalInstructions(nextInstructions)
+          setSupportingFiles(md.supportingFiles || [])
+        } else if (result.status === "failed") {
+          console.error("Failed to load skill details:", result.error)
+        }
+        if (skillDetailRequestRef.current === requestId) {
           setIsLoading(false)
         }
+      } else {
+        skillDetailRequestRef.current += 1
+        setIsLoading(false)
       }
     }
 
