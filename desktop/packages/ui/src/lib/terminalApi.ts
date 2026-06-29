@@ -6,6 +6,7 @@ import type {
   TerminalWebSocketDescriptor,
 } from "@/lib/api/types"
 import { HTTP_DEFAULTS } from "./http"
+import { waitForOpenSocket } from "./terminalSocketWait"
 
 export type {
   CreateTerminalOptions,
@@ -315,12 +316,7 @@ class TerminalTransportManager {
       return this.socket
     }
 
-    const opened = await Promise.race([
-      this.openPromise ?? Promise.resolve(null),
-      new Promise<null>((resolve) => {
-        setTimeout(() => resolve(null), waitMs)
-      }),
-    ])
+    const opened = await waitForOpenSocket(this.openPromise, waitMs)
 
     if (opened && opened.readyState === WS_READY_STATE_OPEN) {
       return opened
