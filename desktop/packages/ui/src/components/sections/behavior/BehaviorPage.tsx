@@ -18,6 +18,7 @@ import {
   normalizeAgentsMdContent,
   type ResponseStyleValue,
 } from "./behaviorSettingsLoad"
+import { BehaviorAutosaveSequence } from "./behaviorAutosaveSequence"
 
 const AGENTS_MD_PATH = "~/.config/ax-code/AGENTS.md"
 
@@ -69,6 +70,7 @@ export const BehaviorPage: React.FC = () => {
     preset: ResponseStyleValue
     custom: string
   } | null>(null)
+  const responseStyleSaveSequenceRef = React.useRef(new BehaviorAutosaveSequence())
 
   React.useEffect(() => {
     const abort = new AbortController()
@@ -124,8 +126,10 @@ export const BehaviorPage: React.FC = () => {
       preset: responseStylePreset,
       custom: responseStyleCustomInstructions,
     }
+    const saveSequence = responseStyleSaveSequenceRef.current
 
     const timer = setTimeout(async () => {
+      const token = saveSequence.begin()
       try {
         await saveBehaviorSetting(
           {
@@ -135,14 +139,22 @@ export const BehaviorPage: React.FC = () => {
           },
           t("settings.behavior.page.toast.saveFailed"),
         )
-        lastSavedResponseStyleRef.current = next
+        if (saveSequence.complete(token)) {
+          lastSavedResponseStyleRef.current = next
+        }
       } catch (error) {
+        if (!saveSequence.complete(token)) {
+          return
+        }
         const message = error instanceof Error ? error.message : t("settings.behavior.page.toast.saveFailed")
         toast.error(message)
       }
     }, 400)
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      saveSequence.cancelActive()
+    }
   }, [responseStyleEnabled, responseStylePreset, responseStyleCustomInstructions, isLoading, t])
 
   const responseStylePreview = getResponseStylePreview(responseStylePreset, responseStyleCustomInstructions)
