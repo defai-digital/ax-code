@@ -1107,30 +1107,37 @@ export const syncDesktopSettings = async (): Promise<void> => {
 // Coalesce rapid updateDesktopSettings calls into a single PUT
 let _pendingSettingsChanges: Partial<DesktopSettings> | null = null
 let _settingsFlushTimer: ReturnType<typeof setTimeout> | null = null
+let _pendingSettingsWaiters: Array<() => void> = []
 const SETTINGS_DEBOUNCE_MS = 200
 
 const _flushSettingsUpdate = async (): Promise<void> => {
   const changes = _pendingSettingsChanges
+  const waiters = _pendingSettingsWaiters
   _pendingSettingsChanges = null
+  _pendingSettingsWaiters = []
   _settingsFlushTimer = null
-  if (!changes || Object.keys(changes).length === 0) return
-
-  const runtimeSettings = getRuntimeSettingsAPI()
-  if (runtimeSettings) {
-    try {
-      const updated = await runtimeSettings.save(changes)
-      if (updated) {
-        persistToLocalStorage(updated)
-        applyDesktopUiPreferences(updated)
-        dispatchSettingsSynced(updated)
-      }
-      return
-    } catch (error) {
-      console.warn("Failed to update settings via runtime settings API:", error)
-    }
+  if (!changes || Object.keys(changes).length === 0) {
+    for (const waiter of waiters) waiter()
+    return
   }
 
   try {
+    const runtimeSettings = getRuntimeSettingsAPI()
+    if (runtimeSettings) {
+      try {
+        const updated = await runtimeSettings.save(changes)
+        if (updated) {
+          persistToLocalStorage(updated)
+          applyDesktopUiPreferences(updated)
+          dispatchSettingsSynced(updated)
+        }
+        for (const waiter of waiters) waiter()
+        return
+      } catch (error) {
+        console.warn("Failed to update settings via runtime settings API:", error)
+      }
+    }
+
     const response = await fetch(API_ENDPOINTS.config.settings, {
       method: HTTP_DEFAULTS.method.put,
       headers: HTTP_DEFAULTS.headers.acceptAndContentTypeJson,
@@ -1139,6 +1146,7 @@ const _flushSettingsUpdate = async (): Promise<void> => {
 
     if (!response.ok) {
       console.warn("Failed to update shared settings via API:", response.status, response.statusText)
+      for (const waiter of waiters) waiter()
       return
     }
 
@@ -1150,14 +1158,16 @@ const _flushSettingsUpdate = async (): Promise<void> => {
       // Invalidate GET cache so next read sees the fresh data
       _settingsCache = null
     }
+    for (const waiter of waiters) waiter()
   } catch (error) {
     console.warn("Failed to update shared settings via API:", error)
+    for (const waiter of waiters) waiter()
   }
 }
 
-export const updateDesktopSettings = async (changes: Partial<DesktopSettings>): Promise<void> => {
+export const updateDesktopSettings = (changes: Partial<DesktopSettings>): Promise<void> => {
   if (typeof window === "undefined") {
-    return
+    return Promise.resolve()
   }
 
   _pendingSettingsChanges = { ...(_pendingSettingsChanges ?? {}), ...changes }
@@ -1165,7 +1175,11 @@ export const updateDesktopSettings = async (changes: Partial<DesktopSettings>): 
   if (_settingsFlushTimer) {
     clearTimeout(_settingsFlushTimer)
   }
+  const promise = new Promise<void>((resolve) => {
+    _pendingSettingsWaiters.push(resolve)
+  })
   _settingsFlushTimer = setTimeout(() => void _flushSettingsUpdate(), SETTINGS_DEBOUNCE_MS)
+  return promise
 }
 
 export const initializeAppearancePreferences = async (): Promise<void> => {
