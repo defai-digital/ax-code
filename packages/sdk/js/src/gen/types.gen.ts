@@ -1936,6 +1936,24 @@ export type ProviderConfig = {
   env?: Array<string>
   id?: string
   npm?: string
+  options?: {
+    apiKey?: string
+    baseURL?: string
+    /**
+     * GitHub Enterprise URL for copilot authentication
+     */
+    enterpriseUrl?: string
+    /**
+     * Enable promptCacheKey for this provider (default false)
+     */
+    setCacheKey?: boolean
+    timeout?: number | false
+    /**
+     * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.
+     */
+    chunkTimeout?: number
+    [key: string]: unknown | string | boolean | number | false | number | undefined
+  }
   models?: {
     [key: string]: {
       id?: string
@@ -1992,24 +2010,6 @@ export type ProviderConfig = {
   }
   whitelist?: Array<string>
   blacklist?: Array<string>
-  options?: {
-    apiKey?: string
-    baseURL?: string
-    /**
-     * GitHub Enterprise URL for copilot authentication
-     */
-    enterpriseUrl?: string
-    /**
-     * Enable promptCacheKey for this provider (default false)
-     */
-    setCacheKey?: boolean
-    timeout?: number | false
-    /**
-     * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.
-     */
-    chunkTimeout?: number
-    [key: string]: unknown | string | boolean | number | false | number | undefined
-  }
 }
 
 export type McpLocalConfig = {
@@ -11887,6 +11887,9 @@ export type ProviderListResponses = {
       env: Array<string>
       id: string
       npm?: string
+      options?: {
+        [key: string]: unknown
+      }
       models: {
         [key: string]: {
           id: string
