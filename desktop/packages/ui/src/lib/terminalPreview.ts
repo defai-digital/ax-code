@@ -40,6 +40,16 @@ const normalizeLoopbackUrl = (url: string): string => {
   return normalized
 }
 
+export const buildTerminalPreviewScanState = (
+  previousTail: string,
+  data: string,
+): { scanText: string; nextTail: string } => {
+  const combined = `${previousTail}${data}`.replace(/\r\n|\r/g, "\n")
+  const lines = combined.split("\n")
+  const nextTail = combined.endsWith("\n") ? "" : (lines[lines.length - 1] ?? "").slice(-1024)
+  return { scanText: combined, nextTail }
+}
+
 export const extractTerminalPreviewUrl = (text: string): string | null => {
   if (!text) return null
 

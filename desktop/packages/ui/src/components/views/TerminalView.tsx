@@ -17,7 +17,11 @@ import { Icon } from "@/components/icon/Icon"
 import { useDeviceInfo } from "@/lib/device"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import { primeTerminalInputTransport } from "@/lib/terminalApi"
-import { extractTerminalPreviewUrl, isTerminalPreviewUrlAvailable } from "@/lib/terminalPreview"
+import {
+  buildTerminalPreviewScanState,
+  extractTerminalPreviewUrl,
+  isTerminalPreviewUrlAvailable,
+} from "@/lib/terminalPreview"
 import { useI18n } from "@/lib/i18n"
 import { PROJECT_ACTION_ICON_MAP, type ProjectActionIconKey } from "@/lib/projectActions"
 
@@ -294,16 +298,14 @@ export const TerminalView: React.FC = () => {
         return
       }
 
-      const combined = `${previewScanTailRef.current}${data}`.replace(/\r\n|\r/g, "\n")
-      const lines = combined.split("\n")
-      const completeText = combined.endsWith("\n") ? lines.join("\n") : lines.slice(0, -1).join("\n")
-      previewScanTailRef.current = combined.endsWith("\n") ? "" : (lines[lines.length - 1] ?? "").slice(-1024)
+      const { scanText, nextTail } = buildTerminalPreviewScanState(previewScanTailRef.current, data)
+      previewScanTailRef.current = nextTail
 
-      if (!completeText) {
+      if (!scanText) {
         return
       }
 
-      const candidate = extractTerminalPreviewUrl(completeText)
+      const candidate = extractTerminalPreviewUrl(scanText)
       if (!candidate || pendingPreviewProbeUrlsRef.current.has(candidate)) {
         return
       }
