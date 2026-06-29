@@ -20,6 +20,7 @@ import type {
   GitHubRepoSelector,
 } from "@/lib/api/types"
 import { useI18n } from "@/lib/i18n"
+import { loadCurrentGitHubPrAttach } from "./githubPrAttachLoad"
 import { loadCurrentGitHubPrList } from "./githubPrListLoad"
 
 const parsePrNumber = (value: string): number | null => {
@@ -88,6 +89,14 @@ export function GitHubPrPickerDialog({
   const [isLoadingMore, setIsLoadingMore] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const listRequestRef = React.useRef(0)
+  const attachRequestRef = React.useRef(0)
+  const attachStateRef = React.useRef({ open, projectDirectory })
+  attachStateRef.current = { open, projectDirectory }
+
+  React.useEffect(() => {
+    attachRequestRef.current += 1
+    setLoadingPrNumber(null)
+  }, [open, projectDirectory])
 
   const refresh = React.useCallback(async () => {
     const requestId = listRequestRef.current + 1
@@ -223,57 +232,87 @@ export function GitHubPrPickerDialog({
       }
       if (loadingPrNumber) return
 
+      const requestId = attachRequestRef.current + 1
+      attachRequestRef.current = requestId
+      const requestedDirectory = projectDirectory
       setLoadingPrNumber(prNumber)
-      try {
-        const context = await github.prContext(projectDirectory, prNumber, {
-          includeDiff,
-          includeCheckDetails: false,
-          sourceRepo,
-        })
-
-        if (context.connected === false) {
-          toast.error(t("session.githubPrPicker.error.notConnected"))
-          return
+      const isCurrentAttachRequest = () =>
+        attachRequestRef.current === requestId &&
+        attachStateRef.current.open &&
+        attachStateRef.current.projectDirectory === requestedDirectory
+      const clearCurrentAttachLoading = () => {
+        if (isCurrentAttachRequest()) {
+          setLoadingPrNumber(null)
         }
-
-        if (!context.pr) {
-          toast.error(t("session.githubPrPicker.error.prNotFound"))
-          return
-        }
-
-        if (!context.repo) {
-          toast.error(t("session.githubPrPicker.error.repoNotResolvable"), {
-            description: t("session.githubPrPicker.error.repoMustBeGithub"),
-          })
-          return
-        }
-
-        if (onSelect) {
-          const instructionsText = await renderMagicPrompt("github.pr.review.instructions")
-          onSelect({
-            number: context.pr.number,
-            title: context.pr.title,
-            url: context.pr.url,
-            head: context.pr.head,
-            base: context.pr.base,
-            includeDiff,
-            instructionsText,
-            contextText: buildPullRequestContextText(context),
-            author: context.pr.author
-              ? {
-                  login: context.pr.author.login,
-                  avatarUrl: context.pr.author.avatarUrl,
-                }
-              : undefined,
-          })
-        }
-        onOpenChange(false)
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e)
-        toast.error(t("session.githubPrPicker.toast.loadDetailsFailed"), { description: message })
-      } finally {
-        setLoadingPrNumber(null)
       }
+
+      const loaded = await loadCurrentGitHubPrAttach({
+        load: async () => {
+          const context = await github.prContext(requestedDirectory, prNumber, {
+            includeDiff,
+            includeCheckDetails: false,
+            sourceRepo,
+          })
+          const instructionsText =
+            context.connected !== false && context.pr && context.repo && onSelect
+              ? await renderMagicPrompt("github.pr.review.instructions")
+              : ""
+          return { context, instructionsText }
+        },
+        isCurrent: isCurrentAttachRequest,
+      })
+      if (loaded.status === "stale") {
+        return
+      }
+      if (loaded.status === "failed") {
+        const message = loaded.error instanceof Error ? loaded.error.message : String(loaded.error)
+        toast.error(t("session.githubPrPicker.toast.loadDetailsFailed"), { description: message })
+        clearCurrentAttachLoading()
+        return
+      }
+
+      const { context, instructionsText } = loaded.value
+
+      if (context.connected === false) {
+        toast.error(t("session.githubPrPicker.error.notConnected"))
+        clearCurrentAttachLoading()
+        return
+      }
+
+      if (!context.pr) {
+        toast.error(t("session.githubPrPicker.error.prNotFound"))
+        clearCurrentAttachLoading()
+        return
+      }
+
+      if (!context.repo) {
+        toast.error(t("session.githubPrPicker.error.repoNotResolvable"), {
+          description: t("session.githubPrPicker.error.repoMustBeGithub"),
+        })
+        clearCurrentAttachLoading()
+        return
+      }
+
+      if (onSelect) {
+        onSelect({
+          number: context.pr.number,
+          title: context.pr.title,
+          url: context.pr.url,
+          head: context.pr.head,
+          base: context.pr.base,
+          includeDiff,
+          instructionsText,
+          contextText: buildPullRequestContextText(context),
+          author: context.pr.author
+            ? {
+                login: context.pr.author.login,
+                avatarUrl: context.pr.author.avatarUrl,
+              }
+            : undefined,
+        })
+      }
+      onOpenChange(false)
+      clearCurrentAttachLoading()
     },
     [github, includeDiff, loadingPrNumber, onOpenChange, onSelect, projectDirectory, t],
   )
