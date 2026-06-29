@@ -1,6 +1,7 @@
 import type { ProjectEntry } from "@/lib/api/types"
 import type { DraftStarterRef } from "@/lib/draftStarters"
 import { getTauriGlobal } from "@/lib/tauriGlobal"
+import { isLoopbackHostname } from "./loopback"
 
 export type UpdateInfo = {
   available: boolean
@@ -319,11 +320,8 @@ const parseUrl = (raw: string): URL | null => {
   }
 }
 
-const normalizeHost = (rawHost: string): string => rawHost.replace(/^\[|\]$/g, "").toLowerCase()
-
 const isLoopbackHost = (host: string): boolean => {
-  const normalized = normalizeHost(host)
-  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1"
+  return isLoopbackHostname(host)
 }
 
 export const isDesktopLocalOriginActive = (): boolean => {

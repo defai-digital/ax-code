@@ -1,9 +1,10 @@
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "./http"
+import { isLoopbackHostname } from "./loopback"
 
 const ANSI_ESCAPE_PREFIX = String.fromCharCode(27)
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ANSI_ESCAPE_PREFIX}\\[[0-9;?]*[ -/]*[@-~]`, "g")
 const LOOPBACK_URL_PATTERN =
-  /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[(?:::1|::)\])(?::\d{2,5})?(?:\/[^\s<>'"`]*)?)/gi
+  /(https?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[(?:::1|::)\])(?::\d{2,5})?(?:\/[^\s<>'"`]*)?)/gi
 const PREVIEW_OUTPUT_PATTERN =
   /(?:➜\s*(?:Local|Network):)|\b(?:local|network|loopback|serving|listening|available|ready|started|running|server|vite|webpack|next\.js|astro|sveltekit|nuxt)\b/i
 const PYTHON_HTTP_SERVER_PATTERN = /Serving HTTP on .*? port (\d{2,5})/i
@@ -90,8 +91,7 @@ export const isTerminalPreviewUrlAvailable = async (url: string, timeoutMs = 150
     return false
   }
 
-  const host = parsed.hostname.toLowerCase()
-  if (host !== "localhost" && host !== "127.0.0.1" && host !== "0.0.0.0" && host !== "::1" && host !== "::") {
+  if (!isLoopbackHostname(parsed.hostname)) {
     return false
   }
 

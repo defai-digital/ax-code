@@ -48,6 +48,13 @@ describe("canUseLocalElectronDesktopIPC", () => {
     restoreWindow()
   })
 
+  test("allows Electron mini-chat IPC across IPv4 loopback aliases", () => {
+    mockDesktopWindow({ origin: "http://127.0.0.2:3910", localOrigin: "http://127.0.0.1:3910" })
+
+    expect(canUseLocalElectronDesktopIPC()).toBe(true)
+    restoreWindow()
+  })
+
   test("blocks local-only Electron mini-chat IPC on remote hosts", () => {
     mockDesktopWindow({ origin: "https://remote.example.com", localOrigin: "http://localhost:3910" })
 
