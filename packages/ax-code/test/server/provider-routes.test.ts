@@ -42,7 +42,7 @@ describe("provider routes", () => {
     expect(await del.json()).toBe(true)
   })
 
-  test("shows GroqCloud, z.ai, and CLI providers on fresh config while hiding Grok Cloud API", async () => {
+  test("shows OpenRouter, GroqCloud, z.ai, and CLI providers on fresh config while hiding Grok Cloud API", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -54,6 +54,7 @@ describe("provider routes", () => {
         const body = (await response.json()) as { all: Array<{ id: string }> }
         const ids = body.all.map((provider) => provider.id)
         expect(ids).not.toContain("xai")
+        expect(ids).toContain("openrouter")
         expect(ids).toContain("groq")
         expect(ids).toContain("zai-coding-plan")
         expect(ids).toContain("grok-build-cli")

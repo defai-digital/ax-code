@@ -111,6 +111,40 @@ describe("update-models script", () => {
     expect(data.groq?.models?.["qwen/qwen3.6-27b"]?.modalities?.input).toEqual(["text", "image"])
     expect(data.groq?.models?.["openai/gpt-oss-120b"]?.limit).toEqual({ context: 131_072, output: 65_536 })
     expect(data.groq?.models?.["openai/gpt-oss-120b"]?.tool_call).toBe(true)
+    expect(data.openrouter?.name).toBe("OpenRouter")
+    expect(data.openrouter?.env).toEqual(["OPENROUTER_API_KEY"])
+    expect(data.openrouter?.api).toBe("https://openrouter.ai/api/v1")
+    expect(data.openrouter?.npm).toBe("@ai-sdk/openai-compatible")
+    expect(data.openrouter?.options?.headers).toEqual({
+      "HTTP-Referer": "https://github.com/defai-digital/ax-code",
+      "X-OpenRouter-Title": "AX Code",
+    })
+    expect(Object.keys(data.openrouter?.models ?? {})).toEqual([
+      "openai/gpt-5.2-codex",
+      "openai/gpt-5.2",
+      "anthropic/claude-fable-5",
+      "anthropic/claude-sonnet-4.6",
+      "moonshotai/kimi-k2.7-code",
+      "qwen/qwen3-coder-plus",
+      "qwen/qwen3-coder-flash",
+      "google/gemini-3.5-flash",
+      "qwen/qwen3.7-plus",
+      "x-ai/grok-build-0.1",
+      "x-ai/grok-4.3",
+      "z-ai/glm-5.2",
+    ])
+    expect(data.openrouter?.models?.["openai/gpt-5.2-codex"]?.tool_call).toBe(true)
+    expect(data.openrouter?.models?.["qwen/qwen3-coder-flash"]?.limit).toEqual({
+      context: 1_000_000,
+      output: 65_536,
+    })
+    expect(data.openrouter?.models?.["google/gemini-3.5-flash"]?.modalities?.input).toEqual([
+      "text",
+      "image",
+      "audio",
+      "video",
+      "pdf",
+    ])
     expect(data["grok-build-cli"]?.name).toBe("Grok Build CLI")
     expect(data.ollama?.api).toBe("http://localhost:11434/v1")
     expect(data["ax-studio"]?.name).toBe("AX Studio")

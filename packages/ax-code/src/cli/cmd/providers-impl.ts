@@ -241,6 +241,7 @@ export const DEFAULT_LOGIN_PROVIDER_IDS = new Set([
   "ax-code",
   "google",
   "groq",
+  "openrouter",
   "zai-coding-plan",
   "alibaba-coding-plan",
   "alibaba-coding-plan-cn",

@@ -1129,6 +1129,9 @@ export namespace Provider {
       if (providerID.startsWith("alibaba")) {
         priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]
       }
+      if (providerID === "openrouter") {
+        priority = ["qwen/qwen3-coder-flash", "google/gemini-3.5-flash", "qwen/qwen3.7-plus"]
+      }
       // OpenAI and Anthropic were missing — without overrides they fell through to the
       // gemini/llama default list which never matched their model IDs, returning undefined
       // and silently disabling Auto-route's LLM tier for the majority of users.

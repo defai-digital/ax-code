@@ -1231,6 +1231,41 @@ describe("ProviderTransform.variants", () => {
     })
   })
 
+  describe("OpenRouter", () => {
+    test("does not auto-generate generic reasoningEffort variants", () => {
+      const model = createMockModel({
+        id: "openrouter/openai/gpt-5.2",
+        providerID: "openrouter",
+        api: {
+          id: "openai/gpt-5.2",
+          url: "https://openrouter.ai/api/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result).toEqual({})
+    })
+
+    test("sanitizes unsupported generic reasoningEffort request options", () => {
+      const model = createMockModel({
+        id: "openrouter/openai/gpt-5.2",
+        providerID: "openrouter",
+        api: {
+          id: "openai/gpt-5.2",
+          url: "https://openrouter.ai/api/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      })
+      const result = ProviderTransform.sanitizeOptions(model, {
+        reasoningEffort: "high",
+        reasoning_effort: "high",
+        reasoning: { effort: "high" },
+        temperature: 0.7,
+      })
+      expect(result).toEqual({ reasoning: { effort: "high" }, temperature: 0.7 })
+    })
+  })
+
   describe("Alibaba DashScope internet search", () => {
     const mkQwen = (providerID: string, apiId = "qwen3.6-plus") =>
       createMockModel({

@@ -343,6 +343,15 @@ export namespace ProviderTransform {
       return {}
     }
 
+    // OpenRouter's public model metadata exposes `reasoning` /
+    // `include_reasoning` broadly, but most current OpenRouter models do not
+    // advertise the OpenAI-style `reasoning_effort` knob. Do not synthesize
+    // generic reasoningEffort variants for this gateway; users can still pass
+    // explicit OpenRouter request options in provider config when needed.
+    if (model.providerID === "openrouter") {
+      return {}
+    }
+
     switch (model.api.npm) {
       case "venice-ai-sdk-provider":
       // https://docs.venice.ai/overview/guides/reasoning-models#reasoning-effort
@@ -519,7 +528,7 @@ export namespace ProviderTransform {
       return rest
     }
 
-    if (model.api.npm === "@ai-sdk/xai" || model.providerID === "groq") {
+    if (model.api.npm === "@ai-sdk/xai" || model.providerID === "groq" || model.providerID === "openrouter") {
       const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
       return rest
     }

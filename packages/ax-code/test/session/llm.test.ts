@@ -243,6 +243,93 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 }
 
 describe("session.llm.stream", () => {
+  test("sends OpenRouter headers and strips generic reasoningEffort parameters", async () => {
+    const providerID = "openrouter"
+    const modelID = "openai/gpt-5.2"
+    const fixture = await loadFixture(providerID, modelID)
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-openrouter-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        expect(resolved.variants).toEqual({})
+
+        const sessionID = SessionID.make("session-openrouter-1")
+        const user = {
+          id: MessageID.make("user-openrouter-1"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "test",
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+          variant: "high",
+        } satisfies MessageV2.User
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {
+            reasoning: { effort: "high" },
+            reasoningEffort: "high",
+            reasoning_effort: "high",
+          },
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {},
+        })
+
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        expect(capture.url.pathname.startsWith("/v1/")).toBe(true)
+        expect(capture.headers.get("Authorization")).toBe("Bearer test-openrouter-key")
+        expect(capture.headers.get("HTTP-Referer")).toBe("https://github.com/defai-digital/ax-code")
+        expect(capture.headers.get("X-OpenRouter-Title")).toBe("AX Code")
+        expect(capture.body.model).toBe(fixture.model.id)
+        expect(capture.body.reasoning).toEqual({ effort: "high" })
+        expect(capture.body.reasoningEffort).toBeUndefined()
+        expect(capture.body.reasoning_effort).toBeUndefined()
+      },
+    })
+  })
+
   test("sends Alibaba token-plan-safe OpenAI-compatible parameters", async () => {
     const providerID = "alibaba-token-plan"
     const modelID = "qwen3.6-plus"

@@ -79,6 +79,30 @@ test("GroqCloud provider exposes documented Qwen and GPT-OSS models", async () =
   })
 })
 
+test("OpenRouter provider preserves OpenAI-compatible options and curated tool models", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("OPENROUTER_API_KEY", "test-openrouter")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const openrouter = providers[ProviderID.make("openrouter")]
+
+      expect(openrouter?.name).toBe("OpenRouter")
+      expect(openrouter?.key).toBe("test-openrouter")
+      expect(openrouter?.options?.headers).toEqual({
+        "HTTP-Referer": "https://github.com/defai-digital/ax-code",
+        "X-OpenRouter-Title": "AX Code",
+      })
+      expect(openrouter?.models[ModelID.make("openai/gpt-5.2")]?.api.url).toBe("https://openrouter.ai/api/v1")
+      expect(openrouter?.models[ModelID.make("openai/gpt-5.2")]?.capabilities.toolcall).toBe(true)
+      expect(openrouter?.models[ModelID.make("z-ai/glm-5.2")]?.limit.context).toBe(1_048_576)
+    },
+  })
+})
+
 test("Provider.invalidate clears SDK cache as well as pending loads", async () => {
   const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
   const start = src.indexOf("export async function invalidate()")
@@ -680,7 +704,9 @@ test("getModel throws ModelNotFoundError for invalid provider", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      await expect(Provider.getModel(ProviderID.make("nonexistent-provider"), ModelID.make("some-model"))).rejects.toThrow()
+      await expect(
+        Provider.getModel(ProviderID.make("nonexistent-provider"), ModelID.make("some-model")),
+      ).rejects.toThrow()
     },
   })
 })
@@ -1568,6 +1594,30 @@ test("getSmallModel uses a supported Alibaba plan model", async () => {
       expect(model).toBeDefined()
       if (!model) throw new Error("expected Alibaba token-plan small model")
       expect(["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]).toContain(model.id)
+    },
+  })
+})
+
+test("getSmallModel uses OpenRouter's Qwen coder flash model", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("OPENROUTER_API_KEY", "test-openrouter-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("openrouter"))
+      expect(model).toBeDefined()
+      expect(String(model?.id)).toBe("qwen/qwen3-coder-flash")
     },
   })
 })

@@ -177,7 +177,7 @@ export function fromModelsDevProvider(provider: ModelsDev.Provider): ProviderInf
       source: "custom",
       name: provider.name ?? provider.id,
       env: provider.env ?? [],
-      options: {},
+      options: provider.options ?? {},
       models,
     }
   } catch (error) {

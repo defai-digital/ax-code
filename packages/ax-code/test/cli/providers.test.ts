@@ -35,6 +35,7 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("xai")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("google")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("groq")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("openrouter")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("github-copilot")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("claude-code")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("gemini-cli")).toBe(true)

@@ -396,6 +396,43 @@ function groqModel(input: {
   } as RawModel
 }
 
+function openRouterModel(input: {
+  id: string
+  name: string
+  family: string
+  attachment: boolean
+  reasoning: boolean
+  temperature: boolean
+  context: number
+  output: number
+  releaseDate: string
+  inputModalities?: string[]
+}) {
+  return {
+    id: input.id,
+    name: input.name,
+    family: input.family,
+    attachment: input.attachment,
+    reasoning: input.reasoning,
+    reasoning_options: input.reasoning ? [{ type: "effort", values: ["default"] }] : [],
+    tool_call: true,
+    structured_output: true,
+    temperature: input.temperature,
+    release_date: input.releaseDate,
+    last_updated: input.releaseDate,
+    modalities: {
+      input: input.inputModalities ?? ["text"],
+      output: ["text"],
+    },
+    open_weights: false,
+    limit: {
+      context: input.context,
+      output: input.output,
+    },
+    status: "active",
+  } as RawModel
+}
+
 // GroqCloud is not yet published by models.dev in this snapshot line. Keep the
 // first-party OpenAI-compatible Groq provider narrow and docs-backed so it
 // survives snapshot regeneration without pulling in stale Groq model aliases.
@@ -429,6 +466,169 @@ fetched["groq"] = {
       context: 131_072,
       output: 65_536,
       releaseDate: "2025-08-05",
+    }),
+  },
+}
+
+// OpenRouter publishes a very broad marketplace catalog. Keep the built-in AX
+// Code preset intentionally narrow: only current, text-output models that
+// advertise OpenAI-compatible tool calling in OpenRouter's public model API are
+// exposed by default. Users can still configure any other OpenRouter model via
+// ax-code.json.
+fetched["openrouter"] = {
+  id: "openrouter",
+  name: "OpenRouter",
+  env: ["OPENROUTER_API_KEY"],
+  npm: "@ai-sdk/openai-compatible",
+  api: "https://openrouter.ai/api/v1",
+  doc: "https://openrouter.ai/docs/quickstart",
+  options: {
+    headers: {
+      "HTTP-Referer": "https://github.com/defai-digital/ax-code",
+      "X-OpenRouter-Title": "AX Code",
+    },
+  },
+  models: {
+    "openai/gpt-5.2-codex": openRouterModel({
+      id: "openai/gpt-5.2-codex",
+      name: "OpenRouter: GPT-5.2-Codex",
+      family: "gpt",
+      attachment: true,
+      reasoning: true,
+      temperature: false,
+      context: 400_000,
+      output: 128_000,
+      releaseDate: "2026-01-14",
+      inputModalities: ["text", "image"],
+    }),
+    "openai/gpt-5.2": openRouterModel({
+      id: "openai/gpt-5.2",
+      name: "OpenRouter: GPT-5.2",
+      family: "gpt",
+      attachment: true,
+      reasoning: true,
+      temperature: false,
+      context: 400_000,
+      output: 128_000,
+      releaseDate: "2025-12-10",
+      inputModalities: ["text", "image", "pdf"],
+    }),
+    "anthropic/claude-fable-5": openRouterModel({
+      id: "anthropic/claude-fable-5",
+      name: "OpenRouter: Claude Fable 5",
+      family: "claude-fable",
+      attachment: true,
+      reasoning: true,
+      temperature: false,
+      context: 1_000_000,
+      output: 128_000,
+      releaseDate: "2026-06-09",
+      inputModalities: ["text", "image", "pdf"],
+    }),
+    "anthropic/claude-sonnet-4.6": openRouterModel({
+      id: "anthropic/claude-sonnet-4.6",
+      name: "OpenRouter: Claude Sonnet 4.6",
+      family: "claude-sonnet",
+      attachment: true,
+      reasoning: true,
+      temperature: true,
+      context: 1_000_000,
+      output: 128_000,
+      releaseDate: "2026-02-17",
+      inputModalities: ["text", "image", "pdf"],
+    }),
+    "moonshotai/kimi-k2.7-code": openRouterModel({
+      id: "moonshotai/kimi-k2.7-code",
+      name: "OpenRouter: Kimi K2.7 Code",
+      family: "kimi-k2.7-code",
+      attachment: true,
+      reasoning: true,
+      temperature: true,
+      context: 262_144,
+      output: 16_384,
+      releaseDate: "2026-06-12",
+      inputModalities: ["text", "image"],
+    }),
+    "qwen/qwen3-coder-plus": openRouterModel({
+      id: "qwen/qwen3-coder-plus",
+      name: "OpenRouter: Qwen3 Coder Plus",
+      family: "qwen-coder",
+      attachment: false,
+      reasoning: false,
+      temperature: true,
+      context: 1_000_000,
+      output: 65_536,
+      releaseDate: "2025-09-23",
+    }),
+    "qwen/qwen3-coder-flash": openRouterModel({
+      id: "qwen/qwen3-coder-flash",
+      name: "OpenRouter: Qwen3 Coder Flash",
+      family: "qwen-coder",
+      attachment: false,
+      reasoning: false,
+      temperature: true,
+      context: 1_000_000,
+      output: 65_536,
+      releaseDate: "2025-09-17",
+    }),
+    "google/gemini-3.5-flash": openRouterModel({
+      id: "google/gemini-3.5-flash",
+      name: "OpenRouter: Gemini 3.5 Flash",
+      family: "gemini",
+      attachment: true,
+      reasoning: true,
+      temperature: true,
+      context: 1_048_576,
+      output: 65_536,
+      releaseDate: "2026-05-19",
+      inputModalities: ["text", "image", "audio", "video", "pdf"],
+    }),
+    "qwen/qwen3.7-plus": openRouterModel({
+      id: "qwen/qwen3.7-plus",
+      name: "OpenRouter: Qwen3.7 Plus",
+      family: "qwen",
+      attachment: true,
+      reasoning: true,
+      temperature: true,
+      context: 1_000_000,
+      output: 65_536,
+      releaseDate: "2026-06-03",
+      inputModalities: ["text", "image"],
+    }),
+    "x-ai/grok-build-0.1": openRouterModel({
+      id: "x-ai/grok-build-0.1",
+      name: "OpenRouter: Grok Build 0.1",
+      family: "grok",
+      attachment: true,
+      reasoning: true,
+      temperature: true,
+      context: 256_000,
+      output: 32_768,
+      releaseDate: "2026-05-20",
+      inputModalities: ["text", "image"],
+    }),
+    "x-ai/grok-4.3": openRouterModel({
+      id: "x-ai/grok-4.3",
+      name: "OpenRouter: Grok 4.3",
+      family: "grok",
+      attachment: true,
+      reasoning: true,
+      temperature: true,
+      context: 1_000_000,
+      output: 32_768,
+      releaseDate: "2026-04-30",
+      inputModalities: ["text", "image", "pdf"],
+    }),
+    "z-ai/glm-5.2": openRouterModel({
+      id: "z-ai/glm-5.2",
+      name: "OpenRouter: GLM 5.2",
+      family: "glm",
+      attachment: false,
+      reasoning: true,
+      temperature: true,
+      context: 1_048_576,
+      output: 32_768,
+      releaseDate: "2026-06-16",
     }),
   },
 }

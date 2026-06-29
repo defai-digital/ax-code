@@ -64,7 +64,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 
 Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
 
-AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
+AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 
 ### Update
 
@@ -162,11 +162,11 @@ Grok defaults to `Grok Build CLI` in `/connect`, using the local `grok` command 
 
 Default setup flows support three provider families:
 
-| Family                   | Providers                                                                          | Model source                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Cloud API providers      | Google, GroqCloud, Alibaba Coding/Token Plan, GitHub Copilot, and Z.AI Coding Plan | Hosted provider model catalogs bundled with AX Code               |
-| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, and Antigravity CLI | One model id per CLI bridge, using the local vendor CLI session   |
-| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                         | Curated 6-bit MLX MTP models: Qwen3.6, Gemma 4, and GLM 4.7 Flash |
+| Family                   | Providers                                                                                      | Model source                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Cloud API providers      | Google, GroqCloud, OpenRouter, Alibaba Coding/Token Plan, GitHub Copilot, and Z.AI Coding Plan | Hosted provider model catalogs bundled with AX Code               |
+| CLI providers            | Claude Code, Gemini CLI, Codex CLI, Grok Build CLI, Qoder CLI, and Antigravity CLI             | One model id per CLI bridge, using the local vendor CLI session   |
+| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                     | Curated 6-bit MLX MTP models: Qwen3.6, Gemma 4, and GLM 4.7 Flash |
 
 See [Supported Providers and Models](docs/supported-providers.md) for provider ids, credential variables, and the exact supported model ids.
 

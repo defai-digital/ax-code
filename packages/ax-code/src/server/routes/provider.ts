@@ -28,6 +28,7 @@ const NATIVE_PROVIDERS = new Set([
   "ax-engine",
   "google",
   "groq",
+  "openrouter",
   "alibaba-coding-plan",
   "alibaba-coding-plan-cn",
   "alibaba-token-plan",

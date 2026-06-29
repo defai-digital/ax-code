@@ -9,7 +9,7 @@ AX Code talks to models through standard provider protocols. Any endpoint that s
 
 This covers self-hosted aggregators and relay gateways such as LiteLLM, one-api, new-api, and the Vercel AI Gateway, as well as private corporate proxies and any other compatible service. AX Code treats these uniformly: it speaks the wire protocol, you supply the URL and key.
 
-> **Responsibility note.** A gateway sits between AX Code and the upstream model, so your prompts, code, and credentials pass through it. When you point AX Code at a third-party or account-pooling relay, you are responsible for trusting that operator with your data and for staying within the terms of service of every upstream provider it routes to. AX Code does not endorse or integrate with any specific relay; it only speaks the standard protocols.
+> **Responsibility note.** A gateway sits between AX Code and the upstream model, so your prompts, code, and credentials pass through it. When you point AX Code at a third-party or account-pooling relay, you are responsible for trusting that operator with your data and for staying within the terms of service of every upstream provider it routes to. Built-in gateway presets such as OpenRouter use the same standard protocol path; custom gateway configuration does not imply endorsement of any relay operator.
 
 ## How a provider is resolved
 
