@@ -82,6 +82,12 @@ import {
   isFilesViewPathWithinRoot as isPathWithinRoot,
   normalizeFilesViewPath as normalizePath,
 } from "./filesViewPathUtils"
+import {
+  clearFilesViewAutoSaveIdleTimer,
+  resetFilesViewAutoSaveStatus,
+  showFilesViewAutoSaveSavedStatus,
+  type FilesViewAutoSaveStatus,
+} from "./filesViewAutoSaveStatus"
 
 type FileStatSnapshot = {
   path: string
@@ -773,9 +779,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
   const [loadedFileLineEnding, setLoadedFileLineEnding] = React.useState<FileLineEnding>("\n")
   const dialogInputRef = React.useRef<HTMLInputElement>(null)
   const autoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoSaveIdleTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastLoadedFileStatRef = React.useRef<FileStatSnapshot | null>(null)
   const activeFileLoadIdRef = React.useRef(0)
-  const [autoSaveStatus, setAutoSaveStatus] = React.useState<"idle" | "saved">("idle")
+  const [autoSaveStatus, setAutoSaveStatus] = React.useState<FilesViewAutoSaveStatus>("idle")
   const [autoSaveEnabled, setAutoSaveEnabled] = React.useState(getInitialAutoSaveEnabled)
 
   const [confirmDiscardOpen, setConfirmDiscardOpen] = React.useState(false)
@@ -914,6 +921,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
       if (copiedPathTimeoutRef.current !== null) {
         window.clearTimeout(copiedPathTimeoutRef.current)
       }
+      clearFilesViewAutoSaveIdleTimer(autoSaveIdleTimerRef)
     }
   }, [])
 
@@ -1594,7 +1602,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
       return
     }
 
-    setAutoSaveStatus("idle")
+    resetFilesViewAutoSaveStatus(setAutoSaveStatus, autoSaveIdleTimerRef)
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current)
       autoSaveTimerRef.current = null
@@ -1611,10 +1619,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
     }
 
     autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null
       void saveDraft().then((saved) => {
         if (!saved) return
-        setAutoSaveStatus("saved")
-        setTimeout(() => setAutoSaveStatus("idle"), 2000)
+        showFilesViewAutoSaveSavedStatus(setAutoSaveStatus, autoSaveIdleTimerRef)
       })
     }, AUTO_SAVE_DELAY)
 
@@ -1628,7 +1636,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
 
   // Reset auto-save status when switching files
   React.useEffect(() => {
-    setAutoSaveStatus("idle")
+    resetFilesViewAutoSaveStatus(setAutoSaveStatus, autoSaveIdleTimerRef)
   }, [selectedFile?.path])
 
   React.useEffect(() => {
@@ -1647,8 +1655,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
         if (!isSaving) {
           void saveDraft().then((saved) => {
             if (!saved) return
-            setAutoSaveStatus("saved")
-            setTimeout(() => setAutoSaveStatus("idle"), 2000)
+            showFilesViewAutoSaveSavedStatus(setAutoSaveStatus, autoSaveIdleTimerRef)
           })
         }
       } else if (e.key.toLowerCase() === "f") {
