@@ -22,7 +22,8 @@ import { useSkillsStore } from "@/stores/useSkillsStore"
 import ReasoningPart from "./ReasoningPart"
 import JustificationBlock from "./JustificationBlock"
 import { areRenderRelevantPartsEqual } from "../renderCompare"
-import { getExternalFaviconUrl } from "@/lib/url"
+import { getExternalFaviconUrl, openExternalUrl } from "@/lib/url"
+import { getSafeToolFetchHref } from "./toolFetchLinks"
 
 const TOOL_ROW_TEXT_CLASS = "!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal"
 const TOOL_ROW_TITLE_CLASS = cn("typography-meta font-medium", TOOL_ROW_TEXT_CLASS)
@@ -821,24 +822,45 @@ const StaticToolRowInner: React.FC<{
           ))
         : null}
       {isFetchGroup && descriptions.length > 0
-        ? descriptions.map((url, index) => (
-            <a
-              key={`${url}-${index}`}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                "min-w-0 flex-1 inline-flex items-center gap-1.5 underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90",
-                "truncate whitespace-nowrap",
-                TOOL_ROW_DESCRIPTION_CLASS,
-              )}
-              style={{ color: "var(--status-info)" }}
-              title={url}
-            >
-              <ExternalLinkFavicon href={url} />
-              <span className="min-w-0 truncate">{url}</span>
-            </a>
-          ))
+        ? descriptions.map((url, index) => {
+            const safeHref = getSafeToolFetchHref(url)
+            const content = (
+              <>
+                {safeHref ? <ExternalLinkFavicon href={safeHref} /> : null}
+                <span className="min-w-0 truncate">{url}</span>
+              </>
+            )
+            const className = cn(
+              "min-w-0 flex-1 inline-flex items-center gap-1.5",
+              safeHref &&
+                "underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90",
+              "truncate whitespace-nowrap",
+              TOOL_ROW_DESCRIPTION_CLASS,
+            )
+
+            return safeHref ? (
+              <a
+                key={`${url}-${index}`}
+                href={safeHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={className}
+                style={{ color: "var(--status-info)" }}
+                title={url}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void openExternalUrl(safeHref)
+                }}
+              >
+                {content}
+              </a>
+            ) : (
+              <span key={`${url}-${index}`} className={className} style={{ color: "var(--tools-description)" }} title={url}>
+                {content}
+              </span>
+            )
+          })
         : null}
       {isSkillGroup && skillEntries.length > 0
         ? skillEntries.map((entry, index) => (
