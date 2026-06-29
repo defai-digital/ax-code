@@ -24,7 +24,7 @@
     { "command": "desktop_search_files", "safeForRemote": false, "args": "object" },
     { "command": "desktop_clear_cache", "safeForRemote": false, "args": "object" },
     { "command": "desktop_notify", "safeForRemote": false, "args": "object" },
-    { "command": "desktop_capture_page_rect", "safeForRemote": true, "args": "object" },
+    { "command": "desktop_capture_page_rect", "safeForRemote": false, "args": "object" },
     { "command": "desktop_browser_capture_page", "safeForRemote": false, "args": "object" },
     { "command": "desktop_hosts_get", "safeForRemote": true, "args": "object" },
     { "command": "desktop_hosts_set", "safeForRemote": false, "args": "object" },

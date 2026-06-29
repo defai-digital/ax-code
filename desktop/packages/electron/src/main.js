@@ -2212,8 +2212,8 @@ handleCommand("desktop_notify", async (args) => {
   return null
 })
 
-// Window-rect screen capture (local-only by capability, but mirror upstream's
-// safe-for-remote allowlist? upstream lists desktop_capture_page_rect as safe).
+// Window-rect screen capture is a local desktop capability. Remote hosts must
+// not be able to capture pixels from the user's Electron window.
 handleCommand(
   "desktop_capture_page_rect",
   async (args, event) => {
@@ -2242,7 +2242,7 @@ handleCommand(
       height: image.getSize().height,
     }
   },
-  { safeForRemote: true },
+  { safeForRemote: false },
 )
 
 handleCommand("desktop_browser_capture_page", async (args) => {

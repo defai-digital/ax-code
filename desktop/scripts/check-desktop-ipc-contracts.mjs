@@ -54,16 +54,46 @@ function extractCall(source, start) {
   let depth = 0
   let quote = null
   let escaped = false
+  let lineComment = false
+  let blockComment = false
 
   for (let index = start; index < source.length; index += 1) {
     const char = source[index]
+    const next = source[index + 1]
+
+    if (lineComment) {
+      if (char === "\n" || char === "\r") lineComment = false
+      continue
+    }
+
+    if (blockComment) {
+      if (char === "*" && next === "/") {
+        blockComment = false
+        index += 1
+      }
+      continue
+    }
+
     if (quote) {
       if (escaped) escaped = false
       else if (char === "\\") escaped = true
       else if (char === quote) quote = null
       continue
     }
-    if (char === "\"" || char === "'" || char === "`") {
+
+    if (char === "/" && next === "/") {
+      lineComment = true
+      index += 1
+      continue
+    }
+
+    if (char === "/" && next === "*") {
+      blockComment = true
+      index += 1
+      continue
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
       quote = char
       continue
     }
