@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { isCurrentProjectOperationTarget, type ProjectOperationTarget } from "./projectOperationTarget"
+import {
+  isCurrentProjectOperationTarget,
+  ProjectOperationSequence,
+  type ProjectOperationTarget,
+} from "./projectOperationTarget"
 
 describe("isCurrentProjectOperationTarget", () => {
   const project: ProjectOperationTarget = { id: "project-a", path: "/repo/a" }
@@ -19,5 +23,29 @@ describe("isCurrentProjectOperationTarget", () => {
   test("rejects missing operation targets", () => {
     expect(isCurrentProjectOperationTarget(null, project)).toBe(false)
     expect(isCurrentProjectOperationTarget(project, null)).toBe(false)
+  })
+})
+
+describe("ProjectOperationSequence", () => {
+  test("only treats the latest operation token as current", () => {
+    const sequence = new ProjectOperationSequence()
+
+    const stale = sequence.begin()
+    const latest = sequence.begin()
+
+    expect(sequence.isCurrent(stale)).toBe(false)
+    expect(sequence.isCurrent(latest)).toBe(true)
+  })
+
+  test("does not let stale completion clear a newer operation", () => {
+    const sequence = new ProjectOperationSequence()
+
+    const stale = sequence.begin()
+    const latest = sequence.begin()
+
+    expect(sequence.complete(stale)).toBe(false)
+    expect(sequence.isCurrent(latest)).toBe(true)
+    expect(sequence.complete(latest)).toBe(true)
+    expect(sequence.isCurrent(latest)).toBe(false)
   })
 })

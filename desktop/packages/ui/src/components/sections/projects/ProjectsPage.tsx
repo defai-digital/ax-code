@@ -17,7 +17,11 @@ import { ProjectActionsSection } from "@/components/sections/projects/ProjectAct
 import { Icon } from "@/components/icon/Icon"
 import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { useI18n } from "@/lib/i18n"
-import { isCurrentProjectOperationTarget, type ProjectOperationTarget } from "./projectOperationTarget"
+import {
+  isCurrentProjectOperationTarget,
+  ProjectOperationSequence,
+  type ProjectOperationTarget,
+} from "./projectOperationTarget"
 
 export const ProjectsPage: React.FC = () => {
   const { t } = useI18n()
@@ -58,6 +62,8 @@ export const ProjectsPage: React.FC = () => {
   const [pendingUploadIconPreviewUrl, setPendingUploadIconPreviewUrl] = React.useState<string | null>(null)
   const [previewImageFailed, setPreviewImageFailed] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+  const saveOperationSequenceRef = React.useRef(new ProjectOperationSequence())
+  const discoverOperationSequenceRef = React.useRef(new ProjectOperationSequence())
 
   const clearPendingUploadIcon = React.useCallback(() => {
     setPendingUploadIconFile(null)
@@ -121,51 +127,69 @@ export const ProjectsPage: React.FC = () => {
 
     const operationTarget = selectedProjectTarget
     if (!operationTarget) return
+    const operationToken = saveOperationSequenceRef.current.begin()
+    const isLatestSaveOperation = () => saveOperationSequenceRef.current.isCurrent(operationToken)
 
-    if (pendingUploadIconFile) {
-      setIsUploadingIcon(true)
-      const uploadResult = await uploadProjectIcon(operationTarget.id, pendingUploadIconFile)
-      setIsUploadingIcon(false)
-      if (!isCurrentProjectOperation(operationTarget)) {
+    try {
+      if (pendingUploadIconFile) {
+        setIsUploadingIcon(true)
+        let uploadResult: Awaited<ReturnType<typeof uploadProjectIcon>>
+        try {
+          uploadResult = await uploadProjectIcon(operationTarget.id, pendingUploadIconFile)
+        } finally {
+          if (isLatestSaveOperation()) {
+            setIsUploadingIcon(false)
+          }
+        }
+        if (!isLatestSaveOperation() || !isCurrentProjectOperation(operationTarget)) {
+          return
+        }
+        if (!uploadResult.ok) {
+          toast.error(uploadResult.error || t("settings.projects.page.toast.uploadIconFailed"))
+          return
+        }
+        toast.success(t("settings.projects.page.toast.iconUpdated"))
+        clearPendingUploadIcon()
+        setPendingRemoveImageIcon(false)
+      }
+
+      const willRemoveImageIcon = pendingRemoveImageIcon && Boolean(selectedProject.iconImage)
+
+      if (willRemoveImageIcon) {
+        setIsRemovingCustomIcon(true)
+        let removeResult: Awaited<ReturnType<typeof removeProjectIcon>>
+        try {
+          removeResult = await removeProjectIcon(operationTarget.id)
+        } finally {
+          if (isLatestSaveOperation()) {
+            setIsRemovingCustomIcon(false)
+          }
+        }
+        if (!isLatestSaveOperation() || !isCurrentProjectOperation(operationTarget)) {
+          return
+        }
+        if (!removeResult.ok) {
+          toast.error(removeResult.error || t("settings.projects.page.toast.removeIconFailed"))
+          return
+        }
+        toast.success(t("settings.projects.page.toast.iconRemoved"))
+        setPendingRemoveImageIcon(false)
+        setIconBackground(null)
+      }
+
+      if (!isLatestSaveOperation() || !isCurrentProjectOperation(operationTarget)) {
         return
       }
-      if (!uploadResult.ok) {
-        toast.error(uploadResult.error || t("settings.projects.page.toast.uploadIconFailed"))
-        return
-      }
-      toast.success(t("settings.projects.page.toast.iconUpdated"))
-      clearPendingUploadIcon()
-      setPendingRemoveImageIcon(false)
+
+      updateProjectMeta(operationTarget.id, {
+        label: name.trim(),
+        icon,
+        color,
+        iconBackground: willRemoveImageIcon ? null : iconBackground,
+      })
+    } finally {
+      saveOperationSequenceRef.current.complete(operationToken)
     }
-
-    const willRemoveImageIcon = pendingRemoveImageIcon && Boolean(selectedProject.iconImage)
-
-    if (willRemoveImageIcon) {
-      setIsRemovingCustomIcon(true)
-      const removeResult = await removeProjectIcon(operationTarget.id)
-      setIsRemovingCustomIcon(false)
-      if (!isCurrentProjectOperation(operationTarget)) {
-        return
-      }
-      if (!removeResult.ok) {
-        toast.error(removeResult.error || t("settings.projects.page.toast.removeIconFailed"))
-        return
-      }
-      toast.success(t("settings.projects.page.toast.iconRemoved"))
-      setPendingRemoveImageIcon(false)
-      setIconBackground(null)
-    }
-
-    if (!isCurrentProjectOperation(operationTarget)) {
-      return
-    }
-
-    updateProjectMeta(operationTarget.id, {
-      label: name.trim(),
-      icon,
-      color,
-      iconBackground: willRemoveImageIcon ? null : iconBackground,
-    })
   }, [
     color,
     icon,
@@ -257,9 +281,11 @@ export const ProjectsPage: React.FC = () => {
     setPreviewImageFailed(false)
 
     setIsDiscoveringIcon(true)
+    const operationToken = discoverOperationSequenceRef.current.begin()
+    const isLatestDiscoverOperation = () => discoverOperationSequenceRef.current.isCurrent(operationToken)
     void discoverProjectIcon(operationTarget.id)
       .then((result) => {
-        if (!isCurrentProjectOperation(operationTarget)) {
+        if (!isLatestDiscoverOperation() || !isCurrentProjectOperation(operationTarget)) {
           return
         }
         if (!result.ok) {
@@ -273,7 +299,9 @@ export const ProjectsPage: React.FC = () => {
         toast.success(t("settings.projects.page.toast.iconDiscovered"))
       })
       .finally(() => {
-        setIsDiscoveringIcon(false)
+        if (discoverOperationSequenceRef.current.complete(operationToken)) {
+          setIsDiscoveringIcon(false)
+        }
       })
   }, [
     clearPendingUploadIcon,
