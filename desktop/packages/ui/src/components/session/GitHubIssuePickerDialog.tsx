@@ -28,6 +28,7 @@ import type {
   GitHubRepoSelector,
 } from "@/lib/api/types"
 import { useI18n } from "@/lib/i18n"
+import { loadCurrentGitHubIssueDetail } from "./githubIssueDetailLoad"
 import { loadCurrentGitHubIssueList } from "./githubIssueListLoad"
 
 const parseIssueNumber = (value: string): number | null => {
@@ -106,6 +107,14 @@ export function GitHubIssuePickerDialog({
   const [isLoadingMore, setIsLoadingMore] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const listRequestRef = React.useRef(0)
+  const detailRequestRef = React.useRef(0)
+  const detailStateRef = React.useRef({ open, projectDirectory })
+  detailStateRef.current = { open, projectDirectory }
+
+  React.useEffect(() => {
+    detailRequestRef.current += 1
+    setStartingIssueNumber(null)
+  }, [open, projectDirectory])
 
   const refresh = React.useCallback(async () => {
     const requestId = listRequestRef.current + 1
@@ -297,70 +306,6 @@ export function GitHubIssuePickerDialog({
 
   const startSession = React.useCallback(
     async (issueNumber: number, sourceRepo?: GitHubRepoSelector | null) => {
-      if (mode === "select") {
-        // In select mode, fetch full issue details and return via onSelect
-        if (!projectDirectory) {
-          toast.error(t("session.githubIssuePicker.error.noActiveProject"))
-          return
-        }
-        if (!github?.issueGet || !github?.issueComments) {
-          toast.error(t("session.githubIssuePicker.error.runtimeUnavailable"))
-          return
-        }
-        if (startingIssueNumber) return
-        setStartingIssueNumber(issueNumber)
-        try {
-          const issueRes = await github.issueGet(projectDirectory, issueNumber, { sourceRepo })
-          if (issueRes.connected === false) {
-            toast.error(t("session.githubIssuePicker.error.notConnected"))
-            return
-          }
-          if (!issueRes.repo) {
-            toast.error(t("session.githubIssuePicker.error.repoNotResolvable"), {
-              description: t("session.githubIssuePicker.error.repoMustBeGithub"),
-            })
-            return
-          }
-          const issue = issueRes.issue
-          if (!issue) {
-            toast.error(t("session.githubIssuePicker.error.issueNotFound"))
-            return
-          }
-
-          const commentsRes = await github.issueComments(projectDirectory, issueNumber, { sourceRepo })
-          if (commentsRes.connected === false) {
-            toast.error(t("session.githubIssuePicker.error.notConnected"))
-            return
-          }
-          const comments = commentsRes.comments ?? []
-
-          // Build full context text like in createSession mode
-          const contextText = buildIssueContextText({ repo: issueRes.repo, issue, comments })
-
-          if (onSelect) {
-            onSelect({
-              number: issue.number,
-              title: issue.title,
-              url: issue.url,
-              contextText,
-              author: issue.author
-                ? {
-                    login: issue.author.login,
-                    avatarUrl: issue.author.avatarUrl,
-                  }
-                : undefined,
-            })
-          }
-          onOpenChange(false)
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e)
-          toast.error(t("session.githubIssuePicker.toast.loadIssueDetailsFailed"), { description: message })
-        } finally {
-          setStartingIssueNumber(null)
-        }
-        return
-      }
-
       if (!projectDirectory) {
         toast.error(t("session.githubIssuePicker.error.noActiveProject"))
         return
@@ -370,45 +315,116 @@ export function GitHubIssuePickerDialog({
         return
       }
       if (startingIssueNumber) return
+
+      const requestId = detailRequestRef.current + 1
+      detailRequestRef.current = requestId
+      const requestedDirectory = projectDirectory
+      const isCurrentIssueRequest = () =>
+        detailRequestRef.current === requestId &&
+        detailStateRef.current.open &&
+        detailStateRef.current.projectDirectory === requestedDirectory
+      const clearCurrentIssueLoading = () => {
+        if (isCurrentIssueRequest()) {
+          setStartingIssueNumber(null)
+        }
+      }
+
       setStartingIssueNumber(issueNumber)
-      try {
-        const issueRes = await github.issueGet(projectDirectory, issueNumber, { sourceRepo })
-        if (issueRes.connected === false) {
-          toast.error(t("session.githubIssuePicker.error.notConnected"))
-          return
-        }
-        if (!issueRes.repo) {
-          toast.error(t("session.githubIssuePicker.error.repoNotResolvable"), {
-            description: t("session.githubIssuePicker.error.repoMustBeGithub"),
+      const loaded = await loadCurrentGitHubIssueDetail({
+        load: async () => {
+          const issueRes = await github.issueGet(requestedDirectory, issueNumber, { sourceRepo })
+          if (issueRes.connected === false || !issueRes.repo || !issueRes.issue) {
+            return { issueRes, commentsRes: null }
+          }
+          const commentsRes = await github.issueComments(requestedDirectory, issueNumber, { sourceRepo })
+          return { issueRes, commentsRes }
+        },
+        isCurrent: isCurrentIssueRequest,
+      })
+      if (loaded.status === "stale") {
+        return
+      }
+      if (loaded.status === "failed") {
+        const message = loaded.error instanceof Error ? loaded.error.message : String(loaded.error)
+        toast.error(
+          t(
+            mode === "select"
+              ? "session.githubIssuePicker.toast.loadIssueDetailsFailed"
+              : "session.githubIssuePicker.toast.startSessionFailed",
+          ),
+          { description: message },
+        )
+        clearCurrentIssueLoading()
+        return
+      }
+
+      const { issueRes, commentsRes } = loaded.value
+      if (issueRes.connected === false) {
+        toast.error(t("session.githubIssuePicker.error.notConnected"))
+        clearCurrentIssueLoading()
+        return
+      }
+      if (!issueRes.repo) {
+        toast.error(t("session.githubIssuePicker.error.repoNotResolvable"), {
+          description: t("session.githubIssuePicker.error.repoMustBeGithub"),
+        })
+        clearCurrentIssueLoading()
+        return
+      }
+      const issue = issueRes.issue
+      if (!issue) {
+        toast.error(t("session.githubIssuePicker.error.issueNotFound"))
+        clearCurrentIssueLoading()
+        return
+      }
+
+      if (commentsRes?.connected === false) {
+        toast.error(t("session.githubIssuePicker.error.notConnected"))
+        clearCurrentIssueLoading()
+        return
+      }
+      const comments = commentsRes?.comments ?? []
+
+      const contextText = buildIssueContextText({ repo: issueRes.repo, issue, comments })
+
+      if (mode === "select") {
+        if (onSelect) {
+          onSelect({
+            number: issue.number,
+            title: issue.title,
+            url: issue.url,
+            contextText,
+            author: issue.author
+              ? {
+                  login: issue.author.login,
+                  avatarUrl: issue.author.avatarUrl,
+                }
+              : undefined,
           })
-          return
         }
-        const issue = issueRes.issue
-        if (!issue) {
-          toast.error(t("session.githubIssuePicker.error.issueNotFound"))
-          return
-        }
+        onOpenChange(false)
+        clearCurrentIssueLoading()
+        return
+      }
 
-        const commentsRes = await github.issueComments(projectDirectory, issueNumber, { sourceRepo })
-        if (commentsRes.connected === false) {
-          toast.error(t("session.githubIssuePicker.error.notConnected"))
-          return
-        }
-        const comments = commentsRes.comments ?? []
+      if (!isCurrentIssueRequest()) {
+        return
+      }
 
+      try {
         const sessionTitle = `#${issue.number} ${issue.title}`.trim()
 
         const sessionId = await (async () => {
           if (createInWorktree) {
             const preferred = `issue-${issue.number}-${generateBranchSlug()}`
-            const created = await createWorktreeSessionForNewBranch(projectDirectory, preferred)
+            const created = await createWorktreeSessionForNewBranch(requestedDirectory, preferred)
             if (!created?.id) {
               throw new Error("Failed to create worktree session")
             }
             return created.id
           }
 
-          const session = await sessionActions.createSession(sessionTitle, projectDirectory, null)
+          const session = await sessionActions.createSession(sessionTitle, requestedDirectory, null)
           if (!session?.id) {
             throw new Error("Failed to create session")
           }
@@ -480,7 +496,6 @@ export function GitHubIssuePickerDialog({
           issue_number: String(issue.number),
         })
         const instructionsText = await renderMagicPrompt("github.issue.review.instructions")
-        const contextText = buildIssueContextText({ repo: issueRes.repo, issue, comments })
 
         void axCodeClient
           .sendMessage({
@@ -507,7 +522,7 @@ export function GitHubIssuePickerDialog({
         const message = e instanceof Error ? e.message : String(e)
         toast.error(t("session.githubIssuePicker.toast.startSessionFailed"), { description: message })
       } finally {
-        setStartingIssueNumber(null)
+        clearCurrentIssueLoading()
       }
     },
     [
