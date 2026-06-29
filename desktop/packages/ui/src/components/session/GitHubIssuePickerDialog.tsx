@@ -28,6 +28,7 @@ import type {
   GitHubRepoSelector,
 } from "@/lib/api/types"
 import { useI18n } from "@/lib/i18n"
+import { loadCurrentGitHubIssueList } from "./githubIssueListLoad"
 
 const parseIssueNumber = (value: string): number | null => {
   const trimmed = value.trim()
@@ -104,11 +105,17 @@ export function GitHubIssuePickerDialog({
   const [isLoading, setIsLoading] = React.useState(false)
   const [isLoadingMore, setIsLoadingMore] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const listRequestRef = React.useRef(0)
 
   const refresh = React.useCallback(async () => {
+    const requestId = listRequestRef.current + 1
+    listRequestRef.current = requestId
+
     if (!projectDirectory) {
       setResult(null)
       setError(t("session.githubIssuePicker.error.noActiveProject"))
+      setIsLoading(false)
+      setIsLoadingMore(false)
       return
     }
     if (githubAuthChecked && githubAuthStatus?.connected === false) {
@@ -117,18 +124,26 @@ export function GitHubIssuePickerDialog({
       setHasMore(false)
       setPage(1)
       setError(null)
+      setIsLoading(false)
+      setIsLoadingMore(false)
       return
     }
     if (!github?.issuesList) {
       setResult(null)
       setError(t("session.githubIssuePicker.error.runtimeUnavailable"))
+      setIsLoading(false)
+      setIsLoadingMore(false)
       return
     }
 
     setIsLoading(true)
     setError(null)
-    try {
-      const next = await github.issuesList(projectDirectory, { page: 1 })
+    const loaded = await loadCurrentGitHubIssueList({
+      load: () => github.issuesList(projectDirectory, { page: 1 }),
+      isCurrent: () => listRequestRef.current === requestId,
+    })
+    if (loaded.status === "loaded") {
+      const next = loaded.result
       setResult(next)
       setIssues(next.issues ?? [])
       setPage(next.page ?? 1)
@@ -136,9 +151,10 @@ export function GitHubIssuePickerDialog({
       if (next.connected === false) {
         setError(null)
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
+    } else if (loaded.status === "failed") {
+      setError(loaded.error instanceof Error ? loaded.error.message : String(loaded.error))
+    }
+    if (listRequestRef.current === requestId) {
       setIsLoading(false)
     }
   }, [github, githubAuthChecked, githubAuthStatus, projectDirectory, t])
@@ -149,24 +165,32 @@ export function GitHubIssuePickerDialog({
     if (isLoadingMore || isLoading) return
     if (!hasMore) return
 
+    const requestId = listRequestRef.current + 1
+    listRequestRef.current = requestId
     setIsLoadingMore(true)
-    try {
-      const nextPage = page + 1
-      const next = await github.issuesList(projectDirectory, { page: nextPage })
+    const nextPage = page + 1
+    const loaded = await loadCurrentGitHubIssueList({
+      load: () => github.issuesList(projectDirectory, { page: nextPage }),
+      isCurrent: () => listRequestRef.current === requestId,
+    })
+    if (loaded.status === "loaded") {
+      const next = loaded.result
       setResult(next)
       setIssues((prev) => [...prev, ...(next.issues ?? [])])
       setPage(next.page ?? nextPage)
       setHasMore(Boolean(next.hasMore))
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
+    } else if (loaded.status === "failed") {
+      const message = loaded.error instanceof Error ? loaded.error.message : String(loaded.error)
       toast.error(t("session.githubIssuePicker.toast.loadMoreFailed"), { description: message })
-    } finally {
+    }
+    if (listRequestRef.current === requestId) {
       setIsLoadingMore(false)
     }
   }, [github, hasMore, isLoading, isLoadingMore, page, projectDirectory, t])
 
   React.useEffect(() => {
     if (!open) {
+      listRequestRef.current += 1
       setQuery("")
       setCreateInWorktree(false)
       setStartingIssueNumber(null)
@@ -176,6 +200,7 @@ export function GitHubIssuePickerDialog({
       setPage(1)
       setHasMore(false)
       setIsLoading(false)
+      setIsLoadingMore(false)
       return
     }
     void refresh()
@@ -184,11 +209,14 @@ export function GitHubIssuePickerDialog({
   React.useEffect(() => {
     if (!open) return
     if (githubAuthChecked && githubAuthStatus?.connected === false) {
+      listRequestRef.current += 1
       setResult({ connected: false })
       setIssues([])
       setHasMore(false)
       setPage(1)
       setError(null)
+      setIsLoading(false)
+      setIsLoadingMore(false)
     }
   }, [githubAuthChecked, githubAuthStatus, open])
 
