@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { toast } from "@/components/ui"
 import { Icon } from "@/components/icon/Icon"
 import { isDesktopShell, isTauriShell } from "@/lib/desktop"
 import { API_ENDPOINTS } from "@/lib/http"
@@ -10,6 +11,7 @@ import { updateDesktopSettings } from "@/lib/persistence"
 import { reloadAxCodeConfiguration } from "@/stores/useAgentsStore"
 import { useUIStore } from "@/stores/useUIStore"
 import { useI18n } from "@/lib/i18n"
+import { saveAxCodeCliSettings } from "./axCodeCliSettingsSave"
 
 export const AxCodeCliSettings: React.FC = () => {
   const { t } = useI18n()
@@ -82,12 +84,16 @@ export const AxCodeCliSettings: React.FC = () => {
   const handleSaveAndReload = React.useCallback(async () => {
     setIsSaving(true)
     try {
-      await updateDesktopSettings({ axCodeBinary: value.trim() })
-      await reloadAxCodeConfiguration({
-        message: t("settings.openchamber.axCodeCli.actions.restartingAxCode"),
-        mode: "projects",
-        scopes: ["all"],
+      const result = await saveAxCodeCliSettings({
+        binaryPath: value,
+        reloadMessage: t("settings.openchamber.axCodeCli.actions.restartingAxCode"),
+        updateDesktopSettings,
+        reloadAxCodeConfiguration,
       })
+      if (result.status === "failed") {
+        console.error("Failed to save AX Code CLI settings:", result.error)
+        toast.error(t("settings.openchamber.axCodeCli.error.saveOrReloadFailed"))
+      }
     } finally {
       setIsSaving(false)
     }
