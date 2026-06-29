@@ -49,6 +49,7 @@ const {
 } = require("./desktop-hosts")
 const { isTrustedRendererNavigationUrl, normalizeDevRendererUrl } = require("./renderer-navigation-policy")
 const { normalizeSafeExternalUrl } = require("./external-url")
+const { buildDesktopOpenDialogOptions, resolveDesktopDialogOwnerWindow } = require("./desktop-dialog")
 const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
 
@@ -539,44 +540,10 @@ handleCommand("desktop_get_lan_address", async () => {
   return null
 })
 
-handleCommand("desktop_dialog_open", async (args) => {
+handleCommand("desktop_dialog_open", async (args, event) => {
   const options = args ?? {}
-  const properties = []
-  if (options?.directory === true) {
-    properties.push("openDirectory")
-  } else {
-    properties.push("openFile")
-  }
-  if (options?.multiple === true) {
-    properties.push("multiSelections")
-  }
-
-  const dialogOptions = {
-    properties,
-  }
-
-  if (typeof options?.title === "string" && options.title.trim()) {
-    dialogOptions.title = options.title.trim()
-  }
-  if (typeof options?.defaultPath === "string" && options.defaultPath.trim()) {
-    dialogOptions.defaultPath = options.defaultPath.trim()
-  }
-  if (Array.isArray(options?.filters)) {
-    dialogOptions.filters = options.filters
-      .filter(
-        (filter) =>
-          filter &&
-          typeof filter.name === "string" &&
-          Array.isArray(filter.extensions) &&
-          filter.extensions.every((extension) => typeof extension === "string" && extension.trim().length > 0),
-      )
-      .map((filter) => ({
-        name: filter.name,
-        extensions: filter.extensions.map((extension) => extension.trim()),
-      }))
-  }
-
-  const ownerWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined
+  const dialogOptions = buildDesktopOpenDialogOptions(options)
+  const ownerWindow = resolveDesktopDialogOwnerWindow(BrowserWindow, event, mainWindow)
   const result = ownerWindow
     ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
     : await dialog.showOpenDialog(dialogOptions)
