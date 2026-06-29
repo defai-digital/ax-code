@@ -17,7 +17,8 @@ describe("ContextPanel browser source guards", () => {
   test("desktop browser new-window navigation reuses normalized loading path", async () => {
     const source = await readFile(sourcePath, "utf8")
 
-    expect(source).toContain("loadUrl(detail.url)")
+    expect(source).toContain("const navigation = readDesktopBrowserNewWindowNavigation(event)")
+    expect(source).toContain("loadUrl(navigation.url)")
     expect(source).not.toContain("w.loadURL(detail.url)")
   })
 

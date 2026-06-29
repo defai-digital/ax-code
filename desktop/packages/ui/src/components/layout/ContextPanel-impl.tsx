@@ -17,6 +17,7 @@ import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useInputStore } from "@/sync/input-store"
 import { ContextPanelContent } from "./ContextSidebarTab"
 import { getContextPanelRelativePathLabel } from "./contextPanelPathLabels"
+import { readDesktopBrowserNewWindowNavigation } from "./desktopBrowserEvents"
 import { toast } from "@/components/ui"
 import { Icon } from "@/components/icon/Icon"
 import { AxCodeIcon } from "@/components/ui/AxCodeIcon"
@@ -1791,16 +1792,10 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
     }
 
     const onNewWindow = (event: Event) => {
-      const detail = (event as CustomEvent<{ url: string; disposition: string }>).detail
-      if (
-        detail?.disposition === "new-window" ||
-        detail?.disposition === "foreground-tab" ||
-        detail?.disposition === "background-tab"
-      ) {
+      const navigation = readDesktopBrowserNewWindowNavigation(event)
+      if (navigation) {
         event.preventDefault()
-        if (detail.url) {
-          loadUrl(detail.url)
-        }
+        loadUrl(navigation.url)
       }
     }
 
