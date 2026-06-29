@@ -44,9 +44,14 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
 
     set((s) => ({ pendingByDirectory: { ...s.pendingByDirectory, [key]: true } }))
 
-    const isolation = await axCodeClient.withDirectory(directory ?? null, async () => {
-      return axCodeClient.getIsolation()
-    })
+    let isolation: Awaited<ReturnType<typeof axCodeClient.getIsolation>> | null = null
+    try {
+      isolation = await axCodeClient.withDirectory(directory ?? null, async () => {
+        return axCodeClient.getIsolation()
+      })
+    } catch {
+      isolation = null
+    }
 
     set((s) => {
       const next: Partial<SandboxState> = {
@@ -75,9 +80,14 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
     }))
 
     const mode = enabled ? "workspace-write" : "full-access"
-    const result = await axCodeClient.withDirectory(directory ?? null, async () => {
-      return axCodeClient.setIsolation(mode)
-    })
+    let result: Awaited<ReturnType<typeof axCodeClient.setIsolation>> | null = null
+    try {
+      result = await axCodeClient.withDirectory(directory ?? null, async () => {
+        return axCodeClient.setIsolation(mode)
+      })
+    } catch {
+      result = null
+    }
 
     set((s) => {
       const pendingByDirectory = { ...s.pendingByDirectory, [key]: false }

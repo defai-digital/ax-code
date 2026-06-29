@@ -1,0 +1,66 @@
+import { afterEach, describe, expect, test, vi } from "vitest"
+
+const importStore = async () => {
+  vi.resetModules()
+
+  const getIsolationMock = vi.fn(async () => ({ mode: "workspace-write" }))
+  const setIsolationMock = vi.fn(async (mode: string) => ({ mode }))
+  const toastErrorMock = vi.fn()
+
+  vi.doMock("@/lib/ax-code/client", () => ({
+    axCodeClient: {
+      withDirectory: async (_directory: string | null, run: () => Promise<unknown>) => run(),
+      getIsolation: getIsolationMock,
+      setIsolation: setIsolationMock,
+    },
+  }))
+
+  vi.doMock("@/components/ui", () => ({
+    toast: {
+      error: toastErrorMock,
+    },
+  }))
+
+  const storeModule = await import("./useSandboxStore")
+
+  return {
+    ...storeModule,
+    getIsolationMock,
+    setIsolationMock,
+    toastErrorMock,
+  }
+}
+
+describe("useSandboxStore", () => {
+  afterEach(() => {
+    vi.doUnmock("@/lib/ax-code/client")
+    vi.doUnmock("@/components/ui")
+    vi.resetModules()
+  })
+
+  test("clears pending state when sandbox loading fails", async () => {
+    const { getIsolationMock, useSandboxStore } = await importStore()
+    getIsolationMock.mockRejectedValueOnce(new Error("server unavailable"))
+
+    await useSandboxStore.getState().loadSandbox("/repo")
+
+    expect(useSandboxStore.getState().isPending("/repo")).toBe(false)
+    expect(useSandboxStore.getState().isSandbox("/repo")).toBeUndefined()
+  })
+
+  test("reverts optimistic sandbox toggle when isolation update fails", async () => {
+    const { setIsolationMock, toastErrorMock, useSandboxStore } = await importStore()
+    useSandboxStore.setState({
+      sandboxByDirectory: { "/repo": false },
+      pendingByDirectory: {},
+      loadedByDirectory: { "/repo": true },
+    })
+    setIsolationMock.mockRejectedValueOnce(new Error("server unavailable"))
+
+    await useSandboxStore.getState().setSandbox("/repo", true)
+
+    expect(useSandboxStore.getState().isPending("/repo")).toBe(false)
+    expect(useSandboxStore.getState().isSandbox("/repo")).toBe(false)
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+  })
+})
