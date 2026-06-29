@@ -317,6 +317,8 @@ describe("desktop hosts config", () => {
   test("treats IPv6 loopback renderer URLs on the desktop server port as local senders", () => {
     expect(isLocalDesktopSenderUrl("http://[::1]:3910/settings", { serverPort: 3910 })).toBe(true)
     expect(isLocalDesktopSenderUrl("http://127.5.5.5:3910/settings", { serverPort: 3910 })).toBe(true)
+    expect(isLocalDesktopSenderUrl("http://0.0.0.0:3910/settings", { serverPort: 3910 })).toBe(true)
+    expect(isLocalDesktopSenderUrl("http://[::]:3910/settings", { serverPort: 3910 })).toBe(true)
     expect(isLocalDesktopSenderUrl("http://[::1]:3911/settings", { serverPort: 3910 })).toBe(false)
     expect(isLocalDesktopSenderUrl("https://remote.example.com/settings", { serverPort: 3910 })).toBe(false)
   })

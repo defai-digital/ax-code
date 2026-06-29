@@ -9,6 +9,8 @@ describe("renderer navigation policy", () => {
     expect(normalizeDevRendererUrl(" http://localhost:5180/ ")).toBe("http://localhost:5180")
     expect(normalizeDevRendererUrl("http://127.0.0.2:5180/")).toBe("http://127.0.0.2:5180")
     expect(normalizeDevRendererUrl("http://[::1]:5180/")).toBe("http://[::1]:5180")
+    expect(normalizeDevRendererUrl("http://0.0.0.0:5180/")).toBe("http://0.0.0.0:5180")
+    expect(normalizeDevRendererUrl("http://[::]:5180/")).toBe("http://[::]:5180")
   })
 
   test("rejects non-loopback dev renderer URLs", () => {
@@ -22,6 +24,8 @@ describe("renderer navigation policy", () => {
     expect(isTrustedRendererNavigationUrl("http://localhost:3910/projects", { serverPort: 3910 })).toBe(true)
     expect(isTrustedRendererNavigationUrl("http://127.0.0.2:3910/projects", { serverPort: 3910 })).toBe(true)
     expect(isTrustedRendererNavigationUrl("http://[::1]:3910/projects", { serverPort: 3910 })).toBe(true)
+    expect(isTrustedRendererNavigationUrl("http://0.0.0.0:3910/projects", { serverPort: 3910 })).toBe(true)
+    expect(isTrustedRendererNavigationUrl("http://[::]:3910/projects", { serverPort: 3910 })).toBe(true)
   })
 
   test("rejects remote, spoofed, and wrong-port server URLs", () => {

@@ -42,6 +42,18 @@ describe("resolveServerRestartReloadUrl", () => {
         newPort: 3920,
       }),
     ).toBe("http://127.0.0.2:3920/projects?tab=chat#bottom")
+    expect(
+      resolveServerRestartReloadUrl("http://0.0.0.0:3910/projects?tab=chat#bottom", {
+        oldPort: 3910,
+        newPort: 3920,
+      }),
+    ).toBe("http://0.0.0.0:3920/projects?tab=chat#bottom")
+    expect(
+      resolveServerRestartReloadUrl("http://[::]:3910/projects?tab=chat#bottom", {
+        oldPort: 3910,
+        newPort: 3920,
+      }),
+    ).toBe("http://[::]:3920/projects?tab=chat#bottom")
   })
 
   test("does not rewrite remote hosts or unrelated localhost ports", () => {
@@ -71,26 +83,32 @@ describe("reloadLocalRendererWindowsAfterServerRestart", () => {
     const main = mockWindow("http://localhost:3910/")
     const miniChat = mockWindow("http://localhost:3910/mini-chat.html?mode=draft")
     const loopbackAlias = mockWindow("http://127.0.0.2:3910/session/alias")
+    const unspecifiedAddress = mockWindow("http://0.0.0.0:3910/session/host")
     const remote = mockWindow("https://remote.example.com/app")
     const destroyed = mockWindow("http://localhost:3910/session/old", { destroyed: true })
 
-    const result = await reloadLocalRendererWindowsAfterServerRestart([main, miniChat, loopbackAlias, remote, destroyed], {
-      oldPort: 3910,
-      newPort: 3920,
-    })
+    const result = await reloadLocalRendererWindowsAfterServerRestart(
+      [main, miniChat, loopbackAlias, unspecifiedAddress, remote, destroyed],
+      {
+        oldPort: 3910,
+        newPort: 3920,
+      },
+    )
 
     expect(result).toEqual({
-      attempted: 3,
+      attempted: 4,
       failed: 0,
       urls: [
         "http://localhost:3920/",
         "http://localhost:3920/mini-chat.html?mode=draft",
         "http://127.0.0.2:3920/session/alias",
+        "http://0.0.0.0:3920/session/host",
       ],
     })
     expect(main.loadedUrls).toEqual(["http://localhost:3920/"])
     expect(miniChat.loadedUrls).toEqual(["http://localhost:3920/mini-chat.html?mode=draft"])
     expect(loopbackAlias.loadedUrls).toEqual(["http://127.0.0.2:3920/session/alias"])
+    expect(unspecifiedAddress.loadedUrls).toEqual(["http://0.0.0.0:3920/session/host"])
     expect(remote.loadedUrls).toEqual([])
     expect(destroyed.loadedUrls).toEqual([])
   })
