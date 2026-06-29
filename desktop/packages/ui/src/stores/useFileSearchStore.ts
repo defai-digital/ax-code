@@ -41,7 +41,24 @@ const buildCacheKey = (
 const cacheKeyMatchesDirectory = (cacheKey: string, directory: string) => {
   try {
     const value: unknown = JSON.parse(cacheKey)
-    return Array.isArray(value) && value[0] === directory
+    if (!Array.isArray(value) || typeof value[0] !== "string") {
+      return false
+    }
+
+    const normalize = (input: string) => {
+      const normalized = input.trim().replace(/\\/g, "/")
+      if (normalized.length > 1) {
+        return normalized.replace(/\/+$/, "")
+      }
+      return normalized
+    }
+
+    const cachedDirectory = normalize(value[0])
+    const invalidatedDirectory = normalize(directory)
+    if (invalidatedDirectory === "/") {
+      return cachedDirectory === "/" || cachedDirectory.startsWith("/")
+    }
+    return cachedDirectory === invalidatedDirectory || cachedDirectory.startsWith(`${invalidatedDirectory}/`)
   } catch {
     return false
   }

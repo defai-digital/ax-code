@@ -121,6 +121,42 @@ describe("useFileSearchStore", () => {
     expect(await secondPromise).toEqual([{ path: "second.ts" }])
   })
 
+  test("invalidates descendant directory search cache entries", async () => {
+    const searchPromise = useFileSearchStore.getState().searchFiles("/project/src", "foo")
+    searchRequests[0].resolve([{ path: "/project/src/stale.ts" }])
+    await searchPromise
+
+    expect(Object.keys(useFileSearchStore.getState().cache)).toHaveLength(1)
+
+    useFileSearchStore.getState().invalidateDirectory("/project")
+
+    expect(useFileSearchStore.getState().cache).toEqual({})
+    expect(useFileSearchStore.getState().cacheKeys).toEqual([])
+  })
+
+  test("does not invalidate sibling directories with the same prefix", async () => {
+    const searchPromise = useFileSearchStore.getState().searchFiles("/project-other/src", "foo")
+    searchRequests[0].resolve([{ path: "/project-other/src/fresh.ts" }])
+    await searchPromise
+
+    useFileSearchStore.getState().invalidateDirectory("/project")
+
+    const cacheEntries = Object.values(useFileSearchStore.getState().cache)
+    expect(cacheEntries).toHaveLength(1)
+    expect(cacheEntries[0]?.files).toEqual([{ path: "/project-other/src/fresh.ts" }])
+  })
+
+  test("invalidates absolute descendant cache entries from the filesystem root", async () => {
+    const searchPromise = useFileSearchStore.getState().searchFiles("/project/src", "foo")
+    searchRequests[0].resolve([{ path: "/project/src/stale.ts" }])
+    await searchPromise
+
+    useFileSearchStore.getState().invalidateDirectory("/")
+
+    expect(useFileSearchStore.getState().cache).toEqual({})
+    expect(useFileSearchStore.getState().cacheKeys).toEqual([])
+  })
+
   test("does not probe native file search in Electron", async () => {
     isTauriShellValue = true
     isElectronShellValue = true
