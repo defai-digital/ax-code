@@ -3,6 +3,7 @@
   "version": "6.7.19",
   "description": "AX Code Desktop local web runtime.",
   "private": false,
+  "license": "MIT",
   "type": "module",
   "main": "./server/index.js",
   "types": "./server/index.d.ts",

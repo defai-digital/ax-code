@@ -63,13 +63,17 @@ If Windows SmartScreen warns about an unknown publisher, click **More info → R
 
 ## Before You Start
 
-Install and sign in to the AX Code CLI first:
+AX Code Desktop needs the local AX Code CLI/runtime for coding sessions. The root
+README shows the paired install commands for the CLI and Desktop app. Before
+starting a session, verify the CLI is available:
 
 ```bash
 ax-code --version
 ```
 
-If `ax-code` is not found, install AX Code before launching AX Code Desktop. The desktop app manages the local UI runtime but needs the AX Code CLI available for coding sessions.
+If `ax-code` is not found, install the AX Code CLI from the root README. The
+desktop app manages the local UI runtime, but coding sessions still use the AX
+Code CLI/server integration.
 
 ## Platform Capabilities
 

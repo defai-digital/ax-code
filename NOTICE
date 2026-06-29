@@ -30,7 +30,6 @@ MIT License
 The majority of dependencies used by AX Code are licensed under the MIT License,
 including but not limited to:
 
-- effect - Copyright Effect-TS Contributors
 - solid-js - Copyright Ryan Carniato
 - hono - Copyright Yusuke Wada
 - @modelcontextprotocol/sdk - Copyright Anthropic

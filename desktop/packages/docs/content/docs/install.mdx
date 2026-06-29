@@ -15,9 +15,18 @@ release artifacts are published from the main
 [AX Code GitHub releases page](https://github.com/defai-digital/ax-code/releases).
 The Homebrew cask tap remains separate because it is a distribution index.
 
-## Prerequisite
+## Runtime Requirement
 
-Install [AX Code](https://ax-code.ai) first — AX Code Desktop runs on top of it.
+AX Code Desktop needs the local AX Code CLI/runtime for coding sessions. The
+root [AX Code README](https://github.com/defai-digital/ax-code#readme) shows
+the paired CLI and Desktop install commands. After installation, verify the CLI:
+
+```bash
+ax-code --version
+```
+
+If `ax-code` is not found, install the AX Code CLI before starting Desktop
+coding sessions.
 
 ## macOS
 
