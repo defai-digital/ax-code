@@ -1,6 +1,6 @@
 "use strict"
 
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1"])
+const { isLoopbackDesktopHostname } = require("./desktop-hosts")
 
 function resolveServerRestartReloadUrl(rawUrl, { oldPort, newPort } = {}) {
   const previousPort = Number(oldPort)
@@ -11,7 +11,7 @@ function resolveServerRestartReloadUrl(rawUrl, { oldPort, newPort } = {}) {
   try {
     const url = new URL(typeof rawUrl === "string" ? rawUrl : "")
     if (url.protocol !== "http:") return null
-    if (!LOOPBACK_HOSTS.has(url.hostname)) return null
+    if (!isLoopbackDesktopHostname(url.hostname)) return null
     if (url.port !== String(previousPort)) return null
 
     url.port = String(nextPort)
