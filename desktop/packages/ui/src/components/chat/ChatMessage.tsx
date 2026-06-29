@@ -34,6 +34,7 @@ import {
   areRelevantTurnGroupingContextsEqual,
 } from "./message/renderCompare"
 import { LazyToolOutputDialog } from "./message/LazyToolOutputDialog"
+import { clearCopyResetTimer, replaceCopyResetTimer } from "./copyResetTimer"
 
 const USER_BUBBLE_STYLE: React.CSSProperties = {
   backgroundColor: "var(--chat-user-message-bg)",
@@ -192,6 +193,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null)
   const [copiedMessage, setCopiedMessage] = React.useState(false)
+  const copiedCodeResetTimerRef = React.useRef<number | null>(null)
+  const copiedMessageResetTimerRef = React.useRef<number | null>(null)
   const [expandedTools, setExpandedTools] = React.useState<Set<string>>(() => readExpandedToolsCache(message.info.id))
   const [collapsedTools, setCollapsedTools] = React.useState<Set<string>>(() =>
     readCollapsedToolsCache(message.info.id),
@@ -206,6 +209,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     setExpandedTools(readExpandedToolsCache(message.info.id))
     setCollapsedTools(readCollapsedToolsCache(message.info.id))
   }, [message.info.id])
+
+  React.useEffect(() => {
+    return () => {
+      copiedCodeResetTimerRef.current = clearCopyResetTimer(copiedCodeResetTimerRef.current)
+      copiedMessageResetTimerRef.current = clearCopyResetTimer(copiedMessageResetTimerRef.current)
+    }
+  }, [])
 
   const messageRole = React.useMemo(() => deriveMessageRole(message.info), [message.info])
   const isUser = messageRole.isUser
@@ -657,7 +667,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return
       }
       setCopiedCode(code)
-      setTimeout(() => setCopiedCode(null), 2000)
+      copiedCodeResetTimerRef.current = replaceCopyResetTimer(copiedCodeResetTimerRef.current, () => {
+        setCopiedCode(null)
+        copiedCodeResetTimerRef.current = null
+      })
     })
   }, [])
 
@@ -771,7 +784,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }
     if (isUser) {
       setCopiedMessage(true)
-      setTimeout(() => setCopiedMessage(false), 2000)
+      copiedMessageResetTimerRef.current = replaceCopyResetTimer(copiedMessageResetTimerRef.current, () => {
+        setCopiedMessage(false)
+        copiedMessageResetTimerRef.current = null
+      })
     }
     return true
   }, [isUser, messageTextContent])
