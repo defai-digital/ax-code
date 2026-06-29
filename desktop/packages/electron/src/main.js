@@ -776,6 +776,7 @@ const sshManager = new ElectronSshManager({
   settingsFilePath: settingsFilePath(),
   appVersion: app.getVersion(),
   emit: (event, detail) => emitToAllWindows(event, detail),
+  mutateSettings: mutateSettingsRoot,
 })
 
 // ── Host list (renderer-side switcher; persisted to settings) ──────────────
@@ -892,9 +893,20 @@ const maybeShowNativeNotification = (rawInput) => {
   })
 
   activeNotifications.add(notification)
+  // Fallback cleanup: macOS suppresses lifecycle events for notifications
+  // sent from hidden apps, which would leave stale references in the set.
+  // Use a generous timeout (5 min) so users still have time to click.
+  const RELEASE_TIMEOUT_MS = 5 * 60 * 1000
+  let released = false
   const release = () => {
+    if (released) return
+    released = true
+    clearTimeout(fallbackTimer)
     activeNotifications.delete(notification)
   }
+  const fallbackTimer = setTimeout(release, RELEASE_TIMEOUT_MS)
+  // Don't keep the process alive just for this timer.
+  if (typeof fallbackTimer.unref === "function") fallbackTimer.unref()
 
   notification.on("click", () => {
     focusForegroundWindow()
