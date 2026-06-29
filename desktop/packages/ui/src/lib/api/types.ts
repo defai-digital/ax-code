@@ -617,10 +617,14 @@ export interface FileWriteOptions {
   allowOutsideWorkspace?: boolean
 }
 
+export interface DirectoryWriteOptions {
+  allowOutsideWorkspace?: boolean
+}
+
 export interface FilesAPI {
   listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult>
   search(payload: FileSearchQuery): Promise<FileSearchResult[]>
-  createDirectory(path: string): Promise<{ success: boolean; path: string }>
+  createDirectory(path: string, options?: DirectoryWriteOptions): Promise<{ success: boolean; path: string }>
   statFile?(
     path: string,
     options?: FileReadOptions,

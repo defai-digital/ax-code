@@ -1,5 +1,6 @@
 import type {
   DirectoryListResult,
+  DirectoryWriteOptions,
   FileReadOptions,
   FileWriteOptions,
   FileSearchQuery,
@@ -97,12 +98,18 @@ export const createWebFilesAPI = (): FilesAPI => ({
     }))
   },
 
-  async createDirectory(path: string): Promise<{ success: boolean; path: string }> {
+  async createDirectory(
+    path: string,
+    options?: DirectoryWriteOptions,
+  ): Promise<{ success: boolean; path: string }> {
     const target = normalizePath(path)
     const response = await fetch(API_ENDPOINTS.files.fsMkdir, {
       method: HTTP_DEFAULTS.method.post,
       headers: HTTP_DEFAULTS.headers.contentTypeJson,
-      body: JSON.stringify({ path: target }),
+      body: JSON.stringify({
+        path: target,
+        ...(options?.allowOutsideWorkspace ? { allowOutsideWorkspace: true } : {}),
+      }),
     })
 
     if (!response.ok) {

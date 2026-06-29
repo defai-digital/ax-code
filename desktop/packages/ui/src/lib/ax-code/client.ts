@@ -1680,7 +1680,7 @@ class AxCodeService {
     const desktopFiles = getDesktopFilesApi()
     if (desktopFiles?.createDirectory) {
       try {
-        return await desktopFiles.createDirectory(dirPath)
+        return await desktopFiles.createDirectory(dirPath, options)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         throw new Error(message || "Failed to create directory")

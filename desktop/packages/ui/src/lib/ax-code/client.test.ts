@@ -1,9 +1,13 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 
+import type { RuntimeAPIs } from "../api/types"
 import { axCodeClient, formatPromptSendError } from "./client"
 
 afterEach(() => {
   axCodeClient.setDirectory(undefined)
+  if (typeof window !== "undefined") {
+    delete (window as typeof window & { __AX_CODE_DESKTOP_RUNTIME_APIS__?: unknown }).__AX_CODE_DESKTOP_RUNTIME_APIS__
+  }
 })
 
 describe("formatPromptSendError", () => {
@@ -88,5 +92,26 @@ describe("axCodeClient directory normalization", () => {
     } finally {
       globalThis.fetch = originalFetch
     }
+  })
+})
+
+describe("axCodeClient desktop file operations", () => {
+  test("passes outside-workspace authorization options to the desktop files API", async () => {
+    const createDirectory = vi.fn(async () => ({ success: true, path: "/tmp/approved/project" }))
+    const runtimeWindow = window as typeof window & { __AX_CODE_DESKTOP_RUNTIME_APIS__?: RuntimeAPIs }
+    runtimeWindow.__AX_CODE_DESKTOP_RUNTIME_APIS__ = {
+      runtime: { platform: "desktop", isDesktop: true },
+      files: {
+        listDirectory: vi.fn(),
+        search: vi.fn(),
+        createDirectory,
+      },
+    } as unknown as RuntimeAPIs
+
+    await expect(
+      axCodeClient.createDirectory("/tmp/approved/project", { allowOutsideWorkspace: true }),
+    ).resolves.toEqual({ success: true, path: "/tmp/approved/project" })
+
+    expect(createDirectory).toHaveBeenCalledWith("/tmp/approved/project", { allowOutsideWorkspace: true })
   })
 })
