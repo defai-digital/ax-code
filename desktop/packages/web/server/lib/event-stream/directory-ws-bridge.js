@@ -20,6 +20,7 @@ export function acceptDirectoryMessageStreamWsConnection({
   let upstreamConnected = false
   let streamReady = false
   let reader = null
+  let closed = false
 
   const cleanup = () => {
     if (!controller.signal.aborted) {
@@ -27,6 +28,26 @@ export function acceptDirectoryMessageStreamWsConnection({
     }
     reader?.stop()
     wsClients.delete(socket)
+  }
+
+  const cleanupAfterClose = () => {
+    if (closed) {
+      return
+    }
+    closed = true
+    clearInterval(pingInterval)
+    clearInterval(heartbeatInterval)
+    upstreamConnected = false
+    cleanup()
+  }
+
+  const closeAndCleanup = (code = 1011, reason = "Message stream client unavailable") => {
+    cleanupAfterClose()
+    try {
+      if (socket.readyState === 1 || socket.readyState === 0) {
+        socket.close(code, reason)
+      }
+    } catch {}
   }
 
   const pingInterval = setInterval(() => {
@@ -47,21 +68,21 @@ export function acceptDirectoryMessageStreamWsConnection({
       return
     }
 
-    sendMessageStreamWsEvent(
+    const sent = sendMessageStreamWsEvent(
       socket,
       { type: "openchamber:heartbeat", timestamp: Date.now() },
       {
         directory: requestedDirectory || "global",
       },
     )
+    if (!sent) {
+      closeAndCleanup()
+    }
   }, heartbeatIntervalMs)
   if (typeof heartbeatInterval.unref === "function") heartbeatInterval.unref()
 
   socket.on("close", () => {
-    clearInterval(pingInterval)
-    clearInterval(heartbeatInterval)
-    upstreamConnected = false
-    cleanup()
+    cleanupAfterClose()
   })
 
   socket.on("error", (error) => {
@@ -75,13 +96,20 @@ export function acceptDirectoryMessageStreamWsConnection({
     const forwardEvent = ({ envelope, payload }) => {
       const directory = requestedDirectory || envelope?.directory || "global"
 
-      sendMessageStreamWsEvent(socket, payload, {
+      const sent = sendMessageStreamWsEvent(socket, payload, {
         directory,
         eventId: typeof envelope?.eventId === "string" && envelope.eventId.length > 0 ? envelope.eventId : undefined,
       })
+      if (!sent) {
+        closeAndCleanup()
+        return
+      }
 
       processForwardedEventPayload(payload, (syntheticPayload) => {
-        sendMessageStreamWsEvent(socket, syntheticPayload, { directory: "global" })
+        const syntheticSent = sendMessageStreamWsEvent(socket, syntheticPayload, { directory: "global" })
+        if (!syntheticSent) {
+          closeAndCleanup()
+        }
       })
     }
 
@@ -125,11 +153,16 @@ export function acceptDirectoryMessageStreamWsConnection({
         getHeaders: getAxCodeAuthHeaders,
         onConnect() {
           if (!streamReady) {
-            sendMessageStreamWsFrame(socket, {
+            const readySent = sendMessageStreamWsFrame(socket, {
               type: "ready",
               scope: "directory",
             })
+            if (!readySent) {
+              closeAndCleanup()
+              return
+            }
             streamReady = true
+            wsClients.add(socket)
           }
 
           upstreamConnected = true

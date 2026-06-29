@@ -292,6 +292,59 @@ describe("message stream websocket runtime", () => {
     await runtime.close()
   })
 
+  it("registers ready directory websocket clients for synthetic UI broadcasts", async () => {
+    const server = new EventEmitter()
+    const wsClients = new Set()
+
+    const runtime = createMessageStreamWsRuntime({
+      server,
+      uiAuthController: null,
+      isRequestOriginAllowed: async () => true,
+      rejectWebSocketUpgrade() {
+        throw new Error("upgrade should not be used in this test")
+      },
+      buildAxCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getAxCodeAuthHeaders: () => ({}),
+      processForwardedEventPayload() {},
+      wsClients,
+      heartbeatIntervalMs: 50,
+      upstreamReconnectDelayMs: 0,
+      fetchImpl: async (_url, options) =>
+        createSseResponse({
+          signal: options.signal,
+          holdOpen: true,
+          blocks: ['id: evt-1\ndata: {"type":"server.connected","properties":{}}\n\n'],
+        }),
+    })
+
+    const socket = new FakeSocket()
+    runtime.wsServer.emit("connection", socket, { url: "/api/event/ws?directory=/tmp/project" })
+
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(wsClients.has(socket)).toBe(true)
+
+    const broadcast = createGlobalUiEventBroadcaster({
+      sseClients: new Set(),
+      wsClients,
+      writeSseEvent() {
+        throw new Error("should not be called")
+      },
+    })
+
+    broadcast({ type: "openchamber:notification", id: "n1" }, { directory: "/tmp/project" })
+
+    expect(socket.sent).toContainEqual({
+      type: "event",
+      payload: { type: "openchamber:notification", id: "n1" },
+      directory: "/tmp/project",
+    })
+
+    socket.close()
+    expect(wsClients.has(socket)).toBe(false)
+
+    await runtime.close()
+  })
+
   it("closes the websocket and triggers health check on initial upstream unavailable response", async () => {
     const server = new EventEmitter()
     const wsClients = new Set()
