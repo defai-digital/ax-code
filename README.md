@@ -211,6 +211,16 @@ ranking, GLM-4.7-Flash placement, and memory-based recommendations.
 
 Report bugs, feature requests, and questions through [GitHub Issues](https://github.com/defai-digital/ax-code/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for the current contribution policy and [Discord](https://discord.gg/cTavsMgu) for community discussion.
 
+## Provenance
+
+AX Code is maintained by [DEFAI Private Limited](https://github.com/defai-digital). The repository includes code with upstream history from these MIT-licensed projects:
+
+- [OpenCode](https://github.com/anomalyco/opencode): the AX Code CLI, runtime, session, provider, and tool foundations began as a DEFAI-maintained product built on the OpenCode codebase. See [NOTICE](NOTICE) for the root runtime attribution.
+- [OpenChamber](https://github.com/btriapitsyn/openchamber): AX Code Desktop includes code derived from OpenChamber, adapted for the AX Code Desktop product, packaging, settings, and runtime model. See [desktop/NOTICE](desktop/NOTICE) for the Desktop attribution.
+- [ax-cli](https://github.com/defai-digital/ax-cli): selected AX/CLI capabilities were ported from DEFAI's earlier ax-cli project. See [NOTICE](NOTICE) for the root attribution.
+
+These notices preserve license provenance and upstream credit. They do not mean the upstream OpenCode, OpenChamber, or ax-cli projects maintain AX Code, AX Code Desktop, or current DEFAI modifications.
+
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). Portions derived from [OpenCode](https://github.com/anomalyco/opencode), Copyright (c) 2025 opencode. See [NOTICE](NOTICE) for project history and upstream attribution.
+[MIT](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). See [NOTICE](NOTICE), [desktop/NOTICE](desktop/NOTICE), and the provenance section above for upstream attribution.
