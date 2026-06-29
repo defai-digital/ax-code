@@ -64,7 +64,7 @@ import { useOpenInAppsStore } from "@/stores/useOpenInAppsStore"
 import { eventMatchesShortcut, getEffectiveShortcutCombo } from "@/lib/shortcuts"
 import { useI18n } from "@/lib/i18n"
 import { FileStatusDot } from "@/components/files/FileStatusDot"
-import { getFileStatusForPath } from "@/components/files/fileStatus"
+import { getFileStatusForPath, getFolderBadgeForPath } from "@/components/files/fileStatus"
 import { API_ENDPOINTS } from "@/lib/http"
 import type { FileNode, FileStatus } from "@/components/files/types"
 import {
@@ -2128,19 +2128,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
 
   const getFolderBadge = React.useCallback(
     (dirPath: string): { modified: number; added: number } | null => {
-      if (!gitStatus?.files) return null
-      const relativeDir = dirPath.startsWith(root + "/") ? dirPath.slice(root.length + 1) : dirPath
-      const prefix = relativeDir ? `${relativeDir}/` : ""
-
-      let modified = 0,
-        added = 0
-      for (const f of gitStatus.files) {
-        if (f.path.startsWith(prefix)) {
-          if (f.index === "M" || f.working_dir === "M") modified++
-          if (f.index === "A" || f.working_dir === "?") added++
-        }
-      }
-      return modified + added > 0 ? { modified, added } : null
+      return getFolderBadgeForPath(dirPath, { root, gitStatus })
     },
     [gitStatus, root],
   )
