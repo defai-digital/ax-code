@@ -49,6 +49,7 @@ const {
   resolveStoredClientTokenForUrl,
   sanitizeClientTokenForStorage,
 } = require("./desktop-hosts")
+const { isTrustedRendererNavigationUrl, normalizeDevRendererUrl } = require("./renderer-navigation-policy")
 const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
 
@@ -83,17 +84,7 @@ function getWebDistPath() {
 
 function getDevRendererUrl() {
   if (app.isPackaged) return null
-  const raw = process.env.AX_CODE_DESKTOP_ELECTRON_RENDERER_URL
-  if (!raw) return null
-  try {
-    const parsed = new URL(raw)
-    if (parsed.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(parsed.hostname)) {
-      return null
-    }
-    return parsed.toString().replace(/\/$/, "")
-  } catch {
-    return null
-  }
+  return normalizeDevRendererUrl(process.env.AX_CODE_DESKTOP_ELECTRON_RENDERER_URL)
 }
 
 // ── State ───────────────────────────────────────────────────────────────────
@@ -332,20 +323,7 @@ function stopServer() {
 
 // ── Window ──────────────────────────────────────────────────────────────────
 function isTrustedRendererNavigation(url) {
-  let parsed
-  try {
-    parsed = new URL(url)
-  } catch {
-    return false
-  }
-
-  const devRendererUrl = getDevRendererUrl()
-  const isServerUrl =
-    parsed.protocol === "http:" &&
-    ["localhost", "127.0.0.1"].includes(parsed.hostname) &&
-    parsed.port === String(serverPort)
-  const isDevRendererUrl = devRendererUrl && parsed.origin === new URL(devRendererUrl).origin
-  return Boolean(isServerUrl || isDevRendererUrl)
+  return isTrustedRendererNavigationUrl(url, { serverPort, devRendererUrl: getDevRendererUrl() || "" })
 }
 
 // Only allow safe protocols for shell.openExternal. Electron's docs explicitly

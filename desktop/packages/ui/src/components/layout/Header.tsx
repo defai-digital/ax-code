@@ -58,6 +58,7 @@ import { DesktopHostSwitcherDialog } from "@/components/desktop/DesktopHostSwitc
 import { OpenInAppButton } from "@/components/desktop/OpenInAppButton"
 import { forceKillTerminal } from "@/lib/terminalApi"
 import { useTerminalStore } from "@/stores/useTerminalStore"
+import { isLoopbackHostname } from "@/lib/loopback"
 import { ProjectActionsButton } from "@/components/layout/ProjectActionsButton"
 import { SessionSwitcherDropdown } from "@/components/session/SessionSwitcherDropdown"
 import { canUseLocalElectronDesktopIPC, invokeDesktop, isDesktopShell, startDesktopWindowDrag } from "@/lib/desktop"
@@ -1686,8 +1687,7 @@ export const Header: React.FC = () => {
   const showDevShutdown = React.useMemo(() => {
     if (typeof window === "undefined") return false
     if (isDesktopApp) return false
-    const host = window.location.hostname
-    return host === "localhost" || host === "127.0.0.1" || host === "::1"
+    return isLoopbackHostname(window.location.hostname)
   }, [isDesktopApp])
 
   const handleDevShutdown = React.useCallback(async () => {

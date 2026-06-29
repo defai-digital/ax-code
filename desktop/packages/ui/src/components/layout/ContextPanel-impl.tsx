@@ -22,6 +22,7 @@ import { Icon } from "@/components/icon/Icon"
 import { AxCodeIcon } from "@/components/ui/AxCodeIcon"
 import { lazyWithChunkRecovery } from "@/lib/chunkLoadRecovery"
 import { invokeDesktopCommand } from "@/lib/desktopNative"
+import { isLoopbackHostname } from "@/lib/loopback"
 import {
   type PreviewElementMetadata,
   isPreviewElementMetadata,
@@ -463,13 +464,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
     parsedUrl = null
   }
 
-  const isLoopback = parsedUrl
-    ? parsedUrl.hostname === "localhost" ||
-      parsedUrl.hostname === "127.0.0.1" ||
-      parsedUrl.hostname === "::1" ||
-      parsedUrl.hostname === "[::1]" ||
-      parsedUrl.hostname === "0.0.0.0"
-    : false
+  const isLoopback = parsedUrl ? isLoopbackHostname(parsedUrl.hostname) : false
 
   const normalizedUrl = parsedUrl
     ? parsedUrl.hostname === "0.0.0.0"

@@ -29,6 +29,7 @@ import {
 import { projectScopedEventMatchesProject } from "@/lib/projectScopedEvents"
 import { detectDevServerCommand, readPackageJsonScripts } from "@/lib/detectDevServer"
 import { connectTerminalStream } from "@/lib/terminalApi"
+import { isLoopbackHostname } from "@/lib/loopback"
 
 type UrlWatchEntry = {
   lastSeenChunkId: number | null
@@ -116,8 +117,7 @@ const extractBestUrl = (value: string): string | null => {
   if (portCandidates.length > 0) {
     const scoreCandidate = (entry: { raw: string; parsed: URL }): number => {
       const { parsed } = entry
-      const host = parsed.hostname.toLowerCase()
-      const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1"
+      const isLocalHost = isLoopbackHostname(parsed.hostname)
       const normalizedPath = parsed.pathname || "/"
       const pathSegments = normalizedPath.split("/").filter(Boolean).length
       const hasRootPath = normalizedPath === "/" || normalizedPath === ""
