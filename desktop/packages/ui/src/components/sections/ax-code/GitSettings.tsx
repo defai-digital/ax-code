@@ -6,8 +6,8 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { useUIStore } from "@/stores/useUIStore"
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { setFilesViewShowGitignored, useFilesViewShowGitignored } from "@/lib/filesViewShowGitignored"
-import { API_ENDPOINTS } from "@/lib/http"
 import { useI18n } from "@/lib/i18n"
+import { loadGitSettings } from "./gitSettingsLoad"
 
 export const GitSettings: React.FC = () => {
   const { t } = useI18n()
@@ -26,53 +26,20 @@ export const GitSettings: React.FC = () => {
     [t],
   )
 
-  type GitSettingsPayload = {
-    gitmojiEnabled?: boolean
-    gitChangesViewMode?: "flat" | "tree"
-  }
-
   // Load current settings
   React.useEffect(() => {
+    const abort = new AbortController()
+    let active = true
+
     const loadSettings = async () => {
       try {
-        let data: GitSettingsPayload | null = null
-
-        // 1. Runtime settings API (VSCode)
-        if (!data) {
-          const runtimeSettings = getRegisteredRuntimeAPIs()?.settings
-          if (runtimeSettings) {
-            try {
-              const result = await runtimeSettings.load()
-              const settings = result?.settings
-              if (settings) {
-                data = {
-                  gitmojiEnabled:
-                    typeof (settings as Record<string, unknown>).gitmojiEnabled === "boolean"
-                      ? ((settings as Record<string, unknown>).gitmojiEnabled as boolean)
-                      : undefined,
-                  gitChangesViewMode:
-                    (settings as Record<string, unknown>).gitChangesViewMode === "flat" ||
-                    (settings as Record<string, unknown>).gitChangesViewMode === "tree"
-                      ? ((settings as Record<string, unknown>).gitChangesViewMode as "flat" | "tree")
-                      : undefined,
-                }
-              }
-            } catch {
-              // fall through
-            }
-          }
-        }
-
-        // 2. Fetch API (Web/server)
-        if (!data) {
-          const response = await fetch(API_ENDPOINTS.config.settings, {
-            method: "GET",
-            headers: { Accept: "application/json" },
-          })
-          if (response.ok) {
-            data = await response.json()
-          }
-        }
+        const runtimeSettings = getRegisteredRuntimeAPIs()?.settings
+        const data = await loadGitSettings({
+          fetchImpl: fetch,
+          loadRuntimeSettings: runtimeSettings?.load,
+          signal: abort.signal,
+        })
+        if (!active) return
 
         if (data) {
           if (typeof data.gitmojiEnabled === "boolean") {
@@ -83,12 +50,20 @@ export const GitSettings: React.FC = () => {
           }
         }
       } catch (error) {
-        console.warn("Failed to load git settings:", error)
+        if (active && (error as Error).name !== "AbortError") {
+          console.warn("Failed to load git settings:", error)
+        }
       } finally {
-        setIsLoading(false)
+        if (active) {
+          setIsLoading(false)
+        }
       }
     }
     loadSettings()
+    return () => {
+      active = false
+      abort.abort()
+    }
   }, [setGitChangesViewMode, setSettingsGitmojiEnabled])
 
   const handleGitmojiChange = React.useCallback(
