@@ -47,7 +47,13 @@ export function acceptDirectoryMessageStreamWsConnection({
       return
     }
 
-    sendMessageStreamWsEvent(socket, { type: "openchamber:heartbeat", timestamp: Date.now() }, { directory: "global" })
+    sendMessageStreamWsEvent(
+      socket,
+      { type: "openchamber:heartbeat", timestamp: Date.now() },
+      {
+        directory: requestedDirectory || "global",
+      },
+    )
   }, heartbeatIntervalMs)
   if (typeof heartbeatInterval.unref === "function") heartbeatInterval.unref()
 

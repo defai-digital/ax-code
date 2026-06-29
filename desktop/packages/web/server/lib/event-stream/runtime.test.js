@@ -254,6 +254,44 @@ describe("message stream websocket runtime", () => {
     await runtime.close()
   })
 
+  it("labels directory websocket heartbeats with the requested directory", async () => {
+    const server = new EventEmitter()
+    const wsClients = new Set()
+
+    const runtime = createMessageStreamWsRuntime({
+      server,
+      uiAuthController: null,
+      isRequestOriginAllowed: async () => true,
+      rejectWebSocketUpgrade() {
+        throw new Error("upgrade should not be used in this test")
+      },
+      buildAxCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getAxCodeAuthHeaders: () => ({}),
+      processForwardedEventPayload() {},
+      wsClients,
+      heartbeatIntervalMs: 10,
+      upstreamReconnectDelayMs: 0,
+      fetchImpl: async (_url, options) =>
+        createSseResponse({
+          signal: options.signal,
+          holdOpen: true,
+          blocks: ['id: evt-1\ndata: {"type":"server.connected","properties":{}}\n\n'],
+        }),
+    })
+
+    const socket = new FakeSocket()
+    runtime.wsServer.emit("connection", socket, { url: "/api/event/ws?directory=/tmp/project" })
+
+    await new Promise((resolve) => setTimeout(resolve, 25))
+
+    const heartbeats = socket.sent.filter((frame) => frame.payload?.type === "openchamber:heartbeat")
+    expect(heartbeats.length).toBeGreaterThan(0)
+    expect(heartbeats.every((frame) => frame.directory === "/tmp/project")).toBe(true)
+
+    socket.close()
+    await runtime.close()
+  })
+
   it("closes the websocket and triggers health check on initial upstream unavailable response", async () => {
     const server = new EventEmitter()
     const wsClients = new Set()
