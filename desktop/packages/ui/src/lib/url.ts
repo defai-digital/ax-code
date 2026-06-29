@@ -28,13 +28,18 @@ const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"])
 
 const hasUrlUserInfo = (parsed: URL): boolean => parsed.username.length > 0 || parsed.password.length > 0
 
-export const isSafeExternalUrl = (url: string): boolean => {
+export const getSafeExternalUrl = (url: string): string | null => {
   const parsed = parseUrlSafely(url.trim())
   if (!parsed) {
-    return false
+    return null
   }
-  return SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol) && !hasUrlUserInfo(parsed)
+  if (!SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol) || hasUrlUserInfo(parsed)) {
+    return null
+  }
+  return parsed.toString()
 }
+
+export const isSafeExternalUrl = (url: string): boolean => getSafeExternalUrl(url) !== null
 
 export const getExternalFaviconUrl = (url: string): string | null => {
   const parsed = parseUrlSafely(url.trim())
@@ -157,16 +162,10 @@ export const openExternalUrl = async (url: string): Promise<boolean> => {
     return false
   }
 
-  const parsed = parseUrlSafely(target)
-  if (!parsed) {
+  const normalizedTarget = getSafeExternalUrl(target)
+  if (!normalizedTarget) {
     return false
   }
-
-  if (!SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol) || hasUrlUserInfo(parsed)) {
-    return false
-  }
-
-  const normalizedTarget = parsed.toString()
 
   const tauri = getTauriGlobal()
   if (tauri?.core?.invoke) {

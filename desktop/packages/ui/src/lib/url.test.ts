@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import {
   extractLoopbackUrls,
   getExternalFaviconUrl,
+  getSafeExternalUrl,
   isLoopbackHttpUrl,
   isSafeExternalUrl,
   normalizeLoopbackPreviewUrl,
@@ -40,6 +41,14 @@ describe("loopback URL helpers", () => {
 })
 
 describe("safe external URL helpers", () => {
+  test("normalizes safe external URLs and rejects unsafe targets", () => {
+    expect(getSafeExternalUrl(" https://example.com/docs?q=1 ")).toBe("https://example.com/docs?q=1")
+    expect(getSafeExternalUrl("mailto:support@example.com")).toBe("mailto:support@example.com")
+    expect(getSafeExternalUrl("tel:+15551234567")).toBe("tel:+15551234567")
+    expect(getSafeExternalUrl("javascript:alert(1)")).toBeNull()
+    expect(getSafeExternalUrl("https://user:pass@example.com/docs")).toBeNull()
+  })
+
   test("allows browser and OS-safe external protocols", () => {
     expect(isSafeExternalUrl("https://example.com")).toBe(true)
     expect(isSafeExternalUrl("mailto:support@example.com")).toBe(true)

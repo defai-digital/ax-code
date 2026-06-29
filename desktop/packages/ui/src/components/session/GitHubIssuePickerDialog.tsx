@@ -20,6 +20,7 @@ import { parseModelIdentifier } from "@/lib/modelIdentifier"
 import { useDeviceInfo } from "@/lib/device"
 import { createWorktreeSessionForNewBranch } from "@/lib/worktreeSessionCreator"
 import { generateBranchSlug } from "@/lib/git/branchNameGenerator"
+import { getSafeExternalUrl, openExternalUrl } from "@/lib/url"
 import type {
   GitHubIssue,
   GitHubIssueComment,
@@ -231,6 +232,7 @@ export function GitHubIssuePickerDialog({
 
   const connected = githubAuthChecked ? result?.connected !== false : true
   const repoUrl = result?.repo?.url ?? null
+  const safeRepoUrl = repoUrl ? getSafeExternalUrl(repoUrl) : null
 
   const openGitHubSettings = React.useCallback(() => {
     setSettingsPage("github")
@@ -620,46 +622,52 @@ export function GitHubIssuePickerDialog({
           </div>
         ) : null}
 
-        {filtered.map((issue) => (
-          <div
-            key={`${issue.sourceRepo?.owner ?? ""}-${issue.sourceRepo?.repo ?? ""}-${issue.number}`}
-            className={cn(
-              "group flex items-center gap-2 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer",
-              startingIssueNumber === issue.number && "bg-interactive-selection/30",
-            )}
-            onClick={() => void startSession(issue.number, issue.sourceRepo)}
-          >
-            <span className="typography-meta text-muted-foreground w-12 text-right flex-shrink-0">#{issue.number}</span>
-            <div className="flex-1 min-w-0 ml-0.5">
-              <p className="typography-small text-foreground truncate">{issue.title}</p>
-              {issue.sourceRepo?.source === "upstream" ? (
-                <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info mt-0.5 inline-block">
-                  {issue.sourceRepo.owner}/{issue.sourceRepo.repo}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="flex-shrink-0 h-5 flex items-center mr-2">
-              {startingIssueNumber === issue.number ? (
-                <Icon name="loader-4" className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : (
-                <a
-                  href={issue.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={cn(
-                    "h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground transition-colors",
-                    alwaysShowActions ? "flex" : "hidden group-hover:flex",
-                  )}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={t("session.githubIssuePicker.actions.openInGitHubAria")}
-                >
-                  <Icon name="external-link" className="h-4 w-4" />
-                </a>
+        {filtered.map((issue) => {
+          const safeIssueUrl = getSafeExternalUrl(issue.url)
+          return (
+            <div
+              key={`${issue.sourceRepo?.owner ?? ""}-${issue.sourceRepo?.repo ?? ""}-${issue.number}`}
+              className={cn(
+                "group flex items-center gap-2 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer",
+                startingIssueNumber === issue.number && "bg-interactive-selection/30",
               )}
+              onClick={() => void startSession(issue.number, issue.sourceRepo)}
+            >
+              <span className="typography-meta text-muted-foreground w-12 text-right flex-shrink-0">
+                #{issue.number}
+              </span>
+              <div className="flex-1 min-w-0 ml-0.5">
+                <p className="typography-small text-foreground truncate">{issue.title}</p>
+                {issue.sourceRepo?.source === "upstream" ? (
+                  <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info mt-0.5 inline-block">
+                    {issue.sourceRepo.owner}/{issue.sourceRepo.repo}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex-shrink-0 h-5 flex items-center mr-2">
+                {startingIssueNumber === issue.number ? (
+                  <Icon name="loader-4" className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : safeIssueUrl ? (
+                  <button
+                    type="button"
+                    className={cn(
+                      "h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      alwaysShowActions ? "flex" : "hidden group-hover:flex",
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void openExternalUrl(safeIssueUrl)
+                    }}
+                    aria-label={t("session.githubIssuePicker.actions.openInGitHubAria")}
+                  >
+                    <Icon name="external-link" className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {hasMore && connected && projectDirectory && github ? (
           <div className="py-2 flex justify-center">
@@ -730,12 +738,10 @@ export function GitHubIssuePickerDialog({
             </div>
             <div className="hidden sm:block sm:flex-1" />
             <div className="flex items-center gap-2">
-              {repoUrl ? (
-                <Button variant="outline" size="sm" asChild>
-                  <a href={repoUrl} target="_blank" rel="noopener noreferrer">
-                    <Icon name="external-link" className="size-4" />
-                    {t("session.githubIssuePicker.actions.openRepo")}
-                  </a>
+              {safeRepoUrl ? (
+                <Button variant="outline" size="sm" onClick={() => void openExternalUrl(safeRepoUrl)}>
+                  <Icon name="external-link" className="size-4" />
+                  {t("session.githubIssuePicker.actions.openRepo")}
                 </Button>
               ) : null}
               <Button

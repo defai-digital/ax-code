@@ -20,6 +20,7 @@ import type {
   GitHubRepoSelector,
 } from "@/lib/api/types"
 import { useI18n } from "@/lib/i18n"
+import { getSafeExternalUrl, openExternalUrl } from "@/lib/url"
 import { loadCurrentGitHubPrAttach } from "./githubPrAttachLoad"
 import { loadCurrentGitHubPrList } from "./githubPrListLoad"
 
@@ -413,51 +414,55 @@ export function GitHubPrPickerDialog({
           </div>
         ) : null}
 
-        {filtered.map((pr) => (
-          <div
-            key={`${pr.sourceRepo?.owner ?? ""}-${pr.sourceRepo?.repo ?? ""}-${pr.number}`}
-            className={cn(
-              "group flex items-center gap-2 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer",
-              loadingPrNumber === pr.number && "bg-interactive-selection/30",
-            )}
-            onClick={() => void attachPr(pr.number, pr.sourceRepo)}
-          >
-            <div className="flex-1 min-w-0 ml-0.5">
-              <p className="typography-small text-foreground truncate">
-                <span className="text-muted-foreground mr-1">#{pr.number}</span>
-                {pr.title}
-              </p>
-              {pr.sourceRepo?.source === "upstream" ? (
-                <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info">
-                  {pr.sourceRepo.owner}/{pr.sourceRepo.repo}
-                </span>
-              ) : null}
-              <p className="typography-meta text-muted-foreground truncate">
-                {pr.head} → {pr.base}
-              </p>
-            </div>
-
-            <div className="flex-shrink-0 h-5 flex items-center mr-2">
-              {loadingPrNumber === pr.number ? (
-                <Icon name="loader-4" className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : (
-                <a
-                  href={pr.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={cn(
-                    "h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground transition-colors",
-                    alwaysShowActions ? "flex" : "hidden group-hover:flex",
-                  )}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={t("session.githubPrPicker.actions.openInGitHubAria")}
-                >
-                  <Icon name="external-link" className="h-4 w-4" />
-                </a>
+        {filtered.map((pr) => {
+          const safePrUrl = getSafeExternalUrl(pr.url)
+          return (
+            <div
+              key={`${pr.sourceRepo?.owner ?? ""}-${pr.sourceRepo?.repo ?? ""}-${pr.number}`}
+              className={cn(
+                "group flex items-center gap-2 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer",
+                loadingPrNumber === pr.number && "bg-interactive-selection/30",
               )}
+              onClick={() => void attachPr(pr.number, pr.sourceRepo)}
+            >
+              <div className="flex-1 min-w-0 ml-0.5">
+                <p className="typography-small text-foreground truncate">
+                  <span className="text-muted-foreground mr-1">#{pr.number}</span>
+                  {pr.title}
+                </p>
+                {pr.sourceRepo?.source === "upstream" ? (
+                  <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info">
+                    {pr.sourceRepo.owner}/{pr.sourceRepo.repo}
+                  </span>
+                ) : null}
+                <p className="typography-meta text-muted-foreground truncate">
+                  {pr.head} → {pr.base}
+                </p>
+              </div>
+
+              <div className="flex-shrink-0 h-5 flex items-center mr-2">
+                {loadingPrNumber === pr.number ? (
+                  <Icon name="loader-4" className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : safePrUrl ? (
+                  <button
+                    type="button"
+                    className={cn(
+                      "h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      alwaysShowActions ? "flex" : "hidden group-hover:flex",
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void openExternalUrl(safePrUrl)
+                    }}
+                    aria-label={t("session.githubPrPicker.actions.openInGitHubAria")}
+                  >
+                    <Icon name="external-link" className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {hasMore && connected && projectDirectory && github ? (
           <div className="py-2 flex justify-center">
