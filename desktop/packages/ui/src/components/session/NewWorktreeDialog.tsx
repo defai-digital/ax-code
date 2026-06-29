@@ -33,6 +33,7 @@ import { rankBranchesForQuery } from "@/lib/worktrees/branchSearch"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import { useGitBranches, useGitStore, useGitLoadingBranches } from "@/stores/useGitStore"
 import { GitHubIntegrationDialog } from "./GitHubIntegrationDialog"
+import { resolveGitHubSourceRepoOption } from "./githubSourceRepoOption"
 import { SortableTabsStrip } from "@/components/ui/sortable-tabs-strip"
 import { MobileOverlayPanel } from "@/components/ui/MobileOverlayPanel"
 import { Icon } from "@/components/icon/Icon"
@@ -551,12 +552,13 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
           return
         }
 
-        const issueRes = await github.issueGet(projectDirectory, args.issue.number)
+        const sourceRepo = resolveGitHubSourceRepoOption(args.issue)
+        const issueRes = await github.issueGet(projectDirectory, args.issue.number, { sourceRepo })
         if (issueRes.connected === false || !issueRes.repo || !issueRes.issue) {
           throw new Error("Failed to load issue context")
         }
 
-        const commentsRes = await github.issueComments(projectDirectory, args.issue.number)
+        const commentsRes = await github.issueComments(projectDirectory, args.issue.number, { sourceRepo })
         if (commentsRes.connected === false) {
           throw new Error("Failed to load issue comments")
         }
@@ -593,9 +595,11 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
           return
         }
 
+        const sourceRepo = resolveGitHubSourceRepoOption(args.pr)
         const prContext = await github.prContext(projectDirectory, args.pr.number, {
           includeDiff: args.includeDiff,
           includeCheckDetails: false,
+          sourceRepo,
         })
         if (prContext.connected === false || !prContext.repo || !prContext.pr) {
           throw new Error("Failed to load PR context")
