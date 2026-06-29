@@ -165,7 +165,7 @@ export const settingsDict = {
     "If enabled, AX Code Desktop daemon is left running remotely when you disconnect.",
   "settings.remoteInstances.page.field.bindHost": "Bind host",
   "settings.remoteInstances.page.field.bindHostHint":
-    "Network interface for the main local URL. Use 127.0.0.1/localhost for local-only access.",
+    "Network interface for the main local URL. Use 127.0.0.1/localhost or another 127.x.x.x alias for local-only access.",
   "settings.remoteInstances.page.field.preferredLocalPort": "Preferred local port",
   "settings.remoteInstances.page.field.preferredLocalPortHint":
     "Preferred local port for the main AX Code Desktop tunnel. Leave empty for auto-select.",

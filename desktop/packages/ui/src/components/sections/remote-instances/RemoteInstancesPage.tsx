@@ -18,6 +18,7 @@ import { useI18n, type I18nKey } from "@/lib/i18n"
 import {
   desktopSshLogsClear,
   desktopSshLogs,
+  normalizeDesktopSshBindHost,
   type DesktopSshInstance,
   type DesktopSshPortForward,
   type DesktopSshPortForwardType,
@@ -209,10 +210,7 @@ const normalizeForSave = (instance: DesktopSshInstance): DesktopSshInstance => {
     connectionTimeoutSec: Math.max(5, Math.min(240, Math.round(instance.connectionTimeoutSec || 60))),
     localForward: {
       ...instance.localForward,
-      bindHost:
-        instance.localForward.bindHost === "localhost" || instance.localForward.bindHost === "0.0.0.0"
-          ? instance.localForward.bindHost
-          : "127.0.0.1",
+      bindHost: normalizeDesktopSshBindHost(instance.localForward.bindHost),
       preferredLocalPort:
         typeof instance.localForward.preferredLocalPort === "number"
           ? Math.max(1, Math.min(65535, Math.round(instance.localForward.preferredLocalPort)))
@@ -1091,31 +1089,26 @@ export const RemoteInstancesPage: React.FC = () => {
                 hint={t("settings.remoteInstances.page.field.bindHostHint")}
               />
             </div>
-            <Select
+            <Input
+              className="h-7 w-40 font-mono"
               value={draft.localForward.bindHost}
-              onValueChange={(value) => {
-                if (value === "0.0.0.0") {
-                  const allow = window.confirm(t("settings.remoteInstances.page.confirm.bindAllInterfaces"))
-                  if (!allow) return
-                }
+              onChange={(event) =>
                 updateDraft((current) => ({
                   ...current,
                   localForward: {
                     ...current.localForward,
-                    bindHost: value === "localhost" || value === "0.0.0.0" ? value : "127.0.0.1",
+                    bindHost: event.target.value,
                   },
                 }))
-              }}
-            >
-              <SelectTrigger className="h-7 w-fit min-w-[140px]">
-                <SelectValue placeholder={t("settings.remoteInstances.page.field.selectBindHostPlaceholder")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="127.0.0.1">127.0.0.1</SelectItem>
-                <SelectItem value="localhost">localhost</SelectItem>
-                <SelectItem value="0.0.0.0">0.0.0.0</SelectItem>
-              </SelectContent>
-            </Select>
+              }
+              placeholder="127.0.0.1"
+              list="desktop-ssh-bind-host-options"
+            />
+            <datalist id="desktop-ssh-bind-host-options">
+              <option value="127.0.0.1" />
+              <option value="localhost" />
+              <option value="0.0.0.0" />
+            </datalist>
           </div>
 
           <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { createDesktopSshInstance, desktopSshInstancesGet } from "./desktopSsh"
+import { createDesktopSshInstance, desktopSshInstancesGet, normalizeDesktopSshBindHost } from "./desktopSsh"
 
 describe("desktopSsh", () => {
   afterEach(() => {
@@ -10,6 +10,15 @@ describe("desktopSsh", () => {
     const instance = createDesktopSshInstance("remote-1", "ssh example.com")
 
     expect(instance.remoteOpenchamber.installMethod).toBe("npm")
+  })
+
+  test("preserves valid loopback bind aliases and rejects unsafe bind hosts", () => {
+    expect(normalizeDesktopSshBindHost("127.0.0.2")).toBe("127.0.0.2")
+    expect(normalizeDesktopSshBindHost("127.10.20.30")).toBe("127.10.20.30")
+    expect(normalizeDesktopSshBindHost("localhost")).toBe("localhost")
+    expect(normalizeDesktopSshBindHost("0.0.0.0")).toBe("0.0.0.0")
+    expect(normalizeDesktopSshBindHost("127.0.0.999")).toBe("127.0.0.1")
+    expect(normalizeDesktopSshBindHost("192.168.1.10")).toBe("127.0.0.1")
   })
 
   test("normalizes legacy bun install method to npm", async () => {
@@ -67,6 +76,34 @@ describe("desktopSsh", () => {
             destination: "alice@example.com",
             args: ["-p", "2222", "alice@example.com"],
           },
+        }),
+      ],
+    })
+  })
+
+  test("preserves a stored main tunnel loopback bind alias", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      instances: [
+        {
+          id: "remote-1",
+          sshCommand: "ssh example.com",
+          localForward: {
+            bindHost: "127.10.20.30",
+          },
+        },
+      ],
+    })
+    ;(window as unknown as { __TAURI__?: unknown }).__TAURI__ = {
+      core: { invoke },
+    }
+
+    await expect(desktopSshInstancesGet()).resolves.toEqual({
+      instances: [
+        expect.objectContaining({
+          id: "remote-1",
+          localForward: expect.objectContaining({
+            bindHost: "127.10.20.30",
+          }),
         }),
       ],
     })

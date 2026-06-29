@@ -42,7 +42,7 @@ export type DesktopSshInstance = {
   }
   localForward: {
     preferredLocalPort?: number
-    bindHost: "127.0.0.1" | "localhost" | "0.0.0.0"
+    bindHost: string
   }
   auth: {
     sshPassword?: DesktopSshStoredSecret
@@ -137,6 +137,19 @@ const parseForwardType = (value: unknown): DesktopSshPortForwardType => {
   return value === "remote" || value === "dynamic" ? value : "local"
 }
 
+export const normalizeDesktopSshBindHost = (value: unknown): string => {
+  const trimmed = typeof value === "string" ? value.trim() : ""
+  if (!trimmed) return "127.0.0.1"
+  if (trimmed === "localhost" || trimmed === "0.0.0.0") return trimmed
+
+  const loopback = trimmed.match(/^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (loopback && loopback.slice(1).every((part) => Number(part) >= 0 && Number(part) <= 255)) {
+    return trimmed
+  }
+
+  return "127.0.0.1"
+}
+
 const parseForward = (value: unknown): DesktopSshPortForward | null => {
   if (!isRecord(value)) return null
   const id = readString(value, "id")
@@ -201,8 +214,7 @@ const parseInstance = (value: unknown): DesktopSshInstance | null => {
       : "npm"
 
   const bindHostRaw = readString(localRaw, "bindHost") || readString(localRaw, "bind_host") || "127.0.0.1"
-  const bindHost: "127.0.0.1" | "localhost" | "0.0.0.0" =
-    bindHostRaw === "localhost" || bindHostRaw === "0.0.0.0" ? bindHostRaw : "127.0.0.1"
+  const bindHost = normalizeDesktopSshBindHost(bindHostRaw)
 
   const forwardsRaw = Array.isArray(value.portForwards)
     ? value.portForwards
