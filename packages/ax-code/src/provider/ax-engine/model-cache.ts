@@ -24,7 +24,7 @@ const log = Log.create({ service: "ax-engine-model-cache" })
 
 // The Hugging Face repo that backs a model+quantization, used to locate the
 // shared snapshot the engine downloaded.
-function hfRepoFor(modelID: AxEngineModelID, quantization: AxEngineQuantization): string | undefined {
+export function hfRepoFor(modelID: AxEngineModelID, quantization: AxEngineQuantization): string | undefined {
   const model = AX_ENGINE_MODEL_DEFINITIONS[modelID]
   return model.quantizations[quantization as keyof typeof model.quantizations]?.hfRepo
 }
@@ -176,9 +176,7 @@ export async function getDiskStatus(options: AxEngineModelOptions = {}): Promise
   const modelID = normalizeModelID(options.modelID)
   const quantization = normalizeQuantization(options.quantization, modelID)
   const target =
-    typeof options.downloadDir === "string" && options.downloadDir.trim()
-      ? options.downloadDir.trim()
-      : HfCache.root()
+    typeof options.downloadDir === "string" && options.downloadDir.trim() ? options.downloadDir.trim() : HfCache.root()
   await fs.mkdir(target, { recursive: true })
   const result = await Process.text(["df", "-Pk", target], { nothrow: true })
   const freeBytes = result.code === 0 ? parseDfPkAvailableBytes(result.text) : undefined
@@ -209,6 +207,15 @@ async function readPrepareState(): Promise<{ state?: AxEnginePrepareState; error
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return {}
     return { error }
   }
+}
+
+export async function clearPreparedStateForPath(target: string): Promise<boolean> {
+  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 10 * 60_000 })
+  const current = await readPrepareState()
+  if (!current.state || current.error) return false
+  if (current.state.path !== target && !Filesystem.contains(target, current.state.path)) return false
+  await fs.rm(AxEnginePaths.prepareState, { force: true })
+  return true
 }
 
 async function writePrepareState(state: AxEnginePrepareState) {

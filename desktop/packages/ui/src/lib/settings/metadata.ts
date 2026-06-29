@@ -2,6 +2,7 @@ import type { SidebarSection } from "@/constants/sidebar"
 
 export type SettingsPageSlug =
   | "home"
+  | "models"
   | "projects"
   | "remote-instances"
   | "providers"
@@ -56,6 +57,13 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     kind: "single",
     description: "Search and jump to common pages.",
     keywords: ["search", "settings"],
+  },
+  {
+    slug: "models",
+    title: "Models",
+    group: "ax-code",
+    kind: "single",
+    keywords: ["models", "local models", "ax-engine", "download", "mtp", "mlx", "qwen", "gemma", "glm"],
   },
   {
     slug: "projects",

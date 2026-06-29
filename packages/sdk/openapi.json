@@ -6362,7 +6362,7 @@
             "name": "parentSessionID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^ses.*"
             }
           },
           {
@@ -6480,7 +6480,7 @@
                 "properties": {
                   "parentSessionID": {
                     "type": "string",
-                    "minLength": 1
+                    "pattern": "^ses.*"
                   },
                   "sourceTemplateID": {
                     "type": "string",
@@ -7321,7 +7321,7 @@
             "name": "parentSessionID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^ses.*"
             }
           },
           {
@@ -8187,7 +8187,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           }
@@ -9127,7 +9127,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           },
@@ -9136,7 +9136,7 @@
             "name": "artifactID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfa.*"
             }
           },
           {
@@ -9144,7 +9144,7 @@
             "name": "phaseID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfp.*"
             }
           },
           {
@@ -9152,7 +9152,7 @@
             "name": "childID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfc.*"
             }
           },
           {
@@ -9232,7 +9232,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           }
@@ -9636,7 +9636,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           }
@@ -10120,7 +10120,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           }
@@ -10972,7 +10972,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           }
@@ -11915,6 +11915,9 @@
                   },
                   "enqueueChildren": {
                     "type": "boolean"
+                  },
+                  "autoStartChildren": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11945,7 +11948,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           }
@@ -12895,7 +12898,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           }
@@ -13845,7 +13848,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           }
@@ -14795,7 +14798,7 @@
             "name": "runID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfr.*"
             },
             "required": true
           },
@@ -14804,7 +14807,7 @@
             "name": "phaseID",
             "schema": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^wfp.*"
             }
           }
         ],
@@ -21959,7 +21962,7 @@
                   },
                   "parentSessionID": {
                     "type": "string",
-                    "minLength": 1
+                    "pattern": "^ses.*"
                   },
                   "modelPolicy": {
                     "type": "object",
@@ -22046,6 +22049,9 @@
                         "type": "boolean"
                       },
                       "enqueueChildren": {
+                        "type": "boolean"
+                      },
+                      "autoStartChildren": {
                         "type": "boolean"
                       }
                     }
@@ -26106,6 +26112,13 @@
                           "npm": {
                             "type": "string"
                           },
+                          "options": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
                           "models": {
                             "type": "object",
                             "propertyNames": {
@@ -26297,6 +26310,250 @@
         ]
       }
     },
+    "/provider/ax-engine/models": {
+      "get": {
+        "operationId": "provider.axEngine.models",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List ax-engine local models",
+        "description": "List supported AX Engine local MTP models with host/model readiness and local cache status.",
+        "responses": {
+          "200": {
+            "description": "ax-engine model catalog",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk\"\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.models({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/provider/ax-engine/models/{modelID}/download": {
+      "post": {
+        "operationId": "provider.axEngine.model.download",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "modelID",
+            "required": true
+          }
+        ],
+        "summary": "Download ax-engine local model",
+        "description": "Start a server-side download job for a supported AX Engine local MTP model.",
+        "responses": {
+          "200": {
+            "description": "Download job",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "default": {},
+                "type": "object",
+                "properties": {
+                  "quantization": {
+                    "type": "string",
+                    "enum": ["mlx6bit"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk\"\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.model.download({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/provider/ax-engine/downloads": {
+      "get": {
+        "operationId": "provider.axEngine.downloads",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List ax-engine model download jobs",
+        "responses": {
+          "200": {
+            "description": "Download jobs",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk\"\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.downloads({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/provider/ax-engine/downloads/{jobID}/cancel": {
+      "post": {
+        "operationId": "provider.axEngine.download.cancel",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "jobID",
+            "required": true
+          }
+        ],
+        "summary": "Cancel ax-engine model download job",
+        "responses": {
+          "200": {
+            "description": "Cancelled job",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk\"\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.download.cancel({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/provider/ax-engine/models/{modelID}": {
+      "delete": {
+        "operationId": "provider.axEngine.model.delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "modelID",
+            "required": true
+          }
+        ],
+        "summary": "Delete ax-engine local model",
+        "description": "Delete the server-resolved local copy for a supported AX Engine model.",
+        "responses": {
+          "200": {
+            "description": "Delete result",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "default": {},
+                "type": "object",
+                "properties": {
+                  "quantization": {
+                    "type": "string",
+                    "enum": ["mlx6bit"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk\"\n\nconst client = createOpencodeClient()\nawait client.provider.axEngine.model.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/provider/ax-engine/status": {
       "get": {
         "operationId": "provider.axEngine.status",
@@ -26377,7 +26634,14 @@
                   },
                   "modelID": {
                     "type": "string",
-                    "enum": ["qwen3-coder-next", "qwen3.6-35b-a3b", "gemma-4-12b", "gemma-4-31b", "glm-4.7-flash"]
+                    "enum": [
+                      "qwen3.6-27b-6bit",
+                      "qwen3.6-35b-a3b",
+                      "gemma-4-12b",
+                      "gemma-4-26b",
+                      "gemma-4-31b",
+                      "glm-4.7-flash"
+                    ]
                   },
                   "quantization": {
                     "type": "string",
@@ -26450,7 +26714,14 @@
                   },
                   "modelID": {
                     "type": "string",
-                    "enum": ["qwen3-coder-next", "qwen3.6-35b-a3b", "gemma-4-12b", "gemma-4-31b", "glm-4.7-flash"]
+                    "enum": [
+                      "qwen3.6-27b-6bit",
+                      "qwen3.6-35b-a3b",
+                      "gemma-4-12b",
+                      "gemma-4-26b",
+                      "gemma-4-31b",
+                      "glm-4.7-flash"
+                    ]
                   },
                   "quantization": {
                     "type": "string",
@@ -29438,6 +29709,124 @@
           }
         ]
       }
+    },
+    "/debug-engine/correlated-diagnostics": {
+      "get": {
+        "operationId": "debugEngine.correlatedDiagnostics",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Get correlated diagnostics for a file",
+        "description": "Return DRE cross-file root-cause correlations for a given file. Each entry maps an LSP error to a possible root-cause location in another file, with a confidence level and a symbol chain linking the error back to its origin. Returns an empty array when the DRE flag is off or no correlations are cached.",
+        "responses": {
+          "200": {
+            "description": "Correlated diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "file": {
+                        "type": "string"
+                      },
+                      "line": {
+                        "type": "number"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": "number"
+                      },
+                      "rootCauseFile": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "rootCauseSymbol": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "rootCauseChain": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "confidence": {
+                        "type": "string",
+                        "enum": ["high", "medium", "low"]
+                      },
+                      "lspTimestamp": {
+                        "type": "number"
+                      },
+                      "lspServerIDs": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "graphQueryIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "graphIndexedAt": {
+                        "type": "number"
+                      },
+                      "graphCompleteness": {
+                        "type": "string",
+                        "enum": ["full", "partial", "lsp-only"]
+                      }
+                    },
+                    "required": [
+                      "file",
+                      "line",
+                      "message",
+                      "severity",
+                      "rootCauseFile",
+                      "rootCauseSymbol",
+                      "rootCauseChain",
+                      "confidence",
+                      "lspTimestamp",
+                      "lspServerIDs",
+                      "graphQueryIds",
+                      "graphIndexedAt",
+                      "graphCompleteness"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpencodeClient } from \"@ax-code/sdk\"\n\nconst client = createOpencodeClient()\nawait client.debugEngine.correlatedDiagnostics({\n  ...\n})"
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -31602,6 +31991,112 @@
               }
             },
             "required": ["file"]
+          }
+        },
+        "required": ["type", "properties"]
+      },
+      "Event.debug-engine.correlated-diagnostics": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "debug-engine.correlated-diagnostics"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "correlations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "type": "string"
+                    },
+                    "line": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "severity": {
+                      "type": "number"
+                    },
+                    "rootCauseFile": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rootCauseSymbol": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rootCauseChain": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "confidence": {
+                      "type": "string",
+                      "enum": ["high", "medium", "low"]
+                    },
+                    "lspTimestamp": {
+                      "type": "number"
+                    },
+                    "lspServerIDs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "graphQueryIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "graphIndexedAt": {
+                      "type": "number"
+                    },
+                    "graphCompleteness": {
+                      "type": "string",
+                      "enum": ["full", "partial", "lsp-only"]
+                    }
+                  },
+                  "required": [
+                    "file",
+                    "line",
+                    "message",
+                    "severity",
+                    "rootCauseFile",
+                    "rootCauseSymbol",
+                    "rootCauseChain",
+                    "confidence",
+                    "lspTimestamp",
+                    "lspServerIDs",
+                    "graphQueryIds",
+                    "graphIndexedAt",
+                    "graphCompleteness"
+                  ]
+                }
+              }
+            },
+            "required": ["file", "correlations"]
           }
         },
         "required": ["type", "properties"]
@@ -34696,6 +35191,9 @@
             "$ref": "#/components/schemas/Event.file.edited"
           },
           {
+            "$ref": "#/components/schemas/Event.debug-engine.correlated-diagnostics"
+          },
+          {
             "$ref": "#/components/schemas/Event.mcp.tools.changed"
           },
           {
@@ -34875,7 +35373,7 @@
             "description": "Port to listen on",
             "type": "integer",
             "exclusiveMinimum": 0,
-            "maximum": 9007199254740991
+            "maximum": 65535
           },
           "hostname": {
             "description": "Hostname to listen on",
@@ -35102,6 +35600,47 @@
           "npm": {
             "type": "string"
           },
+          "options": {
+            "type": "object",
+            "properties": {
+              "apiKey": {
+                "type": "string"
+              },
+              "baseURL": {
+                "type": "string"
+              },
+              "enterpriseUrl": {
+                "description": "GitHub Enterprise URL for copilot authentication",
+                "type": "string"
+              },
+              "setCacheKey": {
+                "description": "Enable promptCacheKey for this provider (default false)",
+                "type": "boolean"
+              },
+              "timeout": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991,
+                    "description": "Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout."
+                  },
+                  {
+                    "type": "boolean",
+                    "const": false,
+                    "description": "Disable timeout for this provider entirely."
+                  }
+                ]
+              },
+              "chunkTimeout": {
+                "description": "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "additionalProperties": {}
+          },
           "models": {
             "type": "object",
             "propertyNames": {
@@ -35265,47 +35804,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "options": {
-            "type": "object",
-            "properties": {
-              "apiKey": {
-                "type": "string"
-              },
-              "baseURL": {
-                "type": "string"
-              },
-              "enterpriseUrl": {
-                "description": "GitHub Enterprise URL for copilot authentication",
-                "type": "string"
-              },
-              "setCacheKey": {
-                "description": "Enable promptCacheKey for this provider (default false)",
-                "type": "boolean"
-              },
-              "timeout": {
-                "anyOf": [
-                  {
-                    "type": "integer",
-                    "exclusiveMinimum": 0,
-                    "maximum": 9007199254740991,
-                    "description": "Timeout in milliseconds for requests to this provider. Default is 300000 (5 minutes). Set to false to disable timeout."
-                  },
-                  {
-                    "type": "boolean",
-                    "const": false,
-                    "description": "Disable timeout for this provider entirely."
-                  }
-                ]
-              },
-              "chunkTimeout": {
-                "description": "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.",
-                "type": "integer",
-                "exclusiveMinimum": 0,
-                "maximum": 9007199254740991
-              }
-            },
-            "additionalProperties": {}
           }
         },
         "additionalProperties": false

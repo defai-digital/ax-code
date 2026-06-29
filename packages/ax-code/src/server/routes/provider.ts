@@ -7,15 +7,27 @@ import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
 import { mapValues } from "remeda"
-import { errors } from "../error"
+import { errors, invalidRequest } from "../error"
 import { lazy } from "../../util/lazy"
 import { PROVIDER_ID_PARAM, withProviderID } from "./route-params"
 import { redactProviderInfo } from "./config"
 import { Log } from "../../util/log"
-import { AX_ENGINE_MODEL_IDS, getAxEngineStatus, prepareAxEngine, stopServer } from "@/provider/ax-engine"
+import {
+  AX_ENGINE_MODEL_IDS,
+  deleteAxEngineModel,
+  getAxEngineModelsCatalog,
+  getAxEngineStatus,
+  isAxEngineModelID,
+  prepareAxEngine,
+  startDownloadJob,
+  cancelDownloadJob,
+  listDownloadJobs,
+  stopServer,
+} from "@/provider/ax-engine"
 import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
+import { toErrorMessage } from "@/util/error-message"
 
 const log = Log.create({ service: "server" })
 
@@ -77,6 +89,27 @@ export const AxEngineStartBody = z
   .optional()
   .default({})
 
+export const AxEngineModelActionBody = z
+  .object({
+    quantization: z.enum(["mlx6bit"]).optional(),
+  })
+  .optional()
+  .default({})
+
+function axEngineModelIDParam(c: { req: { param: (name: string) => string } }) {
+  const modelID = c.req.param("modelID")
+  return isAxEngineModelID(modelID) ? modelID : undefined
+}
+
+function isAxEngineDomainError(error: unknown) {
+  return /^AX_ENGINE_[A-Z_]+:/.test(toErrorMessage(error))
+}
+
+function axEngineInvalidRequest(c: Parameters<typeof invalidRequest>[0], error: unknown) {
+  if (!isAxEngineDomainError(error)) throw error
+  return invalidRequest(c, { message: toErrorMessage(error), details: { resource: "axEngine" } })
+}
+
 export const ProviderRoutes = lazy(() =>
   new Hono()
     .get(
@@ -131,6 +164,131 @@ export const ProviderRoutes = lazy(() =>
           default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0]?.id ?? ""),
           connected: Object.keys(connected),
         })
+      },
+    )
+    .get(
+      "/ax-engine/models",
+      describeRoute({
+        summary: "List ax-engine local models",
+        description: "List supported AX Engine local MTP models with host/model readiness and local cache status.",
+        operationId: "provider.axEngine.models",
+        responses: {
+          200: {
+            description: "ax-engine model catalog",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(await getAxEngineModelsCatalog())
+      },
+    )
+    .post(
+      "/ax-engine/models/:modelID/download",
+      describeRoute({
+        summary: "Download ax-engine local model",
+        description: "Start a server-side download job for a supported AX Engine local MTP model.",
+        operationId: "provider.axEngine.model.download",
+        responses: {
+          200: {
+            description: "Download job",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", AxEngineModelActionBody),
+      async (c) => {
+        const modelID = axEngineModelIDParam(c)
+        if (!modelID) return invalidRequest(c, { message: "Unknown AX Engine model", details: { resource: "model" } })
+        const body = c.req.valid("json")
+        try {
+          return c.json(await startDownloadJob({ modelID, quantization: body.quantization }))
+        } catch (error) {
+          return axEngineInvalidRequest(c, error)
+        }
+      },
+    )
+    .get(
+      "/ax-engine/downloads",
+      describeRoute({
+        summary: "List ax-engine model download jobs",
+        operationId: "provider.axEngine.downloads",
+        responses: {
+          200: {
+            description: "Download jobs",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(await listDownloadJobs())
+      },
+    )
+    .post(
+      "/ax-engine/downloads/:jobID/cancel",
+      describeRoute({
+        summary: "Cancel ax-engine model download job",
+        operationId: "provider.axEngine.download.cancel",
+        responses: {
+          200: {
+            description: "Cancelled job",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      async (c) => {
+        const job = await cancelDownloadJob(c.req.param("jobID"))
+        if (!job) return invalidRequest(c, { message: "Unknown AX Engine download job", details: { resource: "job" } })
+        return c.json(job)
+      },
+    )
+    .delete(
+      "/ax-engine/models/:modelID",
+      describeRoute({
+        summary: "Delete ax-engine local model",
+        description: "Delete the server-resolved local copy for a supported AX Engine model.",
+        operationId: "provider.axEngine.model.delete",
+        responses: {
+          200: {
+            description: "Delete result",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", AxEngineModelActionBody),
+      async (c) => {
+        const modelID = axEngineModelIDParam(c)
+        if (!modelID) return invalidRequest(c, { message: "Unknown AX Engine model", details: { resource: "model" } })
+        const body = c.req.valid("json")
+        const quantization = normalizeQuantization(body.quantization, modelID)
+        try {
+          return c.json(await deleteAxEngineModel({ modelID, quantization }))
+        } catch (error) {
+          return axEngineInvalidRequest(c, error)
+        }
       },
     )
     .get(

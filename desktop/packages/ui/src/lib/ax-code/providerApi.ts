@@ -96,9 +96,11 @@ export const fetchProviderJsonWithRetry = async (
       }
 
       const message =
-        isRecord(payload) && typeof payload.error === "string"
-          ? payload.error
-          : `Provider request failed (${response.status})`
+        isRecord(payload) && typeof payload.message === "string"
+          ? payload.message
+          : isRecord(payload) && typeof payload.error === "string"
+            ? payload.error
+            : `Provider request failed (${response.status})`
       throw Object.assign(new Error(message), { noRetry: true, restarting })
     } catch (error) {
       lastError = error

@@ -1,9 +1,18 @@
 import { describe, expect, test } from "vitest"
+import fs from "fs/promises"
+import path from "path"
 import { Auth } from "../../src/auth"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { redactProviderInfo } from "../../src/server/routes/config"
-import { AxEnginePrepareBody, AxEngineStartBody, shouldShowProviderInList } from "../../src/server/routes/provider"
+import {
+  AxEngineModelActionBody,
+  AxEnginePrepareBody,
+  AxEngineStartBody,
+  shouldShowProviderInList,
+} from "../../src/server/routes/provider"
+import { AX_ENGINE_QWEN36_27B_MODEL_ID } from "../../src/provider/ax-engine"
+import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -183,6 +192,83 @@ describe("provider routes", () => {
       download: "0",
     })
     expect(start.download).toBe(false)
+  })
+
+  test("ax-engine model action schema accepts empty JSON clients", () => {
+    expect(AxEngineModelActionBody.parse({})).toEqual({})
+    expect(AxEngineModelActionBody.parse({ quantization: "mlx6bit" })).toEqual({ quantization: "mlx6bit" })
+  })
+
+  test("ax-engine models route returns the supported model catalog", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const response = await Server.Default().request("/provider/ax-engine/models")
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as { models: Array<{ id: string }> }
+        expect(body.models.map((model) => model.id)).toEqual([
+          "qwen3.6-27b-6bit",
+          "qwen3.6-35b-a3b",
+          "gemma-4-12b",
+          "gemma-4-26b",
+          "gemma-4-31b",
+          "glm-4.7-flash",
+        ])
+      },
+    })
+  })
+
+  test("ax-engine model download route rejects unknown model ids", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const response = await Server.Default().request("/provider/ax-engine/models/nope/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        })
+        expect(response.status).toBe(400)
+        const body = (await response.json()) as { name: string; details?: { resource?: string } }
+        expect(body.name).toBe("InvalidRequestError")
+        expect(body.details?.resource).toBe("model")
+      },
+    })
+  })
+
+  test("ax-engine model delete route returns domain errors as 400 responses", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const modelPath = path.join(tmp.path, "external-model")
+        const marker = {
+          modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
+          quantization: "mlx6bit",
+          path: modelPath,
+          preparedAt: Date.now(),
+        }
+        await fs.mkdir(modelPath, { recursive: true })
+        await fs.mkdir(path.dirname(AxEnginePaths.prepareState), { recursive: true })
+        await fs.writeFile(AxEnginePaths.prepareState, JSON.stringify(marker))
+        await fs.writeFile(AxEnginePaths.completionMarker(modelPath), JSON.stringify(marker))
+
+        const response = await Server.Default().request(`/provider/ax-engine/models/${AX_ENGINE_QWEN36_27B_MODEL_ID}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        })
+        expect(response.status).toBe(400)
+        const body = (await response.json()) as { name: string; message: string; details?: { resource?: string } }
+        expect(body.name).toBe("InvalidRequestError")
+        expect(body.message).toContain("AX_ENGINE_MODEL_NOT_PREPARED")
+        expect(body.details?.resource).toBe("axEngine")
+      },
+    })
   })
 
   test("redactProviderInfo drops the key and masks secret-bearing options", () => {

@@ -169,7 +169,7 @@ export const AX_ENGINE_ERROR = {
   ToolcallUnsupported: "AX_ENGINE_TOOLCALL_UNSUPPORTED",
 } as const
 
-export const AX_ENGINE_MIN_MACOS_MAJOR = 15
+export const AX_ENGINE_MIN_MACOS_MAJOR = 26
 export const AX_ENGINE_MIN_MEMORY_BYTES = 0
 
 export function isAxEngineModelID(value: unknown): value is AxEngineModelID {

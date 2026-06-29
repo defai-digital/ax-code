@@ -241,6 +241,34 @@ describe("fetchProviderJsonWithRetry", () => {
       setFetchStub(originalFetch)
     }
   })
+
+  test("uses standard server error envelope messages", async () => {
+    const originalFetch = globalThis.fetch
+    setFetchStub((async () => {
+      return new Response(
+        JSON.stringify({
+          name: "InvalidRequestError",
+          message: "Unknown AX Engine model",
+          status: 400,
+          details: { resource: "model" },
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
+    }) as typeof fetch)
+
+    try {
+      await fetchProviderJsonWithRetry("/api/test", { method: "POST" })
+      expect(true).toBe(false) // should not reach here
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error)
+      expect((error as Error).message).toBe("Unknown AX Engine model")
+    } finally {
+      setFetchStub(originalFetch)
+    }
+  })
 })
 
 describe("parseAuthMethodsPayload", () => {

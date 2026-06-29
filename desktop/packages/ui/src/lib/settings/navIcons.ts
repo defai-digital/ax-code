@@ -5,6 +5,8 @@ const SNIPPETS_SETTINGS_ICON = { icon: "chat-thread" } as const
 
 export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
   switch (slug) {
+    case "models":
+      return "database-2"
     case "projects":
       return "folders"
     case "remote-instances":

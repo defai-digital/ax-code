@@ -11947,6 +11947,126 @@ export type ProviderListResponses = {
 
 export type ProviderListResponse = ProviderListResponses[keyof ProviderListResponses]
 
+export type ProviderAxEngineModelsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/models"
+}
+
+export type ProviderAxEngineModelsResponses = {
+  /**
+   * ax-engine model catalog
+   */
+  200: unknown
+}
+
+export type ProviderAxEngineModelDownloadData = {
+  body?: {
+    quantization?: "mlx6bit"
+  }
+  path: {
+    modelID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/models/{modelID}/download"
+}
+
+export type ProviderAxEngineModelDownloadErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderAxEngineModelDownloadError =
+  ProviderAxEngineModelDownloadErrors[keyof ProviderAxEngineModelDownloadErrors]
+
+export type ProviderAxEngineModelDownloadResponses = {
+  /**
+   * Download job
+   */
+  200: unknown
+}
+
+export type ProviderAxEngineDownloadsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/downloads"
+}
+
+export type ProviderAxEngineDownloadsResponses = {
+  /**
+   * Download jobs
+   */
+  200: unknown
+}
+
+export type ProviderAxEngineDownloadCancelData = {
+  body?: never
+  path: {
+    jobID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/downloads/{jobID}/cancel"
+}
+
+export type ProviderAxEngineDownloadCancelErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderAxEngineDownloadCancelError =
+  ProviderAxEngineDownloadCancelErrors[keyof ProviderAxEngineDownloadCancelErrors]
+
+export type ProviderAxEngineDownloadCancelResponses = {
+  /**
+   * Cancelled job
+   */
+  200: unknown
+}
+
+export type ProviderAxEngineModelDeleteData = {
+  body?: {
+    quantization?: "mlx6bit"
+  }
+  path: {
+    modelID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/models/{modelID}"
+}
+
+export type ProviderAxEngineModelDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderAxEngineModelDeleteError =
+  ProviderAxEngineModelDeleteErrors[keyof ProviderAxEngineModelDeleteErrors]
+
+export type ProviderAxEngineModelDeleteResponses = {
+  /**
+   * Delete result
+   */
+  200: unknown
+}
+
 export type ProviderAxEngineStatusData = {
   body?: never
   path?: never

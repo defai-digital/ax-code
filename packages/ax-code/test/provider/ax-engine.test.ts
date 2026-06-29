@@ -24,6 +24,7 @@ import {
   axEngineLoader,
   axEngineServerLaunchArgs,
   evaluateDiskStatus,
+  evaluateAxEngineModelFit,
   evaluateAxEngineCapabilityFromModels,
   evaluatePlatformEligibility,
   formatAxEngineCapabilityInspectionFailureReason,
@@ -52,6 +53,7 @@ afterEach(async () => {
 
 describe("ax-engine platform gate", () => {
   test("parses macOS versions and Apple Silicon generations", () => {
+    expect(parseMacosMajor("26.0")).toBe(26)
     expect(parseMacosMajor("16.0")).toBe(16)
     expect(parseMacosMajor("15.6.1")).toBe(15)
     expect(parseMacosMajor("not-a-version")).toBeUndefined()
@@ -113,27 +115,101 @@ describe("ax-engine platform gate", () => {
       evaluatePlatformEligibility({
         platform: "darwin",
         arch: "arm64",
-        macosVersion: "15.0",
+        macosVersion: "25.0",
         chip: "Apple M2 Max",
         memoryBytes: 32 * 1024 ** 3,
       }),
     ).toMatchObject({
-      supported: true,
-      blockers: [],
-      warnings: expect.arrayContaining([expect.stringContaining("AX_ENGINE_INSUFFICIENT_MEMORY")]),
+      supported: false,
+      blockers: expect.arrayContaining([expect.stringContaining("AX_ENGINE_UNSUPPORTED_MACOS")]),
     })
 
     expect(
       evaluatePlatformEligibility({
         platform: "darwin",
         arch: "arm64",
-        macosVersion: "15.0",
+        macosVersion: "26.0",
         chip: "Apple M2 Max",
         memoryBytes: 64 * 1024 ** 3,
       }),
     ).toMatchObject({
       supported: true,
       blockers: [],
+    })
+  })
+
+  test("computes per-model fit states for Desktop readiness", () => {
+    const supported = evaluatePlatformEligibility({
+      platform: "darwin",
+      arch: "arm64",
+      macosVersion: "26.0",
+      chip: "Apple M2 Max",
+      memoryBytes: 32 * 1024 ** 3,
+    })
+    const unsupported = evaluatePlatformEligibility({
+      platform: "darwin",
+      arch: "arm64",
+      macosVersion: "26.0",
+      chip: "Apple M1 Max",
+      memoryBytes: 64 * 1024 ** 3,
+    })
+    const dependency = { available: true, mode: "path", binaryPath: "/bin/ax-engine", blockers: [] } as any
+    const disk = {
+      path: "/tmp",
+      modelID: AX_ENGINE_GEMMA4_12B_MODEL_ID,
+      quantization: "mlx6bit",
+      freeBytes: 100 * 1024 ** 3,
+      requiredBytes: 48 * 1024 ** 3,
+      ok: true,
+      blockers: [],
+    } as any
+    const missingModel = {
+      present: false,
+      modelID: AX_ENGINE_GEMMA4_12B_MODEL_ID,
+      quantization: "mlx6bit",
+      complete: false,
+      blockers: [],
+    } as any
+
+    expect(
+      evaluateAxEngineModelFit({
+        eligibility: unsupported,
+        dependency,
+        disk,
+        model: missingModel,
+        minMemoryBytes: 0,
+      }),
+    ).toMatchObject({
+      state: "host-unsupported",
+      downloadable: false,
+      blockers: expect.arrayContaining([expect.stringContaining("AX_ENGINE_UNSUPPORTED_CHIP")]),
+    })
+
+    expect(
+      evaluateAxEngineModelFit({
+        eligibility: supported,
+        dependency,
+        disk,
+        model: missingModel,
+        minMemoryBytes: 0,
+      }),
+    ).toMatchObject({
+      state: "downloadable",
+      downloadable: true,
+    })
+
+    expect(
+      evaluateAxEngineModelFit({
+        eligibility: supported,
+        dependency,
+        disk,
+        model: missingModel,
+        minMemoryBytes: 64 * 1024 ** 3,
+      }),
+    ).toMatchObject({
+      state: "not-fit",
+      downloadable: false,
+      blockers: expect.arrayContaining([expect.stringContaining("AX_ENGINE_INSUFFICIENT_MEMORY")]),
     })
   })
 })
@@ -596,11 +672,7 @@ describe("ax-engine provider integration", () => {
   test("sub-64GB hosts keep smaller ax-engine models selectable and block larger ones", async () => {
     const provider = (await Provider.fromModelsDevProvider((await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]))!
     expect(
-      modelMemoryBlockReason(
-        AX_ENGINE_PROVIDER_ID,
-        provider.models[AX_ENGINE_QWEN36_27B_MODEL_ID],
-        32 * 1024 ** 3,
-      ),
+      modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN36_27B_MODEL_ID], 32 * 1024 ** 3),
     ).toBe("requires 64GB unified memory")
     expect(
       modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN36_35B_MODEL_ID], 32 * 1024 ** 3),

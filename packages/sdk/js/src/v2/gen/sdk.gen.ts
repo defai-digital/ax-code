@@ -104,6 +104,14 @@ import type {
   PromptHistoryListErrors,
   PromptHistoryListResponses,
   ProviderAuthResponses,
+  ProviderAxEngineDownloadCancelErrors,
+  ProviderAxEngineDownloadCancelResponses,
+  ProviderAxEngineDownloadsResponses,
+  ProviderAxEngineModelDeleteErrors,
+  ProviderAxEngineModelDeleteResponses,
+  ProviderAxEngineModelDownloadErrors,
+  ProviderAxEngineModelDownloadResponses,
+  ProviderAxEngineModelsResponses,
   ProviderAxEnginePrepareErrors,
   ProviderAxEnginePrepareResponses,
   ProviderAxEngineStartErrors,
@@ -5103,7 +5111,161 @@ export class Question extends HeyApiClient {
   }
 }
 
+export class Model extends HeyApiClient {
+  /**
+   * Download ax-engine local model
+   *
+   * Start a server-side download job for a supported AX Engine local MTP model.
+   */
+  public download<ThrowOnError extends boolean = false>(
+    parameters: {
+      modelID: string
+      directory?: string
+      quantization?: "mlx6bit"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "modelID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "quantization" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ProviderAxEngineModelDownloadResponses,
+      ProviderAxEngineModelDownloadErrors,
+      ThrowOnError
+    >({
+      url: "/provider/ax-engine/models/{modelID}/download",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete ax-engine local model
+   *
+   * Delete the server-resolved local copy for a supported AX Engine model.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      modelID: string
+      directory?: string
+      quantization?: "mlx6bit"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "modelID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "quantization" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ProviderAxEngineModelDeleteResponses,
+      ProviderAxEngineModelDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/provider/ax-engine/models/{modelID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Download extends HeyApiClient {
+  /**
+   * Cancel ax-engine model download job
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      jobID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "jobID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ProviderAxEngineDownloadCancelResponses,
+      ProviderAxEngineDownloadCancelErrors,
+      ThrowOnError
+    >({
+      url: "/provider/ax-engine/downloads/{jobID}/cancel",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class AxEngine extends HeyApiClient {
+  /**
+   * List ax-engine local models
+   *
+   * List supported AX Engine local MTP models with host/model readiness and local cache status.
+   */
+  public models<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ProviderAxEngineModelsResponses, unknown, ThrowOnError>({
+      url: "/provider/ax-engine/models",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List ax-engine model download jobs
+   */
+  public downloads<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ProviderAxEngineDownloadsResponses, unknown, ThrowOnError>({
+      url: "/provider/ax-engine/downloads",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Get ax-engine local provider status
    *
@@ -5234,6 +5396,16 @@ export class AxEngine extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _model?: Model
+  get model(): Model {
+    return (this._model ??= new Model({ client: this.client }))
+  }
+
+  private _download?: Download
+  get download(): Download {
+    return (this._download ??= new Download({ client: this.client }))
   }
 }
 
