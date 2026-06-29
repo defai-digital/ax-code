@@ -1,6 +1,7 @@
 "use strict"
 
 const { contextBridge, ipcRenderer } = require("electron")
+const { createElectronDesktopBootOutcome } = require("./desktop-boot-outcome")
 
 // Bridge main-process desktop events to DOM CustomEvents. Several UI consumers
 // listen via window.addEventListener('openchamber:...') (e.g. open-session,
@@ -33,6 +34,11 @@ contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP_ELECTRON__", {
   recordStartupEvent: (name, details) =>
     ipcRenderer.invoke("desktop_record_startup_event", { name, details: details ?? {} }),
 })
+
+// The shared UI waits for this desktop boot outcome before removing the splash
+// gate. Electron only loads the renderer after the local/remote page itself is
+// reachable, so a valid main outcome is enough to unblock the React boot flow.
+contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP_DESKTOP_BOOT_OUTCOME__", createElectronDesktopBootOutcome())
 
 // Tauri-compatible IPC shim.
 // The existing desktop.ts helpers call window.__TAURI__.core.invoke(cmd, args).

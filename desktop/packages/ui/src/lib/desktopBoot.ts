@@ -1,13 +1,13 @@
 /**
  * Authoritative desktop boot outcome types and UI-facing resolver.
  *
- * The Rust backend computes a `DesktopBootOutcome` at startup and injects
- * it as `window.__AX_CODE_DESKTOP_DESKTOP_BOOT_OUTCOME__`. This module provides
- * pure functions to read that outcome and derive the minimal UI state
- * needed for the loading/chooser/recovery/main decision.
+ * The desktop shell computes a `DesktopBootOutcome` at startup and injects it as
+ * `window.__AX_CODE_DESKTOP_DESKTOP_BOOT_OUTCOME__`. This module provides pure
+ * functions to read that outcome and derive the minimal UI state needed for the
+ * loading/chooser/recovery/main decision.
  */
 
-// ── Boot outcome (must match Rust injection) ──
+// ── Boot outcome (must match desktop shell injection) ──
 
 /**
  * Structured boot outcome type.
@@ -258,7 +258,7 @@ export function shouldRestartDesktopBootFlow(input: DesktopBootFlowRestartInput)
 }
 
 /**
- * Read the boot outcome injected by the Rust backend.
+ * Read the boot outcome injected by the desktop shell.
  * Returns `null` when not in desktop, when the outcome has not been set yet,
  * or when the injected payload is malformed.
  */
