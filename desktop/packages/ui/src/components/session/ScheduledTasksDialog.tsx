@@ -26,6 +26,7 @@ import {
   type ScheduledTaskStatus,
 } from "@/lib/scheduledTasksApi"
 import { ScheduledTaskEditorDialog } from "./ScheduledTaskEditorDialog"
+import { loadCurrentScheduledTaskList } from "./scheduledTaskListLoad"
 
 const scheduleTimes = (task: ScheduledTask): string[] => {
   const raw = Array.isArray(task.schedule.times) ? task.schedule.times : task.schedule.time ? [task.schedule.time] : []
@@ -181,6 +182,18 @@ export function ScheduledTasksDialog() {
   const [editorOpen, setEditorOpen] = React.useState(false)
   const [editorTask, setEditorTask] = React.useState<ScheduledTask | null>(null)
   const [mutatingTaskID, setMutatingTaskID] = React.useState<string | null>(null)
+  const taskListRequestRef = React.useRef(0)
+  const selectedProjectIDRef = React.useRef("")
+  const openRef = React.useRef(false)
+
+  React.useEffect(() => {
+    openRef.current = open
+    if (!open) {
+      taskListRequestRef.current += 1
+      setLoading(false)
+      setMutatingTaskID(null)
+    }
+  }, [open])
 
   const selectedProject = React.useMemo(
     () => projects.find((project) => project.id === selectedProjectID) || null,
@@ -231,15 +244,26 @@ export function ScheduledTasksDialog() {
 
   const reloadTasks = React.useCallback(
     async (projectID: string, options?: { silent?: boolean }) => {
+      const requestId = taskListRequestRef.current + 1
+      taskListRequestRef.current = requestId
+
       if (!projectID) {
         setTasks([])
+        if (!options?.silent) {
+          setLoading(false)
+        }
         return
       }
       if (!options?.silent) {
         setLoading(true)
       }
-      try {
-        const nextTasks = await fetchScheduledTasks(projectID)
+      const loaded = await loadCurrentScheduledTaskList({
+        load: () => fetchScheduledTasks(projectID),
+        isCurrent: () =>
+          openRef.current && selectedProjectIDRef.current === projectID && taskListRequestRef.current === requestId,
+      })
+      if (loaded.status === "loaded") {
+        const nextTasks = loaded.tasks
         nextTasks.sort((a, b) => {
           if (a.enabled !== b.enabled) {
             return a.enabled ? -1 : 1
@@ -251,15 +275,16 @@ export function ScheduledTasksDialog() {
           return (a.state?.nextRunAt || Number.MAX_SAFE_INTEGER) - (b.state?.nextRunAt || Number.MAX_SAFE_INTEGER)
         })
         setTasks(nextTasks)
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : t("sessions.scheduledTasks.dialog.toast.loadFailed"))
+      } else if (loaded.status === "failed") {
+        toast.error(
+          loaded.error instanceof Error ? loaded.error.message : t("sessions.scheduledTasks.dialog.toast.loadFailed"),
+        )
         if (!options?.silent) {
           setTasks([])
         }
-      } finally {
-        if (!options?.silent) {
-          setLoading(false)
-        }
+      }
+      if (taskListRequestRef.current === requestId) {
+        setLoading(false)
       }
     },
     [t],
@@ -270,6 +295,7 @@ export function ScheduledTasksDialog() {
       return
     }
     const preferredProjectID = activeProject?.id || projects[0]?.id || ""
+    selectedProjectIDRef.current = preferredProjectID
     setSelectedProjectID(preferredProjectID)
     if (preferredProjectID) {
       void reloadTasks(preferredProjectID)
@@ -391,12 +417,9 @@ export function ScheduledTasksDialog() {
         value={selectedProjectID || "__none"}
         onValueChange={(value) => {
           const nextProjectID = value === "__none" ? "" : value
+          selectedProjectIDRef.current = nextProjectID
           setSelectedProjectID(nextProjectID)
-          if (nextProjectID) {
-            void reloadTasks(nextProjectID)
-          } else {
-            setTasks([])
-          }
+          void reloadTasks(nextProjectID)
         }}
       >
         <SelectTrigger className={isMobile ? "w-full" : undefined}>
