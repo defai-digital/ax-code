@@ -178,11 +178,13 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
       return
     }
 
-    updateCheckRequestId += 1
+    const requestId = ++updateCheckRequestId
+    const isCurrentRequest = () => requestId === updateCheckRequestId
     set({ downloading: true, error: null, progress: null })
 
     try {
       const desktopInfo = await checkForDesktopUpdates()
+      if (!isCurrentRequest()) return
       if (desktopInfo?.error) {
         console.warn("Desktop update recheck failed:", desktopInfo.error)
         throw new Error(UPDATE_FAILED_MESSAGE)
@@ -206,14 +208,17 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
       }))
 
       const ok = await downloadDesktopUpdate((progress) => {
+        if (!isCurrentRequest()) return
         set({ progress })
       })
+      if (!isCurrentRequest()) return
       if (!ok) {
         throw new Error("Desktop update only works on Local instance")
       }
       set({ downloading: false, downloaded: true })
     } catch (error) {
       console.warn("Failed to download desktop update:", error)
+      if (!isCurrentRequest()) return
       set({
         downloading: false,
         error: UPDATE_FAILED_MESSAGE,

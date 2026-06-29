@@ -16,6 +16,14 @@ const createDeferred = <T>(): Deferred<T> => {
   return { promise, resolve }
 }
 
+const waitForCommand = async (command: string) => {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (invokedCommands.includes(command)) return
+    await Promise.resolve()
+  }
+  throw new Error(`Command was not invoked: ${command}`)
+}
+
 const restoreWindow = () => {
   delete (globalThis as Record<string, unknown>).window
 }
@@ -102,6 +110,49 @@ describe("useUpdateStore runtime detection", () => {
           version: "1.1.2",
           currentVersion: "1.1.1",
         },
+      })
+    } finally {
+      restoreWindow()
+    }
+  })
+
+  test("does not let a reset desktop download mark the update as downloaded later", async () => {
+    const download = createDeferred<unknown>()
+    mockElectronUpdaterWindow(async (command) => {
+      invokedCommands.push(command)
+      if (command === "desktop_check_for_updates") {
+        return {
+          available: true,
+          version: "1.1.2",
+          currentVersion: "1.1.1",
+        }
+      }
+      if (command === "desktop_download_and_install_update") {
+        return download.promise
+      }
+      return null
+    })
+
+    try {
+      await useUpdateStore.getState().checkForUpdates()
+      const downloadUpdate = useUpdateStore.getState().downloadUpdate()
+      await waitForCommand("desktop_download_and_install_update")
+
+      useUpdateStore.getState().reset()
+      download.resolve(null)
+      await downloadUpdate
+
+      expect(invokedCommands).toEqual([
+        "desktop_check_for_updates",
+        "desktop_check_for_updates",
+        "desktop_download_and_install_update",
+      ])
+      expect(useUpdateStore.getState()).toMatchObject({
+        checking: false,
+        available: false,
+        downloading: false,
+        downloaded: false,
+        info: null,
       })
     } finally {
       restoreWindow()
