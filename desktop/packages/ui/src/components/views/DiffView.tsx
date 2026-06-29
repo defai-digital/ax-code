@@ -34,10 +34,10 @@ import { sessionEvents } from "@/lib/sessionEvents"
 import { useI18n } from "@/lib/i18n"
 import type { I18nKey } from "@/lib/i18n/store"
 import { describeGitChange } from "./git/changeDescriptors"
+import { fetchGitFileDiffWithTimeout } from "./gitFileDiffLoader"
 
 // Minimum width for side-by-side diff view (px)
 const SIDE_BY_SIDE_MIN_WIDTH = 1100
-const DIFF_REQUEST_TIMEOUT_MS = 15000
 const LARGE_DIFF_CHANGED_LINES = 500
 
 // Perf: limit concurrent expanded diffs in stacked view.
@@ -685,13 +685,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(
       setIsLoading(true)
 
       let cancelled = false
-      const fetchPromise = git.getGitFileDiff(directory, { path: file.path, staged })
-      const timeoutMs = DIFF_REQUEST_TIMEOUT_MS
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs)
-      })
-
-      void Promise.race([fetchPromise, timeoutPromise])
+      void fetchGitFileDiffWithTimeout(git.getGitFileDiff, directory, { path: file.path, staged })
         .then((response) => {
           if (cancelled) return
 
@@ -1560,13 +1554,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
     lastDiffRequestRef.current = requestKey
 
     let cancelled = false
-    const fetchPromise = git.getGitFileDiff(effectiveDirectory, { path: selectedFile, staged: activeDiffStaged })
-    const timeoutMs = DIFF_REQUEST_TIMEOUT_MS
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs)
+    void fetchGitFileDiffWithTimeout(git.getGitFileDiff, effectiveDirectory, {
+      path: selectedFile,
+      staged: activeDiffStaged,
     })
-
-    void Promise.race([fetchPromise, timeoutPromise])
       .then((response) => {
         if (cancelled) return
 
