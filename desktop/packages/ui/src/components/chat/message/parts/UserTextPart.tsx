@@ -8,6 +8,7 @@ import { useSkillsStore } from "@/stores/useSkillsStore"
 import { Icon } from "@/components/icon/Icon"
 import { useEffectiveDirectory } from "@/hooks/useEffectiveDirectory"
 import { extractTextContent } from "../partUtils"
+import { getSafeExternalUrl, openExternalUrl } from "@/lib/url"
 
 type UserTextPartProps = {
   part: Part
@@ -116,6 +117,15 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
         return
       }
 
+      const agentMentionLink = target?.closest<HTMLElement>("[data-agent-mention-url]")
+      const agentMentionUrl = getSafeExternalUrl(agentMentionLink?.dataset.agentMentionUrl ?? "")
+      if (agentMentionUrl) {
+        event.preventDefault()
+        event.stopPropagation()
+        void openExternalUrl(agentMentionUrl)
+        return
+      }
+
       const element = textRef.current
       if (!element) {
         return
@@ -145,8 +155,11 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
 
     // Step 2: Then insert agent mention links (after escaping, so <a> tags won't be escaped)
     if (agentMention?.token && content.includes(agentMention.token)) {
-      const mentionHtml = `<a href="${buildMentionUrl(agentMention.name)}" class="text-primary hover:underline" target="_blank" rel="noopener noreferrer">${agentMention.token}</a>`
-      content = content.replace(agentMention.token, mentionHtml)
+      const mentionUrl = getSafeExternalUrl(buildMentionUrl(agentMention.name))
+      if (mentionUrl) {
+        const mentionHtml = `<button type="button" data-agent-mention-url="${mentionUrl}" class="inline bg-transparent p-0 font-[inherit] text-primary hover:underline">${agentMention.token}</button>`
+        content = content.replace(agentMention.token, mentionHtml)
+      }
     }
 
     content = content.replace(SKILL_TOKEN_PATTERN, (match, prefix: string, skillName: string) => {
@@ -202,16 +215,20 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
       agentMentionUsed = true
       return [
         node.slice(0, idx),
-        <a
+        <button
           key={`agent-${index}`}
-          href={buildMentionUrl(agentMention.name)}
-          className="text-primary hover:underline"
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(event) => event.stopPropagation()}
+          type="button"
+          className="inline bg-transparent p-0 font-[inherit] text-primary hover:underline"
+          onClick={(event) => {
+            event.stopPropagation()
+            const mentionUrl = getSafeExternalUrl(buildMentionUrl(agentMention.name))
+            if (mentionUrl) {
+              void openExternalUrl(mentionUrl)
+            }
+          }}
         >
           {agentMention.token}
-        </a>,
+        </button>,
         node.slice(idx + agentMention.token.length),
       ]
     })
