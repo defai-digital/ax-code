@@ -408,7 +408,12 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
 
   // Creation state
   const [isCreating, setIsCreating] = React.useState(false)
-  const [validationAbortController, setValidationAbortController] = React.useState<AbortController | null>(null)
+  const validationAbortControllerRef = React.useRef<AbortController | null>(null)
+
+  const abortValidation = React.useCallback(() => {
+    validationAbortControllerRef.current?.abort()
+    validationAbortControllerRef.current = null
+  }, [])
 
   const resolveDefaultAgentName = React.useCallback((): string | undefined => {
     const configState = useConfigStore.getState()
@@ -671,6 +676,7 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
   React.useEffect(() => {
     if (!open) return
 
+    abortValidation()
     setMode("new-branch")
     setExistingBranchState({
       selectedBranch: "",
@@ -699,7 +705,14 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
       linkedPr: null,
       includePrDiff: false,
     })
-  }, [open, generateUniqueSlug])
+  }, [open, abortValidation, generateUniqueSlug])
+
+  React.useEffect(() => {
+    if (!open) {
+      abortValidation()
+    }
+    return () => abortValidation()
+  }, [open, abortValidation])
 
   // Sync worktree name with branch name for new-branch mode
   React.useEffect(() => {
@@ -714,13 +727,9 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
   const validateInputs = React.useCallback(async () => {
     if (!projectRef || !validation.touched || isCreating) return
 
-    // Cancel previous validation
-    if (validationAbortController) {
-      validationAbortController.abort()
-    }
-
+    abortValidation()
     const abortController = new AbortController()
-    setValidationAbortController(abortController)
+    validationAbortControllerRef.current = abortController
 
     setValidation((prev) => ({ ...prev, isValidating: true }))
 
@@ -785,6 +794,10 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
           isValidating: false,
         }))
       }
+    } finally {
+      if (validationAbortControllerRef.current === abortController) {
+        validationAbortControllerRef.current = null
+      }
     }
   }, [
     projectRef,
@@ -796,7 +809,7 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
     localBranches,
     remoteBranches,
     validation.touched,
-    validationAbortController,
+    abortValidation,
     isCreating,
     t,
   ])
@@ -840,10 +853,7 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
       return
     }
 
-    if (validationAbortController) {
-      validationAbortController.abort()
-      setValidationAbortController(null)
-    }
+    abortValidation()
 
     setValidation((prev) => ({
       ...prev,
