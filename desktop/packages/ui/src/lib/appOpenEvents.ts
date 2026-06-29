@@ -25,6 +25,15 @@ export type OpenProjectStoreAdapter = {
   addProject: (path: string) => ProjectEntry | null
 }
 
+export type OpenSessionUiAdapter = {
+  setActiveMainTab: (tab: "chat") => void
+  setSessionSwitcherOpen: (open: boolean) => void
+}
+
+export type OpenSessionStoreAdapter = {
+  setCurrentSession: (sessionId: string, directory: string | null) => void | Promise<void>
+}
+
 const getEventDetailRecord = (event: Event): Record<string, unknown> | null => {
   const detail = "detail" in event ? (event as CustomEvent<unknown>).detail : null
   return detail !== null && typeof detail === "object" && !Array.isArray(detail)
@@ -83,4 +92,14 @@ export function applyOpenProjectPathToStore(
   }
 
   return projectsStore.addProject(normalizedPath)?.id ?? null
+}
+
+export function applyOpenSessionEventDetail(
+  detail: OpenSessionEventDetail,
+  uiStore: OpenSessionUiAdapter,
+  sessionStore: OpenSessionStoreAdapter,
+) {
+  uiStore.setActiveMainTab("chat")
+  uiStore.setSessionSwitcherOpen(false)
+  return sessionStore.setCurrentSession(detail.sessionId, detail.directory)
 }

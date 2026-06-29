@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   applyOpenProjectPathToStore,
+  applyOpenSessionEventDetail,
   parseOpenDraftSessionEvent,
   parseOpenProjectEvent,
   parseOpenSessionEvent,
@@ -138,5 +139,26 @@ describe("applyOpenProjectPathToStore", () => {
 
     expect(result).toBeNull()
     expect(added).toEqual([])
+  })
+})
+
+describe("applyOpenSessionEventDetail", () => {
+  test("switches to chat and closes the session switcher before selecting the session", async () => {
+    const actions: string[] = []
+
+    await applyOpenSessionEventDetail(
+      { sessionId: "session-1", directory: "/repo" },
+      {
+        setActiveMainTab: (tab) => actions.push(`tab:${tab}`),
+        setSessionSwitcherOpen: (open) => actions.push(`switcher:${open}`),
+      },
+      {
+        setCurrentSession: async (sessionId, directory) => {
+          actions.push(`session:${sessionId}:${directory}`)
+        },
+      },
+    )
+
+    expect(actions).toEqual(["tab:chat", "switcher:false", "session:session-1:/repo"])
   })
 })

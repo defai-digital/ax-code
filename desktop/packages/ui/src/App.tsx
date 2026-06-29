@@ -58,6 +58,7 @@ import {
   OPEN_DRAFT_SESSION_EVENT,
   OPEN_PROJECT_EVENT,
   applyOpenProjectPathToStore,
+  applyOpenSessionEventDetail,
   OPEN_SESSION_EVENT,
   parseOpenDraftSessionEvent,
   parseOpenProjectEvent,
@@ -590,8 +591,7 @@ function App({ apis }: AppProps) {
     const handler = (event: Event) => {
       const detail = parseOpenSessionEvent(event)
       if (!detail) return
-      useUIStore.getState().setActiveMainTab("chat")
-      void useSessionUIStore.getState().setCurrentSession(detail.sessionId, detail.directory)
+      void applyOpenSessionEventDetail(detail, useUIStore.getState(), useSessionUIStore.getState())
     }
 
     window.addEventListener(OPEN_SESSION_EVENT, handler)
@@ -610,14 +610,12 @@ function App({ apis }: AppProps) {
       if (!action) return
 
       const { sessionId, id, response } = action
-      void sessionActions
-        .respondToPermission(sessionId, id, response)
-        .catch((error: unknown) => {
-          console.error("[App] tray permission action failed", error)
-          toast.error("Permission response failed", {
-            description: error instanceof Error ? error.message : "Could not respond to permission from tray",
-          })
+      void sessionActions.respondToPermission(sessionId, id, response).catch((error: unknown) => {
+        console.error("[App] tray permission action failed", error)
+        toast.error("Permission response failed", {
+          description: error instanceof Error ? error.message : "Could not respond to permission from tray",
         })
+      })
     }
 
     const handleTrayAction = (event: Event) => {
@@ -641,14 +639,12 @@ function App({ apis }: AppProps) {
       if (!action) return
 
       const { sessionId, id, response } = action
-      void sessionActions
-        .respondToPermission(sessionId, id, response)
-        .catch((error: unknown) => {
-          console.error("[App] tray permission action failed", error)
-          toast.error("Permission response failed", {
-            description: error instanceof Error ? error.message : "Could not respond to permission from tray",
-          })
+      void sessionActions.respondToPermission(sessionId, id, response).catch((error: unknown) => {
+        console.error("[App] tray permission action failed", error)
+        toast.error("Permission response failed", {
+          description: error instanceof Error ? error.message : "Could not respond to permission from tray",
         })
+      })
     })
   }, [dedupeTrayPermissionAction])
 
