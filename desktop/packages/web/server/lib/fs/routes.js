@@ -838,6 +838,7 @@ export const registerFsRoutes = (app, dependencies) => {
         req,
         targetPath: filePath,
         resolveProjectDirectory,
+        readSettingsFromDiskMigrated,
         path,
         os,
         normalizeDirectoryPath,
@@ -898,7 +899,7 @@ export const registerFsRoutes = (app, dependencies) => {
   })
 
   app.post("/api/fs/write", async (req, res) => {
-    const { path: filePath, content } = req.body || {}
+    const { path: filePath, content, allowOutsideWorkspace } = req.body || {}
     if (!filePath || typeof filePath !== "string") {
       return res.status(400).json({ error: "Path is required" })
     }
@@ -907,10 +908,14 @@ export const registerFsRoutes = (app, dependencies) => {
     }
 
     try {
-      const resolved = await resolveWorkspacePathFromContext({
+      const resolver = allowOutsideWorkspace
+        ? resolveWorkspaceOrApprovedPathFromContext
+        : resolveWorkspacePathFromContext
+      const resolved = await resolver({
         req,
         targetPath: filePath,
         resolveProjectDirectory,
+        readSettingsFromDiskMigrated,
         path,
         os,
         normalizeDirectoryPath,

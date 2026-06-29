@@ -26,6 +26,7 @@ const createMockResponse = () => {
   let body = null
   let sent = null
   let contentType = null
+  const headers = new Map()
   return {
     status(code) {
       statusCode = code
@@ -33,6 +34,10 @@ const createMockResponse = () => {
     },
     type(value) {
       contentType = value
+      return this
+    },
+    setHeader(name, value) {
+      headers.set(name, value)
       return this
     },
     json(payload) {
@@ -58,6 +63,9 @@ const createMockResponse = () => {
     },
     get contentType() {
       return contentType
+    },
+    get headers() {
+      return headers
     },
   }
 }
@@ -131,7 +139,7 @@ const registerExec = ({ spawn }) => {
   return getRoute("POST", "/api/fs/exec")
 }
 
-const registerWrite = (fsPromises) => {
+const registerWrite = (fsPromises, settings = { approvedDirectories: [] }) => {
   const { app, getRoute } = createRouteRegistry()
   registerFsRoutes(app, {
     os: { homedir: () => "/home/user" },
@@ -144,7 +152,7 @@ const registerWrite = (fsPromises) => {
     crypto: { randomUUID: () => "job-0" },
     normalizeDirectoryPath: (p) => p,
     resolveProjectDirectory: async () => ({ directory: "/repo" }),
-    readSettingsFromDiskMigrated: async () => ({ approvedDirectories: [] }),
+    readSettingsFromDiskMigrated: async () => settings,
     buildAugmentedPath: () => "/usr/bin",
     resolveGitBinaryForSpawn: () => "git",
     openchamberUserConfigRoot: "/home/user/.config",
@@ -220,6 +228,26 @@ describe("fs write", () => {
     expect(fsPromises.mkdir).toHaveBeenCalledWith("/repo", { recursive: true })
     expect(fsPromises.writeFile).toHaveBeenCalledWith("/repo/file.txt", "new", "utf8")
   })
+
+  it("allows writes inside an approved outside-workspace directory when explicitly requested", async () => {
+    const fsPromises = {
+      readFile: vi.fn(async () => "old"),
+      mkdir: vi.fn(async () => undefined),
+      writeFile: vi.fn(async () => undefined),
+    }
+    const handler = registerWrite(fsPromises, { approvedDirectories: ["/tmp/approved"] })
+
+    const res = await callWrite(handler, {
+      path: "/tmp/approved/file.txt",
+      content: "new",
+      allowOutsideWorkspace: true,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({ success: true, path: "/tmp/approved/file.txt" })
+    expect(fsPromises.mkdir).toHaveBeenCalledWith("/tmp/approved", { recursive: true })
+    expect(fsPromises.writeFile).toHaveBeenCalledWith("/tmp/approved/file.txt", "new", "utf8")
+  })
 })
 
 describe("fs outside workspace authorization", () => {
@@ -251,6 +279,23 @@ describe("fs outside workspace authorization", () => {
     expect(res.statusCode).toBe(200)
     expect(res.sent).toBe("approved")
     expect(fsPromises.readFile).toHaveBeenCalledWith("/tmp/approved/file.txt", "utf8")
+  })
+
+  it("allows raw outside-workspace reads inside an approved directory", async () => {
+    const fsPromises = {
+      stat: vi.fn(async () => ({ isFile: () => true })),
+      readFile: vi.fn(async () => Buffer.from("approved image")),
+    }
+    const { getRoute } = registerFs(fsPromises, { approvedDirectories: ["/tmp/approved"] })
+
+    const res = await callRoute(getRoute("GET", "/api/fs/raw"), {
+      query: { path: "/tmp/approved/image.png", allowOutsideWorkspace: "true" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.contentType).toBe("image/png")
+    expect(res.sent).toEqual(Buffer.from("approved image"))
+    expect(fsPromises.readFile).toHaveBeenCalledWith("/tmp/approved/image.png")
   })
 
   it("rejects mkdir outside workspace when the directory was not approved", async () => {

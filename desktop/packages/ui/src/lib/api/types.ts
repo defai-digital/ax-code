@@ -613,6 +613,10 @@ export interface FileReadOptions {
   optional?: boolean
 }
 
+export interface FileWriteOptions {
+  allowOutsideWorkspace?: boolean
+}
+
 export interface FilesAPI {
   listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult>
   search(payload: FileSearchQuery): Promise<FileSearchResult[]>
@@ -623,7 +627,7 @@ export interface FilesAPI {
   ): Promise<{ path: string; isFile: boolean; size: number; mtimeMs?: number }>
   readFile?(path: string, options?: FileReadOptions): Promise<{ content: string; path: string }>
   readFileBinary?(path: string, options?: FileReadOptions): Promise<{ dataUrl: string; path: string }>
-  writeFile?(path: string, content: string): Promise<{ success: boolean; path: string }>
+  writeFile?(path: string, content: string, options?: FileWriteOptions): Promise<{ success: boolean; path: string }>
   delete?(path: string): Promise<{ success: boolean }>
   rename?(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }>
   revealPath?(path: string): Promise<{ success: boolean }>

@@ -1530,7 +1530,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
 
     try {
       const contentToWrite = serializeEditorContent(draftContent, loadedFileLineEnding)
-      const result = await files.writeFile(selectedFile.path, contentToWrite)
+      const result = await files.writeFile(selectedFile.path, contentToWrite, selectedFileReadOptions)
       if (!result?.success) {
         toast.error(t("filesView.toast.writeFileFailed"))
         return false
@@ -1551,7 +1551,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
     } finally {
       setIsSaving(false)
     }
-  }, [draftContent, files, isDirty, loadedFileLineEnding, readFileStat, selectedFile, t])
+  }, [draftContent, files, isDirty, loadedFileLineEnding, readFileStat, selectedFile, selectedFileReadOptions, t])
 
   React.useEffect(() => {
     if (!isDirty) {

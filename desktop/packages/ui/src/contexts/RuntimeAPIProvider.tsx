@@ -128,9 +128,9 @@ function withContentCache(files: FilesAPI): FilesAPI {
 
   // Invalidate cache on writes, deletes, renames
   const cachedWriteFile: FilesAPI["writeFile"] = files.writeFile
-    ? async (path, content) => {
+    ? async (path, content, options) => {
         removeCacheEntry(path)
-        return files.writeFile!(path, content)
+        return files.writeFile!(path, content, options)
       }
     : undefined
 
