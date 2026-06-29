@@ -45,20 +45,27 @@ export const normalizeHostUrl = (raw: string): string | null => {
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return null
     }
-    return trimmed.split("#")[0] || null
+    url.username = ""
+    url.password = ""
+    url.search = ""
+    url.hash = ""
+    return url.toString()
   } catch {
     return null
   }
 }
 
 export const redactSensitiveUrl = (raw: string): string => {
-  const normalized = normalizeHostUrl(raw)
-  if (!normalized) {
+  const trimmed = raw.trim()
+  if (!trimmed) {
     return raw
   }
 
   try {
-    const url = new URL(normalized)
+    const url = new URL(trimmed)
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return raw
+    }
     // Redact embedded credentials (userinfo) to prevent leaking user:pass
     if (url.username || url.password) {
       url.username = ""
@@ -73,7 +80,7 @@ export const redactSensitiveUrl = (raw: string): string => {
     }
     return url.toString()
   } catch {
-    return normalized
+    return raw
   }
 }
 

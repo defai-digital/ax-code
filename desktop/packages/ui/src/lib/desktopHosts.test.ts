@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
-import { desktopHostProbe, desktopHostsGet, isBlockingHostProbeStatus } from "./desktopHosts"
+import { desktopHostProbe, desktopHostsGet, isBlockingHostProbeStatus, normalizeHostUrl } from "./desktopHosts"
 
 type MockDesktopWindowOptions = {
   invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>
@@ -21,6 +21,14 @@ const mockDesktopWindow = (options: MockDesktopWindowOptions = {}) => {
 
 afterEach(() => {
   restoreWindow()
+})
+
+describe("normalizeHostUrl", () => {
+  test("strips credentials, query, and hash before renderer state can use the host URL", () => {
+    expect(normalizeHostUrl(" https://user:pass@remote.example.com/app?token=secret#frag ")).toBe(
+      "https://remote.example.com/app",
+    )
+  })
 })
 
 describe("desktopHostsGet", () => {
