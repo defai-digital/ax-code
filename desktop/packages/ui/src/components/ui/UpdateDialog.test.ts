@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { normalizeReleaseNotesForMarkdown } from "./updateReleaseNotes"
+import { buildUpdateReleaseUrl, normalizeReleaseNotesForMarkdown } from "./updateReleaseNotes"
 
 describe("normalizeReleaseNotesForMarkdown", () => {
   test("converts HTML release notes to readable markdown text", () => {
@@ -20,5 +20,32 @@ describe("normalizeReleaseNotesForMarkdown", () => {
 
   test("decodes common HTML entities", () => {
     expect(normalizeReleaseNotesForMarkdown("<p>Fix A &amp; B &#35;42</p>")).toBe("Fix A & B #42")
+  })
+})
+
+describe("buildUpdateReleaseUrl", () => {
+  test("links desktop updates to desktop release tags", () => {
+    expect(buildUpdateReleaseUrl("6.7.19", "desktop")).toBe(
+      "https://github.com/defai-digital/ax-code/releases/tag/desktop-v6.7.19",
+    )
+  })
+
+  test("links web updates to package release tags", () => {
+    expect(buildUpdateReleaseUrl("6.7.19", "web")).toBe(
+      "https://github.com/defai-digital/ax-code/releases/tag/v6.7.19",
+    )
+  })
+
+  test("preserves versions that already include a release tag prefix", () => {
+    expect(buildUpdateReleaseUrl("desktop-v6.7.19", "desktop")).toBe(
+      "https://github.com/defai-digital/ax-code/releases/tag/desktop-v6.7.19",
+    )
+    expect(buildUpdateReleaseUrl("v6.7.19", "web")).toBe(
+      "https://github.com/defai-digital/ax-code/releases/tag/v6.7.19",
+    )
+  })
+
+  test("falls back to the release list when no version is available", () => {
+    expect(buildUpdateReleaseUrl(undefined, "desktop")).toBe("https://github.com/defai-digital/ax-code/releases")
   })
 })

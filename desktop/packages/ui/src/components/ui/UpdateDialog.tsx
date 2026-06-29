@@ -9,7 +9,7 @@ import { copyTextToClipboard } from "@/lib/clipboard"
 import { openExternalUrl } from "@/lib/url"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import { useI18n } from "@/lib/i18n"
-import { normalizeReleaseNotesForMarkdown } from "./updateReleaseNotes"
+import { buildUpdateReleaseUrl, normalizeReleaseNotesForMarkdown } from "./updateReleaseNotes"
 
 type WebUpdateState = "idle" | "updating" | "restarting" | "reconnecting" | "error"
 
@@ -26,8 +26,6 @@ interface UpdateDialogProps {
   /** Runtime type to show different UI for desktop vs web */
   runtimeType?: "desktop" | "web" | null
 }
-
-const GITHUB_RELEASES_URL = "https://github.com/defai-digital/ax-code/releases"
 
 type ChangelogSection = {
   version: string
@@ -203,7 +201,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   const [webError, setWebError] = useState<string | null>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const releaseUrl = info?.version ? `${GITHUB_RELEASES_URL}/tag/v${info.version}` : GITHUB_RELEASES_URL
+  const releaseUrl = buildUpdateReleaseUrl(info?.version, runtimeType)
 
   const progressPercent = progress?.total ? Math.round((progress.downloaded / progress.total) * 100) : 0
 

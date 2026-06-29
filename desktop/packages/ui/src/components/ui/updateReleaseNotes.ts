@@ -41,3 +41,19 @@ export function normalizeReleaseNotesForMarkdown(body: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim()
 }
+
+const GITHUB_RELEASES_URL = "https://github.com/defai-digital/ax-code/releases"
+
+export function buildUpdateReleaseUrl(version: string | undefined, runtimeType: "desktop" | "web" | null): string {
+  const trimmedVersion = version?.trim()
+  if (!trimmedVersion) {
+    return GITHUB_RELEASES_URL
+  }
+
+  if (trimmedVersion.startsWith("desktop-v") || trimmedVersion.startsWith("v")) {
+    return `${GITHUB_RELEASES_URL}/tag/${trimmedVersion}`
+  }
+
+  const tag = runtimeType === "desktop" ? `desktop-v${trimmedVersion}` : `v${trimmedVersion}`
+  return `${GITHUB_RELEASES_URL}/tag/${tag}`
+}
