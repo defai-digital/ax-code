@@ -47,6 +47,14 @@ import {
   savePreviewViewModePreference,
   type PreviewViewMode,
 } from "@/lib/viewerModePreferences"
+import {
+  buildHomePlanPath,
+  buildRepoPlanPath,
+  normalizePlanPath,
+  resolvePlanProjectRefForDirectory,
+  resolveTildePlanPath,
+  toPlanDisplayPath,
+} from "./planViewPaths"
 
 type PlanViewProps = {
   targetPath?: string | null
@@ -58,88 +66,6 @@ type PlanSendTarget = "session" | "worktree"
 type PendingPlanSend = {
   action: PlanSendAction
   target: PlanSendTarget
-}
-
-const normalize = (value: string): string => {
-  if (!value) return ""
-  const replaced = value.replace(/\\/g, "/")
-  return replaced === "/" ? "/" : replaced.replace(/\/+$/, "")
-}
-
-const joinPath = (base: string, segment: string): string => {
-  const normalizedBase = normalize(base)
-  const cleanSegment = segment.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "")
-  if (!normalizedBase || normalizedBase === "/") {
-    return `/${cleanSegment}`
-  }
-  return `${normalizedBase}/${cleanSegment}`
-}
-
-const buildRepoPlanPath = (directory: string, created: number, slug: string): string => {
-  return joinPath(joinPath(joinPath(directory, ".ax-code"), "plans"), `${created}-${slug}.md`)
-}
-
-const buildHomePlanPath = (created: number, slug: string): string => {
-  return `~/.ax-code/plans/${created}-${slug}.md`
-}
-
-const resolveTilde = (path: string, homeDir: string | null): string => {
-  const trimmed = path.trim()
-  if (!trimmed.startsWith("~")) return trimmed
-  if (trimmed === "~") return homeDir || trimmed
-  if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
-    return homeDir ? `${homeDir}${trimmed.slice(1)}` : trimmed
-  }
-  return trimmed
-}
-
-const toDisplayPath = (resolvedPath: string, options: { currentDirectory: string; homeDirectory: string }): string => {
-  const current = normalize(options.currentDirectory)
-  const home = normalize(options.homeDirectory)
-  const normalized = normalize(resolvedPath)
-
-  if (current && normalized.startsWith(current + "/")) {
-    return normalized.slice(current.length + 1)
-  }
-
-  if (home && normalized === home) {
-    return "~"
-  }
-
-  if (home && normalized.startsWith(home + "/")) {
-    return `~${normalized.slice(home.length)}`
-  }
-
-  return normalized
-}
-
-const resolveProjectRefForDirectory = (
-  directory: string,
-  projects: Array<{ id: string; path: string }>,
-  activeProjectId: string | null,
-): { id: string; path: string } | null => {
-  const normalized = normalize(directory.trim())
-  if (!normalized) {
-    return null
-  }
-
-  const activeProject = activeProjectId ? (projects.find((project) => project.id === activeProjectId) ?? null) : null
-
-  if (activeProject?.path) {
-    const activePath = normalize(activeProject.path)
-    if (normalized === activePath || normalized.startsWith(`${activePath}/`)) {
-      return { id: activeProject.id, path: activeProject.path }
-    }
-  }
-
-  const match = projects
-    .filter((project) => {
-      const projectPath = normalize(project.path)
-      return normalized === projectPath || normalized.startsWith(`${projectPath}/`)
-    })
-    .sort((left, right) => normalize(right.path).length - normalize(left.path).length)[0]
-
-  return match ? { id: match.id, path: match.path } : null
 }
 
 export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
@@ -169,14 +95,14 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
 
   const sessionDirectory = React.useMemo(() => {
     const raw = typeof session?.directory === "string" ? session.directory : ""
-    return normalize(raw || "")
+    return normalizePlanPath(raw || "")
   }, [session?.directory])
   const projectDirectory = React.useMemo(
-    () => normalize(effectiveDirectory || sessionDirectory),
+    () => normalizePlanPath(effectiveDirectory || sessionDirectory),
     [effectiveDirectory, sessionDirectory],
   )
   const currentProjectRef = React.useMemo(
-    () => resolveProjectRefForDirectory(projectDirectory, projects, activeProjectId),
+    () => resolvePlanProjectRefForDirectory(projectDirectory, projects, activeProjectId),
     [activeProjectId, projectDirectory, projects],
   )
   const canCreateWorktree = React.useMemo(
@@ -191,7 +117,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
     if (!resolvedPath || !sessionDirectory || !homeDirectory) {
       return resolvedPath
     }
-    return toDisplayPath(resolvedPath, { currentDirectory: sessionDirectory, homeDirectory })
+    return toPlanDisplayPath(resolvedPath, { currentDirectory: sessionDirectory, homeDirectory })
   }, [resolvedPath, sessionDirectory, homeDirectory])
   const [content, setContent] = React.useState<string>("")
   const [saveError, setSaveError] = React.useState<string | null>(null)
@@ -405,7 +331,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
 
       try {
         const repoPath = buildRepoPlanPath(sessionDirectory, session.time.created, session.slug)
-        const homePath = resolveTilde(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null)
+        const homePath = resolveTildePlanPath(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null)
 
         let resolved: string | null = null
         let text: string | null = null
