@@ -27,6 +27,7 @@ const { promisify } = require("util")
 const { createStartupDiagnostics } = require("./startup-diagnostics")
 const { assertShellOpenPathSucceeded, assertSpawnSyncSucceeded, collectOpenPathCandidates } = require("./open-paths")
 const { assertDesktopReadFileAllowed } = require("./desktop-read-file-policy")
+const { sanitizeDesktopWindowTitle } = require("./desktop-window-title")
 const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy } = require("./server-restart-policy")
@@ -2555,7 +2556,7 @@ handleCommand(
   "desktop_set_window_title",
   async (args, event) => {
     const win = senderWindow(event)
-    const title = typeof args.title === "string" ? args.title : ""
+    const title = sanitizeDesktopWindowTitle(args.title)
     if (win && !win.isDestroyed() && title) win.setTitle(title)
     return null
   },
