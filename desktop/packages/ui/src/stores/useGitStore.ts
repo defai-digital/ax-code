@@ -99,6 +99,8 @@ const inFlightDiffFetchesByDirectory = new Map<string, Set<string>>()
 const diffFetchGenerationByDirectory = new Map<string, number>()
 const inFlightStatusFetches = new Map<string, Promise<boolean>>()
 const inFlightEnsureAllByDirectory = new Map<string, Promise<void>>()
+const statusFetchRequestIds = new Map<string, number>()
+let statusFetchSequence = 0
 
 const getStatusFetchKey = (directory: string, mode: GitStatusFetchMode): string => `${mode}:${directory}`
 
@@ -402,6 +404,10 @@ export const useGitStore = create<GitStore>()(
           return existing
         }
 
+        const requestId = ++statusFetchSequence
+        statusFetchRequestIds.set(directory, requestId)
+        const isCurrentStatusFetch = () => statusFetchRequestIds.get(directory) === requestId
+
         const fetchPromise = (async () => {
           const { silent = false } = options
           const { directories } = get()
@@ -431,6 +437,9 @@ export const useGitStore = create<GitStore>()(
             }
 
             if (!isRepo) {
+              if (!isCurrentStatusFetch()) {
+                return false
+              }
               const newDirectories = new Map(get().directories)
               const currentDirState = newDirectories.get(directory) ?? dirState
               newDirectories.set(directory, {
@@ -446,6 +455,10 @@ export const useGitStore = create<GitStore>()(
             }
 
             const newStatus = await git.getGitStatus(directory, options.mode ? { mode: options.mode } : undefined)
+
+            if (!isCurrentStatusFetch()) {
+              return false
+            }
 
             if (hasStatusChanged(dirState.status, newStatus)) {
               statusChanged = true
@@ -516,7 +529,7 @@ export const useGitStore = create<GitStore>()(
           } catch (error) {
             console.error("Failed to fetch git status:", error)
           } finally {
-            if (!silent) {
+            if (!silent && isCurrentStatusFetch()) {
               const newDirectories = new Map(get().directories)
               const d = newDirectories.get(directory) ?? createEmptyDirectoryState()
               newDirectories.set(directory, { ...d, isLoadingStatus: false })
@@ -534,6 +547,9 @@ export const useGitStore = create<GitStore>()(
         } finally {
           if (inFlightStatusFetches.get(statusFetchKey) === fetchPromise) {
             inFlightStatusFetches.delete(statusFetchKey)
+          }
+          if (isCurrentStatusFetch()) {
+            statusFetchRequestIds.delete(directory)
           }
         }
       },

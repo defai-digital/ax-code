@@ -120,6 +120,36 @@ describe("useGitStore", () => {
     expect(lightResult).toBe(fullResult)
   })
 
+  test("does not let an older light status response overwrite a newer full status", async () => {
+    const requests: Deferred<GitStatus>[] = []
+    const git = createGitApi(() => {
+      const request = createDeferred<GitStatus>()
+      requests.push(request)
+      return request.promise
+    })
+
+    const lightPromise = useGitStore.getState().fetchStatus("/repo", git, { mode: "light", silent: true })
+    const fullPromise = useGitStore.getState().fetchStatus("/repo", git, { silent: true })
+    await Promise.resolve()
+
+    requests[1].resolve(
+      createStatus({ "new.ts": { insertions: 2, deletions: 0 } }, [
+        { path: "new.ts", index: " ", working_dir: "M" },
+      ]),
+    )
+    await fullPromise
+
+    requests[0].resolve(createStatus(undefined, [{ path: "stale.ts", index: " ", working_dir: "M" }]))
+    await lightPromise
+
+    expect(useGitStore.getState().getDirectoryState("/repo")?.status?.files).toEqual([
+      { path: "new.ts", index: " ", working_dir: "M" },
+    ])
+    expect(useGitStore.getState().getDirectoryState("/repo")?.status?.diffStats).toEqual({
+      "new.ts": { insertions: 2, deletions: 0 },
+    })
+  })
+
   test("optimistically stages modified files and preserves untouched file references", () => {
     const target = { path: "src/index.ts", index: " ", working_dir: "M" }
     const untouched = { path: "README.md", index: " ", working_dir: "M" }
