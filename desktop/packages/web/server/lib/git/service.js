@@ -382,12 +382,13 @@ const normalizeFilePathList = (paths) =>
     new Set((Array.isArray(paths) ? paths : [paths]).map((value) => String(value || "").trim()).filter(Boolean)),
   )
 
-const validateRepositoryFilePaths = (directoryPath, filePaths) => {
-  const repoRoot = path.resolve(directoryPath)
+export const validateRepositoryFilePaths = (directoryPath, filePaths, pathTools = path) => {
+  const repoRoot = pathTools.resolve(directoryPath)
 
   for (const filePath of filePaths) {
-    const absoluteTarget = path.resolve(repoRoot, filePath)
-    if (!absoluteTarget.startsWith(repoRoot + path.sep) && absoluteTarget !== repoRoot) {
+    const absoluteTarget = pathTools.resolve(repoRoot, filePath)
+    const relative = pathTools.relative(repoRoot, absoluteTarget)
+    if (relative.startsWith("..") || pathTools.isAbsolute(relative)) {
       throw new Error(`Path is outside repository: ${filePath}`)
     }
   }

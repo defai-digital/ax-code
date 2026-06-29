@@ -14,6 +14,7 @@ import {
   revertCommit,
   stageFiles,
   unstageFiles,
+  validateRepositoryFilePaths,
 } from "./service.js"
 
 // ---------------------------------------------------------------------------
@@ -106,6 +107,18 @@ describe("resolveBaseRefForLog", () => {
 // ---------------------------------------------------------------------------
 
 describe("git index path validation", () => {
+  it("allows Windows repository paths that differ only by case", () => {
+    expect(() =>
+      validateRepositoryFilePaths("C:\\Users\\Alice\\Repo", ["c:\\users\\alice\\repo\\src\\file.ts"], path.win32),
+    ).not.toThrow()
+  })
+
+  it("rejects Windows sibling path escapes", () => {
+    expect(() =>
+      validateRepositoryFilePaths("C:\\Users\\Alice\\Repo", ["C:\\Users\\Alice\\Repo2\\file.ts"], path.win32),
+    ).toThrow("Path is outside repository: C:\\Users\\Alice\\Repo2\\file.ts")
+  })
+
   it("rejects stage paths outside the repository before invoking git", async () => {
     await expect(stageFiles("/repo", ["../secret.txt"])).rejects.toThrow("Path is outside repository: ../secret.txt")
   })
