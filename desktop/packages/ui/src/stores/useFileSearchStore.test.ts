@@ -26,11 +26,13 @@ const searchFilesMock = vi.fn(() => {
 const nativeSearchRequests: Array<{ directory: string; query: string }> = []
 const searchFilesNativeMock = vi.fn(async (directory: string, query: string) => {
   nativeSearchRequests.push({ directory, query })
-  return null
+  return nativeSearchResult
 })
 const recordDesktopStartupEventMock = vi.fn(async () => {}) as (() => Promise<void>) & { mockClear: () => void }
 let isTauriShellValue = false
 let isElectronShellValue = false
+let isDesktopLocalOriginActiveValue = true
+let nativeSearchResult: Array<{ path: string }> | null = null
 
 vi.doMock("@/lib/ax-code/client", () => ({
   axCodeClient: {
@@ -40,6 +42,7 @@ vi.doMock("@/lib/ax-code/client", () => ({
 
 vi.doMock("@/lib/desktop", () => ({
   searchFilesNative: searchFilesNativeMock,
+  isDesktopLocalOriginActive: () => isDesktopLocalOriginActiveValue,
   isTauriShell: () => isTauriShellValue,
   isElectronShell: () => isElectronShellValue,
   recordDesktopStartupEvent: recordDesktopStartupEventMock,
@@ -59,6 +62,8 @@ describe("useFileSearchStore", () => {
     })
     isTauriShellValue = false
     isElectronShellValue = false
+    isDesktopLocalOriginActiveValue = true
+    nativeSearchResult = null
   })
 
   test("does not cache a stale in-flight search after invalidation", async () => {
@@ -157,15 +162,27 @@ describe("useFileSearchStore", () => {
     expect(useFileSearchStore.getState().cacheKeys).toEqual([])
   })
 
-  test("does not probe native file search in Electron", async () => {
+  test("uses native file search on the local Electron desktop origin", async () => {
     isTauriShellValue = true
     isElectronShellValue = true
+    nativeSearchResult = [{ path: "from-native.ts" }]
+
+    const searchPromise = useFileSearchStore.getState().searchFiles("/project", "foo", 10, { type: "file" })
+
+    expect(nativeSearchRequests).toEqual([{ directory: "/project", query: "foo" }])
+    expect(searchRequests).toHaveLength(0)
+    expect(await searchPromise).toEqual([{ path: "from-native.ts" }])
+  })
+
+  test("keeps remote Electron hosts on the HTTP file search path", async () => {
+    isTauriShellValue = true
+    isElectronShellValue = true
+    isDesktopLocalOriginActiveValue = false
 
     const searchPromise = useFileSearchStore.getState().searchFiles("/project", "foo", 10, { type: "file" })
 
     expect(nativeSearchRequests).toEqual([])
     expect(searchRequests).toHaveLength(1)
-
     searchRequests[0].resolve([{ path: "from-ax-code.ts" }])
     expect(await searchPromise).toEqual([{ path: "from-ax-code.ts" }])
   })

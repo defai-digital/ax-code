@@ -1,7 +1,13 @@
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
 import { axCodeClient, type ProjectFileSearchHit } from "@/lib/ax-code/client"
-import { searchFilesNative, isElectronShell, isTauriShell, recordDesktopStartupEvent } from "@/lib/desktop"
+import {
+  searchFilesNative,
+  isDesktopLocalOriginActive,
+  isElectronShell,
+  isTauriShell,
+  recordDesktopStartupEvent,
+} from "@/lib/desktop"
 
 const CACHE_TTL_MS = 30_000
 const MAX_CACHE_ENTRIES = 40
@@ -64,7 +70,7 @@ const cacheKeyMatchesDirectory = (cacheKey: string, directory: string) => {
   }
 }
 
-const canUseNativeFileSearch = (): boolean => isTauriShell() && !isElectronShell()
+const canUseNativeFileSearch = (): boolean => isTauriShell() && (!isElectronShell() || isDesktopLocalOriginActive())
 let firstFileSearchResultRecorded = false
 
 export const useFileSearchStore = create<FileSearchStoreState>()(
@@ -96,13 +102,18 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
           return inflight
         }
 
-        // File-only queries may use the legacy Tauri native command. Electron
-        // exposes a Tauri-compatible IPC shim but does not register this
-        // command, so keep Electron on the AX Code find.files path.
+        // File-only queries may use the native desktop command. Electron also
+        // exposes it, but only on the local desktop origin; remote hosts should
+        // stay on the AX Code HTTP search path.
         const searchStartedAt = Date.now()
         const fetchFiles: Promise<ProjectFileSearchHit[]> =
           type === "file" && canUseNativeFileSearch()
-            ? searchFilesNative(normalizedDirectory, normalizedQuery, { limit, includeHidden, respectGitignore }).then(
+            ? searchFilesNative(normalizedDirectory, normalizedQuery, {
+                limit,
+                includeHidden,
+                respectGitignore,
+                type,
+              }).then(
                 (native) =>
                   native ??
                   axCodeClient.searchFiles(normalizedQuery, {

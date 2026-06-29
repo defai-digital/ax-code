@@ -229,6 +229,7 @@ export type NativeSearchOptions = {
   limit?: number
   includeHidden?: boolean
   respectGitignore?: boolean
+  type?: "file" | "directory"
 }
 
 /**

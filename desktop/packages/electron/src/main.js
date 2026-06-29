@@ -27,7 +27,7 @@ const { promisify } = require("util")
 const { createStartupDiagnostics } = require("./startup-diagnostics")
 const { assertShellOpenPathSucceeded, collectOpenPathCandidates } = require("./open-paths")
 const { assertDesktopReadFileAllowed } = require("./desktop-read-file-policy")
-const { toNativeSearchRelativePath } = require("./desktop-file-search")
+const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
@@ -2201,6 +2201,7 @@ handleCommand("desktop_search_files", async (args) => {
   if (!query) return []
   const options = args.options && typeof args.options === "object" ? args.options : {}
   const includeHidden = options.includeHidden === true
+  const resultType = options.type === "directory" ? "directory" : "file"
   const limit = Number.isFinite(options.limit) && options.limit > 0 ? Math.min(Math.floor(options.limit), 1000) : 200
   const resolvedRoot = path.resolve(root)
   try {
@@ -2223,7 +2224,7 @@ handleCommand("desktop_search_files", async (args) => {
       if (entry.name.startsWith(".") && !includeHidden) continue
       if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue
       const full = path.join(dir, entry.name)
-      if (entry.name.toLowerCase().includes(query)) {
+      if (shouldIncludeNativeSearchEntry(entry, resultType, query)) {
         const ext = entry.isDirectory() ? undefined : path.extname(entry.name).replace(/^\./, "") || undefined
         results.push({
           name: entry.name,
