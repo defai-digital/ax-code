@@ -1,6 +1,6 @@
 import React from "react"
 import type { Session } from "@ax-code/sdk/v2"
-import { dedupeSessionsById, isSessionRelatedToProject, normalizePath } from "../utils"
+import { dedupeSessionsById, isPathWithinProject, isSessionRelatedToProject, normalizePath } from "../utils"
 import type { WorktreeMeta } from "../types"
 
 type Args = {
@@ -88,7 +88,7 @@ export const useProjectSessionLists = (args: Args) => {
         if (!projectWorktree) {
           return false
         }
-        return projectWorktree === project.normalizedPath || projectWorktree.startsWith(`${project.normalizedPath}/`)
+        return isPathWithinProject(projectWorktree, project.normalizedPath)
       })
 
       return dedupeSessionsById([...archived, ...unassignedLive])

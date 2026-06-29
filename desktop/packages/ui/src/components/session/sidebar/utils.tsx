@@ -154,15 +154,18 @@ export const resolveArchivedFolderName = (session: Session, projectRoot: string 
   const projectWorktree = normalizePath(
     (session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null,
   )
+  const normalizedProjectRoot = normalizePath(projectRoot)
   const resolved = sessionDirectory ?? projectWorktree
   if (!resolved) {
     return "unassigned"
   }
-  if (projectRoot && resolved === projectRoot) {
+  if (normalizedProjectRoot && resolved === normalizedProjectRoot) {
     return "project root"
   }
   const source =
-    projectRoot && resolved.startsWith(`${projectRoot}/`) ? resolved.slice(projectRoot.length + 1) : resolved
+    normalizedProjectRoot && projectPathMatchesRoot(resolved, normalizedProjectRoot)
+      ? resolved.slice(normalizedProjectRoot.length + (normalizedProjectRoot.endsWith("/") ? 0 : 1))
+      : resolved
   const segments = source.split("/").filter(Boolean)
   return segments[segments.length - 1] ?? "unassigned"
 }
@@ -176,8 +179,12 @@ export const isSessionRelatedToProject = (
   const projectWorktree = normalizePath(
     (session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null,
   )
+  const normalizedProjectRoot = normalizePath(projectRoot)
+  if (!normalizedProjectRoot) {
+    return false
+  }
 
-  if (projectWorktree && (projectWorktree === projectRoot || projectWorktree.startsWith(`${projectRoot}/`))) {
+  if (projectWorktree && projectPathMatchesRoot(projectWorktree, normalizedProjectRoot)) {
     return true
   }
 
@@ -187,7 +194,7 @@ export const isSessionRelatedToProject = (
   if (validDirectories && validDirectories.has(sessionDirectory)) {
     return true
   }
-  return sessionDirectory === projectRoot || sessionDirectory.startsWith(`${projectRoot}/`)
+  return projectPathMatchesRoot(sessionDirectory, normalizedProjectRoot)
 }
 
 const parseSummaryCount = (value: number | string | null | undefined): number | null => {
