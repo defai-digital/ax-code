@@ -833,17 +833,15 @@ const StaticToolRowInner: React.FC<{
             const className = cn(
               "min-w-0 flex-1 inline-flex items-center gap-1.5",
               safeHref &&
-                "underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90",
+                "bg-transparent p-0 text-left font-[inherit] underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90",
               "truncate whitespace-nowrap",
               TOOL_ROW_DESCRIPTION_CLASS,
             )
 
             return safeHref ? (
-              <a
+              <button
                 key={`${url}-${index}`}
-                href={safeHref}
-                target="_blank"
-                rel="noopener noreferrer"
+                type="button"
                 className={className}
                 style={{ color: "var(--status-info)" }}
                 title={url}
@@ -854,9 +852,14 @@ const StaticToolRowInner: React.FC<{
                 }}
               >
                 {content}
-              </a>
+              </button>
             ) : (
-              <span key={`${url}-${index}`} className={className} style={{ color: "var(--tools-description)" }} title={url}>
+              <span
+                key={`${url}-${index}`}
+                className={className}
+                style={{ color: "var(--tools-description)" }}
+                title={url}
+              >
                 {content}
               </span>
             )
