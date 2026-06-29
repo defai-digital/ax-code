@@ -9,6 +9,20 @@ import { updateDesktopSettings } from "@/lib/persistence"
 import { API_ENDPOINTS } from "@/lib/http"
 
 const DEFAULT_REFRESH_INTERVAL_MS = 60000
+let quotaProviderFetchSequence = 0
+let quotaFetchAllSequence = 0
+let latestQuotaFetchAllRequestId = 0
+const latestQuotaProviderFetchRequestIds = new Map<QuotaProviderId, number>()
+
+const nextQuotaProviderFetchRequestId = (providerId: QuotaProviderId): number => {
+  const requestId = ++quotaProviderFetchSequence
+  latestQuotaProviderFetchRequestIds.set(providerId, requestId)
+  return requestId
+}
+
+const isCurrentQuotaProviderFetch = (providerId: QuotaProviderId, requestId: number): boolean => {
+  return latestQuotaProviderFetchRequestIds.get(providerId) === requestId
+}
 
 interface QuotaSettingsState {
   autoRefresh: boolean
@@ -154,21 +168,27 @@ export const useQuotaStore = create<QuotaStore>()(
       },
 
       fetchAllQuotas: async () => {
+        const requestId = ++quotaFetchAllSequence
+        latestQuotaFetchAllRequestId = requestId
+        const isCurrentRequest = () => requestId === latestQuotaFetchAllRequestId
         set({ isLoading: true, error: null })
         const providerIds = QUOTA_PROVIDERS.map((provider) => provider.id)
         try {
           await Promise.all(providerIds.map((providerId) => get().fetchProviderQuota(providerId)))
+          if (!isCurrentRequest()) return
           set({
             isLoading: false,
             lastUpdated: Date.now(),
           })
         } catch (error) {
+          if (!isCurrentRequest()) return
           const message = error instanceof Error ? error.message : "Failed to fetch quotas"
           set({ isLoading: false, error: message })
         }
       },
 
       fetchProviderQuota: async (providerId) => {
+        const requestId = nextQuotaProviderFetchRequestId(providerId)
         set((state) => ({
           isFetchingProvider: { ...state.isFetchingProvider, [providerId]: true },
         }))
@@ -182,6 +202,7 @@ export const useQuotaStore = create<QuotaStore>()(
           }
 
           const result = payload as ProviderResult
+          if (!isCurrentQuotaProviderFetch(providerId, requestId)) return
           set((state) => {
             const next = state.results.filter((entry) => entry.providerId !== providerId)
             next.push(result)
@@ -198,15 +219,18 @@ export const useQuotaStore = create<QuotaStore>()(
             usage: null,
             fetchedAt: Date.now(),
           }
+          if (!isCurrentQuotaProviderFetch(providerId, requestId)) return
           set((state) => {
             const next = state.results.filter((entry) => entry.providerId !== providerId)
             next.push(fallback)
             return { results: next, error: message }
           })
         } finally {
-          set((state) => ({
-            isFetchingProvider: { ...state.isFetchingProvider, [providerId]: false },
-          }))
+          if (isCurrentQuotaProviderFetch(providerId, requestId)) {
+            set((state) => ({
+              isFetchingProvider: { ...state.isFetchingProvider, [providerId]: false },
+            }))
+          }
         }
       },
 
