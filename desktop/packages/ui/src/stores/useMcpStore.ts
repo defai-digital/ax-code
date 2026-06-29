@@ -61,6 +61,9 @@ type TestConnectionResult = {
   warning?: string
 }
 
+const mcpStatusRefreshRequestIds = new Map<string, number>()
+let mcpStatusRefreshSequence = 0
+
 interface McpStore {
   byDirectory: Record<string, McpStatusMap>
   diagnosticsByDirectory: Record<string, McpRuntimeDiagnosticMap>
@@ -104,6 +107,9 @@ export const useMcpStore = create<McpStore>()(
     refresh: async (options) => {
       const directory = normalizeDirectory(options?.directory ?? useDirectoryStore.getState().currentDirectory)
       const key = toKey(directory)
+      const requestId = ++mcpStatusRefreshSequence
+      mcpStatusRefreshRequestIds.set(key, requestId)
+      const isCurrentRefresh = () => mcpStatusRefreshRequestIds.get(key) === requestId
 
       if (!options?.silent) {
         set((state) => ({
@@ -117,6 +123,10 @@ export const useMcpStore = create<McpStore>()(
         const result = await api.mcp.status()
         const data = (result.data ?? {}) as McpStatusMap
 
+        if (!isCurrentRefresh()) {
+          return
+        }
+
         set((state) => ({
           byDirectory: { ...state.byDirectory, [key]: data },
           diagnosticsByDirectory: {
@@ -129,11 +139,18 @@ export const useMcpStore = create<McpStore>()(
           lastErrorKeys: { ...state.lastErrorKeys, [key]: null },
         }))
       } catch (error) {
+        if (!isCurrentRefresh()) {
+          return
+        }
         const message = error instanceof Error ? error.message : "Failed to load MCP status"
         set((state) => ({
           loadingKeys: { ...state.loadingKeys, [key]: false },
           lastErrorKeys: { ...state.lastErrorKeys, [key]: message },
         }))
+      } finally {
+        if (isCurrentRefresh()) {
+          mcpStatusRefreshRequestIds.delete(key)
+        }
       }
     },
 
