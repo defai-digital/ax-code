@@ -20,8 +20,8 @@ import { API_ENDPOINTS } from "@/lib/http"
 
 import {
   getExternalFaviconUrl,
-  isExternalHttpUrl,
   isLoopbackHttpUrl,
+  isSafeExternalUrl,
   normalizeLoopbackPreviewUrl,
   openExternalUrl,
 } from "@/lib/url"
@@ -92,7 +92,7 @@ const useExternalLinkInteractions = ({
       }
 
       const href = anchor.getAttribute("href") ?? ""
-      if (!isExternalHttpUrl(href)) {
+      if (!isSafeExternalUrl(href)) {
         return
       }
 
@@ -1113,7 +1113,7 @@ const buildMarkdownComponents = ({
   },
   a({ href, children, ...props }) {
     const targetHref = href ?? ""
-    const isExternal = isExternalHttpUrl(targetHref)
+    const isExternal = isSafeExternalUrl(targetHref)
     const isLoopback = onPreviewLoopback ? isLoopbackHttpUrl(targetHref) : false
     const previewHref = isLoopback ? normalizeLoopbackPreviewUrl(targetHref) : null
     return (

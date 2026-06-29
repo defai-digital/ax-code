@@ -48,6 +48,7 @@ const {
   sanitizeClientTokenForStorage,
 } = require("./desktop-hosts")
 const { isTrustedRendererNavigationUrl, normalizeDevRendererUrl } = require("./renderer-navigation-policy")
+const { normalizeSafeExternalUrl } = require("./external-url")
 const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
 
@@ -327,16 +328,9 @@ function isTrustedRendererNavigation(url) {
 // Only allow safe protocols for shell.openExternal. Electron's docs explicitly
 // recommend validating the URL protocol to prevent launching arbitrary OS handlers
 // (file://, ms-settings:, javascript:, etc.) from the renderer.
-const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"])
 function safeOpenExternal(url) {
-  try {
-    const parsed = new URL(url)
-    if (SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol)) {
-      shell.openExternal(url)
-    }
-  } catch {
-    // Malformed URL — silently ignore
-  }
+  const normalized = normalizeSafeExternalUrl(url)
+  if (normalized) shell.openExternal(normalized)
 }
 
 async function createWindow() {
@@ -1998,11 +1992,9 @@ handleCommand("desktop_reveal_path", async (args) => {
 handleCommand("desktop_open_external_url", async (args) => {
   const target = typeof args.url === "string" ? args.url.trim() : ""
   if (!target) throw new Error("URL is required")
-  const parsed = new URL(target)
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("Only HTTP URLs can be opened externally")
-  }
-  await shell.openExternal(parsed.toString())
+  const normalized = normalizeSafeExternalUrl(target)
+  if (!normalized) throw new Error("Only safe external URLs can be opened externally")
+  await shell.openExternal(normalized)
   return null
 })
 

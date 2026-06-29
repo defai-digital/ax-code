@@ -4,7 +4,7 @@ import { isLoopbackHostname, normalizeLoopbackHostname } from "./loopback"
 /**
  * Utility for opening external URLs with desktop shell support.
  * In Tauri desktop runtime, uses a narrow native command that only accepts
- * http(s) URLs. Falls back to window.open() for web/runtime shims.
+ * safe external URLs. Falls back to window.open() for web/runtime shims.
  * Falls back to window.open() for web runtime.
  */
 
@@ -22,6 +22,16 @@ export const isExternalHttpUrl = (url: string): boolean => {
     return false
   }
   return parsed.protocol === "http:" || parsed.protocol === "https:"
+}
+
+const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"])
+
+export const isSafeExternalUrl = (url: string): boolean => {
+  const parsed = parseUrlSafely(url.trim())
+  if (!parsed) {
+    return false
+  }
+  return SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol)
 }
 
 export const getExternalFaviconUrl = (url: string): string | null => {
@@ -150,7 +160,7 @@ export const openExternalUrl = async (url: string): Promise<boolean> => {
     return false
   }
 
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+  if (!SAFE_EXTERNAL_PROTOCOLS.has(parsed.protocol)) {
     return false
   }
 
