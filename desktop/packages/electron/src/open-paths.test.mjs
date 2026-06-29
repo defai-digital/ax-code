@@ -2,7 +2,12 @@ import { createRequire } from "node:module"
 import { describe, expect, test } from "vitest"
 
 const require = createRequire(import.meta.url)
-const { assertShellOpenPathSucceeded, collectOpenPathCandidates, normalizeCandidate } = require("./open-paths.js")
+const {
+  assertShellOpenPathSucceeded,
+  assertSpawnSyncSucceeded,
+  collectOpenPathCandidates,
+  normalizeCandidate,
+} = require("./open-paths.js")
 
 describe("normalizeCandidate", () => {
   test("resolves relative paths against cwd", () => {
@@ -81,5 +86,21 @@ describe("assertShellOpenPathSucceeded", () => {
     expect(() => assertShellOpenPathSucceeded("The system cannot find the file specified.")).toThrow(
       "The system cannot find the file specified.",
     )
+  })
+})
+
+describe("assertSpawnSyncSucceeded", () => {
+  test("accepts zero status process results", () => {
+    expect(() => assertSpawnSyncSucceeded({ status: 0 }, "open")).not.toThrow()
+  })
+
+  test("throws stderr for non-zero process results", () => {
+    expect(() => assertSpawnSyncSucceeded({ status: 1, stderr: "Unable to find application" }, "open")).toThrow(
+      "Unable to find application",
+    )
+  })
+
+  test("throws spawn errors", () => {
+    expect(() => assertSpawnSyncSucceeded({ error: new Error("spawn failed") }, "open")).toThrow("spawn failed")
   })
 })

@@ -69,8 +69,19 @@ const assertShellOpenPathSucceeded = (errorMessage) => {
   }
 }
 
+const assertSpawnSyncSucceeded = (result, command) => {
+  if (result?.error) {
+    throw result.error
+  }
+  if (typeof result?.status === "number" && result.status !== 0) {
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : ""
+    throw new Error(stderr || `${command} exited ${result.status}`)
+  }
+}
+
 module.exports = {
   assertShellOpenPathSucceeded,
+  assertSpawnSyncSucceeded,
   collectOpenPathCandidates,
   normalizeCandidate,
 }

@@ -25,7 +25,7 @@ const dgram = require("dgram")
 const { execFile, spawn, spawnSync } = require("child_process")
 const { promisify } = require("util")
 const { createStartupDiagnostics } = require("./startup-diagnostics")
-const { assertShellOpenPathSucceeded, collectOpenPathCandidates } = require("./open-paths")
+const { assertShellOpenPathSucceeded, assertSpawnSyncSucceeded, collectOpenPathCandidates } = require("./open-paths")
 const { assertDesktopReadFileAllowed } = require("./desktop-read-file-policy")
 const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
@@ -1941,8 +1941,11 @@ handleCommand("desktop_open_path", async (args) => {
   const appName = typeof args.app === "string" ? args.app.trim() : ""
   if (!targetPath) throw new Error("Path is required")
   if (process.platform === "darwin") {
-    const openArgs = appName ? ["-a", appName, targetPath] : [targetPath]
-    spawn("open", openArgs, { detached: true, stdio: "ignore" }).unref()
+    if (appName) {
+      assertSpawnSyncSucceeded(spawnSync("open", ["-a", appName, targetPath], { encoding: "utf8" }), "open")
+      return null
+    }
+    assertShellOpenPathSucceeded(await shell.openPath(targetPath))
     return null
   }
   assertShellOpenPathSucceeded(await shell.openPath(targetPath))
