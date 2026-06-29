@@ -21,7 +21,6 @@ const path = require("path")
 const os = require("os")
 const fs = require("fs")
 const fsp = require("fs/promises")
-const dgram = require("dgram")
 const { execFile, spawn, spawnSync } = require("child_process")
 const { promisify } = require("util")
 const { createStartupDiagnostics } = require("./startup-diagnostics")
@@ -54,6 +53,7 @@ const { buildDesktopOpenDialogOptions, resolveDesktopDialogOwnerWindow } = requi
 const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
 const { isDesktopBrowserCaptureTargetForSender } = require("./desktop-browser-capture-policy")
+const { detectLanIPv4Address } = require("./desktop-lan-address")
 
 const execFileAsync = promisify(execFile)
 
@@ -531,15 +531,8 @@ handleCommand("desktop_set_badge_count", async (args) => {
 })
 
 handleCommand("desktop_get_lan_address", async () => {
-  const nets = os.networkInterfaces()
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] ?? []) {
-      if (net.family === "IPv4" && !net.internal) {
-        return `http://${net.address}:${serverPort}`
-      }
-    }
-  }
-  return null
+  const lanAddress = await detectLanIPv4Address()
+  return lanAddress ? `http://${lanAddress}:${serverPort}` : null
 })
 
 handleCommand("desktop_dialog_open", async (args, event) => {
@@ -855,40 +848,6 @@ const probeHostWithTimeout = async (url, timeoutMs, clientToken = "") => {
   } catch {
     return { status: "unreachable", latencyMs: Date.now() - started }
   }
-}
-
-// ── LAN address detection ──────────────────────────────────────────────────
-const detectLanIPv4Address = async () => {
-  const ip = await new Promise((resolve) => {
-    const socket = dgram.createSocket("udp4")
-    const finish = (value) => {
-      try {
-        socket.close()
-      } catch {}
-      resolve(value)
-    }
-    socket.once("error", () => finish(null))
-    try {
-      socket.connect(80, "8.8.8.8", (error) => {
-        if (error) return finish(null)
-        try {
-          const addr = socket.address()
-          finish(addr && typeof addr.address === "string" ? addr.address : null)
-        } catch {
-          finish(null)
-        }
-      })
-    } catch {
-      finish(null)
-    }
-  })
-  if (ip && ip !== "0.0.0.0" && !ip.startsWith("127.")) return ip
-  for (const entries of Object.values(os.networkInterfaces() || {})) {
-    for (const entry of entries || []) {
-      if (entry.family === "IPv4" && !entry.internal && entry.address) return entry.address
-    }
-  }
-  return null
 }
 
 // ── Native notifications ───────────────────────────────────────────────────
