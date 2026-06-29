@@ -32,6 +32,7 @@ const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support
 const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { sendUpdateProgressToWindows } = require("./update-progress")
+const { normalizeInstalledAppsCache } = require("./installed-apps-cache")
 const {
   reloadLocalRendererWindowsAfterServerRestart,
   resolveServerRestartReloadUrl,
@@ -2060,9 +2061,7 @@ handleCommand("desktop_get_installed_apps", async (args) => {
   try {
     cache = JSON.parse(await fsp.readFile(cachePath, "utf8"))
   } catch {}
-  const cachedApps = Array.isArray(cache?.apps) ? cache.apps : []
-  const hasCache = Boolean(cache)
-  const isCacheStale = !cache || now - Number(cache.updatedAt || 0) > INSTALLED_APPS_CACHE_TTL_SECS
+  const cacheState = normalizeInstalledAppsCache(cache, now, INSTALLED_APPS_CACHE_TTL_SECS)
   const refresh = async () => {
     const apps =
       process.platform === "win32"
@@ -2075,8 +2074,12 @@ handleCommand("desktop_get_installed_apps", async (args) => {
   if (process.platform !== "darwin" && process.platform !== "win32") {
     throw new Error("desktop_get_installed_apps is only supported on macOS and Windows")
   }
-  if (!hasCache || isCacheStale || args.force === true) void refresh()
-  return { apps: cachedApps, hasCache, isCacheStale }
+  if (!cacheState.hasCache || cacheState.isCacheStale || args.force === true) {
+    void refresh().catch((error) => {
+      console.warn("[electron] failed to refresh installed apps cache", error)
+    })
+  }
+  return cacheState
 })
 
 handleCommand("desktop_filter_installed_apps", async (args) => {
