@@ -17,6 +17,7 @@ import { ProjectActionsSection } from "@/components/sections/projects/ProjectAct
 import { Icon } from "@/components/icon/Icon"
 import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { useI18n } from "@/lib/i18n"
+import { isCurrentProjectOperationTarget, type ProjectOperationTarget } from "./projectOperationTarget"
 
 export const ProjectsPage: React.FC = () => {
   const { t } = useI18n()
@@ -68,12 +69,20 @@ export const ProjectsPage: React.FC = () => {
     })
   }, [])
 
-  const selectedProjectRef = React.useMemo(() => {
+  const selectedProjectTarget = React.useMemo<ProjectOperationTarget | null>(() => {
     if (!selectedProject) {
       return null
     }
     return { id: selectedProject.id, path: selectedProject.path }
   }, [selectedProject])
+  const selectedProjectTargetRef = React.useRef<ProjectOperationTarget | null>(null)
+  selectedProjectTargetRef.current = selectedProjectTarget
+
+  const isCurrentProjectOperation = React.useCallback(
+    (target: ProjectOperationTarget | null) =>
+      isCurrentProjectOperationTarget(target, selectedProjectTargetRef.current),
+    [],
+  )
 
   React.useEffect(() => {
     if (!selectedProject) {
@@ -110,10 +119,16 @@ export const ProjectsPage: React.FC = () => {
   const handleSave = React.useCallback(async () => {
     if (!selectedProject) return
 
+    const operationTarget = selectedProjectTarget
+    if (!operationTarget) return
+
     if (pendingUploadIconFile) {
       setIsUploadingIcon(true)
-      const uploadResult = await uploadProjectIcon(selectedProject.id, pendingUploadIconFile)
+      const uploadResult = await uploadProjectIcon(operationTarget.id, pendingUploadIconFile)
       setIsUploadingIcon(false)
+      if (!isCurrentProjectOperation(operationTarget)) {
+        return
+      }
       if (!uploadResult.ok) {
         toast.error(uploadResult.error || t("settings.projects.page.toast.uploadIconFailed"))
         return
@@ -127,8 +142,11 @@ export const ProjectsPage: React.FC = () => {
 
     if (willRemoveImageIcon) {
       setIsRemovingCustomIcon(true)
-      const removeResult = await removeProjectIcon(selectedProject.id)
+      const removeResult = await removeProjectIcon(operationTarget.id)
       setIsRemovingCustomIcon(false)
+      if (!isCurrentProjectOperation(operationTarget)) {
+        return
+      }
       if (!removeResult.ok) {
         toast.error(removeResult.error || t("settings.projects.page.toast.removeIconFailed"))
         return
@@ -138,7 +156,11 @@ export const ProjectsPage: React.FC = () => {
       setIconBackground(null)
     }
 
-    updateProjectMeta(selectedProject.id, {
+    if (!isCurrentProjectOperation(operationTarget)) {
+      return
+    }
+
+    updateProjectMeta(operationTarget.id, {
       label: name.trim(),
       icon,
       color,
@@ -152,9 +174,11 @@ export const ProjectsPage: React.FC = () => {
     pendingUploadIconFile,
     pendingRemoveImageIcon,
     clearPendingUploadIcon,
+    isCurrentProjectOperation,
     uploadProjectIcon,
     removeProjectIcon,
     selectedProject,
+    selectedProjectTarget,
     t,
     updateProjectMeta,
   ])
@@ -223,13 +247,21 @@ export const ProjectsPage: React.FC = () => {
       return
     }
 
+    const operationTarget = selectedProjectTarget
+    if (!operationTarget) {
+      return
+    }
+
     clearPendingUploadIcon()
     setPendingRemoveImageIcon(false)
     setPreviewImageFailed(false)
 
     setIsDiscoveringIcon(true)
-    void discoverProjectIcon(selectedProject.id)
+    void discoverProjectIcon(operationTarget.id)
       .then((result) => {
+        if (!isCurrentProjectOperation(operationTarget)) {
+          return
+        }
         if (!result.ok) {
           toast.error(result.error || t("settings.projects.page.toast.discoverIconFailed"))
           return
@@ -243,7 +275,15 @@ export const ProjectsPage: React.FC = () => {
       .finally(() => {
         setIsDiscoveringIcon(false)
       })
-  }, [clearPendingUploadIcon, discoverProjectIcon, isDiscoveringIcon, selectedProject, t])
+  }, [
+    clearPendingUploadIcon,
+    discoverProjectIcon,
+    isCurrentProjectOperation,
+    isDiscoveringIcon,
+    selectedProject,
+    selectedProjectTarget,
+    t,
+  ])
 
   if (!selectedProject) {
     return (
@@ -503,7 +543,7 @@ export const ProjectsPage: React.FC = () => {
         {/* Worktree Group */}
         <div className="mb-8">
           <section className="px-2 pb-2 pt-0">
-            {selectedProjectRef && <ProjectActionsSection projectRef={selectedProjectRef} />}
+            {selectedProjectTarget && <ProjectActionsSection projectRef={selectedProjectTarget} />}
           </section>
         </div>
 
@@ -515,7 +555,7 @@ export const ProjectsPage: React.FC = () => {
             </h3>
           </div>
           <section className="px-2 pb-2 pt-0">
-            {selectedProjectRef && <WorktreeSectionContent projectRef={selectedProjectRef} />}
+            {selectedProjectTarget && <WorktreeSectionContent projectRef={selectedProjectTarget} />}
           </section>
         </div>
       </div>
