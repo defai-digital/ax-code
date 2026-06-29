@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { parseModelIdentifier } from "@/lib/modelIdentifier"
 import { API_ENDPOINTS } from "@/lib/http"
+import { loadDefaultsSettings } from "./defaultsSettingsLoad"
 
 const getDisplayModel = (storedModel: string | undefined): { providerId: string; modelId: string } => {
   const parsed = parseModelIdentifier(storedModel)
@@ -44,71 +45,39 @@ export const DefaultsSettings: React.FC = () => {
   const parsedModel = React.useMemo(() => getDisplayModel(defaultModel), [defaultModel])
 
   React.useEffect(() => {
+    const abort = new AbortController()
+    let active = true
+
     const loadSettings = async () => {
       try {
-        let data: {
-          defaultModel?: string
-          defaultVariant?: string
-          defaultAgent?: string
-        } | null = null
-
-        if (!data) {
-          const runtimeSettings = getRegisteredRuntimeAPIs()?.settings
-          if (runtimeSettings) {
-            try {
-              const result = await runtimeSettings.load()
-              const settings = result?.settings
-              if (settings) {
-                data = {
-                  defaultModel: typeof settings.defaultModel === "string" ? settings.defaultModel : undefined,
-                  defaultVariant:
-                    typeof (settings as Record<string, unknown>).defaultVariant === "string"
-                      ? ((settings as Record<string, unknown>).defaultVariant as string)
-                      : undefined,
-                  defaultAgent: typeof settings.defaultAgent === "string" ? settings.defaultAgent : undefined,
-                }
-              }
-            } catch {
-              // fall through
-            }
-          }
-        }
-
-        if (!data) {
-          const response = await fetch(API_ENDPOINTS.config.settings, {
-            method: "GET",
-            headers: { Accept: "application/json" },
-          })
-          if (response.ok) {
-            data = await response.json()
-          }
-        }
+        const runtimeSettings = getRegisteredRuntimeAPIs()?.settings
+        const data = await loadDefaultsSettings({
+          fetchImpl: fetch,
+          loadRuntimeSettings: runtimeSettings?.load,
+          signal: abort.signal,
+        })
+        if (!active) return
 
         if (data) {
-          const model =
-            typeof data.defaultModel === "string" && data.defaultModel.trim().length > 0
-              ? data.defaultModel.trim()
-              : undefined
-          const variant =
-            typeof data.defaultVariant === "string" && data.defaultVariant.trim().length > 0
-              ? data.defaultVariant.trim()
-              : undefined
-          const agent =
-            typeof data.defaultAgent === "string" && data.defaultAgent.trim().length > 0
-              ? data.defaultAgent.trim()
-              : undefined
-
-          if (model !== undefined) setDefaultModel(model)
-          if (variant !== undefined) setDefaultVariant(variant)
-          if (agent !== undefined) setDefaultAgent(agent)
+          if (data.defaultModel !== undefined) setDefaultModel(data.defaultModel)
+          if (data.defaultVariant !== undefined) setDefaultVariant(data.defaultVariant)
+          if (data.defaultAgent !== undefined) setDefaultAgent(data.defaultAgent)
         }
       } catch (error) {
-        console.warn("Failed to load defaults settings:", error)
+        if (active && (error as Error).name !== "AbortError") {
+          console.warn("Failed to load defaults settings:", error)
+        }
       } finally {
-        setIsLoading(false)
+        if (active) {
+          setIsLoading(false)
+        }
       }
     }
     loadSettings()
+    return () => {
+      active = false
+      abort.abort()
+    }
   }, [])
 
   const handleModelChange = React.useCallback(
