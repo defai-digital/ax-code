@@ -27,6 +27,17 @@ const isStringRecord = (value: unknown): value is Record<string, string> => {
   return Object.values(value as Record<string, unknown>).every((entry) => typeof entry === "string")
 }
 
+const isPreviewAncestryEntry = (value: unknown): value is PreviewElementMetadata["ancestry"][number] => {
+  if (!value || typeof value !== "object") return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.tag === "string" &&
+    typeof record.selectorPart === "string" &&
+    (typeof record.id === "string" || typeof record.id === "undefined") &&
+    (typeof record.className === "string" || typeof record.className === "undefined")
+  )
+}
+
 // Bridge messages arrive via postMessage from a (possibly untrusted) proxied page,
 // so validate the full shape every downstream consumer touches — not just bounds.
 // formatPreviewAnnotationMarkdown dereferences text/attributes/center/computedStyle/
@@ -48,7 +59,8 @@ export const isPreviewElementMetadata = (value: unknown): value is PreviewElemen
     isXYRecord(record.center) &&
     isStringRecord(record.attributes) &&
     isStringRecord(record.computedStyle) &&
-    Array.isArray(record.ancestry)
+    Array.isArray(record.ancestry) &&
+    record.ancestry.every(isPreviewAncestryEntry)
   )
 }
 
