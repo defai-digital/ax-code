@@ -35,6 +35,7 @@ import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { cn } from "@/lib/utils"
 import { EditorView } from "@codemirror/view"
 import type { Extension } from "@codemirror/state"
+import { runSettingsDeleteMutation } from "../settingsDeleteMutation"
 
 export interface SkillsPageProps {
   view?: "installed" | "catalog"
@@ -154,6 +155,7 @@ const SkillsInstalledPage: React.FC = () => {
   const [originalFileContent, setOriginalFileContent] = React.useState("")
   const [deleteFilePath, setDeleteFilePath] = React.useState<string | null>(null)
   const [isDeletingFile, setIsDeletingFile] = React.useState(false)
+  const fileLoadRequestRef = React.useRef(0)
 
   const hasSkillChanges = isNewSkill
     ? draftName.trim() !== "" || description.trim() !== "" || instructions.trim() !== "" || pendingFiles.length > 0
@@ -347,6 +349,8 @@ const SkillsInstalledPage: React.FC = () => {
   }
 
   const handleAddFile = () => {
+    fileLoadRequestRef.current += 1
+    setIsLoadingFile(false)
     setEditingFilePath(null)
     setNewFileName("")
     setNewFileContent("")
@@ -355,12 +359,15 @@ const SkillsInstalledPage: React.FC = () => {
   }
 
   const handleEditFile = async (filePath: string) => {
+    const requestId = fileLoadRequestRef.current + 1
+    fileLoadRequestRef.current = requestId
     setEditingFilePath(filePath)
     setNewFileName(filePath)
 
     if (isNewSkill) {
       const pendingFile = pendingFiles.find((f) => f.path === filePath)
       const content = pendingFile?.content || ""
+      setIsLoadingFile(false)
       setNewFileContent(content)
       setOriginalFileContent(content)
       setIsFileDialogOpen(true)
@@ -375,14 +382,22 @@ const SkillsInstalledPage: React.FC = () => {
     try {
       const { readSupportingFile } = useSkillsStore.getState()
       const content = await readSupportingFile(selectedSkillName, filePath)
+      if (fileLoadRequestRef.current !== requestId) {
+        return
+      }
       setNewFileContent(content || "")
       setOriginalFileContent(content || "")
     } catch {
+      if (fileLoadRequestRef.current !== requestId) {
+        return
+      }
       toast.error(t("settings.skills.page.toast.loadFileContentFailed"))
       setNewFileContent("")
       setOriginalFileContent("")
     } finally {
-      setIsLoadingFile(false)
+      if (fileLoadRequestRef.current === requestId) {
+        setIsLoadingFile(false)
+      }
     }
   }
 
@@ -460,22 +475,36 @@ const SkillsInstalledPage: React.FC = () => {
       return
     }
 
+    const skillName = selectedSkillName
+    const filePath = deleteFilePath
+
     setIsDeletingFile(true)
-    const { deleteSupportingFile } = useSkillsStore.getState()
-    const success = await deleteSupportingFile(selectedSkillName, deleteFilePath)
-
-    if (success) {
-      toast.success(t("settings.skills.page.toast.fileDeleted", { path: deleteFilePath }))
-      const detail = await getSkillDetail(selectedSkillName)
-      if (detail) {
-        setSupportingFiles(detail.sources.md.supportingFiles || [])
+    try {
+      const { deleteSupportingFile } = useSkillsStore.getState()
+      const outcome = await runSettingsDeleteMutation(() => deleteSupportingFile(skillName, filePath))
+      if (outcome.status === "unexpected-error") {
+        console.error("Failed to delete skill supporting file:", outcome.error)
+        toast.error(t("settings.skills.page.toast.deleteFileFailed"))
+        return
       }
-      setDeleteFilePath(null)
-    } else {
-      toast.error(t("settings.skills.page.toast.deleteFileFailed"))
-    }
 
-    setIsDeletingFile(false)
+      if (outcome.result) {
+        toast.success(t("settings.skills.page.toast.fileDeleted", { path: filePath }))
+        try {
+          const detail = await getSkillDetail(skillName)
+          if (detail && useSkillsStore.getState().selectedSkillName === skillName) {
+            setSupportingFiles(detail.sources.md.supportingFiles || [])
+          }
+        } catch (error) {
+          console.warn("Deleted skill supporting file, but failed to refresh skill details:", error)
+        }
+        setDeleteFilePath(null)
+      } else {
+        toast.error(t("settings.skills.page.toast.deleteFileFailed"))
+      }
+    } finally {
+      setIsDeletingFile(false)
+    }
   }
 
   if ((!selectedSkillName && !skillDraft) || hasStaleSelection) {

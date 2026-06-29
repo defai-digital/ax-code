@@ -20,6 +20,7 @@ import { SettingsProjectSelector } from "@/components/sections/shared/SettingsPr
 import { SidebarGroup } from "@/components/sections/shared/SidebarGroup"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
+import { runSettingsDeleteMutation } from "../settingsDeleteMutation"
 
 interface SkillsSidebarProps {
   onItemSelect?: () => void
@@ -84,15 +85,25 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       return
     }
 
+    const skillName = deleteDialogSkill.name
     setIsDeletePending(true)
-    const success = await deleteSkill(deleteDialogSkill.name)
-    if (success) {
-      toast.success(t("settings.skills.sidebar.toast.skillDeleted", { name: deleteDialogSkill.name }))
-      setDeleteDialogSkill(null)
-    } else {
-      toast.error(t("settings.skills.sidebar.toast.deleteSkillFailed"))
+    try {
+      const outcome = await runSettingsDeleteMutation(() => deleteSkill(skillName))
+      if (outcome.status === "unexpected-error") {
+        console.error("Failed to delete skill:", outcome.error)
+        toast.error(t("settings.skills.sidebar.toast.deleteSkillFailed"))
+        return
+      }
+
+      if (outcome.result) {
+        toast.success(t("settings.skills.sidebar.toast.skillDeleted", { name: skillName }))
+        setDeleteDialogSkill(null)
+      } else {
+        toast.error(t("settings.skills.sidebar.toast.deleteSkillFailed"))
+      }
+    } finally {
+      setIsDeletePending(false)
     }
-    setIsDeletePending(false)
   }
 
   const handleDuplicateSkill = async (skill: DiscoveredSkill) => {

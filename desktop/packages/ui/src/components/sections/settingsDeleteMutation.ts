@@ -1,8 +1,8 @@
-export type SettingsDeleteMutationResult<T extends { ok: boolean }> =
+export type SettingsDeleteMutationResult<T> =
   | { status: "completed"; result: T }
   | { status: "unexpected-error"; error: unknown }
 
-export const runSettingsDeleteMutation = async <T extends { ok: boolean }>(
+export const runSettingsDeleteMutation = async <T>(
   mutation: () => Promise<T>,
 ): Promise<SettingsDeleteMutationResult<T>> => {
   try {

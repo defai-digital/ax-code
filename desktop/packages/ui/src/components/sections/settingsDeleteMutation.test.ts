@@ -19,4 +19,11 @@ describe("runSettingsDeleteMutation", () => {
 
     expect(result).toEqual({ status: "unexpected-error", error })
   })
+
+  test("supports boolean mutation results", async () => {
+    await expect(runSettingsDeleteMutation(async () => true)).resolves.toEqual({
+      status: "completed",
+      result: true,
+    })
+  })
 })
