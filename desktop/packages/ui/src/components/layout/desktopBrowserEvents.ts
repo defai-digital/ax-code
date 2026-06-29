@@ -10,6 +10,8 @@ export type DesktopBrowserNewWindowNavigation = {
   url: string
 }
 
+export type DesktopBrowserLoadUrl = (url: string) => void
+
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null
 }
@@ -30,4 +32,16 @@ export const readDesktopBrowserNewWindowNavigation = (event: Event): DesktopBrow
 
   const url = typeof fields.url === "string" ? fields.url : typeof detail?.url === "string" ? detail.url : ""
   return url ? { url } : null
+}
+
+export const handleDesktopBrowserNewWindowEvent = (event: Event, loadUrl: DesktopBrowserLoadUrl): boolean => {
+  event.preventDefault()
+
+  const navigation = readDesktopBrowserNewWindowNavigation(event)
+  if (!navigation) {
+    return false
+  }
+
+  loadUrl(navigation.url)
+  return true
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { readDesktopBrowserNewWindowNavigation } from "./desktopBrowserEvents"
+import { handleDesktopBrowserNewWindowEvent, readDesktopBrowserNewWindowNavigation } from "./desktopBrowserEvents"
 
 const webviewNewWindowEvent = (input: { url?: string; disposition?: string }): Event => {
   const event = new Event("new-window", { cancelable: true }) as Event & {
@@ -38,5 +38,37 @@ describe("readDesktopBrowserNewWindowNavigation", () => {
       ),
     ).toBeNull()
     expect(readDesktopBrowserNewWindowNavigation(webviewNewWindowEvent({ disposition: "new-window" }))).toBeNull()
+  })
+})
+
+describe("handleDesktopBrowserNewWindowEvent", () => {
+  test("prevents the popup and loads supported new-window URLs in the same browser pane", () => {
+    const event = webviewNewWindowEvent({ url: "https://example.com/docs", disposition: "new-window" })
+    const loadedUrls: string[] = []
+
+    expect(handleDesktopBrowserNewWindowEvent(event, (url) => loadedUrls.push(url))).toBe(true)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(loadedUrls).toEqual(["https://example.com/docs"])
+  })
+
+  test("prevents unmanaged popups even when the event cannot be converted to same-pane navigation", () => {
+    const event = webviewNewWindowEvent({ disposition: "new-window" })
+    const loadedUrls: string[] = []
+
+    expect(handleDesktopBrowserNewWindowEvent(event, (url) => loadedUrls.push(url))).toBe(false)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(loadedUrls).toEqual([])
+  })
+
+  test("prevents unmanaged popups for unexpected dispositions", () => {
+    const event = webviewNewWindowEvent({ url: "https://example.com/docs", disposition: "save-to-disk" })
+    const loadedUrls: string[] = []
+
+    expect(handleDesktopBrowserNewWindowEvent(event, (url) => loadedUrls.push(url))).toBe(false)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(loadedUrls).toEqual([])
   })
 })
