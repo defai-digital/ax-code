@@ -4,6 +4,7 @@ const path = require("path")
 const { fileURLToPath } = require("url")
 
 const pathForPlatform = (platform) => (platform === "win32" ? path.win32 : path.posix)
+const pathKeyForPlatform = (value, platform) => (platform === "win32" ? value.toLowerCase() : value)
 
 const normalizeCandidate = (value, options = {}) => {
   if (typeof value !== "string") return null
@@ -31,8 +32,12 @@ const normalizeCandidate = (value, options = {}) => {
   const pathTools = pathForPlatform(platform)
   const appExecutablePath = typeof options.appExecutablePath === "string" ? options.appExecutablePath.trim() : ""
 
-  if (appExecutablePath && pathTools.normalize(candidate) === pathTools.normalize(appExecutablePath)) {
-    return null
+  if (appExecutablePath) {
+    const normalizedCandidate = pathTools.normalize(candidate)
+    const normalizedExecutable = pathTools.normalize(appExecutablePath)
+    if (pathKeyForPlatform(normalizedCandidate, platform) === pathKeyForPlatform(normalizedExecutable, platform)) {
+      return null
+    }
   }
 
   const cwd = typeof options.cwd === "string" && options.cwd.trim() ? options.cwd.trim() : process.cwd()
@@ -49,7 +54,7 @@ const collectOpenPathCandidates = (argv, options = {}) => {
     const candidate = normalizeCandidate(arg, options)
     if (!candidate) continue
 
-    const key = options.platform === "win32" ? candidate.toLowerCase() : candidate
+    const key = pathKeyForPlatform(candidate, options.platform || process.platform)
     if (seen.has(key)) continue
     seen.add(key)
     result.push(candidate)

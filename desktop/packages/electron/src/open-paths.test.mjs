@@ -44,6 +44,16 @@ describe("normalizeCandidate", () => {
       }),
     ).toBeNull()
   })
+
+  test("rejects the app executable case-insensitively on Windows", () => {
+    expect(
+      normalizeCandidate("c:\\program files\\ax code\\ax code.exe", {
+        cwd: "C:\\Users\\Example",
+        platform: "win32",
+        appExecutablePath: "C:\\Program Files\\AX Code\\AX Code.exe",
+      }),
+    ).toBeNull()
+  })
 })
 
 describe("collectOpenPathCandidates", () => {
