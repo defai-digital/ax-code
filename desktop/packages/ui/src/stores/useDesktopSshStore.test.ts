@@ -114,4 +114,21 @@ describe("useDesktopSshStore", () => {
       updatedAtMs: 200,
     })
   })
+
+  test("does not let a stale status refresh overwrite a newer live SSH event", async () => {
+    const forwardingSnapshot = createStatus("forwarding", 100)
+    const readyEvent = createStatus("ready", 200)
+    const { emitStatus, useDesktopSshStore } = await importStore({
+      snapshot: [forwardingSnapshot],
+    })
+
+    await useDesktopSshStore.getState().load()
+    emitStatus(readyEvent)
+    await useDesktopSshStore.getState().refreshStatuses()
+
+    expect(useDesktopSshStore.getState().statusesById["remote-1"]).toMatchObject({
+      phase: "ready",
+      updatedAtMs: 200,
+    })
+  })
 })

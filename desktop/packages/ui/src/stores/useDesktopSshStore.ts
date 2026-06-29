@@ -153,7 +153,13 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
   refreshStatuses: async () => {
     try {
       const statuses = await desktopSshStatus()
-      set({ statusesById: toStatusMap(statuses) })
+      const statusMap = toStatusMap(statuses)
+      set((state) => {
+        const knownIds = new Set([...Object.keys(statusMap), ...state.instances.map((instance) => instance.id)])
+        return {
+          statusesById: mergeNewerStatuses(statusMap, pickStatusMapEntries(state.statusesById, knownIds)),
+        }
+      })
     } catch (error) {
       set({ error: error instanceof Error ? error.message : String(error) })
     }
