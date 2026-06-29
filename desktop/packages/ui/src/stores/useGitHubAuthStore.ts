@@ -32,8 +32,26 @@ const fetchStatus = async (runtimeGitHub?: RuntimeAPIs["github"]): Promise<GitHu
   return payload
 }
 
-// In-flight dedup for refreshStatus
-let _inFlightAuthRefresh: Promise<GitHubAuthStatusWithError | null> | null = null
+const runtimeGitHubIds = new WeakMap<object, number>()
+const inFlightAuthRefreshes = new Map<string, Promise<GitHubAuthStatusWithError | null>>()
+let runtimeGitHubSequence = 0
+let authRefreshSequence = 0
+let latestAuthRefreshRequestId = 0
+let lastResolvedAuthRefreshKey: string | null = null
+
+const getAuthRefreshKey = (runtimeGitHub?: RuntimeAPIs["github"]): string => {
+  if (!runtimeGitHub) {
+    return "http"
+  }
+  const runtimeObject = runtimeGitHub as object
+  const existing = runtimeGitHubIds.get(runtimeObject)
+  if (existing) {
+    return `runtime:${existing}`
+  }
+  const id = ++runtimeGitHubSequence
+  runtimeGitHubIds.set(runtimeObject, id)
+  return `runtime:${id}`
+}
 
 export const useGitHubAuthStore = create<GitHubAuthStore>((set, get) => ({
   status: null,
@@ -42,31 +60,44 @@ export const useGitHubAuthStore = create<GitHubAuthStore>((set, get) => ({
   setStatus: (status) => set({ status, hasChecked: true }),
   refreshStatus: async (runtimeGitHub, options) => {
     const { hasChecked, status } = get()
-    if (hasChecked && !options?.force) {
+    const refreshKey = getAuthRefreshKey(runtimeGitHub)
+    if (hasChecked && !options?.force && lastResolvedAuthRefreshKey === refreshKey) {
       return status
     }
 
-    if (_inFlightAuthRefresh) return _inFlightAuthRefresh
+    const inFlight = inFlightAuthRefreshes.get(refreshKey)
+    if (inFlight) return inFlight
 
     set({ isLoading: true })
-    _inFlightAuthRefresh = (async () => {
+    const requestId = ++authRefreshSequence
+    latestAuthRefreshRequestId = requestId
+    const request = (async () => {
       try {
         const payload = await fetchStatus(runtimeGitHub)
-        set({ status: payload, isLoading: false, hasChecked: true })
+        if (latestAuthRefreshRequestId === requestId) {
+          lastResolvedAuthRefreshKey = refreshKey
+          set({ status: payload, isLoading: false, hasChecked: true })
+        }
         return payload
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        set({
-          status: { connected: false, error: message },
-          isLoading: false,
-          hasChecked: true,
-        })
+        if (latestAuthRefreshRequestId === requestId) {
+          lastResolvedAuthRefreshKey = refreshKey
+          set({
+            status: { connected: false, error: message },
+            isLoading: false,
+            hasChecked: true,
+          })
+        }
         return null
       }
     })().finally(() => {
-      _inFlightAuthRefresh = null
+      if (inFlightAuthRefreshes.get(refreshKey) === request) {
+        inFlightAuthRefreshes.delete(refreshKey)
+      }
     })
 
-    return _inFlightAuthRefresh
+    inFlightAuthRefreshes.set(refreshKey, request)
+    return request
   },
 }))
