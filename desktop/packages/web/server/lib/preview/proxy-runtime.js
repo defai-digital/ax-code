@@ -1,7 +1,19 @@
 const DEFAULT_TARGET_TTL_MS = 30 * 60 * 1000
 const TOKEN_COOKIE_NAME = "oc_preview_token"
 
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0"])
+const LOOPBACK_HOSTS = new Set(["localhost", "::1", "[::1]", "0.0.0.0"])
+
+const isLoopbackHost = (hostname) => {
+  if (!hostname) return false
+  let host = String(hostname).toLowerCase()
+  if (host.startsWith("[") && host.endsWith("]")) host = host.slice(1, -1)
+
+  if (LOOPBACK_HOSTS.has(host)) return true
+
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!v4) return false
+  return Number(v4[1]) === 127
+}
 
 const PREVIEW_BRIDGE_SCRIPT_ID = "openchamber-preview-bridge"
 
@@ -146,10 +158,7 @@ export const classifyPreviewNavigation = ({ url, currentUrl, targetOrigin }) => 
     }
   }
 
-  const host = parsed.hostname
-  const isLoopback =
-    host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1" || host === "[::1]"
-  if (isLoopback || (parsed.origin === current?.origin && path.startsWith("/"))) {
+  if (isLoopbackHost(parsed.hostname) || (parsed.origin === current?.origin && path.startsWith("/"))) {
     return { action: "proxy", url: parsed.toString() }
   }
 
@@ -371,6 +380,15 @@ const PREVIEW_BRIDGE_SCRIPT = String.raw`(() => {
 
   installColorSchemeMatchMediaPatch();
 
+  const isLoopbackHost = (hostname) => {
+    if (!hostname) return false;
+    let host = String(hostname).toLowerCase();
+    if (host.charAt(0) === '[' && host.charAt(host.length - 1) === ']') host = host.slice(1, -1);
+    if (host === 'localhost' || host === '0.0.0.0' || host === '::1') return true;
+    const match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    return Boolean(match && Number(match[1]) === 127);
+  };
+
   const classifyNavigation = (value) => {
     try {
       const parsed = new URL(value, window.location.href);
@@ -389,9 +407,7 @@ const PREVIEW_BRIDGE_SCRIPT = String.raw`(() => {
           return { action: 'proxy', url: upstreamUrl.toString() };
         } catch {}
       }
-      const host = parsed.hostname;
-      const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1' || host === '[::1]';
-      if (isLoopback || (parsed.origin === current.origin && parsed.pathname.startsWith('/'))) {
+      if (isLoopbackHost(parsed.hostname) || (parsed.origin === current.origin && parsed.pathname.startsWith('/'))) {
         return { action: 'proxy', url: parsed.toString() };
       }
       return { action: 'external', url: parsed.toString() };
@@ -879,7 +895,7 @@ export const normalizeProxyTargetUrl = (rawUrl, { allowExternal = false } = {}) 
 
   const hostname = url.hostname
   if (!allowExternal) {
-    if (!LOOPBACK_HOSTS.has(hostname)) {
+    if (!isLoopbackHost(hostname)) {
       return { ok: false, error: "Only loopback hosts are supported" }
     }
   } else if (isBlockedExternalHost(hostname)) {
@@ -919,7 +935,7 @@ export const rewritePreviewBody = ({ bodyText, proxyBasePath, targetOrigin, kind
     if (url.origin === target.origin) return true
 
     const host = url.hostname
-    if (host !== "localhost" && host !== "127.0.0.1" && host !== "0.0.0.0" && host !== "::1" && host !== "[::1]") {
+    if (!isLoopbackHost(host)) {
       return false
     }
     return url.port === target.port

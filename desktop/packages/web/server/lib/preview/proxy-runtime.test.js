@@ -152,6 +152,11 @@ describe("preview navigation policy", () => {
       action: "proxy",
       url: "http://localhost:3000/roadmap",
     })
+
+    expect(classifyPreviewNavigation({ url: "http://127.0.0.2:3000/roadmap", currentUrl })).toEqual({
+      action: "proxy",
+      url: "http://127.0.0.2:3000/roadmap",
+    })
   })
 
   it("maps app-origin root links back to the upstream origin while proxied", () => {
@@ -192,6 +197,13 @@ describe("proxy target normalization (SSRF guard)", () => {
 
   it("rejects non-loopback hosts without allowExternal", () => {
     expect(normalizeProxyTargetUrl("https://example.com/", {}).ok).toBe(false)
+  })
+
+  it("allows the full IPv4 loopback range for local preview targets", () => {
+    expect(normalizeProxyTargetUrl("http://127.0.0.2:5173/", {})).toEqual({
+      ok: true,
+      origin: "http://127.0.0.2:5173",
+    })
   })
 
   it("refuses private, loopback and link-local literals on the external path", () => {
