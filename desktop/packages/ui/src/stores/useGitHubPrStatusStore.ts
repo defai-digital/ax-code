@@ -25,8 +25,8 @@ const isPendingChecks = (status: GitHubPullRequestStatus | null): boolean => {
 }
 
 export const getGitHubPrStatusKey = (directory: string, branch: string, remoteName?: string | null): string => {
-  void remoteName
-  return `${directory}::${branch}`
+  const remote = typeof remoteName === "string" ? remoteName.trim() : ""
+  return remote ? `${directory}::${branch}::${remote}` : `${directory}::${branch}`
 }
 
 type PrStatusRefreshOptions = {
@@ -125,7 +125,7 @@ const getSignatureFromEntry = (entry: PrStatusEntry | null | undefined): string 
   if (!identity?.directory || !identity.branch) {
     return null
   }
-  return `${identity.directory}::${identity.branch}`
+  return getGitHubPrStatusKey(identity.directory, identity.branch, identity.remoteName)
 }
 
 const getKeysBySignature = (entries: Record<string, PrStatusEntry>, signature: string): string[] => {
