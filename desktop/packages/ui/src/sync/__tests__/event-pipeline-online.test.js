@@ -37,6 +37,85 @@ function createEventTarget(extras = {}) {
 }
 
 describe("createEventPipeline — online event", () => {
+  it("does not spin reconnect attempts after the browser reports offline", async () => {
+    globalThis.document = createEventTarget({ visibilityState: "visible" })
+    globalThis.window = createEventTarget({
+      location: { href: "http://127.0.0.1:3000/", origin: "http://127.0.0.1:3000" },
+    })
+    globalThis.navigator = { onLine: true }
+
+    let sdkCallCount = 0
+    const sdk = {
+      global: {
+        event: async (options) => {
+          sdkCallCount += 1
+          const signal = options?.signal
+          return {
+            stream: (async function* () {
+              yield {
+                payload: {
+                  type: "session.status",
+                  properties: { sessionID: "s1", status: { type: "idle" } },
+                },
+              }
+              await new Promise((_, reject) => {
+                if (signal?.aborted) {
+                  reject(new DOMException("Aborted", "AbortError"))
+                  return
+                }
+                signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {
+                  once: true,
+                })
+              })
+            })(),
+          }
+        },
+      },
+    }
+
+    let cleanup = () => {}
+    try {
+      await new Promise((resolve) => {
+        ;({ cleanup } = createEventPipeline({
+          sdk,
+          transport: "sse",
+          heartbeatTimeoutMs: 60_000,
+          reconnectDelayMs: 50,
+          onEvent: () => {},
+          onReconnect: () => resolve(),
+        }))
+      })
+
+      globalThis.navigator = { onLine: false }
+      globalThis.window.dispatch("offline")
+
+      await new Promise((resolve) => setTimeout(resolve, 180))
+
+      expect(sdkCallCount).toBe(1)
+
+      globalThis.navigator = { onLine: true }
+      globalThis.window.dispatch("online")
+
+      await new Promise((resolve, reject) => {
+        const started = Date.now()
+        const tick = () => {
+          if (sdkCallCount >= 2) {
+            resolve()
+            return
+          }
+          if (Date.now() - started > 500) {
+            reject(new Error("online did not wake offline retry sleep"))
+            return
+          }
+          setTimeout(tick, 10)
+        }
+        tick()
+      })
+    } finally {
+      cleanup()
+    }
+  })
+
   it("cuts the inter-attempt wait short when `online` fires after disconnect", async () => {
     globalThis.document = createEventTarget({ visibilityState: "visible" })
     globalThis.window = createEventTarget({

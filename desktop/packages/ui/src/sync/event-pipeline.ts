@@ -317,7 +317,10 @@ function isFinalToolPart(part: CoalescedPart | undefined): boolean {
   return typeof getValidPartEndTime(part) === "number"
 }
 
-function shouldPreservePreviousPartUpdate(previousPart: CoalescedPart | undefined, nextPart: CoalescedPart | undefined) {
+function shouldPreservePreviousPartUpdate(
+  previousPart: CoalescedPart | undefined,
+  nextPart: CoalescedPart | undefined,
+) {
   if (!previousPart || !nextPart || previousPart.type !== "tool" || nextPart.type !== "tool") {
     return false
   }
@@ -988,8 +991,10 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
 
       if (abort.signal.aborted) return
       if (attemptAbortReason && attemptAbortReason !== "pipeline_stopped") {
-        notifyDisconnected(attemptAbortReason)
-        retryDelayMs = 0
+        const offlineAbort = attemptAbortReason === "ws_offline" || attemptAbortReason === "sse_offline"
+        const abortReason = attemptAbortReason
+        notifyDisconnected(abortReason)
+        retryDelayMs = offlineAbort ? computeRetryDelay(Math.max(1, consecutiveFailures)) : 0
         attemptAbortReason = null
       }
       if (retryDelayMs > 0) {
@@ -1033,6 +1038,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
   // then returns the long cap so we wait for `online` instead of hammering
   // a dead network.
   const onOffline = () => {
+    attemptAbortReason = `${activeTransport}_offline`
     attempt?.abort()
   }
 
