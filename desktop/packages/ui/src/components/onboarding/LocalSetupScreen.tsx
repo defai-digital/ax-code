@@ -9,10 +9,12 @@ import { restartDesktopApp } from "@/lib/desktop"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import { useI18n } from "@/lib/i18n"
 import type { OnboardingPlatform } from "./types"
+import { clearOnboardingTimer, replaceOnboardingTimer } from "./onboardingTimers"
 
 const INSTALL_COMMAND = "curl -fsSL https://ax-code.ai/install | bash"
 const DOCS_URL = "https://ax-code.ai/docs"
 const WINDOWS_WSL_DOCS_URL = "https://ax-code.ai/docs/windows-wsl"
+const FEEDBACK_RESET_DELAY_MS = 2000
 
 type LocalSetupScreenProps = {
   /** Callback when user goes back */
@@ -63,10 +65,19 @@ export function LocalSetupScreen({
   const [checkError, setCheckError] = React.useState<string | null>(null)
   const [axCodeBinary, setAxCodeBinary] = React.useState("")
   const [platform, setPlatform] = React.useState<OnboardingPlatform>("unknown")
+  const copiedResetTimerRef = React.useRef<number | null>(null)
+  const retryResetTimerRef = React.useRef<number | null>(null)
 
   React.useEffect(() => {
     const timer = setTimeout(() => setShowHint(true), HINT_DELAY_MS)
     return () => clearTimeout(timer)
+  }, [])
+
+  React.useEffect(() => {
+    return () => {
+      copiedResetTimerRef.current = clearOnboardingTimer(copiedResetTimerRef.current)
+      retryResetTimerRef.current = clearOnboardingTimer(retryResetTimerRef.current)
+    }
   }, [])
 
   React.useEffect(() => {
@@ -190,7 +201,14 @@ export function LocalSetupScreen({
 
       await fetch(API_ENDPOINTS.config.reload, { method: "POST" })
     } finally {
-      setTimeout(() => setIsRetrying(false), 1000)
+      retryResetTimerRef.current = replaceOnboardingTimer(
+        retryResetTimerRef.current,
+        () => {
+          setIsRetrying(false)
+          retryResetTimerRef.current = null
+        },
+        1000,
+      )
     }
   }, [axCodeBinary])
 
@@ -198,7 +216,14 @@ export function LocalSetupScreen({
     const result = await copyTextToClipboard(INSTALL_COMMAND)
     if (result.ok) {
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      copiedResetTimerRef.current = replaceOnboardingTimer(
+        copiedResetTimerRef.current,
+        () => {
+          setCopied(false)
+          copiedResetTimerRef.current = null
+        },
+        FEEDBACK_RESET_DELAY_MS,
+      )
     } else {
       console.error("Failed to copy:", result.error)
     }
@@ -227,8 +252,8 @@ export function LocalSetupScreen({
     platform === "windows"
       ? "C:\\Users\\you\\AppData\\Roaming\\npm\\ax-code.cmd"
       : platform === "linux"
-        ? "/home/you/.bun/bin/ax-code"
-        : "/Users/you/.bun/bin/ax-code"
+        ? "/home/you/.ax-code/bin/ax-code"
+        : "/Users/you/.ax-code/bin/ax-code"
 
   return (
     <div

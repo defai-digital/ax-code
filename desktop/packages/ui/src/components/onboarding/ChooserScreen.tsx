@@ -12,11 +12,13 @@ import { RemoteConnectionForm } from "./RemoteConnectionForm"
 import { desktopHostsGet, desktopHostsSet } from "@/lib/desktopHosts"
 import { useI18n } from "@/lib/i18n"
 import type { OnboardingPlatform } from "./types"
+import { clearOnboardingTimer, replaceOnboardingTimer } from "./onboardingTimers"
 
 const INSTALL_COMMAND = "curl -fsSL https://ax-code.ai/install | bash"
 const DOCS_URL = "https://ax-code.ai/docs"
 const WINDOWS_WSL_DOCS_URL = "https://ax-code.ai/docs/windows-wsl"
 const POLL_INTERVAL_MS = 2500
+const FEEDBACK_RESET_DELAY_MS = 2000
 
 type ChooserScreenProps = {
   /** Callback when CLI becomes available */
@@ -56,9 +58,18 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
   const [activeTab, setActiveTab] = React.useState<"local" | "remote">("local")
   const [advancedOpen, setAdvancedOpen] = React.useState(false)
   const [troubleOpen, setTroubleOpen] = React.useState(false)
+  const copiedResetTimerRef = React.useRef<number | null>(null)
+  const applyingResetTimerRef = React.useRef<number | null>(null)
 
   React.useEffect(() => {
     setIsDesktopApp(isDesktopShell())
+  }, [])
+
+  React.useEffect(() => {
+    return () => {
+      copiedResetTimerRef.current = clearOnboardingTimer(copiedResetTimerRef.current)
+      applyingResetTimerRef.current = clearOnboardingTimer(applyingResetTimerRef.current)
+    }
   }, [])
 
   React.useEffect(() => {
@@ -218,7 +229,14 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
       }
       await fetch(API_ENDPOINTS.config.reload, { method: "POST" })
     } finally {
-      setTimeout(() => setIsApplyingPath(false), 1000)
+      applyingResetTimerRef.current = replaceOnboardingTimer(
+        applyingResetTimerRef.current,
+        () => {
+          setIsApplyingPath(false)
+          applyingResetTimerRef.current = null
+        },
+        1000,
+      )
     }
   }, [axCodeBinary, persistFirstChoice])
 
@@ -226,7 +244,14 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
     const result = await copyTextToClipboard(INSTALL_COMMAND)
     if (result.ok) {
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      copiedResetTimerRef.current = replaceOnboardingTimer(
+        copiedResetTimerRef.current,
+        () => {
+          setCopied(false)
+          copiedResetTimerRef.current = null
+        },
+        FEEDBACK_RESET_DELAY_MS,
+      )
     } else {
       console.error("Failed to copy:", result.error)
     }
@@ -237,8 +262,8 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
     platform === "windows"
       ? "C:\\Users\\you\\AppData\\Roaming\\npm\\ax-code.cmd"
       : platform === "linux"
-        ? "/home/you/.bun/bin/ax-code"
-        : "/Users/you/.bun/bin/ax-code"
+        ? "/home/you/.ax-code/bin/ax-code"
+        : "/Users/you/.ax-code/bin/ax-code"
 
   const showLocal = !isDesktopApp || !isTauriShell() || activeTab === "local"
 
