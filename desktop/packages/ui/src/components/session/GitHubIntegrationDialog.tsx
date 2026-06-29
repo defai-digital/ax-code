@@ -15,6 +15,7 @@ import { Icon } from "@/components/icon/Icon"
 import type { GitHubIssue, GitHubIssueSummary, GitHubPullRequestSummary } from "@/lib/api/types"
 import type { ProjectRef } from "@/lib/worktrees/worktreeManager"
 import { useI18n } from "@/lib/i18n"
+import { loadCurrentGitHubIntegrationList } from "./githubIntegrationListLoad"
 
 type GitHubTab = "issues" | "prs"
 
@@ -67,20 +68,49 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
   const [validations, setValidations] = React.useState<Map<string, GitHubSelectionValidation>>(new Map())
   const [page, setPage] = React.useState(1)
   const [hasMore, setHasMore] = React.useState(false)
+  const listRequestRef = React.useRef(0)
+  const listStateRef = React.useRef({ open, projectDirectory, activeTab })
+  listStateRef.current = { open, projectDirectory, activeTab }
+
+  React.useEffect(() => {
+    if (!open) {
+      listRequestRef.current += 1
+      setLoading(false)
+      setLoadingMore(false)
+    }
+  }, [open])
 
   // Load GitHub data
   const loadData = React.useCallback(async () => {
-    if (!projectDirectory || !github) return
-    if (githubAuthChecked && githubAuthStatus?.connected === false) return
+    if (!projectDirectory || !github || (githubAuthChecked && githubAuthStatus?.connected === false)) {
+      listRequestRef.current += 1
+      setLoading(false)
+      setLoadingMore(false)
+      return
+    }
+
+    const requestId = listRequestRef.current + 1
+    listRequestRef.current = requestId
+    const requestTab = activeTab
+    const requestDirectory = projectDirectory
+    const isCurrentRequest = () =>
+      listRequestRef.current === requestId &&
+      listStateRef.current.open &&
+      listStateRef.current.projectDirectory === requestDirectory &&
+      listStateRef.current.activeTab === requestTab
 
     setLoading(true)
     setError(null)
     setPage(1)
     setHasMore(false)
 
-    try {
-      if (activeTab === "issues" && github.issuesList) {
-        const result = await github.issuesList(projectDirectory, { page: 1 })
+    if (requestTab === "issues" && github.issuesList) {
+      const loaded = await loadCurrentGitHubIntegrationList({
+        load: () => github.issuesList(requestDirectory, { page: 1 }),
+        isCurrent: isCurrentRequest,
+      })
+      if (loaded.status === "loaded") {
+        const result = loaded.result
         if (result.connected === false) {
           setError(t("session.githubIntegration.error.notConnected"))
           setIssues([])
@@ -89,8 +119,16 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
           setPage(result.page ?? 1)
           setHasMore(Boolean(result.hasMore))
         }
-      } else if (activeTab === "prs" && github.prsList) {
-        const result = await github.prsList(projectDirectory, { page: 1 })
+      } else if (loaded.status === "failed") {
+        setError(loaded.error instanceof Error ? loaded.error.message : t("session.githubIntegration.error.loadDataFailed"))
+      }
+    } else if (requestTab === "prs" && github.prsList) {
+      const loaded = await loadCurrentGitHubIntegrationList({
+        load: () => github.prsList(requestDirectory, { page: 1 }),
+        isCurrent: isCurrentRequest,
+      })
+      if (loaded.status === "loaded") {
+        const result = loaded.result
         if (result.connected === false) {
           setError(t("session.githubIntegration.error.notConnected"))
           setPrs([])
@@ -99,10 +137,11 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
           setPage(result.page ?? 1)
           setHasMore(Boolean(result.hasMore))
         }
+      } else if (loaded.status === "failed") {
+        setError(loaded.error instanceof Error ? loaded.error.message : t("session.githubIntegration.error.loadDataFailed"))
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("session.githubIntegration.error.loadDataFailed"))
-    } finally {
+    }
+    if (isCurrentRequest()) {
       setLoading(false)
     }
   }, [projectDirectory, github, githubAuthChecked, githubAuthStatus, activeTab, t])
@@ -113,29 +152,48 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
     if (loading || loadingMore) return
     if (!hasMore) return
 
+    const requestId = listRequestRef.current + 1
+    listRequestRef.current = requestId
+    const requestTab = activeTab
+    const requestDirectory = projectDirectory
+    const isCurrentRequest = () =>
+      listRequestRef.current === requestId &&
+      listStateRef.current.open &&
+      listStateRef.current.projectDirectory === requestDirectory &&
+      listStateRef.current.activeTab === requestTab
+
     setLoadingMore(true)
 
-    try {
-      const nextPage = page + 1
+    const nextPage = page + 1
 
-      if (activeTab === "issues" && github.issuesList) {
-        const result = await github.issuesList(projectDirectory, { page: nextPage })
+    if (requestTab === "issues" && github.issuesList) {
+      const loaded = await loadCurrentGitHubIntegrationList({
+        load: () => github.issuesList(requestDirectory, { page: nextPage }),
+        isCurrent: isCurrentRequest,
+      })
+      if (loaded.status === "loaded") {
+        const result = loaded.result
         if (result.connected !== false) {
           setIssues((prev) => [...prev, ...(result.issues ?? [])])
           setPage(result.page ?? nextPage)
           setHasMore(Boolean(result.hasMore))
         }
-      } else if (activeTab === "prs" && github.prsList) {
-        const result = await github.prsList(projectDirectory, { page: nextPage })
+      }
+    } else if (requestTab === "prs" && github.prsList) {
+      const loaded = await loadCurrentGitHubIntegrationList({
+        load: () => github.prsList(requestDirectory, { page: nextPage }),
+        isCurrent: isCurrentRequest,
+      })
+      if (loaded.status === "loaded") {
+        const result = loaded.result
         if (result.connected !== false) {
           setPrs((prev) => [...prev, ...(result.prs ?? [])])
           setPage(result.page ?? nextPage)
           setHasMore(Boolean(result.hasMore))
         }
       }
-    } catch {
-      // Silently fail on load more errors
-    } finally {
+    }
+    if (isCurrentRequest()) {
       setLoadingMore(false)
     }
   }, [projectDirectory, github, activeTab, page, hasMore, loading, loadingMore])
@@ -154,6 +212,8 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
       setValidations(new Map())
       setPage(1)
       setHasMore(false)
+      setLoading(false)
+      setLoadingMore(false)
       return
     }
 
