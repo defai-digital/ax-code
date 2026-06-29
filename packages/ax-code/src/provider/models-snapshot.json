@@ -65136,18 +65136,60 @@
     "name": "Inceptron",
     "doc": "https://docs.inceptron.io",
     "models": {
-      "nvidia/llama-3.3-70b-instruct-fp8": {
-        "id": "nvidia/llama-3.3-70b-instruct-fp8",
-        "name": "Llama 3.3 70B Instruct",
-        "family": "llama",
+      "moonshotai/Kimi-K2.7-Code": {
+        "id": "moonshotai/Kimi-K2.7-Code",
+        "name": "Kimi K2.7 Code",
+        "family": "kimi-k2",
         "attachment": true,
-        "reasoning": false,
+        "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-01",
+        "release_date": "2026-06-12",
+        "last_updated": "2026-06-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
+      "zai-org/GLM-5.2": {
+        "id": "zai-org/GLM-5.2",
+        "name": "GLM 5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-12-06",
-        "last_updated": "2024-12-06",
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
         "modalities": {
           "input": [
             "text"
@@ -65158,7 +65200,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
+          "context": 1000000,
           "output": 131072
         }
       },
@@ -65168,7 +65210,16 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -72403,6 +72454,31 @@
     "name": "GMI Cloud",
     "doc": "https://docs.gmicloud.ai/inference-engine/api-reference/llm-api-reference",
     "models": {
+      "Qwen/Qwen3.7-Max": {
+        "id": "Qwen/Qwen3.7-Max",
+        "name": "Qwen3.7 Max",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-21",
+        "last_updated": "2026-05-21",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 65536
+        }
+      },
       "anthropic/claude-opus-4.7": {
         "id": "anthropic/claude-opus-4.7",
         "name": "Claude Opus 4.7",
@@ -72543,6 +72619,43 @@
         "open_weights": true,
         "limit": {
           "context": 202752,
+          "output": 131072
+        }
+      },
+      "zai-org/GLM-5.2-FP8": {
+        "id": "zai-org/GLM-5.2-FP8",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
           "output": 131072
         }
       },

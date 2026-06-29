@@ -27,6 +27,7 @@ const { promisify } = require("util")
 const { createStartupDiagnostics } = require("./startup-diagnostics")
 const { collectOpenPathCandidates } = require("./open-paths")
 const { assertDesktopReadFileAllowed } = require("./desktop-read-file-policy")
+const { toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
@@ -2262,7 +2263,7 @@ handleCommand("desktop_search_files", async (args) => {
         results.push({
           name: entry.name,
           path: full,
-          relativePath: path.relative(resolvedRoot, full),
+          relativePath: toNativeSearchRelativePath(resolvedRoot, full),
           ...(ext ? { extension: ext } : {}),
         })
       }
