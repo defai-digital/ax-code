@@ -28,6 +28,18 @@ describe("isWithinWorktreeRoot", () => {
     expect(isWithinWorktreeRoot("/repo", null)).toBe(false)
     expect(isWithinWorktreeRoot("", "/repo")).toBe(false)
   })
+
+  test("matches Windows cwd paths inside worktree roots case-insensitively", () => {
+    expect(isWithinWorktreeRoot("c:/Users/Alice/Project/.worktrees/Feature/src", "C:/Users/Alice/Project/.worktrees/Feature")).toBe(
+      true,
+    )
+  })
+
+  test("keeps POSIX cwd paths case-sensitive", () => {
+    expect(isWithinWorktreeRoot("/users/Alice/Project/.worktrees/Feature/src", "/Users/Alice/Project/.worktrees/Feature")).toBe(
+      false,
+    )
+  })
 })
 
 describe("getAttachedSessionDirectory", () => {
@@ -205,6 +217,25 @@ describe("resolveSessionWorktreeState", () => {
 
     // cwd is inside worktreeRoot so should be kept
     expect(result.cwd).toBe("/repo/worktrees/feat-a/src")
+    expect(result.degraded).toBe(false)
+  })
+
+  test("keeps Windows cwd when it differs from worktreeRoot only by drive-letter case", () => {
+    const result = resolveSessionWorktreeState({
+      sessionDirectory: "c:/Users/Alice/Project/.worktrees/Feature/src",
+      metadata: {
+        path: "C:/Users/Alice/Project/.worktrees/Feature",
+        projectDirectory: "C:/Users/Alice/Project",
+        branch: "Feature",
+        label: "Feature",
+        worktreeRoot: "C:/Users/Alice/Project/.worktrees/Feature",
+        worktreeStatus: "ready",
+        headState: "branch",
+      },
+      cwdExists: true,
+    })
+
+    expect(result.cwd).toBe("c:/Users/Alice/Project/.worktrees/Feature/src")
     expect(result.degraded).toBe(false)
   })
 
@@ -501,6 +532,25 @@ describe("buildSessionTargetOptions", () => {
     })
 
     expect(options).toHaveLength(2) // root + one worktree, not three
+  })
+
+  test("excludes Windows worktree path that equals projectRoot case-insensitively", () => {
+    const options = buildSessionTargetOptions({
+      projectRoot: "C:/Users/Alice/Project",
+      rootBranch: "main",
+      worktrees: [
+        { path: "c:/Users/Alice/Project", branch: "main", label: "main", projectDirectory: "C:/Users/Alice/Project" },
+        {
+          path: "C:/Users/Alice/Project/.worktrees/Feature",
+          branch: "Feature",
+          label: "Feature",
+          projectDirectory: "C:/Users/Alice/Project",
+        },
+      ],
+    })
+
+    expect(options).toHaveLength(2)
+    expect(options.map((option) => option.kind)).toEqual(["root", "worktree"])
   })
 
   test("handles empty worktrees array", () => {

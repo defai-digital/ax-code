@@ -1,5 +1,6 @@
 import type { WorktreeMetadata } from "@/types/worktree"
 import type { SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
+import { normalizeProjectPath, projectPathMatchesRoot } from "@/lib/projectResolution"
 
 export type ResolveSessionWorktreeStateInput = {
   sessionDirectory: string | null
@@ -33,17 +34,17 @@ export type SessionWorktreeCanonicalizationOptions = {
 }
 
 const normalizePath = (value: string): string => {
-  if (!value) return ""
-  const replaced = value.replace(/\\/g, "/")
-  if (replaced === "/") return "/"
-  return replaced.replace(/\/+$/, "") || replaced
+  return normalizeProjectPath(value) ?? ""
 }
+
+const projectPathsEqual = (left: string, right: string): boolean =>
+  projectPathMatchesRoot(left, right) && projectPathMatchesRoot(right, left)
 
 export function isWithinWorktreeRoot(candidate: string | null, worktreeRoot: string | null): boolean {
   if (!candidate || !worktreeRoot) return false
   const c = normalizePath(candidate)
   const r = normalizePath(worktreeRoot)
-  return c === r || c.startsWith(r + "/")
+  return Boolean(c && r && projectPathMatchesRoot(c, r))
 }
 
 export function getAttachedSessionDirectory(
@@ -214,12 +215,13 @@ export function buildSessionTargetOptions(input: {
     })
   }
 
+  const projectRootNormalized = normalizePath(input.projectRoot)
   const pendingNormalized = input.pendingBootstrapDirectory ? normalizePath(input.pendingBootstrapDirectory) : null
 
   for (const wt of input.worktrees) {
     const normalizedPath = normalizePath(wt.path)
-    if (normalizedPath === input.projectRoot) continue
-    const isPending = normalizedPath === pendingNormalized
+    if (projectRootNormalized && normalizedPath && projectPathsEqual(normalizedPath, projectRootNormalized)) continue
+    const isPending = Boolean(normalizedPath && pendingNormalized && projectPathsEqual(normalizedPath, pendingNormalized))
     options.push({
       value: normalizedPath,
       label: wt.branch?.trim() || wt.label || normalizedPath.split("/").pop() || normalizedPath,
