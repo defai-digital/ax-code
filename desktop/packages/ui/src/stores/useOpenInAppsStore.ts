@@ -278,19 +278,43 @@ export const useOpenInAppsStore = create<OpenInAppsState>()((set, get) => ({
     const loadRevision = installedAppsRevision
 
     try {
-      const { apps: installed, hasCache, isCacheStale } = await fetchDesktopInstalledApps(appNames, force)
+      const { apps: installed, success, hasCache, isCacheStale } = await fetchDesktopInstalledApps(appNames, force)
 
       if (loadRevision !== installedAppsRevision) {
         return
       }
 
-      const withIcons = buildInstalledOpenInAppOptions(installed)
+      const shouldRetryEmptyScan = success && !hasCache && installed.length === 0 && retryAttempt < 3
 
-      set({
-        availableApps: withIcons.length > 0 ? withIcons : getAlwaysAvailableApps(),
-        hasLoadedApps: withIcons.length > 0,
-        isCacheStale: hasCache ? isCacheStale : false,
-      })
+      set({ isCacheStale: hasCache ? isCacheStale : false })
+      set(buildInstalledAppsState(installed, success ? !shouldRetryEmptyScan : false))
+
+      if (success) {
+        if (shouldRetryEmptyScan) {
+          const delays = [800, 1600, 3200]
+          const delay = delays[retryAttempt] ?? 3200
+          retryAttempt += 1
+          keepScanning = true
+          retryTimeout = setTimeout(() => {
+            void get().loadInstalledApps()
+          }, delay)
+          return
+        }
+
+        retryAttempt = 0
+        keepScanning = false
+        return
+      }
+
+      if (retryAttempt < 3) {
+        const delays = [1000, 3000, 7000]
+        const delay = delays[retryAttempt] ?? 7000
+        retryAttempt += 1
+        keepScanning = true
+        retryTimeout = setTimeout(() => {
+          void get().loadInstalledApps()
+        }, delay)
+      }
     } finally {
       loading = false
       if (!keepScanning) {

@@ -62,12 +62,14 @@ const importStore = async () => {
 
 describe("useOpenInAppsStore", () => {
   beforeEach(() => {
+    vi.useRealTimers()
     fetchDesktopInstalledAppsMock.mockReset()
     installMockLocalStorage()
     setDesktopPlatform("win32")
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     clearDesktopPlatform()
     clearMockLocalStorage()
     vi.doUnmock("@/lib/desktop")
@@ -140,6 +142,52 @@ describe("useOpenInAppsStore", () => {
     await useOpenInAppsStore.getState().loadInstalledApps(true)
 
     expect(forceArgs).toEqual([undefined, true])
+    expect(useOpenInAppsStore.getState().availableApps.some((app) => app.id === "cursor")).toBe(true)
+  })
+
+  test("keeps a manual refresh scanning when the uncached first response is empty", async () => {
+    vi.useFakeTimers()
+    const forceArgs: Array<boolean | undefined> = []
+    fetchDesktopInstalledAppsMock.mockImplementation(async (_apps, force) => {
+      forceArgs.push(force)
+      if (forceArgs.length === 1) {
+        return {
+          apps: [{ name: "Terminal", iconDataUrl: "data:image/png;base64,terminal" }],
+          success: true,
+          hasCache: true,
+          isCacheStale: false,
+        }
+      }
+      if (forceArgs.length === 2) {
+        return {
+          apps: [],
+          success: true,
+          hasCache: false,
+          isCacheStale: false,
+        }
+      }
+      return {
+        apps: [{ name: "Cursor", iconDataUrl: "data:image/png;base64,cursor" }],
+        success: true,
+        hasCache: true,
+        isCacheStale: false,
+      }
+    })
+
+    const { useOpenInAppsStore } = await importStore()
+
+    await useOpenInAppsStore.getState().loadInstalledApps()
+    expect(useOpenInAppsStore.getState().hasLoadedApps).toBe(true)
+
+    await useOpenInAppsStore.getState().loadInstalledApps(true)
+
+    expect(useOpenInAppsStore.getState().hasLoadedApps).toBe(false)
+    expect(useOpenInAppsStore.getState().isScanning).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(800)
+
+    expect(forceArgs).toEqual([undefined, true, undefined])
+    expect(useOpenInAppsStore.getState().isScanning).toBe(false)
     expect(useOpenInAppsStore.getState().availableApps.some((app) => app.id === "cursor")).toBe(true)
   })
 })

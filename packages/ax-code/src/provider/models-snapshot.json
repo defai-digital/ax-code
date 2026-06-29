@@ -36439,16 +36439,16 @@
     "name": "Neuralwatt",
     "doc": "https://portal.neuralwatt.com/docs",
     "models": {
-      "glm-5-fast": {
-        "id": "glm-5-fast",
-        "name": "GLM 5 Fast",
+      "glm-5.2-short-fast-flex": {
+        "id": "glm-5.2-short-fast-flex",
+        "name": "GLM 5.2 Short Fast Flex",
         "family": "glm",
         "attachment": false,
         "reasoning": false,
         "tool_call": true,
         "temperature": true,
-        "release_date": "2026-04-07",
-        "last_updated": "2026-04-07",
+        "release_date": "2026-06-17",
+        "last_updated": "2026-06-17",
         "modalities": {
           "input": [
             "text"
@@ -36459,26 +36459,34 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 202736,
-          "output": 202736
+          "context": 199984,
+          "output": 199984
         }
       },
-      "glm-5.2": {
-        "id": "glm-5.2",
-        "name": "GLM 5.2",
+      "glm-5.2-flex": {
+        "id": "glm-5.2-flex",
+        "name": "GLM 5.2 Flex",
         "family": "glm",
         "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
+            "type": "toggle"
+          },
+          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
               "high",
-              "xhigh"
+              "xhigh",
+              "max"
             ]
+          },
+          {
+            "type": "budget_tokens"
           }
         ],
         "tool_call": true,
@@ -36497,6 +36505,74 @@
         "limit": {
           "context": 1048560,
           "output": 1048560
+        }
+      },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM 5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-06-17",
+        "last_updated": "2026-06-17",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048560,
+          "output": 1048560
+        }
+      },
+      "glm-5.2-short-fast": {
+        "id": "glm-5.2-short-fast",
+        "name": "GLM 5.2 Short Fast",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-06-17",
+        "last_updated": "2026-06-17",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 199984,
+          "output": 199984
         }
       },
       "qwen3.5-397b-fast": {
@@ -36548,22 +36624,30 @@
           "output": 131056
         }
       },
-      "glm-5.2-short": {
-        "id": "glm-5.2-short",
-        "name": "GLM 5.2 short",
+      "glm-5.2-short-flex": {
+        "id": "glm-5.2-short-flex",
+        "name": "GLM 5.2 Short Flex",
         "family": "glm",
         "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
+            "type": "toggle"
+          },
+          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
               "high",
-              "xhigh"
+              "xhigh",
+              "max"
             ]
+          },
+          {
+            "type": "budget_tokens"
           }
         ],
         "tool_call": true,
@@ -36580,8 +36664,76 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 200000,
-          "output": 200000
+          "context": 199984,
+          "output": 199984
+        }
+      },
+      "glm-5.2-fast": {
+        "id": "glm-5.2-fast",
+        "name": "GLM 5.2 Fast",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-06-17",
+        "last_updated": "2026-06-17",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048560,
+          "output": 1048560
+        }
+      },
+      "glm-5.2-short": {
+        "id": "glm-5.2-short",
+        "name": "GLM 5.2 Short",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-06-17",
+        "last_updated": "2026-06-17",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 199984,
+          "output": 199984
         }
       },
       "moonshotai/Kimi-K2.7-Code": {
