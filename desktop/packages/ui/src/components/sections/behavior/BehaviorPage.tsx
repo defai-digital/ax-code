@@ -8,49 +8,22 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Icon } from "@/components/icon/Icon"
-import {
-  getResponseStylePresetInstructions,
-  isResponseStylePreset,
-  RESPONSE_STYLE_PRESETS,
-  type ResponseStylePreset,
-} from "@/lib/responseStyle"
+import { isResponseStylePreset, RESPONSE_STYLE_PRESETS, type ResponseStylePreset } from "@/lib/responseStyle"
 import { API_ENDPOINTS } from "@/lib/http"
 import type { DesktopSettings } from "@/lib/desktop"
+import {
+  DEFAULT_BEHAVIOR_SETTINGS,
+  fetchBehaviorSettings,
+  getResponseStylePreview,
+  normalizeAgentsMdContent,
+  type ResponseStyleValue,
+} from "./behaviorSettingsLoad"
 
 const AGENTS_MD_PATH = "~/.config/ax-code/AGENTS.md"
 
 const readApiError = async (response: Response, fallback: string) => {
   const data = (await response.json().catch(() => null)) as { error?: unknown } | null
   return typeof data?.error === "string" && data.error.trim() ? data.error : fallback
-}
-
-const normalizeAgentsMdContent = (content: string) => {
-  return content.length > 0 && !content.endsWith("\n") ? `${content}\n` : content
-}
-
-type ResponseStyleValue = ResponseStylePreset | "custom"
-
-type BehaviorSettingsState = {
-  prompt: string
-  responseStyleEnabled: boolean
-  responseStylePreset: ResponseStyleValue
-  responseStyleCustomInstructions: string
-}
-
-const DEFAULT_BEHAVIOR_SETTINGS: BehaviorSettingsState = {
-  prompt: "",
-  responseStyleEnabled: false,
-  responseStylePreset: "concise",
-  responseStyleCustomInstructions: "",
-}
-
-const getResponseStylePreview = (preset: ResponseStyleValue, customInstructions: string) => {
-  return preset === "custom" ? customInstructions : getResponseStylePresetInstructions(preset)
-}
-
-const sanitizeResponseStylePreset = (value: unknown): ResponseStyleValue => {
-  if (value === "custom") return "custom"
-  return isResponseStylePreset(value) ? value : "concise"
 }
 
 const RESPONSE_STYLE_OPTION_LABEL_KEYS: Record<ResponseStylePreset, I18nKey> = {
@@ -99,43 +72,12 @@ export const BehaviorPage: React.FC = () => {
 
   React.useEffect(() => {
     const abort = new AbortController()
+    let active = true
 
     const load = async () => {
       try {
-        const [settingsRes, agentsMdRes] = await Promise.all([
-          fetch(API_ENDPOINTS.config.settings, {
-            method: "GET",
-            headers: { Accept: "application/json" },
-            signal: abort.signal,
-          }),
-          fetch(API_ENDPOINTS.behavior.agentsMd, {
-            method: "GET",
-            headers: { Accept: "application/json" },
-            signal: abort.signal,
-          }),
-        ])
-
-        let nextSettings: BehaviorSettingsState = DEFAULT_BEHAVIOR_SETTINGS
-        if (settingsRes.ok) {
-          const data = await settingsRes.json()
-          nextSettings = {
-            ...nextSettings,
-            responseStyleEnabled: data.responseStyleEnabled === true,
-            responseStylePreset: sanitizeResponseStylePreset(data.responseStylePreset),
-            responseStyleCustomInstructions:
-              typeof data.responseStyleCustomInstructions === "string" ? data.responseStyleCustomInstructions : "",
-          }
-          if (typeof data.globalBehaviorPrompt === "string") {
-            nextSettings = { ...nextSettings, prompt: data.globalBehaviorPrompt }
-          }
-        }
-
-        if (!nextSettings.prompt.trim() && agentsMdRes.ok) {
-          const agentsData = await agentsMdRes.json()
-          if (typeof agentsData.content === "string") {
-            nextSettings = { ...nextSettings, prompt: agentsData.content }
-          }
-        }
+        const nextSettings = await fetchBehaviorSettings({ fetchImpl: fetch, signal: abort.signal })
+        if (!active) return
 
         setPrompt(nextSettings.prompt)
         setResponseStyleEnabled(nextSettings.responseStyleEnabled)
@@ -148,16 +90,21 @@ export const BehaviorPage: React.FC = () => {
           custom: nextSettings.responseStyleCustomInstructions,
         }
       } catch (error) {
-        if ((error as Error).name !== "AbortError") {
+        if (active && (error as Error).name !== "AbortError") {
           console.warn("Failed to load behavior settings:", error)
         }
       } finally {
-        setIsLoading(false)
+        if (active) {
+          setIsLoading(false)
+        }
       }
     }
 
     void load()
-    return () => abort.abort()
+    return () => {
+      active = false
+      abort.abort()
+    }
   }, [])
 
   React.useEffect(() => {
