@@ -23,6 +23,7 @@ import { useSelectionStore } from "@/sync/selection-store"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useGitHubAuthStore } from "@/stores/useGitHubAuthStore"
 import { getGitHubPrStatusKey, useGitHubPrStatusStore } from "@/stores/useGitHubPrStatusStore"
+import { clearPrActionRefreshTimers, replacePrActionRefreshTimers } from "./prActionRefreshTimers"
 import type {
   GitHubPullRequest,
   GitHubCheckRun,
@@ -1026,13 +1027,12 @@ export const PullRequestSection: React.FC<{
   )
 
   const scheduleActionRefresh = React.useCallback(() => {
-    pendingActionRefreshTimersRef.current.forEach((timerId) => {
-      window.clearTimeout(timerId)
-    })
-    pendingActionRefreshTimersRef.current = PR_ACTION_REFRESH_DELAYS_MS.map((delayMs) =>
-      window.setTimeout(() => {
+    pendingActionRefreshTimersRef.current = replacePrActionRefreshTimers(
+      pendingActionRefreshTimersRef.current,
+      PR_ACTION_REFRESH_DELAYS_MS,
+      () => {
         void refresh({ force: true, silent: true, markInitialResolved: true })
-      }, delayMs),
+      },
     )
   }, [refresh])
 
@@ -1205,11 +1205,8 @@ export const PullRequestSection: React.FC<{
   }, [snapshotKey, title, body, draft, additionalContext, targetBaseBranch, selectedRemote?.name, directory, branch])
 
   React.useEffect(() => {
-    const pendingActionRefreshTimers = pendingActionRefreshTimersRef.current
     return () => {
-      pendingActionRefreshTimers.forEach((timerId) => {
-        window.clearTimeout(timerId)
-      })
+      clearPrActionRefreshTimers(pendingActionRefreshTimersRef.current)
       pendingActionRefreshTimersRef.current = []
     }
   }, [])
