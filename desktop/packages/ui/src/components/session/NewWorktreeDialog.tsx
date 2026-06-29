@@ -46,6 +46,7 @@ import type {
 } from "@/lib/api/types"
 import type { ProjectRef } from "@/lib/worktrees/worktreeManager"
 import { useI18n } from "@/lib/i18n"
+import { getSafeExternalUrl, openExternalUrl } from "@/lib/url"
 
 type Mode = "new-branch" | "existing-branch"
 
@@ -1033,6 +1034,8 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
         !validation.worktreeError
 
   const canCreate = isFormValid && !isCreating
+  const linkedItemUrl = newBranchState.linkedIssue?.url || newBranchState.linkedPr?.url || null
+  const safeLinkedItemUrl = linkedItemUrl ? getSafeExternalUrl(linkedItemUrl) : null
 
   const handleClearLinkedItem = () => {
     setNewBranchState((prev) => ({
@@ -1570,15 +1573,19 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
                     {newBranchState.linkedIssue?.title || newBranchState.linkedPr?.title}
                   </span>
 
-                  <a
-                    href={newBranchState.linkedIssue?.url || newBranchState.linkedPr?.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Icon name="external-link" className="h-3 w-3" />
-                  </a>
+                  {safeLinkedItemUrl ? (
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground shrink-0"
+                      aria-label={t("session.newWorktree.actions.openLinkedItem")}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void openExternalUrl(safeLinkedItemUrl)
+                      }}
+                    >
+                      <Icon name="external-link" className="h-3 w-3" />
+                    </button>
+                  ) : null}
 
                   <button
                     onClick={handleClearLinkedItem}
@@ -2078,15 +2085,19 @@ export function NewWorktreeDialog({ open, onOpenChange, onWorktreeCreated }: New
                       {newBranchState.linkedIssue?.title || newBranchState.linkedPr?.title}
                     </span>
 
-                    <a
-                      href={newBranchState.linkedIssue?.url || newBranchState.linkedPr?.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-foreground shrink-0"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Icon name="external-link" className="h-3 w-3" />
-                    </a>
+                    {safeLinkedItemUrl ? (
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground shrink-0"
+                        aria-label={t("session.newWorktree.actions.openLinkedItem")}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void openExternalUrl(safeLinkedItemUrl)
+                        }}
+                      >
+                        <Icon name="external-link" className="h-3 w-3" />
+                      </button>
+                    ) : null}
 
                     <button
                       onClick={handleClearLinkedItem}

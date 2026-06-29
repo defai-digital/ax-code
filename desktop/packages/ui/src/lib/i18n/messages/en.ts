@@ -1404,6 +1404,7 @@ export const dict = {
   "session.newWorktree.actions.cancel": "Cancel",
   "session.newWorktree.actions.creating": "Creating...",
   "session.newWorktree.actions.createWorktree": "Create Worktree",
+  "session.newWorktree.actions.openLinkedItem": "Open linked item in browser",
   "session.newWorktree.actions.reset": "Reset",
   "session.newWorktree.error.noModelSelected": "No model selected",
   "session.newWorktree.error.noActiveProject": "No active project",
