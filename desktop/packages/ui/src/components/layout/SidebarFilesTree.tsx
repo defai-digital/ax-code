@@ -38,6 +38,7 @@ import { getContextFileOpenFailureMessage, validateContextFileOpen } from "@/lib
 import { useI18n } from "@/lib/i18n"
 import { FileStatusDot } from "@/components/files/FileStatusDot"
 import { getFileStatusForPath, getFolderBadgeForPath } from "@/components/files/fileStatus"
+import { LatestDirectoryLoadTracker } from "@/components/files/latestDirectoryLoadTracker"
 import type { FileNode, FileStatus } from "@/components/files/types"
 
 const sortNodes = (items: FileNode[]) =>
@@ -355,6 +356,7 @@ export const SidebarFilesTree: React.FC = () => {
   const [loadErrorsByDir, setLoadErrorsByDir] = React.useState<Record<string, string>>({})
   const loadedDirsRef = React.useRef<Set<string>>(new Set())
   const inFlightDirsRef = React.useRef<Set<string>>(new Set())
+  const directoryLoadTrackerRef = React.useRef(new LatestDirectoryLoadTracker())
 
   const EMPTY_PATHS: string[] = React.useMemo(() => [], [])
   const EMPTY_CONTEXT_TABS: Array<{ mode: string; targetPath: string | null }> = React.useMemo(() => [], [])
@@ -462,6 +464,8 @@ export const SidebarFilesTree: React.FC = () => {
 
       inFlightDirsRef.current = new Set(inFlightDirsRef.current)
       inFlightDirsRef.current.add(normalizedDir)
+      const loadToken = directoryLoadTrackerRef.current.begin(normalizedDir)
+      const isCurrentRequest = () => directoryLoadTrackerRef.current.isCurrent(loadToken)
 
       const respectGitignore = !showGitignored
       const listPromise = files.listDirectory
@@ -482,6 +486,10 @@ export const SidebarFilesTree: React.FC = () => {
 
       await listPromise
         .then((entries) => {
+          if (!isCurrentRequest()) {
+            return
+          }
+
           const mapped = mapDirectoryEntries(normalizedDir, entries)
 
           loadedDirsRef.current = new Set(loadedDirsRef.current)
@@ -495,6 +503,10 @@ export const SidebarFilesTree: React.FC = () => {
           setChildrenByDir((prev) => ({ ...prev, [normalizedDir]: mapped }))
         })
         .catch((error) => {
+          if (!isCurrentRequest()) {
+            return
+          }
+
           const message = error instanceof Error ? error.message : String(error ?? "")
           console.error("Failed to load sidebar directory:", error)
           setLoadErrorsByDir((prev) => ({
@@ -503,6 +515,10 @@ export const SidebarFilesTree: React.FC = () => {
           }))
         })
         .finally(() => {
+          if (!directoryLoadTrackerRef.current.complete(loadToken)) {
+            return
+          }
+
           inFlightDirsRef.current = new Set(inFlightDirsRef.current)
           inFlightDirsRef.current.delete(normalizedDir)
         })
@@ -515,6 +531,7 @@ export const SidebarFilesTree: React.FC = () => {
 
     loadedDirsRef.current = new Set()
     inFlightDirsRef.current = new Set()
+    directoryLoadTrackerRef.current.reset()
     setLoadErrorsByDir({})
     setChildrenByDir((prev) => (Object.keys(prev).length === 0 ? prev : {}))
 
@@ -547,6 +564,7 @@ export const SidebarFilesTree: React.FC = () => {
 
     loadedDirsRef.current = new Set()
     inFlightDirsRef.current = new Set()
+    directoryLoadTrackerRef.current.reset()
     setLoadErrorsByDir({})
     setChildrenByDir((prev) => (Object.keys(prev).length === 0 ? prev : {}))
     void loadDirectory(root)
