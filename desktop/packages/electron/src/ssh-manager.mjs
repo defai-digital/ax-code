@@ -86,10 +86,21 @@ const writeJsonRoot = async (settingsFilePath, root) => {
 
 const defaultTrue = () => true
 
+const sanitizePort = (raw) => {
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < 1 || value > 65535) return null
+  return value
+}
+
 const sanitizeBindHost = (raw) => {
   const trimmed = typeof raw === "string" ? raw.trim() : ""
   if (!trimmed) return DEFAULT_LOCAL_BIND_HOST
-  return ["127.0.0.1", "localhost", "0.0.0.0"].includes(trimmed) ? trimmed : DEFAULT_LOCAL_BIND_HOST
+  if (["localhost", "0.0.0.0"].includes(trimmed)) return trimmed
+  const loopback = trimmed.match(/^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (loopback && loopback.slice(1).every((part) => Number(part) >= 0 && Number(part) <= 255)) {
+    return trimmed
+  }
+  return DEFAULT_LOCAL_BIND_HOST
 }
 
 const splitShellWords = (input) => {
@@ -677,14 +688,16 @@ export class ElectronSshManager {
     const id = typeof forward?.id === "string" ? forward.id.trim() : ""
     if (!id) return null
     const type = forward?.type === "remote" || forward?.type === "dynamic" ? forward.type : "local"
+    const localPort = sanitizePort(forward?.localPort)
+    const remotePort = sanitizePort(forward?.remotePort)
     const normalized = {
       id,
       enabled: forward?.enabled !== false,
       type,
       ...(forward?.localHost ? { localHost: sanitizeBindHost(forward.localHost) } : {}),
-      ...(Number.isFinite(forward?.localPort) ? { localPort: Number(forward.localPort) } : {}),
+      ...(localPort ? { localPort } : {}),
       ...(forward?.remoteHost ? { remoteHost: String(forward.remoteHost).trim() || "127.0.0.1" } : {}),
-      ...(Number.isFinite(forward?.remotePort) ? { remotePort: Number(forward.remotePort) } : {}),
+      ...(remotePort ? { remotePort } : {}),
     }
 
     if (type === "local" || type === "remote") {
@@ -715,6 +728,8 @@ export class ElectronSshManager {
           .map((forward) => this.sanitizeForward(forward))
           .filter((forward) => forward && !seen.has(forward.id) && seen.add(forward.id))
       : []
+    const preferredRemotePort = sanitizePort(instance?.remoteOpenchamber?.preferredPort)
+    const preferredLocalPort = sanitizePort(instance?.localForward?.preferredLocalPort)
 
     return {
       id,
@@ -730,9 +745,7 @@ export class ElectronSshManager {
       remoteOpenchamber: {
         mode: instance?.remoteOpenchamber?.mode === "external" ? "external" : "managed",
         keepRunning: instance?.remoteOpenchamber?.keepRunning !== false,
-        ...(Number.isFinite(instance?.remoteOpenchamber?.preferredPort)
-          ? { preferredPort: Number(instance.remoteOpenchamber.preferredPort) }
-          : {}),
+        ...(preferredRemotePort ? { preferredPort: preferredRemotePort } : {}),
         installMethod: ["npm", "download_release", "upload_bundle"].includes(instance?.remoteOpenchamber?.installMethod)
           ? instance.remoteOpenchamber.installMethod
           : "npm",
@@ -740,9 +753,7 @@ export class ElectronSshManager {
       },
       localForward: {
         bindHost: sanitizeBindHost(instance?.localForward?.bindHost),
-        ...(Number.isFinite(instance?.localForward?.preferredLocalPort)
-          ? { preferredLocalPort: Number(instance.localForward.preferredLocalPort) }
-          : {}),
+        ...(preferredLocalPort ? { preferredLocalPort } : {}),
       },
       auth: {
         ...(this.sanitizeStoredSecret(instance?.auth?.sshPassword)
