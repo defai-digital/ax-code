@@ -293,7 +293,7 @@ interface FilesViewFileRowProps {
     canDelete: boolean
     canReveal: boolean
   }
-  downloadFile?: (path: string) => Promise<void>
+  downloadFile?: (path: string, options?: { allowOutsideWorkspace?: boolean }) => Promise<void>
   contextMenuPath: string | null
   setContextMenuPath: (path: string | null) => void
   onSelect: (node: FileNode) => void
@@ -449,7 +449,9 @@ const FileRow: React.FC<FilesViewFileRowProps> = ({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation()
-                    void downloadFile(node.path)
+                    void downloadFile(node.path, {
+                      allowOutsideWorkspace: !isPathWithinRoot(node.path, root),
+                    })
                   }}
                 >
                   <Icon name="download" className="mr-2 size-4" /> {t("sidebarFilesTree.menu.save")}

@@ -265,15 +265,16 @@ export const createWebFilesAPI = (): FilesAPI => ({
     return { success: Boolean((result as { success?: boolean }).success) }
   },
 
-  async downloadFile(path: string): Promise<void> {
+  async downloadFile(path: string, options?: FileReadOptions): Promise<void> {
     const target = normalizePath(path)
-    const url = buildQueryUrl(
-      API_ENDPOINTS.files.fsRaw,
-      new URLSearchParams({
-        path: target,
-        download: HTTP_QUERY_STRINGS.true,
-      }),
-    )
+    const params = new URLSearchParams({
+      path: target,
+      download: HTTP_QUERY_STRINGS.true,
+    })
+    if (options?.allowOutsideWorkspace) {
+      params.set("allowOutsideWorkspace", HTTP_QUERY_STRINGS.true)
+    }
+    const url = buildQueryUrl(API_ENDPOINTS.files.fsRaw, params)
     const a = document.createElement("a")
     a.href = url
     a.download = target.split("/").pop() || "file"

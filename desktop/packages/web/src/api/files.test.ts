@@ -4,9 +4,11 @@ import { API_ENDPOINTS, HTTP_DEFAULTS } from "./constants"
 import { createWebFilesAPI } from "./files"
 
 const originalFetch = globalThis.fetch
+const originalDocument = globalThis.document
 
 afterEach(() => {
   globalThis.fetch = originalFetch
+  globalThis.document = originalDocument
   vi.restoreAllMocks()
 })
 
@@ -23,5 +25,24 @@ describe("createWebFilesAPI", () => {
       headers: HTTP_DEFAULTS.headers.contentTypeJson,
       body: JSON.stringify({ path: "/tmp/project", allowOutsideWorkspace: true }),
     })
+  })
+
+  it("passes outside-workspace authorization options when downloading files", async () => {
+    const click = vi.fn()
+    const anchor = { href: "", download: "", click }
+    const appendChild = vi.fn()
+    const removeChild = vi.fn()
+    globalThis.document = {
+      createElement: vi.fn(() => anchor),
+      body: { appendChild, removeChild },
+    } as unknown as Document
+
+    await createWebFilesAPI().downloadFile?.("/tmp/approved/image.png", { allowOutsideWorkspace: true })
+
+    expect(anchor.href).toBe("/api/fs/raw?path=%2Ftmp%2Fapproved%2Fimage.png&download=true&allowOutsideWorkspace=true")
+    expect(anchor.download).toBe("image.png")
+    expect(appendChild).toHaveBeenCalledWith(anchor)
+    expect(click).toHaveBeenCalled()
+    expect(removeChild).toHaveBeenCalledWith(anchor)
   })
 })
