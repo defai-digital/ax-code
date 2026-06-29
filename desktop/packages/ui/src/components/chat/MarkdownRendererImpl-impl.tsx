@@ -34,6 +34,7 @@ import { useDeviceInfo } from "@/lib/device"
 import { useEffectiveDirectory } from "@/hooks/useEffectiveDirectory"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import type { EditorAPI } from "@/lib/api/types"
+import { clearCopyResetTimer, replaceCopyResetTimer } from "./copyResetTimer"
 
 const useCurrentMermaidTheme = () => {
   const themeSystem = useOptionalThemeSystem()
@@ -220,6 +221,7 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
   const [copied, setCopied] = React.useState(false)
   const [showMenu, setShowMenu] = React.useState(false)
   const menuRef = React.useRef<HTMLDivElement>(null)
+  const copiedResetTimerRef = React.useRef<number | null>(null)
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -229,6 +231,20 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  React.useEffect(() => {
+    return () => {
+      copiedResetTimerRef.current = clearCopyResetTimer(copiedResetTimerRef.current)
+    }
+  }, [])
+
+  const markCopied = React.useCallback(() => {
+    setCopied(true)
+    copiedResetTimerRef.current = replaceCopyResetTimer(copiedResetTimerRef.current, () => {
+      setCopied(false)
+      copiedResetTimerRef.current = null
+    })
   }, [])
 
   const handleCopy = async (format: "csv" | "tsv") => {
@@ -245,15 +261,13 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
           "text/html": new Blob([tableEl.outerHTML], { type: "text/html" }),
         }),
       ])
-      setCopied(true)
+      markCopied()
       setShowMenu(false)
-      setTimeout(() => setCopied(false), 2000)
     } catch (err) {
       const fallbackResult = await copyTextToClipboard(content)
       if (fallbackResult.ok) {
-        setCopied(true)
+        markCopied()
         setShowMenu(false)
-        setTimeout(() => setCopied(false), 2000)
         return
       }
       console.error("Failed to copy table:", err)
@@ -379,6 +393,8 @@ const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii" }> = ({ sou
   const { isMobile, isTablet } = useDeviceInfo()
   const [copied, setCopied] = React.useState(false)
   const [downloaded, setDownloaded] = React.useState(false)
+  const copiedResetTimerRef = React.useRef<number | null>(null)
+  const downloadedResetTimerRef = React.useRef<number | null>(null)
 
   const svg = React.useMemo(() => {
     if (mode !== "svg") return ""
@@ -410,12 +426,34 @@ const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii" }> = ({ sou
 
   const copyVisibilityClass = isMobile || isTablet ? "opacity-100" : "opacity-0 group-hover:opacity-100"
 
+  React.useEffect(() => {
+    return () => {
+      copiedResetTimerRef.current = clearCopyResetTimer(copiedResetTimerRef.current)
+      downloadedResetTimerRef.current = clearCopyResetTimer(downloadedResetTimerRef.current)
+    }
+  }, [])
+
+  const markCopied = React.useCallback(() => {
+    setCopied(true)
+    copiedResetTimerRef.current = replaceCopyResetTimer(copiedResetTimerRef.current, () => {
+      setCopied(false)
+      copiedResetTimerRef.current = null
+    })
+  }, [])
+
+  const markDownloaded = React.useCallback(() => {
+    setDownloaded(true)
+    downloadedResetTimerRef.current = replaceCopyResetTimer(downloadedResetTimerRef.current, () => {
+      setDownloaded(false)
+      downloadedResetTimerRef.current = null
+    })
+  }, [])
+
   const handleCopyAscii = async (asciiText: string) => {
     if (!asciiText) return
     const result = await copyTextToClipboard(asciiText)
     if (result.ok) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      markCopied()
     }
   }
 
@@ -423,8 +461,7 @@ const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii" }> = ({ sou
     if (!source) return
     const result = await copyTextToClipboard(source)
     if (result.ok) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      markCopied()
     }
   }
 
@@ -440,8 +477,7 @@ const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii" }> = ({ sou
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
-      setDownloaded(true)
-      setTimeout(() => setDownloaded(false), 2000)
+      markDownloaded()
     } catch {
       toast.error(t("markdownRenderer.mermaid.toast.downloadFailed"))
     }
@@ -774,6 +810,7 @@ const MarkdownCodeBlock: React.FC<{
   const [viewMode, setViewMode] = React.useState<"code" | "preview">("code")
   const prevCodeRef = React.useRef<string>(code)
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copiedResetTimerRef = React.useRef<number | null>(null)
   const { isMobile, isTablet } = useDeviceInfo()
   const skipHighlight = exceedsLineLimit(code, getCodeHighlightLineLimit())
 
@@ -806,11 +843,20 @@ const MarkdownCodeBlock: React.FC<{
     }
   }, [code])
 
+  React.useEffect(() => {
+    return () => {
+      copiedResetTimerRef.current = clearCopyResetTimer(copiedResetTimerRef.current)
+    }
+  }, [])
+
   const handleCopy = React.useCallback(async () => {
     const result = await copyTextToClipboard(code)
     if (!result.ok) return
     setCopied(true)
-    window.setTimeout(() => setCopied(false), 2000)
+    copiedResetTimerRef.current = replaceCopyResetTimer(copiedResetTimerRef.current, () => {
+      setCopied(false)
+      copiedResetTimerRef.current = null
+    })
   }, [code])
 
   const handleDownload = React.useCallback(() => {
