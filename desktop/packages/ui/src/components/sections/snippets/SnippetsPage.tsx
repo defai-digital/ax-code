@@ -9,6 +9,7 @@ import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { Icon } from "@/components/icon/Icon"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useI18n } from "@/lib/i18n"
+import { saveSnippet } from "./snippetSave"
 
 export const SnippetsPage: React.FC = () => {
   const { t } = useI18n()
@@ -87,33 +88,38 @@ export const SnippetsPage: React.FC = () => {
   }, [aliases, content, description, draftName, draftScope, isNew])
 
   const handleSave = async () => {
-    const snippetName = isNew ? draftName.trim().replace(/\s+/g, "-") : selectedSnippetName?.trim()
-    if (!snippetName) {
-      toast.error(t("settings.snippets.page.toast.nameRequired"))
-      return
-    }
-
-    if (!content.trim()) {
-      toast.error(t("settings.snippets.page.toast.contentRequired"))
-      return
-    }
-
-    const parsedAliases = aliases
-      .split(",")
-      .map((alias) => alias.trim())
-      .filter(Boolean)
-
     setIsSaving(true)
     try {
-      const success = isNew
-        ? await createSnippet(snippetName, content, { aliases: parsedAliases, description, scope: draftScope })
-        : await updateSnippet(snippetName, { content, aliases: parsedAliases, description })
-      if (!success) {
-        toast.error(t("settings.snippets.page.toast.saveFailed"))
-        return
+      const result = await saveSnippet({
+        isNew,
+        name: isNew ? draftName : selectedSnippetName,
+        content,
+        aliases,
+        description,
+        scope: draftScope,
+        createSnippet,
+        updateSnippet,
+      })
+
+      switch (result.status) {
+        case "name-required":
+          toast.error(t("settings.snippets.page.toast.nameRequired"))
+          return
+        case "content-required":
+          toast.error(t("settings.snippets.page.toast.contentRequired"))
+          return
+        case "failed":
+          toast.error(t("settings.snippets.page.toast.saveFailed"))
+          return
+        case "unexpected-error":
+          console.error("Error saving snippet:", result.error)
+          toast.error(t("settings.snippets.page.toast.saveFailed"))
+          return
+        case "saved":
+          toast.success(t("settings.snippets.page.toast.saved"))
+          if (isNew) setSnippetDraft(null)
+          return
       }
-      toast.success(t("settings.snippets.page.toast.saved"))
-      if (isNew) setSnippetDraft(null)
     } finally {
       setIsSaving(false)
     }
