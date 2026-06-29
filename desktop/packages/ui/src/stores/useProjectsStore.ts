@@ -4,6 +4,7 @@ import { axCodeClient } from "@/lib/ax-code/client"
 import type { ProjectEntry } from "@/lib/api/types"
 import type { DesktopSettings } from "@/lib/desktop"
 import { updateDesktopSettings } from "@/lib/persistence"
+import { getProjectPathIdentityKey } from "@/lib/projectResolution"
 import { createProjectIdFromPath } from "@/lib/projectId"
 import { getSafeStorage } from "./utils/safeStorage"
 import { useDirectoryStore } from "./useDirectoryStore"
@@ -194,10 +195,12 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
 
     const id = createProjectIdFromPath(normalizedPath)
     if (!id) continue
+    const pathKey = getProjectPathIdentityKey(normalizedPath)
+    if (!pathKey) continue
 
-    if (seenIds.has(id) || seenPaths.has(normalizedPath)) continue
+    if (seenIds.has(id) || seenPaths.has(pathKey)) continue
     seenIds.add(id)
-    seenPaths.add(normalizedPath)
+    seenPaths.add(pathKey)
 
     const project: ProjectEntry = {
       id,
@@ -328,7 +331,13 @@ export const useProjectsStore = create<ProjectsStore>()(
         }
 
         const normalizedPath = validation.normalizedPath
-        const existing = get().projects.find((project) => project.path === normalizedPath)
+        const normalizedPathKey = getProjectPathIdentityKey(normalizedPath)
+        const existing = get().projects.find((project) => {
+          const projectPathKey = getProjectPathIdentityKey(project.path)
+          return projectPathKey && normalizedPathKey
+            ? projectPathKey === normalizedPathKey
+            : project.path === normalizedPath
+        })
         if (existing) {
           get().setActiveProject(existing.id)
           return existing

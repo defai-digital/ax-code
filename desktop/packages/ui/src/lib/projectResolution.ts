@@ -16,6 +16,11 @@ export const normalizeProjectPath = (value?: string | null): string | null => {
 const toComparableProjectPath = (path: string): string =>
   path.startsWith("//") || /^[A-Z]:\//.test(path) ? path.toLowerCase() : path
 
+export const getProjectPathIdentityKey = (value?: string | null): string | null => {
+  const normalized = normalizeProjectPath(value)
+  return normalized ? toComparableProjectPath(normalized) : null
+}
+
 export const projectPathMatchesRoot = (directory: string, root: string): boolean => {
   const comparableDirectory = toComparableProjectPath(directory)
   const comparableRoot = toComparableProjectPath(root)
