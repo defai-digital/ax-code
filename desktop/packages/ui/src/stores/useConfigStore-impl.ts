@@ -17,6 +17,7 @@ import { isPrimaryMode } from "@/lib/modelControlUtils"
 import { hasSelectableProviderModel, isProviderModelSelectable } from "@/lib/providerModelAvailability"
 import type { ProviderModel, ProviderWithModelList } from "@/types/providerModels"
 import { API_ENDPOINTS } from "@/lib/http"
+import { withTimeout } from "@/lib/asyncTimeout"
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json"
 const MODELS_DEV_PROXY_URL = API_ENDPOINTS.openchamber.modelsMetadata
@@ -412,7 +413,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const CONNECTION_PROBE_TIMEOUT_MS = 800
 
 const probeAxCodeHealth = async (timeoutMs = CONNECTION_PROBE_TIMEOUT_MS): Promise<boolean> => {
-  return Promise.race([axCodeClient.checkHealth().catch(() => false), sleep(Math.max(1, timeoutMs)).then(() => false)])
+  return withTimeout(axCodeClient.checkHealth().catch(() => false), Math.max(1, timeoutMs), () => false)
 }
 
 const DIRECTORY_KEY_GLOBAL = "__global__"
@@ -734,12 +735,13 @@ export const useConfigStore = create<ConfigStore>()(
                   () => get().modelsMetadata,
                   (metadata) => set({ modelsMetadata: metadata }),
                 )
-                const apiResult = await Promise.race([
+                const apiResult = await withTimeout(
                   axCodeClient.withDirectory(fromDirectoryKey(directoryKey), () => axCodeClient.getProviders()),
-                  sleep(PROVIDER_FETCH_TIMEOUT_MS).then((): never => {
+                  PROVIDER_FETCH_TIMEOUT_MS,
+                  (): never => {
                     throw new Error(`Provider request timed out after ${PROVIDER_FETCH_TIMEOUT_MS / 1000}s`)
-                  }),
-                ])
+                  },
+                )
                 const providers = Array.isArray(apiResult?.providers) ? apiResult.providers : []
                 const defaults = apiResult?.default || {}
 
