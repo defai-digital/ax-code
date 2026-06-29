@@ -26,4 +26,12 @@ describe("isPathWithinProject", () => {
   test("matches deep child directories", () => {
     expect(isPathWithinProject("/workspace/app/sub/dir", "/workspace/app")).toBe(true)
   })
+
+  test("matches Windows project paths case-insensitively", () => {
+    expect(isPathWithinProject("c:/Users/Alice/Project/src", "C:/Users/Alice/Project")).toBe(true)
+  })
+
+  test("keeps POSIX project paths case-sensitive", () => {
+    expect(isPathWithinProject("/users/Alice/Project/src", "/Users/Alice/Project")).toBe(false)
+  })
 })

@@ -16,9 +16,12 @@ export const normalizeProjectPath = (value?: string | null): string | null => {
 const toComparableProjectPath = (path: string): string =>
   path.startsWith("//") || /^[A-Z]:\//.test(path) ? path.toLowerCase() : path
 
-const pathMatchesProjectRoot = (directory: string, root: string): boolean => {
+export const projectPathMatchesRoot = (directory: string, root: string): boolean => {
   const comparableDirectory = toComparableProjectPath(directory)
   const comparableRoot = toComparableProjectPath(root)
+  if (comparableRoot.endsWith("/")) {
+    return comparableDirectory === comparableRoot || comparableDirectory.startsWith(comparableRoot)
+  }
   return comparableDirectory === comparableRoot || comparableDirectory.startsWith(`${comparableRoot}/`)
 }
 
@@ -35,7 +38,7 @@ export const resolveProjectForDirectory = (projects: ProjectEntry[], directory: 
   for (const p of projects) {
     const pp = normalizeProjectPath(p.path)
     if (!pp) continue
-    if (!pathMatchesProjectRoot(nd, pp)) continue
+    if (!projectPathMatchesRoot(nd, pp)) continue
     if (!best || pp.length > (normalizeProjectPath(best.path)?.length ?? 0)) best = p
   }
   return best
@@ -55,7 +58,7 @@ export const resolveProjectFromWorktreeDirectory = (
     for (const wt of worktrees) {
       const wp = normalizeProjectPath(wt.path)
       if (!wp) continue
-      if (!pathMatchesProjectRoot(nd, wp)) continue
+      if (!projectPathMatchesRoot(nd, wp)) continue
       if (wp.length > bestLen) {
         bestLen = wp.length
         matchedWorktree = wt

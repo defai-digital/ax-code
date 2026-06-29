@@ -24,6 +24,12 @@ describe("resolveProjectForDirectory", () => {
     expect(resolveProjectForDirectory(projects, "c:/Users/Alice/Project/src")?.id).toBe("app")
   })
 
+  test("matches child paths under a Windows drive root project", () => {
+    const projects = [project("drive", "C:/")]
+
+    expect(resolveProjectForDirectory(projects, "C:/Users/Alice/Project")?.id).toBe("drive")
+  })
+
   test("keeps POSIX path matching case-sensitive", () => {
     const projects = [project("app", "/Users/Alice/Project")]
 

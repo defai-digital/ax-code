@@ -1,5 +1,6 @@
 import React from "react"
 import type { Session } from "@ax-code/sdk/v2"
+import { normalizeProjectPath, projectPathMatchesRoot } from "@/lib/projectResolution"
 import type { SessionSummaryMeta } from "./types"
 
 const formatDateLabel = (value: string | number) => {
@@ -70,20 +71,14 @@ export const formatSessionCompactDateLabel = (updatedMs: number): string => {
 }
 
 export const normalizePath = (value?: string | null) => {
-  if (!value) {
-    return null
-  }
-  const normalized = value.replace(/\\/g, "/").replace(/\/+$/, "")
-  return normalized.length === 0 ? "/" : normalized
+  return normalizeProjectPath(value)
 }
 
 export const isPathWithinProject = (directory?: string | null, projectPath?: string | null): boolean => {
   const normalizedDirectory = normalizePath(directory)
   const normalizedProjectPath = normalizePath(projectPath)
   if (!normalizedDirectory || !normalizedProjectPath) return false
-  if (normalizedDirectory === normalizedProjectPath) return true
-  if (normalizedProjectPath === "/") return normalizedDirectory.startsWith("/")
-  return normalizedDirectory.startsWith(`${normalizedProjectPath}/`)
+  return projectPathMatchesRoot(normalizedDirectory, normalizedProjectPath)
 }
 
 export const normalizeForBranchComparison = (value: string): string => {
