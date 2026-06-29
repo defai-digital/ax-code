@@ -2323,6 +2323,7 @@ handleCommand(
       !isAllowedDesktopHostTargetUrl(targetUrl, {
         localOrigin: localOriginUrl(),
         hosts: hostConfig.hosts,
+        includeApiUrls: true,
       })
     ) {
       throw new Error("Host URL is not configured for this desktop session")

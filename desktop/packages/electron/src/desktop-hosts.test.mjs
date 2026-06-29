@@ -103,8 +103,12 @@ describe("desktop hosts config", () => {
     const config = readDesktopHostsConfigFromRoot(root, { includeSecrets: true })
 
     expect(resolveStoredClientTokenForUrl("https://remote.example.com/app", config)).toBe("secret-token")
+    expect(resolveStoredClientTokenForUrl("https://remote.example.com/app/", config)).toBe("secret-token")
+    expect(resolveStoredClientTokenForUrl("https://remote.example.com/app/session/abc", config)).toBe("secret-token")
     expect(resolveStoredClientTokenForUrl("https://api.remote.example.com/v1", config)).toBe("secret-token")
+    expect(resolveStoredClientTokenForUrl("https://api.remote.example.com/v1/status", config)).toBe("secret-token")
     expect(resolveStoredClientTokenForUrl("https://remote.example.com/other", config)).toBe("")
+    expect(resolveStoredClientTokenForUrl("https://remote.example.com/app2", config)).toBe("")
   })
 
   test("preserves existing private host metadata when renderer roundtrips public hosts", () => {
@@ -274,6 +278,38 @@ describe("desktop hosts config", () => {
       isAllowedDesktopHostTargetUrl("https://attacker.example.com/app", {
         localOrigin: "http://localhost:3910",
         hosts,
+      }),
+    ).toBe(false)
+  })
+
+  test("allows configured API URL probe targets only when explicitly requested", () => {
+    const hosts = [
+      {
+        id: "remote-a",
+        label: "Remote A",
+        url: "https://remote.example.com/app",
+        apiUrl: "https://api.remote.example.com/v1",
+      },
+    ]
+
+    expect(
+      isAllowedDesktopHostTargetUrl("https://api.remote.example.com/v1/status", {
+        localOrigin: "http://localhost:3910",
+        hosts,
+      }),
+    ).toBe(false)
+    expect(
+      isAllowedDesktopHostTargetUrl("https://api.remote.example.com/v1/status", {
+        localOrigin: "http://localhost:3910",
+        hosts,
+        includeApiUrls: true,
+      }),
+    ).toBe(true)
+    expect(
+      isAllowedDesktopHostTargetUrl("https://api.remote.example.com/v2/status", {
+        localOrigin: "http://localhost:3910",
+        hosts,
+        includeApiUrls: true,
       }),
     ).toBe(false)
   })

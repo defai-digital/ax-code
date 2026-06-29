@@ -73,11 +73,15 @@ const targetMatchesHostUrl = (targetRaw, hostRaw) => {
   }
 }
 
-const isAllowedDesktopHostTargetUrl = (targetRaw, { localOrigin, hosts } = {}) => {
+const isAllowedDesktopHostTargetUrl = (targetRaw, { localOrigin, hosts, includeApiUrls = false } = {}) => {
   if (targetMatchesHostUrl(targetRaw, localOrigin)) return true
 
   const hostList = Array.isArray(hosts) ? hosts : []
-  return hostList.some((host) => targetMatchesHostUrl(targetRaw, host?.url))
+  return hostList.some(
+    (host) =>
+      targetMatchesHostUrl(targetRaw, host?.url) ||
+      (includeApiUrls && targetMatchesHostUrl(targetRaw, host?.apiUrl)),
+  )
 }
 
 const resolveStoredClientTokenForUrl = (targetRaw, { hosts } = {}) => {
@@ -88,7 +92,7 @@ const resolveStoredClientTokenForUrl = (targetRaw, { hosts } = {}) => {
   for (const host of hostList) {
     const hostUrl = normalizeHostUrl(host?.url)
     const apiUrl = normalizeHostUrl(host?.apiUrl || host?.url)
-    if (normalizedTarget === hostUrl || normalizedTarget === apiUrl) {
+    if (targetMatchesHostUrl(normalizedTarget, hostUrl) || targetMatchesHostUrl(normalizedTarget, apiUrl)) {
       return sanitizeClientTokenForStorage(host?.clientToken) || ""
     }
   }
