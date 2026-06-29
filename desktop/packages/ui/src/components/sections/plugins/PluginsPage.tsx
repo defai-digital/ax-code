@@ -15,6 +15,7 @@ import {
   type PluginFile,
   type PluginScope,
 } from "@/stores/usePluginsStore"
+import { loadPluginFileContent } from "./pluginFileLoad"
 
 interface OptionsParseResult {
   ok: boolean
@@ -110,6 +111,7 @@ export const PluginsPage: React.FC = () => {
     let cancelled = false
 
     if (selectedEntry) {
+      setIsLoadingFile(false)
       setDraft(buildEntryDraft(selectedEntry))
       return () => {
         cancelled = true
@@ -119,18 +121,25 @@ export const PluginsPage: React.FC = () => {
     if (selectedFile) {
       setIsLoadingFile(true)
       void (async () => {
-        const result = await readFile(selectedFile.id)
-        if (cancelled) return
-        setIsLoadingFile(false)
-        const content = result?.content ?? ""
+        const result = await loadPluginFileContent(selectedFile.id, readFile)
+        if (cancelled) {
+          return
+        }
+        const content = result.ok ? result.content : ""
         originalFileContentById.current.set(selectedFile.id, content)
         setDraft(buildFileDraft(selectedFile, content))
-      })()
+        setIsLoadingFile(false)
+      })().finally(() => {
+        if (!cancelled) {
+          setIsLoadingFile(false)
+        }
+      })
       return () => {
         cancelled = true
       }
     }
 
+    setIsLoadingFile(false)
     setDraft(null)
     return () => {
       cancelled = true
@@ -260,13 +269,27 @@ export const PluginsPage: React.FC = () => {
 
     const handleFileDiscard = () => {
       void (async () => {
+        const fileId = selectedFile.id
         setIsLoadingFile(true)
-        const result = await readFile(selectedFile.id)
-        const content = result?.content ?? ""
-        setIsLoadingFile(false)
+        const result = await loadPluginFileContent(fileId, readFile)
+        if (usePluginsStore.getState().selectedId !== fileId) {
+          return
+        }
+        if (!result.ok) {
+          if (result.error) {
+            console.error("Failed to discard plugin file changes:", result.error)
+          }
+          toast.error(t("settings.plugins.toast.fileLoadFailed"))
+          return
+        }
+        const content = result.content
         originalFileContentById.current.set(selectedFile.id, content)
         setDraft(buildFileDraft(selectedFile, content))
-      })()
+      })().finally(() => {
+        if (usePluginsStore.getState().selectedId === selectedFile.id) {
+          setIsLoadingFile(false)
+        }
+      })
     }
 
     const handleFileSave = async () => {

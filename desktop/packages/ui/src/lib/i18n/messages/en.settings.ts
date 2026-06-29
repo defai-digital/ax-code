@@ -781,6 +781,7 @@ export const settingsDict = {
   "settings.plugins.toast.created": "Plugin added",
   "settings.plugins.toast.updated": "Plugin updated",
   "settings.plugins.toast.reloadFailed": "ax-code reload failed — restart required",
+  "settings.plugins.toast.fileLoadFailed": "Failed to load plugin file",
   "settings.plugins.validation.fileName": "Filename must be lowercase, end in .js / .ts / .mjs / .cjs",
   "settings.plugins.validation.specRequired": "Spec is required",
   "settings.plugins.registry.badge.update.label": "↑ {version}",
