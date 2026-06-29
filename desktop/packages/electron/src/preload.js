@@ -2,6 +2,7 @@
 
 const { contextBridge, ipcRenderer } = require("electron")
 const { createElectronDesktopBootOutcome } = require("./desktop-boot-outcome")
+const { isAllowedDesktopInvokeCommand } = require("./preload-ipc-policy")
 
 // Bridge main-process desktop events to DOM CustomEvents. Several UI consumers
 // listen via window.addEventListener('openchamber:...') (e.g. open-session,
@@ -46,7 +47,12 @@ contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP_DESKTOP_BOOT_OUTCOME__", crea
 // works in both Tauri and Electron without changes to the shared UI package.
 contextBridge.exposeInMainWorld("__TAURI__", {
   core: {
-    invoke: (command, args) => ipcRenderer.invoke(command, args ?? {}),
+    invoke: (command, args) => {
+      if (!isAllowedDesktopInvokeCommand(command)) {
+        return Promise.reject(new Error("Desktop IPC command is not available"))
+      }
+      return ipcRenderer.invoke(command, args ?? {})
+    },
   },
   dialog: {
     open: (options) => ipcRenderer.invoke("desktop_dialog_open", options ?? {}),
