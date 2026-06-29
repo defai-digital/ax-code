@@ -19,6 +19,7 @@ import { Icon } from "@/components/icon/Icon"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import { buildSessionContextUsage, findLatestAssistantTokenUsage } from "@/lib/messages/assistantTokens"
 import type { SessionContextUsage } from "@/stores/types/sessionTypes"
+import { buildMiniChatMainHandoffPayload } from "./miniChatMainHandoff"
 import type { MiniChatMode } from "./types"
 
 type MiniChatLayoutProps = {
@@ -241,12 +242,13 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   }, [pinned])
 
   const handleOpenMainApp = React.useCallback(() => {
-    const payload = currentSessionId
-      ? {
-          sessionId: currentSessionId,
-          directory: (session as { directory?: string | null } | null)?.directory ?? currentDirectory ?? "",
-        }
-      : { mode: "draft", directory: openDirectory || currentDirectory || "", projectId: draftProjectId }
+    const payload = buildMiniChatMainHandoffPayload({
+      currentSessionId,
+      openDirectory,
+      sessionDirectory: (session as { directory?: string | null } | null)?.directory ?? null,
+      currentDirectory,
+      draftProjectId,
+    })
     void invokeDesktop<{ focused?: boolean }>("desktop_focus_main_window", payload).then((result) => {
       if (result?.focused === true) {
         return invokeDesktop("desktop_close_current_window")
