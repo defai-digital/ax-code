@@ -5,10 +5,28 @@ export const normalizeProjectPath = (value?: string | null): string | null => {
   if (typeof value !== "string") return null
   const trimmed = value.trim()
   if (!trimmed) return null
-  const replaced = trimmed.replace(/\\/g, "/")
+  const replaced = trimmed.replace(/\\/g, "/").replace(/^([a-z]):/, (_, letter: string) => letter.toUpperCase() + ":")
   if (replaced === "/") return "/"
+  const driveRoot = replaced.match(/^([A-Z]:)\/+$/)
+  if (driveRoot) return `${driveRoot[1]}/`
+  if (/^[A-Z]:$/.test(replaced)) return `${replaced}/`
   return replaced.length > 1 ? replaced.replace(/\/+$/, "") : replaced
 }
+
+const toComparableProjectPath = (path: string): string =>
+  path.startsWith("//") || /^[A-Z]:\//.test(path) ? path.toLowerCase() : path
+
+const pathMatchesProjectRoot = (directory: string, root: string): boolean => {
+  const comparableDirectory = toComparableProjectPath(directory)
+  const comparableRoot = toComparableProjectPath(root)
+  return comparableDirectory === comparableRoot || comparableDirectory.startsWith(`${comparableRoot}/`)
+}
+
+const findProjectByPath = (projects: ProjectEntry[], path: string): ProjectEntry | null =>
+  projects.find((project) => {
+    const projectPath = normalizeProjectPath(project.path)
+    return projectPath ? toComparableProjectPath(projectPath) === toComparableProjectPath(path) : false
+  }) ?? null
 
 export const resolveProjectForDirectory = (projects: ProjectEntry[], directory: string | null): ProjectEntry | null => {
   const nd = normalizeProjectPath(directory)
@@ -17,7 +35,7 @@ export const resolveProjectForDirectory = (projects: ProjectEntry[], directory: 
   for (const p of projects) {
     const pp = normalizeProjectPath(p.path)
     if (!pp) continue
-    if (nd !== pp && !nd.startsWith(`${pp}/`)) continue
+    if (!pathMatchesProjectRoot(nd, pp)) continue
     if (!best || pp.length > (normalizeProjectPath(best.path)?.length ?? 0)) best = p
   }
   return best
@@ -37,7 +55,7 @@ export const resolveProjectFromWorktreeDirectory = (
     for (const wt of worktrees) {
       const wp = normalizeProjectPath(wt.path)
       if (!wp) continue
-      if (nd !== wp && !nd.startsWith(`${wp}/`)) continue
+      if (!pathMatchesProjectRoot(nd, wp)) continue
       if (wp.length > bestLen) {
         bestLen = wp.length
         matchedWorktree = wt
@@ -50,7 +68,7 @@ export const resolveProjectFromWorktreeDirectory = (
     (v): v is string => Boolean(v),
   )
   for (const c of candidates) {
-    const exact = projects.find((p) => normalizeProjectPath(p.path) === c) ?? null
+    const exact = findProjectByPath(projects, c)
     if (exact) return exact
     const nested = resolveProjectForDirectory(projects, c)
     if (nested) return nested
