@@ -24,6 +24,7 @@ import {
 } from "@/lib/terminalPreview"
 import { useI18n } from "@/lib/i18n"
 import { PROJECT_ACTION_ICON_MAP, type ProjectActionIconKey } from "@/lib/projectActions"
+import { cleanupStaleCreatedTerminalSession } from "./terminalCreateCleanup"
 
 type Modifier = "ctrl" | "cmd"
 type MobileKey = "esc" | "tab" | "enter" | "arrow-up" | "arrow-down" | "arrow-left" | "arrow-right"
@@ -526,18 +527,16 @@ export const TerminalView: React.FC = () => {
           const stillActive = !cancelled && directoryRef.current === directory && activeTabIdRef.current === tabId
 
           if (!stillActive) {
-            try {
-              await terminal.close(session.sessionId)
-            } catch {
-              /* ignored */
-            }
+            await cleanupStaleCreatedTerminalSession(terminal.close, setConnecting, directory, tabId, session.sessionId)
             return
           }
 
           setTabSessionId(directory, tabId, session.sessionId)
           terminalId = session.sessionId
         } catch (error) {
-          if (!cancelled) {
+          if (cancelled) {
+            setConnecting(directory, tabId, false)
+          } else {
             setConnectionError(error instanceof Error ? error.message : t("terminalView.error.startSessionFailed"))
             setIsFatalError(true)
             setIsReconnectPending(false)
