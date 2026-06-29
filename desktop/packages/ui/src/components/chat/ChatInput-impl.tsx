@@ -78,6 +78,7 @@ import { fetchResponseStyleInstruction } from "@/lib/responseStyle"
 import { wrapSystemReminder } from "@/lib/systemReminder"
 import { getSyncMessages } from "@/sync/sync-refs"
 import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from "@/lib/shortcuts"
+import { getSafeExternalUrl, openExternalUrl } from "@/lib/url"
 import { isSyntheticPart } from "@/lib/messages/synthetic"
 import {
   buildHighlightParts,
@@ -3772,6 +3773,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     }
   }, [])
 
+  const safeLinkedIssueUrl = linkedIssue ? getSafeExternalUrl(linkedIssue.url) : null
+  const safeLinkedPrUrl = linkedPr ? getSafeExternalUrl(linkedPr.url) : null
+
   return (
     <>
       <form
@@ -3924,15 +3928,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                   <span className="text-foreground truncate">{linkedIssue.title}</span>
                 </button>
                 <span className="flex items-center gap-0.5 flex-shrink-0">
-                  <a
-                    href={linkedIssue.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center h-6 w-6 hover:bg-[var(--interactive-hover)] rounded-full transition-colors"
-                    aria-label={t("chat.chatInput.linked.issue.openInBrowserAria")}
-                  >
-                    <Icon name="external-link" className="h-4 w-4 text-muted-foreground" />
-                  </a>
+                  {safeLinkedIssueUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => void openExternalUrl(safeLinkedIssueUrl)}
+                      className="flex items-center justify-center h-6 w-6 hover:bg-[var(--interactive-hover)] rounded-full transition-colors"
+                      aria-label={t("chat.chatInput.linked.issue.openInBrowserAria")}
+                    >
+                      <Icon name="external-link" className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {
@@ -3977,15 +3982,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                   </span>
                 </button>
                 <span className="flex items-center gap-0.5 flex-shrink-0">
-                  <a
-                    href={linkedPr.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center h-6 w-6 hover:bg-[var(--interactive-hover)] rounded-full transition-colors"
-                    aria-label={t("chat.chatInput.linked.pr.openInBrowserAria")}
-                  >
-                    <Icon name="external-link" className="h-4 w-4 text-muted-foreground" />
-                  </a>
+                  {safeLinkedPrUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => void openExternalUrl(safeLinkedPrUrl)}
+                      className="flex items-center justify-center h-6 w-6 hover:bg-[var(--interactive-hover)] rounded-full transition-colors"
+                      aria-label={t("chat.chatInput.linked.pr.openInBrowserAria")}
+                    >
+                      <Icon name="external-link" className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {
