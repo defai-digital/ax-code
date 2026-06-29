@@ -40,4 +40,35 @@ describe("desktopSsh", () => {
       ],
     })
   })
+
+  test("preserves legacy snake-case parsed ssh command metadata", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      instances: [
+        {
+          id: "remote-1",
+          ssh_command: "ssh -p 2222 alice@example.com",
+          ssh_parsed: {
+            destination: "alice@example.com",
+            args: ["-p", "2222", "alice@example.com"],
+          },
+        },
+      ],
+    })
+    ;(window as unknown as { __TAURI__?: unknown }).__TAURI__ = {
+      core: { invoke },
+    }
+
+    await expect(desktopSshInstancesGet()).resolves.toEqual({
+      instances: [
+        expect.objectContaining({
+          id: "remote-1",
+          sshCommand: "ssh -p 2222 alice@example.com",
+          sshParsed: {
+            destination: "alice@example.com",
+            args: ["-p", "2222", "alice@example.com"],
+          },
+        }),
+      ],
+    })
+  })
 })

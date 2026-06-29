@@ -165,7 +165,11 @@ const parseInstance = (value: unknown): DesktopSshInstance | null => {
   if (!id || !sshCommand) return null
   const nickname = readString(value, "nickname")
 
-  const parsedRaw = value.sshParsed
+  const parsedRaw = isRecord(value.sshParsed)
+    ? value.sshParsed
+    : isRecord(value.ssh_parsed)
+      ? value.ssh_parsed
+      : undefined
   const parsed = isRecord(parsedRaw)
     ? {
         destination: readString(parsedRaw, "destination") || "",
