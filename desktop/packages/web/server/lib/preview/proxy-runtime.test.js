@@ -250,6 +250,15 @@ describe("preview proxy upstream request hygiene", () => {
     ).toBe("/ws?x=1")
   })
 
+  it("keeps malformed percent-encoded query parameters without breaking proxying", () => {
+    expect(
+      buildPreviewProxyUpstreamPath(
+        "/api/preview/proxy/f4af70b4261d77706743959516f9cecc/ws?ocPreview=42&%E0%A4%A=1&x=2",
+        "f4af70b4261d77706743959516f9cecc",
+      ),
+    ).toBe("/ws?%E0%A4%A=1&x=2")
+  })
+
   it("removes Desktop credentials from proxied HTTP and WebSocket requests", () => {
     const removed = []
     removeSensitivePreviewProxyHeaders({

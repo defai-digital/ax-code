@@ -860,7 +860,11 @@ const removeRawQueryParam = (search, paramName) => {
   const query = search.startsWith("?") ? search.slice(1) : search
   const parts = query.split("&").filter((part) => {
     const name = part.split("=", 1)[0] || ""
-    return decodeURIComponent(name.replace(/\+/g, " ")) !== paramName
+    try {
+      return decodeURIComponent(name.replace(/\+/g, " ")) !== paramName
+    } catch {
+      return name !== paramName
+    }
   })
   return parts.length > 0 ? `?${parts.join("&")}` : ""
 }
