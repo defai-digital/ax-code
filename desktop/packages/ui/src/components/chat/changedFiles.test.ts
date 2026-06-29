@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { ToolPart } from "@ax-code/sdk/v2"
 
-import { extractChangedFiles, getFileStats, isSyntheticDiffFile, toRelativePath } from "./changedFiles"
+import { extractChangedFiles, extractGitChangedFiles, getFileStats, isSyntheticDiffFile, toRelativePath } from "./changedFiles"
 
 type ToolFixtureOptions = {
   id?: string
@@ -217,6 +217,10 @@ describe("toRelativePath", () => {
     expect(toRelativePath("/home/user/project/src/app.ts", "/home/user/project/")).toBe("src/app.ts")
   })
 
+  test("matches Windows drive paths case-insensitively", () => {
+    expect(toRelativePath("c:/Users/Alice/Project/src/app.ts", "C:/Users/Alice/Project")).toBe("src/app.ts")
+  })
+
   test("does not treat a sibling directory sharing a prefix as a child", () => {
     expect(toRelativePath("/home/user/project-old/src/app.ts", "/home/user/project")).toBe(
       "/home/user/project-old/src/app.ts",
@@ -225,5 +229,18 @@ describe("toRelativePath", () => {
 
   test("returns the path unchanged when it is outside the base directory", () => {
     expect(toRelativePath("/etc/hosts", "/home/user/project")).toBe("/etc/hosts")
+  })
+})
+
+describe("extractGitChangedFiles", () => {
+  test("does not prefix Windows absolute paths with the current directory", () => {
+    const files = extractGitChangedFiles(
+      [{ path: "C:/Users/Alice/Project/src/app.ts", index: "M", working_dir: "" }],
+      undefined,
+      "C:/Users/Alice/Project",
+    )
+
+    expect(files[0]?.path).toBe("C:/Users/Alice/Project/src/app.ts")
+    expect(files[0]?.relativePath).toBe("src/app.ts")
   })
 })

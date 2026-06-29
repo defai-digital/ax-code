@@ -29,6 +29,28 @@ export const isGitFile = (file: ChangedFileEntry): file is GitChangedFile => "in
 
 export const isSyntheticDiffFile = (file: ChangedFileEntry): boolean => !isGitFile(file) && file.synthetic === "diff"
 
+const normalizeChangedFilePath = (value: string): string => {
+  if (!value) return ""
+  const raw = value.replace(/\\/g, "/")
+  const hadUncPrefix = raw.startsWith("//")
+  let normalized = raw.replace(/\/+/g, "/").replace(/^([a-z]):/, (_, letter: string) => letter.toUpperCase() + ":")
+  if (hadUncPrefix && !normalized.startsWith("//")) {
+    normalized = `/${normalized}`
+  }
+  const isUnixRoot = normalized === "/"
+  const isWindowsDriveRoot = /^[A-Z]:\/$/.test(normalized)
+  if (!isUnixRoot && !isWindowsDriveRoot) {
+    normalized = normalized.replace(/\/+$/, "")
+  }
+  return normalized
+}
+
+const isAbsoluteChangedFilePath = (value: string): boolean =>
+  value.startsWith("/") || value.startsWith("//") || /^[A-Z]:\//.test(value)
+
+const toComparableChangedFilePath = (value: string): string =>
+  value.startsWith("//") || /^[A-Z]:\//.test(value) ? value.toLowerCase() : value
+
 const parseCount = (value: unknown): number | undefined => {
   if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.trunc(value))
   return undefined
@@ -203,9 +225,13 @@ export const extractGitChangedFiles = (
     const code = workingStatus || indexStatus
     if (!code || code === "!") continue
     const stats = diffStats?.[file.path]
+    const normalizedFilePath = normalizeChangedFilePath(file.path)
+    const absoluteFilePath = isAbsoluteChangedFilePath(normalizedFilePath)
+      ? normalizedFilePath
+      : normalizeChangedFilePath(`${directory.endsWith("/") ? directory : `${directory}/`}${file.path}`)
     result.push({
-      path: file.path.startsWith("/") ? file.path : (directory.endsWith("/") ? directory : directory + "/") + file.path,
-      relativePath: file.path,
+      path: absoluteFilePath,
+      relativePath: toRelativePath(normalizedFilePath, directory),
       insertions: stats?.insertions ?? 0,
       deletions: stats?.deletions ?? 0,
       status: code,
@@ -217,11 +243,17 @@ export const extractGitChangedFiles = (
 }
 
 export const toRelativePath = (absolutePath: string, baseDirectory: string): string => {
-  const norm = (p: string) => p.split("\\").join("/").replace(/\/+$/, "")
-  const base = norm(baseDirectory)
-  const absPath = norm(absolutePath)
-  if (absPath.startsWith(base + "/")) {
-    return absPath.slice(base.length + 1)
+  const base = normalizeChangedFilePath(baseDirectory)
+  const absPath = normalizeChangedFilePath(absolutePath)
+  if (!base) {
+    return absPath
+  }
+
+  const prefix = base.endsWith("/") ? base : `${base}/`
+  const comparablePrefix = toComparableChangedFilePath(prefix)
+  const comparablePath = toComparableChangedFilePath(absPath)
+  if (comparablePath.startsWith(comparablePrefix)) {
+    return absPath.slice(prefix.length)
   }
   return absPath
 }
