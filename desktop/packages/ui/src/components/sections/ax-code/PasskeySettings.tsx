@@ -15,6 +15,7 @@ import {
   type StoredPasskey,
 } from "@/lib/passkeys"
 import { useI18n } from "@/lib/i18n"
+import { loadCurrentPasskeySettings } from "./passkeySettingsLoad"
 
 const formatTimestamp = (timestamp: number | null, neverUsedText: string) => {
   if (!timestamp || !Number.isFinite(timestamp)) {
@@ -58,40 +59,49 @@ export const PasskeySettings: React.FC = () => {
     let cancelled = false
 
     void (async () => {
-      try {
-        if (!supportState.supported) {
-          if (!cancelled) {
-            setSupportsPasskeys(false)
-            setIsLoading(false)
-          }
-          return
-        }
-        if (!cancelled) {
-          setSupportsPasskeys(true)
-        }
-      } catch {
-        if (!cancelled) {
-          setSupportsPasskeys(false)
-        }
+      setErrorMessage("")
+      const result = await loadCurrentPasskeySettings({
+        supportState,
+        fetchStatus: fetchPasskeyStatus,
+        fetchPasskeys: fetchStoredPasskeys,
+        isCurrent: () => !cancelled,
+      })
+      if (cancelled || result.status === "stale") {
+        return
       }
 
-      if (!cancelled) {
-        const nextStatus = await fetchPasskeyStatus()
-        setStatus(nextStatus)
-        if (!nextStatus.enabled) {
-          setPasskeys([])
-          setIsLoading(false)
-          return
-        }
-        await loadPasskeys()
+      if (result.status === "unsupported") {
+        setSupportsPasskeys(false)
+        setIsLoading(false)
+        return
       }
+
+      setSupportsPasskeys(true)
+      if (result.status === "disabled") {
+        setStatus(result.passkeyStatus)
+        setPasskeys([])
+        setIsLoading(false)
+        return
+      }
+
+      if (result.status === "loaded") {
+        setStatus(result.passkeyStatus)
+        setPasskeys(result.passkeys)
+        setIsLoading(false)
+        return
+      }
+
+      const message =
+        result.error instanceof Error ? result.error.message : t("settings.openchamber.passkeys.toast.loadFailed")
+      setErrorMessage(message)
+      setIsLoading(false)
     })()
 
     return () => {
       cancelled = true
       cancelPasskeyCeremony()
     }
-  }, [loadPasskeys, supportState.supported])
+  }, [supportState, t])
 
   const handleRegisterPasskey = React.useCallback(async () => {
     if (!status.enabled) {
