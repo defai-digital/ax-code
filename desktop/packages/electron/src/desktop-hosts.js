@@ -18,6 +18,30 @@ const normalizeHostUrl = (raw) => {
   }
 }
 
+const normalizeHostname = (hostname) => String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase()
+
+const isLoopbackDesktopHostname = (hostname) => {
+  const normalized = normalizeHostname(hostname)
+  return normalized === "localhost" || normalized === "::1" || /^127(?:\.\d{1,3}){3}$/.test(normalized)
+}
+
+const isLocalDesktopSenderUrl = (raw, { serverPort = 0, devRendererUrl = "" } = {}) => {
+  try {
+    const url = new URL(String(raw || ""))
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false
+    if (!isLoopbackDesktopHostname(url.hostname)) return false
+
+    if (serverPort > 0 && url.port === String(serverPort)) return true
+    if (devRendererUrl) {
+      const devUrl = new URL(devRendererUrl)
+      return url.origin === devUrl.origin
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
 const sanitizeHostUrlForStorage = (raw) => normalizeHostUrl(raw)
 
 const sanitizeClientTokenForStorage = (raw) => {
@@ -153,6 +177,8 @@ const applyDesktopHostsConfigToRoot = (root, config) => {
 module.exports = {
   applyDesktopHostsConfigToRoot,
   isAllowedDesktopHostTargetUrl,
+  isLocalDesktopSenderUrl,
+  isLoopbackDesktopHostname,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
   resolveStoredClientTokenForUrl,

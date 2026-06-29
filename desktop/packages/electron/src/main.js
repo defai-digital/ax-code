@@ -43,6 +43,7 @@ const {
 const {
   applyDesktopHostsConfigToRoot,
   isAllowedDesktopHostTargetUrl,
+  isLocalDesktopSenderUrl,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
   resolveStoredClientTokenForUrl,
@@ -471,22 +472,8 @@ autoUpdater.on("error", (err) => {
 // scans, ssh, dialogs, and hosts_set are gated to local senders; window/host
 // switcher operations are safe for any renderer.
 const isLocalSender = (wc) => {
-  try {
-    const raw = typeof wc?.getURL === "function" ? wc.getURL() : ""
-    if (!raw) return false
-    const url = new URL(raw)
-    if (url.protocol !== "http:" && url.protocol !== "https:") return false
-    if (!["localhost", "127.0.0.1"].includes(url.hostname)) return false
-    // The local server is the only loopback origin we serve; treat any
-    // loopback http(s) page on our server port as local. Also accept the dev
-    // renderer origin.
-    if (serverPort > 0 && url.port === String(serverPort)) return true
-    const devRendererUrl = getDevRendererUrl()
-    if (devRendererUrl && url.origin === new URL(devRendererUrl).origin) return true
-    return false
-  } catch {
-    return false
-  }
+  const raw = typeof wc?.getURL === "function" ? wc.getURL() : ""
+  return isLocalDesktopSenderUrl(raw, { serverPort, devRendererUrl: getDevRendererUrl() || "" })
 }
 
 // Registration helper: enforces the remote-origin guard (a remote main-*
