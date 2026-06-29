@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.7.19] - 2026-06-29
+
+### Fixed
+
+- CLI: publishes the current stable release line with accumulated provider, TUI, and Desktop integration fixes.
+- Desktop: refreshes signed Desktop release assets from the current monorepo release line.
+- Release: refreshes signed CLI and Desktop assets with Homebrew formula and cask updates.
+
 ## [6.7.18] - 2026-06-28
 
 ### Fixed
