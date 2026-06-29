@@ -53,6 +53,7 @@ const { normalizeSafeExternalUrl } = require("./external-url")
 const { buildDesktopOpenDialogOptions, resolveDesktopDialogOwnerWindow } = require("./desktop-dialog")
 const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
+const { isDesktopBrowserCaptureTargetForSender } = require("./desktop-browser-capture-policy")
 
 const execFileAsync = promisify(execFile)
 
@@ -2246,11 +2247,14 @@ handleCommand(
   { safeForRemote: false },
 )
 
-handleCommand("desktop_browser_capture_page", async (args) => {
+handleCommand("desktop_browser_capture_page", async (args, event) => {
   const wcId = Number.isFinite(args.webContentsId) ? Math.trunc(args.webContentsId) : null
   if (wcId === null || wcId < 0) throw new Error("webContentsId is required")
   const wc = webContents.fromId(wcId)
   if (!wc || wc.isDestroyed()) throw new Error("WebContents not found")
+  if (!isDesktopBrowserCaptureTargetForSender(wc, event.sender)) {
+    throw new Error("WebContents is not available for this window")
+  }
   const image = await wc.capturePage()
   const buffer = image.toJPEG(82)
   return {
