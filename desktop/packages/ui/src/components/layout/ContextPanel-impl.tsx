@@ -4,7 +4,7 @@ import { FileTypeIcon } from "@/components/icons/FileTypeIcon"
 import { Button } from "@/components/ui/button"
 import { SortableTabsStrip } from "@/components/ui/sortable-tabs-strip"
 import { useThemeSystem } from "@/contexts/useThemeSystem"
-import { openExternalUrl } from "@/lib/url"
+import { normalizeLoopbackPreviewUrl, openExternalUrl } from "@/lib/url"
 import { API_ENDPOINTS } from "@/lib/http"
 import { copyTextToClipboard } from "@/lib/clipboard"
 import { useEffectiveDirectory } from "@/hooks/useEffectiveDirectory"
@@ -467,11 +467,8 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
 
   const isLoopback = parsedUrl ? isLoopbackHostname(parsedUrl.hostname) : false
 
-  const normalizedUrl = parsedUrl
-    ? parsedUrl.hostname === "0.0.0.0"
-      ? new URL(parsedUrl.toString().replace("0.0.0.0", "127.0.0.1"))
-      : parsedUrl
-    : null
+  const normalizedPreviewUrl = parsedUrl && isLoopback ? normalizeLoopbackPreviewUrl(parsedUrl.toString()) : null
+  const normalizedUrl = normalizedPreviewUrl ? new URL(normalizedPreviewUrl) : parsedUrl
 
   const targetKey = normalizedUrl ? normalizedUrl.toString() : ""
   const previewColorScheme = currentTheme.metadata.variant

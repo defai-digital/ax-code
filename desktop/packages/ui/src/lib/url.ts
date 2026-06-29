@@ -1,5 +1,5 @@
 import { getTauriGlobal } from "@/lib/tauriGlobal"
-import { isLoopbackHostname } from "./loopback"
+import { isLoopbackHostname, normalizeLoopbackHostname } from "./loopback"
 
 /**
  * Utility for opening external URLs with desktop shell support.
@@ -49,9 +49,53 @@ export const isLoopbackHttpUrl = (url: string): boolean => {
   return isLoopbackHostname(parsed.hostname)
 }
 
+export const normalizeLoopbackPreviewUrl = (url: string): string | null => {
+  const parsed = parseUrlSafely(url.trim())
+  if (!parsed) {
+    return null
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null
+  }
+  if (!isLoopbackHostname(parsed.hostname)) {
+    return null
+  }
+
+  const hostname = normalizeLoopbackHostname(parsed.hostname)
+  if (hostname === "0.0.0.0" || hostname === "::" || hostname === "::1") {
+    parsed.hostname = "127.0.0.1"
+  }
+
+  return parsed.toString()
+}
+
 const LOOPBACK_URL_PATTERN =
   // eslint-disable-next-line no-control-regex
-  /\bhttps?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(?::\d{2,5})?(?:\/[^\s<>"'`\u0000-\u001f]*)?/gi
+  /\bhttps?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[(?:::1|::)\])(?::\d{2,5})?(?:\/[^\s<>"'`\u0000-\u001f]*)?/gi
+
+const TRAILING_PUNCT = new Set([".", ",", ";", ":", "!", "?"])
+
+const trimUrlTrailingPunctuation = (url: string): string => {
+  let result = url
+  while (result.length > 0) {
+    const last = result[result.length - 1]
+    if (last === ")" || last === "]" || last === "}" || last === ">") {
+      const opener = last === ")" ? "(" : last === "]" ? "[" : last === "}" ? "{" : "<"
+      const head = result.slice(0, -1)
+      const opens = (head.match(new RegExp(`\\${opener}`, "g")) || []).length
+      const closes = (head.match(new RegExp(`\\${last}`, "g")) || []).length
+      if (opens > closes) break
+      result = head
+      continue
+    }
+    if (TRAILING_PUNCT.has(last)) {
+      result = result.slice(0, -1)
+      continue
+    }
+    break
+  }
+  return result
+}
 
 /**
  * Extracts loopback http(s) URLs from a free-text string. Returns unique URLs
@@ -69,15 +113,16 @@ export const extractLoopbackUrls = (text: string): string[] => {
   const seen = new Set<string>()
   const out: string[] = []
   for (const raw of matches) {
-    const cleaned = raw.replace(/[),.;:!?'"`]+$/g, "")
-    if (!cleaned || !isLoopbackHttpUrl(cleaned)) {
+    const cleaned = trimUrlTrailingPunctuation(raw)
+    const normalized = cleaned ? normalizeLoopbackPreviewUrl(cleaned) : null
+    if (!normalized) {
       continue
     }
-    if (seen.has(cleaned)) {
+    if (seen.has(normalized)) {
       continue
     }
-    seen.add(cleaned)
-    out.push(cleaned)
+    seen.add(normalized)
+    out.push(normalized)
   }
   return out
 }

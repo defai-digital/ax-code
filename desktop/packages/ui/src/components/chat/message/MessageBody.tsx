@@ -984,7 +984,7 @@ const AssistantMessageBody = React.memo(
         if (!url) {
           continue
         }
-        return url.includes("0.0.0.0") ? url.replace("0.0.0.0", "127.0.0.1") : url
+        return url
       }
       for (const part of toolParts) {
         const state = (part as unknown as { state?: unknown }).state as Record<string, unknown> | undefined
@@ -997,7 +997,7 @@ const AssistantMessageBody = React.memo(
         if (!url) {
           continue
         }
-        return url.includes("0.0.0.0") ? url.replace("0.0.0.0", "127.0.0.1") : url
+        return url
       }
       return null
     }, [assistantTextParts, isMobile, isMiniChatSurface, toolParts])

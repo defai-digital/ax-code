@@ -1,44 +1,12 @@
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "./http"
 import { isLoopbackHostname } from "./loopback"
+import { extractLoopbackUrls } from "./url"
 
 const ANSI_ESCAPE_PREFIX = String.fromCharCode(27)
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ANSI_ESCAPE_PREFIX}\\[[0-9;?]*[ -/]*[@-~]`, "g")
-const LOOPBACK_URL_PATTERN =
-  /(https?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[(?:::1|::)\])(?::\d{2,5})?(?:\/[^\s<>'"`]*)?)/gi
 const PREVIEW_OUTPUT_PATTERN =
   /(?:➜\s*(?:Local|Network):)|\b(?:local|network|loopback|serving|listening|available|ready|started|running|server|vite|webpack|next\.js|astro|sveltekit|nuxt)\b/i
 const PYTHON_HTTP_SERVER_PATTERN = /Serving HTTP on .*? port (\d{2,5})/i
-const TRAILING_PUNCT = new Set([".", ",", ";", ":", "!", "?"])
-
-const trimUrlTrailingPunctuation = (url: string): string => {
-  let result = url
-  while (result.length > 0) {
-    const last = result[result.length - 1]
-    if (last === ")" || last === "]" || last === "}" || last === ">") {
-      const opener = last === ")" ? "(" : last === "]" ? "[" : last === "}" ? "{" : "<"
-      const head = result.slice(0, -1)
-      const opens = (head.match(new RegExp(`\\${opener}`, "g")) || []).length
-      const closes = (head.match(new RegExp(`\\${last}`, "g")) || []).length
-      if (opens > closes) break
-      result = head
-      continue
-    }
-    if (TRAILING_PUNCT.has(last)) {
-      result = result.slice(0, -1)
-      continue
-    }
-    break
-  }
-  return result
-}
-
-const normalizeLoopbackUrl = (url: string): string => {
-  let normalized = trimUrlTrailingPunctuation(url)
-  normalized = normalized.replace("0.0.0.0", "127.0.0.1")
-  normalized = normalized.replace("[::1]", "127.0.0.1")
-  normalized = normalized.replace("[::]", "127.0.0.1")
-  return normalized
-}
 
 export const buildTerminalPreviewScanState = (
   previousTail: string,
@@ -68,19 +36,19 @@ export const extractTerminalPreviewUrl = (text: string): string | null => {
       continue
     }
 
-    const matches = Array.from(line.matchAll(LOOPBACK_URL_PATTERN))
+    const matches = extractLoopbackUrls(line)
     if (matches.length === 0) {
       continue
     }
 
-    const withPort = matches.find((match) => {
+    const withPort = matches.find((url) => {
       try {
-        return Boolean(new URL(normalizeLoopbackUrl(match[1])).port)
+        return Boolean(new URL(url).port)
       } catch {
         return false
       }
     })
-    return normalizeLoopbackUrl((withPort ?? matches[0])[1])
+    return withPort ?? matches[0]
   }
 
   return null

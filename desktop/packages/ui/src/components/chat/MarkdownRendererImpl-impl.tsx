@@ -18,7 +18,13 @@ import { copyTextToClipboard } from "@/lib/clipboard"
 import { useI18n } from "@/lib/i18n"
 import { API_ENDPOINTS } from "@/lib/http"
 
-import { getExternalFaviconUrl, isExternalHttpUrl, isLoopbackHttpUrl, openExternalUrl } from "@/lib/url"
+import {
+  getExternalFaviconUrl,
+  isExternalHttpUrl,
+  isLoopbackHttpUrl,
+  normalizeLoopbackPreviewUrl,
+  openExternalUrl,
+} from "@/lib/url"
 import { useOptionalThemeSystem } from "@/contexts/useThemeSystem"
 import { getDefaultTheme } from "@/lib/theme/themes"
 import { generateSyntaxTheme } from "@/lib/theme/syntaxThemeGenerator"
@@ -1109,6 +1115,7 @@ const buildMarkdownComponents = ({
     const targetHref = href ?? ""
     const isExternal = isExternalHttpUrl(targetHref)
     const isLoopback = onPreviewLoopback ? isLoopbackHttpUrl(targetHref) : false
+    const previewHref = isLoopback ? normalizeLoopbackPreviewUrl(targetHref) : null
     return (
       <>
         <a
@@ -1120,13 +1127,13 @@ const buildMarkdownComponents = ({
           {isExternal ? <ExternalLinkFavicon href={targetHref} /> : null}
           {children}
         </a>
-        {isLoopback && onPreviewLoopback ? (
+        {previewHref && onPreviewLoopback ? (
           <button
             type="button"
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
-              onPreviewLoopback(targetHref)
+              onPreviewLoopback(previewHref)
             }}
             className="ml-1 inline-flex h-5 items-center gap-0.5 rounded border border-[var(--border)] bg-[var(--surface-background)] px-1.5 align-middle text-[11px] leading-none text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
             aria-label={previewTitle ?? previewLabel ?? "Open preview pane"}

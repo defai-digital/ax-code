@@ -32,6 +32,11 @@ describe("terminal preview URL detection", () => {
     expect(extractTerminalPreviewUrl("Vite ready at http://127.0.0.2:5173/app.")).toBe("http://127.0.0.2:5173/app")
   })
 
+  test("normalizes unspecified loopback preview URLs", () => {
+    expect(extractTerminalPreviewUrl("Vite ready at http://0.0.0.0:5173/app.")).toBe("http://127.0.0.1:5173/app")
+    expect(extractTerminalPreviewUrl("Vite ready at http://[::]:5173/app.")).toBe("http://127.0.0.1:5173/app")
+  })
+
   test("probes IPv4 loopback URLs outside 127.0.0.1", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }))
     vi.stubGlobal("fetch", fetchMock)
