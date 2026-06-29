@@ -13,6 +13,7 @@ import {
   parseRequestPathname,
   pruneRebindTimestamps,
   readTerminalInputWsControlFrame,
+  resolveTerminalDimensions,
 } from "./index.js"
 
 export function createTerminalRuntime({
@@ -504,9 +505,14 @@ export function createTerminalRuntime({
         return res.status(429).json({ error: "Maximum terminal sessions reached" })
       }
 
-      let { cwd, cols, rows } = req.body
+      let { cwd } = req.body
       if (!cwd) {
         return res.status(400).json({ error: "cwd is required" })
+      }
+
+      const terminalSize = resolveTerminalDimensions(req.body)
+      if (!terminalSize.ok) {
+        return res.status(400).json({ error: terminalSize.error })
       }
 
       try {
@@ -530,8 +536,8 @@ export function createTerminalRuntime({
 
       const pty = await getPtyProvider()
       const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
-        cols,
-        rows,
+        cols: terminalSize.cols,
+        rows: terminalSize.rows,
         cwd,
         env: resolvedEnv,
       })
@@ -549,7 +555,12 @@ export function createTerminalRuntime({
       wireTerminalSession(sessionId, session)
 
       console.log(`Created terminal session: ${sessionId} in ${cwd} using shell ${shell}`)
-      res.json({ sessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalTransportCapabilities })
+      res.json({
+        sessionId,
+        cols: terminalSize.cols,
+        rows: terminalSize.rows,
+        capabilities: terminalTransportCapabilities,
+      })
     } catch (error) {
       console.error("Failed to create terminal session:", error)
       res.status(500).json({ error: error.message || "Failed to create terminal session" })
@@ -704,15 +715,15 @@ export function createTerminalRuntime({
       return res.status(404).json({ error: "Terminal session not found" })
     }
 
-    const { cols, rows } = req.body
-    if (!cols || !rows) {
-      return res.status(400).json({ error: "cols and rows are required" })
+    const terminalSize = resolveTerminalDimensions(req.body, { requireBoth: true })
+    if (!terminalSize.ok) {
+      return res.status(400).json({ error: terminalSize.error })
     }
 
     try {
-      session.ptyProcess.resize(cols, rows)
+      session.ptyProcess.resize(terminalSize.cols, terminalSize.rows)
       session.lastActivity = Date.now()
-      res.json({ success: true, cols, rows })
+      res.json({ success: true, cols: terminalSize.cols, rows: terminalSize.rows })
     } catch (error) {
       console.error("Failed to resize terminal:", error)
       res.status(500).json({ error: error.message || "Failed to resize terminal" })
@@ -740,10 +751,15 @@ export function createTerminalRuntime({
 
   app.post("/api/terminal/:sessionId/restart", async (req, res) => {
     const { sessionId } = req.params
-    let { cwd, cols, rows } = req.body
+    let { cwd } = req.body
 
     if (!cwd) {
       return res.status(400).json({ error: "cwd is required" })
+    }
+
+    const terminalSize = resolveTerminalDimensions(req.body)
+    if (!terminalSize.ok) {
+      return res.status(400).json({ error: terminalSize.error })
     }
 
     const existingSession = terminalSessions.get(sessionId)
@@ -776,8 +792,8 @@ export function createTerminalRuntime({
 
       const pty = await getPtyProvider()
       const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
-        cols,
-        rows,
+        cols: terminalSize.cols,
+        rows: terminalSize.rows,
         cwd,
         env: resolvedEnv,
       })
@@ -797,8 +813,8 @@ export function createTerminalRuntime({
       console.log(`Restarted terminal session: ${sessionId} -> ${newSessionId} in ${cwd} using shell ${shell}`)
       res.json({
         sessionId: newSessionId,
-        cols: cols || 80,
-        rows: rows || 24,
+        cols: terminalSize.cols,
+        rows: terminalSize.rows,
         capabilities: terminalTransportCapabilities,
       })
     } catch (error) {

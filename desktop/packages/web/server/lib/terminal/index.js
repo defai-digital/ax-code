@@ -29,3 +29,11 @@ export {
   listTerminalOutputReplayChunksSince,
   getLatestTerminalOutputReplayChunkId,
 } from "./output-replay-buffer.js"
+
+export {
+  DEFAULT_TERMINAL_COLS,
+  DEFAULT_TERMINAL_ROWS,
+  MAX_TERMINAL_DIMENSION,
+  parseTerminalDimension,
+  resolveTerminalDimensions,
+} from "./terminal-dimensions.js"
