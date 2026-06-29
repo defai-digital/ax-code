@@ -20,6 +20,7 @@ import type {
   GitHubRepoSelector,
 } from "@/lib/api/types"
 import { useI18n } from "@/lib/i18n"
+import { loadCurrentGitHubPrList } from "./githubPrListLoad"
 
 const parsePrNumber = (value: string): number | null => {
   const trimmed = value.trim()
@@ -86,8 +87,12 @@ export function GitHubPrPickerDialog({
   const [isLoading, setIsLoading] = React.useState(false)
   const [isLoadingMore, setIsLoadingMore] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const listRequestRef = React.useRef(0)
 
   const refresh = React.useCallback(async () => {
+    const requestId = listRequestRef.current + 1
+    listRequestRef.current = requestId
+
     if (!projectDirectory) {
       setResult(null)
       setError(t("session.githubPrPicker.error.noActiveProject"))
@@ -109,8 +114,12 @@ export function GitHubPrPickerDialog({
 
     setIsLoading(true)
     setError(null)
-    try {
-      const next = await github.prsList(projectDirectory, { page: 1 })
+    const loaded = await loadCurrentGitHubPrList({
+      load: () => github.prsList(projectDirectory, { page: 1 }),
+      isCurrent: () => listRequestRef.current === requestId,
+    })
+    if (loaded.status === "loaded") {
+      const next = loaded.result
       setResult(next)
       setPrs(next.prs ?? [])
       setPage(next.page ?? 1)
@@ -118,9 +127,10 @@ export function GitHubPrPickerDialog({
       if (next.connected === false) {
         setError(null)
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
+    } else if (loaded.status === "failed") {
+      setError(loaded.error instanceof Error ? loaded.error.message : String(loaded.error))
+    }
+    if (listRequestRef.current === requestId) {
       setIsLoading(false)
     }
   }, [github, githubAuthChecked, githubAuthStatus, projectDirectory, t])
@@ -131,24 +141,32 @@ export function GitHubPrPickerDialog({
     if (isLoadingMore || isLoading) return
     if (!hasMore) return
 
+    const requestId = listRequestRef.current + 1
+    listRequestRef.current = requestId
     setIsLoadingMore(true)
-    try {
-      const nextPage = page + 1
-      const next = await github.prsList(projectDirectory, { page: nextPage })
+    const nextPage = page + 1
+    const loaded = await loadCurrentGitHubPrList({
+      load: () => github.prsList(projectDirectory, { page: nextPage }),
+      isCurrent: () => listRequestRef.current === requestId,
+    })
+    if (loaded.status === "loaded") {
+      const next = loaded.result
       setResult(next)
       setPrs((prev) => [...prev, ...(next.prs ?? [])])
       setPage(next.page ?? nextPage)
       setHasMore(Boolean(next.hasMore))
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
+    } else if (loaded.status === "failed") {
+      const message = loaded.error instanceof Error ? loaded.error.message : String(loaded.error)
       toast.error(t("session.githubPrPicker.toast.loadMoreFailed"), { description: message })
-    } finally {
+    }
+    if (listRequestRef.current === requestId) {
       setIsLoadingMore(false)
     }
   }, [github, hasMore, isLoading, isLoadingMore, page, projectDirectory, t])
 
   React.useEffect(() => {
     if (!open) {
+      listRequestRef.current += 1
       setQuery("")
       setIncludeDiff(false)
       setLoadingPrNumber(null)
@@ -158,6 +176,7 @@ export function GitHubPrPickerDialog({
       setPage(1)
       setHasMore(false)
       setIsLoading(false)
+      setIsLoadingMore(false)
       return
     }
     void refresh()
