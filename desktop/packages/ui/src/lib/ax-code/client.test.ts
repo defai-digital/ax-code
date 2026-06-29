@@ -114,4 +114,38 @@ describe("axCodeClient desktop file operations", () => {
 
     expect(createDirectory).toHaveBeenCalledWith("/tmp/approved/project", { allowOutsideWorkspace: true })
   })
+
+  test("invalidates cached directory listings after creating a directory", async () => {
+    const listDirectory = vi
+      .fn()
+      .mockResolvedValueOnce({ directory: "/repo", entries: [] })
+      .mockResolvedValueOnce({
+        directory: "/repo",
+        entries: [{ name: "new-folder", path: "/repo/new-folder", isDirectory: true }],
+      })
+    const createDirectory = vi.fn(async () => ({ success: true, path: "/repo/new-folder" }))
+    const runtimeWindow = window as typeof window & { __AX_CODE_DESKTOP_RUNTIME_APIS__?: RuntimeAPIs }
+    runtimeWindow.__AX_CODE_DESKTOP_RUNTIME_APIS__ = {
+      runtime: { platform: "desktop", isDesktop: true },
+      files: {
+        listDirectory,
+        search: vi.fn(),
+        createDirectory,
+      },
+    } as unknown as RuntimeAPIs
+
+    await expect(axCodeClient.listLocalDirectory("/repo")).resolves.toEqual([])
+    await expect(axCodeClient.listLocalDirectory("/repo")).resolves.toEqual([])
+    expect(listDirectory).toHaveBeenCalledTimes(1)
+
+    await expect(axCodeClient.createDirectory("/repo/new-folder")).resolves.toEqual({
+      success: true,
+      path: "/repo/new-folder",
+    })
+
+    await expect(axCodeClient.listLocalDirectory("/repo")).resolves.toEqual([
+      { name: "new-folder", path: "/repo/new-folder", isDirectory: true, isFile: false, isSymbolicLink: false },
+    ])
+    expect(listDirectory).toHaveBeenCalledTimes(2)
+  })
 })

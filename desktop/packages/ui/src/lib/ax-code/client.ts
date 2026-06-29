@@ -274,6 +274,7 @@ class AxCodeService {
   private directoryContextQueue: Promise<void> = Promise.resolve()
   private listDirectoryInFlight: Map<string, Promise<FilesystemEntry[]>> = new Map()
   private listDirectoryCache: Map<string, { entries: FilesystemEntry[]; expiresAt: number }> = new Map()
+  private listDirectoryCacheGeneration = 0
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     const desktopBase = resolveDesktopBaseUrl()
@@ -337,6 +338,39 @@ class AxCodeService {
     const withoutTrailingSlash = normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized
 
     return withoutTrailingSlash || null
+  }
+
+  private invalidateListDirectoryCacheForPath(path?: string | null): void {
+    const normalized = this.normalizeCandidatePath(path)
+    if (!normalized) {
+      this.listDirectoryCacheGeneration += 1
+      this.listDirectoryCache.clear()
+      this.listDirectoryInFlight.clear()
+      return
+    }
+
+    const directories = new Set<string>([normalized])
+    const parentRaw = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : ""
+    const parent = this.normalizeCandidatePath(parentRaw)
+    if (parent) {
+      directories.add(parent)
+    }
+
+    for (const directory of directories) {
+      const prefix = `${directory}|`
+      for (const key of this.listDirectoryCache.keys()) {
+        if (key.startsWith(prefix)) {
+          this.listDirectoryCache.delete(key)
+        }
+      }
+      for (const key of this.listDirectoryInFlight.keys()) {
+        if (key.startsWith(prefix)) {
+          this.listDirectoryInFlight.delete(key)
+        }
+      }
+    }
+
+    this.listDirectoryCacheGeneration += 1
   }
 
   private deriveHomeDirectory(path: string): { homeDirectory: string; username?: string } {
@@ -1680,7 +1714,11 @@ class AxCodeService {
     const desktopFiles = getDesktopFilesApi()
     if (desktopFiles?.createDirectory) {
       try {
-        return await desktopFiles.createDirectory(dirPath, options)
+        const result = await desktopFiles.createDirectory(dirPath, options)
+        if (result?.success) {
+          this.invalidateListDirectoryCacheForPath(result.path || dirPath)
+        }
+        return result
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         throw new Error(message || "Failed to create directory")
@@ -1704,6 +1742,9 @@ class AxCodeService {
     }
 
     const result = await response.json()
+    if (result?.success) {
+      this.invalidateListDirectoryCacheForPath(result.path || dirPath)
+    }
     return result
   }
 
@@ -1723,7 +1764,11 @@ class AxCodeService {
       throw new Error(error.error || "Failed to clone repository")
     }
 
-    return await response.json()
+    const result = await response.json()
+    if (result?.success) {
+      this.invalidateListDirectoryCacheForPath(result.path || input.destinationPath)
+    }
+    return result
   }
 
   async listLocalDirectory(
@@ -1743,6 +1788,7 @@ class AxCodeService {
       return inFlight
     }
 
+    const cacheGeneration = this.listDirectoryCacheGeneration
     const task = (async () => {
       const desktopFiles = getDesktopFilesApi()
       if (desktopFiles) {
@@ -1758,10 +1804,12 @@ class AxCodeService {
             isFile: !entry.isDirectory,
             isSymbolicLink: false,
           }))
-          this.listDirectoryCache.set(cacheKey, {
-            entries,
-            expiresAt: Date.now() + FS_LIST_CACHE_TTL_MS,
-          })
+          if (cacheGeneration === this.listDirectoryCacheGeneration) {
+            this.listDirectoryCache.set(cacheKey, {
+              entries,
+              expiresAt: Date.now() + FS_LIST_CACHE_TTL_MS,
+            })
+          }
           return entries
         } catch (error) {
           console.error("Failed to list directory contents:", error)
@@ -1793,10 +1841,12 @@ class AxCodeService {
         }
 
         const entries = result.entries as FilesystemEntry[]
-        this.listDirectoryCache.set(cacheKey, {
-          entries,
-          expiresAt: Date.now() + FS_LIST_CACHE_TTL_MS,
-        })
+        if (cacheGeneration === this.listDirectoryCacheGeneration) {
+          this.listDirectoryCache.set(cacheKey, {
+            entries,
+            expiresAt: Date.now() + FS_LIST_CACHE_TTL_MS,
+          })
+        }
         return entries
       } catch (error) {
         console.error("Failed to list directory contents:", error)
