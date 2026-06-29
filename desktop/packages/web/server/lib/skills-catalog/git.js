@@ -6,6 +6,10 @@ const execFileAsync = promisify(execFile)
 const DEFAULT_TIMEOUT_MS = 60_000
 const DEFAULT_MAX_BUFFER = 4 * 1024 * 1024
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`
+}
+
 export function looksLikeAuthError(message) {
   const text = String(message || "")
   return (
@@ -35,7 +39,7 @@ export async function runGit(args, options = {}) {
     const sshKeyPath = String(identity.sshKey).trim()
     if (sshKeyPath) {
       // Avoid interactive host key prompts; still safe against changed keys.
-      const sshCommand = `ssh -i ${sshKeyPath} -o BatchMode=yes -o StrictHostKeyChecking=accept-new`
+      const sshCommand = `ssh -i ${shellQuote(sshKeyPath)} -o BatchMode=yes -o StrictHostKeyChecking=accept-new`
       normalizedArgs.unshift(`core.sshCommand=${sshCommand}`)
       normalizedArgs.unshift("-c")
     }

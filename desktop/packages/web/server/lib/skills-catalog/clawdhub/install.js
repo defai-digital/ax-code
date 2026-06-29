@@ -11,7 +11,25 @@ import path from "path"
 import AdmZip from "adm-zip"
 
 import { downloadClawdHubSkill, fetchClawdHubSkillInfo } from "./api.js"
-import { ensureDir, getTargetSkillDir, normalizeUserSkillDir, safeRm, validateSkillName } from "../shared.js"
+import {
+  ensureDir,
+  getCatalogItemFromSkillDocument,
+  getTargetSkillDir,
+  isEnglishOnlyCatalogItem,
+  normalizeRepoRelativePath,
+  normalizeUserSkillDir,
+  safeRm,
+  validateSkillName,
+} from "../shared.js"
+
+export function validateClawdHubZipEntries(zip) {
+  for (const entry of zip.getEntries()) {
+    if (!normalizeRepoRelativePath(entry.entryName)) {
+      return { ok: false, reason: `Invalid ZIP entry path: ${entry.entryName}` }
+    }
+  }
+  return { ok: true }
+}
 
 /**
  * Install skills from ClawdHub registry
@@ -153,9 +171,16 @@ export async function installSkillsFromClawdHub({
 
       // Extract to a temp directory first for validation
       const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `clawdhub-${plan.slug}-`))
+      let movedToTarget = false
 
       try {
         const zip = new AdmZip(Buffer.from(zipBuffer))
+        const zipValidation = validateClawdHubZipEntries(zip)
+        if (!zipValidation.ok) {
+          skipped.push({ skillName: plan.slug, reason: zipValidation.reason })
+          continue
+        }
+
         zip.extractAllTo(tempDir, true)
 
         // Verify SKILL.md exists
@@ -165,14 +190,31 @@ export async function installSkillsFromClawdHub({
           continue
         }
 
+        const skillMdContent = await fs.promises.readFile(skillMdPath, "utf8")
+        const catalogItem = getCatalogItemFromSkillDocument({
+          source: "clawdhub:registry",
+          effectiveSubpath: null,
+          skillDir: plan.slug,
+          skillMdContent,
+        })
+        if (!isEnglishOnlyCatalogItem(catalogItem)) {
+          skipped.push({ skillName: plan.slug, reason: "Skill catalog metadata must be English-only" })
+          continue
+        }
+
         // Move to target directory
         await ensureDir(path.dirname(targetDir))
         await fs.promises.rename(tempDir, targetDir)
+        movedToTarget = true
 
         installed.push({ skillName: plan.slug, scope, source: targetSource === "agents" ? "agents" : "ax-code" })
       } catch (extractError) {
         await safeRm(tempDir)
         throw extractError
+      } finally {
+        if (!movedToTarget) {
+          await safeRm(tempDir)
+        }
       }
     } catch (error) {
       console.error(`Failed to install ClawdHub skill "${plan.slug}":`, error)

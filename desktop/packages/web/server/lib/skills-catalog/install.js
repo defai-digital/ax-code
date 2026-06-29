@@ -6,12 +6,22 @@ import { assertGitAvailable, cloneRepo, looksLikeAuthError, runGit } from "./git
 import { parseSkillRepoSource } from "./source.js"
 import {
   ensureDir,
+  getCatalogItemFromSkillDocument,
   getTargetSkillDir,
+  isEnglishOnlyCatalogItem,
+  isRepoPathInside,
+  normalizeRepoRelativePath,
   normalizeUserSkillDir,
   safeRm,
   toRepoFsPath,
   validateSkillName,
 } from "./shared.js"
+
+function isPathInside(candidatePath, parentPath) {
+  const normalizedCandidate = path.resolve(candidatePath)
+  const normalizedParent = path.resolve(parentPath)
+  return normalizedCandidate === normalizedParent || normalizedCandidate.startsWith(`${normalizedParent}${path.sep}`)
+}
 
 async function copyDirectoryNoSymlinks(srcDir, dstDir) {
   const srcReal = await fs.promises.realpath(srcDir)
@@ -30,7 +40,7 @@ async function copyDirectoryNoSymlinks(srcDir, dstDir) {
 
       // Guard against traversal: ensure source is still under srcReal
       const nextRealParent = await fs.promises.realpath(path.dirname(nextSrc))
-      if (!nextRealParent.startsWith(srcReal)) {
+      if (!isPathInside(nextRealParent, srcReal)) {
         throw new Error("Invalid source path traversal detected")
       }
 
@@ -105,12 +115,13 @@ export async function installSkillsFromRepository({
   const effectiveSubpath =
     parsed.effectiveSubpath ||
     (typeof defaultSubpath === "string" && defaultSubpath.trim() ? defaultSubpath.trim() : null)
-  void effectiveSubpath
 
   const cloneUrl = identity?.sshKey ? parsed.cloneUrlSsh : parsed.cloneUrlHttps
 
   const requestedDirs = Array.isArray(selections)
-    ? selections.map((s) => String(s?.skillDir || "").trim()).filter(Boolean)
+    ? selections
+        .map((s) => normalizeRepoRelativePath(s?.skillDir))
+        .filter((skillDir) => typeof skillDir === "string" && isRepoPathInside(skillDir, effectiveSubpath))
     : []
   if (requestedDirs.length === 0) {
     return { ok: false, error: { kind: "invalidSource", message: "No skills selected for installation" } }
@@ -213,6 +224,18 @@ export async function installSkillsFromRepository({
       const skillMdPath = path.join(srcDir, "SKILL.md")
       if (!fs.existsSync(skillMdPath)) {
         skipped.push({ skillName: plan.skillName, reason: "SKILL.md not found in selected directory" })
+        continue
+      }
+
+      const skillMdContent = await fs.promises.readFile(skillMdPath, "utf8")
+      const catalogItem = getCatalogItemFromSkillDocument({
+        source,
+        effectiveSubpath,
+        skillDir: plan.skillDirPosix,
+        skillMdContent,
+      })
+      if (!isEnglishOnlyCatalogItem(catalogItem)) {
+        skipped.push({ skillName: plan.skillName, reason: "Skill catalog metadata must be English-only" })
         continue
       }
 

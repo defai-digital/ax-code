@@ -1,34 +1,10 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
-import yaml from "yaml"
 
 import { assertGitAvailable, cloneRepo, looksLikeAuthError, runGit } from "./git.js"
 import { parseSkillRepoSource } from "./source.js"
-import { safeRm, toRepoFsPath, validateSkillName } from "./shared.js"
-
-function parseSkillMd(content) {
-  const text = typeof content === "string" ? content : ""
-  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/)
-  if (!match) {
-    return {
-      ok: true,
-      frontmatter: {},
-      warnings: ["Invalid SKILL.md: missing YAML frontmatter delimiter"],
-    }
-  }
-
-  try {
-    const frontmatter = yaml.parse(match[1]) || {}
-    return { ok: true, frontmatter, warnings: [] }
-  } catch {
-    return {
-      ok: true,
-      frontmatter: {},
-      warnings: ["Invalid SKILL.md: failed to parse YAML frontmatter"],
-    }
-  }
-}
+import { getCatalogItemFromSkillDocument, isEnglishOnlyCatalogItem, safeRm, toRepoFsPath } from "./shared.js"
 
 export async function scanSkillsRepository({ source, subpath, defaultSubpath, identity } = {}) {
   const gitCheck = await assertGitAvailable()
@@ -130,10 +106,7 @@ export async function scanSkillsRepository({ source, subpath, defaultSubpath, id
     const worker = async () => {
       while (idx < uniqueSkillDirs.length) {
         const skillDir = uniqueSkillDirs[idx++]
-        const skillName = path.posix.basename(skillDir)
         const skillMdPath = path.posix.join(skillDir, "SKILL.md")
-
-        const warnings = []
         let skillMdContent = ""
 
         // Prefer filesystem reads when sparse checkout succeeded.
@@ -146,34 +119,29 @@ export async function scanSkillsRepository({ source, subpath, defaultSubpath, id
             timeoutMs: 15_000,
           })
           if (!showResult.ok) {
-            warnings.push("Failed to read SKILL.md")
+            items.push({
+              repoSource: source,
+              repoSubpath: effectiveSubpath || undefined,
+              skillDir,
+              skillName: path.posix.basename(skillDir),
+              installable: false,
+              warnings: ["Failed to read SKILL.md"],
+            })
+            continue
           } else {
             skillMdContent = showResult.stdout
           }
         }
 
-        const parsedMd = parseSkillMd(skillMdContent)
-        warnings.push(...(parsedMd.warnings || []))
-
-        const description =
-          typeof parsedMd.frontmatter?.description === "string" ? parsedMd.frontmatter.description : undefined
-        const frontmatterName = typeof parsedMd.frontmatter?.name === "string" ? parsedMd.frontmatter.name : undefined
-
-        const installable = validateSkillName(skillName)
-        if (!installable) {
-          warnings.push("Skill directory name is not a valid AX Code skill name")
-        }
-
-        items.push({
-          repoSource: source,
-          repoSubpath: effectiveSubpath || undefined,
+        const item = getCatalogItemFromSkillDocument({
+          source,
+          effectiveSubpath,
           skillDir,
-          skillName,
-          frontmatterName,
-          description,
-          installable,
-          warnings: warnings.length ? warnings : undefined,
+          skillMdContent,
         })
+        if (isEnglishOnlyCatalogItem(item)) {
+          items.push(item)
+        }
       }
     }
 

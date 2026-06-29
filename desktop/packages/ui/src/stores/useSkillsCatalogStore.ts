@@ -268,7 +268,7 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
             loadedSourceIds: { ...state.loadedSourceIds, [sourceId]: true },
             clawdhubHasMoreBySource: {
               ...state.clawdhubHasMoreBySource,
-              [sourceId]: items.length > 0,
+              [sourceId]: Boolean(nextCursor),
             },
           }))
 
@@ -318,17 +318,13 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
           const currentItems = get().itemsBySource[selectedSourceId] || []
           const items = payload.items || []
           const merged = new Map(currentItems.map((item) => [`${item.sourceId}:${item.skillDir}`, item]))
-          let newCount = 0
 
           for (const item of items) {
             const key = `${item.sourceId}:${item.skillDir}`
-            if (!merged.has(key)) {
-              newCount += 1
-            }
             merged.set(key, item)
           }
 
-          const noMore = items.length === 0 || newCount === 0
+          const noMore = !nextCursor
 
           set((state) => ({
             itemsBySource: {

@@ -6,9 +6,11 @@
  */
 
 import { fetchClawdHubSkills } from "./api.js"
+import { isEnglishOnlyCatalogItem } from "../shared.js"
 
 const MAX_PAGES = 20 // Safety limit to prevent infinite loops
 const CLAWDHUB_PAGE_LIMIT = 25
+const MAX_EMPTY_ENGLISH_PAGES = 10
 
 const mapClawdHubItem = (item) => {
   const latestVersion = item.tags?.latest || item.latestVersion?.version || "1.0.0"
@@ -39,6 +41,10 @@ const mapClawdHubItem = (item) => {
   }
 }
 
+const mapEnglishOnlyClawdHubItems = (items) => {
+  return (items || []).map(mapClawdHubItem).filter(isEnglishOnlyCatalogItem)
+}
+
 /**
  * Scan ClawdHub registry for all available skills
  * @returns {Promise<{ ok: boolean, items?: Array, error?: Object }>}
@@ -64,9 +70,7 @@ export async function scanClawdHub() {
         throw error
       }
 
-      for (const item of items) {
-        allItems.push(mapClawdHubItem(item))
-      }
+      allItems.push(...mapEnglishOnlyClawdHubItems(items))
 
       if (!nextCursor) {
         break
@@ -96,10 +100,21 @@ export async function scanClawdHub() {
  */
 export async function scanClawdHubPage({ cursor } = {}) {
   try {
-    const { items, nextCursor } = await fetchClawdHubSkills({ cursor })
-    const mapped = (items || []).map(mapClawdHubItem).slice(0, CLAWDHUB_PAGE_LIMIT)
-    mapped.sort((a, b) => (b.clawdhub?.downloads || 0) - (a.clawdhub?.downloads || 0))
-    return { ok: true, items: mapped, nextCursor: nextCursor || null }
+    let currentCursor = cursor || null
+
+    for (let page = 0; page < MAX_EMPTY_ENGLISH_PAGES; page++) {
+      const { items, nextCursor } = await fetchClawdHubSkills({ cursor: currentCursor })
+      const mapped = mapEnglishOnlyClawdHubItems(items).slice(0, CLAWDHUB_PAGE_LIMIT)
+      mapped.sort((a, b) => (b.clawdhub?.downloads || 0) - (a.clawdhub?.downloads || 0))
+
+      if (mapped.length > 0 || !nextCursor) {
+        return { ok: true, items: mapped, nextCursor: nextCursor || null }
+      }
+
+      currentCursor = nextCursor
+    }
+
+    return { ok: true, items: [], nextCursor: currentCursor }
   } catch (error) {
     console.error("ClawdHub page scan error:", error)
     return {

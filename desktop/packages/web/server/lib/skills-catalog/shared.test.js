@@ -4,7 +4,12 @@ import os from "os"
 import path from "path"
 import {
   ensureDir,
+  getCatalogItemFromSkillDocument,
   getTargetSkillDir,
+  hasNonEnglishText,
+  isEnglishOnlyCatalogItem,
+  isRepoPathInside,
+  normalizeRepoRelativePath,
   normalizeUserSkillDir,
   safeRm,
   toRepoFsPath,
@@ -19,6 +24,78 @@ describe("skills-catalog shared helpers", () => {
     expect(validateSkillName("bad-")).toBe(false)
     expect(validateSkillName("Bad")).toBe(false)
     expect(validateSkillName("a".repeat(65))).toBe(false)
+  })
+
+  it("detects non-English catalog text", () => {
+    expect(hasNonEnglishText("Review code and write tests")).toBe(false)
+    expect(hasNonEnglishText("Review code — write tests")).toBe(false)
+    expect(hasNonEnglishText("\u4ee3\u7801\u5ba1\u67e5")).toBe(true)
+    expect(hasNonEnglishText("\u30ec\u30d3\u30e5\u30fc")).toBe(true)
+    expect(hasNonEnglishText("\ucf54\ub4dc \ub9ac\ubdf0")).toBe(true)
+  })
+
+  it("accepts only English-only catalog items", () => {
+    expect(
+      isEnglishOnlyCatalogItem({
+        skillName: "review-code",
+        frontmatterName: "Review Code",
+        description: "Review code and suggest focused fixes.",
+        clawdhub: { displayName: "Review Code", owner: "team-alpha" },
+      }),
+    ).toBe(true)
+
+    expect(
+      isEnglishOnlyCatalogItem({
+        skillName: "review-code",
+        frontmatterName: "Review Code | \u4ee3\u7801\u5ba1\u67e5",
+        description: "Review code and suggest focused fixes.",
+      }),
+    ).toBe(false)
+  })
+
+  it("normalizes repository-relative POSIX paths", () => {
+    expect(normalizeRepoRelativePath("/skills//review-code/")).toBe("skills/review-code")
+    expect(normalizeRepoRelativePath("skills/../review-code")).toBeNull()
+    expect(normalizeRepoRelativePath("skills\\review-code")).toBeNull()
+    expect(normalizeRepoRelativePath("")).toBeNull()
+  })
+
+  it("checks repository path containment without sibling prefix matches", () => {
+    expect(isRepoPathInside("skills/review-code", "skills")).toBe(true)
+    expect(isRepoPathInside("skills/review-code", "skills/review-code")).toBe(true)
+    expect(isRepoPathInside("skills-other/review-code", "skills")).toBe(false)
+    expect(isRepoPathInside("../skills/review-code", "skills")).toBe(false)
+  })
+
+  it("builds catalog items from SKILL.md frontmatter", () => {
+    const item = getCatalogItemFromSkillDocument({
+      source: "owner/repo",
+      effectiveSubpath: "skills",
+      skillDir: "skills/review-code",
+      skillMdContent: "---\nname: Review Code\ndescription: Review code and suggest focused fixes.\n---\nBody\n",
+    })
+
+    expect(item).toMatchObject({
+      repoSource: "owner/repo",
+      repoSubpath: "skills",
+      skillDir: "skills/review-code",
+      skillName: "review-code",
+      frontmatterName: "Review Code",
+      description: "Review code and suggest focused fixes.",
+      installable: true,
+    })
+  })
+
+  it("marks non-English catalog metadata as not installable", () => {
+    const item = getCatalogItemFromSkillDocument({
+      source: "owner/repo",
+      effectiveSubpath: "skills",
+      skillDir: "skills/review-code",
+      skillMdContent: "---\nname: \"Review Code | \\u4ee3\\u7801\\u5ba1\\u67e5\"\n---\nBody\n",
+    })
+
+    expect(item.installable).toBe(false)
+    expect(item.warnings).toContain("Skill catalog metadata must be English-only")
   })
 
   it("normalizes the legacy default user skill dir to the plural path", () => {
@@ -62,6 +139,7 @@ describe("skills-catalog shared helpers", () => {
       path.join("/tmp/repo", "skills", "review-code", "SKILL.md"),
     )
     expect(toRepoFsPath("/tmp/repo", "/skills//review-code/")).toBe(path.join("/tmp/repo", "skills", "review-code"))
+    expect(() => toRepoFsPath("/tmp/repo", "../review-code")).toThrow("Invalid repository path")
   })
 
   it("creates and removes directories idempotently", async () => {
