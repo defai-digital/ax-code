@@ -7,8 +7,7 @@ type FetchInstalledAppsResult = {
   isCacheStale: boolean
 }
 
-const fetchDesktopInstalledAppsMock =
-  vi.fn<(_apps: string[], _force?: boolean) => Promise<FetchInstalledAppsResult>>()
+const fetchDesktopInstalledAppsMock = vi.fn<(_apps: string[], _force?: boolean) => Promise<FetchInstalledAppsResult>>()
 
 const installMockLocalStorage = () => {
   const values = new Map<string, string>()
@@ -94,6 +93,32 @@ describe("useOpenInAppsStore", () => {
       label: "Explorer",
       appName: "File Explorer",
       iconDataUrl: "data:image/png;base64,explorer",
+    })
+  })
+
+  test("includes VS Code candidates supported by the desktop open-in-app backend", async () => {
+    const requestedApps: string[][] = []
+    fetchDesktopInstalledAppsMock.mockImplementation(async (apps) => {
+      requestedApps.push(apps)
+      return {
+        apps: [{ name: "Visual Studio Code", iconDataUrl: "data:image/png;base64,vscode" }],
+        success: true,
+        hasCache: true,
+        isCacheStale: false,
+      }
+    })
+
+    const { useOpenInAppsStore } = await importStore()
+
+    await useOpenInAppsStore.getState().loadInstalledApps(true)
+
+    expect(requestedApps.at(-1)).toEqual(expect.arrayContaining(["Visual Studio Code", "VSCodium", "Visual Studio"]))
+
+    const vscode = useOpenInAppsStore.getState().availableApps.find((app) => app.id === "vscode")
+    expect(vscode).toMatchObject({
+      label: "VS Code",
+      appName: "Visual Studio Code",
+      iconDataUrl: "data:image/png;base64,vscode",
     })
   })
 
