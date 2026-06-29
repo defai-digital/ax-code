@@ -4,6 +4,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { useUIStore } from "@/stores/useUIStore"
 import { useMessageQueueStore, type QueuedMessage } from "@/stores/messageQueueStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
+import { getNextUserMessageAfter, getRevertedUserMessages } from "@/sync/revert-order"
 import { useSelectionStore } from "@/sync/selection-store"
 import { useInputStore } from "@/sync/input-store"
 import type { AttachedFile } from "@/stores/types/sessionTypes"
@@ -289,13 +290,12 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
   const noTextContent = t("chat.revertPopover.noTextContent")
   const items = React.useMemo(() => {
     if (!revertMessageID) return []
-    return userMessages
-      .filter((message) => message.id >= revertMessageID)
+    return getRevertedUserMessages(sessionMessages, revertMessageID)
       .map((message) => ({
         id: message.id,
         text: getRevertedPreview(partsByMessage[message.id] ?? [], noTextContent),
       }))
-  }, [noTextContent, partsByMessage, revertMessageID, userMessages])
+  }, [noTextContent, partsByMessage, revertMessageID, sessionMessages])
   const firstRevertedMessageId = items[0]?.id
 
   React.useEffect(() => {
@@ -307,7 +307,7 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
       if (!sessionId || restoringId) return
       setRestoringId(messageId)
       try {
-        const nextMessage = userMessages.find((message) => message.id > messageId)
+        const nextMessage = getNextUserMessageAfter(userMessages, messageId)
         if (nextMessage) {
           await revertToMessage(sessionId, nextMessage.id, { skipRedoPush: true })
         } else {

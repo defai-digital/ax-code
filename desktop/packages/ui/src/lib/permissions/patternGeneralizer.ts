@@ -1,4 +1,5 @@
 import type { PermissionRequest } from "@/types/permission"
+import { getPermissionAlwaysPatterns, normalizePermissionName } from "./permissionPayload"
 
 const getMetaString = (metadata: Record<string, unknown>, key: string): string => {
   const val = metadata[key]
@@ -45,8 +46,9 @@ export const generalizeUrlPattern = (url: string): string => {
 }
 
 export const suggestAllowPattern = (permission: PermissionRequest): string[] => {
-  const tool = permission.permission.toLowerCase()
-  const serverAlways = permission.always ?? []
+  const permissionName = normalizePermissionName(permission.permission)
+  const tool = permissionName.toLowerCase()
+  const serverAlways = getPermissionAlwaysPatterns(permission)
 
   if (serverAlways.length > 0) return serverAlways
 
@@ -88,7 +90,7 @@ export const suggestAllowPattern = (permission: PermissionRequest): string[] => 
   }
 
   if (suggestions.length === 0) {
-    suggestions.push(`${permission.permission} *`)
+    suggestions.push(`${permissionName} *`)
   }
 
   return suggestions

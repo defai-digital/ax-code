@@ -56,6 +56,7 @@ import { useViewportStore } from "./viewport-store"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { getAttachedSessionDirectory } from "./session-worktree-contract"
 import { resolveAssistantForkSendChoice } from "./assistant-fork"
+import { getNextUserMessageAfter, getPreviousUserMessageBefore } from "./revert-order"
 
 export type { AttachedFile }
 
@@ -1008,7 +1009,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const revertToId = currentSession?.revert?.messageID
     let targetMessage: (typeof messages)[number] | undefined
     if (revertToId) {
-      targetMessage = [...userMessages].reverse().find((m) => m.id < revertToId)
+      targetMessage = getPreviousUserMessageBefore(userMessages, revertToId)
     } else {
       targetMessage = userMessages[userMessages.length - 1]
     }
@@ -1050,7 +1051,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     await refetchSessionMessages(sessionId)
     const messages = getSyncMessages(sessionId)
     const userMessages = messages.filter((m) => m.role === "user")
-    const targetMessage = userMessages.find((m) => m.id > revertToId)
+    const targetMessage = getNextUserMessageAfter(userMessages, revertToId)
 
     if (targetMessage) {
       await get().revertToMessage(sessionId, targetMessage.id, { skipRedoPush: true })

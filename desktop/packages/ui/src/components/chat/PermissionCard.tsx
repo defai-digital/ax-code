@@ -13,6 +13,11 @@ import { DiffPreview, WritePreview } from "./DiffPreview"
 import { AllowPatternBuilder } from "./AllowPatternBuilder"
 import { useI18n } from "@/lib/i18n"
 import { toast } from "@/components/ui"
+import {
+  getPermissionAlwaysPatterns,
+  getPermissionPatterns,
+  normalizePermissionName,
+} from "@/lib/permissions/permissionPayload"
 
 const PERMISSION_BASH_CUSTOM_STYLE: React.CSSProperties = {
   margin: 0,
@@ -158,8 +163,10 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onRe
     return null
   }
 
-  const toolName = permission.permission || "unknown"
+  const toolName = normalizePermissionName(permission.permission)
   const tool = toolName.toLowerCase()
+  const patterns = getPermissionPatterns(permission)
+  const alwaysPatterns = getPermissionAlwaysPatterns(permission)
 
   const getMeta = (key: string, fallback: string = ""): string => {
     const val = permission.metadata[key]
@@ -378,11 +385,11 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onRe
 
           {}
           <div className="px-2 py-2">
-            {permission.patterns.length > 0 && (
+            {patterns.length > 0 && (
               <div className="mb-2">
                 <div className="typography-meta text-muted-foreground mb-1">{t("chat.permissionCard.patterns")}</div>
                 <code className="typography-meta px-2 py-1 bg-muted/30 rounded block break-all">
-                  {permission.patterns.join(", ")}
+                  {patterns.join(", ")}
                 </code>
               </div>
             )}
@@ -414,7 +421,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onRe
               Allow Once
             </button>
 
-            {permission.always.length > 0 ? (
+            {alwaysPatterns.length > 0 ? (
               <button
                 onClick={() => setShowPatternBuilder(true)}
                 disabled={isResponding}
@@ -435,11 +442,9 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onRe
               >
                 <Icon name="time" className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
                 {(() => {
-                  const always = (permission.always as string[]) || (permission.metadata.always as string[]) || []
-                  if (always.length === 0) return "Always Allow"
-                  const displayPatterns = always.slice(0, 2)
+                  const displayPatterns = alwaysPatterns.slice(0, 2)
                   const text = displayPatterns.join(", ")
-                  const hasMore = always.length > 2
+                  const hasMore = alwaysPatterns.length > 2
                   return (
                     <span className="truncate max-w-[180px]">{hasMore ? `Always: ${text}...` : `Always: ${text}`}</span>
                   )

@@ -10,6 +10,7 @@ import os from "os"
 import crypto from "crypto"
 import { createUiAuth } from "./lib/ui-auth/ui-auth.js"
 import { createRequestSecurityRuntime } from "./lib/security/request-security.js"
+import { applySecurityHeaders } from "./lib/security/response-headers.js"
 import { prepareNotificationLastMessage } from "./lib/notifications/index.js"
 import { createTerminalRuntime } from "./lib/terminal/runtime.js"
 import {
@@ -1148,14 +1149,7 @@ async function main(options = {}) {
   app.set("trust proxy", "loopback, linklocal, uniquelocal")
   // ── HTTP security headers (defense-in-depth for standalone/Docker deployments) ──
   app.use((req, res, next) => {
-    res.setHeader("X-Content-Type-Options", "nosniff")
-    res.setHeader("X-Frame-Options", "DENY")
-    res.setHeader("Referrer-Policy", "no-referrer")
-    res.setHeader("X-XSS-Protection", "0")
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss: http: https:;",
-    )
+    applySecurityHeaders(req, res)
     next()
   })
   let firstApiResponseRecorded = false

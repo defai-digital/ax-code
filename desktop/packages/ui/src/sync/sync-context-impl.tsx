@@ -54,6 +54,7 @@ import * as sessionActions from "./session-actions"
 import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./materialization"
 import { setSessionPrefetch } from "./session-prefetch-cache"
 import { useSessionUIStore } from "./session-ui-store"
+import { getVisibleMessagesBeforeRevert } from "./revert-order"
 
 // ---------------------------------------------------------------------------
 // Context
@@ -1950,7 +1951,7 @@ export function useVisibleSessionMessages(sessionID: string, directory?: string)
   const revertMessageID = useSessionRevertMessageID(sessionID, directory)
   return useMemo(() => {
     if (!revertMessageID) return messages
-    return messages.filter((m) => m.id < revertMessageID)
+    return getVisibleMessagesBeforeRevert(messages, revertMessageID)
   }, [messages, revertMessageID])
 }
 
@@ -2365,9 +2366,7 @@ function getVisibleMessagesForSession(
 
   return {
     sourceMessages,
-    visibleMessages: revertMessageID
-      ? sourceMessages.filter((message) => message.id < revertMessageID)
-      : sourceMessages,
+    visibleMessages: revertMessageID ? getVisibleMessagesBeforeRevert(sourceMessages, revertMessageID) : sourceMessages,
     revertMessageID,
   }
 }
