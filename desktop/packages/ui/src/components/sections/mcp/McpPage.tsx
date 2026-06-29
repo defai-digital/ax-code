@@ -31,6 +31,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
+import { runSettingsDeleteMutation } from "../settingsDeleteMutation"
 
 // ─────────────────────────────────────────────────────────────
 // CommandTextarea  — one arg per line, paste-friendly
@@ -968,23 +969,39 @@ export const McpPage: React.FC = () => {
   const handleDelete = async () => {
     if (!selectedMcpName) return
     setIsDeleting(true)
-    const result = await deleteMcp(selectedMcpName)
-    if (result.ok) {
-      await clearPendingMcpAuthContext(authStateKey)
-      resetTransientAuthState()
-      if (result.reloadFailed) {
-        toast.warning(
-          result.message || t("settings.mcp.page.toast.serverDeletedReloadFailed", { name: selectedMcpName }),
-          {
-            description: result.warning || t("settings.mcp.page.toast.refreshListIfStale"),
-          },
-        )
-      } else {
-        toast.success(result.message || t("settings.mcp.page.toast.serverDeleted", { name: selectedMcpName }))
+    try {
+      const outcome = await runSettingsDeleteMutation(() => deleteMcp(selectedMcpName))
+      if (outcome.status === "unexpected-error") {
+        console.error("Failed to delete MCP server:", outcome.error)
+        toast.error(t("settings.mcp.page.toast.deleteFailed"))
+        return
       }
-      setShowDeleteConfirm(false)
-    } else toast.error(t("settings.mcp.page.toast.deleteFailed"))
-    setIsDeleting(false)
+
+      const result = outcome.result
+      if (result.ok) {
+        try {
+          await clearPendingMcpAuthContext(authStateKey)
+          resetTransientAuthState()
+        } catch (error) {
+          console.warn("Deleted MCP server, but failed to clear pending auth state:", error)
+        }
+        if (result.reloadFailed) {
+          toast.warning(
+            result.message || t("settings.mcp.page.toast.serverDeletedReloadFailed", { name: selectedMcpName }),
+            {
+              description: result.warning || t("settings.mcp.page.toast.refreshListIfStale"),
+            },
+          )
+        } else {
+          toast.success(result.message || t("settings.mcp.page.toast.serverDeleted", { name: selectedMcpName }))
+        }
+        setShowDeleteConfirm(false)
+      } else {
+        toast.error(t("settings.mcp.page.toast.deleteFailed"))
+      }
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const handleToggleConnect = async () => {

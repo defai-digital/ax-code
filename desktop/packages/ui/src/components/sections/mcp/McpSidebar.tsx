@@ -19,6 +19,7 @@ import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { SettingsProjectSelector } from "@/components/sections/shared/SettingsProjectSelector"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/lib/i18n"
+import { runSettingsDeleteMutation } from "../settingsDeleteMutation"
 
 interface McpSidebarProps {
   onItemSelect?: () => void
@@ -137,20 +138,30 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
   const handleDelete = async () => {
     if (!deleteTarget) return
     setIsDeleting(true)
-    const result = await deleteMcp(deleteTarget.name)
-    if (result.ok) {
-      if (result.reloadFailed) {
-        toast.warning(result.message || `MCP server "${deleteTarget.name}" deleted, but ax-code reload failed`, {
-          description: result.warning || t("settings.mcp.sidebar.toast.refreshListIfStale"),
-        })
-      } else {
-        toast.success(result.message || t("settings.mcp.sidebar.toast.serverDeleted", { name: deleteTarget.name }))
+    try {
+      const outcome = await runSettingsDeleteMutation(() => deleteMcp(deleteTarget.name))
+      if (outcome.status === "unexpected-error") {
+        console.error("Failed to delete MCP server:", outcome.error)
+        toast.error(t("settings.mcp.sidebar.toast.deleteFailed"))
+        return
       }
-    } else {
-      toast.error(t("settings.mcp.sidebar.toast.deleteFailed"))
+
+      const result = outcome.result
+      if (result.ok) {
+        if (result.reloadFailed) {
+          toast.warning(result.message || `MCP server "${deleteTarget.name}" deleted, but ax-code reload failed`, {
+            description: result.warning || t("settings.mcp.sidebar.toast.refreshListIfStale"),
+          })
+        } else {
+          toast.success(result.message || t("settings.mcp.sidebar.toast.serverDeleted", { name: deleteTarget.name }))
+        }
+      } else {
+        toast.error(t("settings.mcp.sidebar.toast.deleteFailed"))
+      }
+      setDeleteTarget(null)
+    } finally {
+      setIsDeleting(false)
     }
-    setDeleteTarget(null)
-    setIsDeleting(false)
   }
 
   return (

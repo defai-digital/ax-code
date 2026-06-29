@@ -18,6 +18,7 @@ import { SettingsSidebarLayout } from "@/components/sections/shared/SettingsSide
 import { SettingsSidebarItem } from "@/components/sections/shared/SettingsSidebarItem"
 import { useI18n } from "@/lib/i18n"
 import { usePluginsStore, type PluginEntry, type PluginFile } from "@/stores/usePluginsStore"
+import { runSettingsDeleteMutation } from "../settingsDeleteMutation"
 
 interface PluginsSidebarProps {
   onItemSelect?: () => void
@@ -123,15 +124,26 @@ export const PluginsSidebar: React.FC<PluginsSidebarProps> = ({ onItemSelect, on
   const handleDelete = React.useCallback(async () => {
     if (!deleteTarget) return
     setIsDeleting(true)
-    const result =
-      deleteTarget.kind === "entry" ? await deleteEntry(deleteTarget.id) : await deleteFile(deleteTarget.id)
-    if (result.ok) {
-      toast.success(result.message || t("settings.plugins.sidebar.toast.deleted", { name: deleteTarget.label }))
-    } else {
-      toast.error(t("settings.plugins.sidebar.toast.deleteFailed"))
+    try {
+      const outcome = await runSettingsDeleteMutation(() =>
+        deleteTarget.kind === "entry" ? deleteEntry(deleteTarget.id) : deleteFile(deleteTarget.id),
+      )
+      if (outcome.status === "unexpected-error") {
+        console.error("Failed to delete plugin:", outcome.error)
+        toast.error(t("settings.plugins.sidebar.toast.deleteFailed"))
+        return
+      }
+
+      const result = outcome.result
+      if (result.ok) {
+        toast.success(result.message || t("settings.plugins.sidebar.toast.deleted", { name: deleteTarget.label }))
+      } else {
+        toast.error(t("settings.plugins.sidebar.toast.deleteFailed"))
+      }
+      setDeleteTarget(null)
+    } finally {
+      setIsDeleting(false)
     }
-    setDeleteTarget(null)
-    setIsDeleting(false)
   }, [deleteEntry, deleteFile, deleteTarget, t])
 
   const renderEntry = (entry: PluginEntry) => {
