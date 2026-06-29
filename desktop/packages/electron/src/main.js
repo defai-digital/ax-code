@@ -26,6 +26,7 @@ const { execFile, spawn, spawnSync } = require("child_process")
 const { promisify } = require("util")
 const { createStartupDiagnostics } = require("./startup-diagnostics")
 const { collectOpenPathCandidates } = require("./open-paths")
+const { assertDesktopReadFileAllowed } = require("./desktop-read-file-policy")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy } = require("./server-restart-policy")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
@@ -2171,21 +2172,7 @@ handleCommand("desktop_read_file", async (args) => {
   } catch {
     throw new Error("Cannot resolve file path")
   }
-  const home = os.homedir() || ""
-  const tmp = os.tmpdir() || ""
-  const underHome = home && (realPath === home || realPath.startsWith(home + path.sep))
-  const underTmp = tmp && (realPath === tmp || realPath.startsWith(tmp + path.sep))
-  if (!underHome && !underTmp) throw new Error("File is outside the allowed workspace")
-  const DENIED_SEGMENTS = [".ssh", ".aws", ".gnupg", ".gpg", ".config/gh", ".config/openchamber/credentials"]
-  const relFromHome = underHome ? realPath.slice(home.length + 1) : ""
-  const relNormalized = relFromHome.split(path.sep).join("/")
-  if (DENIED_SEGMENTS.some((segment) => relNormalized === segment || relNormalized.startsWith(`${segment}/`))) {
-    throw new Error("Access to this path is not allowed")
-  }
-  const basename = path.basename(realPath).toLowerCase()
-  if (basename === ".env" || basename.startsWith(".env.") || basename.endsWith(".pem") || basename.endsWith(".key")) {
-    throw new Error("Access to this path is not allowed")
-  }
+  assertDesktopReadFileAllowed(realPath)
   const stats = await fsp.stat(realPath)
   if (stats.size > 50 * 1024 * 1024) throw new Error("File is too large. Maximum size is 50MB.")
   const bytes = await fsp.readFile(realPath)
