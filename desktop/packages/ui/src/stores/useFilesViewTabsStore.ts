@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { createJSONStorage, devtools, persist } from "zustand/middleware"
 
+import { projectPathMatchesRoot } from "@/lib/projectResolution"
 import { getSafeStorage } from "./utils/safeStorage"
 
 type RootTabsState = {
@@ -58,10 +59,7 @@ const isPathWithinRoot = (path: string, root: string): boolean => {
   const normalizedRoot = normalizePath(root)
   const normalizedPath = normalizePath(path)
   if (!normalizedRoot || !normalizedPath) return false
-
-  const comparableRoot = toComparablePath(normalizedRoot)
-  const comparablePath = toComparablePath(normalizedPath)
-  return comparablePath === comparableRoot || comparablePath.startsWith(`${comparableRoot}/`)
+  return projectPathMatchesRoot(normalizedPath, normalizedRoot)
 }
 
 const sanitizeByRoot = (input: unknown): Record<string, RootTabsState> => {

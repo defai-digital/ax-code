@@ -33,4 +33,18 @@ describe("useFilesViewTabsStore Windows paths", () => {
     expect(rootState?.openPaths).toEqual(["C:/Repo/other.ts"])
     expect(rootState?.selectedPath).toBe("C:/Repo/other.ts")
   })
+
+  test("allows open paths under a Windows drive root", () => {
+    const root = "C:/"
+    const store = useFilesViewTabsStore.getState()
+
+    store.addOpenPath(root, "C:/Users/Alice/Project/src/app.ts")
+    store.setSelectedPath(root, "C:/Users/Alice/Project/src/app.ts")
+    store.expandPath(root, "C:/Users/Alice/Project/src")
+
+    const rootState = useFilesViewTabsStore.getState().byRoot[root]
+    expect(rootState?.openPaths).toEqual(["C:/Users/Alice/Project/src/app.ts"])
+    expect(rootState?.selectedPath).toBe("C:/Users/Alice/Project/src/app.ts")
+    expect(rootState?.expandedPaths).toEqual(["C:/Users/Alice/Project/src"])
+  })
 })
