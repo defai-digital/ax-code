@@ -40,6 +40,8 @@ import {
   parseMacosMajor,
   prepareAxEngine,
   resolveDownloadDestination,
+  selectCurrentAxEngineModelJobs,
+  type AxEngineModelJobSummary,
 } from "../../src/provider/ax-engine"
 import { modelMemoryBlockReason } from "../../src/provider/model-selectability"
 import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
@@ -210,6 +212,34 @@ describe("ax-engine platform gate", () => {
       state: "not-fit",
       downloadable: false,
       blockers: expect.arrayContaining([expect.stringContaining("AX_ENGINE_INSUFFICIENT_MEMORY")]),
+    })
+  })
+
+  test("prefers active download jobs over recent terminal history for Desktop catalog state", () => {
+    const modelID = AX_ENGINE_GEMMA4_12B_MODEL_ID as AxEngineModelJobSummary["modelID"]
+    const failedJob = {
+      id: "failed-job",
+      type: "download" as const,
+      modelID,
+      quantization: "mlx6bit" as const,
+      status: "failed" as const,
+      error: "AX_ENGINE_DOWNLOAD_FAILED: previous attempt failed",
+      finishedAt: 1,
+    }
+    const runningJob = {
+      id: "running-job",
+      type: "download" as const,
+      modelID,
+      quantization: "mlx6bit" as const,
+      status: "running" as const,
+      startedAt: 2,
+    }
+
+    const jobs = selectCurrentAxEngineModelJobs([runningJob, failedJob])
+
+    expect(jobs.get(`${modelID}:mlx6bit`)).toMatchObject({
+      id: "running-job",
+      status: "running",
     })
   })
 })

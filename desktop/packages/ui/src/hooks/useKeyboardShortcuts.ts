@@ -557,6 +557,8 @@ export const useKeyboardShortcuts = () => {
     openNewSessionDraft,
     abortCurrentOperation,
     toggleCommandPalette,
+    setCommandPaletteSearchMode,
+    setCommandPaletteOpen,
     toggleHelpDialog,
     toggleSidebar,
     toggleRightSidebar,

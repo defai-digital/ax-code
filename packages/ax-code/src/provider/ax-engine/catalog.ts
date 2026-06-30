@@ -63,6 +63,15 @@ export type AxEngineModelsResponse = {
   jobs: AxEngineModelJobSummary[]
 }
 
+export function selectCurrentAxEngineModelJobs(jobs: AxEngineModelJobSummary[]) {
+  const selected = new Map<string, AxEngineModelJobSummary>()
+  for (const job of jobs) {
+    const key = `${job.modelID}:${job.quantization}`
+    if (!selected.has(key)) selected.set(key, job)
+  }
+  return selected
+}
+
 export function evaluateAxEngineModelFit(input: {
   eligibility: AxEnginePlatformEligibility
   dependency: AxEngineDependencyStatus
@@ -176,7 +185,7 @@ export async function getAxEngineModelsCatalog(): Promise<AxEngineModelsResponse
     listDownloadJobs(),
   ])
   const diskRootStatus = await getDiskStatus()
-  const activeJobs = new Map(jobs.map((job) => [`${job.modelID}:${job.quantization}`, job]))
+  const activeJobs = selectCurrentAxEngineModelJobs(jobs)
   const models: AxEngineModelCatalogEntry[] = []
 
   for (const modelID of AX_ENGINE_MODEL_IDS) {

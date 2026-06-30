@@ -230,8 +230,48 @@ export async function getServerStatus(): Promise<AxEngineServerRuntimeStatus> {
   }
 }
 
+// A single user message resolves the ax-engine model more than once at the same
+// time (the main completion and prompt-title generation both call getModel ->
+// ensureReady -> ensureServer). FileLock is not reentrant — maybeSteal refuses
+// to steal a lock held by the current pid — so without coalescing the second
+// concurrent caller blocks on a lock its own process holds and times out during
+// the slow first model load ("timed out waiting for file lock: server.lock").
+// Collapse same-process starts that target the same server identity into one
+// shared start; distinct models still serialize on the cross-process file lock.
+const inflightEnsure = new Map<string, Promise<AxEngineServerState>>()
+
+function ensureServerKey(options: AxEngineServerOptions): string {
+  return [
+    options.modelID,
+    options.modelPath,
+    options.apiModelID,
+    options.contextTokens ?? "",
+    options.speculationProfile ?? "",
+    options.mtpMode ?? "",
+    options.baseURL ?? "",
+  ].join("::")
+}
+
 export async function ensureServer(options: AxEngineServerOptions): Promise<AxEngineServerState> {
-  using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 30_000, staleMs: 5 * 60_000 })
+  const key = ensureServerKey(options)
+  const existing = inflightEnsure.get(key)
+  if (existing) return existing
+  const started = ensureServerLocked(options)
+  inflightEnsure.set(key, started)
+  try {
+    return await started
+  } finally {
+    inflightEnsure.delete(key)
+  }
+}
+
+async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEngineServerState> {
+  // Held across the entire cold start: process spawn + up to 90s readiness wait,
+  // or up to 120s model reload. Wait well past that worst case so a genuine
+  // cross-process start (e.g. the desktop server alongside a CLI) queues instead
+  // of failing at 30s; a dead holder is still reclaimed immediately via the
+  // staleMs / pid-liveness checks inside FileLock.
+  using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 180_000, staleMs: 5 * 60_000 })
   const existingResult = await readServerState()
   if (existingResult.error) {
     throw new Error(`${AX_ENGINE_ERROR.ServerStartFailed}: failed to read server state`)

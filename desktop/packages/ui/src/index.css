@@ -301,6 +301,29 @@ textarea[data-chat-input="true"]:focus-visible {
   }
 }
 
+/* Indeterminate progress bar — used where an exact percentage is unavailable
+   (e.g. AX Engine local-model downloads, which stream no progress). A segment
+   sweeps across the track to signal ongoing work. */
+@keyframes oc-indeterminate-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.oc-indeterminate-progress-bar {
+  animation: oc-indeterminate-progress 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-indeterminate-progress-bar {
+    animation: oc-busy-pulse 1.2s ease-in-out infinite;
+    transform: none;
+  }
+}
+
 .file-mention-marquee-container {
   --file-mention-marquee-width: 360px;
   --file-mention-marquee-duration: 4s;

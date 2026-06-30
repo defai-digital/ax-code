@@ -37,6 +37,14 @@ const formatBytes = (value?: number) => {
 
 const formatTokens = (value: number) => compactNumber.format(value)
 
+const formatElapsed = (ms: number) => {
+  if (!Number.isFinite(ms) || ms <= 0) return "0:00"
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`
+}
+
 const stateLabel: Record<string, string> = {
   ready: "Local",
   downloadable: "Ready to download",
@@ -73,6 +81,12 @@ export const LocalModelsPage: React.FC = () => {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [busyKey, setBusyKey] = React.useState<string | null>(null)
+  // Ticks once a second while a download is active so the in-row elapsed timer
+  // advances smoothly between the 2s catalog polls.
+  const [now, setNow] = React.useState(() => Date.now())
+  // Downloads we've shown a persistent toast for, so we can resolve it to
+  // success/failure once the async job finishes (observed on a later poll).
+  const announcedRef = React.useRef<Map<string, { name: string }>>(new Map())
 
   const load = React.useCallback(async () => {
     setError(null)
@@ -98,6 +112,58 @@ export const LocalModelsPage: React.FC = () => {
     const timer = window.setInterval(() => void load(), 2000)
     return () => window.clearInterval(timer)
   }, [hasActiveJob, load])
+
+  React.useEffect(() => {
+    if (!hasActiveJob) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveJob])
+
+  // Resolve the persistent "Downloading…" toast once its job reaches a terminal
+  // state. The job finishes server-side, so we learn the outcome on a poll.
+  React.useEffect(() => {
+    if (!data) return
+    const announced = announcedRef.current
+    for (const [jobId, info] of announced) {
+      const job = data.jobs.find((entry) => entry.id === jobId)
+      if (!job) continue
+      if (job.status === "complete") {
+        toast.success(`${info.name} downloaded`, {
+          id: `axe-dl-${jobId}`,
+          description: "Ready to start.",
+        })
+        announced.delete(jobId)
+      } else if (job.status === "failed") {
+        toast.error(`${info.name} download failed`, {
+          id: `axe-dl-${jobId}`,
+          description: job.error,
+        })
+        announced.delete(jobId)
+      } else if (job.status === "cancelled") {
+        toast.dismiss(`axe-dl-${jobId}`)
+        announced.delete(jobId)
+      }
+    }
+  }, [data])
+
+  const handleDownload = async (model: AxEngineModelCatalogEntry) => {
+    setBusyKey(model.id)
+    try {
+      const job = await startAxEngineModelDownload(model.id, directory)
+      announcedRef.current.set(job.id, { name: model.name })
+      toast.loading(`Downloading ${model.name}…`, {
+        id: `axe-dl-${job.id}`,
+        description: "Large models can take several minutes — you can keep working while it downloads.",
+        duration: Infinity,
+      })
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start download")
+    } finally {
+      setBusyKey(null)
+    }
+  }
 
   const runAction = async (key: string, action: () => Promise<unknown>, success: string) => {
     setBusyKey(key)
@@ -181,10 +247,9 @@ export const LocalModelsPage: React.FC = () => {
                     key={model.id}
                     model={model}
                     job={job}
+                    now={now}
                     busy={busyKey === model.id || (job ? busyKey === job.id : false)}
-                    onDownload={() =>
-                      runAction(model.id, () => startAxEngineModelDownload(model.id, directory), "Download started")
-                    }
+                    onDownload={() => void handleDownload(model)}
                     onCancel={() => {
                       if (!job) return
                       void runAction(job.id, () => cancelAxEngineModelDownload(job.id, directory), "Download cancelled")
@@ -225,12 +290,13 @@ const StatusBox: React.FC<{ title: string; value: string; blocked?: boolean }> =
 const ModelRow: React.FC<{
   model: AxEngineModelCatalogEntry
   job?: AxEngineModelJobSummary
+  now: number
   busy: boolean
   onDownload: () => void
   onCancel: () => void | undefined
   onDelete: () => void
   onStart: () => void
-}> = ({ model, job, busy, onDownload, onCancel, onDelete, onStart }) => {
+}> = ({ model, job, now, busy, onDownload, onCancel, onDelete, onStart }) => {
   const reason = primaryReason(model)
   const dimmed = isDimmed(model)
   return (
@@ -252,18 +318,40 @@ const ModelRow: React.FC<{
         </div>
       </div>
       <div className="min-w-0 space-y-1">
-        <span className="inline-flex rounded-full border border-border bg-background px-2 py-0.5 typography-micro text-foreground">
-          {job ? stateLabel.downloading : stateLabel[model.fit.state]}
-        </span>
-        {model.local.present && (
-          <div className="truncate typography-micro text-muted-foreground" title={model.local.path}>
-            {formatBytes(model.local.bytes)} · {model.local.path}
+        {job ? (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5 typography-micro font-medium text-foreground">
+              <Icon name="loader" className="h-3 w-3 animate-spin text-muted-foreground" />
+              {job.status === "queued" ? "Queued…" : "Downloading…"}
+            </div>
+            <div
+              className="relative h-1 w-full overflow-hidden rounded-full bg-border"
+              role="progressbar"
+              aria-label={`${model.name} ${job.status === "queued" ? "queued for download" : "downloading"}`}
+            >
+              <div className="oc-indeterminate-progress-bar absolute inset-y-0 left-0 w-1/4 rounded-full bg-primary" />
+            </div>
+            <div className="typography-micro text-muted-foreground">
+              {`≈${formatBytes(model.minDiskBytes)}`}
+              {job.status === "running" && job.startedAt ? ` · ${formatElapsed(now - job.startedAt)} elapsed` : ""}
+            </div>
           </div>
-        )}
-        {reason && (
-          <div className="line-clamp-2 typography-micro text-muted-foreground" title={reason}>
-            {reason}
-          </div>
+        ) : (
+          <>
+            <span className="inline-flex rounded-full border border-border bg-background px-2 py-0.5 typography-micro text-foreground">
+              {stateLabel[model.fit.state]}
+            </span>
+            {model.local.present && (
+              <div className="truncate typography-micro text-muted-foreground" title={model.local.path}>
+                {formatBytes(model.local.bytes)} · {model.local.path}
+              </div>
+            )}
+            {reason && (
+              <div className="line-clamp-2 typography-micro text-muted-foreground" title={reason}>
+                {reason}
+              </div>
+            )}
+          </>
         )}
       </div>
       <div className="min-w-0 space-y-1 typography-micro text-muted-foreground">
