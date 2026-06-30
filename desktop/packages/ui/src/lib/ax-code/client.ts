@@ -550,12 +550,15 @@ class AxCodeService {
   }
 
   async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
-    const response = await this.client.session.create({
-      ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
+    const directory = this.currentDirectory
+    const client = directory ? this.getScopedApiClient(directory) : this.client
+    const response = await client.session.create({
+      ...(directory ? { directory } : {}),
       parentID: params?.parentID,
       title: params?.title,
     })
-    if (!response.data) throw new Error("Failed to create session")
+    if (response.error) throw new Error(`Failed to create session: ${formatSdkError(response.error)}`)
+    if (!response.data) throw new Error("Failed to create session: response did not include session data")
     return response.data
   }
 

@@ -104,6 +104,24 @@ function dir() {
   return _getDirectory() || undefined
 }
 
+function formatSdkError(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string") return error
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message
+  }
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
 function connectionLostError(): Error {
   const { hasEverConnected, lastDisconnectReason } = useConfigStore.getState()
   const suffix = lastDisconnectReason ? ` (${lastDisconnectReason})` : hasEverConnected ? "" : " (never connected)"
@@ -430,15 +448,18 @@ export async function createSession(
   parentID?: string | null,
 ): Promise<Session | null> {
   try {
-    const result = await sdk().session.create({
-      directory: directoryOverride ?? dir(),
+    const directory = directoryOverride ?? dir()
+    const client = directory ? axCodeClient.getScopedSdkClient(directory) : sdk()
+    const result = await client.session.create({
+      directory,
       title,
       parentID: parentID ?? undefined,
     })
+    if (result.error) throw new Error(`Failed to create session: ${formatSdkError(result.error)}`)
     const session = result.data
-    if (!session) return null
+    if (!session) throw new Error("Failed to create session: response did not include session data")
 
-    const sessionDirectory = (session as { directory?: string }).directory ?? directoryOverride ?? null
+    const sessionDirectory = (session as { directory?: string }).directory ?? directory ?? null
     // Pre-populate routing index so SSE events arriving before session.created
     // can be routed to the correct child store
     if (sessionDirectory) {
@@ -449,7 +470,7 @@ export async function createSession(
     return session
   } catch (error) {
     console.error("[session-actions] createSession failed", error)
-    return null
+    throw error
   }
 }
 

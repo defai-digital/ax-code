@@ -5,6 +5,11 @@ import { resolveResyncedSessionStatus, hasCompletedAssistantReply } from "./reco
 
 // Mock SDK client that records permission.reply / question.reply calls
 const replyCalls: Array<{ method: string; params: Record<string, unknown> }> = []
+const createSessionCalls: Array<{ client: "scoped" | "global"; params: Record<string, unknown> }> = []
+type MockSessionCreateResult = {
+  data?: { id: string; directory: unknown }
+  error?: { message: string }
+}
 
 let configState: {
   isConnected: boolean
@@ -40,6 +45,10 @@ const mockScopedClient = {
     }),
   },
   session: {
+    create: vi.fn((params: Record<string, unknown>): Promise<MockSessionCreateResult> => {
+      createSessionCalls.push({ client: "scoped", params })
+      return Promise.resolve({ data: { id: "ses_scoped", directory: params.directory } })
+    }),
     messages: vi.fn(() => Promise.resolve(scopedMessagesResult)),
   },
   question: {
@@ -55,6 +64,12 @@ const mockScopedClient = {
 }
 
 const mockSdk = {
+  session: {
+    create: vi.fn((params: Record<string, unknown>): Promise<MockSessionCreateResult> => {
+      createSessionCalls.push({ client: "global", params })
+      return Promise.resolve({ data: { id: "ses_global", directory: params.directory } })
+    }),
+  },
   permission: {
     reply: vi.fn((params: Record<string, unknown>) => {
       replyCalls.push({ method: "permission.reply", params })
@@ -98,6 +113,7 @@ vi.doMock("./session-ui-store", () => ({
         if (sessionId === "session-b") return "/other/project"
         return null
       },
+      setCurrentSession: vi.fn(),
     }),
   },
 }))
@@ -109,7 +125,11 @@ vi.doMock("./input-store", () => ({
 
 // Mock useGlobalSessionsStore (imported but not used in permission functions)
 vi.doMock("@/stores/useGlobalSessionsStore", () => ({
-  useGlobalSessionsStore: {},
+  useGlobalSessionsStore: {
+    getState: () => ({
+      upsertSession: vi.fn(),
+    }),
+  },
 }))
 
 // Mock sync-refs (imported but not used in permission functions)
@@ -206,6 +226,57 @@ describe("respondToPermission passes directory", () => {
     expect(replyCalls[0].params.requestID).toBe("perm-3")
     expect(replyCalls[0].params.reply).toBe("reject")
     expect(replyCalls[0].params.directory).toBe("/fallback/dir")
+  })
+})
+
+describe("createSession passes directory", () => {
+  beforeEach(() => {
+    createSessionCalls.length = 0
+    mockScopedClient.session.create.mockImplementation(
+      (params: Record<string, unknown>): Promise<MockSessionCreateResult> => {
+        createSessionCalls.push({ client: "scoped", params })
+        return Promise.resolve({ data: { id: "ses_scoped", directory: params.directory } })
+      },
+    )
+    mockSdk.session.create.mockImplementation(
+      (params: Record<string, unknown>): Promise<MockSessionCreateResult> => {
+        createSessionCalls.push({ client: "global", params })
+        return Promise.resolve({ data: { id: "ses_global", directory: params.directory } })
+      },
+    )
+  })
+
+  test("uses a directory-scoped SDK client when a directory is provided", async () => {
+    const { createSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as AxCodeClient, createChildStores([]), () => "/current/project")
+
+    const session = await createSession("Desktop session", "/selected/project", null)
+
+    expect(session?.id).toBe("ses_scoped")
+    expect(createSessionCalls).toEqual([
+      {
+        client: "scoped",
+        params: {
+          directory: "/selected/project",
+          title: "Desktop session",
+          parentID: undefined,
+        },
+      },
+    ])
+  })
+
+  test("throws the SDK error message when session creation fails", async () => {
+    mockScopedClient.session.create.mockImplementationOnce((params: Record<string, unknown>) => {
+      createSessionCalls.push({ client: "scoped", params })
+      return Promise.resolve({ error: { message: "Project directory is not accessible" } })
+    })
+
+    const { createSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as AxCodeClient, createChildStores([]), () => "/current/project")
+
+    await expect(createSession("Desktop session", "/selected/project", null)).rejects.toThrow(
+      "Failed to create session: Project directory is not accessible",
+    )
   })
 })
 

@@ -937,6 +937,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       return session
     } catch (e) {
       console.error("[session-ui-store] createSession failed", e)
+      set({ error: e instanceof Error ? e.message : String(e) })
       return null
     }
   },
