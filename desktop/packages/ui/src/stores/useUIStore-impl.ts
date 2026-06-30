@@ -901,7 +901,7 @@ export const useUIStore = create<UIStore>()(
         showSplitAssistantMessageActions: false,
         isExpandedInput: false,
         shortcutOverrides: {},
-        hasCompletedTour: false,
+        hasCompletedTour: true,
         tourStep: 0,
 
         setTheme: (theme) => {

@@ -3,8 +3,7 @@ import { useFeatureTour, TOUR_STEPS } from "@/hooks/useFeatureTour"
 import { useI18n } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-
-const SPOTLIGHT_PADDING = 8
+import { computeFeatureTourLayout } from "./featureTourLayout"
 
 export const FeatureTour: React.FC = React.memo(function FeatureTour() {
   const { t } = useI18n()
@@ -25,24 +24,24 @@ export const FeatureTour: React.FC = React.memo(function FeatureTour() {
     const observer = new ResizeObserver(updateRect)
     observer.observe(el)
     window.addEventListener("scroll", updateRect, true)
+    window.addEventListener("resize", updateRect)
 
     return () => {
       observer.disconnect()
       window.removeEventListener("scroll", updateRect, true)
+      window.removeEventListener("resize", updateRect)
     }
   }, [isActive, currentStepData])
 
   if (!isActive || !currentStepData || !targetRect) return null
 
-  const spotlightTop = Math.max(0, targetRect.top - SPOTLIGHT_PADDING)
-  const spotlightLeft = Math.max(0, targetRect.left - SPOTLIGHT_PADDING)
-  const spotlightWidth = targetRect.width + SPOTLIGHT_PADDING * 2
-  const spotlightHeight = targetRect.height + SPOTLIGHT_PADDING * 2
-
-  const tooltipBelow = spotlightTop + spotlightHeight + 160 < window.innerHeight
-  const tooltipTop = tooltipBelow
-    ? spotlightTop + spotlightHeight + 12
-    : spotlightTop - 12
+  const layout = computeFeatureTourLayout({
+    targetRect,
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    },
+  })
 
   return (
     <div className="fixed inset-0 z-[100]">
@@ -52,10 +51,10 @@ export const FeatureTour: React.FC = React.memo(function FeatureTour() {
           <mask id="tour-mask">
             <rect x="0" y="0" width="100%" height="100%" fill="white" />
             <rect
-              x={spotlightLeft}
-              y={spotlightTop}
-              width={spotlightWidth}
-              height={spotlightHeight}
+              x={layout.spotlight.left}
+              y={layout.spotlight.top}
+              width={layout.spotlight.width}
+              height={layout.spotlight.height}
               rx="8"
               fill="black"
             />
@@ -75,10 +74,10 @@ export const FeatureTour: React.FC = React.memo(function FeatureTour() {
       <div
         className="absolute rounded-lg border-2 border-primary/50 shadow-[0_0_0_9999px_transparent]"
         style={{
-          top: spotlightTop,
-          left: spotlightLeft,
-          width: spotlightWidth,
-          height: spotlightHeight,
+          top: layout.spotlight.top,
+          left: layout.spotlight.left,
+          width: layout.spotlight.width,
+          height: layout.spotlight.height,
           pointerEvents: "none",
         }}
       />
@@ -87,10 +86,10 @@ export const FeatureTour: React.FC = React.memo(function FeatureTour() {
       <div
         className="absolute cursor-pointer"
         style={{
-          top: spotlightTop,
-          left: spotlightLeft,
-          width: spotlightWidth,
-          height: spotlightHeight,
+          top: layout.spotlight.top,
+          left: layout.spotlight.left,
+          width: layout.spotlight.width,
+          height: layout.spotlight.height,
         }}
         onClick={nextStep}
       />
@@ -102,12 +101,11 @@ export const FeatureTour: React.FC = React.memo(function FeatureTour() {
           "animate-in fade-in-0 zoom-in-95 duration-200",
         )}
         style={{
-          top: tooltipBelow ? tooltipTop : undefined,
-          bottom: tooltipBelow ? undefined : window.innerHeight - tooltipTop,
-          left: Math.min(
-            Math.max(16, spotlightLeft + spotlightWidth / 2 - 144),
-            window.innerWidth - 304,
-          ),
+          top: layout.tooltip.top,
+          left: layout.tooltip.left,
+          width: layout.tooltip.width,
+          maxHeight: layout.tooltip.maxHeight,
+          overflowY: "auto",
         }}
       >
         {/* Step indicator */}

@@ -1,6 +1,8 @@
 import { useCallback } from "react"
 import { useUIStore } from "@/stores/useUIStore"
 
+const FEATURE_TOUR_ENABLED = false
+
 export const TOUR_STEPS = [
   {
     target: "[data-tour-target='sidebar']",
@@ -32,7 +34,7 @@ export const TOUR_STEPS = [
 export function useFeatureTour() {
   const hasCompletedTour = useUIStore((s) => s.hasCompletedTour)
   const currentStep = useUIStore((s) => s.tourStep ?? 0)
-  const isActive = !hasCompletedTour
+  const isActive = FEATURE_TOUR_ENABLED && !hasCompletedTour
 
   const nextStep = useCallback(() => {
     const step = useUIStore.getState().tourStep ?? 0
