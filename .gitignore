@@ -75,3 +75,6 @@ TODOS/
 planning/
 
 # Local dev files
+
+# Apple signing/notarization creds (local only)
+desktop/.env.local

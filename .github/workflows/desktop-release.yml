@@ -239,6 +239,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Windows x64 (Intel/AMD). The arm64 sibling is build-windows-arm64 below;
+  # each arch builds on its own runner so native modules compile for the target.
   build-windows:
     needs: create-release
     runs-on: windows-2022
@@ -279,7 +281,7 @@ jobs:
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --win --x64 --publish=never
 
-      - name: Upload Windows assets
+      - name: Upload Windows x64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
         uses: softprops/action-gh-release@v3
         with:
@@ -288,19 +290,122 @@ jobs:
             desktop/packages/electron/dist/*.exe
             desktop/packages/electron/dist/*.zip
             desktop/packages/electron/dist/*.blockmap
-            desktop/packages/electron/dist/latest.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Both Windows jobs emit a file literally named "latest.yml"; uploading
+      # both to the release would clobber. Keep it as an arch-tagged CI artifact
+      # and merge into one manifest later (see merge-windows-latest-yml).
+      - name: Upload Windows x64 update manifest
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: latest-yml-x86_64-pc-windows-msvc
+          path: desktop/packages/electron/dist/latest.yml
+          if-no-files-found: error
+
+  build-windows-arm64:
+    needs: create-release
+    runs-on: windows-11-arm
+    env:
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        shell: bash
+        run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        shell: bash
+        run: pnpm --dir packages/sdk/js run build
+
+      - name: Decode Windows signing certificate
+        if: ${{ env.HAS_WINDOWS_CERT == 'true' }}
+        shell: bash
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$WINDOWS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          echo "WIN_CSC_LINK=$RUNNER_TEMP/certificate.p12" >> "$GITHUB_ENV"
+          echo "WIN_CSC_KEY_PASSWORD=$WINDOWS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build Windows Electron app
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @ax-code/electron run build
+          node desktop/packages/electron/scripts/package.mjs --win --arm64 --publish=never
+
+      - name: Upload Windows arm64 installers
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag }}
+          files: |
+            desktop/packages/electron/dist/*.exe
+            desktop/packages/electron/dist/*.zip
+            desktop/packages/electron/dist/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows arm64 update manifest
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: latest-yml-aarch64-pc-windows-msvc
+          path: desktop/packages/electron/dist/latest.yml
+          if-no-files-found: error
+
+  merge-windows-latest-yml:
+    needs: [create-release, build-windows, build-windows-arm64]
+    if: >-
+      always() &&
+      github.event.inputs.dry_run != 'true' &&
+      needs.create-release.result == 'success' &&
+      needs.build-windows.result == 'success' &&
+      needs.build-windows-arm64.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download per-arch Windows update manifests
+        uses: actions/download-artifact@v7
+        with:
+          path: win-latest-yml
+          pattern: latest-yml-*-pc-windows-msvc
+
+      - name: Merge per-arch latest.yml into one manifest
+        env:
+          LATEST_YML_DIR: win-latest-yml
+          AX_CODE_DESKTOP_VERSION: ${{ needs.create-release.outputs.version }}
+        run: node desktop/packages/electron/scripts/finalize-windows-latest-yml.mjs
+
+      - name: Upload merged latest.yml to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh release upload "$TAG" --repo "$REPOSITORY" --clobber "$RUNNER_TEMP/latest.yml"
+
   sign-release-assets:
-    needs: [create-release, package-web, build-macos, build-windows]
+    needs: [create-release, package-web, build-macos, build-windows, build-windows-arm64, merge-windows-latest-yml]
     if: >-
       always() &&
       github.event.inputs.dry_run != 'true' &&
       needs.create-release.result == 'success' &&
       needs.package-web.result == 'success' &&
       needs.build-macos.result == 'success' &&
-      needs.build-windows.result == 'success'
+      needs.build-windows.result == 'success' &&
+      needs.build-windows-arm64.result == 'success' &&
+      needs.merge-windows-latest-yml.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -359,7 +464,16 @@ jobs:
           gh release upload "$TAG" --repo "$REPOSITORY" --clobber "${signatures[@]}"
 
   finalize-release:
-    needs: [create-release, package-web, build-macos, build-windows, sign-release-assets]
+    needs:
+      [
+        create-release,
+        package-web,
+        build-macos,
+        build-windows,
+        build-windows-arm64,
+        merge-windows-latest-yml,
+        sign-release-assets,
+      ]
     if: >-
       always() &&
       github.event.inputs.dry_run != 'true' &&
@@ -367,6 +481,8 @@ jobs:
       needs.package-web.result == 'success' &&
       needs.build-macos.result == 'success' &&
       needs.build-windows.result == 'success' &&
+      needs.build-windows-arm64.result == 'success' &&
+      needs.merge-windows-latest-yml.result == 'success' &&
       needs.sign-release-assets.result == 'success'
     runs-on: ubuntu-latest
     steps:
