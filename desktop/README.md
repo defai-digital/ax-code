@@ -165,7 +165,7 @@ Windows SmartScreen may warn for unsigned or low-reputation builds. Release note
 
 AX Code Desktop is intended for trusted desktop workstations. Do not expose the development web UI publicly.
 
-Temporary browser access from another trusted device is available through a guarded Cloudflare quick tunnel command. It requires UI password protection and should still sit behind Cloudflare Access, SSO, VPN, or another identity gate for shared access:
+Temporary browser access from another trusted device is available through a guarded Cloudflare quick tunnel command. It requires UI password protection. For shared or longer-lived access, use a Cloudflare Access-protected hostname, SSO, VPN, or another identity gate instead of a public quick tunnel:
 
 ```bash
 brew install cloudflared

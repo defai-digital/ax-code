@@ -3,9 +3,10 @@ import path from "path"
 import { pathToFileURL } from "url"
 
 import { isModuleCliExecution, normalizeCliEntryPath } from "./cli-entry.js"
-import { parseArgs } from "./cli.js"
+import { buildTunnelServeOptions, parseArgs, resolveTunnelProviderAndMode, CliError, EXIT_CODE } from "./cli.js"
 import {
   buildCloudflaredArgs,
+  createTunnelManager,
   normalizeTunnelMode,
   normalizeTunnelProvider,
   parseCloudflareQuickTunnelUrl,
@@ -37,6 +38,29 @@ describe("cli args", () => {
     expect(parsed.options.port).toBe(3000)
     expect(parsed.options.force).toBe(true)
   })
+
+  it("keeps tunnel auto-started server output silent even in json mode", () => {
+    expect(
+      buildTunnelServeOptions(
+        {
+          json: true,
+          quiet: false,
+          uiPassword: "secret",
+          port: 3000,
+        },
+        true,
+      ),
+    ).toMatchObject({
+      json: false,
+      quiet: true,
+      suppressQuietOutput: true,
+      suppressStartupSummary: true,
+      suppressUiPasswordWarning: true,
+      explicitPort: true,
+      uiPassword: "secret",
+      port: 3000,
+    })
+  })
 })
 
 describe("tunnel args", () => {
@@ -47,6 +71,22 @@ describe("tunnel args", () => {
     expect(normalizeTunnelMode("Quick")).toBe("quick")
     expect(() => normalizeTunnelProvider("ngrok")).toThrow("Unsupported tunnel provider")
     expect(() => normalizeTunnelMode("managed-remote")).toThrow("Unsupported tunnel mode")
+  })
+
+  it("maps unsupported tunnel provider and mode to CLI usage errors", () => {
+    expect(resolveTunnelProviderAndMode({ provider: "cloudflare", mode: "quick" })).toEqual({
+      provider: "cloudflare",
+      mode: "quick",
+    })
+
+    try {
+      resolveTunnelProviderAndMode({ provider: "ngrok" })
+      throw new Error("expected provider error")
+    } catch (error) {
+      expect(error).toBeInstanceOf(CliError)
+      expect(error.exitCode).toBe(EXIT_CODE.USAGE_ERROR)
+      expect(error.message).toContain("Unsupported tunnel provider")
+    }
   })
 
   it("builds the cloudflared quick tunnel invocation", () => {
@@ -65,6 +105,48 @@ describe("tunnel args", () => {
       ),
     ).toBe("https://demo-abc.trycloudflare.com")
     expect(parseCloudflareQuickTunnelUrl("no public URL yet")).toBeNull()
+  })
+
+  it("checks cloudflared availability before tunnel startup", () => {
+    const baseDependencies = {
+      getRunDir: () => "/tmp/unused-run-dir",
+      getLogsDir: () => "/tmp/unused-log-dir",
+      isProcessRunning: () => false,
+      terminateProcessTree: async () => true,
+    }
+
+    const missing = createTunnelManager({
+      ...baseDependencies,
+      searchPathFor: () => null,
+      processLike: { env: {} },
+    })
+    expect(missing.checkDependency()).toMatchObject({
+      ok: false,
+      dependency: "cloudflared",
+      path: null,
+    })
+
+    const configuredInvalid = createTunnelManager({
+      ...baseDependencies,
+      searchPathFor: () => "/usr/bin/cloudflared",
+      isExecutable: () => false,
+      processLike: { env: { AX_CODE_DESKTOP_CLOUDFLARED_BINARY: "/missing/cloudflared" } },
+    })
+    expect(configuredInvalid.checkDependency()).toMatchObject({
+      ok: false,
+      path: null,
+    })
+
+    const configuredValid = createTunnelManager({
+      ...baseDependencies,
+      searchPathFor: () => null,
+      isExecutable: () => true,
+      processLike: { env: { AX_CODE_DESKTOP_CLOUDFLARED_BINARY: "/opt/bin/cloudflared" } },
+    })
+    expect(configuredValid.checkDependency()).toMatchObject({
+      ok: true,
+      path: "/opt/bin/cloudflared",
+    })
   })
 })
 

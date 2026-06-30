@@ -11,7 +11,7 @@ Use the tunnel command when you need temporary browser access to AX Code Desktop
 
 - Install `cloudflared` and make it available on `PATH`.
 - Protect AX Code Desktop with a UI password.
-- Use Cloudflare Access, SSO, or another identity gate for any shared or longer-lived URL.
+- Use a Cloudflare Access-protected hostname, SSO, VPN, or another identity gate for any shared or longer-lived URL. Quick tunnels are temporary public provider URLs and are not the right boundary for client-facing access.
 
 ```bash
 brew install cloudflared
@@ -32,7 +32,7 @@ ax-code-desktop tunnel stop --port 3000
 ax-code-desktop tunnel providers
 ```
 
-Only Cloudflare quick tunnels are supported in this first implementation. Managed Cloudflare tunnels should stay behind your own Cloudflare Access policy or reverse proxy setup.
+Only Cloudflare quick tunnels are supported in this first implementation. For managed Cloudflare tunnels, keep AX Code Desktop behind your own Cloudflare Access policy or reverse proxy setup.
 
 ## Safety Notes
 

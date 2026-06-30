@@ -1533,12 +1533,36 @@ function createCliTunnelManager() {
     getRunDir,
     getLogsDir,
     searchPathFor,
+    isExecutable,
     isProcessRunning,
     terminateProcessTree,
   })
 }
 
-async function resolveTunnelTargetPort(options, commandRuntime) {
+function buildTunnelServeOptions(options, explicitPort) {
+  return {
+    ...options,
+    explicitPort,
+    json: false,
+    suppressStartupSummary: true,
+    suppressUiPasswordWarning: true,
+    quiet: true,
+    suppressQuietOutput: true,
+  }
+}
+
+function resolveTunnelProviderAndMode(options = {}) {
+  try {
+    return {
+      provider: normalizeTunnelProvider(options.provider),
+      mode: normalizeTunnelMode(options.mode),
+    }
+  } catch (error) {
+    throw new CliError(error instanceof Error ? error.message : String(error), EXIT_CODE.USAGE_ERROR)
+  }
+}
+
+async function resolveTunnelTarget(options, commandRuntime) {
   const runningInstances = await discoverRunningInstances()
   const desktopInstance = await discoverDesktopInstance()
   const explicitPort = options.explicitPort === true
@@ -1546,13 +1570,13 @@ async function resolveTunnelTargetPort(options, commandRuntime) {
   if (explicitPort) {
     const port = options.port
     const tracked = runningInstances.find((entry) => entry.port === port)
-    if (tracked) return port
+    if (tracked) return { port, started: false }
     const info = await fetchSystemInfoFromPort(port)
-    if (info?.runtime) return port
+    if (info?.runtime) return { port, started: false }
   } else {
     const latest = getLatestInstance(runningInstances)
-    if (latest) return latest.port
-    if (desktopInstance?.port) return desktopInstance.port
+    if (latest) return { port: latest.port, started: false }
+    if (desktopInstance?.port) return { port: desktopInstance.port, started: false }
   }
 
   if (!hasUiPasswordConfigured(options.uiPassword)) {
@@ -1562,14 +1586,8 @@ async function resolveTunnelTargetPort(options, commandRuntime) {
     )
   }
 
-  return await commandRuntime.serve({
-    ...options,
-    explicitPort,
-    suppressStartupSummary: true,
-    suppressUiPasswordWarning: true,
-    quiet: true,
-    suppressQuietOutput: true,
-  })
+  const port = await commandRuntime.serve(buildTunnelServeOptions(options, explicitPort))
+  return { port, started: true }
 }
 
 async function assertTunnelTargetProtected(port) {
@@ -2529,9 +2547,13 @@ const commands = {
       return
     }
 
-    const provider = normalizeTunnelProvider(options.provider)
-    const mode = normalizeTunnelMode(options.mode)
-    const targetPort = await resolveTunnelTargetPort(options, this)
+    const { provider, mode } = resolveTunnelProviderAndMode(options)
+    const dependency = manager.checkDependency({ provider })
+    if (!dependency.ok) {
+      throw new CliError(dependency.message, EXIT_CODE.MISSING_DEPENDENCY)
+    }
+    const target = await resolveTunnelTarget(options, this)
+    const targetPort = target.port
     assertSafeBrowserPort(targetPort, { context: "AX Code Desktop tunnel" })
     await assertTunnelTargetProtected(targetPort)
 
@@ -2541,14 +2563,27 @@ const commands = {
       logStatus("info", `target`, buildTunnelOriginUrl(targetPort))
     }
     startSpin?.start(`Starting Cloudflare tunnel for port ${targetPort}...`)
-    const tunnel = await manager.startTunnel({
-      port: targetPort,
-      originUrl: buildTunnelOriginUrl(targetPort),
-      provider,
-      mode,
-      force: options.force,
-    })
-    startSpin?.stop(`Cloudflare tunnel started for port ${targetPort}`)
+    let tunnel
+    try {
+      tunnel = await manager.startTunnel({
+        port: targetPort,
+        originUrl: buildTunnelOriginUrl(targetPort),
+        provider,
+        mode,
+        force: options.force,
+      })
+    } catch (error) {
+      if (target.started) {
+        await this.stop({
+          explicitPort: true,
+          port: targetPort,
+          quiet: true,
+          suppressQuietOutput: true,
+        }).catch(() => undefined)
+      }
+      throw error
+    }
+    startSpin?.stop(`Cloudflare tunnel started: ${tunnel.url}`)
 
     if (isJsonMode(options)) {
       printJson({
@@ -2561,7 +2596,7 @@ const commands = {
       process.stdout.write(`${tunnel.url}\n`)
       return tunnel
     }
-    if (!startSpin && showOutput) {
+    if (showOutput) {
       logStatus("success", "public URL", tunnel.url)
       logStatus("info", "log", tunnel.logPath)
       clackOutro("tunnel running")
@@ -3011,6 +3046,8 @@ export {
   fetchSystemInfoFromPort,
   discoverRunningInstances,
   findClosestMatch,
+  buildTunnelServeOptions,
+  resolveTunnelProviderAndMode,
   CliError,
   EXIT_CODE,
 }

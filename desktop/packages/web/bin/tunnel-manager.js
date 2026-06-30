@@ -46,6 +46,7 @@ export function createTunnelManager(dependencies) {
     getRunDir,
     getLogsDir,
     searchPathFor,
+    isExecutable,
     isProcessRunning,
     terminateProcessTree,
     fsImpl = fs,
@@ -84,20 +85,47 @@ export function createTunnelManager(dependencies) {
         ? processLike.env.AX_CODE_DESKTOP_CLOUDFLARED_BINARY.trim()
         : ""
     if (configured) {
+      if (typeof isExecutable === "function" && !isExecutable(configured)) {
+        return null
+      }
       return configured
     }
     return searchPathFor("cloudflared")
   }
 
-  const waitForTunnelUrl = async (logPath, timeoutMs = DEFAULT_TUNNEL_READY_TIMEOUT_MS) => {
+  const checkDependency = ({ provider } = {}) => {
+    const normalizedProvider = normalizeTunnelProvider(provider)
+    const binary = resolveCloudflaredBinary()
+    return {
+      ok: Boolean(binary),
+      provider: normalizedProvider,
+      dependency: "cloudflared",
+      path: binary,
+      message: binary
+        ? "cloudflared is available"
+        : "cloudflared was not found on PATH. Install it first, or set AX_CODE_DESKTOP_CLOUDFLARED_BINARY to the executable path.",
+    }
+  }
+
+  const waitForTunnelUrl = async (logPath, timeoutMs = DEFAULT_TUNNEL_READY_TIMEOUT_MS, isAlive = () => true) => {
     const start = Date.now()
     let lastText = ""
     while (Date.now() - start < timeoutMs) {
       try {
         lastText = fsImpl.readFileSync(logPath, "utf8")
-        const url = parseCloudflareQuickTunnelUrl(lastText)
-        if (url) return url
       } catch {}
+      const url = parseCloudflareQuickTunnelUrl(lastText)
+      if (url) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        if (!isAlive()) {
+          throw new Error("cloudflared exited before the tunnel became active")
+        }
+        return url
+      }
+      if (!isAlive()) {
+        const tail = lastText.split(/\r?\n/).slice(-12).join("\n").trim()
+        throw new Error(`cloudflared exited before publishing a public URL${tail ? `: ${tail}` : ""}`)
+      }
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
     const tail = lastText.split(/\r?\n/).slice(-12).join("\n").trim()
@@ -161,12 +189,11 @@ export function createTunnelManager(dependencies) {
       await stopTunnel({ port })
     }
 
-    const cloudflared = resolveCloudflaredBinary()
-    if (!cloudflared) {
-      throw new Error(
-        "cloudflared was not found on PATH. Install it first, or set AX_CODE_DESKTOP_CLOUDFLARED_BINARY to the executable path.",
-      )
+    const dependency = checkDependency({ provider: normalizedProvider })
+    if (!dependency.ok) {
+      throw new Error(dependency.message)
     }
+    const cloudflared = dependency.path
 
     const logPath = getTunnelLogFilePath(port)
     fsImpl.mkdirSync(pathImpl.dirname(logPath), { recursive: true, mode: 0o700 })
@@ -182,7 +209,11 @@ export function createTunnelManager(dependencies) {
         ...processLike.env,
       },
     })
+    let childExited = false
     child.on?.("error", () => {})
+    child.on?.("exit", () => {
+      childExited = true
+    })
     child.unref?.()
 
     try {
@@ -196,7 +227,7 @@ export function createTunnelManager(dependencies) {
 
     let publicUrl
     try {
-      publicUrl = await waitForTunnelUrl(logPath, readyTimeoutMs)
+      publicUrl = await waitForTunnelUrl(logPath, readyTimeoutMs, () => !childExited && isProcessRunning(pid))
     } catch (error) {
       await terminateProcessTree(pid, { gracefulTimeoutMs: 1000, forceTimeoutMs: 1500 }).catch(() => false)
       throw error
@@ -220,6 +251,7 @@ export function createTunnelManager(dependencies) {
   return {
     getTunnelStateFilePath,
     getTunnelLogFilePath,
+    checkDependency,
     listTunnels,
     getTunnel,
     startTunnel,
