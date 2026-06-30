@@ -1,0 +1,44 @@
+---
+title: Cloudflare Tunnel
+description: Reach AX Code Desktop from a trusted browser through a Cloudflare quick tunnel.
+---
+
+# Cloudflare Tunnel
+
+Use the tunnel command when you need temporary browser access to AX Code Desktop from another trusted device. This is private remote workstation access, not a hosted multi-user service.
+
+## Requirements
+
+- Install `cloudflared` and make it available on `PATH`.
+- Protect AX Code Desktop with a UI password.
+- Use Cloudflare Access, SSO, or another identity gate for any shared or longer-lived URL.
+
+```bash
+brew install cloudflared
+ax-code-desktop tunnel start --ui-password be-creative-here
+```
+
+If AX Code Desktop is already running, the tunnel command checks that UI password protection is enabled before exposing it:
+
+```bash
+ax-code-desktop tunnel start --port 3000
+```
+
+## Commands
+
+```bash
+ax-code-desktop tunnel status
+ax-code-desktop tunnel stop --port 3000
+ax-code-desktop tunnel providers
+```
+
+Only Cloudflare quick tunnels are supported in this first implementation. Managed Cloudflare tunnels should stay behind your own Cloudflare Access policy or reverse proxy setup.
+
+## Safety Notes
+
+- Do not expose an unlocked AX Code Desktop instance.
+- Do not share one instance between unrelated users or clients.
+- Treat browser access as access to the machine, project files, terminal, Git credentials, provider auth, and configured tools.
+- Stop the tunnel when the remote session is done.
+
+For persistent deployments, prefer [Reverse Proxy](/reverse-proxy/) with a tightly controlled private network or Cloudflare Access policy.

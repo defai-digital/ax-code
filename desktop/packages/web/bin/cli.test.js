@@ -4,11 +4,67 @@ import { pathToFileURL } from "url"
 
 import { isModuleCliExecution, normalizeCliEntryPath } from "./cli-entry.js"
 import { parseArgs } from "./cli.js"
+import {
+  buildCloudflaredArgs,
+  normalizeTunnelMode,
+  normalizeTunnelProvider,
+  parseCloudflareQuickTunnelUrl,
+} from "./tunnel-manager.js"
 
 describe("cli args", () => {
   it("accepts legacy daemon flags as no-ops", () => {
     expect(parseArgs(["serve", "--daemon"]).removedFlagErrors).toEqual([])
     expect(parseArgs(["serve", "-d"]).removedFlagErrors).toEqual([])
+  })
+
+  it("parses tunnel subcommands and options", () => {
+    const parsed = parseArgs([
+      "tunnel",
+      "start",
+      "--provider",
+      "cloudflare",
+      "--mode",
+      "quick",
+      "--port",
+      "3000",
+      "--force",
+    ])
+
+    expect(parsed.command).toBe("tunnel")
+    expect(parsed.tunnelAction).toBe("start")
+    expect(parsed.options.provider).toBe("cloudflare")
+    expect(parsed.options.mode).toBe("quick")
+    expect(parsed.options.port).toBe(3000)
+    expect(parsed.options.force).toBe(true)
+  })
+})
+
+describe("tunnel args", () => {
+  it("supports only the Cloudflare quick tunnel MVP", () => {
+    expect(normalizeTunnelProvider(undefined)).toBe("cloudflare")
+    expect(normalizeTunnelProvider("Cloudflare")).toBe("cloudflare")
+    expect(normalizeTunnelMode(undefined)).toBe("quick")
+    expect(normalizeTunnelMode("Quick")).toBe("quick")
+    expect(() => normalizeTunnelProvider("ngrok")).toThrow("Unsupported tunnel provider")
+    expect(() => normalizeTunnelMode("managed-remote")).toThrow("Unsupported tunnel mode")
+  })
+
+  it("builds the cloudflared quick tunnel invocation", () => {
+    expect(buildCloudflaredArgs({ mode: "quick", originUrl: "http://127.0.0.1:3000" })).toEqual([
+      "tunnel",
+      "--no-autoupdate",
+      "--url",
+      "http://127.0.0.1:3000",
+    ])
+  })
+
+  it("parses Cloudflare quick tunnel URLs from logs", () => {
+    expect(
+      parseCloudflareQuickTunnelUrl(
+        "2026-06-30 INF +--------------------------------------------------------------------------------------------+\nhttps://demo-abc.trycloudflare.com",
+      ),
+    ).toBe("https://demo-abc.trycloudflare.com")
+    expect(parseCloudflareQuickTunnelUrl("no public URL yet")).toBeNull()
   })
 })
 

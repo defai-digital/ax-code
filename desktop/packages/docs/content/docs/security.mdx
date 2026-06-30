@@ -28,9 +28,11 @@ Passkeys are tied to the current password. If you change or remove the password,
 ## Before you expose it
 
 - By default AX Code Desktop only listens on your own machine (`127.0.0.1`). It takes a deliberate change to listen more widely, and you should set a password first.
-- Prefer a private network, VPN, or tightly controlled reverse proxy over opening a port to the internet.
+- Prefer a private network, VPN, Cloudflare Access-protected tunnel, or tightly controlled reverse proxy over opening a port to the internet.
 - If you put AX Code Desktop behind your own HTTPS server, see [Reverse Proxy](/reverse-proxy/).
+- For temporary browser access from another trusted device, see [Cloudflare Tunnel](/cloudflare-tunnel/).
 
 ## Related
 
+- [Cloudflare Tunnel](/cloudflare-tunnel/) — temporary trusted browser access
 - [Reverse Proxy](/reverse-proxy/) — run AX Code Desktop behind your own server

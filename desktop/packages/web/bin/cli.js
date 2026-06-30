@@ -19,6 +19,13 @@ import {
   printJson,
   logStatus,
 } from "./cli-output.js"
+import {
+  TUNNEL_MODE_QUICK,
+  TUNNEL_PROVIDER_CLOUDFLARE,
+  createTunnelManager,
+  normalizeTunnelMode,
+  normalizeTunnelProvider,
+} from "./tunnel-manager.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -32,6 +39,7 @@ const STARTUP_SERVICE_ID = "ai.ax-code.app.web"
 const SYSTEMD_SERVICE_NAME = "ax-code-desktop.service"
 const API_BASE_PATH = "/api"
 const API_HEALTH_PATH = "/health"
+const AUTH_SESSION_PATH = "/auth/session"
 const API_SYSTEM_INFO_PATH = `${API_BASE_PATH}/system/info`
 const API_SYSTEM_SHUTDOWN_PATH = `${API_BASE_PATH}/system/shutdown`
 const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"))
@@ -119,6 +127,10 @@ function buildLocalUrl(port, endpoint = "") {
   const host = formatHostForUrl(resolveApiHost())
   const pathPart = endpoint.startsWith("/") ? endpoint : `/${endpoint}`
   return `http://${host}:${port}${pathPart}`
+}
+
+function buildTunnelOriginUrl(port) {
+  return `http://127.0.0.1:${port}`
 }
 
 function formatUnsafePortWarning(port) {
@@ -430,11 +442,13 @@ function parseArgs(argv = process.argv.slice(2)) {
   const command = positional[0] || "serve"
   const subcommand = null
   const startupAction = command === "startup" ? positional[1] || "status" : null
+  const tunnelAction = command === "tunnel" ? positional[1] || "status" : null
 
   return {
     command,
     subcommand,
     startupAction,
+    tunnelAction,
     options,
     removedFlagErrors,
     helpRequested,
@@ -454,6 +468,7 @@ COMMANDS:
   stop           Stop running instance(s)
   restart        Stop and start the server
   status         Show server status
+  tunnel         Manage a Cloudflare quick tunnel for browser access
   startup        Manage launch at system startup
   logs           Tail AX Code Desktop logs
   update         Check for and install updates
@@ -481,7 +496,38 @@ EXAMPLES:
   ax-code-desktop --port 8080        # Start on port 8080 (daemon)
   ax-code-desktop serve --foreground # Start in foreground (for systemd Type=simple)
   ax-code-desktop startup enable     # Start AX Code Desktop at user login
+  ax-code-desktop tunnel start --ui-password secret
   ax-code-desktop logs               # Follow logs for latest running instance
+`)
+}
+
+function showTunnelHelp() {
+  console.log(`
+ AX Code Desktop Tunnel Commands
+
+USAGE:
+  ax-code-desktop tunnel <SUBCOMMAND> [OPTIONS]
+
+SUBCOMMANDS:
+  start       Start a Cloudflare quick tunnel for a running or new web UI
+  status      Show active tunnel state
+  stop        Stop active tunnel(s)
+  providers   Show supported tunnel providers
+
+OPTIONS:
+  -p, --port              Target AX Code Desktop web server port
+  --ui-password           Required when tunnel start needs to launch the web server
+  --provider              Tunnel provider (only cloudflare is supported)
+  --mode                  Tunnel mode (only quick is supported)
+  --force                 Replace an existing tunnel on the same port
+  --json                  Output machine-readable JSON
+  -q, --quiet             Suppress non-essential output
+
+EXAMPLES:
+  ax-code-desktop tunnel start --ui-password be-creative-here
+  ax-code-desktop tunnel start --port 3000 --force
+  ax-code-desktop tunnel status --json
+  ax-code-desktop tunnel stop --port 3000
 `)
 }
 
@@ -1434,6 +1480,36 @@ async function fetchSystemInfoFromPort(port, fetchImpl = globalThis.fetch) {
   }
 }
 
+async function fetchUiPasswordProtectionStatus(port, fetchImpl = globalThis.fetch) {
+  if (!Number.isFinite(port) || port <= 0 || typeof fetchImpl !== "function") {
+    return { known: false, protected: false }
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 1500)
+  try {
+    const response = await fetchImpl(buildLocalUrl(port, AUTH_SESSION_PATH), {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    })
+    const body = await response.json().catch(() => null)
+    if (response.status === 401 && body?.locked === true) {
+      return { known: true, protected: true }
+    }
+    if (response.ok && body?.disabled === true) {
+      return { known: true, protected: false }
+    }
+    if (response.ok && body?.authenticated === true) {
+      return { known: true, protected: body?.disabled !== true }
+    }
+    return { known: true, protected: response.status === 401 }
+  } catch {
+    return { known: false, protected: false }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function discoverDesktopInstance(fetchImpl = globalThis.fetch) {
   const port = readDesktopLocalPortFromSettings()
   if (!port) {
@@ -1450,6 +1526,61 @@ async function discoverDesktopInstance(fetchImpl = globalThis.fetch) {
     pid: info.pid,
     runtime: info.runtime,
   }
+}
+
+function createCliTunnelManager() {
+  return createTunnelManager({
+    getRunDir,
+    getLogsDir,
+    searchPathFor,
+    isProcessRunning,
+    terminateProcessTree,
+  })
+}
+
+async function resolveTunnelTargetPort(options, commandRuntime) {
+  const runningInstances = await discoverRunningInstances()
+  const desktopInstance = await discoverDesktopInstance()
+  const explicitPort = options.explicitPort === true
+
+  if (explicitPort) {
+    const port = options.port
+    const tracked = runningInstances.find((entry) => entry.port === port)
+    if (tracked) return port
+    const info = await fetchSystemInfoFromPort(port)
+    if (info?.runtime) return port
+  } else {
+    const latest = getLatestInstance(runningInstances)
+    if (latest) return latest.port
+    if (desktopInstance?.port) return desktopInstance.port
+  }
+
+  if (!hasUiPasswordConfigured(options.uiPassword)) {
+    throw new CliError(
+      "Starting a tunnel requires UI password protection. Pass --ui-password or set AX_CODE_DESKTOP_UI_PASSWORD before starting the tunnel.",
+      EXIT_CODE.AUTH_CONFIG_ERROR,
+    )
+  }
+
+  return await commandRuntime.serve({
+    ...options,
+    explicitPort,
+    suppressStartupSummary: true,
+    suppressUiPasswordWarning: true,
+    quiet: true,
+    suppressQuietOutput: true,
+  })
+}
+
+async function assertTunnelTargetProtected(port) {
+  const status = await fetchUiPasswordProtectionStatus(port)
+  if (status.known && status.protected) {
+    return
+  }
+  throw new CliError(
+    `Refusing to expose AX Code Desktop on port ${port} without UI password protection. Restart it with --ui-password or AX_CODE_DESKTOP_UI_PASSWORD, then retry.`,
+    EXIT_CODE.AUTH_CONFIG_ERROR,
+  )
 }
 
 function readTailLines(filePath, lineCount = DEFAULT_TAIL_LINES) {
@@ -2278,6 +2409,166 @@ const commands = {
     clackOutro(`${runningCount} running runtime(s)`)
   },
 
+  async tunnel(options = {}, action = "status") {
+    const normalizedAction = typeof action === "string" ? action.trim().toLowerCase() : "status"
+    if (!["start", "status", "stop", "providers"].includes(normalizedAction)) {
+      throw new CliError(
+        `Unknown tunnel subcommand '${action}'. Use 'ax-code-desktop tunnel --help'.`,
+        EXIT_CODE.USAGE_ERROR,
+      )
+    }
+
+    const manager = createCliTunnelManager()
+    const showOutput = shouldRenderHumanOutput(options)
+
+    if (normalizedAction === "providers") {
+      const result = {
+        providers: [
+          {
+            id: TUNNEL_PROVIDER_CLOUDFLARE,
+            modes: [TUNNEL_MODE_QUICK],
+            dependency: "cloudflared",
+          },
+        ],
+      }
+      if (isJsonMode(options)) {
+        printJson(result)
+        return
+      }
+      if (isQuietMode(options)) {
+        process.stdout.write(`${TUNNEL_PROVIDER_CLOUDFLARE} modes:${TUNNEL_MODE_QUICK} dependency:cloudflared\n`)
+        return
+      }
+      clackIntro("AX Code Desktop Tunnel Providers")
+      logStatus("success", "cloudflare", "quick mode via cloudflared")
+      clackOutro("provider list complete")
+      return
+    }
+
+    if (normalizedAction === "status") {
+      let tunnels = manager.listTunnels()
+      if (options.explicitPort) {
+        tunnels = tunnels.filter((entry) => entry.port === options.port)
+      }
+      if (isJsonMode(options)) {
+        printJson({
+          state: tunnels.length > 0 ? "running" : "stopped",
+          runningCount: tunnels.length,
+          tunnels,
+        })
+        return
+      }
+      if (isQuietMode(options)) {
+        if (tunnels.length === 0) {
+          process.stdout.write("stopped\n")
+          return
+        }
+        for (const tunnel of tunnels) {
+          process.stdout.write(`port ${tunnel.port} ${tunnel.provider}:${tunnel.mode} ${tunnel.url}\n`)
+        }
+        return
+      }
+      clackIntro("AX Code Desktop Tunnel Status")
+      if (tunnels.length === 0) {
+        logStatus("warning", "stopped")
+        clackOutro("no active tunnels")
+        return
+      }
+      for (const tunnel of tunnels) {
+        logStatus("success", `port ${tunnel.port}`, `${tunnel.url}`)
+        logStatus("info", "log", tunnel.logPath)
+      }
+      clackOutro(`${tunnels.length} active tunnel(s)`)
+      return
+    }
+
+    if (normalizedAction === "stop") {
+      let tunnels = manager.listTunnels()
+      if (options.explicitPort) {
+        const byPort = manager.getTunnel(options.port)
+        tunnels = byPort ? [byPort] : []
+      }
+
+      const results = []
+      for (const tunnel of tunnels) {
+        results.push(await manager.stopTunnel({ port: tunnel.port }))
+      }
+      if (options.explicitPort && tunnels.length === 0) {
+        results.push({ port: options.port, stopped: false, reason: "not-running" })
+      }
+
+      if (isJsonMode(options)) {
+        printJson({
+          stoppedCount: results.filter((entry) => entry.stopped).length,
+          results,
+        })
+        return
+      }
+      if (isQuietMode(options)) {
+        if (results.length === 0) {
+          process.stdout.write("none\n")
+          return
+        }
+        for (const result of results) {
+          process.stdout.write(
+            result.stopped ? `stopped ${result.port}\n` : `not-running ${result.port} ${result.reason || ""}\n`,
+          )
+        }
+        return
+      }
+      clackIntro("AX Code Desktop Tunnel Stop")
+      if (results.length === 0) {
+        logStatus("info", "No active tunnels found")
+        clackOutro("nothing to stop")
+        return
+      }
+      for (const result of results) {
+        logStatus(result.stopped ? "success" : "warning", `port ${result.port}`, result.reason || undefined)
+      }
+      clackOutro("stop complete")
+      return
+    }
+
+    const provider = normalizeTunnelProvider(options.provider)
+    const mode = normalizeTunnelMode(options.mode)
+    const targetPort = await resolveTunnelTargetPort(options, this)
+    assertSafeBrowserPort(targetPort, { context: "AX Code Desktop tunnel" })
+    await assertTunnelTargetProtected(targetPort)
+
+    const startSpin = showOutput ? createSpinner(options) : null
+    if (showOutput && !startSpin) {
+      clackIntro("AX Code Desktop Tunnel Start")
+      logStatus("info", `target`, buildTunnelOriginUrl(targetPort))
+    }
+    startSpin?.start(`Starting Cloudflare tunnel for port ${targetPort}...`)
+    const tunnel = await manager.startTunnel({
+      port: targetPort,
+      originUrl: buildTunnelOriginUrl(targetPort),
+      provider,
+      mode,
+      force: options.force,
+    })
+    startSpin?.stop(`Cloudflare tunnel started for port ${targetPort}`)
+
+    if (isJsonMode(options)) {
+      printJson({
+        ok: true,
+        tunnel,
+      })
+      return tunnel
+    }
+    if (isQuietMode(options)) {
+      process.stdout.write(`${tunnel.url}\n`)
+      return tunnel
+    }
+    if (!startSpin && showOutput) {
+      logStatus("success", "public URL", tunnel.url)
+      logStatus("info", "log", tunnel.logPath)
+      clackOutro("tunnel running")
+    }
+    return tunnel
+  },
+
   async logs(options) {
     const showFrames = shouldRenderHumanOutput(options)
     const shouldPrefixLines = options.all || !showFrames
@@ -2552,7 +2843,16 @@ const commands = {
 
 async function main() {
   const parsed = parseArgs()
-  const { command, subcommand, startupAction, options, removedFlagErrors, helpRequested, versionRequested } = parsed
+  const {
+    command,
+    subcommand,
+    startupAction,
+    tunnelAction,
+    options,
+    removedFlagErrors,
+    helpRequested,
+    versionRequested,
+  } = parsed
   activeCommandOptions = options
 
   if (versionRequested) {
@@ -2584,6 +2884,8 @@ async function main() {
   if (helpRequested) {
     if (command === "startup") {
       showStartupHelp()
+    } else if (command === "tunnel") {
+      showTunnelHelp()
     } else {
       showHelp()
     }
@@ -2595,8 +2897,13 @@ async function main() {
     return
   }
 
+  if (command === "tunnel") {
+    await commands.tunnel(options, tunnelAction)
+    return
+  }
+
   if (!commands[command]) {
-    const knownCommands = ["serve", "stop", "restart", "status", "startup", "logs", "update"]
+    const knownCommands = ["serve", "stop", "restart", "status", "tunnel", "startup", "logs", "update"]
     const suggestion = findClosestMatch(command, knownCommands)
     const hint = suggestion ? ` Did you mean '${suggestion}'?` : ""
     if (isJsonMode(options)) {

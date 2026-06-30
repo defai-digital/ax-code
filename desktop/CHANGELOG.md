@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Desktop: added a guarded `ax-code-desktop tunnel` Cloudflare quick tunnel MVP for temporary trusted browser access with UI password enforcement.
+
 ## [6.8.1] - 2026-06-30
 
 ### Fixed

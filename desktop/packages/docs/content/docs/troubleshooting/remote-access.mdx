@@ -24,7 +24,14 @@ When a [remote instance](/remote-instances/) stalls, AX Code Desktop names the s
 
 If you put AX Code Desktop behind a reverse proxy and it loads oddly or won't connect, see [Reverse Proxy](/reverse-proxy/).
 
+## Cloudflare tunnel does not start
+
+- confirm `cloudflared` is installed and on `PATH`
+- run `ax-code-desktop tunnel status` to check whether an old tunnel is still active
+- start or restart AX Code Desktop with `--ui-password`; unlocked instances cannot be exposed
+- use `--force` only when replacing a stale tunnel on the same port
+
 ## Related
 
-- [Remote Instances](/remote-instances/) · [Reverse Proxy](/reverse-proxy/)
+- [Remote Instances](/remote-instances/) · [Cloudflare Tunnel](/cloudflare-tunnel/) · [Reverse Proxy](/reverse-proxy/)
 - [Security](/security/) — protect the UI before exposing it

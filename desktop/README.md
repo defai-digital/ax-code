@@ -165,6 +165,15 @@ Windows SmartScreen may warn for unsigned or low-reputation builds. Release note
 
 AX Code Desktop is intended for trusted desktop workstations. Do not expose the development web UI publicly.
 
+Temporary browser access from another trusted device is available through a guarded Cloudflare quick tunnel command. It requires UI password protection and should still sit behind Cloudflare Access, SSO, VPN, or another identity gate for shared access:
+
+```bash
+brew install cloudflared
+ax-code-desktop tunnel start --ui-password your-password
+ax-code-desktop tunnel status
+ax-code-desktop tunnel stop --port 3000
+```
+
 ## Development Web UI
 
 The web package is the local UI substrate used by development and desktop packaging. It is not a supported end-user distribution mode.
