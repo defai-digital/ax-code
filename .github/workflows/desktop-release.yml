@@ -199,10 +199,30 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+      # Notarize via the App Store Connect API key (not Apple ID + app password).
+      # electron-builder reads APPLE_API_KEY (path) / APPLE_API_KEY_ID /
+      # APPLE_API_ISSUER. Exported via GITHUB_ENV so they are set ONLY when a
+      # cert is configured — otherwise electron-builder would error on a partial
+      # API-key config instead of building unsigned.
+      - name: Configure Apple API key for notarization
+        if: ${{ env.HAS_APPLE_CERT == 'true' }}
+        env:
+          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          KEY_PATH="$RUNNER_TEMP/apple-api-key.p8"
+          echo "$APPLE_API_KEY_B64" | base64 --decode > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          {
+            echo "APPLE_API_KEY=$KEY_PATH"
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+          } >> "$GITHUB_ENV"
+
       - name: Build macOS Electron app
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           ELECTRON_BUILDER_ARCH: arm64
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_APPLE_CERT }}
@@ -213,6 +233,18 @@ jobs:
           fi
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --mac --arm64 --publish=never
+
+      # electron-builder notarizes + staples the .app (and .zip), but not the
+      # .dmg wrapper. Notarize the dmg itself and staple so it passes Gatekeeper
+      # offline / before mounting.
+      - name: Notarize and staple the dmg
+        if: ${{ env.HAS_APPLE_CERT == 'true' }}
+        run: |
+          set -euo pipefail
+          DMG="$(ls desktop/packages/electron/dist/*.dmg)"
+          xcrun notarytool submit "$DMG" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
 
       - name: Packaged app smoke
         run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs --artifacts "$RUNNER_TEMP/desktop-smoke"
