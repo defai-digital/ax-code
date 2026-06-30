@@ -256,15 +256,17 @@ export namespace Config {
             return undefined
           }
           // Keep this short: the fetch sits on the Config.get() critical path
-          // (so effectively on every command's startup), the legacy fallback
-          // can double the wait, and a missing wellknown config is tolerated.
-          const WELLKNOWN_TIMEOUT_MS = 3_000
-          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) })
+          // (so effectively on every command's startup). Share a single time
+          // budget across primary + legacy fallback so worst-case is bounded.
+          const WELLKNOWN_TIMEOUT_MS = 1_500
+          const deadline = Date.now() + WELLKNOWN_TIMEOUT_MS
+          const remaining = () => Math.max(1, deadline - Date.now())
+          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(remaining()) })
             .then((res) => {
               if (res.ok || res.status !== 404) return res
-              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) })
+              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(remaining()) })
             })
-            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) }))
+            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(remaining()) }))
           if (!response.ok) {
             log.warn("failed to fetch remote config", {
               command: "config.load",
@@ -363,53 +365,93 @@ export namespace Config {
 
     const deps = []
 
-    for (const dir of unique(directories)) {
-      // Directories come from three sources: Global.Path.config
-      // (trusted), user home walk (trusted), worktree walk
-      // (untrusted). Only `.ax-code` dirs *inside the worktree*
-      // carry code committed by third parties, so they're the ones
-      // we need to confine.
-      const inWorktree = Filesystem.contains(Instance.worktree, dir)
-      const isUserConfigDir = dir === Global.Path.config || dir === Flag.AX_CODE_CONFIG_DIR
-      const trusted = !inWorktree || isUserConfigDir
-      const dependencyManaged = !inWorktree || isUserConfigDir
-      const configuredPlugins: string[] = []
-      if (dir.endsWith(".ax-code") || dir === Flag.AX_CODE_CONFIG_DIR) {
-        for (const file of ["ax-code.jsonc", "ax-code.json"]) {
-          log.debug(`loading config from ${path.join(dir, file)}`)
-          const loaded = await loadFile(path.join(dir, file), { trusted })
+    // Load all directories in parallel. Each directory's config files,
+    // commands, agents, modes, and plugins are independent I/O and can
+    // run concurrently. Merge results sequentially afterwards to
+    // preserve precedence order (lower-priority directories first).
+    const uniqueDirs = unique(directories)
+    const dirResults = await Promise.all(
+      uniqueDirs.map(async (dir) => {
+        // Directories come from three sources: Global.Path.config
+        // (trusted), user home walk (trusted), worktree walk
+        // (untrusted). Only `.ax-code` dirs *inside the worktree*
+        // carry code committed by third parties, so they're the ones
+        // we need to confine.
+        const inWorktree = Filesystem.contains(Instance.worktree, dir)
+        const isUserConfigDir = dir === Global.Path.config || dir === Flag.AX_CODE_CONFIG_DIR
+        const trusted = !inWorktree || isUserConfigDir
+        const dependencyManaged = !inWorktree || isUserConfigDir
+        const isConfigDir = dir.endsWith(".ax-code") || dir === Flag.AX_CODE_CONFIG_DIR
+
+        // Parallel load of all independent I/O within this directory
+        const configFiles = isConfigDir ? ["ax-code.jsonc", "ax-code.json"] : []
+        const [loadedConfigs, command, agent, mode, pluginFiles] = await Promise.all([
+          Promise.all(
+            configFiles.map(async (file) => {
+              log.debug(`loading config from ${path.join(dir, file)}`)
+              return loadFile(path.join(dir, file), { trusted })
+            }),
+          ),
+          loadCommand(dir, inWorktree && !isUserConfigDir ? "project" : "config"),
+          loadAgent(dir),
+          loadMode(dir),
+          loadPlugin(dir),
+        ])
+
+        const configuredPlugins: string[] = []
+        for (const loaded of loadedConfigs) {
           configuredPlugins.push(...(loaded.plugin ?? []))
+        }
+
+        return {
+          dir,
+          trusted,
+          dependencyManaged,
+          isConfigDir,
+          loadedConfigs,
+          configuredPlugins,
+          command,
+          agent,
+          mode,
+          pluginFiles,
+        }
+      }),
+    )
+
+    // Merge results sequentially to preserve precedence order
+    for (const dr of dirResults) {
+      if (dr.isConfigDir) {
+        for (const loaded of dr.loadedConfigs) {
           mergeFromSource(
-            trusted
-              ? trustedMcpSource("config_directory", { path: dir })
-              : untrustedMcpSource("config_directory", { path: dir }),
+            dr.trusted
+              ? trustedMcpSource("config_directory", { path: dr.dir })
+              : untrustedMcpSource("config_directory", { path: dr.dir }),
             loaded,
           )
-          // to satisfy the type checker
-          result.agent ??= {}
-          result.mode ??= {}
-          result.plugin ??= []
         }
+        // to satisfy the type checker
+        result.agent ??= {}
+        result.mode ??= {}
+        result.plugin ??= []
       }
 
-      result.command = mergeDeep(
-        result.command ?? {},
-        await loadCommand(dir, inWorktree && !isUserConfigDir ? "project" : "config"),
-      )
-      result.agent = mergeDeep(result.agent, await loadAgent(dir))
-      result.agent = mergeDeep(result.agent, await loadMode(dir))
-      const pluginFiles = await loadPlugin(dir)
+      result.command = mergeDeep(result.command ?? {}, dr.command)
+      result.agent = mergeDeep(result.agent, dr.agent)
+      result.agent = mergeDeep(result.agent, dr.mode)
       // Reassign rather than push: `result.plugin` can alias the lazily-cached
       // global config's array (mergeDeep does not clone source-only arrays), so
       // an in-place push would mutate that shared array and leak discovered
       // plugins across directories / reloads.
-      result.plugin = [...result.plugin, ...pluginFiles]
+      result.plugin = [...result.plugin, ...dr.pluginFiles]
 
-      if (dependencyManaged && (await hasLocalFilePlugin([...configuredPlugins, ...pluginFiles], dir))) {
+      if (
+        dr.dependencyManaged &&
+        (await hasLocalFilePlugin([...dr.configuredPlugins, ...dr.pluginFiles], dr.dir))
+      ) {
         deps.push(
           iife(async () => {
-            const shouldInstall = await needsInstall(dir)
-            if (shouldInstall) await installDependencies(dir)
+            const shouldInstall = await needsInstall(dr.dir)
+            if (shouldInstall) await installDependencies(dr.dir)
           }),
         )
       }

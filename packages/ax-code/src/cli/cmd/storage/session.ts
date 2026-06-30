@@ -1,21 +1,16 @@
 import type { Argv } from "yargs"
 import { cmd } from "../cmd"
-import { Session } from "../../../session"
-import { SessionID } from "../../../session/schema"
+import type { Session } from "../../../session"
 import { bootstrap } from "../../bootstrap"
 import { UI } from "../../ui"
 import { Locale } from "../../../util/locale"
 import { Flag } from "../../../flag/flag"
 import { Filesystem } from "../../../util/filesystem"
-import { Process } from "../../../util/process"
 import { EOL } from "os"
 import path from "path"
 import { which } from "../../../util/which"
 import { Instance } from "../../../project/instance"
 import { Global } from "../../../global"
-import { EventQuery } from "../../../replay/query"
-import { buildTransfer } from "./transfer"
-import { ProjectIdentity } from "../../../project/project-identity"
 import { registerShutdownSignals } from "../../../util/signals"
 
 const lessPagerOptions = ["-R", "-S"]
@@ -103,6 +98,7 @@ type ProjectCleanupSessionContext = CurrentProjectSessionContext & {
 }
 
 async function getCurrentProjectSessionContext(): Promise<CurrentProjectSessionContext> {
+  const { Session } = await import("../../../session")
   return {
     sessions: [...Session.list()],
     duplicateProjectIdentities: await getDuplicateProjectIdentities(),
@@ -137,6 +133,9 @@ async function backupSessions(input: {
   duplicateProjectIdentities: DuplicateProjectIdentity[]
   backupDir?: string
 }) {
+  const { Session } = await import("../../../session")
+  const { EventQuery } = await import("../../../replay/query")
+  const { buildTransfer } = await import("./transfer")
   const backupDir = input.backupDir ?? path.join(Global.Path.data, "cleanup-backups")
   const backupPath = path.join(backupDir, `session-project-${cleanupStamp()}.json`)
   const transfers = []
@@ -205,6 +204,7 @@ export function sessionProjectStatusPayload(input: {
 }
 
 async function getDuplicateProjectIdentities() {
+  const { ProjectIdentity } = await import("../../../project/project-identity")
   return ProjectIdentity.listDuplicateWorktreeIdentities({
     worktree: Instance.worktree,
     currentProjectID: Instance.project.id,
@@ -226,6 +226,7 @@ export const SessionClearProjectCommand = cmd({
       })
   },
   handler: async (args) => {
+    const { Session } = await import("../../../session")
     await bootstrap(process.cwd(), async () => {
       const { sessions, duplicateProjectIdentities, deletionRoots } = await getCurrentProjectCleanupContext()
 
@@ -345,12 +346,16 @@ export const SessionPruneCommand = cmd({
         describe: "delete sessions older than this many days (default: config session.ttl_days or 30)",
         type: "number",
       })
-      .check((argv) => {
-        if (argv.days !== undefined) Session.validatePruneTtlDays(argv.days)
+      .check(async (argv) => {
+        if (argv.days !== undefined) {
+          const { Session } = await import("../../../session")
+          Session.validatePruneTtlDays(argv.days)
+        }
         return true
       })
   },
   handler: async (args) => {
+    const { Session } = await import("../../../session")
     await bootstrap(process.cwd(), async () => {
       const { Config } = await import("../../../config/config")
       const cfg = await Config.get()
@@ -378,6 +383,8 @@ export const SessionDeleteCommand = cmd({
     })
   },
   handler: async (args) => {
+    const { Session } = await import("../../../session")
+    const { SessionID } = await import("../../../session/schema")
     await bootstrap(process.cwd(), async () => {
       const sessionID = SessionID.make(args.sessionID)
       try {
@@ -410,6 +417,9 @@ export const SessionListCommand = cmd({
       })
   },
   handler: async (args) => {
+    const { Session } = await import("../../../session")
+    const { Process } = await import("../../../util/process")
+    const { ProjectIdentity } = await import("../../../project/project-identity")
     await bootstrap(process.cwd(), async () => {
       const sessions = [...Session.list({ roots: true, limit: args.maxCount })]
 

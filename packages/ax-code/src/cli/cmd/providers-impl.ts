@@ -1,33 +1,18 @@
 import { Auth } from "../../auth"
 import { cmd } from "./cmd"
 import { GITHUB_REPO_URL } from "@/constants/project"
-import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
-import { ModelsDev } from "../../provider/models"
-import { getCliProviderDefinition } from "../../provider/cli/config"
-import { probeCliProvider } from "../../provider/cli/connect"
-import { map, pipe, sortBy, values } from "remeda"
 import path from "path"
 import os from "os"
 import { Config } from "../../config/config"
 import { Global } from "../../global"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
-import { Provider } from "../../provider/provider"
 import type { Hooks } from "@ax-code/plugin"
-import { Process } from "../../util/process"
-import { text } from "node:stream/consumers"
 import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
-import {
-  AX_ENGINE_MODEL_IDS,
-  AX_ENGINE_QUANTIZATION_IDS,
-  getAxEngineStatus,
-  normalizeModelID,
-  normalizeQuantization,
-  prepareAxEngine,
-  stopServer,
-} from "@/provider/ax-engine"
+import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine"
+
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -42,11 +27,13 @@ function isHttpProviderUrl(input: string) {
 
 async function setProviderAuth(provider: string, info: Auth.Info) {
   await Auth.set(provider, info)
+  const { Provider } = await import("../../provider/provider")
   await Provider.invalidate().catch(() => {})
 }
 
 async function removeProviderAuth(provider: string) {
   await Auth.remove(provider)
+  const { Provider } = await import("../../provider/provider")
   await Provider.invalidate().catch(() => {})
 }
 
@@ -55,6 +42,7 @@ function isWellKnownAuthCommand(input: unknown): input is string[] {
 }
 
 async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, methodName?: string): Promise<boolean> {
+  const prompts = await import("@clack/prompts")
   let index = 0
   if (methodName) {
     const match = plugin.auth.methods.findIndex((x) => x.label.toLowerCase() === methodName.toLowerCase())
@@ -270,7 +258,8 @@ export const ProvidersCommand = cmd({
   async handler() {},
 })
 
-function printAxEngineStatus(status: Awaited<ReturnType<typeof getAxEngineStatus>>) {
+async function printAxEngineStatus(status: any) {
+  const prompts = await import("@clack/prompts")
   prompts.intro("AX Engine")
   const eligibilityStatus = status.eligibility.supported ? "ok" : "blocked"
   prompts.log.info(`Eligibility: ${eligibilityStatus}`)
@@ -341,6 +330,17 @@ export const ProvidersAxEngineCommand = cmd({
         type: "boolean",
       }),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
+    const {
+      AX_ENGINE_MODEL_IDS,
+      AX_ENGINE_QUANTIZATION_IDS,
+      getAxEngineStatus,
+      normalizeModelID,
+      normalizeQuantization,
+      prepareAxEngine,
+      stopServer,
+    } = await import("@/provider/ax-engine")
+    const { Provider } = await import("../../provider/provider")
     const action = args.action
     const options = {
       binaryPath: args.binaryPath,
@@ -352,7 +352,7 @@ export const ProvidersAxEngineCommand = cmd({
     if (action === "status") {
       const status = await getAxEngineStatus(options)
       if (args.json) console.log(JSON.stringify(status, null, 2))
-      else printAxEngineStatus(status)
+      else await printAxEngineStatus(status)
       return
     }
 
@@ -416,6 +416,9 @@ export const ProvidersListCommand = cmd({
   aliases: ["ls"],
   describe: "list providers and credentials",
   async handler(_args) {
+    const prompts = await import("@clack/prompts")
+    const { ModelsDev } = await import("../../provider/models")
+    const { getCliProviderDefinition } = await import("../../provider/cli/config")
     UI.empty()
     const authPath = path.join(Global.Path.data, "auth.json")
     const homedir = os.homedir()
@@ -479,6 +482,13 @@ export const ProvidersLoginCommand = cmd({
         type: "string",
       }),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
+    const { ModelsDev } = await import("../../provider/models")
+    const { getCliProviderDefinition } = await import("../../provider/cli/config")
+    const { probeCliProvider } = await import("../../provider/cli/connect")
+    const { map, pipe, sortBy, values } = await import("remeda")
+    const { Process } = await import("../../util/process")
+    const { text } = await import("node:stream/consumers")
     UI.empty()
     prompts.intro("Add credential")
 
@@ -768,6 +778,8 @@ export const ProvidersLogoutCommand = cmd({
         type: "string",
       }),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
+    const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     const credentials = await Auth.all().then((x) => Object.entries(x))
     prompts.intro("Remove credential")

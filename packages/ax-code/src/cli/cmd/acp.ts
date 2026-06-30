@@ -1,10 +1,6 @@
 import { Log } from "@/util/log"
 import { bootstrap } from "../bootstrap"
 import { cmd } from "./cmd"
-import { AgentSideConnection, ndJsonStream } from "@agentclientprotocol/sdk"
-import { ACP } from "@/acp/agent"
-import { Server } from "@/server/server"
-import { createOpencodeClient } from "@ax-code/sdk/v2"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
 import { FeatureFlag } from "@/util/feature-flags"
 
@@ -21,6 +17,10 @@ export const AcpCommand = cmd({
     })
   },
   handler: async (args) => {
+    const { AgentSideConnection, ndJsonStream } = await import("@agentclientprotocol/sdk")
+    const { ACP } = await import("@/acp/agent")
+    const { Server } = await import("@/server/server")
+    const { createOpencodeClient } = await import("@ax-code/sdk/v2")
     FeatureFlag.set("AX_CODE_CLIENT", "acp")
     await bootstrap(process.cwd(), async () => {
       const opts = await resolveNetworkOptions(args)

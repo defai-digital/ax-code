@@ -113691,6 +113691,9 @@
           }
         ],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-06-13",

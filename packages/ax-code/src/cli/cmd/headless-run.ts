@@ -3,21 +3,11 @@ import { bootstrap } from "../bootstrap"
 import { Filesystem } from "@/util/filesystem"
 import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
 import { buildAttachAuthHeaders } from "../attach-auth"
-import { Server } from "@/server/server"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
-import { ServerRuntimeAuth } from "@/server/runtime-auth"
-import { Provider } from "@/provider/provider"
-import {
-  createHeadlessAgentRuntime,
-  createHeadlessCompositeEventSink,
-  createHeadlessJsonlEventSink,
-  headlessSessionErrorMessage,
-  isHeadlessSessionIdleEvent,
-  runHeadlessSession,
-  type HeadlessEventSink,
-  type HeadlessRuntimeCommand,
+import type {
+  HeadlessEventSink,
+  HeadlessRuntimeCommand,
 } from "@/runtime/headless"
-import { createHeadlessJsonlFileEventSink } from "@/runtime/headless/event-sink-node"
 import path from "node:path"
 
 type FetchHandler = (request: Request) => Response | Promise<Response>
@@ -113,6 +103,18 @@ export const HeadlessRunCommand = cmd({
         default: false,
       }),
   handler: async (args) => {
+    const { Server } = await import("@/server/server")
+    const { ServerRuntimeAuth } = await import("@/server/runtime-auth")
+    const { Provider } = await import("@/provider/provider")
+    const {
+      createHeadlessAgentRuntime,
+      createHeadlessCompositeEventSink,
+      createHeadlessJsonlEventSink,
+      headlessSessionErrorMessage,
+      isHeadlessSessionIdleEvent,
+      runHeadlessSession,
+    } = await import("@/runtime/headless")
+    const { createHeadlessJsonlFileEventSink } = await import("@/runtime/headless/event-sink-node")
     const callerCwd = Filesystem.callerCwd()
     const directory = (() => {
       if (args.attach) return args.dir

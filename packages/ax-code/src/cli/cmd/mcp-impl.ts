@@ -1,8 +1,4 @@
 import { cmd } from "./cmd"
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
-import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
 import { MCP } from "../../mcp"
 import { McpAuth } from "../../mcp/auth"
@@ -18,8 +14,6 @@ import { FileLock } from "../../util/filelock"
 import { Lock } from "../../util/lock"
 import { Bus } from "../../bus"
 import { isRecord } from "../../util/record"
-import { available as discoverAvailable } from "../../mcp/discovery"
-import * as McpTemplates from "../../mcp/templates"
 import { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { parseJsonPayload } from "../../util/json-value"
@@ -118,6 +112,8 @@ export const McpListCommand = cmd({
         default: false,
       }),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
+    const { available: discoverAvailable } = await import("../../mcp/discovery")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -240,7 +236,7 @@ export const McpListCommand = cmd({
         // Show auto-discovered servers not yet configured (opt-in)
         if (!args.discover) return
         const configuredNames = new Set(servers.map(([name]) => name))
-        const discovered = await discoverAvailable().catch(() => [])
+        const discovered = await discoverAvailable().catch(() => [] as Array<{ name: string; description: string }>)
         const unconfigured = discovered.filter((s) => !configuredNames.has(s.name))
         if (unconfigured.length > 0) {
           UI.empty()
@@ -266,6 +262,7 @@ export const McpAuthCommand = cmd({
       })
       .command(McpAuthListCommand),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -403,6 +400,7 @@ export const McpAuthListCommand = cmd({
   aliases: ["ls"],
   describe: "list OAuth-capable MCP servers and their auth status",
   async handler() {
+    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -447,6 +445,7 @@ export const McpLogoutCommand = cmd({
       type: "string",
     }),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -509,6 +508,7 @@ export const McpTrustCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -544,6 +544,7 @@ export const McpUntrustCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -600,6 +601,8 @@ export const McpAddCommand = cmd({
   command: "add",
   describe: "add an MCP server",
   async handler() {
+    const prompts = await import("@clack/prompts")
+    const McpTemplates = await import("../../mcp/templates")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -836,6 +839,10 @@ export const McpDebugCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
+    const prompts = await import("@clack/prompts")
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
+    const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
+    const { UnauthorizedError } = await import("@modelcontextprotocol/sdk/client/auth.js")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {

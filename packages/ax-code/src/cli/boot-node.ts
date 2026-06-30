@@ -60,6 +60,7 @@ export function scheduleForcedExit(exit: () => void = () => process.exit()) {
 }
 
 export function cli(argv = hideBin(process.argv)) {
+  const rawArgv = argv.slice()
   let cli = yargs(argv)
     .parserConfiguration({ "populate--": true })
     .scriptName("ax-code")
@@ -95,8 +96,16 @@ export function cli(argv = hideBin(process.argv)) {
       type: "boolean",
     })
     .middleware(async (opts) => {
+      Object.defineProperty(opts, "__axCodeRawArgv", {
+        value: rawArgv,
+        enumerable: false,
+      })
       await init(opts)
-      await migrate()
+      // Skip database migration for commands that never touch the DB.
+      const skipMigration =
+        rawArgv.some((a) => a === "--help" || a === "-h" || a === "--version" || a === "-v") ||
+        rawArgv[0] === "completion"
+      if (!skipMigration) await migrate()
     })
     .usage("\n" + UI.logo())
     .completion("completion", "generate shell completion script")

@@ -195,7 +195,12 @@ export function cli(argv = hideBin(process.argv)) {
         enumerable: false,
       })
       await init(opts)
-      await migrate()
+      // Skip database migration for commands that never touch the DB.
+      // This avoids loading the SQLite module for --help, --version, etc.
+      const skipMigration =
+        rawArgv.some((a) => a === "--help" || a === "-h" || a === "--version" || a === "-v") ||
+        rawArgv[0] === "completion"
+      if (!skipMigration) await migrate()
     })
     .usage("\n" + UI.logo())
     .completion("completion", "generate shell completion script")

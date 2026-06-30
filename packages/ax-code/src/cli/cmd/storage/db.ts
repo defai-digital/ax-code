@@ -1,23 +1,22 @@
 import type { Argv } from "yargs"
 import { spawn } from "child_process"
-import { DatabaseSync } from "node:sqlite"
 import { Database } from "../../../storage/db"
 import { UI } from "../../ui"
 import { cmd } from "../cmd"
-import { JsonMigration } from "../../../storage/json-migration"
 import { EOL } from "os"
 import { toErrorMessage } from "../../../util/error-message"
 import { mkdirSync, closeSync, openSync } from "node:fs"
 import { dirname } from "node:path"
 
-function openDatabase(dbPath: string, options: { readonly: boolean }): DatabaseSync {
+async function openDatabase(dbPath: string, options: { readonly: boolean }) {
+  const { DatabaseSync } = await import("node:sqlite")
   // Ensure the file exists before opening (node:sqlite has no 'create' flag).
   mkdirSync(dirname(dbPath), { recursive: true })
   closeSync(openSync(dbPath, "a"))
   return new DatabaseSync(dbPath, { open: true, readOnly: options.readonly })
 }
 
-function formatOrphanSummary(orphans: JsonMigration.OrphanStats) {
+function formatOrphanSummary(orphans: Record<string, number>) {
   return Object.entries(orphans)
     .filter(([, count]) => count > 0)
     .map(([name, count]) => `${count} ${name}`)
@@ -43,7 +42,7 @@ const QueryCommand = cmd({
   handler: async (args: { query?: string; format: string }) => {
     const query = args.query as string | undefined
     if (query) {
-      const db = openDatabase(Database.Path, { readonly: true })
+      const db = await openDatabase(Database.Path, { readonly: true })
       // Guarantee db.close() on every exit path (success AND error) so
       // the WAL checkpoint and file lock are released.
       let ok = false
@@ -85,7 +84,8 @@ const MigrateCommand = cmd({
   command: "migrate",
   describe: "migrate JSON data to SQLite (merges with existing data)",
   handler: async () => {
-    const sqlite = openDatabase(Database.Path, { readonly: false })
+    const { JsonMigration } = await import("../../../storage/json-migration")
+    const sqlite = await openDatabase(Database.Path, { readonly: false })
     const tty = process.stderr.isTTY
     const width = 36
     const orange = "\x1b[38;5;214m"

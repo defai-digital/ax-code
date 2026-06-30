@@ -10,31 +10,27 @@ import { buildAttachAuthHeaders } from "../attach-auth"
 import { EOL } from "os"
 import { Filesystem } from "../../util/filesystem"
 import { createOpencodeClient, type Message, type OpencodeClient, type ToolPart } from "@ax-code/sdk/v2"
-import { Server } from "../../server/server"
-import { Provider } from "../../provider/provider"
-import { Agent } from "../../agent/agent"
-import { Permission } from "../../permission"
+import type { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { toErrorMessage } from "../../util/error-message"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
-import { Tool } from "../../tool/tool"
-import { GlobTool } from "../../tool/glob"
-import { GrepTool } from "../../tool/grep"
-import { ListTool } from "../../tool/ls"
-import { ReadTool } from "../../tool/read"
-import { WebFetchTool } from "../../tool/webfetch"
-import { EditTool } from "../../tool/edit"
-import { WriteTool } from "../../tool/write"
-import { CodeSearchTool } from "../../tool/codesearch"
-import { WebSearchTool } from "../../tool/websearch"
-import { TaskTool } from "../../tool/task"
-import { SkillTool } from "../../tool/skill"
-import { BashTool } from "../../tool/bash"
-import { TodoWriteTool } from "../../tool/todo"
+import type { Tool } from "../../tool/tool"
+import type { GlobTool } from "../../tool/glob"
+import type { GrepTool } from "../../tool/grep"
+import type { ListTool } from "../../tool/ls"
+import type { ReadTool } from "../../tool/read"
+import type { WebFetchTool } from "../../tool/webfetch"
+import type { EditTool } from "../../tool/edit"
+import type { WriteTool } from "../../tool/write"
+import type { CodeSearchTool } from "../../tool/codesearch"
+import type { WebSearchTool } from "../../tool/websearch"
+import type { TaskTool } from "../../tool/task"
+import type { SkillTool } from "../../tool/skill"
+import type { BashTool } from "../../tool/bash"
+import type { TodoWriteTool } from "../../tool/todo"
 import { Todo } from "../../session/todo"
 import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
-import { ServerRuntimeAuth } from "../../server/runtime-auth"
 import { isNonEmptyRecord } from "../../util/record"
 
 type ToolProps<T extends Tool.Info> = {
@@ -356,6 +352,10 @@ export const RunCommand = cmd({
       })
   },
   handler: async (args) => {
+    const { Server } = await import("../../server/server")
+    const { Provider } = await import("../../provider/provider")
+    const { Agent } = await import("../../agent/agent")
+    const { ServerRuntimeAuth } = await import("../../server/runtime-auth")
     const exitEarly = (message: string): never => {
       UI.error(message)
       process.exitCode = 1
