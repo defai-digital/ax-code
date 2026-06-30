@@ -234,10 +234,11 @@ standalone Desktop source repository.
 
 ## License
 
-MIT. AX Code Desktop is maintained by DEFAI Private Limited.
+[Apache License 2.0](./LICENSE). AX Code Desktop is maintained by DEFAI Private Limited.
 
-This project includes software derived from OpenChamber. Upstream attribution is
-kept in [NOTICE](./NOTICE) for provenance and license compliance; public product
+This project includes software derived from OpenChamber; those portions remain
+under the [MIT License](./LICENSE-MIT). Upstream attribution is kept in
+[NOTICE](./NOTICE) for provenance and license compliance; public product
 branding should use AX Code Desktop.
 
 GitHub may display upstream OpenChamber contributors in repository contributor

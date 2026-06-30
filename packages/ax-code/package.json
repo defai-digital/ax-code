@@ -3,7 +3,7 @@
   "version": "6.8.1",
   "name": "ax-code",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true,
   "scripts": {
     "typecheck": "tsgo --noEmit",

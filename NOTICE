@@ -1,13 +1,48 @@
-ax-code
+AX Code
 Copyright 2025 DEFAI Private Limited
 
-This product includes software developed by third parties under the following licenses:
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+Portions of this product are derived from MIT-licensed projects and remain
+subject to the MIT License (see LICENSE-MIT). This NOTICE file is provided in
+accordance with Section 4(d) of the Apache License, Version 2.0; downstream
+distributors must retain it.
 
 ========================================================================
+Project history and embedded MIT-licensed code
+========================================================================
+
+AX Code began as a DEFAI-maintained product built on the OpenCode codebase
+(https://github.com/anomalyco/opencode), Copyright (c) opencode, originally
+licensed under the MIT License. Source files derived from OpenCode remain
+available under the MIT License; see LICENSE-MIT.
+
+Selected AX/CLI capabilities were ported from DEFAI's ax-cli project
+(https://github.com/defai-digital/ax-cli), Copyright (c) DEFAI Private Limited,
+originally released under the MIT License. As DEFAI owns that code, the
+ax-cli-derived portions are now offered as part of this combined work under the
+Apache License, Version 2.0.
+
+The AX Code Desktop subtree (desktop/) includes software derived from
+OpenChamber (https://github.com/btriapitsyn/openchamber), Copyright (c) 2025
+Bohdan Triapitsyn, originally licensed under the MIT License. See desktop/NOTICE
+and desktop/LICENSE-MIT for the detailed Desktop provenance and attribution.
+
+The vendored OpenTUI packages (packages/opentui-core, packages/opentui-solid,
+packages/opentui-spinner) are forks of OpenTUI
+(https://github.com/anomalyco/opentui), Copyright (c) opentui, and remain
+licensed in full under the MIT License. See each package's own LICENSE file.
+
+========================================================================
+Third-party dependencies
+========================================================================
+
+This product depends on software developed by third parties under the following
+licenses. These dependencies are distributed under their own terms and are not
+relicensed by AX Code.
+
+------------------------------------------------------------------------
 Apache License 2.0
-========================================================================
-
-The following dependencies are licensed under the Apache License, Version 2.0:
+------------------------------------------------------------------------
 
 - ai (Vercel AI SDK) - Copyright Vercel, Inc.
 - @ai-sdk/google - Copyright Vercel, Inc.
@@ -23,9 +58,9 @@ The following dependencies are licensed under the Apache License, Version 2.0:
 You may obtain a copy of the Apache License at:
 http://www.apache.org/licenses/LICENSE-2.0
 
-========================================================================
+------------------------------------------------------------------------
 MIT License
-========================================================================
+------------------------------------------------------------------------
 
 The majority of dependencies used by AX Code are licensed under the MIT License,
 including but not limited to:
@@ -37,36 +72,35 @@ including but not limited to:
 - fuzzysort - Copyright Stephen Kamenar
 - remeda - Copyright Remeda Contributors
 
-========================================================================
+------------------------------------------------------------------------
 BSD-3-Clause License
-========================================================================
+------------------------------------------------------------------------
 
 - diff - Copyright Kevin Decker
 
-========================================================================
+------------------------------------------------------------------------
 ISC License
-========================================================================
+------------------------------------------------------------------------
 
 - semver - Copyright npm, Inc.
 - minimatch - Copyright npm, Inc.
 
+------------------------------------------------------------------------
+Mozilla Public License 2.0
+------------------------------------------------------------------------
+
+- lightningcss - Copyright Mozilla and the lightningcss contributors
+
+  Used unmodified as a build-time dependency. MPL-2.0 is a file-level copyleft
+  license; obligations attach only to modifications of the MPL-covered files,
+  which AX Code does not make. Source for these files is available from the
+  upstream project.
+
 ========================================================================
-Project History and Attribution
+Attribution disclaimer
 ========================================================================
-
-AX Code began as a DEFAI-maintained product built on the OpenCode codebase
-(https://github.com/anomalyco/opencode), licensed under the MIT License.
-Copyright opencode.
-
-Selected AX/ax-cli capabilities were also ported from DEFAI's ax-cli project
-(https://github.com/defai-digital/ax-cli), licensed under the MIT License.
-Copyright DEFAI Private Limited.
-
-The AX Code Desktop subtree includes software derived from OpenChamber
-(https://github.com/btriapitsyn/openchamber), licensed under the MIT License.
-See desktop/NOTICE for the detailed Desktop provenance and attribution.
 
 These notices preserve upstream attribution and license history. They do not
-mean that upstream OpenCode, OpenChamber, or ax-cli contributors maintain AX
-Code unless they are separately listed in this repository's current
+mean that upstream OpenCode, OpenChamber, OpenTUI, or ax-cli contributors
+maintain AX Code unless they are separately listed in this repository's current
 contribution history.

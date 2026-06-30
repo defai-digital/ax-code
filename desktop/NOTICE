@@ -1,13 +1,20 @@
 AX Code Desktop
-Copyright (c) 2025 DEFAI Private Limited
+Copyright 2025 DEFAI Private Limited
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+Portions of this product are derived from OpenChamber and remain subject to the
+MIT License (see LICENSE-MIT). This NOTICE file is provided in accordance with
+Section 4(d) of the Apache License, Version 2.0; downstream distributors must
+retain it.
 
 This product includes software derived from OpenChamber
-(https://github.com/btriapitsyn/openchamber),
-Copyright (c) 2025 Bohdan Triapitsyn, licensed under the MIT License.
-
-The original OpenChamber source code is used as the foundation for this project
-and has been modified by DEFAI Private Limited. All modifications are the work
-of DEFAI Private Limited and are copyright DEFAI Private Limited.
+(https://github.com/btriapitsyn/openchamber), Copyright (c) 2025 Bohdan
+Triapitsyn, originally licensed under the MIT License. The original OpenChamber
+source code was used as the foundation for this project and has been modified by
+DEFAI Private Limited. DEFAI's modifications are Copyright 2025 DEFAI Private
+Limited and are licensed under the Apache License, Version 2.0. The
+OpenChamber-derived portions remain available under the MIT License; see
+LICENSE-MIT.
 
 The Electron desktop shell (packages/electron: the SSH instance manager, menu-bar
 tray controller, and the native desktop command handlers) is derived from the
@@ -19,5 +26,6 @@ widgets because this project includes derived code. Those accounts are credited
 for upstream work and are not necessarily maintainers of, or direct contributors
 to, AX Code Desktop.
 
-See the LICENSE file for the full text of the MIT License as it applies to both
-this project and the original OpenChamber project.
+See LICENSE for the full text of the Apache License, Version 2.0, and LICENSE-MIT
+for the MIT License as it applies to the OpenChamber-derived portions of this
+project.

@@ -3,7 +3,7 @@
   "version": "6.8.1",
   "description": "AX Code Desktop local web runtime.",
   "private": false,
-  "license": "MIT",
+  "license": "Apache-2.0",
   "type": "module",
   "main": "./server/index.js",
   "types": "./server/index.d.ts",

@@ -47181,7 +47181,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262000,
+          "context": 262144,
           "output": 8192
         }
       },
@@ -56683,6 +56683,42 @@
           "output": 16384
         }
       },
+      "moonshotai/Kimi-K2.7-Code": {
+        "id": "moonshotai/Kimi-K2.7-Code",
+        "name": "Kimi K2.7 Code",
+        "family": "kimi-k2",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-01",
+        "release_date": "2026-06-12",
+        "last_updated": "2026-06-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
       "google/gemma-4-31B-it": {
         "id": "google/gemma-4-31B-it",
         "name": "Gemma 4 31B IT",
@@ -57527,6 +57563,48 @@
         "limit": {
           "context": 200000,
           "output": 64000
+        }
+      },
+      "claude-sonnet-5@default": {
+        "id": "claude-sonnet-5@default",
+        "name": "Claude Sonnet 5",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
         }
       },
       "claude-opus-4-6@default": {
@@ -60946,6 +61024,51 @@
               }
             }
           }
+        },
+        "headers": {
+          "anthropic-beta": "context-1m-2025-08-07"
+        }
+      },
+      "claude-sonnet-5": {
+        "id": "claude-sonnet-5",
+        "name": "Claude Sonnet 5",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
         },
         "headers": {
           "anthropic-beta": "context-1m-2025-08-07"
@@ -73177,11 +73300,15 @@
       "z-code": {
         "id": "z-code",
         "name": "Z-Code",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
           }
         ],
         "tool_call": true,
@@ -73195,9 +73322,7 @@
         "last_updated": "2026-04-15",
         "modalities": {
           "input": [
-            "text",
-            "image",
-            "video"
+            "text"
           ],
           "output": [
             "text"
@@ -73205,8 +73330,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 262144,
-          "output": 262144
+          "context": 1000000,
+          "output": 131072
         }
       }
     }
@@ -85521,6 +85646,49 @@
           "output": 128000
         }
       },
+      "jp.anthropic.claude-sonnet-5": {
+        "id": "jp.anthropic.claude-sonnet-5",
+        "name": "Claude Sonnet 5 (JP)",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
       "openai.gpt-oss-120b": {
         "id": "openai.gpt-oss-120b",
         "name": "gpt-oss-120b",
@@ -85559,6 +85727,49 @@
           "npm": "@ai-sdk/amazon-bedrock/mantle",
           "api": "https://bedrock-mantle.${AWS_REGION}.api.aws/v1",
           "shape": "responses"
+        }
+      },
+      "global.anthropic.claude-sonnet-5": {
+        "id": "global.anthropic.claude-sonnet-5",
+        "name": "Claude Sonnet 5 (Global)",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
         }
       },
       "global.anthropic.claude-opus-4-8": {
@@ -85668,6 +85879,49 @@
           "npm": "@ai-sdk/amazon-bedrock/mantle",
           "api": "https://bedrock-mantle.${AWS_REGION}.api.aws/openai/v1",
           "shape": "responses"
+        }
+      },
+      "anthropic.claude-sonnet-5": {
+        "id": "anthropic.claude-sonnet-5",
+        "name": "Claude Sonnet 5",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
         }
       },
       "mistral.devstral-2-123b": {
@@ -86736,6 +86990,49 @@
           "output": 16384
         }
       },
+      "au.anthropic.claude-sonnet-5": {
+        "id": "au.anthropic.claude-sonnet-5",
+        "name": "Claude Sonnet 5 (AU)",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
       "qwen.qwen3-235b-a22b-2507-v1:0": {
         "id": "qwen.qwen3-235b-a22b-2507-v1:0",
         "name": "Qwen3 235B A22B 2507",
@@ -86985,6 +87282,49 @@
         "knowledge": "2025-08",
         "release_date": "2026-02-17",
         "last_updated": "2026-02-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
+      "us.anthropic.claude-sonnet-5": {
+        "id": "us.anthropic.claude-sonnet-5",
+        "name": "Claude Sonnet 5 (US)",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
         "modalities": {
           "input": [
             "text",
@@ -87296,6 +87636,49 @@
         "limit": {
           "context": 262144,
           "output": 131072
+        }
+      },
+      "eu.anthropic.claude-sonnet-5": {
+        "id": "eu.anthropic.claude-sonnet-5",
+        "name": "Claude Sonnet 5 (EU)",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
         }
       },
       "nvidia.nemotron-nano-3-30b": {
@@ -96721,6 +97104,51 @@
         "limit": {
           "context": 200000,
           "output": 64000
+        },
+        "provider": {
+          "npm": "@ai-sdk/google-vertex/anthropic"
+        }
+      },
+      "claude-sonnet-5@default": {
+        "id": "claude-sonnet-5@default",
+        "name": "Claude Sonnet 5",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
         },
         "provider": {
           "npm": "@ai-sdk/google-vertex/anthropic"

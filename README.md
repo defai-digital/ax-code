@@ -10,7 +10,7 @@ AX Code runs coding agents against your actual repositories through AX Code Desk
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 
 ---
@@ -223,4 +223,6 @@ These notices preserve license provenance and upstream credit. They do not mean 
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). See [NOTICE](NOTICE), [desktop/NOTICE](desktop/NOTICE), and the provenance section above for upstream attribution.
+AX Code is licensed under the [Apache License, Version 2.0](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital).
+
+Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT), and the vendored OpenTUI packages under `packages/opentui-*` remain MIT-licensed under their own LICENSE files. See [NOTICE](NOTICE), [LICENSE-MIT](LICENSE-MIT), [desktop/NOTICE](desktop/NOTICE), and the provenance section above for upstream attribution.

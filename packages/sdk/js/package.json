@@ -3,7 +3,7 @@
   "name": "@ax-code/sdk",
   "version": "2.2.0",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "typecheck": "tsgo --noEmit",
     "validate:openapi": "tsx ./script/validate-openapi.ts",

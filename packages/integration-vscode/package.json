@@ -167,7 +167,7 @@
     "theme": "dark"
   },
   "icon": "images/icon.png",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "publisher": "defai-digital",
   "scripts": {
     "vscode:prepublish": "pnpm run package",
