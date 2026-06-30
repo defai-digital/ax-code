@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 
 - Desktop: added a guarded `ax-code-desktop tunnel` Cloudflare quick tunnel MVP for temporary trusted browser access with UI password enforcement.
 
+## [6.8.3] - 2026-06-30
+
+### Changed
+
+- Desktop: moves AX Engine server start/stop controls to the Models settings header and keeps model switching on the provider model picker hot-swap path.
+- Desktop: simplifies the Models settings table status labels and reduces row text density.
+- Desktop: expands the built-in Skills Catalog sources with additional curated engineering catalogs ordered by popularity.
+
 ## [6.8.2] - 2026-06-30
 
 ### Fixed
