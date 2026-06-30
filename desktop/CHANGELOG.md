@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 
 - Desktop: added a guarded `ax-code-desktop tunnel` Cloudflare quick tunnel MVP for temporary trusted browser access with UI password enforcement.
 
+## [6.8.2] - 2026-06-30
+
+### Fixed
+
+- CLI: republishes the current stable release line with accumulated startup, licensing, and Desktop integration fixes.
+- Desktop: refreshes signed Desktop release assets from the current monorepo release line.
+- Release: switches Windows Desktop Authenticode packaging to Azure Trusted Signing and refreshes Homebrew formula and cask updates.
+
 ## [6.8.1] - 2026-06-30
 
 ### Fixed

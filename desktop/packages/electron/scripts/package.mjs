@@ -33,10 +33,10 @@ const result = spawnSync("npx", ["electron-builder", `-c.electronVersion=${elect
   stdio: "inherit",
   cwd: electronDir,
   shell: true,
-  // Windows signing is read natively by electron-builder from
-  // WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD, which the CI signing step sets only
-  // when a certificate is present; nothing to inject here. With no cert the
-  // installer + portable zip are built unsigned.
+  // Windows Authenticode is handled by the custom electron-builder sign hook
+  // (scripts/sign-windows.cjs) using Azure Trusted Signing. CI provides the
+  // AZURE_TRUSTED_SIGNING_* / SIGNTOOL_PATH / AZURE_CODESIGNING_DLIB env; with
+  // no signing env the installer + portable zip are built unsigned.
   env: process.env,
 })
 

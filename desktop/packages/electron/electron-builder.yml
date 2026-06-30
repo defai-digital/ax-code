@@ -78,11 +78,12 @@ win:
   # exactly its own arch. The ${arch} token keeps the per-arch installer/zip/
   # blockmap names distinct on the shared release.
   icon: build/icon.ico
-  # No certificateFile here: with no cert this would force signing against a
-  # missing file and fail the build. Windows signing, when desired, is picked
-  # up natively by electron-builder from WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD
-  # (set by CI only when a certificate secret is present). Otherwise the
-  # installer and portable zip are produced unsigned.
+  # Authenticode via Azure Trusted Signing. electron-builder 25 can't sign
+  # against Trusted Signing natively, so this custom hook signs each artifact
+  # with signtool + the Azure dlib (CI sets SIGNTOOL_PATH / AZURE_CODESIGNING_DLIB
+  # and the AZURE_TRUSTED_SIGNING_* env). The hook no-ops (unsigned) when that env
+  # is absent, so forks/PRs without secrets still build.
+  sign: scripts/sign-windows.cjs
 
 nsis:
   oneClick: false
