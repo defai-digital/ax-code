@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.8.1] - 2026-06-30
+
+### Fixed
+
+- CLI: republishes the current stable release line with the supported security-policy table aligned to the 6.8 minor line.
+- Desktop: refreshes signed Desktop release assets from the current monorepo release line.
+- Release: refreshes signed CLI and Desktop assets with Homebrew formula and cask updates.
+
 ## [6.8.0] - 2026-06-29
 
 ### Fixed
