@@ -44,14 +44,18 @@ const notifyWithTauri = async (payload?: NotificationPayload): Promise<boolean> 
   }
 
   try {
-    await tauri.core.invoke("desktop_notify", {
+    const result = await tauri.core.invoke("desktop_notify", {
       payload: {
         title: payload?.title,
         body: payload?.body,
         tag: payload?.tag,
       },
     })
-    return true
+    if (typeof result === "boolean") return result
+    if (result && typeof result === "object" && "success" in result) {
+      return Boolean((result as { success?: unknown }).success)
+    }
+    return result == null
   } catch (error) {
     console.warn("Failed to send native notification (tauri)", error)
     return false

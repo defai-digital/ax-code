@@ -877,20 +877,25 @@ const activeNotifications = new Set()
 const maybeShowNativeNotification = (rawInput) => {
   const payload = normalizeNotificationInput(rawInput)
   const requireHidden = Boolean(payload.requireHidden ?? payload.require_hidden)
-  if (requireHidden && isAnyWindowFocused()) return
-  if (!Notification.isSupported()) return
+  if (requireHidden && isAnyWindowFocused()) return { success: false, reason: "focused" }
+  if (!Notification.isSupported()) return { success: false, reason: "unsupported" }
 
   const title = typeof payload.title === "string" && payload.title.trim() ? payload.title.trim() : "AX Code"
   const body = typeof payload.body === "string" ? payload.body : ""
   const sessionId = typeof payload.sessionId === "string" && payload.sessionId.trim() ? payload.sessionId.trim() : null
   const directory = typeof payload.directory === "string" && payload.directory.trim() ? payload.directory.trim() : null
 
-  const notification = new Notification({
-    title,
-    body,
-    silent: false,
-    ...(process.platform === "darwin" ? { sound: "Glass" } : {}),
-  })
+  let notification
+  try {
+    notification = new Notification({
+      title,
+      body,
+      silent: false,
+      ...(process.platform === "darwin" ? { sound: "Glass" } : {}),
+    })
+  } catch (error) {
+    return { success: false, reason: error instanceof Error ? error.message : String(error) }
+  }
 
   activeNotifications.add(notification)
   // Fallback cleanup: macOS suppresses lifecycle events for notifications
@@ -916,7 +921,13 @@ const maybeShowNativeNotification = (rawInput) => {
   notification.on("close", release)
   notification.on("failed", release)
 
-  notification.show()
+  try {
+    notification.show()
+  } catch (error) {
+    release()
+    return { success: false, reason: error instanceof Error ? error.message : String(error) }
+  }
+  return { success: true }
 }
 
 // ── Installed-app discovery / open-in-app (macOS + Windows) ────────────────
@@ -2181,8 +2192,7 @@ handleCommand("desktop_clear_cache", async () => {
 })
 
 handleCommand("desktop_notify", async (args) => {
-  maybeShowNativeNotification(args)
-  return null
+  return maybeShowNativeNotification(args)
 })
 
 // Window-rect screen capture is a local desktop capability. Remote hosts must
