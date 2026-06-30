@@ -23,7 +23,7 @@ vi.doMock("@/lib/configUpdate", () => ({
   updateConfigUpdateMessage: vi.fn(() => undefined),
 }))
 
-const { useSkillsCatalogStore } = await import("./useSkillsCatalogStore")
+const { FALLBACK_SOURCES, useSkillsCatalogStore } = await import("./useSkillsCatalogStore")
 
 type FetchCall = {
   input: RequestInfo | URL
@@ -75,6 +75,18 @@ describe("useSkillsCatalogStore", () => {
     queuedResponses = []
     fetchMock.mockClear()
     vi.stubGlobal("fetch", fetchMock)
+  })
+
+  test("keeps curated fallback sources broad enough for the catalog", () => {
+    expect(FALLBACK_SOURCES.map((source) => source.id)).toEqual([
+      "anthropic",
+      "mattpocock",
+      "jeffallan",
+      "jezweb",
+      "engineering-workflows",
+      "posit",
+      "clawdhub",
+    ])
   })
 
   test("keeps ClawdHub pagination available when a filtered page has no visible items", async () => {

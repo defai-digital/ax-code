@@ -11,6 +11,7 @@ import { AxEngineDiskStatus, getDiskStatus } from "./model-cache"
 import { AxEnginePlatformEligibility, getPlatformEligibility } from "./platform"
 import { getModelStatus, type AxEngineModelStatus } from "./model-cache"
 import { listDownloadJobs, type AxEngineModelJobSummary } from "./download-job"
+import { getServerStatus, type AxEngineServerRuntimeStatus } from "./server"
 
 export const AxEngineModelFitState = z.enum([
   "ready",
@@ -54,6 +55,7 @@ export type AxEngineModelCatalogEntry = {
 export type AxEngineModelsResponse = {
   eligibility: AxEnginePlatformEligibility
   dependency: AxEngineDependencyStatus
+  server: AxEngineServerRuntimeStatus
   diskRoot: {
     path: string
     freeBytes?: number
@@ -179,10 +181,11 @@ export function evaluateAxEngineModelFit(input: {
 }
 
 export async function getAxEngineModelsCatalog(): Promise<AxEngineModelsResponse> {
-  const [eligibility, dependency, jobs] = await Promise.all([
+  const [eligibility, dependency, jobs, server] = await Promise.all([
     getPlatformEligibility(),
     getDependencyStatus(),
     listDownloadJobs(),
+    getServerStatus(),
   ])
   const diskRootStatus = await getDiskStatus()
   const activeJobs = selectCurrentAxEngineModelJobs(jobs)
@@ -226,6 +229,7 @@ export async function getAxEngineModelsCatalog(): Promise<AxEngineModelsResponse
   return {
     eligibility,
     dependency,
+    server,
     diskRoot: {
       path: diskRootStatus.path,
       freeBytes: diskRootStatus.freeBytes,

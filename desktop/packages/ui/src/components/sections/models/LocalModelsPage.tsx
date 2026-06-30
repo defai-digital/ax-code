@@ -9,18 +9,14 @@ import {
   cancelAxEngineModelDownload,
   deleteAxEngineModel,
   fetchAxEngineModels,
-  startAxEngineModel,
+  startAxEngineServer,
   startAxEngineModelDownload,
+  stopAxEngineServer,
   type AxEngineModelCatalogEntry,
   type AxEngineModelJobSummary,
   type AxEngineModelsResponse,
 } from "@/lib/ax-code/axEngineModelsApi"
 import { getCurrentDirectory } from "@/lib/ax-code/providerApi"
-
-const compactNumber = new Intl.NumberFormat("en-US", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-})
 
 const formatBytes = (value?: number) => {
   if (typeof value !== "number" || Number.isNaN(value)) return "Unknown"
@@ -35,8 +31,6 @@ const formatBytes = (value?: number) => {
   return `${next >= 10 ? next.toFixed(0) : next.toFixed(1)} ${units[unit]}`
 }
 
-const formatTokens = (value: number) => compactNumber.format(value)
-
 const formatElapsed = (ms: number) => {
   if (!Number.isFinite(ms) || ms <= 0) return "0:00"
   const totalSeconds = Math.floor(ms / 1000)
@@ -45,17 +39,7 @@ const formatElapsed = (ms: number) => {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`
 }
 
-const stateLabel: Record<string, string> = {
-  ready: "Local",
-  downloadable: "Ready to download",
-  downloading: "Downloading",
-  "not-fit": "Does not fit",
-  "host-unsupported": "Unsupported host",
-  "dependency-missing": "AX Engine missing",
-  "disk-blocked": "Insufficient disk",
-  "local-unusable": "Local but unusable",
-  failed: "Failed",
-}
+const statusLabel = (model: AxEngineModelCatalogEntry) => (model.local.present ? "Downloaded" : "Ready to download")
 
 const isDimmed = (model: AxEngineModelCatalogEntry) =>
   !model.fit.downloadable && !model.fit.runnable && model.fit.state !== "downloading"
@@ -183,6 +167,30 @@ export const LocalModelsPage: React.FC = () => {
       ? `${data.eligibility.chip ?? data.eligibility.platform} · ${formatBytes(data.eligibility.memoryBytes)} memory`
       : (data.eligibility.blockers[0] ?? "AX Engine is not supported on this host")
     : "Loading host readiness"
+  const serverModel = data?.server.state
+    ? data.models.find((model) => model.id === data.server.state?.modelID)
+    : undefined
+  const serverSummary = data
+    ? data.server.running
+      ? data.server.ready
+        ? `Running${serverModel ? ` · ${serverModel.name}` : ""}`
+        : (data.server.blockers[0] ?? "Starting")
+      : "Stopped"
+    : "Checking"
+  const startCandidate = data?.models.find((model) => model.fit.runnable)
+  const serverBusy = busyKey === "ax-engine-server"
+  const canStartServer = Boolean(startCandidate) && !hasActiveJob && !loading
+  const handleServerToggle = async () => {
+    if (data?.server.running) {
+      await runAction("ax-engine-server", () => stopAxEngineServer(directory), "AX Engine stopped")
+      return
+    }
+    if (!startCandidate) {
+      toast.error("Download a runnable model before starting AX Engine")
+      return
+    }
+    await runAction("ax-engine-server", () => startAxEngineServer(startCandidate.id, directory), "AX Engine started")
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -190,20 +198,39 @@ export const LocalModelsPage: React.FC = () => {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <h1 className="typography-ui-header font-semibold text-foreground">Models</h1>
-            <p className="typography-ui text-muted-foreground">
+            <p className="typography-meta text-muted-foreground">
               Download and manage local AX Engine MTP models. AX Engine requires macOS 26+, Apple Silicon M2 or later.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <Icon name={loading ? "loader" : "refresh"} className={cn("h-4 w-4", loading && "animate-spin")} />
-            Refresh
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={data?.server.running ? "outline" : "default"}
+              size="sm"
+              onClick={() => void handleServerToggle()}
+              disabled={serverBusy || (!data?.server.running && !canStartServer)}
+              title={
+                !data?.server.running && !startCandidate
+                  ? "Download a runnable model before starting AX Engine"
+                  : undefined
+              }
+            >
+              <Icon
+                name={serverBusy ? "loader" : data?.server.running ? "close" : "play"}
+                className={cn("h-4 w-4", serverBusy && "animate-spin")}
+              />
+              {data?.server.running ? "Stop" : "Start"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+              <Icon name={loading ? "loader" : "refresh"} className={cn("h-4 w-4", loading && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-6">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-          <div className="grid gap-3 lg:grid-cols-3">
+          <div className="grid gap-3 lg:grid-cols-4">
             <StatusBox title="Host" value={hostSummary} blocked={data ? !data.eligibility.supported : false} />
             <StatusBox
               title="AX Engine"
@@ -213,6 +240,13 @@ export const LocalModelsPage: React.FC = () => {
                   : (data?.dependency.blockers[0] ?? "Checking")
               }
               blocked={data ? !data.dependency.available : false}
+            />
+            <StatusBox
+              title="Server"
+              value={serverSummary}
+              blocked={
+                data ? Boolean(data.server.blockers.length) || (data.server.running && !data.server.ready) : false
+              }
             />
             <StatusBox
               title="Download Cache"
@@ -228,7 +262,7 @@ export const LocalModelsPage: React.FC = () => {
           )}
 
           <div className="overflow-hidden rounded-lg border border-border bg-[var(--surface-elevated)]">
-            <div className="hidden grid-cols-[minmax(220px,1.4fr)_minmax(160px,0.8fr)_minmax(220px,1fr)_auto] gap-3 border-b border-border px-4 py-2 typography-meta text-muted-foreground md:grid">
+            <div className="hidden grid-cols-[minmax(220px,1.4fr)_minmax(140px,0.7fr)_minmax(180px,0.9fr)_auto] gap-3 border-b border-border px-4 py-2 text-[11px] font-medium text-muted-foreground md:grid">
               <span>Model</span>
               <span>Status</span>
               <span>Requirements</span>
@@ -259,9 +293,6 @@ export const LocalModelsPage: React.FC = () => {
                       if (!ok) return
                       void runAction(model.id, () => deleteAxEngineModel(model.id, directory), "Model deleted")
                     }}
-                    onStart={() =>
-                      runAction(model.id, () => startAxEngineModel(model.id, directory), "AX Engine starting")
-                    }
                   />
                 )
               })
@@ -280,8 +311,8 @@ const StatusBox: React.FC<{ title: string; value: string; blocked?: boolean }> =
       blocked ? "border-[var(--status-warning)]/35 bg-[var(--status-warning)]/5" : "border-border bg-background",
     )}
   >
-    <div className="typography-meta text-muted-foreground">{title}</div>
-    <div className="truncate typography-ui-label text-foreground" title={value}>
+    <div className="text-[11px] leading-4 text-muted-foreground">{title}</div>
+    <div className="truncate text-[12px] leading-5 text-foreground" title={value}>
       {value}
     </div>
   </div>
@@ -295,32 +326,28 @@ const ModelRow: React.FC<{
   onDownload: () => void
   onCancel: () => void | undefined
   onDelete: () => void
-  onStart: () => void
-}> = ({ model, job, now, busy, onDownload, onCancel, onDelete, onStart }) => {
+}> = ({ model, job, now, busy, onDownload, onCancel, onDelete }) => {
   const reason = primaryReason(model)
   const dimmed = isDimmed(model)
   return (
     <div
       className={cn(
-        "grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-3 last:border-b-0 md:grid-cols-[minmax(220px,1.4fr)_minmax(160px,0.8fr)_minmax(220px,1fr)_auto]",
+        "grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-2.5 text-[12px] leading-4 last:border-b-0 md:grid-cols-[minmax(220px,1.4fr)_minmax(140px,0.7fr)_minmax(180px,0.9fr)_auto]",
         dimmed && "opacity-60",
       )}
     >
-      <div className="min-w-0 space-y-1">
-        <div className="truncate typography-ui-label font-medium text-foreground" title={model.name}>
+      <div className="min-w-0 space-y-0.5">
+        <div className="truncate text-[13px] font-medium leading-5 text-foreground" title={model.name}>
           {model.name}
         </div>
-        <div className="truncate typography-micro text-muted-foreground" title={model.id}>
+        <div className="truncate text-[11px] leading-4 text-muted-foreground" title={`${model.id} · ${model.hfRepo}`}>
           {model.id}
-        </div>
-        <div className="truncate typography-micro text-muted-foreground" title={model.hfRepo}>
-          {model.hfRepo}
         </div>
       </div>
       <div className="min-w-0 space-y-1">
         {job ? (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 typography-micro font-medium text-foreground">
+            <div className="flex items-center gap-1.5 text-[12px] font-medium leading-4 text-foreground">
               <Icon name="loader" className="h-3 w-3 animate-spin text-muted-foreground" />
               {job.status === "queued" ? "Queued…" : "Downloading…"}
             </div>
@@ -331,40 +358,25 @@ const ModelRow: React.FC<{
             >
               <div className="oc-indeterminate-progress-bar absolute inset-y-0 left-0 w-1/4 rounded-full bg-primary" />
             </div>
-            <div className="typography-micro text-muted-foreground">
+            <div className="text-[11px] leading-4 text-muted-foreground">
               {`≈${formatBytes(model.minDiskBytes)}`}
               {job.status === "running" && job.startedAt ? ` · ${formatElapsed(now - job.startedAt)} elapsed` : ""}
             </div>
           </div>
         ) : (
-          <>
-            <span className="inline-flex rounded-full border border-border bg-background px-2 py-0.5 typography-micro text-foreground">
-              {stateLabel[model.fit.state]}
-            </span>
-            {model.local.present && (
-              <div className="truncate typography-micro text-muted-foreground" title={model.local.path}>
-                {formatBytes(model.local.bytes)} · {model.local.path}
-              </div>
-            )}
-            {reason && (
-              <div className="line-clamp-2 typography-micro text-muted-foreground" title={reason}>
-                {reason}
-              </div>
-            )}
-          </>
+          <span
+            className="inline-flex rounded-full border border-border bg-background px-2 py-0.5 text-[11px] leading-4 text-foreground"
+            title={model.local.present ? model.local.path : reason}
+          >
+            {statusLabel(model)}
+          </span>
         )}
       </div>
-      <div className="min-w-0 space-y-1 typography-micro text-muted-foreground">
+      <div className="min-w-0 space-y-0.5 text-[11px] leading-4 text-muted-foreground" title={model.mtpSource}>
         <div>{model.quantization} · MTP</div>
         <div>
           Disk {formatBytes(model.minDiskBytes)} · Memory{" "}
           {model.minMemoryBytes > 0 ? formatBytes(model.minMemoryBytes) : "standard"}
-        </div>
-        <div>
-          Context {formatTokens(model.contextTokens)} · Output {formatTokens(model.outputTokens)}
-        </div>
-        <div className="truncate" title={model.mtpSource}>
-          {model.mtpSource}
         </div>
       </div>
       <div className="flex items-start justify-start gap-2 md:justify-end">
@@ -378,16 +390,11 @@ const ModelRow: React.FC<{
             <Icon name={busy ? "loader" : "download"} className={cn("h-4 w-4", busy && "animate-spin")} />
             Download
           </Button>
-        ) : model.fit.runnable ? (
-          <Button size="sm" onClick={onStart} disabled={busy}>
-            <Icon name={busy ? "loader" : "play"} className={cn("h-4 w-4", busy && "animate-spin")} />
-            Start
-          </Button>
-        ) : (
+        ) : !model.fit.runnable ? (
           <Button size="sm" variant="outline" disabled title={reason}>
             Unavailable
           </Button>
-        )}
+        ) : null}
         {model.fit.deletable && (
           <Button size="sm" variant="destructive" onClick={onDelete} disabled={busy || Boolean(job)}>
             <Icon name="delete-bin" className="h-4 w-4" />

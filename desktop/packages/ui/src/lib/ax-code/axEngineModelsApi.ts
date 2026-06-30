@@ -82,6 +82,26 @@ export type AxEngineModelsResponse = {
     binaryPath?: string
     blockers: string[]
   }
+  server: {
+    running: boolean
+    ready: boolean
+    state?: {
+      pid: number
+      port: number
+      baseURL: string
+      modelID: string
+      apiModelID?: string
+      modelPath: string
+      modelRevision?: string
+      binaryPath: string
+      contextTokens?: number
+      speculationProfile?: string
+      mtpMode?: string
+      startedAt: number
+      lastHealthAt?: number
+    }
+    blockers: string[]
+  }
   diskRoot: {
     path: string
     freeBytes?: number
@@ -151,10 +171,18 @@ export const deleteAxEngineModel = async (
   ) as Promise<AxEngineDeleteModelResponse>
 }
 
-export const startAxEngineModel = async (modelId: string, directory: string | null) => {
+export const startAxEngineServer = async (modelId: string, directory: string | null) => {
   return fetchProviderJsonWithRetry(buildDirectoryUrl(API_ENDPOINTS.provider.axEngineStart, directory), {
     method: "POST",
     headers: jsonHeaders,
     body: JSON.stringify({ modelID: modelId, download: false }),
   })
+}
+
+export const stopAxEngineServer = async (directory: string | null): Promise<boolean> => {
+  return fetchProviderJsonWithRetry(buildDirectoryUrl(API_ENDPOINTS.provider.axEngineStop, directory), {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({}),
+  }) as Promise<boolean>
 }
