@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import fs from "fs/promises"
+import { constants as fsConstants } from "fs"
 import path from "path"
+import os from "os"
+import { execFileSync } from "child_process"
+import { createHash } from "crypto"
 
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
+import { installReleaseBin } from "../../../src/lsp/server-releases"
 import {
   AX_ENGINE_ERROR,
   AX_ENGINE_EXPECTED_TEAM_ID,
@@ -173,5 +178,74 @@ describe("dependency resolution picks up the managed binary", () => {
     expect(status.mode).toBe("managed")
     expect(status.managedVersion).toBe(RELEASE.version)
     expect(status.binaryPath).toBe(AxEnginePaths.managedBinary(RELEASE.version))
+  })
+})
+
+// Exercise the real download → sha256-verify → extract → chmod → marker path
+// against a genuine .tar.gz artifact. Only the two external boundaries are
+// stubbed: the HTTPS fetch (returns the local tarball bytes) and the macOS
+// codesign check (a hand-rolled test binary is not Apple-notarized). Everything
+// else — including the real installReleaseBin extraction — runs for real.
+describe("end-to-end install of a real tarball artifact", () => {
+  beforeEach(() => {
+    delete process.env.AX_ENGINE_BIN
+  })
+
+  test("downloads, verifies, extracts, and resolves the managed binary", async () => {
+    const stage = await fs.mkdtemp(path.join(os.tmpdir(), "axe-artifact-"))
+    try {
+      // A stand-in ax-engine executable, packed exactly how a release archive
+      // is expected to be shaped: the binary at the top level of the tarball.
+      await fs.writeFile(path.join(stage, "ax-engine"), "#!/bin/sh\necho ax-engine-real\n", { mode: 0o755 })
+      const tarPath = path.join(stage, "artifact.tar.gz")
+      execFileSync("tar", ["-czf", tarPath, "-C", stage, "ax-engine"])
+      const bytes = await fs.readFile(tarPath)
+      const sha256 = createHash("sha256").update(bytes).digest("hex")
+      const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+
+      const release: AxEngineBinaryRelease = {
+        version: "e2e-1",
+        assetName: "artifact.tar.gz",
+        url: "https://example.com/ax-engine/artifact.tar.gz",
+        sha256,
+      }
+
+      // Real installReleaseBin, but with the network fetch replaced by the
+      // local tarball bytes so extraction/verification run against real files.
+      const realInstall = ((opts: Parameters<typeof installReleaseBin>[0]) =>
+        installReleaseBin({
+          ...opts,
+          fetcher: async () => ({ ok: true, arrayBuffer: async () => arrayBuffer }),
+        })) as NonNullable<AxEngineInstallRuntime["install"]>
+
+      let codesignCalledFor: string | undefined
+      const result = await installAxEngineBinary(
+        {},
+        baseRuntime({
+          resolveRelease: () => release,
+          install: realInstall,
+          verifyCodesign: async (binaryPath) => {
+            codesignCalledFor = binaryPath
+          },
+        }),
+      )
+
+      const bin = AxEnginePaths.managedBinary("e2e-1")
+      expect(result).toMatchObject({ installed: true, alreadyPresent: false, version: "e2e-1", binaryPath: bin })
+      // The real binary was extracted, is executable, and carries its contents.
+      await fs.access(bin, fsConstants.X_OK)
+      expect(await fs.readFile(bin, "utf8")).toContain("ax-engine-real")
+      // The signature gate ran against the extracted binary.
+      expect(codesignCalledFor).toBe(bin)
+      // And it now resolves as the managed dependency.
+      expect(await getManagedBinary()).toEqual({ path: bin, version: "e2e-1" })
+      const status = await getDependencyStatus()
+      if (status.mode !== "path") {
+        expect(status.mode).toBe("managed")
+        expect(status.binaryPath).toBe(bin)
+      }
+    } finally {
+      await fs.rm(stage, { recursive: true, force: true }).catch(() => undefined)
+    }
   })
 })
