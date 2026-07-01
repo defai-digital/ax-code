@@ -121,10 +121,11 @@ export async function getManagedBinary(): Promise<{ path: string; version: strin
 }
 
 async function verifyCodesign(binaryPath: string, expectedTeamId?: string): Promise<void> {
-  // codesign is always present on macOS. A downloaded executable must carry an
-  // intact signature; when we know the expected Developer ID Team, its
-  // identifier must match so a look-alike artifact can't be trusted even if it
-  // is validly signed by someone else.
+  // codesign is always present on macOS. `--verify` validates the binary's
+  // embedded code hashes, catching post-extraction tampering; AX Engine ships
+  // ad-hoc-signed binaries, which pass this. Team-identifier enforcement is
+  // opt-in (expectedTeamId): ad-hoc binaries have no team, so it is skipped
+  // unless a Developer-ID team is explicitly required.
   const verify = await Process.run(["codesign", "--verify", "--strict", binaryPath], {
     timeout: 15_000,
     nothrow: true,

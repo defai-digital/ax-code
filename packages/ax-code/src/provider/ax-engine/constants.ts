@@ -34,11 +34,13 @@ export const AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES = AX_ENGINE_RECOMMENDED_MEMO
 // managed install directory.
 export const AX_ENGINE_MANAGED_BINARY_NAME = "ax-engine"
 
-// Apple Developer ID Team the official ax-engine binary is signed + notarized
-// under (same identity as the desktop app). The installer verifies a
-// downloaded binary's codesign Team identifier against this before trusting it.
-// Override per-machine with AX_ENGINE_INSTALL_TEAM_ID.
-export const AX_ENGINE_EXPECTED_TEAM_ID = "N5ZUZDUJS6"
+// Optional Apple Developer ID Team the installer can additionally require a
+// downloaded binary to be codesigned by. AX Engine release binaries are ad-hoc
+// signed (no Team identifier) and distributed with minisign signatures rather
+// than Apple notarization, so this is empty by default — only the SHA-256 and
+// ad-hoc `codesign --verify` integrity checks apply. Set AX_ENGINE_INSTALL_TEAM_ID
+// to additionally enforce a specific team for a Developer-ID-signed build.
+export const AX_ENGINE_EXPECTED_TEAM_ID = ""
 
 // Environment overrides that point the installer at a specific ax-engine
 // release without a code change (power users / pre-release testing).
@@ -59,14 +61,19 @@ export type AxEngineBinaryRelease = {
   teamId?: string
 }
 
-// Pinned official darwin-arm64 release of the ax-engine binary. Set this to a
-// real object (with `url` + `sha256`) once a signed + notarized artifact is
-// published; until then the pin is treated as "no installable release" and
-// callers fall back to the manual-install path. Kept deliberate and
-// reproducible, mirroring the LSP PINNED_* release pins. A machine can also
-// point the installer at an artifact via the AX_ENGINE_INSTALL_* env vars
-// without editing this.
-export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undefined
+// Pinned official darwin-arm64 release of the ax-engine binary, mirroring the
+// LSP PINNED_* release pins. `sha256` is the archive digest published on the
+// GitHub release (asset `.sha256` and the release manifest); update all fields
+// together when bumping the pinned engine version. Set to `undefined` to
+// disable the managed install and fall back to the manual-install path. A
+// machine can override this via the AX_ENGINE_INSTALL_* env vars without
+// editing here.
+export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = {
+  version: "6.6.0",
+  assetName: "ax-engine-v6.6.0-macos-arm64.tar.gz",
+  url: "https://github.com/defai-digital/ax-engine/releases/download/v6.6.0/ax-engine-v6.6.0-macos-arm64.tar.gz",
+  sha256: "32ba4da8b52dc184f9cbc530c891cd3a9f93c80cc07cefed40399a25db26766f",
+}
 
 export const AX_ENGINE_MODEL_IDS = [
   AX_ENGINE_QWEN36_27B_MODEL_ID,

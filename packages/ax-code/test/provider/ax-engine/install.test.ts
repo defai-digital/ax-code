@@ -9,8 +9,8 @@ import { createHash } from "crypto"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { installReleaseBin } from "../../../src/lsp/server-releases"
 import {
+  AX_ENGINE_BINARY_RELEASE,
   AX_ENGINE_ERROR,
-  AX_ENGINE_EXPECTED_TEAM_ID,
   AX_ENGINE_INSTALL_ENV,
   type AxEngineBinaryRelease,
 } from "../../../src/provider/ax-engine/constants"
@@ -28,7 +28,6 @@ const RELEASE: AxEngineBinaryRelease = {
   assetName: "ax-engine-1.2.3-darwin-arm64.tar.gz",
   url: "https://example.com/ax-engine-1.2.3-darwin-arm64.tar.gz",
   sha256: "a".repeat(64),
-  teamId: AX_ENGINE_EXPECTED_TEAM_ID,
 }
 
 // A fake `installReleaseBin` that materializes an executable at `bin`, standing
@@ -71,25 +70,34 @@ describe("resolveInstallableRelease", () => {
     expect(resolveInstallableRelease("win32", "arm64", env)).toBeUndefined()
   })
 
-  test("env override derives asset name, version, and team id", () => {
-    const release = resolveInstallableRelease("darwin", "arm64", {
+  test("env override derives version + asset name; team id is opt-in", () => {
+    const base = {
       [AX_ENGINE_INSTALL_ENV.url]: "https://example.com/dl/ax-engine-9.9.tar.gz",
       [AX_ENGINE_INSTALL_ENV.sha256]: "b".repeat(64),
       [AX_ENGINE_INSTALL_ENV.version]: "9.9",
-    })
-    expect(release).toEqual({
+    }
+    // ax-engine binaries are ad-hoc signed, so no Developer-ID team is enforced by default.
+    expect(resolveInstallableRelease("darwin", "arm64", base)).toMatchObject({
       version: "9.9",
       assetName: "ax-engine-9.9.tar.gz",
       url: "https://example.com/dl/ax-engine-9.9.tar.gz",
       sha256: "b".repeat(64),
-      teamId: AX_ENGINE_EXPECTED_TEAM_ID,
     })
+    expect(resolveInstallableRelease("darwin", "arm64", base)?.teamId).toBeUndefined()
+    // A team can still be required explicitly.
+    expect(
+      resolveInstallableRelease("darwin", "arm64", { ...base, [AX_ENGINE_INSTALL_ENV.teamId]: "TEAM123456" })?.teamId,
+    ).toBe("TEAM123456")
   })
 
-  test("no override and no pinned release means nothing to install", () => {
-    expect(resolveInstallableRelease("darwin", "arm64", {})).toBeUndefined()
-    expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(false)
-    expect(isAxEngineInstallable("darwin", "arm64", { [AX_ENGINE_INSTALL_ENV.url]: "https://x/e.zip" })).toBe(true)
+  test("falls back to the pinned release when there is no env override", () => {
+    const pinned = resolveInstallableRelease("darwin", "arm64", {})
+    expect(pinned?.version).toBe(AX_ENGINE_BINARY_RELEASE?.version)
+    expect(pinned?.url).toBe(AX_ENGINE_BINARY_RELEASE?.url)
+    expect(pinned?.sha256).toBe(AX_ENGINE_BINARY_RELEASE?.sha256)
+    expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(Boolean(AX_ENGINE_BINARY_RELEASE))
+    // Non-Apple-Silicon-macOS never gets a release, pinned or not.
+    expect(resolveInstallableRelease("linux", "arm64", {})).toBeUndefined()
   })
 })
 

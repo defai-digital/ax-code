@@ -77,7 +77,7 @@ If none of the first three is present, AX Code offers a managed install:
 - **Desktop** — open the **Models** page. When the host is eligible and the engine is missing, the **AX Engine** status box shows an **Install** button.
 - **CLI** — run `ax-code providers ax-engine install`. `ax-code providers ax-engine status` reports whether an install is available.
 
-The managed binary is downloaded over HTTPS, verified against a published SHA-256 checksum, and (on macOS) checked with `codesign` for a valid, notarized signature from the expected Apple Developer ID team before it is trusted. It is installed under AX Code's cache and never overrides a binary you configured yourself or one already on your `PATH`. Delete the managed copy any time by removing the `ax-engine/bin` directory in AX Code's cache; AX Code re-resolves on the next check.
+The managed binary is downloaded over HTTPS and verified against the SHA-256 checksum published on the AX Engine release; on macOS its embedded code signature is also validated with `codesign`. (AX Engine binaries are ad-hoc signed and distributed with minisign signatures rather than Apple notarization.) It is installed under AX Code's cache and never overrides a binary you configured yourself or one already on your `PATH`. Delete the managed copy any time by removing the `ax-engine/bin` directory in AX Code's cache; AX Code re-resolves on the next check.
 
 Installing the engine does not download any model — pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`.
 
