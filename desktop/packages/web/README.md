@@ -22,7 +22,7 @@ pnpm install
 pnpm --filter ax-code-desktop run start -- --ui-password your-password
 ```
 
-The runtime listens on `http://localhost:3000` by default.
+The runtime prefers `http://localhost:3100` by default. If that port is busy, it scans upward and uses the next safe free port.
 
 ## Operator CLI Usage
 

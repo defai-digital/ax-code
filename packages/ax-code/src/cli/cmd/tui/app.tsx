@@ -77,6 +77,7 @@ import { responseErrorMessage, unknownErrorMessage } from "@tui/util/error-messa
 import { registerTuiEventListener } from "@tui/util/lifecycle"
 import { resolveSessionFirstRoute } from "./navigation/launch-policy"
 import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
+import { launchWebUi } from "@/desktop/webui"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -983,6 +984,35 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         dialog.clear()
       },
       category: "System",
+    },
+    {
+      title: "Open Web UI",
+      value: "webui.open",
+      slash: {
+        name: "webui",
+      },
+      description: "Start or open the AX Code browser UI",
+      category: "System",
+      onSelect: (dialog) => {
+        dialog.clear()
+        void launchWebUi({ openBrowser: true })
+          .then((result) => {
+            DiagnosticLog.recordProcess("webui.handoff", { started: result.started, port: result.port })
+            toast.show({
+              message: result.message,
+              variant: "success",
+              duration: 5000,
+            })
+          })
+          .catch((error) => {
+            Log.Default.warn("failed to open web ui", { error })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to open AX Code Web UI",
+              variant: "error",
+              duration: 7000,
+            })
+          })
+      },
     },
     {
       title: "Open Desktop",

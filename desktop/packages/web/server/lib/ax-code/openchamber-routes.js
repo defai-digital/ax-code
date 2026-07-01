@@ -76,7 +76,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
         return
       }
 
-      const currentPort = server.address()?.port || 3000
+      const currentPort = server.address()?.port || 3100
       const instanceFilePath = path.join(openchamberDataDir, "run", `openchamber-${currentPort}.json`)
       let storedOptions = { port: currentPort, daemon: true }
       try {

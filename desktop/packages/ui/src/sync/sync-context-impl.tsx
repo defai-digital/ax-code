@@ -1846,6 +1846,8 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
     }
 
     const interval = setInterval(tick, ACTIVE_SESSION_WATCHDOG_INTERVAL_MS)
+    // unref so this timer does not prevent Electron utility-process shutdown
+    ;(interval as unknown as { unref?: () => void }).unref?.()
     tick()
 
     return () => {
@@ -1935,7 +1937,14 @@ export function useSessionMessages(sessionID: string, directory?: string) {
   const subscribe = useCallback(
     (notify: () => void) => {
       if (!sessionID) return () => undefined
-      return store.subscribe(notify)
+      // Only notify when this session's message array reference changes
+      let prev = store.getState().message[sessionID]
+      return store.subscribe(() => {
+        const next = store.getState().message[sessionID]
+        if (next === prev) return
+        prev = next
+        notify()
+      })
     },
     [sessionID, store],
   )
@@ -1987,7 +1996,13 @@ export function useSessionStatus(sessionID: string, directory?: string) {
   const subscribe = useCallback(
     (notify: () => void) => {
       if (!sessionID) return () => undefined
-      return store.subscribe(notify)
+      let prev = store.getState().session_status?.[sessionID]
+      return store.subscribe(() => {
+        const next = store.getState().session_status?.[sessionID]
+        if (next === prev) return
+        prev = next
+        notify()
+      })
     },
     [sessionID, store],
   )
@@ -2004,7 +2019,13 @@ export function useSessionPermissions(sessionID: string, directory?: string) {
   const subscribe = useCallback(
     (notify: () => void) => {
       if (!sessionID) return () => undefined
-      return store.subscribe(notify)
+      let prev = store.getState().permission[sessionID]
+      return store.subscribe(() => {
+        const next = store.getState().permission[sessionID]
+        if (next === prev) return
+        prev = next
+        notify()
+      })
     },
     [sessionID, store],
   )
@@ -2312,7 +2333,21 @@ const snapshotPartsMatchState = (snapshot: SessionMessageRecordsSnapshot, state:
     return true
   }
 
-  for (const record of snapshot.list) {
+  const { list } = snapshot
+  if (list.length === 0) return true
+
+  // Fast path: during streaming, the changed part is almost always the last
+  // assistant message (the one being streamed). Check it first so we can
+  // detect the common case in O(1) instead of scanning all N records.
+  const lastRecord = list[list.length - 1]
+  if (lastRecord && (state.part[lastRecord.info.id] ?? EMPTY_PARTS) !== lastRecord.parts) {
+    return false
+  }
+
+  // Full scan for non-streaming changes (e.g. tool status updates on earlier
+  // messages, permission/question state changes).
+  for (let i = 0; i < list.length - 1; i++) {
+    const record = list[i]
     if ((state.part[record.info.id] ?? EMPTY_PARTS) !== record.parts) {
       return false
     }
@@ -2507,7 +2542,44 @@ export function useSessionMessageRecords(
   const subscribe = useCallback(
     (notify: () => void) => {
       if (!sessionID) return () => undefined
-      return store.subscribe(notify)
+      // Session-scoped subscription: only notify when THIS session's
+      // messages or parts actually changed. During streaming, the store
+      // receives many events per second for OTHER sessions (status updates,
+      // other sessions' part deltas). Without this filter every store change
+      // triggers getSnapshot which iterates all visible messages — O(n)
+      // even when the change is irrelevant to this session.
+      let prevMessages = store.getState().message[sessionID]
+      let prevPartsById = new Map<string, Part[] | undefined>()
+      for (const msg of prevMessages ?? []) {
+        prevPartsById.set(msg.id, store.getState().part[msg.id])
+      }
+
+      return store.subscribe(() => {
+        const state = store.getState()
+        const nextMessages = state.message[sessionID]
+
+        // Fast path: message array reference unchanged AND no parts changed
+        if (nextMessages === prevMessages) {
+          // Check if any of our visible messages' parts changed
+          let partsChanged = false
+          for (const msg of nextMessages ?? EMPTY_MESSAGES) {
+            if (state.part[msg.id] !== prevPartsById.get(msg.id)) {
+              partsChanged = true
+              break
+            }
+          }
+          if (!partsChanged) return
+        }
+
+        // Update tracked references
+        prevMessages = nextMessages
+        prevPartsById = new Map()
+        for (const msg of nextMessages ?? EMPTY_MESSAGES) {
+          prevPartsById.set(msg.id, state.part[msg.id])
+        }
+
+        notify()
+      })
     },
     [sessionID, store],
   )

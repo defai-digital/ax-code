@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.8.4] - 2026-07-01
+
+### Added
+
+- CLI: adds `ax-code webui` and a `/webui` TUI command that reuse or start the AX Code Desktop browser UI.
+- Desktop: changes the browser web UI preferred port to `3100` and scans upward for the next safe free port instead of using an OS-random fallback.
+
+### Changed
+
+- Desktop: reduces session sync render churn with session-scoped subscriptions and streaming fast paths.
+
 ### Added
 
 - Desktop: added a guarded `ax-code-desktop tunnel` Cloudflare quick tunnel MVP for temporary trusted browser access with UI password enforcement.

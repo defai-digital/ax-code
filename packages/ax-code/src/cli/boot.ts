@@ -43,6 +43,7 @@ import { TuiBackendCommand } from "./cmd/tui/backend"
 import { TuiThreadCommand } from "./cmd/tui/thread"
 import { UninstallCommand } from "./cmd/uninstall"
 import { UpgradeCommand } from "./cmd/upgrade"
+import { WebUiCommand } from "./cmd/webui"
 import { WorkflowCommand } from "./cmd/workflow"
 import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
@@ -77,6 +78,7 @@ const cmds = [
   AgentCommand,
   UpgradeCommand,
   UninstallCommand,
+  WebUiCommand,
   ServeCommand,
   RestartCommand,
   ModelsCommand,

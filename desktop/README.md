@@ -171,7 +171,7 @@ Temporary browser access from another trusted device is available through a guar
 brew install cloudflared
 ax-code-desktop tunnel start --ui-password your-password
 ax-code-desktop tunnel status
-ax-code-desktop tunnel stop --port 3000
+ax-code-desktop tunnel stop --port 3100
 ```
 
 ## Development Web UI
@@ -186,7 +186,7 @@ pnpm run desktop:build
 pnpm --filter ax-code-desktop run start -- --ui-password your-password
 ```
 
-The web UI is available at `http://localhost:3000` by default.
+The web UI prefers `http://localhost:3100` by default. If that port is busy, AX Code Desktop scans upward and uses the next safe free port.
 
 ## Development
 

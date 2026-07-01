@@ -65,7 +65,7 @@ import { createSseProxyMetrics } from "./lib/ax-code/proxy.js"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const DEFAULT_PORT = 3000
+const DEFAULT_PORT = 3100
 const DESKTOP_NOTIFY_PREFIX = "[OpenChamberDesktopNotify] "
 const uiNotificationClients = new Set()
 const uiNotificationWsClients = new Set()

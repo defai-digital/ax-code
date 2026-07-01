@@ -640,21 +640,30 @@ export function applyDirectoryEvent(
           materialization: { type: "incomplete-session-snapshot", messageID: props.messageID, partID: props.partID },
         }
       }
-      const result = Binary.search(parts, props.partID, (p) => p.id)
-      if (!result.found) {
-        syncDebug.reducer.partDeltaNotFound(props.messageID, props.partID)
-        return {
-          changed: false,
-          materialization: { type: "incomplete-session-snapshot", messageID: props.messageID, partID: props.partID },
+      // Fast path: streaming deltas almost always target the last part
+      // (the active streaming text part). Check it first to skip binary search.
+      const lastIndex = parts.length - 1
+      let partIndex: number
+      if (lastIndex >= 0 && parts[lastIndex].id === props.partID) {
+        partIndex = lastIndex
+      } else {
+        const result = Binary.search(parts, props.partID, (p) => p.id)
+        if (!result.found) {
+          syncDebug.reducer.partDeltaNotFound(props.messageID, props.partID)
+          return {
+            changed: false,
+            materialization: { type: "incomplete-session-snapshot", messageID: props.messageID, partID: props.partID },
+          }
         }
+        partIndex = result.index
       }
-      const existing = parts[result.index] as Record<string, unknown>
+      const existing = parts[partIndex] as Record<string, unknown>
       const existingValue = existing[props.field] as string | undefined
       const dedupeFields = (existing as DedupeMetadata).__dedupeNextDeltaFields ?? []
       const shouldDedupe = dedupeFields.includes(props.field)
       // Create new Part object + new array so React detects the change
       const next = [...parts]
-      next[result.index] = {
+      next[partIndex] = {
         ...existing,
         [props.field]: shouldDedupe
           ? appendNonOverlappingDelta(existingValue, props.delta)

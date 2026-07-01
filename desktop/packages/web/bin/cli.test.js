@@ -3,7 +3,14 @@ import path from "path"
 import { pathToFileURL } from "url"
 
 import { isModuleCliExecution, normalizeCliEntryPath } from "./cli-entry.js"
-import { buildTunnelServeOptions, parseArgs, resolveTunnelProviderAndMode, CliError, EXIT_CODE } from "./cli.js"
+import {
+  buildTunnelServeOptions,
+  parseArgs,
+  resolveAvailablePort,
+  resolveTunnelProviderAndMode,
+  CliError,
+  EXIT_CODE,
+} from "./cli.js"
 import {
   buildCloudflaredArgs,
   createTunnelManager,
@@ -13,6 +20,10 @@ import {
 } from "./tunnel-manager.js"
 
 describe("cli args", () => {
+  it("defaults the browser UI to the less crowded product port", () => {
+    expect(parseArgs([]).options.port).toBe(3100)
+  })
+
   it("accepts legacy daemon flags as no-ops", () => {
     expect(parseArgs(["serve", "--daemon"]).removedFlagErrors).toEqual([])
     expect(parseArgs(["serve", "-d"]).removedFlagErrors).toEqual([])
@@ -27,7 +38,7 @@ describe("cli args", () => {
       "--mode",
       "quick",
       "--port",
-      "3000",
+      "3100",
       "--force",
     ])
 
@@ -35,7 +46,7 @@ describe("cli args", () => {
     expect(parsed.tunnelAction).toBe("start")
     expect(parsed.options.provider).toBe("cloudflare")
     expect(parsed.options.mode).toBe("quick")
-    expect(parsed.options.port).toBe(3000)
+    expect(parsed.options.port).toBe(3100)
     expect(parsed.options.force).toBe(true)
   })
 
@@ -46,7 +57,7 @@ describe("cli args", () => {
           json: true,
           quiet: false,
           uiPassword: "secret",
-          port: 3000,
+          port: 3100,
         },
         true,
       ),
@@ -58,8 +69,18 @@ describe("cli args", () => {
       suppressUiPasswordWarning: true,
       explicitPort: true,
       uiPassword: "secret",
-      port: 3000,
+      port: 3100,
     })
+  })
+})
+
+describe("port selection", () => {
+  it("falls back by scanning upward instead of asking the OS for a random port", async () => {
+    const selected = await resolveAvailablePort(3100, false, undefined, undefined, {
+      isPortAvailable: async (port) => port !== 3100,
+      fetchSystemInfoFromPort: async () => null,
+    })
+    expect(selected).toBe(3101)
   })
 })
 
@@ -90,11 +111,11 @@ describe("tunnel args", () => {
   })
 
   it("builds the cloudflared quick tunnel invocation", () => {
-    expect(buildCloudflaredArgs({ mode: "quick", originUrl: "http://127.0.0.1:3000" })).toEqual([
+    expect(buildCloudflaredArgs({ mode: "quick", originUrl: "http://127.0.0.1:3100" })).toEqual([
       "tunnel",
       "--no-autoupdate",
       "--url",
-      "http://127.0.0.1:3000",
+      "http://127.0.0.1:3100",
     ])
   })
 

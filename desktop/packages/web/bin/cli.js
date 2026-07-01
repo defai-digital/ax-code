@@ -30,7 +30,8 @@ import {
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const DEFAULT_PORT = 3000
+const DEFAULT_PORT = 3100
+const FALLBACK_PORT_SCAN_LIMIT = 100
 const DEFAULT_TAIL_LINES = 200
 const DAEMON_READY_TIMEOUT_MS = 30000
 const LOG_ROTATE_MAX_BYTES = 10 * 1024 * 1024
@@ -142,7 +143,7 @@ function assertSafeBrowserPort(port, { context = "This action" } = {}) {
     return
   }
   throw new CliError(
-    `${context} cannot use port ${port}. ${formatUnsafePortWarning(port)} Use a safe port such as 3000, 5173, 8080, or a high ephemeral port.`,
+    `${context} cannot use port ${port}. ${formatUnsafePortWarning(port)} Use a safe port such as 3100, 5173, 8080, or a high ephemeral port.`,
     EXIT_CODE.USAGE_ERROR,
   )
 }
@@ -492,7 +493,7 @@ ENVIRONMENT:
   AX_CODE_DESKTOP_AX_CODE_HOSTNAME  Bind hostname for managed ax-code server (default: 127.0.0.1)
 
 EXAMPLES:
-  ax-code-desktop                    # Start in daemon mode on default port 3000 (or free port)
+  ax-code-desktop                    # Start in daemon mode on default port 3100 (or next free port)
   ax-code-desktop --port 8080        # Start on port 8080 (daemon)
   ax-code-desktop serve --foreground # Start in foreground (for systemd Type=simple)
   ax-code-desktop startup enable     # Start AX Code Desktop at user login
@@ -525,9 +526,9 @@ OPTIONS:
 
 EXAMPLES:
   ax-code-desktop tunnel start --ui-password be-creative-here
-  ax-code-desktop tunnel start --port 3000 --force
+  ax-code-desktop tunnel start --port 3100 --force
   ax-code-desktop tunnel status --json
-  ax-code-desktop tunnel stop --port 3000
+  ax-code-desktop tunnel stop --port 3100
 `)
 }
 
@@ -553,7 +554,7 @@ OPTIONS:
 
 EXAMPLES:
   ax-code-desktop startup enable
-  ax-code-desktop startup enable --port 3000
+  ax-code-desktop startup enable --port 3100
   ax-code-desktop startup status --json
 `)
 }
@@ -718,16 +719,27 @@ async function isPortAvailable(port, host) {
   })
 }
 
-async function resolveAvailablePort(desiredPort, explicitPort = false, onNotice) {
+function resolvePortCheckHost(host) {
+  if (typeof host === "string" && host.trim().length > 0) return host.trim()
+  if (typeof process.env.AX_CODE_DESKTOP_HOST === "string" && process.env.AX_CODE_DESKTOP_HOST.trim().length > 0) {
+    return process.env.AX_CODE_DESKTOP_HOST.trim()
+  }
+  return "127.0.0.1"
+}
+
+async function resolveAvailablePort(desiredPort, explicitPort = false, onNotice, host, dependencies = {}) {
+  const portAvailable = dependencies.isPortAvailable || isPortAvailable
+  const systemInfoFromPort = dependencies.fetchSystemInfoFromPort || fetchSystemInfoFromPort
   const startPort = Number.isFinite(desiredPort) ? Math.trunc(desiredPort) : DEFAULT_PORT
+  const checkHost = resolvePortCheckHost(host)
   if (explicitPort) {
     return startPort
   }
-  if (await isPortAvailable(startPort)) {
+  if (await portAvailable(startPort, checkHost)) {
     return startPort
   }
 
-  const occupant = await fetchSystemInfoFromPort(startPort)
+  const occupant = await systemInfoFromPort(startPort)
   let message
   if (occupant?.runtime === "desktop") {
     message = `Port ${startPort} is used by AX Code Desktop; using a free port`
@@ -745,7 +757,19 @@ async function resolveAvailablePort(desiredPort, explicitPort = false, onNotice)
   } else if (message) {
     console.warn(message)
   }
-  return 0
+
+  for (let offset = 1; offset <= FALLBACK_PORT_SCAN_LIMIT; offset++) {
+    const candidate = startPort + offset
+    if (candidate > 65535 || isUnsafeBrowserPort(candidate)) continue
+    if (await portAvailable(candidate, checkHost)) {
+      return candidate
+    }
+  }
+
+  throw new CliError(
+    `No available AX Code Desktop web UI port found in ${startPort}-${Math.min(startPort + FALLBACK_PORT_SCAN_LIMIT, 65535)}. Pass --port to choose an explicit safe port.`,
+    EXIT_CODE.NETWORK_RUNTIME_ERROR,
+  )
 }
 
 function getRunDir() {
@@ -1688,7 +1712,7 @@ const commands = {
       }
     }
     const explicitPort = options.explicitPort === true
-    const targetPort = await resolveAvailablePort(options.port, explicitPort, emitNotice)
+    const targetPort = await resolveAvailablePort(options.port, explicitPort, emitNotice, options.host)
 
     if (targetPort !== 0 && !options.suppressUnsafePortWarning) {
       assertSafeBrowserPort(targetPort, { context: "AX Code Desktop serve" })
@@ -3045,6 +3069,7 @@ export {
   getPidFilePath,
   fetchSystemInfoFromPort,
   discoverRunningInstances,
+  resolveAvailablePort,
   findClosestMatch,
   buildTunnelServeOptions,
   resolveTunnelProviderAndMode,

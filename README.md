@@ -44,7 +44,7 @@ AX Code Desktop is the primary graphical workspace. It shares the AX Code runtim
 ax-code # terminal UI
 ```
 
-Or open **AX Code** from Applications / Start Menu to use the Desktop app. No project setup or config file is required. On first launch, connect a provider from the Desktop onboarding flow or use `/connect` inside the terminal UI.
+Or open **AX Code** from Applications / Start Menu to use the Desktop app. The terminal UI can also start or open the browser web UI with `/webui`, and shell users can run `ax-code webui`. The web UI prefers `http://127.0.0.1:3100` and scans upward if that port is busy. No project setup or config file is required. On first launch, connect a provider from the Desktop onboarding flow or use `/connect` inside the terminal UI.
 
 **CLI-only install**
 
