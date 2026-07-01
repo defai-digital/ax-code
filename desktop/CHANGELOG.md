@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop: reverting the latest user message no longer hides the assistant responses of earlier, non-reverted turns. Client-generated user-message ids used a different timestamp encoding than server-generated assistant ids, so the sync store (sorted by id) reordered the transcript into "all users, then all assistants"; the position-based revert filter then dropped earlier replies (#325).
+
 ## [6.8.4] - 2026-07-01
 
 ### Added

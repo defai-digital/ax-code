@@ -88,13 +88,16 @@ const mockSdk = {
   },
 }
 
-// Mock axCodeClient singleton
+// Mock axCodeClient singleton. `ascendingId` is a pure, monotonic id generator used by
+// optimisticSend — provide a faithful stub so store insertion order (sorted by id) is stable.
+let mockIdCounter = 0
 vi.doMock("@/lib/ax-code/client", () => ({
   axCodeClient: {
     getScopedSdkClient: () => mockScopedClient,
     getDirectory: () => "/test/project",
     checkHealth: () => Promise.resolve(true),
   },
+  ascendingId: (prefix: "msg" | "prt") => `${prefix}_${(mockIdCounter++).toString(16).padStart(12, "0")}mockrandom0001`,
 }))
 
 // Mock useConfigStore
@@ -238,12 +241,10 @@ describe("createSession passes directory", () => {
         return Promise.resolve({ data: { id: "ses_scoped", directory: params.directory } })
       },
     )
-    mockSdk.session.create.mockImplementation(
-      (params: Record<string, unknown>): Promise<MockSessionCreateResult> => {
-        createSessionCalls.push({ client: "global", params })
-        return Promise.resolve({ data: { id: "ses_global", directory: params.directory } })
-      },
-    )
+    mockSdk.session.create.mockImplementation((params: Record<string, unknown>): Promise<MockSessionCreateResult> => {
+      createSessionCalls.push({ client: "global", params })
+      return Promise.resolve({ data: { id: "ses_global", directory: params.directory } })
+    })
   })
 
   test("uses a directory-scoped SDK client when a directory is provided", async () => {
