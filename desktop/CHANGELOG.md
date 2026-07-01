@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.8.5] - 2026-07-01
+
+### Added
+
+- CLI: installs the pinned AX Engine v6.6.0 binary on eligible macOS hosts and documents the `AX_ENGINE_INSTALL_URL` override for managed installs.
+- Desktop: lets the Models settings flow trigger the managed AX Engine install path when the bundled engine is missing.
+
+### Changed
+
+- CLI: aligns the AX Engine managed-install trust model with the ad-hoc minisign release artifacts used by the engine release.
+
 ## [6.8.4] - 2026-07-01
 
 ### Added

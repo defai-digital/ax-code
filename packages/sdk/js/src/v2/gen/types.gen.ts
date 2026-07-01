@@ -12083,6 +12083,31 @@ export type ProviderAxEngineStatusResponses = {
   200: unknown
 }
 
+export type ProviderAxEngineInstallData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/install"
+}
+
+export type ProviderAxEngineInstallErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderAxEngineInstallError = ProviderAxEngineInstallErrors[keyof ProviderAxEngineInstallErrors]
+
+export type ProviderAxEngineInstallResponses = {
+  /**
+   * Install result
+   */
+  200: unknown
+}
+
 export type ProviderAxEnginePrepareData = {
   body?: {
     modelPath?: string

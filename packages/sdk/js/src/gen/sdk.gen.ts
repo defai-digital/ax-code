@@ -107,6 +107,8 @@ import type {
   ProviderAxEngineDownloadCancelErrors,
   ProviderAxEngineDownloadCancelResponses,
   ProviderAxEngineDownloadsResponses,
+  ProviderAxEngineInstallErrors,
+  ProviderAxEngineInstallResponses,
   ProviderAxEngineModelDeleteErrors,
   ProviderAxEngineModelDeleteResponses,
   ProviderAxEngineModelDownloadErrors,
@@ -5280,6 +5282,29 @@ export class AxEngine extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<ProviderAxEngineStatusResponses, unknown, ThrowOnError>({
       url: "/provider/ax-engine/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Install the managed ax-engine binary
+   *
+   * Download, verify, and install the AX Engine binary on an eligible host so local inference works without a manual install.
+   */
+  public install<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<
+      ProviderAxEngineInstallResponses,
+      ProviderAxEngineInstallErrors,
+      ThrowOnError
+    >({
+      url: "/provider/ax-engine/install",
       ...options,
       ...params,
     })
