@@ -80,6 +80,8 @@ export type AxEngineModelsResponse = {
     available: boolean
     mode?: string
     binaryPath?: string
+    managedVersion?: string
+    installable?: boolean
     blockers: string[]
   }
   server: {
@@ -169,6 +171,21 @@ export const deleteAxEngineModel = async (
       body: JSON.stringify({}),
     },
   ) as Promise<AxEngineDeleteModelResponse>
+}
+
+export type AxEngineInstallResult = {
+  installed: boolean
+  alreadyPresent: boolean
+  version: string
+  binaryPath: string
+}
+
+export const installAxEngine = async (directory: string | null): Promise<AxEngineInstallResult> => {
+  return fetchProviderJsonWithRetry(buildDirectoryUrl(API_ENDPOINTS.provider.axEngineInstall, directory), {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({}),
+  }) as Promise<AxEngineInstallResult>
 }
 
 export const startAxEngineServer = async (modelId: string, directory: string | null) => {

@@ -17,6 +17,7 @@ import {
   deleteAxEngineModel,
   getAxEngineModelsCatalog,
   getAxEngineStatus,
+  installAxEngineBinary,
   isAxEngineModelID,
   prepareAxEngine,
   startDownloadJob,
@@ -311,6 +312,37 @@ export const ProviderRoutes = lazy(() =>
       async (c) => {
         const config = await Config.get().catch(() => undefined)
         return c.json(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {}))
+      },
+    )
+    .post(
+      "/ax-engine/install",
+      describeRoute({
+        summary: "Install the managed ax-engine binary",
+        description:
+          "Download, verify, and install the AX Engine binary on an eligible host so local inference works without a manual install.",
+        operationId: "provider.axEngine.install",
+        responses: {
+          200: {
+            description: "Install result",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      async (c) => {
+        try {
+          const result = await installAxEngineBinary({ signal: c.req.raw.signal })
+          await Provider.invalidate().catch((error) =>
+            log.warn("failed to invalidate provider after ax-engine install", { error }),
+          )
+          return c.json(result)
+        } catch (error) {
+          return axEngineInvalidRequest(c, error)
+        }
       },
     )
     .post(
