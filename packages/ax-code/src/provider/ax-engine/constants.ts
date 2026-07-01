@@ -25,6 +25,49 @@ export const AX_ENGINE_MTP_MODE = "pure"
 export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
 export const AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES = AX_ENGINE_RECOMMENDED_MEMORY_BYTES
 
+// --- Managed binary install ------------------------------------------------
+// AX Code can download and install the `ax-engine` binary itself (not just the
+// model weights) so selecting local inference on an eligible Mac works without
+// a manual install step. See provider/ax-engine/install.ts.
+
+// Filename of the ax-engine executable inside a release archive and in the
+// managed install directory.
+export const AX_ENGINE_MANAGED_BINARY_NAME = "ax-engine"
+
+// Apple Developer ID Team the official ax-engine binary is signed + notarized
+// under (same identity as the desktop app). The installer verifies a
+// downloaded binary's codesign Team identifier against this before trusting it.
+// Override per-machine with AX_ENGINE_INSTALL_TEAM_ID.
+export const AX_ENGINE_EXPECTED_TEAM_ID = "N5ZUZDUJS6"
+
+// Environment overrides that point the installer at a specific ax-engine
+// release without a code change (power users / pre-release testing).
+export const AX_ENGINE_INSTALL_ENV = {
+  url: "AX_ENGINE_INSTALL_URL",
+  sha256: "AX_ENGINE_INSTALL_SHA256",
+  version: "AX_ENGINE_INSTALL_VERSION",
+  teamId: "AX_ENGINE_INSTALL_TEAM_ID",
+} as const
+
+export type AxEngineBinaryRelease = {
+  version: string
+  // Archive filename (must be a .tar.* or .zip containing `ax-engine` at the
+  // top level). Drives extraction and the on-disk temp name.
+  assetName: string
+  url: string
+  sha256?: string
+  teamId?: string
+}
+
+// Pinned official darwin-arm64 release of the ax-engine binary. Set this to a
+// real object (with `url` + `sha256`) once a signed + notarized artifact is
+// published; until then the pin is treated as "no installable release" and
+// callers fall back to the manual-install path. Kept deliberate and
+// reproducible, mirroring the LSP PINNED_* release pins. A machine can also
+// point the installer at an artifact via the AX_ENGINE_INSTALL_* env vars
+// without editing this.
+export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undefined
+
 export const AX_ENGINE_MODEL_IDS = [
   AX_ENGINE_QWEN36_27B_MODEL_ID,
   AX_ENGINE_QWEN36_35B_MODEL_ID,

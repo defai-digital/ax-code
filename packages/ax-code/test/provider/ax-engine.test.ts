@@ -546,6 +546,7 @@ describe("ax-engine prepare lifecycle", () => {
             available: true,
             mode: "configured",
             binaryPath: "/bin/ax-engine",
+            installable: false,
             blockers: [],
           }
         },
@@ -585,6 +586,7 @@ describe("ax-engine prepare lifecycle", () => {
             available: true,
             mode: "configured",
             binaryPath: "/bin/ax-engine",
+            installable: false,
             blockers: [],
           }
         },

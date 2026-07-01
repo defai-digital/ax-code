@@ -4,12 +4,17 @@ import z from "zod"
 import { which } from "@/util/which"
 import { Process } from "@/util/process"
 import { AX_ENGINE_ERROR } from "./constants"
+import { getManagedBinary, isAxEngineInstallable } from "./install"
 
 export const AxEngineDependencyStatus = z.object({
   available: z.boolean(),
-  mode: z.enum(["configured", "path", "missing"]),
+  mode: z.enum(["configured", "path", "managed", "missing"]),
   binaryPath: z.string().optional(),
   version: z.string().optional(),
+  // Version of the AX Code-managed binary, when `mode` is "managed".
+  managedVersion: z.string().optional(),
+  // When missing, whether AX Code can download + install the binary on this host.
+  installable: z.boolean().default(false),
   blockers: z.array(z.string()).default([]),
 })
 export type AxEngineDependencyStatus = z.infer<typeof AxEngineDependencyStatus>
@@ -41,12 +46,16 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
   const env = process.env.AX_ENGINE_BIN
   const candidate = configured ?? env
 
+  // Resolution order: an explicit binary (config/env) or an existing PATH
+  // install always wins, so a deliberate user setup is respected. The AX
+  // Code-managed install is the fallback used when nothing else is present.
   if (candidate) {
     if (!(await isExecutable(candidate))) {
       return {
         available: false,
         mode: "configured",
         binaryPath: candidate,
+        installable: false,
         blockers: [`${AX_ENGINE_ERROR.BinaryMissing}: configured ax-engine binary is not executable`],
       }
     }
@@ -55,6 +64,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
       mode: "configured",
       binaryPath: candidate,
       version: await version(candidate),
+      installable: false,
       blockers: [],
     }
   }
@@ -66,15 +76,33 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
       mode: "path",
       binaryPath: found,
       version: await version(found),
+      installable: false,
       blockers: [],
     }
   }
 
+  const managed = await getManagedBinary()
+  if (managed) {
+    return {
+      available: true,
+      mode: "managed",
+      binaryPath: managed.path,
+      version: await version(managed.path),
+      managedVersion: managed.version,
+      installable: false,
+      blockers: [],
+    }
+  }
+
+  const installable = isAxEngineInstallable()
   return {
     available: false,
     mode: "missing",
+    installable,
     blockers: [
-      `${AX_ENGINE_ERROR.BinaryMissing}: install ax-engine or configure provider.ax-engine.options.binaryPath`,
+      installable
+        ? `${AX_ENGINE_ERROR.BinaryMissing}: ax-engine is not installed — install it from AX Code to run local models`
+        : `${AX_ENGINE_ERROR.BinaryMissing}: install ax-engine or configure provider.ax-engine.options.binaryPath`,
     ],
   }
 }

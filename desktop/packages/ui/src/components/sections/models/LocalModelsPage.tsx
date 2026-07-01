@@ -9,6 +9,7 @@ import {
   cancelAxEngineModelDownload,
   deleteAxEngineModel,
   fetchAxEngineModels,
+  installAxEngine,
   startAxEngineServer,
   startAxEngineModelDownload,
   stopAxEngineServer,
@@ -179,6 +180,12 @@ export const LocalModelsPage: React.FC = () => {
     : "Checking"
   const startCandidate = data?.models.find((model) => model.fit.runnable)
   const serverBusy = busyKey === "ax-engine-server"
+  const canInstallEngine = Boolean(
+    data && !data.dependency.available && data.dependency.installable && data.eligibility.supported,
+  )
+  const installBusy = busyKey === "ax-engine-install"
+  const handleInstallEngine = () =>
+    void runAction("ax-engine-install", () => installAxEngine(directory), "AX Engine installed")
   const canStartServer = Boolean(startCandidate) && !hasActiveJob && !loading
   const handleServerToggle = async () => {
     if (data?.server.running) {
@@ -240,6 +247,17 @@ export const LocalModelsPage: React.FC = () => {
                   : (data?.dependency.blockers[0] ?? "Checking")
               }
               blocked={data ? !data.dependency.available : false}
+              action={
+                canInstallEngine ? (
+                  <Button size="sm" onClick={handleInstallEngine} disabled={installBusy}>
+                    <Icon
+                      name={installBusy ? "loader" : "download"}
+                      className={cn("h-4 w-4", installBusy && "animate-spin")}
+                    />
+                    {installBusy ? "Installing…" : "Install"}
+                  </Button>
+                ) : undefined
+              }
             />
             <StatusBox
               title="Server"
@@ -304,7 +322,12 @@ export const LocalModelsPage: React.FC = () => {
   )
 }
 
-const StatusBox: React.FC<{ title: string; value: string; blocked?: boolean }> = ({ title, value, blocked }) => (
+const StatusBox: React.FC<{ title: string; value: string; blocked?: boolean; action?: React.ReactNode }> = ({
+  title,
+  value,
+  blocked,
+  action,
+}) => (
   <div
     className={cn(
       "min-w-0 rounded-md border px-3 py-2",
@@ -312,8 +335,11 @@ const StatusBox: React.FC<{ title: string; value: string; blocked?: boolean }> =
     )}
   >
     <div className="text-[11px] leading-4 text-muted-foreground">{title}</div>
-    <div className="truncate text-[12px] leading-5 text-foreground" title={value}>
-      {value}
+    <div className="flex items-center justify-between gap-2">
+      <div className="truncate text-[12px] leading-5 text-foreground" title={value}>
+        {value}
+      </div>
+      {action}
     </div>
   </div>
 )

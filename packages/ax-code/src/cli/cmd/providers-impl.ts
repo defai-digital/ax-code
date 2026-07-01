@@ -13,7 +13,6 @@ import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
 import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine"
 
-
 type PluginAuth = NonNullable<Hooks["auth"]>
 
 function isHttpProviderUrl(input: string) {
@@ -267,11 +266,13 @@ async function printAxEngineStatus(status: any) {
   for (const warning of status.eligibility.warnings ?? []) prompts.log.warn(warning)
 
   prompts.log.info(
-    `Dependency: ${status.dependency.available ? status.dependency.binaryPath : "missing"}${
+    `Dependency: ${status.dependency.available ? `${status.dependency.binaryPath} [${status.dependency.mode}]` : "missing"}${
       status.dependency.version ? ` (${status.dependency.version})` : ""
     }`,
   )
   for (const blocker of status.dependency.blockers ?? []) prompts.log.error(blocker)
+  if (!status.dependency.available && status.dependency.installable)
+    prompts.log.info("Run `ax-code providers ax-engine install` to download and install it.")
 
   prompts.log.info(
     `Disk: ${status.disk.ok ? "ok" : "blocked"}${
@@ -299,7 +300,7 @@ export const ProvidersAxEngineCommand = cmd({
     yargs
       .positional("action", {
         describe: "action to run",
-        choices: ["status", "prepare", "start", "stop"] as const,
+        choices: ["status", "install", "prepare", "start", "stop"] as const,
       })
       .option("json", {
         describe: "print JSON output",
@@ -335,6 +336,7 @@ export const ProvidersAxEngineCommand = cmd({
       AX_ENGINE_MODEL_IDS,
       AX_ENGINE_QUANTIZATION_IDS,
       getAxEngineStatus,
+      installAxEngineBinary,
       normalizeModelID,
       normalizeQuantization,
       prepareAxEngine,
@@ -353,6 +355,30 @@ export const ProvidersAxEngineCommand = cmd({
       const status = await getAxEngineStatus(options)
       if (args.json) console.log(JSON.stringify(status, null, 2))
       else await printAxEngineStatus(status)
+      return
+    }
+
+    if (action === "install") {
+      if (!args.json) prompts.intro("AX Engine install")
+      try {
+        const result = await installAxEngineBinary({})
+        await Provider.invalidate().catch(() => {})
+        if (args.json) console.log(JSON.stringify(result, null, 2))
+        else {
+          if (result.alreadyPresent)
+            prompts.log.info(`ax-engine ${result.version} already installed at ${result.binaryPath}`)
+          else prompts.log.success(`Installed ax-engine ${result.version} at ${result.binaryPath}`)
+          prompts.outro("Done")
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (args.json) console.log(JSON.stringify({ installed: false, error: message }, null, 2))
+        else {
+          prompts.log.error(message)
+          prompts.outro("Install failed")
+        }
+        process.exitCode = 1
+      }
       return
     }
 
