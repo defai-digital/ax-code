@@ -23,6 +23,10 @@
 
 #![allow(clippy::missing_safety_doc)]
 
+pub mod gcb;
+mod gcb_table;
+pub mod unicode;
+mod width_table;
 mod yoga_sys;
 
 use napi::bindgen_prelude::BigInt;
@@ -32,6 +36,24 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
 use yoga_sys::*;
+
+// --- Slice A test surface (not part of the dlopen symbol table) ---------------
+
+/// Test-only export for the unicode differential harness: mirrors the Zig
+/// `encodeUnicode` observable output as a flat [width0, char0, width1, char1,
+/// ...] array (char = codepoint for simple printable-ASCII cells, 0xFFFFFFFF
+/// for pooled/special cells). The `__ax` prefix keeps it out of the overlay's
+/// yoga/audio symbol families.
+#[napi(js_name = "__axEncodeWidths")]
+pub fn ax_encode_widths(text: String, width_method: u32) -> Vec<u32> {
+    let cells = unicode::encode_widths(&text, unicode::WidthMethod::from_code(width_method), 2);
+    let mut flat = Vec::with_capacity(cells.len() * 2);
+    for (width, ch) in cells {
+        flat.push(width);
+        flat.push(ch);
+    }
+    flat
+}
 
 // --- handle <-> pointer -----------------------------------------------------
 

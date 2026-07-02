@@ -19154,6 +19154,284 @@
       }
     }
   },
+  "trustedrouter": {
+    "id": "trustedrouter",
+    "env": [
+      "TRUSTEDROUTER_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.trustedrouter.com/v1",
+    "name": "TrustedRouter",
+    "doc": "https://trustedrouter.com/docs",
+    "models": {
+      "zdr": {
+        "id": "zdr",
+        "name": "Zero Data Retention",
+        "description": "TrustedRouter privacy routing alias that prefers zero data retention model endpoints.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-01",
+        "last_updated": "2026-06-27",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "e2e": {
+        "id": "e2e",
+        "name": "End-to-End Encrypted",
+        "description": "TrustedRouter privacy routing alias for end-to-end encrypted provider routes where available.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-01",
+        "last_updated": "2026-06-27",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "synth-code": {
+        "id": "synth-code",
+        "name": "Synth Code",
+        "description": "TrustedRouter code synthesis orchestration alias that combines multiple model responses into one answer.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-20",
+        "last_updated": "2026-06-27",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "fast": {
+        "id": "fast",
+        "name": "Fast",
+        "description": "TrustedRouter speed routing alias that prefers low-latency healthy model endpoints.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-01",
+        "last_updated": "2026-06-27",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "synth": {
+        "id": "synth",
+        "name": "Synth",
+        "description": "TrustedRouter synthesis orchestration alias that combines multiple model responses into one answer.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-20",
+        "last_updated": "2026-06-27",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "auto": {
+        "id": "auto",
+        "name": "Auto",
+        "description": "TrustedRouter automatic routing alias that chooses a healthy supported model endpoint for the request.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-05-01",
+        "last_updated": "2026-06-27",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "cheap": {
+        "id": "cheap",
+        "name": "Cheap",
+        "description": "TrustedRouter low-cost routing alias that prefers inexpensive healthy model endpoints.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-05-01",
+        "last_updated": "2026-06-27",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      }
+    }
+  },
   "zhipuai": {
     "id": "zhipuai",
     "env": [
@@ -21893,14 +22171,69 @@
     "name": "StepFun AI",
     "doc": "https://platform.stepfun.ai/docs/en/step-plan/integrations/open-code",
     "models": {
-      "step-3.5-flash": {
-        "id": "step-3.5-flash",
-        "name": "Step 3.5 Flash",
+      "step-2-16k": {
+        "id": "step-2-16k",
+        "name": "Step 2 (16K)",
         "description": "StepFun flash model for efficient multimodal reasoning, coding, and tool use",
         "attachment": false,
         "reasoning": true,
         "reasoning_options": [],
         "tool_call": true,
+        "temperature": true,
+        "knowledge": "2024-06",
+        "release_date": "2025-01-01",
+        "last_updated": "2026-02-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 16384,
+          "input": 16384,
+          "output": 8192
+        }
+      },
+      "step-tts-2": {
+        "id": "step-tts-2",
+        "name": "Step TTS 2",
+        "description": "Speech generation model for controllable voice, narration, and audio delivery",
+        "family": "step",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-03-01",
+        "last_updated": "2026-07-02",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "step-3.5-flash": {
+        "id": "step-3.5-flash",
+        "name": "Step 3.5 Flash",
+        "description": "StepFun flash lane for quick multimodal reasoning and coding assistance",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "temperature": true,
         "knowledge": "2025-01",
         "release_date": "2026-01-29",
@@ -21920,6 +22253,56 @@
           "output": 256000
         }
       },
+      "stepaudio-2.5-asr": {
+        "id": "stepaudio-2.5-asr",
+        "name": "StepAudio 2.5 ASR",
+        "description": "Speech transcription model for accurate audio-to-text and captioning workflows",
+        "family": "step",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-04-24",
+        "last_updated": "2026-07-02",
+        "modalities": {
+          "input": [
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "stepaudio-2.5-tts": {
+        "id": "stepaudio-2.5-tts",
+        "name": "StepAudio 2.5 TTS",
+        "description": "Speech generation model for controllable voice, narration, and audio delivery",
+        "family": "step",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-04-16",
+        "last_updated": "2026-07-02",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "step-3.5-flash-2603": {
         "id": "step-3.5-flash-2603",
         "name": "Step 3.5 Flash 2603",
@@ -21936,6 +22319,9 @@
           }
         ],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "temperature": true,
         "knowledge": "2025-01",
         "release_date": "2026-04-02",
@@ -21953,6 +22339,73 @@
           "context": 256000,
           "input": 256000,
           "output": 256000
+        }
+      },
+      "step-3.7-flash": {
+        "id": "step-3.7-flash",
+        "name": "Step 3.7 Flash",
+        "description": "Newer StepFun flash model for faster agents, coding, and multimodal prompts",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "knowledge": "2026-01-01",
+        "release_date": "2026-05-29",
+        "last_updated": "2026-06-29",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "input": 256000,
+          "output": 256000
+        }
+      },
+      "step-1-32k": {
+        "id": "step-1-32k",
+        "name": "Step 1 (32K)",
+        "description": "StepFun flash model for efficient multimodal reasoning, coding, and tool use",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2024-06",
+        "release_date": "2025-01-01",
+        "last_updated": "2026-02-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 32768,
+          "input": 32768,
+          "output": 32768
         }
       }
     }
@@ -32484,6 +32937,48 @@
           "output": 32000
         }
       },
+      "anthropic/claude-sonnet-5-free": {
+        "id": "anthropic/claude-sonnet-5-free",
+        "name": "Claude Sonnet 5 (Free)",
+        "description": "Everyday Claude agent model for coding, planning, browsing, and general work",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://zenmux.ai/api/anthropic/v1"
+        }
+      },
       "anthropic/claude-3.5-haiku": {
         "id": "anthropic/claude-3.5-haiku",
         "name": "Claude 3.5 Haiku",
@@ -32620,6 +33115,48 @@
         "limit": {
           "context": 200000,
           "output": 64000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic",
+          "api": "https://zenmux.ai/api/anthropic/v1"
+        }
+      },
+      "anthropic/claude-sonnet-5": {
+        "id": "anthropic/claude-sonnet-5",
+        "name": "Claude Sonnet 5",
+        "description": "Everyday Claude agent model for coding, planning, browsing, and general work",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
         },
         "provider": {
           "npm": "@ai-sdk/anthropic",
@@ -68969,6 +69506,9 @@
           }
         ],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "temperature": true,
         "knowledge": "2026-01-01",
         "release_date": "2026-05-29",
@@ -69005,6 +69545,9 @@
           }
         ],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "temperature": true,
         "knowledge": "2025-01",
         "release_date": "2026-04-02",
@@ -69024,6 +69567,56 @@
           "output": 256000
         }
       },
+      "stepaudio-2.5-tts": {
+        "id": "stepaudio-2.5-tts",
+        "name": "StepAudio 2.5 TTS",
+        "description": "Speech generation model for controllable voice, narration, and audio delivery",
+        "family": "step",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-04-16",
+        "last_updated": "2026-07-02",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
+      "stepaudio-2.5-asr": {
+        "id": "stepaudio-2.5-asr",
+        "name": "StepAudio 2.5 ASR",
+        "description": "Speech transcription model for accurate audio-to-text and captioning workflows",
+        "family": "step",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-04-24",
+        "last_updated": "2026-07-02",
+        "modalities": {
+          "input": [
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "step-3.5-flash": {
         "id": "step-3.5-flash",
         "name": "Step 3.5 Flash",
@@ -69032,6 +69625,9 @@
         "reasoning": true,
         "reasoning_options": [],
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "temperature": true,
         "knowledge": "2025-01",
         "release_date": "2026-01-29",
@@ -69049,6 +69645,31 @@
           "context": 256000,
           "input": 256000,
           "output": 256000
+        }
+      },
+      "step-tts-2": {
+        "id": "step-tts-2",
+        "name": "Step TTS 2",
+        "description": "Speech generation model for controllable voice, narration, and audio delivery",
+        "family": "step",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-03-01",
+        "last_updated": "2026-07-02",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "audio"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
         }
       },
       "step-2-16k": {
@@ -77911,6 +78532,46 @@
           "output": 128000
         }
       },
+      "duo-chat-fable-5": {
+        "id": "duo-chat-fable-5",
+        "name": "Agentic Chat (Claude Fable 5)",
+        "description": "Claude model for creative writing, analysis, and controlled agent workflows",
+        "family": "claude-fable",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-09",
+        "last_updated": "2026-06-09",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
       "duo-chat-opus-4-6": {
         "id": "duo-chat-opus-4-6",
         "name": "Agentic Chat (Claude Opus 4.6)",
@@ -78088,6 +78749,49 @@
           "context": 400000,
           "input": 272000,
           "output": 128000
+        }
+      },
+      "duo-chat-sonnet-5": {
+        "id": "duo-chat-sonnet-5",
+        "name": "Agentic Chat (Claude Sonnet 5)",
+        "description": "Everyday Claude agent model for coding, planning, browsing, and general work",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-06-30",
+        "last_updated": "2026-06-30",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
         }
       },
       "duo-chat-gpt-5-4-mini": {
@@ -91503,7 +92207,7 @@
         "temperature": true,
         "knowledge": "2023-12",
         "release_date": "2024-12-06",
-        "last_updated": "2024-12-06",
+        "last_updated": "2026-07-02",
         "modalities": {
           "input": [
             "text"
@@ -91610,7 +92314,7 @@
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-05-21",
-        "last_updated": "2026-06-15",
+        "last_updated": "2026-07-02",
         "modalities": {
           "input": [
             "text"
@@ -99258,6 +99962,48 @@
           "output": 128000
         }
       },
+      "claude-opus-4-8": {
+        "id": "claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "description": "Top Claude Opus tier for the hardest reasoning, coding, and long-horizon agents",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": true,
+        "temperature": false,
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 32000
+        }
+      },
       "gemini-3.1-pro-preview-customtools": {
         "id": "gemini-3.1-pro-preview-customtools",
         "name": "Gemini 3.1 Pro Preview Custom Tools",
@@ -99967,6 +100713,50 @@
         "limit": {
           "context": 204800,
           "output": 128100
+        }
+      },
+      "claude-opus-4-8-think": {
+        "id": "claude-opus-4-8-think",
+        "name": "Claude Opus 4.8",
+        "description": "Top Claude Opus tier for the hardest reasoning, coding, and long-horizon agents",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": false,
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 32000
         }
       },
       "qwen3.6-max-preview": {
@@ -118829,6 +119619,36 @@
           "output": 64000
         }
       },
+      "kimi-k2.7-code": {
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code",
+        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
+        "family": "kimi-k2",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-01",
+        "release_date": "2026-06-12",
+        "last_updated": "2026-06-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "input": 224000,
+          "output": 32000
+        }
+      },
       "claude-sonnet-5": {
         "id": "claude-sonnet-5",
         "name": "Claude Sonnet 5",
@@ -118952,6 +119772,44 @@
               }
             }
           }
+        }
+      },
+      "mai-code-1-flash-picker": {
+        "id": "mai-code-1-flash-picker",
+        "name": "MAI-Code-1-Flash",
+        "description": "Microsoft coding model built for fast, efficient assistance in everyday developer workflows",
+        "family": "mai",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-12",
+        "release_date": "2026-06-02",
+        "last_updated": "2026-06-08",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "input": 128000,
+          "output": 128000
         }
       },
       "gpt-5.2": {

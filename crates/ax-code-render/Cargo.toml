@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 napi = { workspace = true }
 napi-derive = { workspace = true }
+unicode-properties = "0.1"
 
 [build-dependencies]
 napi-build = { workspace = true }

@@ -28,9 +28,17 @@ const runNode = (args: string[], env: Record<string, string> = {}) =>
 describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () => {
   it("matches the Zig backend op-for-op", () => {
     const result = runNode([path.join(pkgDir, "script/native-render-parity-probe.mjs")])
-    if (result.status === 2) return // addon resolvable check raced a rebuild; probe skipped itself
+    // The addon .node exists (describe-level gate), so a "not built" exit here
+    // means broken resolution, not a missing build — fail loudly.
     expect(result.stderr).not.toContain("PARITY MISMATCH")
     expect(result.stdout).toContain("yoga parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
+  it("unicode width/grapheme core matches the Zig encodeUnicode oracle", () => {
+    const result = runNode([path.join(pkgDir, "script/native-render-unicode-parity.mjs"), "--fuzz=500"])
+    expect(result.stderr).not.toContain("mismatching")
+    expect(result.stdout).toContain("unicode parity: MATCH")
     expect(result.status).toBe(0)
   })
 

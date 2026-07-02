@@ -970,6 +970,9 @@ importers:
         specifier: 'catalog:'
         version: 3.24.5(zod@4.3.6)
     devDependencies:
+      '@ax-code/render':
+        specifier: workspace:*
+        version: link:../ax-code-render-native
       '@octokit/webhooks-types':
         specifier: 'catalog:'
         version: 7.6.1

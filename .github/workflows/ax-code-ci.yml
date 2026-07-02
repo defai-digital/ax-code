@@ -215,8 +215,11 @@ jobs:
           AX_CODE_NATIVE_RENDER: "1"
         run: pnpm --dir packages/ax-code run check:golden-frames
 
-      - name: Yoga parity regression
+      - name: Yoga + unicode parity regression
         run: pnpm --dir packages/ax-code exec vitest run test/cli/tui/native-render-yoga-parity.test.ts
+
+      - name: Unicode parity sweep (deep fuzz)
+        run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-unicode-parity.mjs --fuzz=20000
 
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live
