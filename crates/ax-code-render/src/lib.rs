@@ -23,8 +23,11 @@
 
 #![allow(clippy::missing_safety_doc)]
 
+pub mod buffer;
+mod buffer_ffi;
 pub mod gcb;
 mod gcb_table;
+pub mod handles;
 pub mod unicode;
 mod width_table;
 mod yoga_sys;

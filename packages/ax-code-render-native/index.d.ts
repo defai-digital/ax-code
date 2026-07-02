@@ -51,9 +51,55 @@ export declare function audioStopVoice(engine: number, voice: number): number
 
 export declare function audioUnload(engine: number, sound: number): number
 
+export declare function bufferClear(handle: number, bg: number): void
+
+export declare function bufferClearOpacity(handle: number): void
+
+export declare function bufferClearScissorRects(handle: number): void
+
+export declare function bufferDrawChar(handle: number, char: number, x: number, y: number, fg: number, bg: number, attributes: number): void
+
+export declare function bufferFillRect(handle: number, x: number, y: number, width: number, height: number, bg: number): void
+
+export declare function bufferGetAttributesPtr(handle: number): number
+
+export declare function bufferGetBgPtr(handle: number): number
+
+export declare function bufferGetCharPtr(handle: number): number
+
+export declare function bufferGetCurrentOpacity(handle: number): number
+
+export declare function bufferGetFgPtr(handle: number): number
+
+export declare function bufferGetId(handle: number, outPtr: number, maxLen: number): number
+
+export declare function bufferGetRealCharSize(handle: number): number
+
+export declare function bufferGetRespectAlpha(handle: number): boolean
+
+export declare function bufferPopOpacity(handle: number): void
+
+export declare function bufferPopScissorRect(handle: number): void
+
+export declare function bufferPushOpacity(handle: number, opacity: number): void
+
+export declare function bufferPushScissorRect(handle: number, x: number, y: number, width: number, height: number): void
+
+export declare function bufferResize(handle: number, width: number, height: number): void
+
+export declare function bufferSetCell(handle: number, x: number, y: number, char: number, fg: number, bg: number, attributes: number): void
+
+export declare function bufferSetCellWithAlphaBlending(handle: number, x: number, y: number, char: number, fg: number, bg: number, attributes: number): void
+
+export declare function bufferSetRespectAlpha(handle: number, respectAlpha: number): void
+
 export declare function createAudioEngine(options: number): number
 
+export declare function createOptimizedBuffer(width: number, height: number, respectAlpha: number, widthMethod: number, idPtr: number, idLen: number): number
+
 export declare function destroyAudioEngine(engine: number): void
+
+export declare function destroyOptimizedBuffer(handle: number): void
 
 export declare function yogaConfigCreate(): number
 

@@ -221,6 +221,9 @@ jobs:
       - name: Unicode parity sweep (deep fuzz)
         run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-unicode-parity.mjs --fuzz=20000
 
+      - name: Buffer parity sweep (deep op fuzz)
+        run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-buffer-parity.mjs --seqs=2000
+
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live
     runs-on: ubuntu-latest
