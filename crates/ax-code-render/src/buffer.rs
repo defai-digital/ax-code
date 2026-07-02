@@ -14,6 +14,8 @@
 //! one byte of a 32-bit metadata word in the high byte (meta bits 0-7 =
 //! palette slot, bits 8-9 = ColorIntent rgb/indexed/default).
 
+use crate::pool::{GraphemePool, GraphemeTracker};
+
 pub type Rgba = [u16; 4];
 
 pub const DEFAULT_SPACE_CHAR: u32 = 32;
@@ -91,6 +93,26 @@ pub fn encoded_char_width(c: u32) -> u32 {
     } else {
         1
     }
+}
+
+pub fn grapheme_id_from_char(c: u32) -> u32 {
+    c & crate::pool::GRAPHEME_ID_MASK
+}
+
+/// Zig packGraphemeStart: the encoded extent is capped at 4 cells even when
+/// the logical cluster width is larger (wcwidth ZWJ families).
+pub fn pack_grapheme_start(gid: u32, total_width: u32) -> u32 {
+    let right = (total_width - 1).min(CHAR_EXT_MASK);
+    CHAR_FLAG_GRAPHEME
+        | ((right & CHAR_EXT_MASK) << CHAR_EXT_RIGHT_SHIFT)
+        | (gid & crate::pool::GRAPHEME_ID_MASK)
+}
+
+fn pack_continuation(left: u32, right: u32, gid: u32) -> u32 {
+    CHAR_FLAG_CONTINUATION
+        | ((left & CHAR_EXT_MASK) << CHAR_EXT_LEFT_SHIFT)
+        | ((right & CHAR_EXT_MASK) << CHAR_EXT_RIGHT_SHIFT)
+        | (gid & crate::pool::GRAPHEME_ID_MASK)
 }
 
 // --- blending math (buffer.zig, bit-exact integer ops) ------------------------
@@ -215,6 +237,7 @@ pub struct OptimizedBuffer {
     opacity_stack: Vec<f32>,
     pub id: Vec<u8>,
     pub width_method: u32,
+    pub tracker: GraphemeTracker,
 }
 
 impl OptimizedBuffer {
@@ -242,6 +265,7 @@ impl OptimizedBuffer {
             opacity_stack: Vec::new(),
             id,
             width_method,
+            tracker: GraphemeTracker::default(),
         })
     }
 
@@ -344,8 +368,9 @@ impl OptimizedBuffer {
         self.opacity_stack.clear();
     }
 
-    pub fn clear(&mut self, bg: Rgba, char: Option<u32>) {
+    pub fn clear(&mut self, pool: &mut GraphemePool, bg: Rgba, char: Option<u32>) {
         let cell_char = char.unwrap_or(DEFAULT_SPACE_CHAR);
+        self.tracker.clear(pool);
         self.char.fill(cell_char);
         self.attributes.fill(0);
         self.fg.fill(rgb_color(255, 255, 255, 255));
@@ -385,15 +410,92 @@ impl OptimizedBuffer {
 
     /// Zig `set` (setInternal with span cleanup). Grapheme spans are a
     /// tranche-2 concern; simple cells reduce to a plane write.
-    pub fn set(&mut self, x: u32, y: u32, cell: Cell) {
+    pub fn set(&mut self, pool: &mut GraphemePool, x: u32, y: u32, cell: Cell) {
         let Some(index) = self.validate_and_index(x, y) else {
             return;
         };
-        debug_assert!(
-            !is_grapheme_char(self.char[index]) && !is_continuation_char(self.char[index]),
-            "grapheme spans are tranche 2"
-        );
-        self.write_cell(index, cell);
+        let prev_char = self.char[index];
+        let mut tracker_replaced = false;
+
+        // Overwriting part of a grapheme span with a different char clears the span.
+        if (is_grapheme_char(prev_char) || is_continuation_char(prev_char))
+            && prev_char != cell.char
+        {
+            let row_start = (y * self.width) as usize;
+            let row_end = row_start + self.width as usize - 1;
+            let left = char_left_extent(prev_char) as usize;
+            let right = char_right_extent(prev_char) as usize;
+            let id = grapheme_id_from_char(prev_char);
+
+            let new_grapheme_id = if is_grapheme_char(cell.char) {
+                let new_width = char_right_extent(cell.char) + 1;
+                if x + new_width > self.width {
+                    None
+                } else {
+                    Some(grapheme_id_from_char(cell.char))
+                }
+            } else {
+                None
+            };
+            self.tracker.replace(pool, Some(id), new_grapheme_id);
+            tracker_replaced = true;
+
+            let span_start = index - left.min(index - row_start);
+            let span_end = index + right.min(row_end - index);
+            for i in span_start..=span_end {
+                let span_char = self.char[i];
+                if !(is_grapheme_char(span_char) || is_continuation_char(span_char)) {
+                    continue;
+                }
+                if grapheme_id_from_char(span_char) != id {
+                    continue;
+                }
+                self.char[i] = DEFAULT_SPACE_CHAR;
+                self.attributes[i] = 0;
+            }
+        }
+
+        if is_grapheme_char(cell.char) {
+            let right = char_right_extent(cell.char);
+            let width = 1 + right;
+
+            if x + width > self.width {
+                // Start cell would overflow the row: fill to EOL with spaces.
+                let end_of_line = ((y + 1) * self.width) as usize;
+                self.char[index..end_of_line].fill(DEFAULT_SPACE_CHAR);
+                self.attributes[index..end_of_line].fill(cell.attributes);
+                self.fg[index..end_of_line].fill(cell.fg);
+                self.bg[index..end_of_line].fill(cell.bg);
+                return;
+            }
+
+            self.char[index] = cell.char;
+            self.fg[index] = cell.fg;
+            self.bg[index] = cell.bg;
+            self.attributes[index] = cell.attributes;
+
+            let id = grapheme_id_from_char(cell.char);
+            let is_same_grapheme_start = is_grapheme_char(prev_char) && prev_char == cell.char;
+            if !tracker_replaced && !is_same_grapheme_start {
+                self.tracker.add(pool, id);
+            }
+
+            if width > 1 {
+                let row_end_index = ((y * self.width) + self.width - 1) as usize;
+                let max_right = (right as usize).min(row_end_index - index);
+                if max_right > 0 {
+                    self.fg[index + 1..index + 1 + max_right].fill(cell.fg);
+                    self.bg[index + 1..index + 1 + max_right].fill(cell.bg);
+                    self.attributes[index + 1..index + 1 + max_right].fill(cell.attributes);
+                    for k in 1..=max_right {
+                        self.char[index + k] =
+                            pack_continuation(k as u32, (max_right - k) as u32, id);
+                    }
+                }
+            }
+        } else {
+            self.write_cell(index, cell);
+        }
     }
 
     fn blend_cells(&self, overlay: Cell, dest: Cell) -> Cell {
@@ -437,7 +539,13 @@ impl OptimizedBuffer {
         }
     }
 
-    pub fn set_cell_with_alpha_blending(&mut self, x: u32, y: u32, cell: Cell) {
+    pub fn set_cell_with_alpha_blending(
+        &mut self,
+        pool: &mut GraphemePool,
+        x: u32,
+        y: u32,
+        cell: Cell,
+    ) {
         if !self.point_in_scissor(x as i32, y as i32) {
             return;
         }
@@ -446,7 +554,7 @@ impl OptimizedBuffer {
             return;
         }
         if is_fully_opaque(opacity, cell.fg, cell.bg) {
-            self.set(x, y, cell);
+            self.set(pool, x, y, cell);
             return;
         }
         let o = opacity_to_u8(opacity);
@@ -459,9 +567,9 @@ impl OptimizedBuffer {
         match self.get(x, y) {
             Some(dest) => {
                 let blended = self.blend_cells(effective, dest);
-                self.set(x, y, blended);
+                self.set(pool, x, y, blended);
             }
-            None => self.set(x, y, effective),
+            None => self.set(pool, x, y, effective),
         }
     }
 
@@ -496,7 +604,15 @@ impl OptimizedBuffer {
         }
     }
 
-    pub fn fill_rect(&mut self, x: u32, y: u32, width: u32, height: u32, bg: Rgba) {
+    pub fn fill_rect(
+        &mut self,
+        pool: &mut GraphemePool,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+        bg: Rgba,
+    ) {
         if self.width == 0 || self.height == 0 || width == 0 || height == 0 {
             return;
         }
@@ -526,10 +642,24 @@ impl OptimizedBuffer {
         let ce_y = end_y.min((clipped.y + clipped.height as i32 - 1) as u32);
 
         let has_alpha = is_rgba_with_alpha(bg) || opacity < 1.0;
-        // Tranche 1: grapheme/link trackers are always empty (matching the
-        // reference when no graphemes/links were drawn), so the tracker-aware
-        // slow path is unreachable.
-        if has_alpha {
+        if self.tracker.has_any() {
+            // Grapheme-aware slow path: full blending setter per cell.
+            for fy in cs_y..=ce_y {
+                for fx in cs_x..=ce_x {
+                    self.set_cell_with_alpha_blending(
+                        pool,
+                        fx,
+                        fy,
+                        Cell {
+                            char: DEFAULT_SPACE_CHAR,
+                            fg: rgb_color(255, 255, 255, 255),
+                            bg,
+                            attributes: 0,
+                        },
+                    );
+                }
+            }
+        } else if has_alpha {
             for fy in cs_y..=ce_y {
                 for fx in cs_x..=ce_x {
                     self.set_cell_with_alpha_blending_raw(
@@ -556,7 +686,7 @@ impl OptimizedBuffer {
         }
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
+    pub fn resize(&mut self, pool: &mut GraphemePool, width: u32, height: u32) {
         if self.width == width && self.height == height {
             return;
         }
@@ -571,11 +701,180 @@ impl OptimizedBuffer {
         self.width = width;
         self.height = height;
         // Zig clears after resize (realloc leaves garbage / shrink needs cleanup).
-        self.clear(rgb_color(0, 0, 0, 255), None);
+        self.clear(pool, rgb_color(0, 0, 0, 255), None);
     }
 
-    pub fn get_real_char_size(&self) -> u32 {
-        // Tranche 1: no graphemes tracked, so the size is one unit per cell.
-        self.width * self.height
+    /// Zig `drawText`: walks the Slice A grapheme pipeline, allocating pool
+    /// ids for non-trivial clusters and writing start + continuation cells.
+    pub fn draw_text(
+        &mut self,
+        pool: &mut GraphemePool,
+        text: &str,
+        x: u32,
+        y: u32,
+        fg: Rgba,
+        bg: Option<Rgba>,
+        attributes: u32,
+    ) {
+        use crate::unicode::{WidthMethod, find_grapheme_info, width_at_unicode, width_at_wcwidth};
+        if x >= self.width || y >= self.height || text.is_empty() {
+            return;
+        }
+        let opacity = self.current_opacity();
+        if is_fully_transparent(opacity, fg, bg.unwrap_or(rgb_color(0, 0, 0, 0))) {
+            return;
+        }
+        let method = WidthMethod::from_code(self.width_method);
+        let tab_width: u8 = 2;
+        let specials = find_grapheme_info(text, method, tab_width);
+        let bytes = text.as_bytes();
+
+        let mut advance_cells: u32 = 0;
+        let mut byte_offset: usize = 0;
+        let mut col: u32 = 0;
+        let mut special_idx: usize = 0;
+
+        while byte_offset < bytes.len() {
+            let char_x = x + advance_cells;
+            if char_x >= self.width {
+                break;
+            }
+            let at_special =
+                special_idx < specials.len() && specials[special_idx].col_offset == col;
+            let (g_start, g_len, g_width) = if at_special {
+                let g = &specials[special_idx];
+                special_idx += 1;
+                byte_offset = g.byte_offset + g.byte_len;
+                (g.byte_offset, g.byte_len, g.width)
+            } else {
+                byte_offset += 1;
+                (byte_offset - 1, 1, 1)
+            };
+
+            if !self.point_in_scissor(char_x as i32, y as i32) {
+                advance_cells += g_width;
+                col += g_width;
+                continue;
+            }
+
+            let bg_color = match bg {
+                Some(b) => b,
+                None => match self.get(char_x, y) {
+                    Some(existing) => existing.bg,
+                    None => rgb_color(0, 0, 0, 255),
+                },
+            };
+
+            let anchor = if at_special {
+                specials[special_idx - 1].byte_offset
+            } else {
+                byte_offset - 1
+            };
+            let cell_width = match method {
+                WidthMethod::Unicode => width_at_unicode(bytes, anchor, tab_width),
+                WidthMethod::Wcwidth => width_at_wcwidth(bytes, anchor, tab_width),
+            };
+            if cell_width == 0 {
+                col += g_width;
+                continue;
+            }
+
+            if g_len == 1 && bytes[g_start] == b'\t' {
+                for tab_col in 0..g_width {
+                    let tab_x = char_x + tab_col;
+                    if tab_x >= self.width {
+                        break;
+                    }
+                    let cell = Cell {
+                        char: DEFAULT_SPACE_CHAR,
+                        fg,
+                        bg: bg_color,
+                        attributes,
+                    };
+                    if is_rgba_with_alpha(bg_color) {
+                        self.set_cell_with_alpha_blending(pool, tab_x, y, cell);
+                    } else {
+                        self.set(pool, tab_x, y, cell);
+                    }
+                }
+                advance_cells += g_width;
+                col += g_width;
+                continue;
+            }
+
+            let encoded_char = if g_len == 1 && cell_width == 1 && bytes[g_start] >= 32 {
+                bytes[g_start] as u32
+            } else {
+                let Some(gid) = pool.alloc(&bytes[g_start..g_start + g_len]) else {
+                    return;
+                };
+                pack_grapheme_start(gid, cell_width)
+            };
+
+            let cell = Cell {
+                char: encoded_char,
+                fg,
+                bg: bg_color,
+                attributes,
+            };
+            if is_rgba_with_alpha(bg_color) {
+                self.set_cell_with_alpha_blending(pool, char_x, y, cell);
+            } else {
+                self.set(pool, char_x, y, cell);
+            }
+
+            advance_cells += cell_width;
+            col += g_width;
+        }
+    }
+
+    /// Zig `writeResolvedChars`: resolve the char plane back to UTF-8
+    /// (grapheme ids via the pool, continuations skipped, NUL/invalid as space).
+    /// Zig `writeResolvedChars`: resolve the char plane back to UTF-8.
+    /// NOTE the reference's `continue` statements skip the end-of-row newline
+    /// check — continuation cells and NUL/invalid cells never emit a newline
+    /// even at row boundaries. Mirrored exactly.
+    pub fn write_resolved_chars(
+        &self,
+        pool: &mut GraphemePool,
+        out: &mut Vec<u8>,
+        add_line_breaks: bool,
+    ) {
+        let total = (self.width * self.height) as usize;
+        for i in 0..total {
+            let c = self.char[i];
+            if is_grapheme_char(c) {
+                match pool.get(grapheme_id_from_char(c)) {
+                    Some(bytes) => out.extend_from_slice(bytes),
+                    None => out.push(b' '),
+                }
+            } else if is_continuation_char(c) {
+                continue; // skips the newline check (Zig behavior)
+            } else if c == 0 || c > 0x10FFFF {
+                out.push(b' ');
+                continue; // skips the newline check (Zig behavior)
+            } else {
+                match char::from_u32(c) {
+                    Some(ch) => {
+                        let mut buf = [0u8; 4];
+                        out.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                    }
+                    None => {
+                        out.push(b' ');
+                        continue; // Zig utf8Encode failure path
+                    }
+                }
+            }
+            if add_line_breaks && (i + 1) % self.width as usize == 0 {
+                out.push(b'\n');
+            }
+        }
+    }
+
+    pub fn get_real_char_size(&self, pool: &mut GraphemePool) -> u32 {
+        let total_chars = self.width * self.height;
+        let grapheme_count = self.tracker.cell_count();
+        let total_grapheme_bytes = self.tracker.total_bytes(pool);
+        (total_chars - grapheme_count) * 4 + total_grapheme_bytes
     }
 }

@@ -2,9 +2,11 @@
 // against a Zig OptimizedBuffer (raw dlopen symbols) and the Rust port, then
 // byte-compares all four cell planes (char u32 / fg,bg [4]u16 / attrs u32).
 //
-// Tranche 1 excludes grapheme/link content (drawText and pool land next), so
-// ops use simple BMP chars and colors with all intents/alphas — covering
-// set/setWithAlphaBlending/drawChar/fillRect/clear/scissor/opacity/resize.
+// Tranche 2 adds drawText (grapheme pool ids in the char plane are
+// deterministic — both pools intern live strings and allocate LIFO slots, so
+// identical op sequences produce identical ids), covering CJK/emoji/tabs and
+// the grapheme span-cleanup + continuation-cell paths on top of the tranche-1
+// set/blend/fill/scissor/opacity/resize surface.
 //
 // Run with: node --experimental-ffi script/native-render-buffer-parity.mjs [--seqs=N]
 // Exit codes: 0 = parity, 1 = mismatch, 2 = Rust addon not built (skip).
@@ -62,8 +64,40 @@ function planes(getPtr, handle, cellCount, bytesPerCell, isZig) {
 
 function compare(zh, rh, w, h, tag, opsLog) {
   const n = w * h
+  const fail = (msg) => {
+    console.error(`\u2717 ${tag}: ${msg}`)
+    console.error(`  ops: ${opsLog.slice(-12).join(" | ")}`)
+    return false
+  }
+
+  // char plane: pool ids are free-list-order dependent (not semantic), so
+  // cluster cells compare flags+extents only; simple cells compare exactly.
+  // Cluster CONTENT is compared via writeResolvedChars below.
+  const zChar = new Uint32Array(ffi.toArrayBuffer(BigInt(zig.bufferGetCharPtr(zh)), n * 4).slice(0))
+  const rChar = new Uint32Array(ffi.toArrayBuffer(BigInt(Math.round(rust.bufferGetCharPtr(rh))), n * 4).slice(0))
+  for (let i = 0; i < n; i++) {
+    const zc = zChar[i] >>> 0
+    const rc = rChar[i] >>> 0
+    const zCluster = (zc & 0xc0000000) !== 0
+    const rCluster = (rc & 0xc0000000) !== 0
+    if (zCluster !== rCluster) return fail(`char cell ${i} cluster-ness differs zig=${zc.toString(16)} rust=${rc.toString(16)}`)
+    if (zCluster) {
+      if (zc >>> 26 !== rc >>> 26) return fail(`char cell ${i} flags/extents differ zig=${zc.toString(16)} rust=${rc.toString(16)}`)
+    } else if (zc !== rc) {
+      return fail(`char cell ${i} differs zig=${zc.toString(16)} rust=${rc.toString(16)}`)
+    }
+  }
+
+  // resolved text: semantic contents of the char plane, pool lookups included
+  const zOut = new Uint8Array(n * 130)
+  const rOut = new Uint8Array(n * 130)
+  const zLen = zig.bufferWriteResolvedChars(zh, ptr(zOut), zOut.length, 1)
+  const rLen = rust.bufferWriteResolvedChars(rh, Number(ptr(rOut)), rOut.length, true)
+  const zText = Buffer.from(zOut.subarray(0, Number(zLen))).toString("hex")
+  const rText = Buffer.from(rOut.subarray(0, Number(rLen))).toString("hex")
+  if (zText !== rText) return fail(`resolved chars differ\n  zig : ${zText.slice(0, 160)}\n  rust: ${rText.slice(0, 160)}`)
+
   const specs = [
-    ["char", zig.bufferGetCharPtr, rust.bufferGetCharPtr, 4],
     ["fg", zig.bufferGetFgPtr, rust.bufferGetFgPtr, 8],
     ["bg", zig.bufferGetBgPtr, rust.bufferGetBgPtr, 8],
     ["attrs", zig.bufferGetAttributesPtr, rust.bufferGetAttributesPtr, 4],
@@ -72,22 +106,31 @@ function compare(zh, rh, w, h, tag, opsLog) {
     const zHex = planes(zGet, zh, n, bpc, true)
     const rHex = planes(rGet, rh, n, bpc, false)
     if (zHex !== rHex) {
-      console.error(`✗ ${tag}: plane '${name}' differs`)
       for (let i = 0; i < zHex.length; i += bpc * 2) {
         if (zHex.slice(i, i + bpc * 2) !== rHex.slice(i, i + bpc * 2)) {
           const cell = i / (bpc * 2)
-          console.error(`  first diff at cell ${cell} (x=${cell % w}, y=${Math.floor(cell / w)}): zig=${zHex.slice(i, i + bpc * 2)} rust=${rHex.slice(i, i + bpc * 2)}`)
-          break
+          return fail(`plane '${name}' differs at cell ${cell} (x=${cell % w}, y=${Math.floor(cell / w)}): zig=${zHex.slice(i, i + bpc * 2)} rust=${rHex.slice(i, i + bpc * 2)}`)
         }
       }
-      console.error(`  ops: ${opsLog.slice(-12).join(" | ")}`)
-      return false
+      return fail(`plane '${name}' differs`)
     }
   }
   return true
 }
 
 // --- op fuzz -------------------------------------------------------------------
+const TEXTS = [
+  "hello",
+  "混合 width 世界",
+  "🚀 rocket 🎉",
+  "👨‍👩‍👧‍👦 family",
+  "tab\there",
+  "e\u0301 combining café",
+  "🇹🇼 flag",
+  "デテキスト",
+  "a", " ", "wide 寬 mix",
+]
+
 const seqArg = process.argv.find((a) => a.startsWith("--seqs="))
 const SEQUENCES = seqArg ? Number(seqArg.slice(7)) : 300
 let failures = 0
@@ -144,10 +187,20 @@ for (let s = 0; s < SEQUENCES; s++) {
         rust.bufferClear(rh, Number(ptr(bg)))
       }
     } else if (op === 10) {
-      const [ch, x, y, fg, bg, at] = [33 + randInt(0x2000), randInt(w + 2), randInt(h + 2), randColor(), randColor(), randInt(256)]
-      opsLog.push(`drawChar(${x},${y})`)
-      zig.bufferDrawChar(zh, ch, x, y, ptr(fg), ptr(bg), at)
-      rust.bufferDrawChar(rh, ch, x, y, Number(ptr(fg)), Number(ptr(bg)), at)
+      if (rand() < 0.5) {
+        const [ch, x, y, fg, bg, at] = [33 + randInt(0x2000), randInt(w + 2), randInt(h + 2), randColor(), randColor(), randInt(256)]
+        opsLog.push(`drawChar(${x},${y})`)
+        zig.bufferDrawChar(zh, ch, x, y, ptr(fg), ptr(bg), at)
+        rust.bufferDrawChar(rh, ch, x, y, Number(ptr(fg)), Number(ptr(bg)), at)
+      } else {
+        const text = TEXTS[randInt(TEXTS.length)]
+        const bytes = new TextEncoder().encode(text)
+        const [x, y, fg, at] = [randInt(w + 2), randInt(h + 2), randColor(), randInt(256)]
+        const bgOpt = rand() < 0.3 ? null : randColor()
+        opsLog.push(`drawText(${x},${y},${JSON.stringify(text).slice(0, 14)})`)
+        zig.bufferDrawText(zh, ptr(bytes), bytes.length, x, y, ptr(fg), bgOpt ? ptr(bgOpt) : null, at)
+        rust.bufferDrawText(rh, Number(ptr(bytes)), bytes.length, x, y, Number(ptr(fg)), bgOpt ? Number(ptr(bgOpt)) : 0, at)
+      }
     } else if (rand() < 0.3) {
       const nw = 2 + randInt(24)
       const nh = 2 + randInt(12)

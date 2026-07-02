@@ -187,11 +187,11 @@ impl ClusterWidth {
     }
 }
 
-struct GraphemeInfo {
-    byte_offset: usize,
-    byte_len: usize,
-    width: u32,
-    col_offset: u32,
+pub(crate) struct GraphemeInfo {
+    pub(crate) byte_offset: usize,
+    pub(crate) byte_len: usize,
+    pub(crate) width: u32,
+    pub(crate) col_offset: u32,
 }
 
 /// Cluster boundaries of the (valid UTF-8) text, using the uucode-matching
@@ -243,7 +243,11 @@ fn cluster_width_of(
 }
 
 /// Zig `findGraphemeInfo`: the "specials" table consumed by the encoder walk.
-fn find_grapheme_info(text: &str, method: WidthMethod, tab_width: u8) -> Vec<GraphemeInfo> {
+pub(crate) fn find_grapheme_info(
+    text: &str,
+    method: WidthMethod,
+    tab_width: u8,
+) -> Vec<GraphemeInfo> {
     let bytes = text.as_bytes();
     if bytes.iter().all(|&b| b < 0x80) {
         // Zig returns early for ASCII-only text in both modes.
@@ -279,7 +283,7 @@ fn find_grapheme_info(text: &str, method: WidthMethod, tab_width: u8) -> Vec<Gra
 /// Zig `getWidthAt` for unicode mode: width of the cluster starting at an
 /// arbitrary byte anchor, decoding with `zig_decode` and running the break
 /// state fresh from the anchor. Invalid codepoints force breaks.
-fn width_at_unicode(bytes: &[u8], anchor: usize, tab_width: u8) -> u32 {
+pub(crate) fn width_at_unicode(bytes: &[u8], anchor: usize, tab_width: u8) -> u32 {
     if anchor >= bytes.len() {
         return 0;
     }
@@ -308,7 +312,7 @@ fn width_at_unicode(bytes: &[u8], anchor: usize, tab_width: u8) -> u32 {
 }
 
 /// Zig `getWidthAtWCWidth`: the first codepoint's own width.
-fn width_at_wcwidth(bytes: &[u8], anchor: usize, tab_width: u8) -> u32 {
+pub(crate) fn width_at_wcwidth(bytes: &[u8], anchor: usize, tab_width: u8) -> u32 {
     if anchor >= bytes.len() {
         return 0;
     }

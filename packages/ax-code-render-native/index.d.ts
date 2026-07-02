@@ -59,6 +59,8 @@ export declare function bufferClearScissorRects(handle: number): void
 
 export declare function bufferDrawChar(handle: number, char: number, x: number, y: number, fg: number, bg: number, attributes: number): void
 
+export declare function bufferDrawText(handle: number, textPtr: number, textLen: number, x: number, y: number, fg: number, bg: number, attributes: number): void
+
 export declare function bufferFillRect(handle: number, x: number, y: number, width: number, height: number, bg: number): void
 
 export declare function bufferGetAttributesPtr(handle: number): number
@@ -92,6 +94,8 @@ export declare function bufferSetCell(handle: number, x: number, y: number, char
 export declare function bufferSetCellWithAlphaBlending(handle: number, x: number, y: number, char: number, fg: number, bg: number, attributes: number): void
 
 export declare function bufferSetRespectAlpha(handle: number, respectAlpha: number): void
+
+export declare function bufferWriteResolvedChars(handle: number, outputPtr: number, outputLen: number, addLineBreaks: boolean): number
 
 export declare function createAudioEngine(options: number): number
 

@@ -5,9 +5,21 @@
 //! `[4]u16` values (the JS layer packs RGBA into u16 lanes before the call);
 //! the overlay bridge narrows BigInt pointers to f64 numbers.
 
+#![allow(clippy::too_many_arguments)]
+
 use crate::buffer::{Cell, OptimizedBuffer, Rgba};
 use crate::handles::{self, Kind};
+use crate::pool::GraphemePool;
 use napi_derive::napi;
+use std::sync::{Mutex, MutexGuard, OnceLock};
+
+/// Process-global grapheme pool, mirroring the Zig `initGlobalPool` arena.
+fn global_pool() -> MutexGuard<'static, GraphemePool> {
+    static POOL: OnceLock<Mutex<GraphemePool>> = OnceLock::new();
+    POOL.get_or_init(|| Mutex::new(GraphemePool::new()))
+        .lock()
+        .unwrap()
+}
 
 fn resolve(handle: u32) -> Option<&'static mut OptimizedBuffer> {
     handles::get(handle, Kind::OptimizedBuffer)
@@ -49,14 +61,16 @@ pub fn create_optimized_buffer(
 #[napi(js_name = "destroyOptimizedBuffer")]
 pub fn destroy_optimized_buffer(handle: u32) {
     if let Some(ptr) = handles::remove(handle, Kind::OptimizedBuffer) {
-        drop(unsafe { Box::from_raw(ptr as *mut OptimizedBuffer) });
+        let mut buf = unsafe { Box::from_raw(ptr as *mut OptimizedBuffer) };
+        buf.tracker.clear(&mut global_pool()); // release pool references (Zig deinit)
+        drop(buf);
     }
 }
 
 #[napi(js_name = "bufferClear")]
 pub fn buffer_clear(handle: u32, bg: f64) {
     if let Some(buf) = resolve(handle) {
-        buf.clear(unsafe { read_rgba(bg) }, None);
+        buf.clear(&mut global_pool(), unsafe { read_rgba(bg) }, None);
     }
 }
 
@@ -69,7 +83,7 @@ pub fn buffer_set_cell(handle: u32, x: u32, y: u32, char: u32, fg: f64, bg: f64,
             bg: unsafe { read_rgba(bg) },
             attributes,
         };
-        buf.set(x, y, cell);
+        buf.set(&mut global_pool(), x, y, cell);
     }
 }
 
@@ -90,7 +104,7 @@ pub fn buffer_set_cell_with_alpha_blending(
             bg: unsafe { read_rgba(bg) },
             attributes,
         };
-        buf.set_cell_with_alpha_blending(x, y, cell);
+        buf.set_cell_with_alpha_blending(&mut global_pool(), x, y, cell);
     }
 }
 
@@ -103,14 +117,16 @@ pub fn buffer_draw_char(handle: u32, char: u32, x: u32, y: u32, fg: f64, bg: f64
             bg: unsafe { read_rgba(bg) },
             attributes,
         };
-        buf.set_cell_with_alpha_blending(x, y, cell);
+        buf.set_cell_with_alpha_blending(&mut global_pool(), x, y, cell);
     }
 }
 
 #[napi(js_name = "bufferFillRect")]
 pub fn buffer_fill_rect(handle: u32, x: u32, y: u32, width: u32, height: u32, bg: f64) {
     if let Some(buf) = resolve(handle) {
-        buf.fill_rect(x, y, width, height, unsafe { read_rgba(bg) });
+        buf.fill_rect(&mut global_pool(), x, y, width, height, unsafe {
+            read_rgba(bg)
+        });
     }
 }
 
@@ -164,7 +180,7 @@ pub fn buffer_get_current_opacity(handle: u32) -> f64 {
 #[napi(js_name = "bufferResize")]
 pub fn buffer_resize(handle: u32, width: u32, height: u32) {
     if let Some(buf) = resolve(handle) {
-        buf.resize(width, height);
+        buf.resize(&mut global_pool(), width, height);
     }
 }
 
@@ -190,7 +206,7 @@ pub fn buffer_get_attributes_ptr(handle: u32) -> f64 {
 
 #[napi(js_name = "bufferGetRealCharSize")]
 pub fn buffer_get_real_char_size(handle: u32) -> u32 {
-    resolve(handle).map_or(0, |buf| buf.get_real_char_size())
+    resolve(handle).map_or(0, |buf| buf.get_real_char_size(&mut global_pool()))
 }
 
 #[napi(js_name = "bufferGetRespectAlpha")]
@@ -203,6 +219,64 @@ pub fn buffer_set_respect_alpha(handle: u32, respect_alpha: f64) {
     if let Some(buf) = resolve(handle) {
         buf.respect_alpha = respect_alpha != 0.0;
     }
+}
+
+#[napi(js_name = "bufferDrawText")]
+#[allow(clippy::too_many_arguments)]
+pub fn buffer_draw_text(
+    handle: u32,
+    text_ptr: f64,
+    text_len: u32,
+    x: u32,
+    y: u32,
+    fg: f64,
+    bg: f64,
+    attributes: u32,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    if text_ptr == 0.0 || text_len == 0 {
+        return;
+    }
+    let p = (text_ptr as u64) as usize as *const u8;
+    let bytes = unsafe { std::slice::from_raw_parts(p, text_len as usize) };
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return;
+    };
+    let bg_color = if bg == 0.0 {
+        None
+    } else {
+        Some(unsafe { read_rgba(bg) })
+    };
+    buf.draw_text(
+        &mut global_pool(),
+        text,
+        x,
+        y,
+        unsafe { read_rgba(fg) },
+        bg_color,
+        attributes,
+    );
+}
+
+#[napi(js_name = "bufferWriteResolvedChars")]
+pub fn buffer_write_resolved_chars(
+    handle: u32,
+    output_ptr: f64,
+    output_len: u32,
+    add_line_breaks: bool,
+) -> u32 {
+    let Some(buf) = resolve(handle) else { return 0 };
+    if output_len == 0 || output_ptr == 0.0 {
+        return 0;
+    }
+    let mut resolved = Vec::new();
+    buf.write_resolved_chars(&mut global_pool(), &mut resolved, add_line_breaks);
+    if resolved.len() > output_len as usize {
+        return 0; // Zig: BufferTooSmall -> catch 0 in the export glue
+    }
+    let out = (output_ptr as u64) as usize as *mut u8;
+    unsafe { std::ptr::copy_nonoverlapping(resolved.as_ptr(), out, resolved.len()) };
+    resolved.len() as u32
 }
 
 #[napi(js_name = "bufferGetId")]
