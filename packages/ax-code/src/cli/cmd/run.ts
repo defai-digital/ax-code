@@ -32,6 +32,7 @@ import { Todo } from "../../session/todo"
 import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
+import { extractRunFinalAssistantText, handleRunStructuredOutput, resolveRunOutputFile } from "./run-output"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -305,6 +306,19 @@ export const RunCommand = cmd({
         default: "default",
         describe: "format: default (formatted) or json (raw JSON events)",
       })
+      .option("output-file", {
+        alias: ["o"],
+        type: "string",
+        describe: "write the final assistant message to a file",
+      })
+      .option("output-last-message", {
+        type: "string",
+        describe: "write the final assistant message to a file (compatibility alias for --output-file)",
+      })
+      .option("output-schema", {
+        type: "string",
+        describe: "validate the final assistant message as JSON against a JSON Schema file",
+      })
       .option("file", {
         alias: ["f"],
         type: "string",
@@ -434,6 +448,15 @@ export const RunCommand = cmd({
       exitEarly("--replay-limit must be a positive integer")
     }
 
+    try {
+      resolveRunOutputFile({
+        outputFile: args["output-file"],
+        outputLastMessage: args["output-last-message"],
+      })
+    } catch (error) {
+      exitEarly(error instanceof Error ? error.message : String(error))
+    }
+
     const rules: Permission.Ruleset = [
       {
         permission: "question",
@@ -466,6 +489,16 @@ export const RunCommand = cmd({
       const name = title()
       const result = await sdk.session.create({ title: name, permission: rules })
       return result.data?.id
+    }
+
+    async function readFinalAssistantText(
+      sdk: OpencodeClient,
+      sessionID: string,
+      assistantMessageID: string | undefined,
+    ): Promise<string | undefined> {
+      if (!assistantMessageID) return undefined
+      const result = await sdk.session.messages({ sessionID })
+      return extractRunFinalAssistantText(result.data, assistantMessageID)
     }
 
     async function execute(sdk: OpencodeClient) {
@@ -505,11 +538,21 @@ export const RunCommand = cmd({
 
       const events = await sdk.event.subscribe()
       let error: string | undefined
+      let finalMessage: string | undefined
+      let finalAssistantMessageID: string | undefined
 
       async function loop() {
         const toggles = new Map<string, boolean>()
 
         for await (const event of events.stream) {
+          if (
+            event.type === "message.updated" &&
+            event.properties.info.role === "assistant" &&
+            event.properties.info.sessionID === sessionID
+          ) {
+            finalAssistantMessageID = event.properties.info.id
+          }
+
           if (
             event.type === "message.updated" &&
             event.properties.info.role === "assistant" &&
@@ -560,9 +603,10 @@ export const RunCommand = cmd({
             }
 
             if (part.type === "text" && part.time?.end) {
-              if (emit("text", { part })) continue
               const text = part.text.trim()
               if (!text) continue
+              finalMessage = text
+              if (emit("text", { part })) continue
               if (!process.stdout.isTTY) {
                 process.stdout.write(text + EOL)
                 continue
@@ -741,6 +785,26 @@ export const RunCommand = cmd({
         UI.error(`Event stream error: ${toErrorMessage(e)}`)
         process.exitCode = 1
       })
+      const storedFinalMessage = await readFinalAssistantText(sdk, sessionID, finalAssistantMessageID).catch((e) => {
+        Log.Default.warn("failed to read final assistant text from session messages", {
+          sessionID,
+          assistantMessageID: finalAssistantMessageID,
+          error: toErrorMessage(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        })
+        return undefined
+      })
+      try {
+        await handleRunStructuredOutput(storedFinalMessage ?? finalMessage, {
+          callerCwd,
+          outputFile: args["output-file"],
+          outputLastMessage: args["output-last-message"],
+          outputSchema: args["output-schema"],
+        })
+      } catch (e) {
+        UI.error(e instanceof Error ? e.message : String(e))
+        process.exitCode = 1
+      }
       if (error) process.exitCode = 1
     }
 

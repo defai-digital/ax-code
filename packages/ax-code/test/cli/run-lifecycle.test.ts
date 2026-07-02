@@ -67,6 +67,30 @@ test("run command logs tool renderer fallback errors", async () => {
   expect(src).toContain("stack: error instanceof Error ? error.stack : undefined")
 })
 
+test("run command wires structured output flags after the event loop", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+
+  expect(src).toContain('.option("output-file"')
+  expect(src).toContain('.option("output-last-message"')
+  expect(src).toContain('.option("output-schema"')
+  expect(src).toContain("resolveRunOutputFile({")
+  expect(src).toContain("async function readFinalAssistantText")
+  expect(src).toContain("assistantMessageID: string | undefined")
+  expect(src).toContain("if (!assistantMessageID) return undefined")
+  expect(src).toContain("finalAssistantMessageID = event.properties.info.id")
+  expect(src).toContain("await sdk.session.messages({ sessionID })")
+
+  const awaitLoop = src.indexOf("await loopPromise.catch")
+  const storedFinalMessage = src.indexOf(
+    "const storedFinalMessage = await readFinalAssistantText(sdk, sessionID, finalAssistantMessageID)",
+    awaitLoop,
+  )
+  const structuredOutput = src.indexOf("await handleRunStructuredOutput(storedFinalMessage ?? finalMessage", awaitLoop)
+  expect(awaitLoop).toBeGreaterThan(-1)
+  expect(storedFinalMessage).toBeGreaterThan(awaitLoop)
+  expect(structuredOutput).toBeGreaterThan(storedFinalMessage)
+})
+
 test("headless-run clears the idle timer before checking timeout state", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
   const runStart = src.indexOf("await runHeadlessSession({")
@@ -192,7 +216,10 @@ test("TUI worker always forces exit after uncaught exceptions", async () => {
   expect(end).toBeGreaterThan(start)
   expect(block).not.toContain("if (!shutdownPromise) setTimeout")
 
-  const lifecycleSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/util/lifecycle.ts"), "utf-8")
+  const lifecycleSrc = await readFile(
+    path.join(import.meta.dirname, "../../src/cli/cmd/tui/util/lifecycle.ts"),
+    "utf-8",
+  )
   const handlerStart = lifecycleSrc.indexOf("export function registerTuiProcessHandler")
   expect(handlerStart).toBeGreaterThan(-1)
   const handlerBlock = lifecycleSrc.slice(handlerStart)
