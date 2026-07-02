@@ -1,0 +1,196 @@
+{
+  "scene": "select-list",
+  "width": 34,
+  "height": 9,
+  "chars": [
+    "   alpha                          ",
+    "   first option                   ",
+    " ▶ beta                           ",
+    "   second option                  ",
+    "   gamma 選項                     ",
+    "   third 寬字 option              ",
+    "   delta                          ",
+    "   fourth option                  ",
+    "                                  ",
+    ""
+  ],
+  "frame": {
+    "cols": 34,
+    "rows": 9,
+    "cursor": [
+      1,
+      1
+    ],
+    "lines": [
+      {
+        "spans": [
+          {
+            "text": "   alpha                          ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 34
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "   ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 3
+          },
+          {
+            "text": "first option",
+            "fg": "#888888",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 12
+          },
+          {
+            "text": "                   ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 19
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#334455",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "▶ beta",
+            "fg": "#ffff00",
+            "bg": "#334455",
+            "attributes": 0,
+            "width": 6
+          },
+          {
+            "text": "                           ",
+            "fg": "#ffffff",
+            "bg": "#334455",
+            "attributes": 0,
+            "width": 27
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "   ",
+            "fg": "#ffffff",
+            "bg": "#334455",
+            "attributes": 0,
+            "width": 3
+          },
+          {
+            "text": "second option",
+            "fg": "#cccccc",
+            "bg": "#334455",
+            "attributes": 0,
+            "width": 13
+          },
+          {
+            "text": "                  ",
+            "fg": "#ffffff",
+            "bg": "#334455",
+            "attributes": 0,
+            "width": 18
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "   gamma 選項                     ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 34
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "   ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 3
+          },
+          {
+            "text": "third 寬字 option",
+            "fg": "#888888",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 17
+          },
+          {
+            "text": "              ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 14
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "   delta                          ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 34
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "   ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 3
+          },
+          {
+            "text": "fourth option",
+            "fg": "#888888",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 13
+          },
+          {
+            "text": "                  ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 18
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                  ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 34
+          }
+        ]
+      }
+    ]
+  }
+}

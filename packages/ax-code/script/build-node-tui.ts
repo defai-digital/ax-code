@@ -137,17 +137,73 @@ if (result.errors.length > 0) {
   process.exit(1)
 }
 
-// Unix launcher: node --experimental-ffi so OpenTUI's node:ffi backend loads.
-// --disable-warning=ExperimentalWarning silences Node's "FFI is experimental"
-// notice so the shipped binary doesn't print it to stderr on every run.
+// Bundle the build-time Node runtime so the shipped TUI runs on a pinned Node
+// instead of whatever `node` is on the user's PATH (ADR-046 Phase 0). The
+// node:ffi backend is experimental and has changed behavior across Node
+// releases (u32 argument marshalling); pinning the runtime contains that
+// exposure to release time. Cross-arch builds cannot copy process.execPath —
+// they fall back to the PATH launcher and CI must supply the target runtime.
+const bundledNodeName = process.platform === "win32" ? "node.exe" : "node"
+const bundledNodeDir = path.join(outRoot, "node")
+let bundledNode = false
+if (process.arch === arch) {
+  // bin/ + lib/ mirrors the source install layout: shared-library Node builds
+  // (e.g. Homebrew) are a small bin/node linked against ../lib/libnode.* via
+  // @loader_path rpath, so the dylib must ship in the same relative spot.
+  // Official release binaries are static — their lib/ has no libnode and only
+  // the executable is copied.
+  const nodeRealPath = await fs.promises.realpath(process.execPath)
+  await fs.promises.mkdir(path.join(bundledNodeDir, "bin"), { recursive: true })
+  await fs.promises.copyFile(nodeRealPath, path.join(bundledNodeDir, "bin", bundledNodeName))
+  await fs.promises.chmod(path.join(bundledNodeDir, "bin", bundledNodeName), 0o755)
+  const nodeLibDir = path.join(path.dirname(nodeRealPath), "..", "lib")
+  const libNodeFiles = fs.existsSync(nodeLibDir)
+    ? (await fs.promises.readdir(nodeLibDir)).filter((f) => /^libnode\./.test(f))
+    : []
+  for (const lib of libNodeFiles) {
+    await fs.promises.mkdir(path.join(bundledNodeDir, "lib"), { recursive: true })
+    await fs.promises.copyFile(path.join(nodeLibDir, lib), path.join(bundledNodeDir, "lib", lib))
+  }
+  bundledNode = true
+  console.log(
+    `Bundled Node runtime ${process.version} (${process.platform}-${arch}${libNodeFiles.length ? `, shared: ${libNodeFiles.join(", ")}` : ", static"})`,
+  )
+} else {
+  console.warn(
+    `Cross-arch build (${process.arch} -> ${arch}): skipping bundled Node runtime; launcher will use PATH node`,
+  )
+}
+
+// Launchers prefer the bundled runtime; AX_CODE_SYSTEM_NODE=1 forces the PATH
+// node (support/debug escape hatch), which also remains the fallback when no
+// runtime ships beside the bundle. --disable-warning=ExperimentalWarning
+// silences Node's "FFI is experimental" notice on every run.
+const nodeArgs = `--experimental-ffi --disable-warning=ExperimentalWarning`
 await writeText(
   path.join(outBin, "ax-code"),
-  `#!/bin/sh\nexec node --experimental-ffi --disable-warning=ExperimentalWarning "$(dirname "$0")/../lib/index-node-tui.js" "$@"\n`,
+  [
+    `#!/bin/sh`,
+    `dir="$(dirname "$0")"`,
+    `if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node" ]; then`,
+    `  exec "$dir/../node/bin/node" ${nodeArgs} "$dir/../lib/index-node-tui.js" "$@"`,
+    `fi`,
+    `exec node ${nodeArgs} "$dir/../lib/index-node-tui.js" "$@"`,
+    ``,
+  ].join("\n"),
 )
 await fs.promises.chmod(path.join(outBin, "ax-code"), 0o755)
 await writeText(
   path.join(outBin, "ax-code.cmd"),
-  `@echo off\r\nset AX_CODE_ORIGINAL_CWD=%CD%\r\n${WINDOWS_UTF8_WARNING.replaceAll("\n", "\r\n")}node --experimental-ffi --disable-warning=ExperimentalWarning "%~dp0..\\lib\\index-node-tui.js" %*\r\n`,
+  [
+    `@echo off`,
+    `set AX_CODE_ORIGINAL_CWD=%CD%`,
+    `${WINDOWS_UTF8_WARNING.replaceAll("\n", "\r\n")}if not defined AX_CODE_SYSTEM_NODE if exist "%~dp0..\\node\\bin\\node.exe" (`,
+    `  "%~dp0..\\node\\bin\\node.exe" ${nodeArgs} "%~dp0..\\lib\\index-node-tui.js" %*`,
+    `  exit /b %ERRORLEVEL%`,
+    `)`,
+    `node ${nodeArgs} "%~dp0..\\lib\\index-node-tui.js" %*`,
+    ``,
+  ].join("\r\n"),
 )
 
 // --- Make the distribution self-contained (Bun-free) -----------------------
@@ -164,12 +220,14 @@ const opentuiSolidPkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
 }
-const opentuiSpinnerPkg = JSON.parse(fs.readFileSync(path.join(dir, "..", "opentui-spinner", "package.json"), "utf8")) as {
+const opentuiSpinnerPkg = JSON.parse(
+  fs.readFileSync(path.join(dir, "..", "opentui-spinner", "package.json"), "utf8"),
+) as {
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
 }
-const currentNativePkg = Object.keys(opentuiCorePkg.optionalDependencies ?? {}).find(
-  (name) => name.includes(`-${process.platform}-${process.arch}`)
+const currentNativePkg = Object.keys(opentuiCorePkg.optionalDependencies ?? {}).find((name) =>
+  name.includes(`-${process.platform}-${process.arch}`),
 )
 const distDeps: Record<string, string> = {
   ...collectPackageRuntimeDependencies([opentuiCorePkg, opentuiSolidPkg, opentuiSpinnerPkg]),
@@ -271,6 +329,7 @@ const nativePkgs: Array<[string, string]> = [
   ["diff", path.join(dir, "..", "ax-code-diff-native")],
   ["parser", path.join(dir, "..", "ax-code-parser-native")],
   ["index-core", path.join(dir, "..", "ax-code-index-core")],
+  ["render", path.join(dir, "..", "ax-code-render-native")],
 ]
 const axScope = path.join(outRoot, "node_modules", "@ax-code")
 fs.mkdirSync(axScope, { recursive: true })
@@ -288,7 +347,10 @@ for (const [name, src] of nativePkgs) {
 // binary, a node-bundled dist carries many native libraries (.node addons and
 // OpenTUI's .dylib); ad-hoc sign each so the bundle runs after download. Real
 // (notarized) signing happens in CI with a Developer ID; ad-hoc keeps local and
-// unsigned-CI builds runnable.
+// unsigned-CI builds runnable. The bundled Node runtime under node/ is
+// deliberately NOT re-signed: the copied binary keeps its original signature
+// (official Node releases ship Developer ID signed), and overwriting it with
+// an ad-hoc signature would be a downgrade.
 if (process.platform === "darwin") {
   const nativeLibs: string[] = []
   const walk = (root: string) => {
@@ -308,9 +370,9 @@ if (process.platform === "darwin") {
 }
 
 if (release) {
-  // Archive the WHOLE tree (bin + lib + node_modules), not just bin/ — the
-  // node-bundled runtime needs all three beside each other. Zip from the dist
-  // root so the archive expands to the same `ax-code-<os>-<arch>/` layout.
+  // Archive the WHOLE tree (bin + lib + node_modules + node/), not just bin/ —
+  // the node-bundled runtime needs them all beside each other. Zip from the
+  // dist root so the archive expands to the same `ax-code-<os>-<arch>/` layout.
   const archive = path.join(dir, "dist", `${legacyName}.zip`)
   fs.rmSync(archive, { force: true })
   const zipper =
@@ -328,7 +390,7 @@ if (release) {
   console.log(`Release archive: ${path.relative(dir, archive)}`)
 }
 
-console.log(`Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/4 native addons)`)
 console.log(
-  `Run: node --experimental-ffi --disable-warning=ExperimentalWarning ${path.relative(dir, path.join(outLib, "index-node-tui.js"))}`,
+  `Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/${nativePkgs.length} native addons, bundled node: ${bundledNode ? process.version : "none"})`,
 )
+console.log(`Run: ${path.relative(dir, path.join(outBin, "ax-code"))}`)

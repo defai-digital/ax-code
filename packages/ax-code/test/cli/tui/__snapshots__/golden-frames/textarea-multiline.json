@@ -1,0 +1,114 @@
+{
+  "scene": "textarea-multiline",
+  "width": 32,
+  "height": 8,
+  "chars": [
+    "┌──────────────────────────────┐",
+    "│first line                    │",
+    "│第二行中文字                  │",
+    "│third 🚀 line                 │",
+    "│                              │",
+    "│                              │",
+    "│                              │",
+    "└──────────────────────────────┘",
+    ""
+  ],
+  "frame": {
+    "cols": 32,
+    "rows": 8,
+    "cursor": [
+      2,
+      2
+    ],
+    "lines": [
+      {
+        "spans": [
+          {
+            "text": "┌──────────────────────────────┐",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 32
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "│first line                    │",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 32
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "│第二行中文字                  │",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 32
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "│third 🚀 line                 │",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 32
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "│                              │",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 32
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "│                              │",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 32
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "│                              │",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 32
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "└──────────────────────────────┘",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 32
+          }
+        ]
+      }
+    ]
+  }
+}

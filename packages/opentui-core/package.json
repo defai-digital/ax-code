@@ -5,7 +5,7 @@
   "types": "index.d.ts",
   "type": "module",
   "version": "1.0.0",
-  "description": "Vendored fork of @opentui/core — native Zig core TypeScript bindings for building terminal UIs. Independently maintained in the ax-code workspace.",
+  "description": "Vendored fork of @opentui/core \u2014 native Zig core TypeScript bindings for building terminal UIs. Independently maintained in the ax-code workspace.",
   "license": "MIT",
   "exports": {
     ".": {
@@ -67,6 +67,7 @@
     "@opentui/core-win32-x64": "0.4.1",
     "@opentui/core-win32-arm64": "0.4.1",
     "@opentui/core-linux-x64-musl": "0.4.1",
-    "@opentui/core-linux-arm64-musl": "0.4.1"
+    "@opentui/core-linux-arm64-musl": "0.4.1",
+    "@ax-code/render": "workspace:*"
   }
 }

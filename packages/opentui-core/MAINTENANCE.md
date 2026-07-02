@@ -42,6 +42,19 @@ The regression test for this guard is:
 pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-guard.test.ts
 ```
 
+The vendored core must also preserve the ADR-046 native-render overlay
+(`applyNativeRenderOverlay` in the main bundle, applied at the end of
+`getOpenTUILib`). With `AX_CODE_NATIVE_RENDER=1`, the yoga and audio symbol
+families route to the `@ax-code/render` napi addon (Rust, vendored
+facebook/yoga v3.2.1 — the same tag the upstream Zig build pins); any load
+failure falls back to the bundled Zig library. `@ax-code/render` is declared
+as a workspace optionalDependency of this package. Parity gate:
+
+```sh
+pnpm --dir packages/ax-code run check:golden-frames                          # Zig baseline
+AX_CODE_NATIVE_RENDER=1 pnpm --dir packages/ax-code run check:golden-frames  # Rust overlay, must byte-match
+```
+
 ## Update Workflow
 
 When syncing from upstream OpenTUI:

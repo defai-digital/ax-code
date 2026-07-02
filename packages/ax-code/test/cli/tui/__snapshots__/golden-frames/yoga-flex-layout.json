@@ -1,0 +1,438 @@
+{
+  "scene": "yoga-flex-layout",
+  "width": 48,
+  "height": 14,
+  "chars": [
+    "╭───────────────────ax-code────────────────────╮",
+    "│                                              │",
+    "╰──────────────────────────────────────────────╯",
+    "                                                ",
+    " ┌──────────────┐ ╔═main══════════════════════╗ ",
+    " │side          │ ║content                    ║ ",
+    " │              │ ║                           ║ ",
+    " │              │ ║                           ║ ",
+    " │              │ ║                           ║ ",
+    " │              │ ║                           ║ ",
+    " │              │ ║                           ║ ",
+    " │              │ ║                           ║ ",
+    " └──────────────┘ ╚═══════════════════════════╝ ",
+    "                                                ",
+    ""
+  ],
+  "frame": {
+    "cols": 48,
+    "rows": 14,
+    "cursor": [
+      1,
+      1
+    ],
+    "lines": [
+      {
+        "spans": [
+          {
+            "text": "╭───────────────────ax-code────────────────────╮",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 48
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "│                                              │",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 48
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "╰──────────────────────────────────────────────╯",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 48
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                                ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 48
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "┌──────────────┐",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "╔═main══════════════════════╗",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "│side          │",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "║content                    ║",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "│              │",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "║                           ║",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "│              │",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "║                           ║",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "│              │",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "║                           ║",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "│              │",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "║                           ║",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "│              │",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "║                           ║",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "│              │",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "║                           ║",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "└──────────────┘",
+            "fg": "#ffffff",
+            "bg": "#1e2939",
+            "attributes": 0,
+            "width": 16
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "╚═══════════════════════════╝",
+            "fg": "#ffffff",
+            "bg": "#312e51",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                                ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 48
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "scene": "scrollbox-overflow",
+  "width": 30,
+  "height": 8,
+  "chars": [
+    "line 01 of twenty            ▀",
+    "line 02 of twenty             ",
+    "line 03 of twenty             ",
+    "line 04 of twenty             ",
+    "line 05 of twenty             ",
+    "line 06 of twenty             ",
+    "line 07 of twenty             ",
+    "line 08 of twenty             ",
+    ""
+  ],
+  "frame": {
+    "cols": 30,
+    "rows": 8,
+    "cursor": [
+      1,
+      1
+    ],
+    "lines": [
+      {
+        "spans": [
+          {
+            "text": "line 01 of twenty            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": "▀",
+            "fg": "#9a9ea3",
+            "bg": "#252527",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "line 02 of twenty            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#252527",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "line 03 of twenty            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#252527",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "line 04 of twenty            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#252527",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "line 05 of twenty            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#252527",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "line 06 of twenty            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#252527",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "line 07 of twenty            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#252527",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "line 08 of twenty            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#252527",
+            "attributes": 0,
+            "width": 1
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "scene": "styled-text-attributes",
+  "width": 44,
+  "height": 8,
+  "chars": [
+    "plain default text                          ",
+    "colored fg/bg                               ",
+    "bold attribute                              ",
+    "dim + underline                             ",
+    "mix bold italic under                       ",
+    "                                            ",
+    "                                            ",
+    "                                            ",
+    ""
+  ],
+  "frame": {
+    "cols": 44,
+    "rows": 8,
+    "cursor": [
+      1,
+      1
+    ],
+    "lines": [
+      {
+        "spans": [
+          {
+            "text": "plain default text                          ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 44
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "colored fg/bg",
+            "fg": "#e5c07b",
+            "bg": "#282c34",
+            "attributes": 0,
+            "width": 13
+          },
+          {
+            "text": "                               ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 31
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "bold attribute",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 1,
+            "width": 14
+          },
+          {
+            "text": "                              ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 30
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "dim + underline",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 10,
+            "width": 15
+          },
+          {
+            "text": "                             ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 29
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "mix ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 4
+          },
+          {
+            "text": "bold",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 1,
+            "width": 4
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "italic",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 4,
+            "width": 6
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "under",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 8,
+            "width": 5
+          },
+          {
+            "text": "                       ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 23
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 44
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 44
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                            ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 44
+          }
+        ]
+      }
+    ]
+  }
+}

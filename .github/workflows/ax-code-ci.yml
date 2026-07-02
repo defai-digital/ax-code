@@ -9,6 +9,9 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "packages/ax-code/**"
+      - "packages/opentui-core/**"
+      - "packages/ax-code-render-native/**"
+      - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
       - "packages/plugin/**"
@@ -23,6 +26,9 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "packages/ax-code/**"
+      - "packages/opentui-core/**"
+      - "packages/ax-code-render-native/**"
+      - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
       - "packages/plugin/**"
@@ -178,6 +184,39 @@ jobs:
           name: ax-code-coverage-baseline-summary
           path: packages/ax-code/.tmp/coverage-summary.json
           if-no-files-found: ignore
+
+  # ADR-046: the Rust render core must stay byte-equivalent to the bundled Zig
+  # library. Runs on Node 26 (node:ffi) with the repo rust-toolchain; the
+  # deterministic job stays on Node 24 and skips these paths.
+  native-render-parity:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "26"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @ax-code/render native addon
+        run: pnpm run build:native render
+
+      - name: Golden frames (Zig baseline)
+        run: pnpm --dir packages/ax-code run check:golden-frames
+
+      - name: Golden frames (Rust overlay, must byte-match)
+        env:
+          AX_CODE_NATIVE_RENDER: "1"
+        run: pnpm --dir packages/ax-code run check:golden-frames
+
+      - name: Yoga parity regression
+        run: pnpm --dir packages/ax-code exec vitest run test/cli/tui/native-render-yoga-parity.test.ts
 
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live

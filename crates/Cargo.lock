@@ -203,6 +203,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ax-code-render"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "napi",
+ "napi-build",
+ "napi-derive",
+]
+
+[[package]]
 name = "ax-code-terminal"
 version = "0.1.0"
 dependencies = [

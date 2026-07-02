@@ -11880,6 +11880,42 @@ function ffiCellOrigin(x, y) {
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
   return { x, y };
 }
+// ax-code local fix (ADR-046 Phase 1): when AX_CODE_NATIVE_RENDER=1, route the
+// yoga/audio symbol families to the @ax-code/render napi addon (Rust, vendored
+// facebook/yoga v3.2.1 — the same tag the upstream Zig library pins). Load
+// failure falls back to the bundled Zig library silently, mirroring the
+// AX_CODE_NATIVE_* addon pattern. BigInt arguments (backend ptr()/callback
+// pointers) are narrowed to numbers — addresses stay below 2^53 so this is
+// exact — because the napi addon takes f64 parameters.
+var nativeRenderAddon;
+var nativeRenderAddonFailed = false;
+function applyNativeRenderOverlay(symbols) {
+  if (process.env.AX_CODE_NATIVE_RENDER !== "1" || nativeRenderAddonFailed) {
+    return symbols;
+  }
+  if (!nativeRenderAddon) {
+    try {
+      nativeRenderAddon = requireModule("@ax-code/render");
+    } catch (error) {
+      nativeRenderAddonFailed = true;
+      console.warn(
+        "AX_CODE_NATIVE_RENDER=1 but @ax-code/render failed to load; falling back to the bundled native library:",
+        error instanceof Error ? error.message : error
+      );
+      return symbols;
+    }
+  }
+  const addon = nativeRenderAddon;
+  const bridge = (fn) => (...args) => fn(...args.map((arg) => typeof arg === "bigint" ? Number(arg) : arg));
+  const overlaid = { ...symbols };
+  for (const key of Object.keys(overlaid)) {
+    const isOverlayFamily = key.startsWith("yoga") || key.startsWith("audio") || key === "createAudioEngine" || key === "destroyAudioEngine";
+    if (isOverlayFamily && typeof addon[key] === "function") {
+      overlaid[key] = bridge(addon[key]);
+    }
+  }
+  return overlaid;
+}
 function getOpenTUILib(libPath) {
   const resolvedLibPath = libPath || targetLibPath;
   const rawSymbols = dlopen(resolvedLibPath, {
@@ -13192,10 +13228,17 @@ function getOpenTUILib(libPath) {
       returns: "void"
     }
   });
+  const overlaidSymbols = applyNativeRenderOverlay(rawSymbols.symbols);
   if (env.OTUI_DEBUG_FFI || env.OTUI_TRACE_FFI) {
     return {
       ...rawSymbols,
-      symbols: convertToDebugSymbols(rawSymbols.symbols)
+      symbols: convertToDebugSymbols(overlaidSymbols)
+    };
+  }
+  if (overlaidSymbols !== rawSymbols.symbols) {
+    return {
+      ...rawSymbols,
+      symbols: overlaidSymbols
     };
   }
   return rawSymbols;

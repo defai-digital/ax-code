@@ -20,6 +20,7 @@
     "check:skills:all": "tsx script/check-skills.ts --all",
     "check:tui-layering": "tsx script/check-tui-layering.ts",
     "check:tui-snapshot": "node --experimental-ffi --disable-warning=ExperimentalWarning --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-tui-snapshot.ts",
+    "check:golden-frames": "node --experimental-ffi --disable-warning=ExperimentalWarning --import tsx --conditions=node script/check-golden-frames.ts",
     "check:bun-compat": "tsx script/check-bun-compat.ts",
     "quality:rollout": "node --experimental-ffi --disable-warning=ExperimentalWarning --import tsx --import ../../script/solid-loader.mjs --conditions=node script/quality-rollout.ts",
     "perf:index": "tsx script/perf-index.ts",

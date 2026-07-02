@@ -35,6 +35,7 @@ const PACKAGES: NativePkg[] = [
   { pkgName: "@ax-code/fs", dir: "ax-code-fs-native", alias: "fs", binaryName: "ax-code-fs" },
   { pkgName: "@ax-code/diff", dir: "ax-code-diff-native", alias: "diff", binaryName: "ax-code-diff" },
   { pkgName: "@ax-code/parser", dir: "ax-code-parser-native", alias: "parser", binaryName: "ax-code-parser" },
+  { pkgName: "@ax-code/render", dir: "ax-code-render-native", alias: "render", binaryName: "ax-code-render" },
 ]
 
 function parseArgs(argv: string[]) {
