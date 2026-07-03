@@ -187,6 +187,7 @@ impl ClusterWidth {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct GraphemeInfo {
     pub(crate) byte_offset: usize,
     pub(crate) byte_len: usize,
@@ -390,4 +391,56 @@ pub(crate) fn calculate_text_width(text: &str, tab_width: u8, method: WidthMetho
         .iter()
         .map(|&(start, len)| cluster_width_of(text, start, len, method, tab_width))
         .sum()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineBreakKind {
+    Lf,
+    Crlf,
+    Cr,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WrapBreak {
+    pub pos: u32,
+    pub kind: LineBreakKind,
+}
+
+/// Zig `findWrapBreaks`: newline positions. CRLF records at the LF byte and
+/// consumes both; lone CR records at the CR byte.
+pub fn find_wrap_breaks(bytes: &[u8]) -> Vec<WrapBreak> {
+    let mut out = Vec::new();
+    let mut pos = 0usize;
+    while pos < bytes.len() {
+        match bytes[pos] {
+            b'\n' => {
+                let kind = if pos > 0 && bytes[pos - 1] == b'\r' {
+                    LineBreakKind::Crlf
+                } else {
+                    LineBreakKind::Lf
+                };
+                out.push(WrapBreak {
+                    pos: pos as u32,
+                    kind,
+                });
+            }
+            b'\r' => {
+                if pos + 1 < bytes.len() && bytes[pos + 1] == b'\n' {
+                    out.push(WrapBreak {
+                        pos: pos as u32 + 1,
+                        kind: LineBreakKind::Crlf,
+                    });
+                    pos += 1;
+                } else {
+                    out.push(WrapBreak {
+                        pos: pos as u32,
+                        kind: LineBreakKind::Cr,
+                    });
+                }
+            }
+            _ => {}
+        }
+        pos += 1;
+    }
+    out
 }
