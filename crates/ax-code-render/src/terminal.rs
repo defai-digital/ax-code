@@ -372,6 +372,57 @@ impl Terminal {
             self.state.kitty_keyboard_flags = 0;
         }
     }
+
+    fn set_terminal_title(&self, out: &mut Vec<u8>, title: &str) {
+        out.extend_from_slice(b"\x1b]0;"); // setTerminalTitle prefix (OSC 0)
+        out.extend_from_slice(title.as_bytes());
+        out.push(0x07); // BEL
+    }
+
+    /// terminal.zig `resetState` — best-effort teardown (non-Windows path):
+    /// unconditional show-cursor/SGR-reset/mouse-pointer reset, then disable
+    /// each mode that our state tracking says is currently active.
+    pub fn reset_state(&mut self, out: &mut Vec<u8>) {
+        out.extend_from_slice(b"\x1b[?25h"); // showCursor
+        out.extend_from_slice(b"\x1b[0m"); // reset
+        out.extend_from_slice(b"\x1b]22;\x07"); // resetMousePointer
+        self.mouse_pointer = MousePointerStyle::Default;
+
+        if self.state.kitty_keyboard {
+            self.set_kitty_keyboard(out, false, 0);
+        }
+        if self.state.modify_other_keys {
+            self.set_modify_other_keys(out, false);
+        }
+        if self.state.mouse_was_enabled {
+            // forceDisableMouseMode: emit disables even if tracked state drifted.
+            self.state.mouse = false;
+            self.state.pixel_mouse = false;
+            write_mouse_disable_sequences(out);
+        }
+        if self.state.bracketed_paste {
+            self.set_bracketed_paste(out, false);
+        }
+        if self.state.focus_tracking {
+            self.set_focus_tracking(out, false);
+        }
+        if self.state.alt_screen {
+            self.exit_alt_screen(out);
+        }
+        // else (non-alt): non-Windows emits nothing here.
+        if self.state.color_scheme_updates {
+            self.set_color_scheme_updates(out, false);
+        }
+        self.set_terminal_title(out, "");
+    }
+}
+
+/// terminal.zig `writeMouseDisableSequences`.
+fn write_mouse_disable_sequences(out: &mut Vec<u8>) {
+    out.extend_from_slice(b"\x1b[?1003l"); // disableAnyEventTracking
+    out.extend_from_slice(b"\x1b[?1002l"); // disableButtonEventTracking
+    out.extend_from_slice(b"\x1b[?1000l"); // disableMouseTracking
+    out.extend_from_slice(b"\x1b[?1006l"); // disableSGRMouseMode
 }
 
 /// Append the capability-query block (terminal.zig `queryTerminalSend`). The

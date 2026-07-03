@@ -405,8 +405,8 @@ impl CliRenderer {
         self.terminal.set_cursor_position(cx, cy, visible);
     }
 
-    /// Zig `setupTerminal` — query capabilities, save cursor, enter alt screen
-    /// or reserve non-alt surface, and enable detected features.
+    /// Zig `setupTerminal` — query capabilities, then run the detection-free
+    /// setup (save cursor, alt screen / reserve surface, enable features).
     pub fn setup_terminal(&mut self, use_alternate_screen: bool) {
         self.use_alternate_screen = use_alternate_screen;
         self.terminal_setup = true;
@@ -415,11 +415,17 @@ impl CliRenderer {
         self.terminal.query_terminal_send(&mut query);
         self.write_out(&query);
 
+        self.setup_terminal_without_detection(use_alternate_screen, true);
+    }
+
+    /// Zig `setupTerminalWithoutDetection` — the part of setup that re-runs on
+    /// resume (no capability queries).
+    fn setup_terminal_without_detection(&mut self, use_alternate_screen: bool, reserve: bool) {
         let mut setup = Vec::new();
         setup.extend_from_slice(b"\x1b[s"); // saveCursorState
         if use_alternate_screen {
             self.terminal.enter_alt_screen(&mut setup);
-        } else {
+        } else if reserve {
             make_room_for_renderer_output(&mut setup, self.height.max(1));
         }
         self.terminal.set_cursor_position(1, 1, false);
@@ -439,6 +445,52 @@ impl CliRenderer {
 
     pub fn set_clear_on_shutdown(&mut self, clear: bool) {
         self.clear_on_shutdown = clear;
+    }
+
+    /// Zig `performShutdownSequence` — reset terminal state, clear the surface,
+    /// and restore cursor color/style/visibility. No-op unless setup ran.
+    pub fn perform_shutdown_sequence(&mut self) {
+        if !self.terminal_setup {
+            return;
+        }
+        let mut out = Vec::new();
+        self.terminal.reset_state(&mut out);
+
+        if self.use_alternate_screen {
+            // resetState already exited the alt screen.
+        } else if self.clear_on_shutdown && self.render_offset == 0 {
+            out.extend_from_slice(b"\x1b[H\x1b[J");
+        } else if self.clear_on_shutdown && self.render_offset > 0 {
+            clear_split_footer_surface(&mut out, self.render_offset);
+        }
+
+        out.extend_from_slice(b"\x1b]12;default\x07"); // resetCursorColorFallback
+        out.extend_from_slice(b"\x1b]112\x07"); // resetCursorColor
+        out.extend_from_slice(b"\x1b[0 q"); // defaultCursorStyle
+        out.extend_from_slice(b"\x1b[?25h"); // showCursor
+        self.write_out(&out);
+
+        // Ghostty workaround: re-emit showCursor as a separate write. The Zig
+        // reference sleeps 10ms around this; only the emitted bytes matter for
+        // parity, so the sleep is omitted.
+        self.write_out(b"\x1b[?25h");
+    }
+
+    /// Zig `suspendRenderer`.
+    pub fn suspend_renderer(&mut self) {
+        if !self.terminal_setup {
+            return;
+        }
+        self.perform_shutdown_sequence();
+    }
+
+    /// Zig `resumeRenderer` — re-run detection-free setup.
+    pub fn resume_renderer(&mut self) {
+        if !self.terminal_setup {
+            return;
+        }
+        let reserve = self.render_offset == 0;
+        self.setup_terminal_without_detection(self.use_alternate_screen, reserve);
     }
 
     fn prepare_render_frame(&mut self, out: &mut Vec<u8>, force: bool) {
@@ -712,6 +764,19 @@ fn make_room_for_renderer_output(out: &mut Vec<u8>, height: u32) {
             out.push(b'\n');
         }
     }
+}
+
+/// Zig `clearSplitFooterSurface` — reset the scroll region and erase below the
+/// footer's top line (only reached when a split-footer render offset is set).
+fn clear_split_footer_surface(out: &mut Vec<u8>, render_offset: u32) {
+    if render_offset == 0 {
+        return;
+    }
+    let footer_top_line = (render_offset + 1).max(1);
+    out.extend_from_slice(b"\x1b[r"); // reset scroll region
+    move_to_output(out, 1, footer_top_line);
+    out.extend_from_slice(b"\x1b[J"); // eraseBelowCursor
+    move_to_output(out, 1, footer_top_line);
 }
 
 fn move_to_output(out: &mut Vec<u8>, x: u32, y: u32) {

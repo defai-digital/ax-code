@@ -58,9 +58,26 @@ pub fn create_renderer(
 pub fn destroy_renderer(handle: u32) {
     if let Some(ptr) = handles::remove(handle, Kind::Renderer) {
         let mut boxed = unsafe { Box::from_raw(ptr as *mut CliRenderer) };
+        // Zig destroy order: performShutdownSequence emits teardown ANSI first
+        // (no-op unless setupTerminal ran), then the renderer is torn down.
+        boxed.perform_shutdown_sequence();
         boxed.invalidate_child_handles();
         boxed.release_pool_refs(&mut global_pool());
         drop(boxed);
+    }
+}
+
+#[napi(js_name = "suspendRenderer")]
+pub fn suspend_renderer(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.suspend_renderer();
+    }
+}
+
+#[napi(js_name = "resumeRenderer")]
+pub fn resume_renderer(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.resume_renderer();
     }
 }
 

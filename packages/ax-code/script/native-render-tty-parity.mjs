@@ -54,15 +54,16 @@ async function runChild(which) {
   }
 
   // Full setup/teardown surface: setup handshake, a focus-in restore re-emit,
-  // and a clear. setCursorPosition mutates state only (verified via the memory
-  // render harness), so it is not exercised here.
+  // a clear, then suspend (performShutdownSequence) / resume
+  // (setupTerminalWithoutDetection) / destroy (performShutdownSequence again).
+  // setCursorPosition mutates state only (verified via the memory render
+  // harness), so it is not exercised here.
   sym.setupTerminal(rh, 0) // useAlternateScreen = false
   sym.restoreTerminalModes(rh)
   sym.clearTerminal(rh)
-
-  // Do NOT destroyRenderer: the Zig teardown (performShutdownSequence) is not
-  // yet ported, and letting the process exit keeps only the captured symbols'
-  // bytes on stdout.
+  sym.suspendRenderer(rh)
+  sym.resumeRenderer(rh)
+  sym.destroyRenderer(rh) // emits performShutdownSequence, then frees
   process.exit(0)
 }
 

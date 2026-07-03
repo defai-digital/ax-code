@@ -233,6 +233,8 @@ export declare function resizeRenderer(handle: number, width: number, height: nu
 
 export declare function restoreTerminalModes(handle: number): void
 
+export declare function resumeRenderer(handle: number): void
+
 export declare function setBackgroundColor(handle: number, color: number): void
 
 export declare function setClearOnShutdown(handle: number, clear: number): void
@@ -242,6 +244,8 @@ export declare function setCursorPosition(handle: number, x: number, y: number, 
 export declare function setRenderOffset(handle: number, offset: number): void
 
 export declare function setupTerminal(handle: number, useAlternateScreen: number): void
+
+export declare function suspendRenderer(handle: number): void
 
 export declare function syntaxStyleGetStyleCount(handle: number): number
 
