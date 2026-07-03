@@ -1,0 +1,365 @@
+{
+  "scene": "command-palette-popup",
+  "width": 40,
+  "height": 12,
+  "chars": [
+    "background message line 1               ",
+    "background message line 2               ",
+    "ba┃ /init     create an AGENTS.md  ┃    ",
+    "ba┃ /undo     revert the last mess ┃    ",
+    "ba┃ /compact  summarize the conver ┃    ",
+    "ba┃ /model    switch the active mo ┃    ",
+    "                                        ",
+    "                                        ",
+    "                                        ",
+    "                                        ",
+    "                                        ",
+    "                                        ",
+    ""
+  ],
+  "frame": {
+    "cols": 40,
+    "rows": 12,
+    "cursor": [
+      1,
+      1
+    ],
+    "lines": [
+      {
+        "spans": [
+          {
+            "text": "background message line 1",
+            "fg": "#585b70",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 25
+          },
+          {
+            "text": "               ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 15
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "background message line 2",
+            "fg": "#585b70",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 25
+          },
+          {
+            "text": "               ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 15
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "ba",
+            "fg": "#585b70",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 2
+          },
+          {
+            "text": "┃",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "/init     ",
+            "fg": "#cdd6f4",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 10
+          },
+          {
+            "text": "create an AGENTS.md ",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 20
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "┃",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "    ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 4
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "ba",
+            "fg": "#585b70",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 2
+          },
+          {
+            "text": "┃",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#89b4fa",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "/undo     revert the last mess",
+            "fg": "#1e1e2e",
+            "bg": "#89b4fa",
+            "attributes": 0,
+            "width": 30
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#89b4fa",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "┃",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "    ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 4
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "ba",
+            "fg": "#585b70",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 2
+          },
+          {
+            "text": "┃",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "/compact  ",
+            "fg": "#cdd6f4",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 10
+          },
+          {
+            "text": "summarize the conver",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 20
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "┃",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "    ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 4
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "ba",
+            "fg": "#585b70",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 2
+          },
+          {
+            "text": "┃",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "/model    ",
+            "fg": "#cdd6f4",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 10
+          },
+          {
+            "text": "switch the active mo",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 20
+          },
+          {
+            "text": " ",
+            "fg": "#ffffff",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "┃",
+            "fg": "#6c7086",
+            "bg": "#313244",
+            "attributes": 0,
+            "width": 1
+          },
+          {
+            "text": "    ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 4
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#1e1e2e",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -336,6 +336,88 @@ const SCENES: Scene[] = [
       if (sceneTextarea) sceneTextarea.setSelection(4, 22, "#3b4252", "#eceff4")
     },
   },
+  {
+    // Mirrors the "/" command-palette autocomplete popup (prompt/autocomplete.tsx):
+    // an absolute, z-indexed box over background content, with the SplitBorder
+    // (left/right sides only + custom heavy "┃" chars), a selected-row background
+    // highlight, and a wrapMode:"none" description column that overflows/truncates.
+    // Exercises custom-border-char emission, z-order compositing over content, and
+    // no-wrap overflow — paths the generic scenes don't hit directly.
+    name: "command-palette-popup",
+    width: 40,
+    height: 12,
+    build(renderer) {
+      const root = new BoxRenderable(renderer, {
+        width: "100%",
+        height: "100%",
+        flexDirection: "column",
+        backgroundColor: "#1e1e2e",
+      })
+      for (let i = 1; i <= 6; i++) {
+        root.add(new TextRenderable(renderer, { content: `background message line ${i}`, fg: "#585b70" }))
+      }
+      renderer.root.add(root)
+
+      const splitBorderChars = {
+        topLeft: "",
+        bottomLeft: "",
+        vertical: "┃",
+        topRight: "",
+        bottomRight: "",
+        horizontal: " ",
+        bottomT: "",
+        topT: "",
+        cross: "",
+        leftT: "",
+        rightT: "",
+      }
+      const popup = new BoxRenderable(renderer, {
+        position: "absolute",
+        top: 2,
+        left: 2,
+        width: 34,
+        zIndex: 100,
+        border: ["left", "right"],
+        customBorderChars: splitBorderChars,
+        borderColor: "#6c7086",
+        backgroundColor: "#313244",
+        flexDirection: "column",
+      })
+      const options = [
+        { display: "/init", desc: "create an AGENTS.md file", selected: false },
+        { display: "/undo", desc: "revert the last message", selected: true },
+        { display: "/compact", desc: "summarize the conversation so far to save context window", selected: false },
+        { display: "/model", desc: "switch the active model", selected: false },
+      ]
+      for (const o of options) {
+        const row = new BoxRenderable(renderer, {
+          paddingLeft: 1,
+          paddingRight: 1,
+          backgroundColor: o.selected ? "#89b4fa" : undefined,
+          flexDirection: "row",
+          width: "100%",
+          flexShrink: 0,
+        })
+        row.add(
+          new TextRenderable(renderer, {
+            content: o.display.padEnd(10),
+            fg: o.selected ? "#1e1e2e" : "#cdd6f4",
+            flexShrink: 0,
+          }),
+        )
+        row.add(
+          new TextRenderable(renderer, {
+            content: o.desc,
+            fg: o.selected ? "#1e1e2e" : "#6c7086",
+            wrapMode: "none",
+            flexGrow: 1,
+          }),
+        )
+        popup.add(row)
+      }
+      renderer.root.add(popup)
+    },
+  },
 ]
 
 function hex(color: RGBA): string {
