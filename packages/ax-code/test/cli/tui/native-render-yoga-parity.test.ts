@@ -130,6 +130,22 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("full render pipeline (SCOPE=full) byte-matches the Zig golden frames", () => {
+    // ADR-046 render-core gate: routes the ENTIRE renderer/buffer/text/edit/
+    // editor pipeline (not just yoga/audio) to the Rust addon and renders the
+    // representative scenes through the real OpenTUI renderable layer. The
+    // committed goldens were produced by the Zig backend, so a match proves the
+    // Rust render core is frame-parity across yoga layout, styled attributes,
+    // CJK/emoji wrapping, alpha blending, scroll offset, and selection.
+    const result = runNode(
+      ["--import", "tsx", "--conditions=node", path.join(pkgDir, "script/check-golden-frames.ts")],
+      { AX_CODE_NATIVE_RENDER: "1", AX_CODE_NATIVE_RENDER_SCOPE: "full" },
+    )
+    expect(result.stderr).not.toContain("frame drift")
+    expect(result.stdout).toContain("all golden frames match")
+    expect(result.status).toBe(0)
+  })
+
   it("overlay engages under AX_CODE_NATIVE_RENDER=1 (audio-stub fingerprint)", () => {
     const fingerprint = `
       import { Yoga } from "@ax-code/opentui-core"

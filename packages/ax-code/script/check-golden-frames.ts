@@ -47,7 +47,16 @@ interface Scene {
   width: number
   height: number
   build: (renderer: Renderer) => void | Promise<void>
+  // Runs after the first layout/render pass, before the settling pass — for
+  // state that needs measured geometry (e.g. a scroll offset clamped to content
+  // height). The captured frame is taken after a further render.
+  settle?: (renderer: Renderer) => void | Promise<void>
 }
+
+// Refs shared between a scene's build() and settle() (scenes render one at a
+// time, so a module-level handoff is sufficient).
+let sceneScroll: ScrollBoxRenderable | null = null
+let sceneTextarea: TextareaRenderable | null = null
 
 const SCENES: Scene[] = [
   {
@@ -200,6 +209,133 @@ const SCENES: Scene[] = [
       renderer.root.add(scroll)
     },
   },
+  {
+    // Yoga justifyContent/alignItems across rows — main-axis distribution and
+    // cross-axis alignment the earlier flex scene doesn't hit.
+    name: "flex-align-justify",
+    width: 40,
+    height: 11,
+    build(renderer) {
+      const root = new BoxRenderable(renderer, { width: "100%", height: "100%", flexDirection: "column", gap: 1 })
+      for (const justify of ["center", "flex-end", "space-between"] as const) {
+        const rowBox = new BoxRenderable(renderer, {
+          flexGrow: 1,
+          flexDirection: "row",
+          justifyContent: justify,
+          alignItems: "center",
+          gap: 1,
+          border: true,
+          title: justify,
+        })
+        rowBox.add(new TextRenderable(renderer, { content: "A" }))
+        rowBox.add(new TextRenderable(renderer, { content: "BB" }))
+        rowBox.add(new TextRenderable(renderer, { content: "CCC" }))
+        root.add(rowBox)
+      }
+      renderer.root.add(root)
+    },
+  },
+  {
+    // The text attributes the styled-text scene omits: strikethrough, blink,
+    // inverse (with fg/bg), and a bold+italic+underline stack.
+    name: "text-attributes-matrix",
+    width: 40,
+    height: 8,
+    build(renderer) {
+      const root = new BoxRenderable(renderer, { width: "100%", height: "100%", flexDirection: "column" })
+      root.add(new TextRenderable(renderer, { content: "strikethrough", attributes: TextAttributes.STRIKETHROUGH }))
+      root.add(new TextRenderable(renderer, { content: "blink attribute", attributes: TextAttributes.BLINK }))
+      root.add(
+        new TextRenderable(renderer, {
+          content: "inverse video",
+          attributes: TextAttributes.INVERSE,
+          fg: "#e06c75",
+          bg: "#282c34",
+        }),
+      )
+      root.add(
+        new TextRenderable(renderer, {
+          content: "bold italic under",
+          attributes: TextAttributes.BOLD | TextAttributes.ITALIC | TextAttributes.UNDERLINE,
+        }),
+      )
+      renderer.root.add(root)
+    },
+  },
+  {
+    // Absolute-positioned overlapping boxes with semi-transparent backgrounds —
+    // exercises the alpha-blending cell path (setCellWithAlphaBlending) and
+    // z-order compositing that opaque scenes never reach.
+    name: "opacity-overlap",
+    width: 24,
+    height: 8,
+    build(renderer) {
+      const root = new BoxRenderable(renderer, { width: "100%", height: "100%", backgroundColor: "#1e2939" })
+      root.add(
+        new BoxRenderable(renderer, {
+          position: "absolute",
+          left: 1,
+          top: 1,
+          width: 13,
+          height: 5,
+          backgroundColor: "#ff000080",
+        }),
+      )
+      root.add(
+        new BoxRenderable(renderer, {
+          position: "absolute",
+          left: 8,
+          top: 2,
+          width: 13,
+          height: 5,
+          backgroundColor: "#00ff0080",
+        }),
+      )
+      renderer.root.add(root)
+    },
+  },
+  {
+    // Scrollbox scrolled mid-content: the scrollbar thumb is off the top rail
+    // and the viewport shows an interior window (scroll offset + thumb geometry).
+    // scrollTop is applied in settle() so content height is already measured.
+    name: "scrollbox-scrolled",
+    width: 30,
+    height: 8,
+    build(renderer) {
+      const scroll = new ScrollBoxRenderable(renderer, { width: "100%", height: "100%" })
+      for (let i = 1; i <= 24; i++) {
+        scroll.add(new TextRenderable(renderer, { content: `row ${String(i).padStart(2, "0")} of 24` }))
+      }
+      renderer.root.add(scroll)
+      sceneScroll = scroll
+    },
+    settle() {
+      if (sceneScroll) sceneScroll.scrollTop = 9
+    },
+  },
+  {
+    // Focused textarea with an explicit colored selection — the editor-view
+    // selection-highlight path (bg/fg runs over multiple lines incl. CJK).
+    // setSelection runs in settle() so the view geometry exists.
+    name: "textarea-selection",
+    width: 30,
+    height: 6,
+    build(renderer) {
+      const box = new BoxRenderable(renderer, { width: "100%", height: "100%", border: true })
+      const textarea = new TextareaRenderable(renderer, {
+        width: "100%",
+        height: "100%",
+        initialValue: "select this text\n第二行也選\nthird line",
+      })
+      box.add(textarea)
+      renderer.root.add(box)
+      textarea.focus()
+      sceneTextarea = textarea
+    },
+    settle() {
+      if (sceneTextarea) sceneTextarea.setSelection(4, 22, "#3b4252", "#eceff4")
+    },
+  },
 ]
 
 function hex(color: RGBA): string {
@@ -232,8 +368,13 @@ async function renderScene(scene: Scene): Promise<string> {
   try {
     await scene.build(setup.renderer)
     // Two passes: the first computes layout/wrapping, the second settles any
-    // measure-func driven reflow so the capture is deterministic.
+    // measure-func driven reflow so the capture is deterministic. The optional
+    // settle hook runs in between, once geometry has been measured.
     await setup.renderOnce()
+    if (scene.settle) {
+      await scene.settle(setup.renderer)
+      await setup.renderOnce()
+    }
     await setup.renderOnce()
     const golden = {
       scene: scene.name,

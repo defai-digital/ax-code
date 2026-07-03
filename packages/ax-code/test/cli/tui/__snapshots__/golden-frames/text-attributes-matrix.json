@@ -1,0 +1,142 @@
+{
+  "scene": "text-attributes-matrix",
+  "width": 40,
+  "height": 8,
+  "chars": [
+    "strikethrough                           ",
+    "blink attribute                         ",
+    "inverse video                           ",
+    "bold italic under                       ",
+    "                                        ",
+    "                                        ",
+    "                                        ",
+    "                                        ",
+    ""
+  ],
+  "frame": {
+    "cols": 40,
+    "rows": 8,
+    "cursor": [
+      1,
+      1
+    ],
+    "lines": [
+      {
+        "spans": [
+          {
+            "text": "strikethrough",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 128,
+            "width": 13
+          },
+          {
+            "text": "                           ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 27
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "blink attribute",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 16,
+            "width": 15
+          },
+          {
+            "text": "                         ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 25
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "inverse video",
+            "fg": "#282c34",
+            "bg": "#e06c75",
+            "attributes": 32,
+            "width": 13
+          },
+          {
+            "text": "                           ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 27
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "bold italic under",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 13,
+            "width": 17
+          },
+          {
+            "text": "                       ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 23
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      },
+      {
+        "spans": [
+          {
+            "text": "                                        ",
+            "fg": "#ffffff",
+            "bg": "#00000000",
+            "attributes": 0,
+            "width": 40
+          }
+        ]
+      }
+    ]
+  }
+}
