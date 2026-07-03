@@ -9,6 +9,7 @@ import z from "zod"
 import type { ChildProcessWithoutNullStreams } from "child_process"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
+import { Global } from "../global"
 import { Ripgrep } from "../file/ripgrep"
 import { LspScheduler } from "./scheduler"
 import * as LSPSelection from "./selection"
@@ -594,6 +595,19 @@ export namespace LSP {
     const maxFiles = normalizePrewarmWorkspaceLimit(opts.maxFiles, 0)
     const maxLanguages = normalizePrewarmWorkspaceLimit(opts.maxLanguages, maxFiles)
     if (maxFiles === 0 || maxLanguages === 0) {
+      return { files: [], readyCount: 0, freshSpawnCount: 0 }
+    }
+
+    // The home directory is not a real workspace. The Ripgrep walk below feeds
+    // off the native file walker, which walks the entire tree eagerly (it is
+    // not lazy), so the bounded maxFiles/maxLanguages break cannot cap it — it
+    // walks all of ~/ before yielding a single entry. During bootstrap this
+    // runs in the background but the synchronous native call still monopolizes
+    // the event loop for tens of seconds, stalling the first HTTP request (the
+    // desktop web UI launches its managed `ax-code serve` with cwd = home). A
+    // home directory has no coherent set of language servers to prime, so skip
+    // it entirely. See the matching guard in File.scan (src/file/index.ts).
+    if (Instance.directory === Global.Path.home) {
       return { files: [], readyCount: 0, freshSpawnCount: 0 }
     }
 

@@ -253,4 +253,56 @@ describe("LSP.prewarmFiles", () => {
       },
     })
   })
+
+  test("prewarmWorkspace skips the home directory without walking it", async () => {
+    // Regression: the desktop web UI launches its managed `ax-code serve` with
+    // cwd = home. prewarmWorkspace used to walk the entire home tree via the
+    // (non-lazy) native file walker, blocking the event loop for tens of
+    // seconds during bootstrap and stalling the first HTTP request. The home
+    // directory has no coherent workspace to prime, so it must be skipped.
+    await using tmp = await tmpdir()
+    const a = path.join(tmp.path, "a.ts")
+    const serverPath = path.join(import.meta.dirname, "..", "fixture", "lsp", "fake-lsp-server.js")
+    await writeFile(a, "export const a = 1\n")
+
+    const ripgrep = await import("../../src/file/ripgrep")
+    const filesSpy = vi.spyOn(ripgrep.Ripgrep, "files")
+
+    const previousTestHome = process.env.AX_CODE_TEST_HOME
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          configSpy = vi.spyOn(Config, "get").mockResolvedValue({
+            lsp: {
+              fake: {
+                command: [process.execPath, serverPath],
+                extensions: [".ts"],
+              },
+            },
+          } as never)
+
+          const result = await LSP.prewarmWorkspace({
+            mode: "semantic",
+            methods: ["documentSymbol"],
+            maxFiles: 4,
+            maxLanguages: 4,
+          })
+
+          expect(result).toEqual({
+            files: [],
+            readyCount: 0,
+            freshSpawnCount: 0,
+          })
+          // The workspace walk must not run for the home directory.
+          expect(filesSpy).not.toHaveBeenCalled()
+        },
+      })
+    } finally {
+      filesSpy.mockRestore()
+      if (previousTestHome === undefined) delete process.env.AX_CODE_TEST_HOME
+      else process.env.AX_CODE_TEST_HOME = previousTestHome
+    }
+  })
 })
