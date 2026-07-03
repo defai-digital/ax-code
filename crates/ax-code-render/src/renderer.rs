@@ -82,28 +82,92 @@ fn color_distance_squared(a: Rgba, b: Rgba) -> f32 {
     dr * dr + dg * dg + db * db
 }
 
-// --- memory output backend (renderer-output.zig BufferedBackend, .memory) -----
+// --- output backend (renderer-output.zig BufferedBackend) ---------------------
 //
-// Non-threaded memory mode never flips the active buffer, so the committed
-// frame is simply the last bytes written between begin/end. `dump_to` mirrors
-// the Zig debug format the parity harness parses.
-#[derive(Default)]
-struct MemoryBackend {
-    frame: Vec<u8>,
-    has_committed: bool,
+// Non-threaded mode never flips the active buffer, so the committed frame is
+// simply the last bytes written between begin/end. The memory variant keeps the
+// frame + control (`writeOut`) bytes in memory (`dump_to` mirrors the Zig debug
+// format the render harness parses); the stdout variant flushes committed frame
+// + control bytes to process stdout, matching Zig's StdoutOutput so the TTY
+// differential harness can capture setup/teardown escape sequences.
+enum OutputBackend {
+    Memory {
+        frame: Vec<u8>,
+        has_committed: bool,
+        // Faithful to MemoryOutput.bytes: accumulates writeOut + committed
+        // frames. Not surfaced by dumpOutputBuffer (which dumps the A/B frame).
+        control: Vec<u8>,
+    },
+    Stdout {
+        frame: Vec<u8>,
+        has_committed: bool,
+    },
 }
 
-impl MemoryBackend {
-    fn begin_frame(&mut self) {
-        self.frame.clear();
+impl OutputBackend {
+    fn memory() -> OutputBackend {
+        OutputBackend::Memory {
+            frame: Vec::new(),
+            has_committed: false,
+            control: Vec::new(),
+        }
     }
 
-    fn end_frame(&mut self) {
-        self.has_committed = true;
+    fn stdout() -> OutputBackend {
+        OutputBackend::Stdout {
+            frame: Vec::new(),
+            has_committed: false,
+        }
+    }
+
+    /// Commit one rendered frame's bytes (begin_frame + write + end_frame).
+    fn commit_frame(&mut self, bytes: &[u8]) {
+        match self {
+            OutputBackend::Memory {
+                frame,
+                has_committed,
+                ..
+            } => {
+                frame.clear();
+                frame.extend_from_slice(bytes);
+                *has_committed = true;
+            }
+            OutputBackend::Stdout {
+                frame,
+                has_committed,
+            } => {
+                frame.clear();
+                frame.extend_from_slice(bytes);
+                *has_committed = true;
+                write_stdout(bytes);
+            }
+        }
+    }
+
+    /// Synchronously emit a pre-built control sequence (setup/shutdown/query).
+    fn write_out(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        match self {
+            OutputBackend::Memory { control, .. } => control.extend_from_slice(bytes),
+            OutputBackend::Stdout { .. } => write_stdout(bytes),
+        }
     }
 
     fn dump_to(&self, out: &mut Vec<u8>) {
-        let last: &[u8] = if self.has_committed { &self.frame } else { &[] };
+        let (frame, has_committed) = match self {
+            OutputBackend::Memory {
+                frame,
+                has_committed,
+                ..
+            } => (frame, *has_committed),
+            OutputBackend::Stdout {
+                frame,
+                has_committed,
+            } => (frame, *has_committed),
+        };
+        let last: &[u8] = if has_committed { frame } else { &[] };
         if !last.is_empty() {
             out.extend_from_slice(last);
         } else {
@@ -116,6 +180,14 @@ impl MemoryBackend {
     }
 }
 
+fn write_stdout(bytes: &[u8]) {
+    use std::io::Write as _;
+    let stdout = std::io::stdout();
+    let mut lock = stdout.lock();
+    let _ = lock.write_all(bytes);
+    let _ = lock.flush();
+}
+
 pub struct CliRenderer {
     pub width: u32,
     pub height: u32,
@@ -126,7 +198,12 @@ pub struct CliRenderer {
     background_color: Rgba,
     render_offset: u32,
     terminal: Terminal,
-    backend: MemoryBackend,
+    backend: OutputBackend,
+
+    // Terminal setup/teardown state (renderer.zig).
+    terminal_setup: bool,
+    use_alternate_screen: bool,
+    clear_on_shutdown: bool,
 
     palette_rgba: [Rgba; 256],
     #[allow(dead_code)]
@@ -157,8 +234,19 @@ pub enum RenderStatus {
     Failed = 2,
 }
 
+/// Output transport requested at createRenderer time.
+pub enum OutputKind {
+    Stdout,
+    Memory,
+}
+
 impl CliRenderer {
-    pub fn create(width: u32, height: u32, remote_mode: RemoteMode) -> Option<Box<CliRenderer>> {
+    pub fn create(
+        width: u32,
+        height: u32,
+        output: OutputKind,
+        remote_mode: RemoteMode,
+    ) -> Option<Box<CliRenderer>> {
         if width == 0 || height == 0 {
             return None;
         }
@@ -223,7 +311,13 @@ impl CliRenderer {
             background_color,
             render_offset: 0,
             terminal: Terminal::init(remote_mode),
-            backend: MemoryBackend::default(),
+            backend: match output {
+                OutputKind::Stdout => OutputBackend::stdout(),
+                OutputKind::Memory => OutputBackend::memory(),
+            },
+            terminal_setup: false,
+            use_alternate_screen: true,
+            clear_on_shutdown: true,
             palette_rgba,
             default_fg_rgba: default_color(255, 255, 255, 255),
             default_bg_rgba: default_color(0, 0, 0, 255),
@@ -289,10 +383,62 @@ impl CliRenderer {
     pub fn render(&mut self, force: bool) -> RenderStatus {
         let mut out = Vec::new();
         self.prepare_render_frame(&mut out, force);
-        self.backend.begin_frame();
-        self.backend.frame.extend_from_slice(&out);
-        self.backend.end_frame();
+        self.backend.commit_frame(&out);
         RenderStatus::Rendered
+    }
+
+    /// Emit a pre-built control sequence through the active backend.
+    fn write_out(&mut self, bytes: &[u8]) {
+        self.backend.write_out(bytes);
+    }
+
+    /// Zig `clearTerminal` — clear screen + home.
+    pub fn clear_terminal(&mut self) {
+        self.write_out(b"\x1b[H\x1b[2J");
+    }
+
+    /// Zig `setCursorPosition` glue — clamp to >=1, update terminal state; the
+    /// escape is emitted by the next render()'s cursor tail.
+    pub fn set_cursor_position(&mut self, x: i32, y: i32, visible: bool) {
+        let cx = x.max(1) as u32;
+        let cy = y.max(1) as u32;
+        self.terminal.set_cursor_position(cx, cy, visible);
+    }
+
+    /// Zig `setupTerminal` — query capabilities, save cursor, enter alt screen
+    /// or reserve non-alt surface, and enable detected features.
+    pub fn setup_terminal(&mut self, use_alternate_screen: bool) {
+        self.use_alternate_screen = use_alternate_screen;
+        self.terminal_setup = true;
+
+        let mut query = Vec::new();
+        self.terminal.query_terminal_send(&mut query);
+        self.write_out(&query);
+
+        let mut setup = Vec::new();
+        setup.extend_from_slice(b"\x1b[s"); // saveCursorState
+        if use_alternate_screen {
+            self.terminal.enter_alt_screen(&mut setup);
+        } else {
+            make_room_for_renderer_output(&mut setup, self.height.max(1));
+        }
+        self.terminal.set_cursor_position(1, 1, false);
+        let use_kitty = self.terminal.kitty_keyboard_flags() > 0;
+        self.terminal
+            .enable_detected_features(&mut setup, use_kitty);
+        self.write_out(&setup);
+    }
+
+    /// Zig `restoreTerminalModes` — re-emit enable sequences for every mode
+    /// currently active (focus-in recovery).
+    pub fn restore_terminal_modes(&mut self) {
+        let mut out = Vec::new();
+        self.terminal.restore_terminal_modes(&mut out);
+        self.write_out(&out);
+    }
+
+    pub fn set_clear_on_shutdown(&mut self, clear: bool) {
+        self.clear_on_shutdown = clear;
     }
 
     fn prepare_render_frame(&mut self, out: &mut Vec<u8>, force: bool) {
@@ -556,6 +702,16 @@ impl CliRenderer {
 fn begin_render_frame(out: &mut Vec<u8>) {
     out.extend_from_slice(b"\x1b[?2026h"); // syncSet
     out.extend_from_slice(b"\x1b[?25l"); // hideCursor
+}
+
+/// ansi.ANSI.makeRoomForRendererOutput — reserve the non-alt surface by
+/// scrolling `height - 1` blank lines.
+fn make_room_for_renderer_output(out: &mut Vec<u8>, height: u32) {
+    if height > 1 {
+        for _ in 0..(height - 1) {
+            out.push(b'\n');
+        }
+    }
 }
 
 fn move_to_output(out: &mut Vec<u8>, x: u32, y: u32) {

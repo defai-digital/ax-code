@@ -119,6 +119,8 @@ export declare function bufferSetRespectAlpha(handle: number, respectAlpha: numb
 
 export declare function bufferWriteResolvedChars(handle: number, outputPtr: number, outputLen: number, addLineBreaks: boolean): number
 
+export declare function clearTerminal(handle: number): void
+
 export declare function createAudioEngine(options: number): number
 
 export declare function createEditBuffer(widthMethod: number, eventSinkHandle: number): number
@@ -229,9 +231,17 @@ export declare function render(handle: number, force: number): number
 
 export declare function resizeRenderer(handle: number, width: number, height: number): void
 
+export declare function restoreTerminalModes(handle: number): void
+
 export declare function setBackgroundColor(handle: number, color: number): void
 
+export declare function setClearOnShutdown(handle: number, clear: number): void
+
+export declare function setCursorPosition(handle: number, x: number, y: number, visible: number): void
+
 export declare function setRenderOffset(handle: number, offset: number): void
+
+export declare function setupTerminal(handle: number, useAlternateScreen: number): void
 
 export declare function syntaxStyleGetStyleCount(handle: number): number
 

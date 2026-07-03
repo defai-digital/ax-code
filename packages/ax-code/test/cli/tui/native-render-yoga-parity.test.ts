@@ -70,6 +70,15 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("setupTerminal/restoreTerminalModes/clearTerminal escape output matches the Zig backend", () => {
+    // Drives the stdout backend in child processes and diffs the emitted
+    // control sequences (dumpOutputBuffer can't see writeOut output).
+    const result = runNode([path.join(pkgDir, "script/native-render-tty-parity.mjs")])
+    expect(result.stderr).not.toContain("escape output differs")
+    expect(result.stdout).toContain("tty parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
   it("overlay engages under AX_CODE_NATIVE_RENDER=1 (audio-stub fingerprint)", () => {
     const fingerprint = `
       import { Yoga } from "@ax-code/opentui-core"

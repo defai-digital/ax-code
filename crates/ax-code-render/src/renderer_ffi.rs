@@ -7,7 +7,7 @@
 use crate::buffer::Rgba;
 use crate::buffer_ffi::global_pool;
 use crate::handles::{self, Kind};
-use crate::renderer::CliRenderer;
+use crate::renderer::{CliRenderer, OutputKind};
 use crate::terminal::RemoteMode;
 use napi_derive::napi;
 
@@ -34,9 +34,14 @@ pub fn create_renderer(
     if feed_ptr != 0.0 {
         return 0;
     }
-    let _ = buffered_destination_kind; // memory backend regardless (stdout unused off-TTY)
+    // bufferedDestinationKind: 0 = stdout, 1 = memory (renderer.zig createRenderer).
+    let output = match buffered_destination_kind {
+        0 => OutputKind::Stdout,
+        1 => OutputKind::Memory,
+        _ => return 0,
+    };
     let remote_mode = RemoteMode::from_code(remote_mode_value as u8);
-    let Some(renderer) = CliRenderer::create(width, height, remote_mode) else {
+    let Some(renderer) = CliRenderer::create(width, height, output, remote_mode) else {
         return 0;
     };
     let ptr = Box::into_raw(renderer) as usize;
@@ -102,5 +107,40 @@ pub fn set_render_offset(handle: u32, offset: u32) {
 pub fn set_background_color(handle: u32, color: f64) {
     if let Some(r) = resolve(handle) {
         r.set_background_color(unsafe { read_rgba(color) });
+    }
+}
+
+#[napi(js_name = "setupTerminal")]
+pub fn setup_terminal(handle: u32, use_alternate_screen: f64) {
+    if let Some(r) = resolve(handle) {
+        r.setup_terminal(use_alternate_screen != 0.0);
+    }
+}
+
+#[napi(js_name = "restoreTerminalModes")]
+pub fn restore_terminal_modes(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.restore_terminal_modes();
+    }
+}
+
+#[napi(js_name = "setCursorPosition")]
+pub fn set_cursor_position(handle: u32, x: i32, y: i32, visible: f64) {
+    if let Some(r) = resolve(handle) {
+        r.set_cursor_position(x, y, visible != 0.0);
+    }
+}
+
+#[napi(js_name = "clearTerminal")]
+pub fn clear_terminal(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.clear_terminal();
+    }
+}
+
+#[napi(js_name = "setClearOnShutdown")]
+pub fn set_clear_on_shutdown(handle: u32, clear: f64) {
+    if let Some(r) = resolve(handle) {
+        r.set_clear_on_shutdown(clear != 0.0);
     }
 }
