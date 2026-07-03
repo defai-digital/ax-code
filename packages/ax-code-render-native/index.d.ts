@@ -125,6 +125,8 @@ export declare function createSyntaxStyle(): number
 
 export declare function createTextBuffer(widthMethod: number): number
 
+export declare function createTextBufferView(tbHandle: number): number
+
 export declare function destroyAudioEngine(engine: number): void
 
 export declare function destroyOptimizedBuffer(handle: number): void
@@ -132,6 +134,8 @@ export declare function destroyOptimizedBuffer(handle: number): void
 export declare function destroySyntaxStyle(handle: number): void
 
 export declare function destroyTextBuffer(handle: number): void
+
+export declare function destroyTextBufferView(handle: number): void
 
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
@@ -196,6 +200,27 @@ export declare function textBufferSetSyntaxStyle(handle: number, styleHandle: nu
 export declare function textBufferSetTabWidth(handle: number, width: number): void
 
 export declare function textBufferSetTextFromMem(handle: number, id: number): void
+
+/**
+ * ExternalLineInfo extern layout (64-bit): starts_ptr@0, starts_len@8,
+ * widths_ptr@16, widths_len@24, sources_ptr@32, sources_len@40,
+ * wraps_ptr@48, wraps_len@56, width_cols_max@64.
+ */
+export declare function textBufferViewGetLineInfoDirect(handle: number, outPtr: number): void
+
+export declare function textBufferViewGetPlainText(handle: number, outPtr: number, maxLen: number): number
+
+export declare function textBufferViewGetVirtualLineCount(handle: number): number
+
+export declare function textBufferViewSetFirstLineOffset(handle: number, offset: number): void
+
+export declare function textBufferViewSetViewport(handle: number, x: number, y: number, width: number, height: number): void
+
+export declare function textBufferViewSetViewportSize(handle: number, width: number, height: number): void
+
+export declare function textBufferViewSetWrapMode(handle: number, mode: number): void
+
+export declare function textBufferViewSetWrapWidth(handle: number, width: number): void
 
 export declare function yogaConfigCreate(): number
 

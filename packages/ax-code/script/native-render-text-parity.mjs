@@ -107,6 +107,22 @@ function state(sym, handle, isZig) {
   }
 }
 
+function lineInfo(sym, view, isZig) {
+  const out = new Uint8Array(72)
+  keepAlive.push(out)
+  sym.textBufferViewGetLineInfoDirect(view, isZig ? ptr(out) : Number(ptr(out)))
+  const dv = new DataView(out.buffer, out.byteOffset)
+  const dump = []
+  for (let f = 0; f < 4; f++) {
+    const p = dv.getBigUint64(f * 16, true)
+    const n = dv.getUint32(f * 16 + 8, true)
+    if (!p || !n) { dump.push("") ; continue }
+    dump.push(Buffer.from(ffi.toArrayBuffer(p, n * 4).slice(0)).toString("hex"))
+  }
+  dump.push(dv.getUint32(64, true))
+  return dump
+}
+
 const seqArg = process.argv.find((a) => a.startsWith("--seqs="))
 const SEQUENCES = seqArg ? Number(seqArg.slice(7)) : 400
 let failures = 0
@@ -116,6 +132,13 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
   const rh = rust.createTextBuffer(1)
   const zStyle = zig.createSyntaxStyle()
   const rStyle = rust.createSyntaxStyle()
+  const zView = zig.createTextBufferView(zh)
+  const rView = rust.createTextBufferView(rh)
+  if (rand() < 0.5) {
+    const [vx, vy, vw, vh] = [randInt(4), randInt(4), 1 + randInt(40), 1 + randInt(10)]
+    zig.textBufferViewSetViewport(zView, vx, vy, vw, vh)
+    rust.textBufferViewSetViewport(rView, vx, vy, vw, vh)
+  }
   if (rand() < 0.6) {
     zig.textBufferSetSyntaxStyle(zh, zStyle)
     rust.textBufferSetSyntaxStyle(rh, rStyle)
@@ -236,6 +259,10 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
       zs[`coords${r}`] = Buffer.from(zOut.subarray(0, zc)).toString("hex")
       rs[`coords${r}`] = Buffer.from(rOut.subarray(0, rc)).toString("hex")
     }
+    zs.vlines = Number(zig.textBufferViewGetVirtualLineCount(zView))
+    rs.vlines = Number(rust.textBufferViewGetVirtualLineCount(rView))
+    zs.lineInfo = lineInfo(zig, zView, true)
+    rs.lineInfo = lineInfo(rust, rView, false)
     if (JSON.stringify(zs) !== JSON.stringify(rs)) {
       console.error(`✗ seq ${s} op ${i} [${opsLog[opsLog.length - 1]}]`)
       console.error(`  zig : ${JSON.stringify(zs)}`)
@@ -260,6 +287,8 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
     console.error(`✗ seq ${s}: resolveByName divergence z=${zid} r=${rid}`)
     failures++
   }
+  zig.destroyTextBufferView(zView)
+  rust.destroyTextBufferView(rView)
   zig.destroySyntaxStyle(zStyle)
   rust.destroySyntaxStyle(rStyle)
   zig.destroyTextBuffer(zh)

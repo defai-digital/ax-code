@@ -35,6 +35,8 @@ pub mod segment;
 pub mod syntax_style;
 pub mod text_buffer;
 mod text_buffer_ffi;
+pub mod text_buffer_view;
+mod text_buffer_view_ffi;
 pub mod unicode;
 mod width_table;
 mod yoga_sys;
