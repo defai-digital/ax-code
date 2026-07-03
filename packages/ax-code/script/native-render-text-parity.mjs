@@ -148,6 +148,22 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
 
     const zs = state(zig, zh, true)
     const rs = state(rust, rh, false)
+    // text-range extraction across random weight windows and coords
+    for (let r = 0; r < 3; r++) {
+      const a = randInt(zs.length + 3)
+      const b = a + randInt(8)
+      const zOut = new Uint8Array(4096)
+      const rOut = new Uint8Array(4096)
+      const zl = Number(zig.textBufferGetTextRange(zh, a, b, ptr(zOut), zOut.length))
+      const rl = Number(rust.textBufferGetTextRange(rh, a, b, Number(ptr(rOut)), rOut.length))
+      zs[`range${r}`] = Buffer.from(zOut.subarray(0, zl)).toString("hex")
+      rs[`range${r}`] = Buffer.from(rOut.subarray(0, rl)).toString("hex")
+      const [sr, sc, er, ec] = [randInt(zs.lines + 1), randInt(6), randInt(zs.lines + 1), randInt(6)]
+      const zc = Number(zig.textBufferGetTextRangeByCoords(zh, sr, sc, er, ec, ptr(zOut), zOut.length))
+      const rc = Number(rust.textBufferGetTextRangeByCoords(rh, sr, sc, er, ec, Number(ptr(rOut)), rOut.length))
+      zs[`coords${r}`] = Buffer.from(zOut.subarray(0, zc)).toString("hex")
+      rs[`coords${r}`] = Buffer.from(rOut.subarray(0, rc)).toString("hex")
+    }
     if (JSON.stringify(zs) !== JSON.stringify(rs)) {
       console.error(`✗ seq ${s} op ${i} [${opsLog[opsLog.length - 1]}]`)
       console.error(`  zig : ${JSON.stringify(zs)}`)

@@ -223,6 +223,54 @@ pub fn text_buffer_set_text_from_mem(handle: u32, id: u32) {
     }
 }
 
+#[napi(js_name = "textBufferGetTextRange")]
+pub fn text_buffer_get_text_range(
+    handle: u32,
+    start_offset: u32,
+    end_offset: u32,
+    out_ptr: f64,
+    max_len: u32,
+) -> u32 {
+    let Some(tb) = resolve(handle) else { return 0 };
+    if out_ptr == 0.0 || max_len == 0 {
+        return 0;
+    }
+    let out = tb.get_text_range(start_offset, end_offset, max_len as usize);
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            out.as_ptr(),
+            (out_ptr as u64) as usize as *mut u8,
+            out.len(),
+        )
+    };
+    out.len() as u32
+}
+
+#[napi(js_name = "textBufferGetTextRangeByCoords")]
+pub fn text_buffer_get_text_range_by_coords(
+    handle: u32,
+    start_row: u32,
+    start_col: u32,
+    end_row: u32,
+    end_col: u32,
+    out_ptr: f64,
+    max_len: u32,
+) -> u32 {
+    let Some(tb) = resolve(handle) else { return 0 };
+    if out_ptr == 0.0 || max_len == 0 {
+        return 0;
+    }
+    let out = tb.get_text_range_by_coords(start_row, start_col, end_row, end_col, max_len as usize);
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            out.as_ptr(),
+            (out_ptr as u64) as usize as *mut u8,
+            out.len(),
+        )
+    };
+    out.len() as u32
+}
+
 #[napi(js_name = "textBufferAppendFromMemId")]
 pub fn text_buffer_append_from_mem_id(handle: u32, id: u32) {
     if let Some(tb) = resolve(handle) {

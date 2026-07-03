@@ -12,9 +12,10 @@
 use crate::buffer::Rgba;
 use crate::mem_registry::{MemBuffer, MemRegistry};
 use crate::rope::Rope;
-use crate::segment::{FLAG_ASCII_ONLY, MARKER_LINESTART, Segment, TextChunk};
+use crate::segment::{FLAG_ASCII_ONLY, MARKER_BRK, MARKER_LINESTART, Segment, TextChunk};
 use crate::unicode::{
-    LineBreakKind, WidthMethod, calculate_text_width, find_line_breaks, is_ascii_only,
+    LineBreakKind, WidthMethod, calculate_text_width, find_line_breaks, find_pos_by_width,
+    is_ascii_only,
 };
 
 pub struct StyledChunkIn<'a> {
@@ -252,6 +253,150 @@ impl TextBuffer {
 
     pub fn line_count_markers(&mut self) -> u32 {
         self.rope.marker_count(MARKER_LINESTART)
+    }
+
+    /// Zig `lineWidthAt` (iterators): line width from linestart markers.
+    pub fn line_width_at(&mut self, row: u32) -> u32 {
+        let count = self.rope.marker_count(MARKER_LINESTART);
+        if row >= count {
+            return 0;
+        }
+        let Some(marker) = self.rope.get_marker(MARKER_LINESTART, row) else {
+            return 0;
+        };
+        if row + 1 < count {
+            let Some(next) = self.rope.get_marker(MARKER_LINESTART, row + 1) else {
+                return 0;
+            };
+            if next.global_weight <= marker.global_weight {
+                return 0;
+            }
+            next.global_weight - marker.global_weight - 1
+        } else {
+            self.rope.total_weight() - marker.global_weight
+        }
+    }
+
+    /// Zig `coordsToOffset`: (row, col) -> global weight offset.
+    pub fn coords_to_offset(&mut self, row: u32, col: u32) -> Option<u32> {
+        let count = self.rope.marker_count(MARKER_LINESTART);
+        if row >= count {
+            return None;
+        }
+        let marker = self.rope.get_marker(MARKER_LINESTART, row)?;
+        if col > self.line_width_at(row) {
+            return None;
+        }
+        Some(marker.global_weight + col)
+    }
+
+    /// Zig `getTextRange` via `extractTextBetweenOffsets`: extract the text
+    /// covering the weight range [start, end). Chunk boundaries snap to
+    /// grapheme clusters (start snaps back, end snaps forward); a break
+    /// occupies one weight unit and emits '\n' when inside the range (never
+    /// for the final line).
+    pub fn get_text_range(
+        &mut self,
+        start_offset: u32,
+        end_offset: u32,
+        max_len: usize,
+    ) -> Vec<u8> {
+        let mut out = Vec::new();
+        if start_offset >= end_offset || max_len == 0 {
+            return out;
+        }
+        let total_weight = self.rope.total_weight();
+        if start_offset >= total_weight {
+            return out;
+        }
+        let end = end_offset.min(total_weight);
+        let _ = self.rope.marker_count(MARKER_BRK); // keep marker cache warm (parity of behavior)
+
+        let tab_width = self.tab_width;
+        let method = self.width_method;
+        let mut col_offset: u32 = 0;
+        // Collect chunk copies first to avoid borrowing registry inside walk.
+        struct Piece {
+            bytes: Vec<u8>,
+            width: u32,
+            ascii: bool,
+            is_break: bool,
+        }
+        let mut pieces: Vec<Piece> = Vec::new();
+        self.rope.walk(&mut |segment, _| {
+            match segment {
+                Segment::Text(chunk) => pieces.push(Piece {
+                    bytes: chunk.bytes(&self.registry).to_vec(),
+                    width: chunk.width as u32,
+                    ascii: chunk.is_ascii_only(),
+                    is_break: false,
+                }),
+                Segment::Brk => pieces.push(Piece {
+                    bytes: Vec::new(),
+                    width: 1,
+                    ascii: true,
+                    is_break: true,
+                }),
+                Segment::LineStart => {}
+            }
+            true
+        });
+
+        for piece in &pieces {
+            if piece.is_break {
+                let newline_offset = col_offset;
+                if newline_offset >= start_offset && newline_offset < end && out.len() < max_len {
+                    out.push(b'\n');
+                }
+                col_offset += 1;
+                continue;
+            }
+            let chunk_start = col_offset;
+            let chunk_end = chunk_start + piece.width;
+            if chunk_end <= start_offset || chunk_start >= end {
+                col_offset = chunk_end;
+                continue;
+            }
+            let local_start_col = start_offset.saturating_sub(chunk_start);
+            let local_end_col = (end - chunk_start).min(piece.width);
+            let text = std::str::from_utf8(&piece.bytes).unwrap_or("");
+            let byte_start = if local_start_col > 0 {
+                find_pos_by_width(text, local_start_col, tab_width, piece.ascii, false, method)
+                    .byte_offset
+            } else {
+                0
+            };
+            let byte_end = if local_end_col < piece.width {
+                find_pos_by_width(text, local_end_col, tab_width, piece.ascii, true, method)
+                    .byte_offset
+            } else {
+                piece.bytes.len() as u32
+            };
+            if byte_start < byte_end && (byte_start as usize) < piece.bytes.len() {
+                let actual_end = (byte_end as usize).min(piece.bytes.len());
+                let selected = &piece.bytes[byte_start as usize..actual_end];
+                let copy = selected.len().min(max_len - out.len());
+                out.extend_from_slice(&selected[..copy]);
+            }
+            col_offset = chunk_end;
+        }
+        out
+    }
+
+    pub fn get_text_range_by_coords(
+        &mut self,
+        sr: u32,
+        sc: u32,
+        er: u32,
+        ec: u32,
+        max_len: usize,
+    ) -> Vec<u8> {
+        let (Some(start), Some(end)) =
+            (self.coords_to_offset(sr, sc), self.coords_to_offset(er, ec))
+        else {
+            return Vec::new();
+        };
+        self.get_text_range(start, end, max_len)
     }
 }
 

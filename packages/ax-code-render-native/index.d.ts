@@ -149,6 +149,10 @@ export declare function textBufferGetPlainText(handle: number, outPtr: number, m
 
 export declare function textBufferGetTabWidth(handle: number): number
 
+export declare function textBufferGetTextRange(handle: number, startOffset: number, endOffset: number, outPtr: number, maxLen: number): number
+
+export declare function textBufferGetTextRangeByCoords(handle: number, startRow: number, startCol: number, endRow: number, endCol: number, outPtr: number, maxLen: number): number
+
 export declare function textBufferRegisterMemBuffer(handle: number, dataPtr: number, dataLen: number, owned: boolean): number
 
 export declare function textBufferReplaceMemBuffer(handle: number, id: number, dataPtr: number, dataLen: number, owned: boolean): boolean

@@ -445,3 +445,94 @@ pub fn find_line_breaks(bytes: &[u8]) -> Vec<WrapBreak> {
     }
     out
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PosByWidth {
+    pub byte_offset: u32,
+    pub grapheme_count: u32,
+    pub columns_used: u32,
+}
+
+/// Zig `findPosByWidth`: map a column limit to a byte offset, snapping to
+/// grapheme cluster boundaries. `include_start_before` selects the snapping
+/// direction: true includes any cluster that STARTS before the limit
+/// (selection ends snap forward); false only includes clusters that END at
+/// or before it (selection starts snap backward).
+pub fn find_pos_by_width(
+    text: &str,
+    max_columns: u32,
+    tab_width: u8,
+    is_ascii: bool,
+    include_start_before: bool,
+    method: WidthMethod,
+) -> PosByWidth {
+    let bytes = text.as_bytes();
+    if bytes.is_empty() || max_columns == 0 {
+        return PosByWidth {
+            byte_offset: 0,
+            grapheme_count: 0,
+            columns_used: 0,
+        };
+    }
+    if is_ascii {
+        let n = bytes.len() as u32;
+        let cut = max_columns.min(n);
+        return PosByWidth {
+            byte_offset: cut,
+            grapheme_count: cut,
+            columns_used: cut,
+        };
+    }
+    let mut columns_used: u32 = 0;
+    let mut graphemes: u32 = 0;
+    let cluster_list = clusters(text);
+    let last = cluster_list.len().saturating_sub(1);
+    for (idx, &(start, len)) in cluster_list.iter().enumerate() {
+        let w = cluster_width_of(text, start, len, method, tab_width);
+        if idx == last {
+            // Zig's final-cluster flush: the trailing cluster is excluded only
+            // when the columns consumed BEFORE it already reach the limit — a
+            // boundary-straddling final cluster is swallowed whole and the
+            // function reports text.len (reference quirk, found by fuzz).
+            if w > 0 {
+                if columns_used >= max_columns {
+                    return PosByWidth {
+                        byte_offset: start as u32,
+                        grapheme_count: graphemes,
+                        columns_used,
+                    };
+                }
+                columns_used += w;
+                if include_start_before {
+                    graphemes += 1;
+                }
+            }
+            break;
+        }
+        if include_start_before {
+            if columns_used >= max_columns {
+                return PosByWidth {
+                    byte_offset: start as u32,
+                    grapheme_count: graphemes,
+                    columns_used,
+                };
+            }
+            columns_used += w;
+            graphemes += 1;
+        } else {
+            if columns_used + w > max_columns {
+                return PosByWidth {
+                    byte_offset: start as u32,
+                    grapheme_count: graphemes,
+                    columns_used,
+                };
+            }
+            columns_used += w;
+        }
+    }
+    PosByWidth {
+        byte_offset: bytes.len() as u32,
+        grapheme_count: graphemes,
+        columns_used,
+    }
+}
