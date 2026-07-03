@@ -34,6 +34,7 @@ pub struct Capabilities {
     pub kitty_keyboard: bool,
     pub bracketed_paste: bool,
     pub focus_tracking: bool,
+    pub osc52: bool,
 }
 
 impl Default for Capabilities {
@@ -48,6 +49,7 @@ impl Default for Capabilities {
             kitty_keyboard: false,
             bracketed_paste: false,
             focus_tracking: false,
+            osc52: false,
         }
     }
 }
@@ -199,6 +201,8 @@ pub struct Terminal {
     pub state: ModeState,
     multiplexer: Multiplexer,
     is_foot: bool,
+    remote: bool,
+    sty: bool,
     // These are reset to false at every checkEnvironmentOverrides and only ever
     // set true by query responses, which the headless port never processes.
     skip_explicit_width_query: bool,
@@ -216,6 +220,8 @@ impl Terminal {
             state: ModeState::default(),
             multiplexer: detected.multiplexer,
             is_foot: detected.is_foot,
+            remote: detected.remote,
+            sty: detected.sty,
             skip_explicit_width_query: false,
             // Options.kitty_keyboard_flags default = 0b00101 (disambiguate +
             // alternate keys), not 0.
@@ -233,6 +239,64 @@ impl Terminal {
 
     fn is_in_tmux(&self) -> bool {
         self.multiplexer == Multiplexer::Tmux
+    }
+
+    fn can_write_clipboard(&self) -> bool {
+        self.caps.osc52
+    }
+
+    /// Multiplexer code for the ExternalCapabilities struct (none/tmux/zellij/screen).
+    pub fn multiplexer_code(&self) -> u8 {
+        match self.multiplexer {
+            Multiplexer::None => 0,
+            Multiplexer::Tmux => 1,
+            Multiplexer::Zellij => 2,
+            Multiplexer::Screen => 3,
+        }
+    }
+
+    pub fn is_remote(&self) -> bool {
+        self.remote
+    }
+
+    /// terminal.zig `writeClipboard` — OSC 52 set-clipboard, wrapped for tmux
+    /// (DCS, ESC doubled) or screen (DCS) passthrough. Returns false (NotSupported)
+    /// when osc52 is not detected.
+    pub fn write_clipboard(&self, out: &mut Vec<u8>, target: u8, payload: &[u8]) -> bool {
+        if !self.can_write_clipboard() {
+            return false;
+        }
+        let mut osc52: Vec<u8> = Vec::new();
+        osc52.extend_from_slice(b"\x1b]52;");
+        osc52.push(target);
+        osc52.push(b';');
+        osc52.extend_from_slice(payload);
+        osc52.extend_from_slice(b"\x1b\\");
+
+        if self.is_in_tmux() {
+            out.extend_from_slice(b"\x1bPtmux;"); // tmuxDcsStart
+            for &c in &osc52 {
+                if c == 0x1b {
+                    out.push(0x1b);
+                }
+                out.push(c);
+            }
+            out.extend_from_slice(b"\x1b\\"); // tmuxDcsEnd
+        } else if self.remote {
+            out.extend_from_slice(&osc52);
+        } else if self.sty {
+            out.extend_from_slice(b"\x1bP"); // screenDcsStart
+            for &c in &osc52 {
+                if c == 0x1b {
+                    out.push(0x1b);
+                }
+                out.push(c);
+            }
+            out.extend_from_slice(b"\x1b\\"); // screenDcsEnd
+        } else {
+            out.extend_from_slice(&osc52);
+        }
+        true
     }
 
     pub fn set_cursor_position(&mut self, x: u32, y: u32, visible: bool) {
@@ -540,6 +604,8 @@ struct Detected {
     caps: Capabilities,
     multiplexer: Multiplexer,
     is_foot: bool,
+    remote: bool,
+    sty: bool,
 }
 
 /// `checkEnvironmentOverrides`, scoped to the state the setup/teardown escape
@@ -563,6 +629,8 @@ fn detect(remote_mode: RemoteMode) -> Detected {
             caps,
             multiplexer,
             is_foot: false,
+            remote: true,
+            sty: false,
         };
     }
 
@@ -639,11 +707,73 @@ fn detect(remote_mode: RemoteMode) -> Detected {
         caps.ansi256 = true;
     }
 
+    // osc52 detection (checkEnvironmentOverrides, !from_xtversion path).
+    let sty = env("STY").is_some();
+    if env("WT_SESSION").is_some() {
+        caps.osc52 = true;
+    }
+    if !caps.osc52
+        && (multiplexer == Multiplexer::Tmux || multiplexer == Multiplexer::Screen || sty)
+    {
+        caps.osc52 = true;
+    }
+    if !caps.osc52 {
+        if let Some(prog) = env("TERM_PROGRAM") {
+            if is_osc52_term(&prog) {
+                caps.osc52 = true;
+            }
+        }
+    }
+    if !caps.osc52 {
+        if let Some(term) = env("TERM") {
+            if is_osc52_term(&term)
+                || contains_ignore_case(&term, "256color")
+                || contains_ignore_case(&term, "xterm")
+            {
+                caps.osc52 = true;
+            }
+        }
+    }
+
+    let remote = match remote_mode {
+        RemoteMode::Auto => is_remote_session_env(),
+        _ => false,
+    };
+
     Detected {
         caps,
         multiplexer,
         is_foot,
+        remote,
+        sty,
     }
+}
+
+fn is_osc52_term(value: &str) -> bool {
+    for needle in [
+        "iterm",
+        "kitty",
+        "alacritty",
+        "wezterm",
+        "contour",
+        "foot",
+        "rio",
+        "ghostty",
+        "tmux",
+        "screen",
+    ] {
+        if contains_ignore_case(value, needle) {
+            return true;
+        }
+    }
+    false
+}
+
+fn is_remote_session_env() -> bool {
+    env("SSH_CONNECTION").is_some()
+        || env("SSH_CLIENT").is_some()
+        || env("SSH_TTY").is_some()
+        || env("MOSH_CONNECTION").is_some()
 }
 
 fn contains_ignore_case(haystack: &str, needle: &str) -> bool {

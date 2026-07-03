@@ -71,6 +71,9 @@ async function runChild(which) {
   sym.setTerminalTitle(rh, p(title), title.length)
   sym.queryThemeColors(rh)
   sym.queryPixelResolution(rh)
+  const clip = new TextEncoder().encode("SGVsbG8=")
+  sym.copyToClipboardOSC52(rh, 0, p(clip), clip.length)
+  sym.clearClipboardOSC52(rh, 0)
   sym.disableMouse(rh)
   sym.disableKittyKeyboard(rh)
 

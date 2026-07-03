@@ -1092,6 +1092,21 @@ impl CliRenderer {
         self.write_out(b"\x1b[14t"); // queryPixelSize
     }
 
+    /// Zig `copyToClipboardOSC52` — OSC 52 set-clipboard, false if unsupported.
+    pub fn copy_to_clipboard_osc52(&mut self, target: u8, payload: &[u8]) -> bool {
+        let mut out = Vec::new();
+        if !self.terminal.write_clipboard(&mut out, target, payload) {
+            return false;
+        }
+        self.write_out(&out);
+        true
+    }
+
+    /// Zig `clearClipboardOSC52` — OSC 52 with an empty payload.
+    pub fn clear_clipboard_osc52(&mut self, target: u8) -> bool {
+        self.copy_to_clipboard_osc52(target, b"")
+    }
+
     /// Zig `writeOut` — emit arbitrary pre-built bytes through the backend.
     pub fn write_out_bytes(&mut self, bytes: &[u8]) {
         self.write_out(bytes);
@@ -1103,6 +1118,37 @@ impl CliRenderer {
 
     pub fn set_hyperlinks_capability(&mut self, enabled: bool) {
         self.terminal.caps.hyperlinks = enabled;
+    }
+
+    /// Zig `getTerminalCapabilities` — write the capability booleans into the
+    /// ExternalCapabilities out-struct. Terminal name/version pointers are left
+    /// null/zero (name bookkeeping is not tracked in this port); the boolean
+    /// capabilities are exact.
+    pub fn write_terminal_capabilities(&self, base: usize) {
+        let caps = self.terminal.get_capabilities();
+        unsafe {
+            // Zero the 64-byte struct first (name/version ptrs, padding, extras).
+            std::ptr::write_bytes(base as *mut u8, 0, 64);
+            let b = |off: usize, v: bool| ((base + off) as *mut u8).write_unaligned(v as u8);
+            b(0, caps.kitty_keyboard);
+            b(2, caps.rgb);
+            b(3, caps.ansi256);
+            ((base + 4) as *mut u8).write_unaligned(
+                if caps.unicode == crate::terminal::WidthMethod::Unicode {
+                    1
+                } else {
+                    0
+                },
+            );
+            b(7, caps.explicit_width);
+            b(10, caps.focus_tracking);
+            b(12, caps.bracketed_paste);
+            b(13, caps.hyperlinks);
+            b(14, caps.osc52);
+            b(16, caps.explicit_cursor_positioning);
+            b(17, self.terminal.is_remote());
+            ((base + 18) as *mut u8).write_unaligned(self.terminal.multiplexer_code());
+        }
     }
 
     /// Zig `getCursorState` — snapshot (x, y, visible, style_tag, blinking,

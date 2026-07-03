@@ -134,24 +134,46 @@ pub fn destroy_event_sink(handle: u32) {
 }
 
 // --- clipboard OSC52 (gated on the osc52 capability) -------------------------
-//
-// osc52 is only enabled by a query response / multiplexer detection not modeled
-// here, so canWriteClipboard is false and these return false without emitting —
-// matching the reference on a plain terminal. (tmux/screen enablement is a
-// documented follow-up.)
+
+/// ClipboardTarget code → OSC 52 target char (intToEnum order; default clipboard).
+fn clipboard_target_char(target: u32) -> u8 {
+    match target {
+        1 => b'p', // primary
+        2 => b's', // secondary
+        3 => b'q', // query
+        _ => b'c', // clipboard
+    }
+}
+
 #[napi(js_name = "copyToClipboardOSC52")]
 pub fn copy_to_clipboard_osc52(
-    _handle: u32,
-    _target: u32,
-    _payload_ptr: f64,
-    _payload_len: u32,
+    handle: u32,
+    target: u32,
+    payload_ptr: f64,
+    payload_len: u32,
 ) -> bool {
-    false
+    let Some(r) = renderer(handle) else {
+        return false;
+    };
+    let payload: &[u8] = if payload_ptr == 0.0 || payload_len == 0 {
+        &[]
+    } else {
+        unsafe {
+            std::slice::from_raw_parts(
+                (payload_ptr as u64) as usize as *const u8,
+                payload_len as usize,
+            )
+        }
+    };
+    r.copy_to_clipboard_osc52(clipboard_target_char(target), payload)
 }
 
 #[napi(js_name = "clearClipboardOSC52")]
-pub fn clear_clipboard_osc52(_handle: u32, _target: u32) -> bool {
-    false
+pub fn clear_clipboard_osc52(handle: u32, target: u32) -> bool {
+    let Some(r) = renderer(handle) else {
+        return false;
+    };
+    r.clear_clipboard_osc52(clipboard_target_char(target))
 }
 
 // --- notification (gated on notification protocol detection) -----------------
@@ -200,10 +222,17 @@ pub fn process_capability_response(_handle: u32, _resp_ptr: f64, _resp_len: u32)
 }
 
 #[napi(js_name = "getTerminalCapabilities")]
-pub fn get_terminal_capabilities(_handle: u32, _caps_ptr: f64) {
-    // ExternalCapabilities out-struct includes terminal name/version pointers
-    // not tracked here; left as the caller's zeroed struct (matches the Zig
-    // error path). A full getter lands with terminal-name bookkeeping.
+pub fn get_terminal_capabilities(handle: u32, caps_ptr: f64) {
+    if caps_ptr == 0.0 {
+        return;
+    }
+    let base = (caps_ptr as u64) as usize;
+    match renderer(handle) {
+        // Boolean capabilities are exact; terminal name/version are left empty
+        // (name bookkeeping not tracked — a documented partial getter).
+        Some(r) => r.write_terminal_capabilities(base),
+        None => unsafe { std::ptr::write_bytes(base as *mut u8, 0, 64) },
+    }
 }
 
 #[napi(js_name = "getAllocatorStats")]
