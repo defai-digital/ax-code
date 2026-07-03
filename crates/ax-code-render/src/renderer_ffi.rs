@@ -171,6 +171,99 @@ pub fn dump_hit_grid(handle: u32) {
     }
 }
 
+#[napi(js_name = "enableKittyKeyboard")]
+pub fn enable_kitty_keyboard(handle: u32, flags: u32) {
+    if let Some(r) = resolve(handle) {
+        r.enable_kitty_keyboard(flags as u8);
+    }
+}
+
+#[napi(js_name = "disableKittyKeyboard")]
+pub fn disable_kitty_keyboard(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.disable_kitty_keyboard();
+    }
+}
+
+#[napi(js_name = "setKittyKeyboardFlags")]
+pub fn set_kitty_keyboard_flags(handle: u32, flags: u32) {
+    if let Some(r) = resolve(handle) {
+        r.set_kitty_keyboard_flags(flags as u8);
+    }
+}
+
+#[napi(js_name = "getKittyKeyboardFlags")]
+pub fn get_kitty_keyboard_flags(handle: u32) -> u32 {
+    resolve(handle).map_or(0, |r| r.get_kitty_keyboard_flags() as u32)
+}
+
+#[napi(js_name = "enableMouse")]
+pub fn enable_mouse(handle: u32, enable_movement: f64) {
+    if let Some(r) = resolve(handle) {
+        r.enable_mouse(enable_movement != 0.0);
+    }
+}
+
+#[napi(js_name = "disableMouse")]
+pub fn disable_mouse(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.disable_mouse();
+    }
+}
+
+#[napi(js_name = "setTerminalTitle")]
+pub fn set_terminal_title(handle: u32, title_ptr: f64, title_len: u32) {
+    let Some(r) = resolve(handle) else { return };
+    let title = if title_ptr == 0.0 || title_len == 0 {
+        String::new()
+    } else {
+        let p = (title_ptr as u64) as usize as *const u8;
+        let bytes = unsafe { std::slice::from_raw_parts(p, title_len as usize) };
+        String::from_utf8_lossy(bytes).into_owned()
+    };
+    r.set_terminal_title(&title);
+}
+
+#[napi(js_name = "queryThemeColors")]
+pub fn query_theme_colors(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.query_theme_colors();
+    }
+}
+
+#[napi(js_name = "queryPixelResolution")]
+pub fn query_pixel_resolution(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.query_pixel_resolution();
+    }
+}
+
+/// CursorStyleOptions extern struct: u8 style @0, u8 blinking @1, ptr color @8,
+/// u8 cursor @16.
+#[napi(js_name = "setCursorStyleOptions")]
+pub fn set_cursor_style_options(handle: u32, options_ptr: f64) {
+    let Some(r) = resolve(handle) else { return };
+    if options_ptr == 0.0 {
+        return;
+    }
+    let base = (options_ptr as u64) as usize;
+    let (style, blinking, color_ptr, cursor) = unsafe {
+        (
+            *(base as *const u8),
+            *((base + 1) as *const u8),
+            *((base + 8) as *const usize),
+            *((base + 16) as *const u8),
+        )
+    };
+    let color = if color_ptr == 0 {
+        None
+    } else {
+        let p = color_ptr as *const u16;
+        Some(unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] })
+    };
+    r.set_cursor_style_options(style, blinking, color, cursor);
+}
+
 #[napi(js_name = "suspendRenderer")]
 pub fn suspend_renderer(handle: u32) {
     if let Some(r) = resolve(handle) {

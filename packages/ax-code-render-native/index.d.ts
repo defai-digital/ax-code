@@ -157,6 +157,10 @@ export declare function destroyTextBuffer(handle: number): void
 
 export declare function destroyTextBufferView(handle: number): void
 
+export declare function disableKittyKeyboard(handle: number): void
+
+export declare function disableMouse(handle: number): void
+
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
 export declare function dumpHitGrid(handle: number): void
@@ -233,9 +237,15 @@ export declare function editBufferSetText(handle: number, textPtr: number, textL
 
 export declare function editBufferUndo(handle: number, outPtr: number, maxLen: number): number
 
+export declare function enableKittyKeyboard(handle: number, flags: number): void
+
+export declare function enableMouse(handle: number, enableMovement: number): void
+
 export declare function getCurrentBuffer(handle: number): number
 
 export declare function getHitGridDirty(handle: number): boolean
+
+export declare function getKittyKeyboardFlags(handle: number): number
 
 export declare function getNextBuffer(handle: number): number
 
@@ -254,6 +264,10 @@ export declare function hitGridPopScissorRect(handle: number): void
 
 export declare function hitGridPushScissorRect(handle: number, x: number, y: number, width: number, height: number): void
 
+export declare function queryPixelResolution(handle: number): void
+
+export declare function queryThemeColors(handle: number): void
+
 export declare function render(handle: number, force: number): number
 
 export declare function rendererSetPaletteState(handle: number, palettePtr: number, paletteLen: number, defaultFgPtr: number, defaultBgPtr: number, paletteEpoch: number): void
@@ -270,7 +284,17 @@ export declare function setClearOnShutdown(handle: number, clear: number): void
 
 export declare function setCursorPosition(handle: number, x: number, y: number, visible: number): void
 
+/**
+ * CursorStyleOptions extern struct: u8 style @0, u8 blinking @1, ptr color @8,
+ * u8 cursor @16.
+ */
+export declare function setCursorStyleOptions(handle: number, optionsPtr: number): void
+
+export declare function setKittyKeyboardFlags(handle: number, flags: number): void
+
 export declare function setRenderOffset(handle: number, offset: number): void
+
+export declare function setTerminalTitle(handle: number, titlePtr: number, titleLen: number): void
 
 export declare function setupTerminal(handle: number, useAlternateScreen: number): void
 

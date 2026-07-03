@@ -754,6 +754,91 @@ impl CliRenderer {
         self.clear_on_shutdown = clear;
     }
 
+    // --- input modes / cursor / queries (escape emitters) ---------------------
+
+    pub fn enable_kitty_keyboard(&mut self, flags: u8) {
+        let mut out = Vec::new();
+        self.terminal.enable_kitty_keyboard(&mut out, flags);
+        self.write_out(&out);
+    }
+
+    pub fn disable_kitty_keyboard(&mut self) {
+        let mut out = Vec::new();
+        self.terminal.disable_kitty_keyboard(&mut out);
+        self.write_out(&out);
+    }
+
+    pub fn set_kitty_keyboard_flags(&mut self, flags: u8) {
+        self.terminal.set_kitty_keyboard_flags(flags);
+    }
+
+    pub fn get_kitty_keyboard_flags(&self) -> u8 {
+        self.terminal.kitty_keyboard_flags()
+    }
+
+    pub fn enable_mouse(&mut self, enable_movement: bool) {
+        let mut out = Vec::new();
+        self.terminal
+            .set_mouse_mode(&mut out, true, enable_movement);
+        self.write_out(&out);
+    }
+
+    pub fn disable_mouse(&mut self) {
+        let movement = self.terminal.state.mouse_movement;
+        let mut out = Vec::new();
+        self.terminal.set_mouse_mode(&mut out, false, movement);
+        self.write_out(&out);
+    }
+
+    pub fn set_terminal_title(&mut self, title: &str) {
+        let mut out = Vec::new();
+        self.terminal.set_terminal_title(&mut out, title);
+        self.write_out(&out);
+    }
+
+    pub fn query_theme_colors(&mut self) {
+        let mut out = Vec::new();
+        self.terminal.query_theme_colors(&mut out);
+        self.write_out(&out);
+    }
+
+    pub fn query_pixel_resolution(&mut self) {
+        self.write_out(b"\x1b[14t"); // queryPixelSize
+    }
+
+    /// Zig `setCursorStyleOptions` — style/blinking (when in range), optional
+    /// cursor color, and mouse-pointer style. Emitted by the next render's tail.
+    pub fn set_cursor_style_options(
+        &mut self,
+        style_code: u8,
+        blinking_code: u8,
+        color: Option<Rgba>,
+        cursor_code: u8,
+    ) {
+        let current = self.terminal.cursor;
+        let style = match style_code {
+            0 => CursorStyle::Block,
+            1 => CursorStyle::Line,
+            2 => CursorStyle::Underline,
+            3 => CursorStyle::Default,
+            _ => current.style,
+        };
+        let blinking = if blinking_code <= 1 {
+            blinking_code == 1
+        } else {
+            current.blinking
+        };
+        if style_code <= 3 || blinking_code <= 1 {
+            self.terminal.set_cursor_style(style, blinking);
+        }
+        if let Some(c) = color {
+            self.terminal.set_cursor_color(c);
+        }
+        if let Some(ptr_style) = MousePointerStyle::from_code(cursor_code) {
+            self.terminal.set_mouse_pointer_style(ptr_style);
+        }
+    }
+
     /// Zig `performShutdownSequence` — reset terminal state, clear the surface,
     /// and restore cursor color/style/visibility. No-op unless setup ran.
     pub fn perform_shutdown_sequence(&mut self) {

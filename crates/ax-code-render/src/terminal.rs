@@ -137,12 +137,34 @@ impl CursorStyle {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum MousePointerStyle {
     Default,
+    Pointer,
+    Text,
+    Crosshair,
+    Move,
+    NotAllowed,
 }
 
 impl MousePointerStyle {
+    pub fn from_code(v: u8) -> Option<MousePointerStyle> {
+        Some(match v {
+            0 => MousePointerStyle::Default,
+            1 => MousePointerStyle::Pointer,
+            2 => MousePointerStyle::Text,
+            3 => MousePointerStyle::Crosshair,
+            4 => MousePointerStyle::Move,
+            5 => MousePointerStyle::NotAllowed,
+            _ => return None,
+        })
+    }
+
     pub fn to_name(self) -> &'static str {
         match self {
             MousePointerStyle::Default => "default",
+            MousePointerStyle::Pointer => "pointer",
+            MousePointerStyle::Text => "text",
+            MousePointerStyle::Crosshair => "crosshair",
+            MousePointerStyle::Move => "move",
+            MousePointerStyle::NotAllowed => "not-allowed",
         }
     }
 }
@@ -195,7 +217,9 @@ impl Terminal {
             multiplexer: detected.multiplexer,
             is_foot: detected.is_foot,
             skip_explicit_width_query: false,
-            kitty_keyboard_flags_opt: 0,
+            // Options.kitty_keyboard_flags default = 0b00101 (disambiguate +
+            // alternate keys), not 0.
+            kitty_keyboard_flags_opt: 0b00101,
         }
     }
 
@@ -373,10 +397,60 @@ impl Terminal {
         }
     }
 
-    fn set_terminal_title(&self, out: &mut Vec<u8>, title: &str) {
+    pub fn set_terminal_title(&self, out: &mut Vec<u8>, title: &str) {
         out.extend_from_slice(b"\x1b]0;"); // setTerminalTitle prefix (OSC 0)
         out.extend_from_slice(title.as_bytes());
         out.push(0x07); // BEL
+    }
+
+    pub fn set_kitty_keyboard_flags(&mut self, flags: u8) {
+        self.kitty_keyboard_flags_opt = flags;
+    }
+
+    pub fn enable_kitty_keyboard(&mut self, out: &mut Vec<u8>, flags: u8) {
+        self.set_kitty_keyboard(out, true, flags);
+    }
+
+    pub fn disable_kitty_keyboard(&mut self, out: &mut Vec<u8>) {
+        self.set_kitty_keyboard(out, false, 0);
+    }
+
+    pub fn set_cursor_color(&mut self, color: Rgba) {
+        self.cursor.color = color;
+    }
+
+    pub fn set_mouse_pointer_style(&mut self, style: MousePointerStyle) {
+        self.mouse_pointer = style;
+    }
+
+    /// terminal.zig `setMouseMode`.
+    pub fn set_mouse_mode(&mut self, out: &mut Vec<u8>, enable: bool, enable_movement: bool) {
+        if enable {
+            if self.state.mouse && self.state.mouse_movement == enable_movement {
+                return;
+            }
+        } else if !self.state.mouse {
+            return;
+        }
+
+        if enable {
+            self.state.mouse = true;
+            self.state.mouse_movement = enable_movement;
+            self.state.mouse_was_enabled = true;
+            if !enable_movement {
+                out.extend_from_slice(b"\x1b[?1003l"); // disableAnyEventTracking
+            }
+            out.extend_from_slice(b"\x1b[?1000h"); // enableMouseTracking
+            out.extend_from_slice(b"\x1b[?1002h"); // enableButtonEventTracking
+            if enable_movement {
+                out.extend_from_slice(b"\x1b[?1003h"); // enableAnyEventTracking
+            }
+            out.extend_from_slice(b"\x1b[?1006h"); // enableSGRMouseMode
+        } else {
+            self.state.mouse = false;
+            self.state.pixel_mouse = false;
+            write_mouse_disable_sequences(out);
+        }
     }
 
     /// terminal.zig `resetState` — best-effort teardown (non-Windows path):

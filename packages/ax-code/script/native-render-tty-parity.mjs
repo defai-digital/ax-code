@@ -60,6 +60,20 @@ async function runChild(which) {
   // harness), so it is not exercised here.
   sym.setupTerminal(rh, 0) // useAlternateScreen = false
   sym.restoreTerminalModes(rh)
+
+  // Input-mode + query emitters (all writeOut escape sequences).
+  const isZig = which === "zig"
+  const p = (v) => (isZig ? ffi.getRawPointer(v) : Number(ffi.getRawPointer(v)))
+  sym.enableKittyKeyboard(rh, 7)
+  sym.enableMouse(rh, 1)
+  sym.enableMouse(rh, 0) // toggle movement off (exercises the disableAnyEventTracking branch)
+  const title = new TextEncoder().encode("ax-code")
+  sym.setTerminalTitle(rh, p(title), title.length)
+  sym.queryThemeColors(rh)
+  sym.queryPixelResolution(rh)
+  sym.disableMouse(rh)
+  sym.disableKittyKeyboard(rh)
+
   sym.clearTerminal(rh)
   sym.suspendRenderer(rh)
   sym.resumeRenderer(rh)
