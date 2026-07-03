@@ -44,28 +44,32 @@ pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-
 
 The vendored core must also preserve the ADR-046 native-render overlay
 (`applyNativeRenderOverlay` in the main bundle, applied at the end of
-`getOpenTUILib`). With `AX_CODE_NATIVE_RENDER=1`, the yoga and audio symbol
-families route to the `@ax-code/render` napi addon (Rust, vendored
-facebook/yoga v3.2.1 — the same tag the upstream Zig build pins); any load
-failure falls back to the bundled Zig library. `@ax-code/render` is declared
-as a workspace optionalDependency of this package.
+`getOpenTUILib`). With `AX_CODE_NATIVE_RENDER=1`, the ENTIRE render pipeline —
+the renderer, buffer, text-buffer/view, edit-buffer, editor-view,
+native-span-feed and terminal families, plus yoga and audio — routes to the
+`@ax-code/render` napi addon (Rust; yoga is vendored facebook/yoga v3.2.1, the
+same tag the upstream Zig build pins). Any load failure falls back to the
+bundled Zig library. `@ax-code/render` is declared as a workspace
+optionalDependency of this package.
 
-`AX_CODE_NATIVE_RENDER_SCOPE=full` additionally routes the ENTIRE render
-pipeline — the renderer, buffer, text-buffer/view, edit-buffer, editor-view,
-native-span-feed and terminal families — to the Rust addon. The render families
-share a backend-specific handle registry, so they flip atomically (a Zig
-renderer handle can't be used by a Rust buffer call). The overlay bridge narrows
-BigInt pointer args to Number and null/undefined pointer args to 0, matching
-node:ffi's coercion for the Zig library. FFI boolean parameters use the numeric
-node:ffi convention (1/0), so the addon's few bool-argument symbols take f64.
+The render families share a backend-specific handle registry, so they flip
+atomically (a Zig renderer handle can't be used by a Rust buffer call). The
+overlay bridge narrows BigInt pointer args to Number and null/undefined pointer
+args to 0, matching node:ffi's coercion for the Zig library. FFI boolean
+parameters use the numeric node:ffi convention (1/0), so the addon's few
+bool-argument symbols take f64.
 
-Parity gate (all three must byte-match):
+`AX_CODE_NATIVE_RENDER_SCOPE=yoga` is the escape hatch back to the Phase-1
+behavior — only the yoga/audio families route to Rust and the render pipeline
+stays on the bundled Zig library.
+
+Parity gate (all must byte-match):
 
 ```sh
 pnpm --dir packages/ax-code run check:golden-frames                          # Zig baseline
-AX_CODE_NATIVE_RENDER=1 pnpm --dir packages/ax-code run check:golden-frames  # Rust yoga/audio overlay
-AX_CODE_NATIVE_RENDER=1 AX_CODE_NATIVE_RENDER_SCOPE=full \
-  pnpm --dir packages/ax-code run check:golden-frames                        # Rust FULL render pipeline
+AX_CODE_NATIVE_RENDER=1 pnpm --dir packages/ax-code run check:golden-frames  # Rust FULL pipeline (default)
+AX_CODE_NATIVE_RENDER=1 AX_CODE_NATIVE_RENDER_SCOPE=yoga \
+  pnpm --dir packages/ax-code run check:golden-frames                        # Rust yoga/audio only
 ```
 
 ## Update Workflow

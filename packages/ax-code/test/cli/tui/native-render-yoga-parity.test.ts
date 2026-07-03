@@ -130,20 +130,45 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
-  it("full render pipeline (SCOPE=full) byte-matches the Zig golden frames", () => {
-    // ADR-046 render-core gate: routes the ENTIRE renderer/buffer/text/edit/
-    // editor pipeline (not just yoga/audio) to the Rust addon and renders the
-    // representative scenes through the real OpenTUI renderable layer. The
-    // committed goldens were produced by the Zig backend, so a match proves the
-    // Rust render core is frame-parity across yoga layout, styled attributes,
-    // CJK/emoji wrapping, alpha blending, scroll offset, and selection.
+  it("default AX_CODE_NATIVE_RENDER=1 routes the full render pipeline and byte-matches the Zig golden frames", () => {
+    // ADR-046 render-core gate: AX_CODE_NATIVE_RENDER=1 now routes the ENTIRE
+    // renderer/buffer/text/edit/editor pipeline (not just yoga/audio) to the Rust
+    // addon by default, and renders the representative scenes through the real
+    // OpenTUI renderable layer. The committed goldens were produced by the Zig
+    // backend, so a match proves the Rust render core is frame-parity across yoga
+    // layout, styled attributes, CJK/emoji wrapping, alpha blending, scroll
+    // offset, and selection.
     const result = runNode(
       ["--import", "tsx", "--conditions=node", path.join(pkgDir, "script/check-golden-frames.ts")],
-      { AX_CODE_NATIVE_RENDER: "1", AX_CODE_NATIVE_RENDER_SCOPE: "full" },
+      { AX_CODE_NATIVE_RENDER: "1" },
     )
     expect(result.stderr).not.toContain("frame drift")
     expect(result.stdout).toContain("all golden frames match")
     expect(result.status).toBe(0)
+  })
+
+  it("AX_CODE_NATIVE_RENDER_SCOPE=yoga escape hatch keeps the render pipeline on Zig", () => {
+    // getBuildOptions is a documented no-op in the Rust addon and populated by
+    // the Zig dylib; under the yoga escape hatch the render family stays on Zig,
+    // so the probe buffer must be modified.
+    const probe = `
+      import { createRequire } from "node:module"
+      const require = createRequire(import.meta.url)
+      const ffi = require("node:ffi")
+      const { resolveRenderLib } = await import("@ax-code/opentui-core")
+      const sym = resolveRenderLib().opentui.symbols
+      const buf = new Uint8Array(64).fill(0xAB)
+      const p = ffi.getRawPointer(buf)
+      sym.getBuildOptions(typeof p === "bigint" ? Number(p) : p)
+      console.log(buf.every((b) => b === 0xAB) ? "render:RUST" : "render:ZIG")
+    `
+    const full = runNode(["--input-type=module", "-e", probe], { AX_CODE_NATIVE_RENDER: "1" })
+    expect(full.stdout).toContain("render:RUST")
+    const yoga = runNode(["--input-type=module", "-e", probe], {
+      AX_CODE_NATIVE_RENDER: "1",
+      AX_CODE_NATIVE_RENDER_SCOPE: "yoga",
+    })
+    expect(yoga.stdout).toContain("render:ZIG")
   })
 
   it("overlay engages under AX_CODE_NATIVE_RENDER=1 (audio-stub fingerprint)", () => {

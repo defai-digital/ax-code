@@ -11913,14 +11913,14 @@ function applyNativeRenderOverlay(symbols) {
   const bridge = (fn) => (...args) =>
     fn(...args.map((arg) => (typeof arg === "bigint" ? Number(arg) : arg == null ? 0 : arg)));
   const overlaid = { ...symbols };
-  // ADR-046 integration: AX_CODE_NATIVE_RENDER_SCOPE=full routes the ENTIRE
-  // render pipeline (renderer/buffer/text/edit/editor/feed/terminal families) to
-  // the Rust addon, not just yoga/audio. The render families share a
-  // backend-specific handle registry, so they must flip atomically — a Zig
-  // renderer handle can't be used by a Rust buffer call. Default scope ("yoga")
-  // keeps the Phase-1 behavior; "full" is validated by check:golden-frames before
-  // promotion.
-  const routeAll = process.env.AX_CODE_NATIVE_RENDER_SCOPE === "full";
+  // ADR-046: with AX_CODE_NATIVE_RENDER=1 the ENTIRE render pipeline
+  // (renderer/buffer/text/edit/editor/feed/terminal families) routes to the Rust
+  // addon by default, not just yoga/audio. The render families share a
+  // backend-specific handle registry, so they flip atomically — a Zig renderer
+  // handle can't be used by a Rust buffer call. AX_CODE_NATIVE_RENDER_SCOPE=yoga
+  // is the escape hatch back to the Phase-1 yoga/audio-only routing. The
+  // full-pipeline parity is gated by check:golden-frames (Zig baseline vs Rust).
+  const routeAll = process.env.AX_CODE_NATIVE_RENDER_SCOPE !== "yoga";
   for (const key of Object.keys(overlaid)) {
     const isOverlayFamily =
       routeAll || key.startsWith("yoga") || key.startsWith("audio") || key === "createAudioEngine" || key === "destroyAudioEngine";
