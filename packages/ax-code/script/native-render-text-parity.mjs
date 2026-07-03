@@ -45,6 +45,16 @@ const TEXTS = [
 // Keep every buffer we hand to the natives alive for the whole run — both
 // sides borrow external memory for registered/appended text.
 const keepAlive = []
+
+function packColor(r, g, b, a, meta = 0) {
+  const arr = new Uint16Array(4)
+  keepAlive.push(arr)
+  arr[0] = (r & 0xff) | ((meta & 0xff) << 8)
+  arr[1] = (g & 0xff) | (((meta >> 8) & 0xff) << 8)
+  arr[2] = (b & 0xff) | (((meta >> 16) & 0xff) << 8)
+  arr[3] = (a & 0xff) | (((meta >> 24) & 0xff) << 8)
+  return arr
+}
 const encode = (s) => {
   const b = new TextEncoder().encode(s)
   keepAlive.push(b)
@@ -61,8 +71,8 @@ function packChunks(specs) {
     const off = i * 56
     dv.setBigUint64(off, BigInt(spec.text.length ? ffi.getRawPointer(spec.text) : 0n), true)
     dv.setBigUint64(off + 8, BigInt(spec.text.length), true)
-    dv.setBigUint64(off + 16, 0n, true) // fg (styling lands in C4)
-    dv.setBigUint64(off + 24, 0n, true) // bg
+    dv.setBigUint64(off + 16, spec.fg ? BigInt(ffi.getRawPointer(spec.fg)) : 0n, true)
+    dv.setBigUint64(off + 24, spec.bg ? BigInt(ffi.getRawPointer(spec.bg)) : 0n, true)
     dv.setUint32(off + 32, spec.attributes >>> 0, true)
     dv.setBigUint64(off + 40, 0n, true) // link
     dv.setBigUint64(off + 48, 0n, true)
@@ -104,6 +114,12 @@ let failures = 0
 outer: for (let s = 0; s < SEQUENCES; s++) {
   const zh = zig.createTextBuffer(1)
   const rh = rust.createTextBuffer(1)
+  const zStyle = zig.createSyntaxStyle()
+  const rStyle = rust.createSyntaxStyle()
+  if (rand() < 0.6) {
+    zig.textBufferSetSyntaxStyle(zh, zStyle)
+    rust.textBufferSetSyntaxStyle(rh, rStyle)
+  }
   const opsLog = []
   const memIds = []
   const opCount = 3 + randInt(12)
@@ -111,7 +127,12 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
     const op = randInt(10)
     if (op < 3) {
       const count = 1 + randInt(4)
-      const specs = Array.from({ length: count }, () => ({ text: encode(TEXTS[randInt(TEXTS.length)]), attributes: randInt(256) }))
+      const specs = Array.from({ length: count }, () => ({
+        text: encode(TEXTS[randInt(TEXTS.length)]),
+        attributes: randInt(256),
+        fg: rand() < 0.5 ? packColor(randInt(256), randInt(256), randInt(256), 255) : null,
+        bg: rand() < 0.3 ? packColor(randInt(256), randInt(256), randInt(256), 255) : null,
+      }))
       opsLog.push(`styled(${count})`)
       zig.textBufferSetStyledText(zh, ptr(packChunks(specs)), count)
       rust.textBufferSetStyledText(rh, Number(ptr(packChunks(specs))), count)
@@ -225,6 +246,22 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
       continue outer
     }
   }
+  // style registry state must agree too
+  const zc = Number(zig.syntaxStyleGetStyleCount(zStyle))
+  const rc = Number(rust.syntaxStyleGetStyleCount(rStyle))
+  if (zc !== rc) {
+    console.error(`✗ seq ${s}: style count divergence z=${zc} r=${rc}`)
+    failures++
+  }
+  const probeName = encode("chunk0")
+  const zid = Number(zig.syntaxStyleResolveByName(zStyle, ptr(probeName), probeName.length))
+  const rid = Number(rust.syntaxStyleResolveByName(rStyle, Number(ptr(probeName)), probeName.length))
+  if (zid !== rid) {
+    console.error(`✗ seq ${s}: resolveByName divergence z=${zid} r=${rid}`)
+    failures++
+  }
+  zig.destroySyntaxStyle(zStyle)
+  rust.destroySyntaxStyle(rStyle)
   zig.destroyTextBuffer(zh)
   rust.destroyTextBuffer(rh)
 }

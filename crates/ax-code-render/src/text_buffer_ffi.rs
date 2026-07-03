@@ -389,3 +389,103 @@ pub fn text_buffer_append_from_mem_id(handle: u32, id: u32) {
         tb.append_from_mem(id as u8);
     }
 }
+
+// --- syntax styles (C4b) --------------------------------------------------------
+
+use crate::syntax_style::{StyleDefinition, SyntaxStyle};
+
+fn resolve_style(handle: u32) -> Option<&'static mut SyntaxStyle> {
+    handles::get(handle, Kind::SyntaxStyle).map(|ptr| unsafe { &mut *(ptr as *mut SyntaxStyle) })
+}
+
+#[napi(js_name = "createSyntaxStyle")]
+pub fn create_syntax_style() -> u32 {
+    let ptr = Box::into_raw(Box::new(SyntaxStyle::new())) as usize;
+    let handle = handles::insert(Kind::SyntaxStyle, ptr);
+    if handle == 0 {
+        drop(unsafe { Box::from_raw(ptr as *mut SyntaxStyle) });
+    }
+    handle
+}
+
+#[napi(js_name = "destroySyntaxStyle")]
+pub fn destroy_syntax_style(handle: u32) {
+    if let Some(ptr) = handles::remove(handle, Kind::SyntaxStyle) {
+        drop(unsafe { Box::from_raw(ptr as *mut SyntaxStyle) });
+    }
+}
+
+#[napi(js_name = "syntaxStyleRegister")]
+pub fn syntax_style_register(
+    handle: u32,
+    name_ptr: f64,
+    name_len: u32,
+    fg: f64,
+    bg: f64,
+    attributes: u32,
+) -> u32 {
+    let Some(style) = resolve_style(handle) else {
+        return 0;
+    };
+    let name = if name_ptr == 0.0 || name_len == 0 {
+        ""
+    } else {
+        let bytes = unsafe {
+            std::slice::from_raw_parts((name_ptr as u64) as usize as *const u8, name_len as usize)
+        };
+        std::str::from_utf8(bytes).unwrap_or("")
+    };
+    let read_rgba = |addr: f64| -> Option<crate::buffer::Rgba> {
+        if addr == 0.0 {
+            return None;
+        }
+        let p = (addr as u64) as usize as *const u16;
+        Some(unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] })
+    };
+    style.register(
+        name,
+        StyleDefinition {
+            fg: read_rgba(fg),
+            bg: read_rgba(bg),
+            attributes,
+        },
+    )
+}
+
+#[napi(js_name = "syntaxStyleResolveByName")]
+pub fn syntax_style_resolve_by_name(handle: u32, name_ptr: f64, name_len: u32) -> u32 {
+    let Some(style) = resolve_style(handle) else {
+        return 0;
+    };
+    if name_ptr == 0.0 || name_len == 0 {
+        return style.resolve_by_name("").unwrap_or(0);
+    }
+    let bytes = unsafe {
+        std::slice::from_raw_parts((name_ptr as u64) as usize as *const u8, name_len as usize)
+    };
+    std::str::from_utf8(bytes)
+        .ok()
+        .and_then(|n| style.resolve_by_name(n))
+        .unwrap_or(0)
+}
+
+#[napi(js_name = "syntaxStyleGetStyleCount")]
+pub fn syntax_style_get_style_count(handle: u32) -> u32 {
+    resolve_style(handle).map_or(0, |s| s.style_count())
+}
+
+#[napi(js_name = "textBufferSetSyntaxStyle")]
+pub fn text_buffer_set_syntax_style(handle: u32, style_handle: u32) -> bool {
+    let Some(tb) = resolve(handle) else {
+        return false;
+    };
+    if style_handle != 0 && handles::get(style_handle, Kind::SyntaxStyle).is_none() {
+        return false;
+    }
+    tb.syntax_style = if style_handle == 0 {
+        None
+    } else {
+        Some(style_handle)
+    };
+    true
+}

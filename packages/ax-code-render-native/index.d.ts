@@ -121,15 +121,25 @@ export declare function createAudioEngine(options: number): number
 
 export declare function createOptimizedBuffer(width: number, height: number, respectAlpha: number, widthMethod: number, idPtr: number, idLen: number): number
 
+export declare function createSyntaxStyle(): number
+
 export declare function createTextBuffer(widthMethod: number): number
 
 export declare function destroyAudioEngine(engine: number): void
 
 export declare function destroyOptimizedBuffer(handle: number): void
 
+export declare function destroySyntaxStyle(handle: number): void
+
 export declare function destroyTextBuffer(handle: number): void
 
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
+
+export declare function syntaxStyleGetStyleCount(handle: number): number
+
+export declare function syntaxStyleRegister(handle: number, namePtr: number, nameLen: number, fg: number, bg: number, attributes: number): number
+
+export declare function syntaxStyleResolveByName(handle: number, namePtr: number, nameLen: number): number
 
 export declare function textBufferAddHighlight(handle: number, lineIdx: number, hlPtr: number): void
 
@@ -180,6 +190,8 @@ export declare function textBufferReset(handle: number): void
  * fg_ptr@16, bg_ptr@24, attributes@32 (u32 + 4 pad), link_ptr@40, link_len@48.
  */
 export declare function textBufferSetStyledText(handle: number, chunksPtr: number, chunkCount: number): void
+
+export declare function textBufferSetSyntaxStyle(handle: number, styleHandle: number): boolean
 
 export declare function textBufferSetTabWidth(handle: number, width: number): void
 

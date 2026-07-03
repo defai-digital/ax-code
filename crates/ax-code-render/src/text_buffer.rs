@@ -35,6 +35,7 @@ pub struct TextBuffer {
     pub default_bg: Option<Rgba>,
     pub default_attributes: Option<u32>,
     styled_text_mem_id: Option<u8>,
+    pub syntax_style: Option<u32>, // handle into the global registry
     line_highlights: Vec<Vec<crate::segment::Highlight>>,
     internal_highlight_count: u32,
 }
@@ -50,6 +51,7 @@ impl TextBuffer {
             default_bg: None,
             default_attributes: None,
             styled_text_mem_id: None,
+            syntax_style: None,
             line_highlights: Vec::new(),
             internal_highlight_count: 0,
         }
@@ -189,6 +191,7 @@ impl TextBuffer {
             return false;
         };
         let len = text.len();
+        self.clear_internal_highlights();
         self.clear();
         self.set_text_internal(mem_id, len);
         true
@@ -243,6 +246,41 @@ impl TextBuffer {
             }
         };
         self.set_text_internal(mem_id, total_len);
+
+        // Zig setStyledText's style bridge: with a syntax style attached, each
+        // chunk registers a transient "chunk{i}" style (same-name re-register
+        // keeps the id) and lays an internal priority-1 highlight over the
+        // chunk's column range. Links (link_ptr) are a later tranche.
+        if let Some(style_handle) = self.syntax_style {
+            if let Some(ptr) = crate::handles::get(style_handle, crate::handles::Kind::SyntaxStyle)
+            {
+                let style = unsafe { &mut *(ptr as *mut crate::syntax_style::SyntaxStyle) };
+                let mut char_pos: u32 = 0;
+                for (i, chunk) in chunks.iter().enumerate() {
+                    let text = std::str::from_utf8(chunk.text).unwrap_or("");
+                    let chunk_len = self.measure_text(text);
+                    if chunk_len > 0 {
+                        let style_id = style.register(
+                            &format!("chunk{i}"),
+                            crate::syntax_style::StyleDefinition {
+                                fg: chunk.fg,
+                                bg: chunk.bg,
+                                attributes: chunk.attributes,
+                            },
+                        );
+                        self.add_highlight_by_char_range(
+                            char_pos,
+                            char_pos + chunk_len,
+                            style_id,
+                            1,
+                            0,
+                            true,
+                        );
+                    }
+                    char_pos += chunk_len;
+                }
+            }
+        }
     }
 
     /// Zig `getPlainTextIntoBuffer` semantics: chunk bytes joined with a
