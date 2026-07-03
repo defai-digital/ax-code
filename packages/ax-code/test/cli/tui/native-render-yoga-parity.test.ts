@@ -70,6 +70,13 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("editorView (cursor/viewport/visual moves/selection) matches the Zig backend", () => {
+    const result = runNode([path.join(pkgDir, "script/native-render-editorview-parity.mjs"), "--seqs=150"])
+    expect(result.stderr).not.toContain("state differs")
+    expect(result.stdout).toContain("editorview parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
   it("native-span-feed (write/commit/drain + render routing) matches the Zig backend", () => {
     const result = runNode([path.join(pkgDir, "script/native-render-feed-parity.mjs"), "--seqs=150"])
     expect(result.stderr).not.toContain("failing check")

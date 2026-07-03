@@ -99,6 +99,21 @@ impl EditBuffer {
         self.cursor
     }
 
+    /// Set the primary cursor directly (editor-view visual moves / recenter).
+    pub fn set_primary_cursor(&mut self, cursor: Cursor) {
+        self.cursor = cursor;
+    }
+
+    /// Max display width across all logical lines (editor-view horizontal clamp).
+    pub fn max_line_width(&mut self) -> u32 {
+        let line_count = self.tb.get_line_count();
+        let mut max = 0u32;
+        for row in 0..line_count {
+            max = max.max(self.tb.line_width_at(row));
+        }
+        max
+    }
+
     fn line_width(&mut self, row: u32) -> u32 {
         self.tb.line_width_at(row)
     }

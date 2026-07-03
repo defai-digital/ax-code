@@ -156,6 +156,77 @@ impl TextBufferView {
         }));
     }
 
+    pub fn get_viewport(&self) -> Option<Viewport> {
+        self.viewport
+    }
+
+    pub fn selection_anchor(&self) -> Option<u32> {
+        self.selection_anchor_offset
+    }
+
+    /// Set the underlying text buffer handle (editor-view placeholder swap).
+    pub fn set_text_buffer_handle(&mut self, handle: u32) {
+        if self.text_buffer != handle {
+            self.text_buffer = handle;
+            self.dirty = true;
+        }
+    }
+
+    pub fn text_buffer_handle(&self) -> u32 {
+        self.text_buffer
+    }
+
+    /// Rebuild virtual lines and expose them (Zig `virtual_lines.items`).
+    pub fn virtual_lines(&mut self) -> &[VirtualLine] {
+        self.update_virtual_lines();
+        &self.caches.vlines
+    }
+
+    /// Zig `findVisualLineIndex` — the virtual-line index containing
+    /// (logical_row, logical_col), honoring wrap boundaries.
+    pub fn find_visual_line_index(&mut self, logical_row: u32, logical_col: u32) -> u32 {
+        self.update_virtual_lines();
+        let vlines_len = self.caches.vlines.len() as u32;
+        if vlines_len == 0 {
+            return 0;
+        }
+        let first = &self.caches.first_vline;
+        let counts = &self.caches.vline_counts;
+        if first.is_empty() {
+            return 0;
+        }
+        let clamped_row = if logical_row >= first.len() as u32 {
+            first.len() as u32 - 1
+        } else {
+            logical_row
+        };
+        let first_vline_idx = first[clamped_row as usize];
+        let vline_count = counts[clamped_row as usize];
+        if vline_count == 0 {
+            return first_vline_idx;
+        }
+        for i in 0..vline_count {
+            let vline_idx = first_vline_idx + i;
+            if vline_idx >= vlines_len {
+                break;
+            }
+            let vline = &self.caches.vlines[vline_idx as usize];
+            let start_col = vline.source_col_offset;
+            let end_col = start_col + vline.width_cols;
+            let is_last = i == vline_count - 1;
+            let end_check = if is_last {
+                logical_col <= end_col
+            } else {
+                logical_col < end_col
+            };
+            if logical_col >= start_col && end_check {
+                return vline_idx;
+            }
+        }
+        let last = first_vline_idx + vline_count - 1;
+        if last < vlines_len { last } else { 0 }
+    }
+
     /// Zig `updateVirtualLines`. NOTE: the view has no cheap content-epoch
     /// signal yet (registerView/isViewDirty land with the production flip),
     /// so it recomputes whenever any dependency may have changed — same

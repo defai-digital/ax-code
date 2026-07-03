@@ -75,6 +75,8 @@ export declare function bufferDrawBox(handle: number, x: number, y: number, widt
 
 export declare function bufferDrawChar(handle: number, char: number, x: number, y: number, fg: number, bg: number, attributes: number): void
 
+export declare function bufferDrawEditorView(bufferHandle: number, viewHandle: number, x: number, y: number): void
+
 export declare function bufferDrawGrayscaleBuffer(handle: number, posX: number, posY: number, intensities: number, srcWidth: number, srcHeight: number, fg: number, bg: number): void
 
 export declare function bufferDrawGrayscaleBufferSupersampled(handle: number, posX: number, posY: number, intensities: number, srcWidth: number, srcHeight: number, fg: number, bg: number): void
@@ -139,6 +141,8 @@ export declare function createAudioEngine(options: number): number
 
 export declare function createEditBuffer(widthMethod: number, eventSinkHandle: number): number
 
+export declare function createEditorView(editHandle: number, viewportWidth: number, viewportHeight: number): number
+
 export declare function createNativeSpanFeed(optionsPtr: number): number
 
 export declare function createOptimizedBuffer(width: number, height: number, respectAlpha: number, widthMethod: number, idPtr: number, idLen: number): number
@@ -154,6 +158,8 @@ export declare function createTextBufferView(tbHandle: number): number
 export declare function destroyAudioEngine(engine: number): void
 
 export declare function destroyEditBuffer(handle: number): void
+
+export declare function destroyEditorView(handle: number): void
 
 export declare function destroyFrameBuffer(handle: number): void
 
@@ -248,6 +254,74 @@ export declare function editBufferSetCursorToLineCol(handle: number, row: number
 export declare function editBufferSetText(handle: number, textPtr: number, textLen: number): void
 
 export declare function editBufferUndo(handle: number, outPtr: number, maxLen: number): number
+
+export declare function editorViewClearViewport(handle: number): void
+
+export declare function editorViewDeleteSelectedText(handle: number): void
+
+export declare function editorViewGetCursor(handle: number, outRow: number, outCol: number): void
+
+export declare function editorViewGetEOL(handle: number, outPtr: number): void
+
+export declare function editorViewGetLineInfoDirect(handle: number, outPtr: number): void
+
+export declare function editorViewGetLogicalLineInfoDirect(handle: number, outPtr: number): void
+
+export declare function editorViewGetNextWordBoundary(handle: number, outPtr: number): void
+
+export declare function editorViewGetPrevWordBoundary(handle: number, outPtr: number): void
+
+export declare function editorViewGetSelectedTextBytes(handle: number, outPtr: number, maxLen: number): number
+
+export declare function editorViewGetSelection(handle: number): bigint
+
+export declare function editorViewGetText(handle: number, outPtr: number, maxLen: number): number
+
+export declare function editorViewGetTextBufferView(handle: number): number
+
+export declare function editorViewGetTotalVirtualLineCount(handle: number): number
+
+export declare function editorViewGetViewport(handle: number, outX: number, outY: number, outW: number, outH: number): boolean
+
+export declare function editorViewGetVirtualLineCount(handle: number): number
+
+export declare function editorViewGetVisualCursor(handle: number, outPtr: number): void
+
+export declare function editorViewGetVisualEOL(handle: number, outPtr: number): void
+
+export declare function editorViewGetVisualSOL(handle: number, outPtr: number): void
+
+export declare function editorViewMoveDownVisual(handle: number): void
+
+export declare function editorViewMoveUpVisual(handle: number): void
+
+export declare function editorViewResetLocalSelection(handle: number): void
+
+export declare function editorViewResetSelection(handle: number): void
+
+export declare function editorViewSetCursorByOffset(handle: number, offset: number): void
+
+export declare function editorViewSetLocalSelection(handle: number, anchorX: number, anchorY: number, focusX: number, focusY: number, bg: number, fg: number, updateCursor: number, followCursor: number): boolean
+
+export declare function editorViewSetPlaceholderStyledText(handle: number, chunksPtr: number, chunkCount: number): void
+
+export declare function editorViewSetScrollMargin(handle: number, margin: number): void
+
+export declare function editorViewSetSelection(handle: number, start: number, end: number, bg: number, fg: number): void
+
+export declare function editorViewSetTabIndicator(handle: number, indicator: number): void
+
+export declare function editorViewSetTabIndicatorColor(handle: number, color: number): void
+
+export declare function editorViewSetViewport(handle: number, x: number, y: number, width: number, height: number, moveCursor: number): void
+
+export declare function editorViewSetViewportSize(handle: number, width: number, height: number): void
+
+export declare function editorViewSetWrapMode(handle: number, mode: number): void
+
+export declare function editorViewUpdateLocalSelection(handle: number, anchorX: number, anchorY: number, focusX: number, focusY: number, bg: number, fg: number, updateCursor: number, followCursor: number): boolean
+
+export declare function editorViewUpdateSelection(handle: number, end: number, bg: number, fg: number): void
 
 export declare function enableKittyKeyboard(handle: number, flags: number): void
 
