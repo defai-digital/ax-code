@@ -242,8 +242,15 @@ pub fn set_terminal_env_var(
 }
 
 #[napi(js_name = "processCapabilityResponse")]
-pub fn process_capability_response(_handle: u32, _resp_ptr: f64, _resp_len: u32) {
-    // Query-response parsing (updates caps) is unported; caps come from env.
+pub fn process_capability_response(handle: u32, resp_ptr: f64, resp_len: u32) {
+    let Some(r) = renderer(handle) else { return };
+    if resp_ptr == 0.0 || resp_len == 0 {
+        return;
+    }
+    let resp = unsafe {
+        std::slice::from_raw_parts((resp_ptr as u64) as usize as *const u8, resp_len as usize)
+    };
+    r.process_capability_response(resp);
 }
 
 #[napi(js_name = "getTerminalCapabilities")]

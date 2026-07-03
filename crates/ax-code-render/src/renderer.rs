@@ -1124,6 +1124,10 @@ impl CliRenderer {
         self.terminal.set_terminal_env_var(key, value);
     }
 
+    pub fn process_capability_response(&mut self, response: &[u8]) {
+        self.terminal.process_capability_response(response);
+    }
+
     /// Zig `triggerNotification` — emit a desktop notification, false if unsupported.
     pub fn trigger_notification(&mut self, message: &[u8], title: Option<&[u8]>) -> bool {
         let mut out = Vec::new();
@@ -1145,8 +1149,13 @@ impl CliRenderer {
             std::ptr::write_bytes(base as *mut u8, 0, 64);
             let b = |off: usize, v: bool| ((base + off) as *mut u8).write_unaligned(v as u8);
             b(0, caps.kitty_keyboard);
+            b(1, caps.kitty_graphics);
             b(2, caps.rgb);
             b(3, caps.ansi256);
+            b(5, caps.sgr_pixels);
+            b(6, caps.color_scheme_updates);
+            b(9, caps.sixel);
+            b(11, caps.sync);
             ((base + 4) as *mut u8).write_unaligned(
                 if caps.unicode == crate::terminal::WidthMethod::Unicode {
                     1

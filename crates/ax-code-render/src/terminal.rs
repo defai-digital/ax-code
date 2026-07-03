@@ -36,6 +36,11 @@ pub struct Capabilities {
     pub focus_tracking: bool,
     pub osc52: bool,
     pub notifications: bool,
+    pub sgr_pixels: bool,
+    pub color_scheme_updates: bool,
+    pub sync: bool,
+    pub sixel: bool,
+    pub kitty_graphics: bool,
 }
 
 impl Default for Capabilities {
@@ -52,6 +57,11 @@ impl Default for Capabilities {
             focus_tracking: false,
             osc52: false,
             notifications: false,
+            sgr_pixels: false,
+            color_scheme_updates: false,
+            sync: false,
+            sixel: false,
+            kitty_graphics: false,
         }
     }
 }
@@ -334,6 +344,81 @@ impl Terminal {
         self.remote = detected.remote;
         self.sty = detected.sty;
         self.notification_protocol = detected.notification_protocol;
+    }
+
+    /// Zig `processCapabilityResponse` (DECRPM subset) — apply capabilities
+    /// reported by the terminal's query responses. xtversion/iTerm/OSC-99
+    /// sub-parsing (terminal-name + notification-from-xtversion) is not modeled.
+    pub fn process_capability_response(&mut self, response: &[u8]) {
+        let has = |needle: &str| find_subslice(response, needle.as_bytes());
+        if has("1016;2$y") {
+            self.caps.sgr_pixels = true;
+        }
+        if has("2027;2$y") {
+            self.caps.unicode = WidthMethod::Unicode;
+        }
+        if has("2031;1$y") || has("2031;2$y") {
+            self.caps.color_scheme_updates = true;
+        }
+        if has("1004;1$y") || has("1004;2$y") {
+            self.caps.focus_tracking = true;
+        }
+        if has("2026;1$y") || has("2026;2$y") {
+            self.caps.sync = true;
+        }
+        if has("2004;1$y") || has("2004;2$y") {
+            self.caps.bracketed_paste = true;
+        }
+
+        let s = String::from_utf8_lossy(response);
+        // "kitty" in the response advertises a color/sixel/hyperlink family. The
+        // kitty_keyboard/kitty_graphics mode caps are NOT set here — the Zig
+        // renderer consumes+resets them in enableDetectedFeatures (unported), so
+        // they stay at their (off) init value to preserve differential parity.
+        if contains_ignore_case(&s, "kitty") {
+            self.caps.unicode = WidthMethod::Unicode;
+            self.caps.rgb = true;
+            self.caps.ansi256 = true;
+            self.caps.sixel = true;
+            self.caps.bracketed_paste = true;
+            self.caps.hyperlinks = true;
+        }
+        if contains_ignore_case(&s, "tmux") {
+            self.caps.unicode = WidthMethod::Wcwidth;
+            self.caps.explicit_cursor_positioning = true;
+        }
+        if contains_ignore_case(&s, "alacritty") {
+            self.caps.explicit_cursor_positioning = true;
+        }
+        // Sixel via DA1 (`\x1b[?...;c` containing capability 4).
+        if let Some(pos) = response.windows(2).position(|w| w == b";c") {
+            if pos >= 4 {
+                let mut start = pos;
+                while start > 0 && response[start] != 0x1b {
+                    start -= 1;
+                }
+                let da = &response[start..pos + 2];
+                if da.starts_with(b"\x1b[?")
+                    && (find_subslice(da, b"4;")
+                        || find_subslice(da, b";4;")
+                        || find_subslice(da, b";4c"))
+                {
+                    self.caps.sixel = true;
+                }
+            }
+        }
+        // isOsc52Term / isHyperlinkTerm response checks.
+        if !self.caps.osc52 && is_osc52_term(&s) {
+            self.caps.osc52 = true;
+        }
+        if !self.caps.hyperlinks && is_hyperlink_term(&s) {
+            self.caps.hyperlinks = true;
+        }
+        // rgb -> hyperlinks coupling (applied on any post-init capability pass).
+        if self.caps.rgb {
+            self.caps.ansi256 = true;
+            self.caps.hyperlinks = true;
+        }
     }
 
     pub fn kitty_keyboard_flags(&self) -> u8 {
@@ -1017,6 +1102,13 @@ fn detect(
     }
 }
 
+/// terminal.zig isHyperlinkTerm.
+fn is_hyperlink_term(value: &str) -> bool {
+    ["ghostty", "kitty", "wezterm", "alacritty", "iterm"]
+        .iter()
+        .any(|n| contains_ignore_case(value, n))
+}
+
 fn is_osc52_term(value: &str) -> bool {
     for needle in [
         "iterm",
@@ -1041,6 +1133,13 @@ fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
     haystack
         .to_ascii_lowercase()
         .contains(&needle.to_ascii_lowercase())
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() || needle.len() > haystack.len() {
+        return needle.is_empty();
+    }
+    haystack.windows(needle.len()).any(|w| w == needle)
 }
 
 /// terminal.zig writeOsc99Payload — `\x1b]99;i={id}:p={type}:e=1:d={done};<b64>\x1b\\`.

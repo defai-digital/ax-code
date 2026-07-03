@@ -123,6 +123,13 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("processCapabilityResponse DECRPM/sixel/osc52 capability updates match the Zig backend", () => {
+    const result = runNode([path.join(pkgDir, "script/native-render-pcr-parity.mjs")])
+    expect(result.stderr).not.toContain("pcr caps differ")
+    expect(result.stdout).toContain("pcr parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
   it("overlay engages under AX_CODE_NATIVE_RENDER=1 (audio-stub fingerprint)", () => {
     const fingerprint = `
       import { Yoga } from "@ax-code/opentui-core"
