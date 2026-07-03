@@ -13,6 +13,8 @@ export declare function addToCurrentHitGridClipped(handle: number, x: number, y:
 
 export declare function addToHitGrid(handle: number, x: number, y: number, width: number, height: number, id: number): void
 
+export declare function attachNativeSpanFeed(stream: number): number
+
 export declare function attributesGetLinkId(attributes: number): number
 
 export declare function attributesWithLink(baseAttributes: number, linkId: number): number
@@ -135,6 +137,8 @@ export declare function createAudioEngine(options: number): number
 
 export declare function createEditBuffer(widthMethod: number, eventSinkHandle: number): number
 
+export declare function createNativeSpanFeed(optionsPtr: number): number
+
 export declare function createOptimizedBuffer(width: number, height: number, respectAlpha: number, widthMethod: number, idPtr: number, idLen: number): number
 
 export declare function createRenderer(width: number, height: number, bufferedDestinationKind: number, remoteModeValue: number, feedPtr: number): number
@@ -148,6 +152,8 @@ export declare function createTextBufferView(tbHandle: number): number
 export declare function destroyAudioEngine(engine: number): void
 
 export declare function destroyEditBuffer(handle: number): void
+
+export declare function destroyNativeSpanFeed(stream: number): void
 
 export declare function destroyOptimizedBuffer(handle: number): void
 
@@ -313,6 +319,24 @@ export declare function setTerminalTitle(handle: number, titlePtr: number, title
 export declare function setupTerminal(handle: number, useAlternateScreen: number): void
 
 export declare function setUseThread(handle: number, useThread: number): void
+
+export declare function streamClose(stream: number): number
+
+export declare function streamCommit(stream: number): number
+
+export declare function streamCommitReserved(stream: number, len: number): number
+
+export declare function streamDrainSpans(stream: number, outPtr: number, maxSpans: number): number
+
+export declare function streamGetStats(stream: number, statsPtr: number): number
+
+export declare function streamReserve(stream: number, minLen: number, outPtr: number): number
+
+export declare function streamSetCallback(stream: number, callback: number): void
+
+export declare function streamSetOptions(stream: number, optionsPtr: number): number
+
+export declare function streamWrite(stream: number, srcPtr: number, len: number): number
 
 export declare function suspendRenderer(handle: number): void
 

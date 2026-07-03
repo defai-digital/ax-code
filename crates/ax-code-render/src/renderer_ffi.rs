@@ -29,17 +29,16 @@ pub fn create_renderer(
     remote_mode_value: u32,
     feed_ptr: f64,
 ) -> u32 {
-    // Only the memory/stdout buffered backends are ported; the span-feed
-    // transport is a later tranche. The harness (and the TUI's default path)
-    // uses the buffered backend, so a non-null feed pointer is rejected.
-    if feed_ptr != 0.0 {
-        return 0;
-    }
-    // bufferedDestinationKind: 0 = stdout, 1 = memory (renderer.zig createRenderer).
-    let output = match buffered_destination_kind {
-        0 => OutputKind::Stdout,
-        1 => OutputKind::Memory,
-        _ => return 0,
+    // feedPtr != null routes frames to the given native span feed; otherwise
+    // bufferedDestinationKind selects stdout (0) or memory (1).
+    let output = if feed_ptr != 0.0 {
+        OutputKind::Feed((feed_ptr as u64) as usize as *mut crate::native_span_feed::Stream)
+    } else {
+        match buffered_destination_kind {
+            0 => OutputKind::Stdout,
+            1 => OutputKind::Memory,
+            _ => return 0,
+        }
     };
     let remote_mode = RemoteMode::from_code(remote_mode_value as u8);
     let Some(renderer) = CliRenderer::create(width, height, output, remote_mode) else {

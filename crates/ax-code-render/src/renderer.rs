@@ -102,6 +102,12 @@ enum OutputBackend {
         frame: Vec<u8>,
         has_committed: bool,
     },
+    /// Routes committed frames + control bytes to a native span feed (the SSH /
+    /// thin-client remote-attach transport). Non-owning pointer — the feed is
+    /// created and destroyed via createNativeSpanFeed / destroyNativeSpanFeed.
+    Feed {
+        stream: *mut crate::native_span_feed::Stream,
+    },
 }
 
 impl OutputBackend {
@@ -118,6 +124,15 @@ impl OutputBackend {
             frame: Vec::new(),
             has_committed: false,
         }
+    }
+
+    fn feed_write(stream: *mut crate::native_span_feed::Stream, bytes: &[u8]) {
+        if stream.is_null() || bytes.is_empty() {
+            return;
+        }
+        let s = unsafe { &mut *stream };
+        let _ = s.write(bytes);
+        let _ = s.commit();
     }
 
     /// Commit one rendered frame's bytes (begin_frame + write + end_frame).
@@ -141,6 +156,7 @@ impl OutputBackend {
                 *has_committed = true;
                 write_stdout(bytes);
             }
+            OutputBackend::Feed { stream } => Self::feed_write(*stream, bytes),
         }
     }
 
@@ -152,20 +168,29 @@ impl OutputBackend {
         match self {
             OutputBackend::Memory { control, .. } => control.extend_from_slice(bytes),
             OutputBackend::Stdout { .. } => write_stdout(bytes),
+            OutputBackend::Feed { stream } => Self::feed_write(*stream, bytes),
         }
     }
 
     fn dump_to(&self, out: &mut Vec<u8>) {
-        let (frame, has_committed) = match self {
+        let (frame, has_committed): (&[u8], bool) = match self {
             OutputBackend::Memory {
                 frame,
                 has_committed,
                 ..
-            } => (frame, *has_committed),
+            } => (frame.as_slice(), *has_committed),
             OutputBackend::Stdout {
                 frame,
                 has_committed,
-            } => (frame, *has_committed),
+            } => (frame.as_slice(), *has_committed),
+            OutputBackend::Feed { .. } => {
+                // Feed has no flat previous-frame slice; drain the spans instead.
+                out.extend_from_slice(
+                    b"(feed backend - drain spans from the NativeSpanFeed for output)\n",
+                );
+                out.extend_from_slice(b"\n================\n");
+                return;
+            }
         };
         let last: &[u8] = if has_committed { frame } else { &[] };
         if !last.is_empty() {
@@ -370,6 +395,7 @@ pub enum RenderStatus {
 pub enum OutputKind {
     Stdout,
     Memory,
+    Feed(*mut crate::native_span_feed::Stream),
 }
 
 impl CliRenderer {
@@ -446,6 +472,7 @@ impl CliRenderer {
             backend: match output {
                 OutputKind::Stdout => OutputBackend::stdout(),
                 OutputKind::Memory => OutputBackend::memory(),
+                OutputKind::Feed(stream) => OutputBackend::Feed { stream },
             },
             terminal_setup: false,
             use_alternate_screen: true,

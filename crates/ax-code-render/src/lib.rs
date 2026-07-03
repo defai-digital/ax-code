@@ -31,6 +31,7 @@ pub mod gcb;
 mod gcb_table;
 pub mod handles;
 pub mod mem_registry;
+pub mod native_span_feed;
 pub mod pool;
 pub mod renderer;
 mod renderer_ffi;
