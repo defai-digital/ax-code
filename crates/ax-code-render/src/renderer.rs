@@ -1,0 +1,658 @@
+//! ADR-046 Slice E — `CliRenderer`: cell-buffer diff → ANSI escape output.
+//!
+//! Ported from OpenTUI v0.4.1 `renderer.zig` / `renderer-output.zig` /
+//! `ansi.zig`, scoped to the render path the TUI drives: double-buffered
+//! `current`/`next` cell grids, `prepareRenderFrameWithWriter`'s per-cell diff
+//! with run-encoded color/attribute/char emission, the cursor/mouse-pointer
+//! restore tail, and the memory output backend + `dumpOutputBuffer` dump used
+//! by the parity harness (no TTY required).
+//!
+//! Verification: `script/native-render-renderer-parity.mjs` renders identical
+//! frames through this and the Zig backend and diffs the committed ANSI stream.
+
+use std::io::Write as _;
+
+use crate::buffer::{
+    ColorIntent, OptimizedBuffer, Rgba, alpha, blue, char_right_extent, default_color,
+    grapheme_id_from_char, green, intent, is_continuation_char, is_grapheme_char, link_id,
+    rgb_color, rgba_equal, slot, u8_rgb_to_rgba,
+};
+use crate::buffer_ffi::global_pool;
+use crate::handles::{self, Kind};
+use crate::terminal::{Capabilities, CursorStyle, MousePointerStyle, RemoteMode, Terminal};
+
+/// Zig `CLEAR_CHAR` — sentinel the current buffer is seeded with so the first
+/// diff always differs; never emitted.
+const CLEAR_CHAR: u32 = 0x0A00;
+
+// --- text attribute bits (ansi.TextAttributes) --------------------------------
+const ATTR_BOLD: u32 = 1 << 0;
+const ATTR_DIM: u32 = 1 << 1;
+const ATTR_ITALIC: u32 = 1 << 2;
+const ATTR_UNDERLINE: u32 = 1 << 3;
+const ATTR_BLINK: u32 = 1 << 4;
+const ATTR_INVERSE: u32 = 1 << 5;
+const ATTR_HIDDEN: u32 = 1 << 6;
+const ATTR_STRIKETHROUGH: u32 = 1 << 7;
+
+// --- ANSI 256-color fallback palette (ansi.fallbackAnsi256Color) --------------
+const ANSI16_RGB: [[u8; 3]; 16] = [
+    [0x00, 0x00, 0x00],
+    [0x80, 0x00, 0x00],
+    [0x00, 0x80, 0x00],
+    [0x80, 0x80, 0x00],
+    [0x00, 0x00, 0x80],
+    [0x80, 0x00, 0x80],
+    [0x00, 0x80, 0x80],
+    [0xc0, 0xc0, 0xc0],
+    [0x80, 0x80, 0x80],
+    [0xff, 0x00, 0x00],
+    [0x00, 0xff, 0x00],
+    [0xff, 0xff, 0x00],
+    [0x00, 0x00, 0xff],
+    [0xff, 0x00, 0xff],
+    [0x00, 0xff, 0xff],
+    [0xff, 0xff, 0xff],
+];
+const CUBE_LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+
+fn fallback_ansi256_color(index: usize) -> Rgba {
+    if index < 16 {
+        return u8_rgb_to_rgba(
+            ANSI16_RGB[index][0],
+            ANSI16_RGB[index][1],
+            ANSI16_RGB[index][2],
+        );
+    }
+    if index < 232 {
+        let cube = index - 16;
+        let r = CUBE_LEVELS[(cube / 36) % 6];
+        let g = CUBE_LEVELS[(cube / 6) % 6];
+        let b = CUBE_LEVELS[cube % 6];
+        return u8_rgb_to_rgba(r, g, b);
+    }
+    let gray = (8 + (index - 232) * 10) as u8;
+    u8_rgb_to_rgba(gray, gray, gray)
+}
+
+fn color_distance_squared(a: Rgba, b: Rgba) -> f32 {
+    let dr = crate::buffer::red(a) as f32 - crate::buffer::red(b) as f32;
+    let dg = green(a) as f32 - green(b) as f32;
+    let db = blue(a) as f32 - blue(b) as f32;
+    dr * dr + dg * dg + db * db
+}
+
+// --- memory output backend (renderer-output.zig BufferedBackend, .memory) -----
+//
+// Non-threaded memory mode never flips the active buffer, so the committed
+// frame is simply the last bytes written between begin/end. `dump_to` mirrors
+// the Zig debug format the parity harness parses.
+#[derive(Default)]
+struct MemoryBackend {
+    frame: Vec<u8>,
+    has_committed: bool,
+}
+
+impl MemoryBackend {
+    fn begin_frame(&mut self) {
+        self.frame.clear();
+    }
+
+    fn end_frame(&mut self) {
+        self.has_committed = true;
+    }
+
+    fn dump_to(&self, out: &mut Vec<u8>) {
+        let last: &[u8] = if self.has_committed { &self.frame } else { &[] };
+        if !last.is_empty() {
+            out.extend_from_slice(last);
+        } else {
+            out.extend_from_slice(b"(no output rendered yet)\n");
+        }
+        out.extend_from_slice(b"\n================\n");
+        let _ = write!(out, "Buffer size: {} bytes\n", last.len());
+        out.extend_from_slice(b"Active buffer: A\n");
+        out.extend_from_slice(b"Last committed buffer: A\n");
+    }
+}
+
+pub struct CliRenderer {
+    pub width: u32,
+    pub height: u32,
+    current_buffer: Box<OptimizedBuffer>,
+    next_buffer: Box<OptimizedBuffer>,
+    current_handle: u32,
+    next_handle: u32,
+    background_color: Rgba,
+    render_offset: u32,
+    terminal: Terminal,
+    backend: MemoryBackend,
+
+    palette_rgba: [Rgba; 256],
+    #[allow(dead_code)]
+    default_fg_rgba: Rgba,
+    #[allow(dead_code)]
+    default_bg_rgba: Rgba,
+    palette_epoch: u32,
+    last_rendered_palette_epoch: Option<u32>,
+    force_full_repaint: bool,
+
+    // Cursor diff cache.
+    last_cursor_style_tag: Option<u8>,
+    last_cursor_blinking: Option<bool>,
+    last_cursor_color_rgb: Option<[u8; 3]>,
+    last_cursor_x: Option<u32>,
+    last_cursor_y: Option<u32>,
+    last_cursor_visible: Option<bool>,
+    last_mouse_pointer: MousePointerStyle,
+}
+
+/// Zig `RenderStatus`.
+#[repr(u8)]
+pub enum RenderStatus {
+    Rendered = 0,
+    #[allow(dead_code)]
+    Skipped = 1,
+    #[allow(dead_code)]
+    Failed = 2,
+}
+
+impl CliRenderer {
+    pub fn create(width: u32, height: u32, remote_mode: RemoteMode) -> Option<Box<CliRenderer>> {
+        if width == 0 || height == 0 {
+            return None;
+        }
+        let mut current_buffer = Box::new(OptimizedBuffer::new(
+            width,
+            height,
+            false,
+            1,
+            b"current buffer".to_vec(),
+        )?);
+        let mut next_buffer = Box::new(OptimizedBuffer::new(
+            width,
+            height,
+            false,
+            1,
+            b"next buffer".to_vec(),
+        )?);
+
+        let background_color = rgb_color(0, 0, 0, 0);
+
+        {
+            let mut pool = global_pool();
+            next_buffer.set_blend_backdrop_color(Some(rgb_color(
+                crate::buffer::red(background_color),
+                green(background_color),
+                blue(background_color),
+                255,
+            )));
+            current_buffer.clear(&mut pool, background_color, Some(CLEAR_CHAR));
+            next_buffer.clear(&mut pool, background_color, None);
+        }
+
+        // Register the two child buffers so getNextBuffer/getCurrentBuffer hand
+        // JS a handle bufferDrawText can resolve. Borrowed: destroyRenderer
+        // invalidates them; the renderer's Boxes own the storage.
+        let current_handle =
+            handles::insert(Kind::OptimizedBuffer, &*current_buffer as *const _ as usize);
+        let next_handle =
+            handles::insert(Kind::OptimizedBuffer, &*next_buffer as *const _ as usize);
+        if current_handle == 0 || next_handle == 0 {
+            if current_handle != 0 {
+                handles::remove(current_handle, Kind::OptimizedBuffer);
+            }
+            if next_handle != 0 {
+                handles::remove(next_handle, Kind::OptimizedBuffer);
+            }
+            return None;
+        }
+
+        let mut palette_rgba = [rgb_color(0, 0, 0, 0); 256];
+        for (i, slot_color) in palette_rgba.iter_mut().enumerate() {
+            *slot_color = fallback_ansi256_color(i);
+        }
+
+        Some(Box::new(CliRenderer {
+            width,
+            height,
+            current_buffer,
+            next_buffer,
+            current_handle,
+            next_handle,
+            background_color,
+            render_offset: 0,
+            terminal: Terminal::init(remote_mode),
+            backend: MemoryBackend::default(),
+            palette_rgba,
+            default_fg_rgba: default_color(255, 255, 255, 255),
+            default_bg_rgba: default_color(0, 0, 0, 255),
+            palette_epoch: 0,
+            last_rendered_palette_epoch: None,
+            force_full_repaint: false,
+            last_cursor_style_tag: None,
+            last_cursor_blinking: None,
+            last_cursor_color_rgb: None,
+            last_cursor_x: None,
+            last_cursor_y: None,
+            last_cursor_visible: None,
+            last_mouse_pointer: MousePointerStyle::Default,
+        }))
+    }
+
+    pub fn next_handle(&self) -> u32 {
+        self.next_handle
+    }
+
+    pub fn current_handle(&self) -> u32 {
+        self.current_handle
+    }
+
+    pub fn set_background_color(&mut self, color: Rgba) {
+        self.background_color = color;
+    }
+
+    pub fn set_render_offset(&mut self, offset: u32) {
+        self.render_offset = offset;
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width == 0 || height == 0 || (width == self.width && height == self.height) {
+            return;
+        }
+        let mut pool = global_pool();
+        self.current_buffer.resize(&mut pool, width, height);
+        self.next_buffer.resize(&mut pool, width, height);
+        self.width = width;
+        self.height = height;
+        self.current_buffer
+            .clear(&mut pool, self.background_color, Some(CLEAR_CHAR));
+        self.next_buffer
+            .clear(&mut pool, self.background_color, None);
+        self.force_full_repaint = true;
+    }
+
+    /// Release grapheme-pool references held by the child buffers before the
+    /// renderer (and its owned buffers) is dropped (Zig buffer `deinit`).
+    pub fn release_pool_refs(&mut self, pool: &mut crate::pool::GraphemePool) {
+        self.current_buffer.tracker.clear(pool);
+        self.next_buffer.tracker.clear(pool);
+    }
+
+    /// On destroy, invalidate the borrowed child buffer handles so any stale JS
+    /// handle stops resolving. Storage is freed when the Box drops.
+    pub fn invalidate_child_handles(&self) {
+        handles::remove(self.current_handle, Kind::OptimizedBuffer);
+        handles::remove(self.next_handle, Kind::OptimizedBuffer);
+    }
+
+    pub fn render(&mut self, force: bool) -> RenderStatus {
+        let mut out = Vec::new();
+        self.prepare_render_frame(&mut out, force);
+        self.backend.begin_frame();
+        self.backend.frame.extend_from_slice(&out);
+        self.backend.end_frame();
+        RenderStatus::Rendered
+    }
+
+    fn prepare_render_frame(&mut self, out: &mut Vec<u8>, force: bool) {
+        let palette_force = match self.last_rendered_palette_epoch {
+            None => true,
+            Some(epoch) => epoch != self.palette_epoch,
+        };
+        let should_force = force || self.force_full_repaint || palette_force;
+
+        let caps = self.terminal.get_capabilities();
+        let hyperlinks_enabled = caps.hyperlinks;
+        let render_offset = self.render_offset;
+
+        let mut frame_started = false;
+        let mut current_fg: Option<Rgba> = None;
+        let mut current_bg: Option<Rgba> = None;
+        let mut current_attributes: Option<u32> = None;
+        let mut current_link_id: u32 = 0;
+
+        let mut pool = global_pool();
+
+        for y in 0..self.height {
+            let mut run_start: i64 = -1;
+            let mut run_length: u32 = 0;
+
+            for x in 0..self.width {
+                let current_cell = self.current_buffer.get(x, y);
+                let next_cell = self.next_buffer.get(x, y);
+                let (Some(current_cell), Some(next_cell)) = (current_cell, next_cell) else {
+                    continue;
+                };
+
+                if !should_force {
+                    let char_equal = current_cell.char == next_cell.char;
+                    let attr_equal = current_cell.attributes == next_cell.attributes;
+                    if char_equal
+                        && attr_equal
+                        && rgba_equal(current_cell.fg, next_cell.fg)
+                        && rgba_equal(current_cell.bg, next_cell.bg)
+                    {
+                        if run_length > 0 {
+                            out.extend_from_slice(b"\x1b[0m");
+                            run_start = -1;
+                            run_length = 0;
+                        }
+                        continue;
+                    }
+                }
+
+                let cell = next_cell;
+
+                if !frame_started {
+                    begin_render_frame(out);
+                    frame_started = true;
+                }
+
+                let fg_match = current_fg.is_some_and(|c| rgba_equal(c, cell.fg));
+                let bg_match = current_bg.is_some_and(|c| rgba_equal(c, cell.bg));
+                let same_attributes = fg_match
+                    && bg_match
+                    && current_attributes.is_some_and(|a| a == cell.attributes);
+
+                let link = if hyperlinks_enabled {
+                    link_id(cell.attributes)
+                } else {
+                    0
+                };
+                if hyperlinks_enabled && link != current_link_id {
+                    if current_link_id != 0 {
+                        out.extend_from_slice(b"\x1b]8;;\x1b\\");
+                    }
+                    current_link_id = link;
+                    // Link URL resolution is a later-tranche concern; with
+                    // hyperlinks disabled in a fresh Terminal this never fires.
+                    if current_link_id != 0 {
+                        current_link_id = 0;
+                    }
+                }
+
+                if !same_attributes || run_start == -1 {
+                    if run_length > 0 {
+                        out.extend_from_slice(b"\x1b[0m");
+                    }
+                    run_start = x as i64;
+                    run_length = 0;
+
+                    current_fg = Some(cell.fg);
+                    current_bg = Some(cell.bg);
+                    current_attributes = Some(cell.attributes);
+
+                    move_to_output(out, x + 1, y + 1 + render_offset);
+                    emit_color(out, &caps, &self.palette_rgba, cell.fg, false);
+                    emit_color(out, &caps, &self.palette_rgba, cell.bg, true);
+                    apply_attributes(out, cell.attributes);
+                }
+
+                if is_grapheme_char(cell.char) {
+                    let gid = grapheme_id_from_char(cell.char);
+                    if let Some(bytes) = pool.get(gid) {
+                        if !bytes.is_empty() {
+                            let grapheme_width = char_right_extent(cell.char) + 1;
+                            if caps.explicit_width {
+                                let bytes = bytes.to_vec();
+                                let _ = write!(out, "\x1b]66;w={};", grapheme_width);
+                                out.extend_from_slice(&bytes);
+                                out.extend_from_slice(b"\x1b\\");
+                            } else {
+                                out.extend_from_slice(bytes);
+                                if caps.explicit_cursor_positioning {
+                                    let next_x = x + grapheme_width;
+                                    if next_x < self.width {
+                                        move_to_output(out, next_x + 1, y + 1 + render_offset);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if is_continuation_char(cell.char) {
+                    // Intentionally emit nothing for continuation cells.
+                } else {
+                    push_utf8(out, cell.char);
+                }
+                run_length += 1;
+
+                self.current_buffer.sync_cell(&mut pool, x, y, cell);
+            }
+        }
+
+        if hyperlinks_enabled && current_link_id != 0 {
+            if !frame_started {
+                begin_render_frame(out);
+                frame_started = true;
+            }
+            out.extend_from_slice(b"\x1b]8;;\x1b\\");
+        }
+
+        if frame_started {
+            out.extend_from_slice(b"\x1b[0m");
+        }
+
+        // Cursor restore tail.
+        let cursor = self.terminal.cursor;
+        if cursor.visible {
+            let style_code: &[u8] = match cursor.style {
+                CursorStyle::Block => {
+                    if cursor.blinking {
+                        b"\x1b[1 q"
+                    } else {
+                        b"\x1b[2 q"
+                    }
+                }
+                CursorStyle::Line => {
+                    if cursor.blinking {
+                        b"\x1b[5 q"
+                    } else {
+                        b"\x1b[6 q"
+                    }
+                }
+                CursorStyle::Underline => {
+                    if cursor.blinking {
+                        b"\x1b[3 q"
+                    } else {
+                        b"\x1b[4 q"
+                    }
+                }
+                CursorStyle::Default => b"\x1b[0 q",
+            };
+
+            let cr = crate::buffer::red(cursor.color);
+            let cg = green(cursor.color);
+            let cb = blue(cursor.color);
+
+            let style_tag = cursor.style.tag();
+            let style_changed = self.last_cursor_style_tag != Some(style_tag)
+                || self.last_cursor_blinking != Some(cursor.blinking);
+            let color_changed = match self.last_cursor_color_rgb {
+                None => true,
+                Some(rgb) => rgb[0] != cr || rgb[1] != cg || rgb[2] != cb,
+            };
+            let cursor_x = cursor.x;
+            let cursor_y = cursor.y + render_offset;
+            let position_changed = self.last_cursor_x != Some(cursor_x)
+                || self.last_cursor_y != Some(cursor_y)
+                || self.last_cursor_x.is_none()
+                || self.last_cursor_y.is_none();
+            let visibility_changed = self.last_cursor_visible != Some(true);
+            let needs_cursor_restore = frame_started
+                || style_changed
+                || color_changed
+                || position_changed
+                || visibility_changed;
+
+            if needs_cursor_restore {
+                if !frame_started {
+                    begin_render_frame(out);
+                    frame_started = true;
+                }
+                if color_changed {
+                    let _ = write!(out, "\x1b]12;#{:02x}{:02x}{:02x}\x07", cr, cg, cb);
+                    self.last_cursor_color_rgb = Some([cr, cg, cb]);
+                }
+                if style_changed {
+                    out.extend_from_slice(style_code);
+                    self.last_cursor_style_tag = Some(style_tag);
+                    self.last_cursor_blinking = Some(cursor.blinking);
+                }
+                move_to_output(out, cursor_x, cursor_y);
+                out.extend_from_slice(b"\x1b[?25h");
+            }
+
+            self.last_cursor_x = Some(cursor_x);
+            self.last_cursor_y = Some(cursor_y);
+            self.last_cursor_visible = Some(true);
+        } else {
+            if !frame_started && self.last_cursor_visible != Some(false) {
+                begin_render_frame(out);
+                frame_started = true;
+                out.extend_from_slice(b"\x1b[?25l");
+            }
+            self.last_cursor_style_tag = None;
+            self.last_cursor_blinking = None;
+            self.last_cursor_color_rgb = None;
+            self.last_cursor_x = None;
+            self.last_cursor_y = None;
+            self.last_cursor_visible = Some(false);
+        }
+
+        let mouse_pointer = self.terminal.mouse_pointer;
+        if mouse_pointer != self.last_mouse_pointer {
+            if !frame_started {
+                begin_render_frame(out);
+                frame_started = true;
+            }
+            let _ = write!(out, "\x1b]22;{}\x07", mouse_pointer.to_name());
+            self.last_mouse_pointer = mouse_pointer;
+        }
+
+        if frame_started {
+            out.extend_from_slice(b"\x1b[?2026l");
+        }
+
+        self.last_rendered_palette_epoch = Some(self.palette_epoch);
+        self.force_full_repaint = false;
+
+        self.next_buffer
+            .clear(&mut pool, self.background_color, None);
+    }
+
+    pub fn dump_output_buffer(&self, timestamp: i64) {
+        let _ = std::fs::create_dir_all("buffer_dump");
+        let filename = format!("buffer_dump/output_buffer_{}.txt", timestamp);
+        let mut body: Vec<u8> = Vec::new();
+        let _ = write!(body, "Output Buffer Dump (timestamp: {}):\n", timestamp);
+        body.extend_from_slice(b"Last Rendered ANSI Output:\n");
+        body.extend_from_slice(b"================\n");
+        self.backend.dump_to(&mut body);
+        let _ = std::fs::write(filename, body);
+    }
+}
+
+fn begin_render_frame(out: &mut Vec<u8>) {
+    out.extend_from_slice(b"\x1b[?2026h"); // syncSet
+    out.extend_from_slice(b"\x1b[?25l"); // hideCursor
+}
+
+fn move_to_output(out: &mut Vec<u8>, x: u32, y: u32) {
+    let _ = write!(out, "\x1b[{};{}H", y, x);
+}
+
+fn apply_attributes(out: &mut Vec<u8>, attributes: u32) {
+    let base = attributes & 0xFF;
+    if base & ATTR_BOLD != 0 {
+        out.extend_from_slice(b"\x1b[1m");
+    }
+    if base & ATTR_DIM != 0 {
+        out.extend_from_slice(b"\x1b[2m");
+    }
+    if base & ATTR_ITALIC != 0 {
+        out.extend_from_slice(b"\x1b[3m");
+    }
+    if base & ATTR_UNDERLINE != 0 {
+        out.extend_from_slice(b"\x1b[4m");
+    }
+    if base & ATTR_BLINK != 0 {
+        out.extend_from_slice(b"\x1b[5m");
+    }
+    if base & ATTR_INVERSE != 0 {
+        out.extend_from_slice(b"\x1b[7m");
+    }
+    if base & ATTR_HIDDEN != 0 {
+        out.extend_from_slice(b"\x1b[8m");
+    }
+    if base & ATTR_STRIKETHROUGH != 0 {
+        out.extend_from_slice(b"\x1b[9m");
+    }
+}
+
+fn emit_color(
+    out: &mut Vec<u8>,
+    caps: &Capabilities,
+    palette: &[Rgba; 256],
+    rgba: Rgba,
+    is_bg: bool,
+) {
+    if intent(rgba) == ColorIntent::Default {
+        out.extend_from_slice(if is_bg { b"\x1b[49m" } else { b"\x1b[39m" });
+        return;
+    }
+    if is_bg && alpha(rgba) == 0 {
+        out.extend_from_slice(b"\x1b[49m");
+        return;
+    }
+    if intent(rgba) == ColorIntent::Indexed && caps.ansi256 {
+        let index = slot(rgba);
+        let _ = if is_bg {
+            write!(out, "\x1b[48;5;{}m", index)
+        } else {
+            write!(out, "\x1b[38;5;{}m", index)
+        };
+        return;
+    }
+    if !caps.rgb && caps.ansi256 {
+        let index = nearest_palette_index(palette, rgba);
+        let _ = if is_bg {
+            write!(out, "\x1b[48;5;{}m", index)
+        } else {
+            write!(out, "\x1b[38;5;{}m", index)
+        };
+        return;
+    }
+    let r = crate::buffer::red(rgba);
+    let g = green(rgba);
+    let b = blue(rgba);
+    let _ = if is_bg {
+        write!(out, "\x1b[48;2;{};{};{}m", r, g, b)
+    } else {
+        write!(out, "\x1b[38;2;{};{};{}m", r, g, b)
+    };
+}
+
+fn nearest_palette_index(palette: &[Rgba; 256], rgba: Rgba) -> u8 {
+    let mut best_index: u8 = 0;
+    let mut best_distance = f32::INFINITY;
+    for (index, candidate) in palette.iter().enumerate() {
+        let distance = color_distance_squared(rgba, *candidate);
+        if distance < best_distance {
+            best_distance = distance;
+            best_index = index as u8;
+        }
+    }
+    best_index
+}
+
+/// Encode a codepoint as UTF-8 (Zig `utf8Encode`, `catch 1` on invalid).
+fn push_utf8(out: &mut Vec<u8>, ch: u32) {
+    match char::from_u32(ch) {
+        Some(c) => {
+            let mut buf = [0u8; 4];
+            out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+        }
+        None => out.push((ch & 0xFF) as u8),
+    }
+}

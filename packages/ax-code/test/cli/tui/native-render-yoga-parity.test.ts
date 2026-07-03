@@ -63,6 +63,13 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("CliRenderer escape output matches the Zig backend byte-for-byte", () => {
+    const result = runNode([path.join(pkgDir, "script/native-render-renderer-parity.mjs"), "--seqs=100"])
+    expect(result.stderr).not.toContain("escape output differs")
+    expect(result.stdout).toContain("renderer parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
   it("overlay engages under AX_CODE_NATIVE_RENDER=1 (audio-stub fingerprint)", () => {
     const fingerprint = `
       import { Yoga } from "@ax-code/opentui-core"

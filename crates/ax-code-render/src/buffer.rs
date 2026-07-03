@@ -29,8 +29,47 @@ fn chan(c: Rgba, i: usize) -> u32 {
     (c[i] & 0xFF) as u32
 }
 #[inline]
+pub fn red(c: Rgba) -> u8 {
+    (c[0] & 0xFF) as u8
+}
+#[inline]
+pub fn green(c: Rgba) -> u8 {
+    (c[1] & 0xFF) as u8
+}
+#[inline]
+pub fn blue(c: Rgba) -> u8 {
+    (c[2] & 0xFF) as u8
+}
+#[inline]
 pub fn alpha(c: Rgba) -> u32 {
     chan(c, 3)
+}
+
+/// ansi.ColorIntent — recorded so the renderer emits the right ANSI sequence.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ColorIntent {
+    Rgb,
+    Indexed,
+    Default,
+}
+
+/// ansi.intent: bits 8-9 of the metadata word.
+pub fn intent(c: Rgba) -> ColorIntent {
+    match (get_meta(c) >> 8) as u8 {
+        1 => ColorIntent::Indexed,
+        2 => ColorIntent::Default,
+        _ => ColorIntent::Rgb,
+    }
+}
+
+/// ansi.slot: low 8 bits of the metadata word (only meaningful when indexed).
+pub fn slot(c: Rgba) -> u8 {
+    (get_meta(c) & 0xFF) as u8
+}
+
+/// Exact integer equality over all four lanes (buf.rgbaEqual).
+pub fn rgba_equal(a: Rgba, b: Rgba) -> bool {
+    a == b
 }
 
 pub fn get_meta(c: Rgba) -> u32 {
@@ -52,6 +91,16 @@ pub fn pack_rgba8(r: u8, g: u8, b: u8, a: u8, meta: u32) -> Rgba {
 /// ansi.rgbColor: literal RGB intent (meta = 0).
 pub fn rgb_color(r: u8, g: u8, b: u8, a: u8) -> Rgba {
     pack_rgba8(r, g, b, a, 0)
+}
+
+/// ansi.defaultColor: terminal-default intent (SGR 39/49). Meta = intent 2.
+pub fn default_color(r: u8, g: u8, b: u8, a: u8) -> Rgba {
+    pack_rgba8(r, g, b, a, (ColorIntent::Default as u32) << 8)
+}
+
+/// ansi.u8RgbToRgba
+pub fn u8_rgb_to_rgba(r: u8, g: u8, b: u8) -> Rgba {
+    rgb_color(r, g, b, 255)
 }
 
 // --- attributes (ansi.TextAttributes): low 8 bits = base, bits 8..31 = link id
@@ -80,7 +129,7 @@ pub fn is_continuation_char(c: u32) -> bool {
 pub fn is_grapheme_char(c: u32) -> bool {
     (c & 0xC000_0000) == CHAR_FLAG_GRAPHEME
 }
-fn char_right_extent(c: u32) -> u32 {
+pub fn char_right_extent(c: u32) -> u32 {
     (c >> CHAR_EXT_RIGHT_SHIFT) & CHAR_EXT_MASK
 }
 fn char_left_extent(c: u32) -> u32 {
@@ -594,9 +643,33 @@ impl OptimizedBuffer {
         })
     }
 
-    /// Zig `set` (setInternal with span cleanup). Grapheme spans are a
-    /// tranche-2 concern; simple cells reduce to a plane write.
+    /// Set the backdrop color used when blending against a transparent
+    /// destination (Zig `setBlendBackdropColor`).
+    pub fn set_blend_backdrop_color(&mut self, color: Option<Rgba>) {
+        self.blend_backdrop = color;
+    }
+
+    /// Zig `set` — setInternal with span cleanup.
     pub fn set(&mut self, pool: &mut GraphemePool, x: u32, y: u32, cell: Cell) {
+        self.set_internal(pool, true, x, y, cell);
+    }
+
+    /// Zig `syncCell` — setInternal without span cleanup. Used by the renderer
+    /// to mirror emitted cells into the current buffer without destroying
+    /// continuation cells written earlier in the same left-to-right pass.
+    pub fn sync_cell(&mut self, pool: &mut GraphemePool, x: u32, y: u32, cell: Cell) {
+        self.set_internal(pool, false, x, y, cell);
+    }
+
+    /// Zig `setInternal`. Grapheme spans are handled per the reference.
+    fn set_internal(
+        &mut self,
+        pool: &mut GraphemePool,
+        span_cleanup: bool,
+        x: u32,
+        y: u32,
+        cell: Cell,
+    ) {
         let Some(index) = self.validate_and_index(x, y) else {
             return;
         };
@@ -607,8 +680,33 @@ impl OptimizedBuffer {
         let prev_link_id_at_entry = link_id(self.attributes[index]);
         let mut tracker_replaced = false;
 
+        // Without span cleanup, the tracker is still updated up front so
+        // grapheme refcounts stay balanced (Zig setInternal, span_cleanup=false).
+        if !span_cleanup {
+            let old_start_id = if is_grapheme_char(prev_char) {
+                Some(grapheme_id_from_char(prev_char))
+            } else {
+                None
+            };
+            let new_start_id = if is_grapheme_char(cell.char) {
+                let new_width = char_right_extent(cell.char) + 1;
+                if x + new_width > self.width {
+                    None
+                } else {
+                    Some(grapheme_id_from_char(cell.char))
+                }
+            } else {
+                None
+            };
+            if old_start_id.is_some() || new_start_id.is_some() {
+                self.tracker.replace(pool, old_start_id, new_start_id);
+                tracker_replaced = true;
+            }
+        }
+
         // Overwriting part of a grapheme span with a different char clears the span.
-        if (is_grapheme_char(prev_char) || is_continuation_char(prev_char))
+        if span_cleanup
+            && (is_grapheme_char(prev_char) || is_continuation_char(prev_char))
             && prev_char != cell.char
         {
             let row_start = (y * self.width) as usize;

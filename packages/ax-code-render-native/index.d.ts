@@ -125,6 +125,8 @@ export declare function createEditBuffer(widthMethod: number, eventSinkHandle: n
 
 export declare function createOptimizedBuffer(width: number, height: number, respectAlpha: number, widthMethod: number, idPtr: number, idLen: number): number
 
+export declare function createRenderer(width: number, height: number, bufferedDestinationKind: number, remoteModeValue: number, feedPtr: number): number
+
 export declare function createSyntaxStyle(): number
 
 export declare function createTextBuffer(widthMethod: number): number
@@ -137,6 +139,8 @@ export declare function destroyEditBuffer(handle: number): void
 
 export declare function destroyOptimizedBuffer(handle: number): void
 
+export declare function destroyRenderer(handle: number): void
+
 export declare function destroySyntaxStyle(handle: number): void
 
 export declare function destroyTextBuffer(handle: number): void
@@ -144,6 +148,8 @@ export declare function destroyTextBuffer(handle: number): void
 export declare function destroyTextBufferView(handle: number): void
 
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
+
+export declare function dumpOutputBuffer(handle: number, timestamp: number): void
 
 export declare function editBufferCanRedo(handle: number): boolean
 
@@ -214,6 +220,18 @@ export declare function editBufferSetCursorToLineCol(handle: number, row: number
 export declare function editBufferSetText(handle: number, textPtr: number, textLen: number): void
 
 export declare function editBufferUndo(handle: number, outPtr: number, maxLen: number): number
+
+export declare function getCurrentBuffer(handle: number): number
+
+export declare function getNextBuffer(handle: number): number
+
+export declare function render(handle: number, force: number): number
+
+export declare function resizeRenderer(handle: number, width: number, height: number): void
+
+export declare function setBackgroundColor(handle: number, color: number): void
+
+export declare function setRenderOffset(handle: number, offset: number): void
 
 export declare function syntaxStyleGetStyleCount(handle: number): number
 
