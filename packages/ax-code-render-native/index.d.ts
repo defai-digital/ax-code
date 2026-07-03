@@ -127,6 +127,8 @@ export declare function checkHit(handle: number, x: number, y: number): number
 
 export declare function clearCurrentHitGrid(handle: number): void
 
+export declare function clearPendingSplitFooterTransition(handle: number): void
+
 export declare function clearTerminal(handle: number): void
 
 export declare function createAudioEngine(options: number): number
@@ -262,6 +264,8 @@ export declare function getNextBuffer(handle: number): number
  */
 export declare function getRenderStats(handle: number, outPtr: number): void
 
+export declare function getSplitOutputOffset(handle: number, surfaceOffset: number): number
+
 export declare function hitGridClearScissorRects(handle: number): void
 
 export declare function hitGridPopScissorRect(handle: number): void
@@ -275,6 +279,10 @@ export declare function queryThemeColors(handle: number): void
 export declare function render(handle: number, force: number): number
 
 export declare function rendererSetPaletteState(handle: number, palettePtr: number, paletteLen: number, defaultFgPtr: number, defaultBgPtr: number, paletteEpoch: number): void
+
+export declare function repaintSplitFooter(handle: number, pinnedRenderOffset: number, force: number): bigint
+
+export declare function resetSplitScrollback(handle: number, seedRows: number, pinnedRenderOffset: number): number
 
 export declare function resizeRenderer(handle: number, width: number, height: number): void
 
@@ -296,6 +304,8 @@ export declare function setCursorStyleOptions(handle: number, optionsPtr: number
 
 export declare function setKittyKeyboardFlags(handle: number, flags: number): void
 
+export declare function setPendingSplitFooterTransition(handle: number, mode: number, sourceTopLine: number, sourceHeight: number, targetTopLine: number, targetHeight: number, scrollLines: number): void
+
 export declare function setRenderOffset(handle: number, offset: number): void
 
 export declare function setTerminalTitle(handle: number, titlePtr: number, titleLen: number): void
@@ -305,6 +315,8 @@ export declare function setupTerminal(handle: number, useAlternateScreen: number
 export declare function setUseThread(handle: number, useThread: number): void
 
 export declare function suspendRenderer(handle: number): void
+
+export declare function syncSplitScrollback(handle: number, pinnedRenderOffset: number): number
 
 export declare function syntaxStyleGetStyleCount(handle: number): number
 

@@ -70,6 +70,13 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("split-footer scrollback (offsets + repaint) matches the Zig backend", () => {
+    const result = runNode([path.join(pkgDir, "script/native-render-split-parity.mjs"), "--seqs=200"])
+    expect(result.stderr).not.toContain("failing check")
+    expect(result.stdout).toContain("split parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
   it("getRenderStats deterministic fields match the Zig backend", () => {
     const result = runNode([path.join(pkgDir, "script/native-render-stats-parity.mjs"), "--seqs=100"])
     expect(result.stderr).not.toContain("failing sequence")

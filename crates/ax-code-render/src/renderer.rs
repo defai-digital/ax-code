@@ -262,6 +262,10 @@ pub struct CliRenderer {
     stat_heap_total: u32,
     #[allow(dead_code)]
     stat_array_buffers: u32,
+
+    // Split-footer scrollback.
+    split_scrollback: SplitScrollback,
+    pending_split_footer_transition: SplitFooterTransition,
 }
 
 const MAX_STAT_SAMPLES: usize = 30;
@@ -280,6 +284,76 @@ struct HitClipRect {
     y: i32,
     width: u32,
     height: u32,
+}
+
+/// split-scrollback.zig `SplitScrollback` (subset used by the ported symbols:
+/// reset / renderOffset / noteViewportScroll).
+#[derive(Clone, Copy, Default)]
+struct SplitScrollback {
+    published_rows: u32,
+    tail_column: u32,
+}
+
+impl SplitScrollback {
+    fn reset(&mut self, seed_rows: u32) {
+        self.published_rows = seed_rows;
+        self.tail_column = 0;
+    }
+
+    fn render_offset(&self, surface_offset: u32) -> u32 {
+        if surface_offset == 0 {
+            0
+        } else {
+            self.published_rows.min(surface_offset)
+        }
+    }
+
+    fn note_viewport_scroll(&mut self, lines: u32) {
+        self.published_rows -= lines.min(self.published_rows);
+        if self.published_rows == 0 {
+            self.tail_column = 0;
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SplitFooterTransitionMode {
+    None,
+    ViewportScroll,
+    ClearStaleRows,
+}
+
+impl SplitFooterTransitionMode {
+    fn from_code(v: u8) -> SplitFooterTransitionMode {
+        match v {
+            1 => SplitFooterTransitionMode::ViewportScroll,
+            2 => SplitFooterTransitionMode::ClearStaleRows,
+            _ => SplitFooterTransitionMode::None,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SplitFooterTransition {
+    mode: SplitFooterTransitionMode,
+    source_top_line: u32,
+    source_height: u32,
+    target_top_line: u32,
+    target_height: u32,
+    scroll_lines: u32,
+}
+
+impl Default for SplitFooterTransition {
+    fn default() -> SplitFooterTransition {
+        SplitFooterTransition {
+            mode: SplitFooterTransitionMode::None,
+            source_top_line: 0,
+            source_height: 0,
+            target_top_line: 0,
+            target_height: 0,
+            scroll_lines: 0,
+        }
+    }
 }
 
 /// Zig `RenderStatus`.
@@ -410,7 +484,137 @@ impl CliRenderer {
             stat_heap_used: 0,
             stat_heap_total: 0,
             stat_array_buffers: 0,
+            split_scrollback: SplitScrollback::default(),
+            pending_split_footer_transition: SplitFooterTransition::default(),
         }))
+    }
+
+    // --- split-footer scrollback ----------------------------------------------
+
+    fn split_output_offset(&self, surface_offset: u32) -> u32 {
+        self.split_scrollback.render_offset(surface_offset)
+    }
+
+    fn clamp_split_surface_offset(&self, surface_offset: u32, pinned_render_offset: u32) -> u32 {
+        let output_offset = self.split_output_offset(pinned_render_offset);
+        surface_offset.clamp(output_offset, pinned_render_offset)
+    }
+
+    pub fn reset_split_scrollback(&mut self, seed_rows: u32, pinned_render_offset: u32) -> u32 {
+        self.split_scrollback.reset(seed_rows);
+        self.render_offset = self.split_scrollback.render_offset(pinned_render_offset);
+        self.render_offset
+    }
+
+    pub fn sync_split_scrollback(&mut self, pinned_render_offset: u32) -> u32 {
+        self.render_offset =
+            self.clamp_split_surface_offset(self.render_offset, pinned_render_offset);
+        self.render_offset
+    }
+
+    pub fn get_split_output_offset(&self, surface_offset: u32) -> u32 {
+        self.split_output_offset(surface_offset)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_pending_split_footer_transition(
+        &mut self,
+        mode: u8,
+        source_top_line: u32,
+        source_height: u32,
+        target_top_line: u32,
+        target_height: u32,
+        scroll_lines: u32,
+    ) {
+        self.pending_split_footer_transition = SplitFooterTransition {
+            mode: SplitFooterTransitionMode::from_code(mode),
+            source_top_line,
+            source_height,
+            target_top_line,
+            target_height,
+            scroll_lines,
+        };
+    }
+
+    pub fn clear_pending_split_footer_transition(&mut self) {
+        self.pending_split_footer_transition = SplitFooterTransition::default();
+    }
+
+    /// Zig `applyPendingSplitFooterTransition` — emit the pending transition's
+    /// scroll / stale-row-clear escapes, then consume it.
+    fn apply_pending_split_footer_transition(
+        &mut self,
+        out: &mut Vec<u8>,
+        frame_started: &mut bool,
+    ) {
+        let transition = self.pending_split_footer_transition;
+        self.pending_split_footer_transition = SplitFooterTransition::default();
+
+        if transition.mode == SplitFooterTransitionMode::None
+            || transition.source_height == 0
+            || transition.target_height == 0
+        {
+            return;
+        }
+        if !*frame_started {
+            begin_render_frame(out);
+            *frame_started = true;
+        }
+        match transition.mode {
+            SplitFooterTransitionMode::ViewportScroll => {
+                if transition.scroll_lines == 0 {
+                    return;
+                }
+                self.split_scrollback
+                    .note_viewport_scroll(transition.scroll_lines);
+                if transition.source_top_line < transition.target_top_line {
+                    let _ = write!(out, "\x1b[{}T", transition.scroll_lines);
+                } else if transition.source_top_line > transition.target_top_line {
+                    let _ = write!(out, "\x1b[{}S", transition.scroll_lines);
+                }
+            }
+            SplitFooterTransitionMode::ClearStaleRows => {
+                let source_end = transition.source_top_line + transition.source_height - 1;
+                let target_end = transition.target_top_line + transition.target_height - 1;
+                let mut line = transition.source_top_line;
+                while line <= source_end {
+                    if line >= transition.target_top_line && line <= target_end {
+                        line += 1;
+                        continue;
+                    }
+                    move_to_output(out, 1, line);
+                    out.extend_from_slice(b"\x1b[2K");
+                    line += 1;
+                }
+            }
+            SplitFooterTransitionMode::None => {}
+        }
+    }
+
+    /// Zig `repaintSplitFooter` — adjust the render offset for the footer and
+    /// render, returning packed (renderOffset | status<<32).
+    pub fn repaint_split_footer(&mut self, pinned_render_offset: u32, force: bool) -> u64 {
+        let transition = self.pending_split_footer_transition;
+        let has_pending_viewport_target = transition.mode
+            == SplitFooterTransitionMode::ViewportScroll
+            && transition.target_top_line > 0
+            && transition.scroll_lines > 0;
+        let previous = self.render_offset;
+        let next = if has_pending_viewport_target {
+            transition.target_top_line - 1
+        } else {
+            self.clamp_split_surface_offset(previous, pinned_render_offset)
+        };
+        let redraw_footer = force || previous != next;
+        self.render_offset = next;
+
+        let mut out = Vec::new();
+        self.prepare_render_frame(&mut out, redraw_footer);
+        self.backend.commit_frame(&out);
+        self.collect_frame_stats();
+
+        // status rendered = 0
+        (self.render_offset as u64) | (0u64 << 32)
     }
 
     /// Zig `setUseThread` — gated on the backend supporting threading. The
@@ -948,6 +1152,8 @@ impl CliRenderer {
         let render_offset = self.render_offset;
 
         let mut frame_started = false;
+        self.apply_pending_split_footer_transition(out, &mut frame_started);
+
         let mut current_fg: Option<Rgba> = None;
         let mut current_bg: Option<Rgba> = None;
         let mut current_attributes: Option<u32> = None;

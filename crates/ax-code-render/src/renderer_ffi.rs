@@ -9,6 +9,7 @@ use crate::buffer_ffi::global_pool;
 use crate::handles::{self, Kind};
 use crate::renderer::{CliRenderer, OutputKind};
 use crate::terminal::RemoteMode;
+use napi::bindgen_prelude::BigInt;
 use napi_derive::napi;
 
 fn resolve(handle: u32) -> Option<&'static mut CliRenderer> {
@@ -301,6 +302,61 @@ pub fn dump_output_buffer(handle: u32, timestamp: f64) {
     if let Some(r) = resolve(handle) {
         r.dump_output_buffer(timestamp as i64);
     }
+}
+
+#[napi(js_name = "resetSplitScrollback")]
+pub fn reset_split_scrollback(handle: u32, seed_rows: u32, pinned_render_offset: u32) -> u32 {
+    resolve(handle).map_or(0, |r| {
+        r.reset_split_scrollback(seed_rows, pinned_render_offset)
+    })
+}
+
+#[napi(js_name = "syncSplitScrollback")]
+pub fn sync_split_scrollback(handle: u32, pinned_render_offset: u32) -> u32 {
+    resolve(handle).map_or(0, |r| r.sync_split_scrollback(pinned_render_offset))
+}
+
+#[napi(js_name = "getSplitOutputOffset")]
+pub fn get_split_output_offset(handle: u32, surface_offset: u32) -> u32 {
+    resolve(handle).map_or(0, |r| r.get_split_output_offset(surface_offset))
+}
+
+#[napi(js_name = "setPendingSplitFooterTransition")]
+pub fn set_pending_split_footer_transition(
+    handle: u32,
+    mode: u32,
+    source_top_line: u32,
+    source_height: u32,
+    target_top_line: u32,
+    target_height: u32,
+    scroll_lines: u32,
+) {
+    if let Some(r) = resolve(handle) {
+        r.set_pending_split_footer_transition(
+            mode as u8,
+            source_top_line,
+            source_height,
+            target_top_line,
+            target_height,
+            scroll_lines,
+        );
+    }
+}
+
+#[napi(js_name = "clearPendingSplitFooterTransition")]
+pub fn clear_pending_split_footer_transition(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.clear_pending_split_footer_transition();
+    }
+}
+
+#[napi(js_name = "repaintSplitFooter")]
+pub fn repaint_split_footer(handle: u32, pinned_render_offset: u32, force: f64) -> BigInt {
+    let packed = match resolve(handle) {
+        Some(r) => r.repaint_split_footer(pinned_render_offset, force != 0.0),
+        None => 2u64 << 32, // failed status, offset 0
+    };
+    BigInt::from(packed)
 }
 
 #[napi(js_name = "setUseThread")]
