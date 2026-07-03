@@ -177,6 +177,17 @@ jobs:
         if: ${{ matrix.targets == 'darwin-arm64' && env.HAS_APPLE_CERT != 'true' }}
         run: echo "::warning::No Apple signing certificate configured; macOS CLI archive will use ad-hoc native-library signing and will not be notarized."
 
+      # ADR-046: build the Rust render addon per platform so build-node-tui can
+      # ship its .node. Without this the dist has no @ax-code/render binding and
+      # the native-render overlay silently falls back to the bundled Zig library.
+      # The addon's build.rs compiles the vendored yoga C++ (C++20 via cc), so
+      # each runner needs a working C/C++ toolchain (present on the GitHub images).
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build @ax-code/render native addon (napi, host platform)
+        run: pnpm run build:native render
+
       - name: Build
         working-directory: packages/ax-code
         run: pnpm exec tsx ${{ matrix.build-script }} ${{ matrix.build-args }}
@@ -184,6 +195,19 @@ jobs:
           AX_CODE_VERSION: ${{ github.ref_name }}
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
+
+      # Fail loudly if the render .node was not shipped into the dist — otherwise
+      # the native-render overlay would silently fall back to Zig in production.
+      - name: Verify render addon shipped
+        shell: bash
+        run: |
+          node_files=$(ls packages/ax-code/dist/ax-code-*/node_modules/@ax-code/render/*.node 2>/dev/null || true)
+          if [ -z "$node_files" ]; then
+            echo "FAIL: @ax-code/render .node was not shipped into the dist (native-render would fall back to Zig)"
+            exit 1
+          fi
+          echo "OK: render addon shipped:"
+          echo "$node_files"
 
       - name: Smoke — release runtime
         working-directory: packages/ax-code
