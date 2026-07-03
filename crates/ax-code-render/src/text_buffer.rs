@@ -605,7 +605,9 @@ impl TextBuffer {
                 right = mid;
             } else {
                 let next_line_start = if mid + 1 < count {
-                    self.rope.get_marker(MARKER_LINESTART, mid + 1)?.global_weight
+                    self.rope
+                        .get_marker(MARKER_LINESTART, mid + 1)?
+                        .global_weight
                 } else {
                     total_weight
                 };
@@ -663,7 +665,12 @@ impl TextBuffer {
                 if clamped == cols_before {
                     if let Some((pbytes, _)) = &prev {
                         let ptext = std::str::from_utf8(pbytes).unwrap_or("");
-                        return crate::unicode::prev_grapheme_width(ptext, pbytes.len(), tab, method);
+                        return crate::unicode::prev_grapheme_width(
+                            ptext,
+                            pbytes.len(),
+                            tab,
+                            method,
+                        );
                     }
                     return 0;
                 }
@@ -671,7 +678,12 @@ impl TextBuffer {
                 let is_ascii = (chunk_ref.flags & FLAG_ASCII_ONLY) != 0;
                 let local = clamped - cols_before;
                 let here = find_pos_by_width(text, local, tab, is_ascii, false, method);
-                return crate::unicode::prev_grapheme_width(text, here.byte_offset as usize, tab, method);
+                return crate::unicode::prev_grapheme_width(
+                    text,
+                    here.byte_offset as usize,
+                    tab,
+                    method,
+                );
             }
             cols_before = next;
             prev = Some((bytes, cols_before));

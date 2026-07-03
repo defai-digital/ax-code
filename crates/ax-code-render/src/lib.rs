@@ -25,6 +25,8 @@
 
 pub mod buffer;
 mod buffer_ffi;
+pub mod edit_buffer;
+mod edit_buffer_ffi;
 pub mod gcb;
 mod gcb_table;
 pub mod handles;
@@ -33,8 +35,6 @@ pub mod pool;
 pub mod rope;
 pub mod segment;
 pub mod syntax_style;
-pub mod edit_buffer;
-mod edit_buffer_ffi;
 pub mod text_buffer;
 mod text_buffer_ffi;
 pub mod text_buffer_view;

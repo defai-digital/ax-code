@@ -32,6 +32,9 @@ pub fn create_edit_buffer(width_method: u32, _event_sink_handle: u32) -> u32 {
     let ptr = Box::into_raw(Box::new(eb)) as usize;
     let handle = handles::insert(Kind::EditBuffer, ptr);
     if handle == 0 {
+        if tb_handle != 0 {
+            handles::remove(tb_handle, Kind::TextBuffer);
+        }
         drop(unsafe { Box::from_raw(ptr as *mut EditBuffer) });
     }
     handle
@@ -64,7 +67,9 @@ pub fn edit_buffer_insert_text(handle: u32, text_ptr: f64, text_len: u32) {
     if text_ptr == 0.0 || text_len == 0 {
         return;
     }
-    let bytes = unsafe { std::slice::from_raw_parts((text_ptr as u64) as usize as *const u8, text_len as usize) };
+    let bytes = unsafe {
+        std::slice::from_raw_parts((text_ptr as u64) as usize as *const u8, text_len as usize)
+    };
     eb.insert_text(bytes);
 }
 
@@ -102,11 +107,25 @@ pub fn edit_buffer_delete_line(handle: u32) {
 }
 
 #[napi(js_name = "editBufferDeleteRange")]
-pub fn edit_buffer_delete_range(handle: u32, start_row: u32, start_col: u32, end_row: u32, end_col: u32) {
+pub fn edit_buffer_delete_range(
+    handle: u32,
+    start_row: u32,
+    start_col: u32,
+    end_row: u32,
+    end_col: u32,
+) {
     if let Some(eb) = resolve(handle) {
         eb.delete_range(
-            Cursor { row: start_row, col: start_col, ..Default::default() },
-            Cursor { row: end_row, col: end_col, ..Default::default() },
+            Cursor {
+                row: start_row,
+                col: start_col,
+                ..Default::default()
+            },
+            Cursor {
+                row: end_row,
+                col: end_col,
+                ..Default::default()
+            },
         );
     }
 }
@@ -167,7 +186,15 @@ pub fn edit_buffer_get_cursor_position(handle: u32, out_ptr: f64) {
         return;
     };
     let (row, col, offset) = eb.cursor_position();
-    write_cursor(out_ptr, &Cursor { row, col, offset, desired_col: col });
+    write_cursor(
+        out_ptr,
+        &Cursor {
+            row,
+            col,
+            offset,
+            desired_col: col,
+        },
+    );
 }
 
 #[napi(js_name = "editBufferGetCursor")]
@@ -218,7 +245,9 @@ pub fn edit_buffer_set_text(handle: u32, text_ptr: f64, text_len: u32) {
     let bytes = if text_ptr == 0.0 || text_len == 0 {
         &[][..]
     } else {
-        unsafe { std::slice::from_raw_parts((text_ptr as u64) as usize as *const u8, text_len as usize) }
+        unsafe {
+            std::slice::from_raw_parts((text_ptr as u64) as usize as *const u8, text_len as usize)
+        }
     };
     eb.set_text(bytes);
 }
@@ -229,7 +258,9 @@ pub fn edit_buffer_replace_text(handle: u32, text_ptr: f64, text_len: u32) {
     let bytes = if text_ptr == 0.0 || text_len == 0 {
         &[][..]
     } else {
-        unsafe { std::slice::from_raw_parts((text_ptr as u64) as usize as *const u8, text_len as usize) }
+        unsafe {
+            std::slice::from_raw_parts((text_ptr as u64) as usize as *const u8, text_len as usize)
+        }
     };
     eb.replace_text(bytes);
 }
@@ -242,19 +273,29 @@ pub fn edit_buffer_get_text(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
     }
     let text = eb.get_text();
     let copy = text.len().min(max_len as usize);
-    unsafe { std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy) };
+    unsafe {
+        std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
+    };
     copy as u32
 }
 
 #[napi(js_name = "editBufferGetTextRange")]
-pub fn edit_buffer_get_text_range(handle: u32, start: u32, end: u32, out_ptr: f64, max_len: u32) -> u32 {
+pub fn edit_buffer_get_text_range(
+    handle: u32,
+    start: u32,
+    end: u32,
+    out_ptr: f64,
+    max_len: u32,
+) -> u32 {
     let Some(eb) = resolve(handle) else { return 0 };
     if out_ptr == 0.0 || max_len == 0 {
         return 0;
     }
     let text = eb.get_text_range(start, end, max_len as usize);
     let copy = text.len().min(max_len as usize);
-    unsafe { std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy) };
+    unsafe {
+        std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
+    };
     copy as u32
 }
 
@@ -271,7 +312,15 @@ pub fn edit_buffer_offset_to_position(handle: u32, offset: u32, out_ptr: f64) ->
     };
     match eb.tb.offset_to_coords(offset) {
         Some((row, col)) => {
-            write_cursor(out_ptr, &Cursor { row, col, offset, desired_col: col });
+            write_cursor(
+                out_ptr,
+                &Cursor {
+                    row,
+                    col,
+                    offset,
+                    desired_col: col,
+                },
+            );
             true
         }
         None => {
@@ -283,7 +332,9 @@ pub fn edit_buffer_offset_to_position(handle: u32, offset: u32, out_ptr: f64) ->
 
 #[napi(js_name = "editBufferPositionToOffset")]
 pub fn edit_buffer_position_to_offset(handle: u32, row: u32, col: u32) -> i64 {
-    resolve(handle).map_or(-1, |eb| eb.tb.coords_to_offset(row, col).map_or(-1, |o| o as i64))
+    resolve(handle).map_or(-1, |eb| {
+        eb.tb.coords_to_offset(row, col).map_or(-1, |o| o as i64)
+    })
 }
 
 #[napi(js_name = "editBufferUndo")]
@@ -294,7 +345,9 @@ pub fn edit_buffer_undo(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
     }
     let meta = eb.undo();
     let copy = meta.len().min(max_len as usize);
-    unsafe { std::ptr::copy_nonoverlapping(meta.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy) };
+    unsafe {
+        std::ptr::copy_nonoverlapping(meta.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
+    };
     copy as u32
 }
 
@@ -306,7 +359,9 @@ pub fn edit_buffer_redo(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
     }
     let meta = eb.redo();
     let copy = meta.len().min(max_len as usize);
-    unsafe { std::ptr::copy_nonoverlapping(meta.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy) };
+    unsafe {
+        std::ptr::copy_nonoverlapping(meta.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
+    };
     copy as u32
 }
 

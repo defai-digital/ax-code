@@ -526,26 +526,6 @@ impl<T: RopeItem> Rope<T> {
     }
 
     /// Item index + item-local weight offset for a global weight.
-    fn locate_weight(&self, weight: u32) -> (u32, u32) {
-        let mut item_index = 0u32;
-        let mut acc = 0u32;
-        let mut result = (self.count(), 0u32);
-        self.walk(&mut |item, _| {
-            let mut m = Metrics::<T>::default();
-            m.count = 1;
-            m.custom = item.measure();
-            let w = m.weight();
-            if weight < acc + w {
-                result = (item_index, weight - acc);
-                return false;
-            }
-            acc += w;
-            item_index += 1;
-            true
-        });
-        result
-    }
-
     /// Split the rope at a global weight; self keeps the left part and the
     /// returned rope holds the right part. Items straddling the boundary are
     /// divided with `split_leaf`; zero-weight items sitting exactly on the
@@ -586,11 +566,12 @@ impl<T: RopeItem> Rope<T> {
         if start >= end {
             return;
         }
-        let items = self.collect_items();
-        let (left, rest) = Self::split_at_weight_items(&items, start, split_leaf);
-        let (_mid, right) = Self::split_at_weight_items(&rest, end - start, split_leaf);
-        let joined = Self::join_with_boundary(left, right);
-        self.root = Self::build_balanced(&joined);
+        // Zig deleteRangeByWeight: two tree splits + join_with_boundary — all on
+        // the node tree so the empty_leaf sentinel behaves exactly (a count-0
+        // partition contributes null to the seam and is absorbed by join).
+        let (left, mid_right) = Self::split_at_weight(&self.root, start, split_leaf);
+        let (_mid, right) = Self::split_at_weight(&mid_right, end - start, split_leaf);
+        self.root = Self::join_with_boundary_node(&left, &right);
         self.apply_ends_invariant();
         self.touch();
         self.maybe_rebalance();
@@ -602,95 +583,139 @@ impl<T: RopeItem> Rope<T> {
         new_items: &[T],
         split_leaf: &LeafSplitFn<T>,
     ) {
+        if new_items.is_empty() {
+            return;
+        }
         // Zig insertSliceByWeight: split at `weight`, then
         // join_with_boundary(join_with_boundary(left, insert), right).
-        let items = self.collect_items();
-        let (left, right) = Self::split_at_weight_items(&items, weight, split_leaf);
-        let left_joined = Self::join_with_boundary(left, new_items.to_vec());
-        let joined = Self::join_with_boundary(left_joined, right);
-        self.root = Self::build_balanced(&joined);
+        let insert = Self::build_balanced(new_items);
+        let (left, right) = Self::split_at_weight(&self.root, weight, split_leaf);
+        let left_joined = Self::join_with_boundary_node(&left, &insert);
+        self.root = Self::join_with_boundary_node(&left_joined, &right);
         self.apply_ends_invariant();
         self.touch();
         self.maybe_rebalance();
     }
 
-    fn collect_items(&self) -> Vec<T> {
-        let mut items = Vec::new();
-        self.walk(&mut |item, _| {
-            items.push(item.clone());
-            true
-        });
-        items
-    }
-
-    /// Zig `split_at_weight` (item-list form): split the item list at `target`
-    /// weight into (left, right). A leaf reached with zero remaining target
-    /// (i.e. the split falls exactly at its start) goes entirely RIGHT; a leaf
-    /// fully within the remaining target goes LEFT; a straddled leaf splits.
-    fn split_at_weight_items(items: &[T], target: u32, split_leaf: &LeafSplitFn<T>) -> (Vec<T>, Vec<T>) {
-        let mut left: Vec<T> = Vec::new();
-        let mut right: Vec<T> = Vec::new();
-        let mut remaining = target;
-        let mut done = false;
-        for item in items {
-            if done {
-                right.push(item.clone());
-                continue;
-            }
-            if remaining == 0 {
-                right.push(item.clone());
-                done = true;
-                continue;
-            }
-            let w = T::metrics_weight(&item.measure()).unwrap_or(1);
-            if remaining >= w {
-                left.push(item.clone());
-                remaining -= w;
-            } else {
-                // 0 < remaining < w: split this leaf
-                if let Some((l, r)) = split_leaf(item, remaining) {
-                    left.push(l);
-                    right.push(r);
+    /// Zig `split_at_weight` on the node tree. Leaf rule: target 0 → whole leaf
+    /// right; target >= leaf weight → whole leaf left; else split the leaf.
+    fn split_at_weight(
+        node: &Rc<Node<T>>,
+        target: u32,
+        split_leaf: &LeafSplitFn<T>,
+    ) -> (Rc<Node<T>>, Rc<Node<T>>) {
+        match &**node {
+            Node::Leaf { data: None } => (Node::sentinel(), Node::sentinel()),
+            Node::Leaf { data: Some(d) } => {
+                let leaf_weight = node.metrics().weight();
+                if target == 0 {
+                    (Node::sentinel(), node.clone())
+                } else if target >= leaf_weight {
+                    (node.clone(), Node::sentinel())
+                } else if let Some((l, r)) = split_leaf(d, target) {
+                    (Node::leaf(l), Node::leaf(r))
+                } else {
+                    (node.clone(), Node::sentinel())
                 }
-                done = true;
+            }
+            Node::Branch {
+                left,
+                right,
+                left_metrics,
+                ..
+            } => {
+                let lw = left_metrics.weight();
+                match target.cmp(&lw) {
+                    std::cmp::Ordering::Less => {
+                        let (a, b) = Self::split_at_weight(left, target, split_leaf);
+                        (a, Self::join(&b, right))
+                    }
+                    std::cmp::Ordering::Greater => {
+                        let (a, b) = Self::split_at_weight(right, target - lw, split_leaf);
+                        (Self::join(left, &a), b)
+                    }
+                    std::cmp::Ordering::Equal => (left.clone(), right.clone()),
+                }
             }
         }
-        (left, right)
+    }
+
+    fn get_first_leaf(node: &Rc<Node<T>>) -> Option<T> {
+        match &**node {
+            Node::Branch { left, .. } => Self::get_first_leaf(left),
+            Node::Leaf { data } => {
+                if node.metrics().count == 0 {
+                    None
+                } else {
+                    data.clone()
+                }
+            }
+        }
+    }
+
+    fn get_last_leaf(node: &Rc<Node<T>>) -> Option<T> {
+        match &**node {
+            Node::Branch { right, .. } => Self::get_last_leaf(right),
+            Node::Leaf { data } => {
+                if node.metrics().count == 0 {
+                    None
+                } else {
+                    data.clone()
+                }
+            }
+        }
+    }
+
+    fn drop_first(node: &Rc<Node<T>>) -> Rc<Node<T>> {
+        if node.metrics().count == 0 {
+            return node.clone();
+        }
+        let (_, right) = Self::split_at(node, 1);
+        right
+    }
+
+    fn drop_last(node: &Rc<Node<T>>) -> Rc<Node<T>> {
+        let cnt = node.metrics().count;
+        if cnt == 0 {
+            return node.clone();
+        }
+        let (left, _) = Self::split_at(node, cnt - 1);
+        left
+    }
+
+    /// Zig `joinWithBoundary` on the node tree: merge adjacent mergeable leaves,
+    /// else apply the seam rewrite. A count-0 side yields None to the seam.
+    fn join_with_boundary_node(left: &Rc<Node<T>>, right: &Rc<Node<T>>) -> Rc<Node<T>> {
+        let l_last = Self::get_last_leaf(left);
+        let r_first = Self::get_first_leaf(right);
+        if let (Some(l), Some(r)) = (&l_last, &r_first) {
+            if T::can_merge(l, r) {
+                let merged = T::merge(l, r);
+                let dropped_left = Self::drop_last(left);
+                let dropped_right = Self::drop_first(right);
+                let with_merged = Self::join(&dropped_left, &Node::leaf(merged));
+                return Self::join(&with_merged, &dropped_right);
+            }
+        }
+        let action = T::rewrite_boundary(l_last.as_ref(), r_first.as_ref());
+        let mut l = left.clone();
+        let mut r = right.clone();
+        if action.delete_left {
+            l = Self::drop_last(&l);
+        }
+        if action.delete_right {
+            r = Self::drop_first(&r);
+        }
+        if !action.insert_between.is_empty() {
+            let insert = Self::build_balanced(&action.insert_between);
+            let with_insert = Self::join(&l, &insert);
+            return Self::join(&with_insert, &r);
+        }
+        Self::join(&l, &r)
     }
 
     /// Zig `joinWithBoundary` (item-list form): merge or rewrite the seam
     /// between the tail of `left` and the head of `right`.
-    fn join_with_boundary(mut left: Vec<T>, mut right: Vec<T>) -> Vec<T> {
-        // Zig models an empty partition as the empty_leaf sentinel, which still
-        // participates in the boundary rewrite (e.g. a trailing break + the
-        // sentinel materializes a trailing linestart). The sentinel itself is
-        // absorbed, not emitted.
-        let sentinel = T::sentinel();
-        let l_last = left.last().cloned().or_else(|| sentinel.clone());
-        let r_first = right.first().cloned().or_else(|| sentinel.clone());
-        if let (Some(l), Some(r)) = (left.last().cloned(), right.first().cloned()) {
-            if T::can_merge(&l, &r) {
-                let merged = T::merge(&l, &r);
-                left.pop();
-                right.remove(0);
-                left.push(merged);
-                left.extend(right);
-                return left;
-            }
-        }
-        let action = T::rewrite_boundary(l_last.as_ref(), r_first.as_ref());
-        // delete_left/right act on real items only (never on the sentinel).
-        if action.delete_left && !left.is_empty() {
-            left.pop();
-        }
-        if action.delete_right && !right.is_empty() {
-            right.remove(0);
-        }
-        left.extend(action.insert_between);
-        left.extend(right);
-        left
-    }
-
     // --- markers ------------------------------------------------------------------
 
     fn ensure_marker_cache(&mut self) {
