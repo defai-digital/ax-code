@@ -303,6 +303,73 @@ pub fn dump_output_buffer(handle: u32, timestamp: f64) {
     }
 }
 
+#[napi(js_name = "setCursorColor")]
+pub fn set_cursor_color(handle: u32, color: f64) {
+    if let Some(r) = resolve(handle) {
+        r.set_cursor_color(unsafe { read_rgba(color) });
+    }
+}
+
+#[napi(js_name = "setHyperlinksCapability")]
+pub fn set_hyperlinks_capability(handle: u32, enabled: f64) {
+    if let Some(r) = resolve(handle) {
+        r.set_hyperlinks_capability(enabled != 0.0);
+    }
+}
+
+#[napi(js_name = "writeOut")]
+pub fn write_out(handle: u32, data_ptr: f64, data_len: u32) {
+    let Some(r) = resolve(handle) else { return };
+    if data_ptr == 0.0 || data_len == 0 {
+        return;
+    }
+    let p = (data_ptr as u64) as usize as *const u8;
+    let bytes = unsafe { std::slice::from_raw_parts(p, data_len as usize) };
+    r.write_out_bytes(bytes);
+}
+
+/// ExternalCursorState extern struct (28 bytes): u32 x@0, u32 y@4, bool
+/// visible@8, u8 style@9, bool blinking@10, f32 r@12, g@16, b@20, a@24.
+#[napi(js_name = "getCursorState")]
+pub fn get_cursor_state(handle: u32, out_ptr: f64) {
+    if out_ptr == 0.0 {
+        return;
+    }
+    let base = (out_ptr as u64) as usize;
+    let (x, y, visible, style, blinking, r, g, b, a) = match resolve(handle) {
+        Some(rn) => rn.get_cursor_state(),
+        None => (0, 0, false, 0, false, 0.0, 0.0, 0.0, 0.0),
+    };
+    unsafe {
+        (base as *mut u32).write_unaligned(x);
+        ((base + 4) as *mut u32).write_unaligned(y);
+        ((base + 8) as *mut u8).write_unaligned(visible as u8);
+        ((base + 9) as *mut u8).write_unaligned(style);
+        ((base + 10) as *mut u8).write_unaligned(blinking as u8);
+        ((base + 12) as *mut f32).write_unaligned(r);
+        ((base + 16) as *mut f32).write_unaligned(g);
+        ((base + 20) as *mut f32).write_unaligned(b);
+        ((base + 24) as *mut f32).write_unaligned(a);
+    }
+}
+
+#[napi(js_name = "destroyFrameBuffer")]
+pub fn destroy_frame_buffer(handle: u32) {
+    // Zig aliases this to destroyOptimizedBuffer.
+    crate::buffer_ffi::destroy_optimized_buffer(handle);
+}
+
+#[napi(js_name = "clearGlobalLinkPool")]
+pub fn clear_global_link_pool() {}
+
+#[napi(js_name = "setLogCallback")]
+pub fn set_log_callback(_callback: f64) {}
+
+#[napi(js_name = "getArenaAllocatedBytes")]
+pub fn get_arena_allocated_bytes() -> BigInt {
+    BigInt::from(0u64)
+}
+
 #[napi(js_name = "resetSplitScrollback")]
 pub fn reset_split_scrollback(handle: u32, seed_rows: u32, pinned_render_offset: u32) -> u32 {
     resolve(handle).map_or(0, |r| {

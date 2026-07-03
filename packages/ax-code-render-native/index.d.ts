@@ -129,6 +129,8 @@ export declare function checkHit(handle: number, x: number, y: number): number
 
 export declare function clearCurrentHitGrid(handle: number): void
 
+export declare function clearGlobalLinkPool(): void
+
 export declare function clearPendingSplitFooterTransition(handle: number): void
 
 export declare function clearTerminal(handle: number): void
@@ -152,6 +154,8 @@ export declare function createTextBufferView(tbHandle: number): number
 export declare function destroyAudioEngine(engine: number): void
 
 export declare function destroyEditBuffer(handle: number): void
+
+export declare function destroyFrameBuffer(handle: number): void
 
 export declare function destroyNativeSpanFeed(stream: number): void
 
@@ -249,11 +253,19 @@ export declare function enableKittyKeyboard(handle: number, flags: number): void
 
 export declare function enableMouse(handle: number, enableMovement: number): void
 
+export declare function getArenaAllocatedBytes(): bigint
+
 export declare function getBufferHeight(handle: number): number
 
 export declare function getBufferWidth(handle: number): number
 
 export declare function getCurrentBuffer(handle: number): number
+
+/**
+ * ExternalCursorState extern struct (28 bytes): u32 x@0, u32 y@4, bool
+ * visible@8, u8 style@9, bool blinking@10, f32 r@12, g@16, b@20, a@24.
+ */
+export declare function getCursorState(handle: number, outPtr: number): void
 
 export declare function getHitGridDirty(handle: number): boolean
 
@@ -300,6 +312,8 @@ export declare function setBackgroundColor(handle: number, color: number): void
 
 export declare function setClearOnShutdown(handle: number, clear: number): void
 
+export declare function setCursorColor(handle: number, color: number): void
+
 export declare function setCursorPosition(handle: number, x: number, y: number, visible: number): void
 
 /**
@@ -308,7 +322,11 @@ export declare function setCursorPosition(handle: number, x: number, y: number, 
  */
 export declare function setCursorStyleOptions(handle: number, optionsPtr: number): void
 
+export declare function setHyperlinksCapability(handle: number, enabled: number): void
+
 export declare function setKittyKeyboardFlags(handle: number, flags: number): void
+
+export declare function setLogCallback(callback: number): void
 
 export declare function setPendingSplitFooterTransition(handle: number, mode: number, sourceTopLine: number, sourceHeight: number, targetTopLine: number, targetHeight: number, scrollLines: number): void
 
@@ -456,6 +474,8 @@ export declare function textBufferViewUpdateSelection(handle: number, end: numbe
 export declare function updateMemoryStats(handle: number, heapUsed: number, heapTotal: number, arrayBuffers: number): void
 
 export declare function updateStats(handle: number, time: number, fps: number, frameCallbackTime: number): void
+
+export declare function writeOut(handle: number, dataPtr: number, dataLen: number): void
 
 export declare function yogaConfigCreate(): number
 

@@ -1088,6 +1088,37 @@ impl CliRenderer {
         self.write_out(b"\x1b[14t"); // queryPixelSize
     }
 
+    /// Zig `writeOut` — emit arbitrary pre-built bytes through the backend.
+    pub fn write_out_bytes(&mut self, bytes: &[u8]) {
+        self.write_out(bytes);
+    }
+
+    pub fn set_cursor_color(&mut self, color: Rgba) {
+        self.terminal.set_cursor_color(color);
+    }
+
+    pub fn set_hyperlinks_capability(&mut self, enabled: bool) {
+        self.terminal.caps.hyperlinks = enabled;
+    }
+
+    /// Zig `getCursorState` — snapshot (x, y, visible, style_tag, blinking,
+    /// r, g, b, a) with color channels as 0..1 floats.
+    #[allow(clippy::type_complexity)]
+    pub fn get_cursor_state(&self) -> (u32, u32, bool, u8, bool, f32, f32, f32, f32) {
+        let c = self.terminal.cursor;
+        (
+            c.x,
+            c.y,
+            c.visible,
+            c.style.tag(),
+            c.blinking,
+            crate::buffer::red(c.color) as f32 / 255.0,
+            green(c.color) as f32 / 255.0,
+            blue(c.color) as f32 / 255.0,
+            alpha(c.color) as f32 / 255.0,
+        )
+    }
+
     /// Zig `setCursorStyleOptions` — style/blinking (when in range), optional
     /// cursor color, and mouse-pointer style. Emitted by the next render's tail.
     pub fn set_cursor_style_options(
