@@ -54,6 +54,9 @@ function buildPackage(pkg: NativePkg, debug: boolean): boolean {
   const result = spawnSync("pnpm", ["--filter", pkg.pkgName, "run", script], {
     stdio: "inherit",
     cwd: ROOT,
+    // On Windows `pnpm` is `pnpm.cmd`; spawnSync can't resolve it without a
+    // shell (mirrors build-node-tui's runNpm), else it ENOENTs instantly.
+    shell: process.platform === "win32",
   })
   if (result.status !== 0) {
     console.error(`✗ build failed for ${pkg.pkgName}`)
