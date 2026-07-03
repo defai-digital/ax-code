@@ -222,6 +222,24 @@ pub struct CliRenderer {
     last_cursor_y: Option<u32>,
     last_cursor_visible: Option<bool>,
     last_mouse_pointer: MousePointerStyle,
+
+    // Hit grid for mouse dispatch (double-buffered like the render buffers).
+    current_hit_grid: Vec<u32>,
+    next_hit_grid: Vec<u32>,
+    hit_grid_width: u32,
+    hit_grid_height: u32,
+    hit_scissor_stack: Vec<HitClipRect>,
+    hit_grid_dirty: bool,
+    hit_grid_resize_invalidated: bool,
+}
+
+/// Screen-space clip rect for hit-grid scissoring (buf.ClipRect).
+#[derive(Clone, Copy)]
+struct HitClipRect {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
 }
 
 /// Zig `RenderStatus`.
@@ -331,6 +349,13 @@ impl CliRenderer {
             last_cursor_y: None,
             last_cursor_visible: None,
             last_mouse_pointer: MousePointerStyle::Default,
+            current_hit_grid: vec![0; (width * height) as usize],
+            next_hit_grid: vec![0; (width * height) as usize],
+            hit_grid_width: width,
+            hit_grid_height: height,
+            hit_scissor_stack: Vec::new(),
+            hit_grid_dirty: false,
+            hit_grid_resize_invalidated: false,
         }))
     }
 
@@ -344,6 +369,173 @@ impl CliRenderer {
 
     pub fn set_background_color(&mut self, color: Rgba) {
         self.background_color = color;
+    }
+
+    // --- hit grid (mouse dispatch) --------------------------------------------
+
+    fn current_hit_scissor(&self) -> Option<HitClipRect> {
+        self.hit_scissor_stack.last().copied()
+    }
+
+    /// Intersect a rect with the current hit scissor (Zig clipRectToHitScissor).
+    fn clip_rect_to_hit_scissor(
+        &self,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+    ) -> Option<HitClipRect> {
+        let Some(scissor) = self.current_hit_scissor() else {
+            return Some(HitClipRect {
+                x,
+                y,
+                width,
+                height,
+            });
+        };
+        let rect_end_x = x + width as i32;
+        let rect_end_y = y + height as i32;
+        let scissor_end_x = scissor.x + scissor.width as i32;
+        let scissor_end_y = scissor.y + scissor.height as i32;
+        let ix = x.max(scissor.x);
+        let iy = y.max(scissor.y);
+        let iex = rect_end_x.min(scissor_end_x);
+        let iey = rect_end_y.min(scissor_end_y);
+        if ix >= iex || iy >= iey {
+            return None;
+        }
+        Some(HitClipRect {
+            x: ix,
+            y: iy,
+            width: (iex - ix) as u32,
+            height: (iey - iy) as u32,
+        })
+    }
+
+    /// Fill a clipped rect in the given grid with `id` (shared by
+    /// addToHitGrid / addToCurrentHitGridClipped).
+    fn fill_hit_grid(
+        grid: &mut [u32],
+        grid_width: u32,
+        grid_height: u32,
+        rect: HitClipRect,
+        id: u32,
+    ) {
+        let start_x = rect.x.max(0);
+        let start_y = rect.y.max(0);
+        let end_x = (rect.x + rect.width as i32).min(grid_width as i32);
+        let end_y = (rect.y + rect.height as i32).min(grid_height as i32);
+        if start_x >= end_x || start_y >= end_y {
+            return;
+        }
+        for row in start_y as u32..end_y as u32 {
+            let row_start = (row * grid_width) as usize;
+            let s = row_start + start_x as usize;
+            let e = row_start + end_x as usize;
+            grid[s..e].fill(id);
+        }
+    }
+
+    /// Zig `addToHitGrid` — write a renderable's clipped bounds to nextHitGrid.
+    pub fn add_to_hit_grid(&mut self, x: i32, y: i32, width: u32, height: u32, id: u32) {
+        let Some(rect) = self.clip_rect_to_hit_scissor(x, y, width, height) else {
+            return;
+        };
+        Self::fill_hit_grid(
+            &mut self.next_hit_grid,
+            self.hit_grid_width,
+            self.hit_grid_height,
+            rect,
+            id,
+        );
+    }
+
+    /// Zig `addToCurrentHitGridClipped` — write directly to currentHitGrid.
+    pub fn add_to_current_hit_grid_clipped(
+        &mut self,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+        id: u32,
+    ) {
+        let Some(rect) = self.clip_rect_to_hit_scissor(x, y, width, height) else {
+            return;
+        };
+        Self::fill_hit_grid(
+            &mut self.current_hit_grid,
+            self.hit_grid_width,
+            self.hit_grid_height,
+            rect,
+            id,
+        );
+    }
+
+    pub fn clear_current_hit_grid(&mut self) {
+        self.current_hit_grid.fill(0);
+    }
+
+    /// Zig `checkHit` — renderable id at (x, y), 0 if none / out of bounds.
+    pub fn check_hit(&self, x: u32, y: u32) -> u32 {
+        if x >= self.hit_grid_width || y >= self.hit_grid_height {
+            return 0;
+        }
+        self.current_hit_grid[(y * self.hit_grid_width + x) as usize]
+    }
+
+    /// Zig `getHitGridDirty` — read dirty flag and clear the resize latch.
+    pub fn get_hit_grid_dirty(&mut self) -> bool {
+        let dirty = self.hit_grid_dirty;
+        self.hit_grid_resize_invalidated = false;
+        dirty
+    }
+
+    pub fn hit_grid_push_scissor_rect(&mut self, x: i32, y: i32, width: u32, height: u32) {
+        let mut rect = HitClipRect {
+            x,
+            y,
+            width,
+            height,
+        };
+        if self.current_hit_scissor().is_some() {
+            rect = self
+                .clip_rect_to_hit_scissor(rect.x, rect.y, rect.width, rect.height)
+                .unwrap_or(HitClipRect {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                });
+        }
+        self.hit_scissor_stack.push(rect);
+    }
+
+    pub fn hit_grid_pop_scissor_rect(&mut self) {
+        self.hit_scissor_stack.pop();
+    }
+
+    pub fn hit_grid_clear_scissor_rects(&mut self) {
+        self.hit_scissor_stack.clear();
+    }
+
+    pub fn dump_hit_grid(&self) {
+        // Debug helper (Zig writes hitgrid_<ts>.txt); best-effort, not on any
+        // hot/verified path.
+        let mut out = String::with_capacity(
+            (self.hit_grid_width + 1) as usize * self.hit_grid_height as usize,
+        );
+        for y in 0..self.hit_grid_height {
+            for x in 0..self.hit_grid_width {
+                let id = self.current_hit_grid[(y * self.hit_grid_width + x) as usize];
+                out.push(if id == 0 {
+                    '.'
+                } else {
+                    char::from(b'0' + (id % 10) as u8)
+                });
+            }
+            out.push('\n');
+        }
+        let _ = std::fs::write("hitgrid.txt", out);
     }
 
     pub fn set_render_offset(&mut self, offset: u32) {
@@ -393,6 +585,14 @@ impl CliRenderer {
         self.next_buffer
             .clear(&mut pool, self.background_color, None);
         self.force_full_repaint = true;
+
+        let cells = (width * height) as usize;
+        self.current_hit_grid = vec![0; cells];
+        self.next_hit_grid = vec![0; cells];
+        self.hit_grid_width = width;
+        self.hit_grid_height = height;
+        self.hit_scissor_stack.clear();
+        self.hit_grid_resize_invalidated = true;
     }
 
     /// Release grapheme-pool references held by the child buffers before the
@@ -766,6 +966,14 @@ impl CliRenderer {
 
         self.next_buffer
             .clear(&mut pool, self.background_color, None);
+
+        // Hit-grid dirty compare (before swap) + double-buffer swap: nextHitGrid
+        // (built this frame) becomes the active grid; the old current is cleared
+        // for the next frame.
+        self.hit_grid_dirty =
+            self.hit_grid_resize_invalidated || self.current_hit_grid != self.next_hit_grid;
+        std::mem::swap(&mut self.current_hit_grid, &mut self.next_hit_grid);
+        self.next_hit_grid.fill(0);
     }
 
     pub fn dump_output_buffer(&self, timestamp: i64) {

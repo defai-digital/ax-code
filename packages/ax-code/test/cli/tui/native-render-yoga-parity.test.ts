@@ -70,6 +70,13 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("hit grid (addToHitGrid/checkHit/scissor) matches the Zig backend", () => {
+    const result = runNode([path.join(pkgDir, "script/native-render-hitgrid-parity.mjs"), "--seqs=200"])
+    expect(result.stderr).not.toContain("failing sequence")
+    expect(result.stdout).toContain("hitgrid parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
   it("rendererSetPaletteState nearest-palette output matches the Zig backend", () => {
     // Self-spawns under an ansi256-only profile so the custom palette is
     // actually consulted (emitColor's nearest-palette fallback).

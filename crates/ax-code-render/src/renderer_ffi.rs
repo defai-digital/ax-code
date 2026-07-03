@@ -67,6 +67,72 @@ pub fn destroy_renderer(handle: u32) {
     }
 }
 
+#[napi(js_name = "addToHitGrid")]
+pub fn add_to_hit_grid(handle: u32, x: i32, y: i32, width: u32, height: u32, id: u32) {
+    if let Some(r) = resolve(handle) {
+        r.add_to_hit_grid(x, y, width, height, id);
+    }
+}
+
+#[napi(js_name = "addToCurrentHitGridClipped")]
+pub fn add_to_current_hit_grid_clipped(
+    handle: u32,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    id: u32,
+) {
+    if let Some(r) = resolve(handle) {
+        r.add_to_current_hit_grid_clipped(x, y, width, height, id);
+    }
+}
+
+#[napi(js_name = "checkHit")]
+pub fn check_hit(handle: u32, x: u32, y: u32) -> u32 {
+    resolve(handle).map_or(0, |r| r.check_hit(x, y))
+}
+
+#[napi(js_name = "clearCurrentHitGrid")]
+pub fn clear_current_hit_grid(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.clear_current_hit_grid();
+    }
+}
+
+#[napi(js_name = "getHitGridDirty")]
+pub fn get_hit_grid_dirty(handle: u32) -> bool {
+    resolve(handle).is_some_and(|r| r.get_hit_grid_dirty())
+}
+
+#[napi(js_name = "hitGridPushScissorRect")]
+pub fn hit_grid_push_scissor_rect(handle: u32, x: i32, y: i32, width: u32, height: u32) {
+    if let Some(r) = resolve(handle) {
+        r.hit_grid_push_scissor_rect(x, y, width, height);
+    }
+}
+
+#[napi(js_name = "hitGridPopScissorRect")]
+pub fn hit_grid_pop_scissor_rect(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.hit_grid_pop_scissor_rect();
+    }
+}
+
+#[napi(js_name = "hitGridClearScissorRects")]
+pub fn hit_grid_clear_scissor_rects(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.hit_grid_clear_scissor_rects();
+    }
+}
+
+#[napi(js_name = "dumpHitGrid")]
+pub fn dump_hit_grid(handle: u32) {
+    if let Some(r) = resolve(handle) {
+        r.dump_hit_grid();
+    }
+}
+
 #[napi(js_name = "suspendRenderer")]
 pub fn suspend_renderer(handle: u32) {
     if let Some(r) = resolve(handle) {

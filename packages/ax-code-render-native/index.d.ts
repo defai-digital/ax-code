@@ -9,6 +9,10 @@
  */
 export declare function __axEncodeWidths(text: string, widthMethod: number): Array<number>
 
+export declare function addToCurrentHitGridClipped(handle: number, x: number, y: number, width: number, height: number, id: number): void
+
+export declare function addToHitGrid(handle: number, x: number, y: number, width: number, height: number, id: number): void
+
 export declare function attributesGetLinkId(attributes: number): number
 
 export declare function attributesWithLink(baseAttributes: number, linkId: number): number
@@ -119,6 +123,10 @@ export declare function bufferSetRespectAlpha(handle: number, respectAlpha: numb
 
 export declare function bufferWriteResolvedChars(handle: number, outputPtr: number, outputLen: number, addLineBreaks: boolean): number
 
+export declare function checkHit(handle: number, x: number, y: number): number
+
+export declare function clearCurrentHitGrid(handle: number): void
+
 export declare function clearTerminal(handle: number): void
 
 export declare function createAudioEngine(options: number): number
@@ -150,6 +158,8 @@ export declare function destroyTextBuffer(handle: number): void
 export declare function destroyTextBufferView(handle: number): void
 
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
+
+export declare function dumpHitGrid(handle: number): void
 
 export declare function dumpOutputBuffer(handle: number, timestamp: number): void
 
@@ -225,7 +235,15 @@ export declare function editBufferUndo(handle: number, outPtr: number, maxLen: n
 
 export declare function getCurrentBuffer(handle: number): number
 
+export declare function getHitGridDirty(handle: number): boolean
+
 export declare function getNextBuffer(handle: number): number
+
+export declare function hitGridClearScissorRects(handle: number): void
+
+export declare function hitGridPopScissorRect(handle: number): void
+
+export declare function hitGridPushScissorRect(handle: number, x: number, y: number, width: number, height: number): void
 
 export declare function render(handle: number, force: number): number
 
