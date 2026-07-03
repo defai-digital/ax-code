@@ -279,6 +279,113 @@ pub fn buffer_write_resolved_chars(
     resolved.len() as u32
 }
 
+#[napi(js_name = "bufferDrawBox")]
+pub fn buffer_draw_box(
+    handle: u32,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    border_chars: f64,
+    packed_options: u32,
+    border_color: f64,
+    background_color: f64,
+    title_color: f64,
+    title_ptr: f64,
+    title_len: u32,
+    bottom_title_ptr: f64,
+    bottom_title_len: u32,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    let bc_ptr = (border_chars as u64) as usize as *const u32;
+    if bc_ptr.is_null() {
+        return;
+    }
+    let mut chars = [0u32; 11];
+    unsafe { std::ptr::copy_nonoverlapping(bc_ptr, chars.as_mut_ptr(), 11) };
+    let sides = (
+        (packed_options & 0b1000) != 0,
+        (packed_options & 0b0100) != 0,
+        (packed_options & 0b0010) != 0,
+        (packed_options & 0b0001) != 0,
+    );
+    let should_fill = ((packed_options >> 4) & 1) != 0;
+    let title_alignment = ((packed_options >> 5) & 0b11) as u8;
+    let bottom_alignment = ((packed_options >> 7) & 0b11) as u8;
+    let read_str = |ptr: f64, len: u32| -> Option<String> {
+        if ptr == 0.0 || len == 0 {
+            return None;
+        }
+        let p = (ptr as u64) as usize as *const u8;
+        let bytes = unsafe { std::slice::from_raw_parts(p, len as usize) };
+        std::str::from_utf8(bytes).ok().map(|s| s.to_string())
+    };
+    let title = read_str(title_ptr, title_len);
+    let bottom_title = read_str(bottom_title_ptr, bottom_title_len);
+    buf.draw_box(
+        &mut global_pool(),
+        x,
+        y,
+        width,
+        height,
+        &chars,
+        sides,
+        unsafe { read_rgba(border_color) },
+        unsafe { read_rgba(background_color) },
+        unsafe { read_rgba(title_color) },
+        should_fill,
+        title.as_deref(),
+        title_alignment,
+        bottom_title.as_deref(),
+        bottom_alignment,
+    );
+}
+
+#[napi(js_name = "drawFrameBuffer")]
+#[allow(clippy::too_many_arguments)]
+pub fn draw_frame_buffer_export(
+    handle: u32,
+    dest_x: i32,
+    dest_y: i32,
+    src_handle: u32,
+    source_x: u32,
+    source_y: u32,
+    source_width: u32,
+    source_height: u32,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    let Some(src) = resolve(src_handle) else {
+        return;
+    };
+    if handle == src_handle {
+        return; // aliasing guard; the JS layer never blits a buffer onto itself
+    }
+    // Zig treats ALL zero source params as "unset" (null).
+    let sx = if source_x == 0 { None } else { Some(source_x) };
+    let sy = if source_y == 0 { None } else { Some(source_y) };
+    let sw = if source_width == 0 {
+        None
+    } else {
+        Some(source_width)
+    };
+    let sh = if source_height == 0 {
+        None
+    } else {
+        Some(source_height)
+    };
+    buf.draw_frame_buffer(&mut global_pool(), dest_x, dest_y, src, sx, sy, sw, sh);
+}
+
+#[napi(js_name = "attributesWithLink")]
+pub fn attributes_with_link(base_attributes: u32, link_id: u32) -> u32 {
+    crate::buffer::with_link_id(base_attributes, link_id)
+}
+
+#[napi(js_name = "attributesGetLinkId")]
+pub fn attributes_get_link_id(attributes: u32) -> u32 {
+    crate::buffer::link_id(attributes)
+}
+
 #[napi(js_name = "bufferGetId")]
 pub fn buffer_get_id(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
     let Some(buf) = resolve(handle) else { return 0 };

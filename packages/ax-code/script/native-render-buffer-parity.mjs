@@ -131,6 +131,14 @@ const TEXTS = [
   "a", " ", "wide 寬 mix",
 ]
 
+const BORDER_SETS = [
+  [0x256d, 0x256e, 0x2570, 0x256f, 0x2500, 0x2502, 0x252c, 0x2534, 0x251c, 0x2524, 0x253c], // rounded
+  [0x250c, 0x2510, 0x2514, 0x2518, 0x2500, 0x2502, 0x252c, 0x2534, 0x251c, 0x2524, 0x253c], // single
+  [0x2554, 0x2557, 0x255a, 0x255d, 0x2550, 0x2551, 0x2566, 0x2569, 0x2560, 0x2563, 0x256c], // double
+  [0x4e00, 0x2510, 0x2514, 0x2518, 0x4e00, 0x2502, 0x252c, 0x2534, 0x251c, 0x2524, 0x253c], // wide corner (defeats fast path)
+]
+const randAttrs = () => (rand() < 0.25 ? ((1 + randInt(500)) << 8) | randInt(256) : randInt(256)) // sometimes carry a link id
+
 const seqArg = process.argv.find((a) => a.startsWith("--seqs="))
 const SEQUENCES = seqArg ? Number(seqArg.slice(7)) : 300
 let failures = 0
@@ -145,12 +153,12 @@ for (let s = 0; s < SEQUENCES; s++) {
     const op = randInt(12)
     if (op < 3) {
       // setCellWithAlphaBlending — the hot path
-      const [x, y, ch, fg, bg, at] = [randInt(w + 2), randInt(h + 2), 33 + randInt(0x2000), randColor(), randColor(), randInt(256)]
+      const [x, y, ch, fg, bg, at] = [randInt(w + 2), randInt(h + 2), 33 + randInt(0x2000), randColor(), randColor(), randAttrs()]
       opsLog.push(`blend(${x},${y})`)
       zig.bufferSetCellWithAlphaBlending(zh, x, y, ch, ptr(fg), ptr(bg), at)
       rust.bufferSetCellWithAlphaBlending(rh, x, y, ch, Number(ptr(fg)), Number(ptr(bg)), at)
     } else if (op < 5) {
-      const [x, y, ch, fg, bg, at] = [randInt(w + 2), randInt(h + 2), 33 + randInt(0x2000), randColor(), randColor(), randInt(256)]
+      const [x, y, ch, fg, bg, at] = [randInt(w + 2), randInt(h + 2), 33 + randInt(0x2000), randColor(), randColor(), randAttrs()]
       opsLog.push(`set(${x},${y})`)
       zig.bufferSetCell(zh, x, y, ch, ptr(fg), ptr(bg), at)
       rust.bufferSetCell(rh, x, y, ch, Number(ptr(fg)), Number(ptr(bg)), at)
@@ -188,18 +196,49 @@ for (let s = 0; s < SEQUENCES; s++) {
       }
     } else if (op === 10) {
       if (rand() < 0.5) {
-        const [ch, x, y, fg, bg, at] = [33 + randInt(0x2000), randInt(w + 2), randInt(h + 2), randColor(), randColor(), randInt(256)]
+        const [ch, x, y, fg, bg, at] = [33 + randInt(0x2000), randInt(w + 2), randInt(h + 2), randColor(), randColor(), randAttrs()]
         opsLog.push(`drawChar(${x},${y})`)
         zig.bufferDrawChar(zh, ch, x, y, ptr(fg), ptr(bg), at)
         rust.bufferDrawChar(rh, ch, x, y, Number(ptr(fg)), Number(ptr(bg)), at)
       } else {
         const text = TEXTS[randInt(TEXTS.length)]
         const bytes = new TextEncoder().encode(text)
-        const [x, y, fg, at] = [randInt(w + 2), randInt(h + 2), randColor(), randInt(256)]
+        const [x, y, fg, at] = [randInt(w + 2), randInt(h + 2), randColor(), randAttrs()]
         const bgOpt = rand() < 0.3 ? null : randColor()
         opsLog.push(`drawText(${x},${y},${JSON.stringify(text).slice(0, 14)})`)
         zig.bufferDrawText(zh, ptr(bytes), bytes.length, x, y, ptr(fg), bgOpt ? ptr(bgOpt) : null, at)
         rust.bufferDrawText(rh, Number(ptr(bytes)), bytes.length, x, y, Number(ptr(fg)), bgOpt ? Number(ptr(bgOpt)) : 0, at)
+      }
+    } else if (op === 11 && rand() < 0.6) {
+      if (rand() < 0.6) {
+        const chars = new Uint32Array(BORDER_SETS[randInt(BORDER_SETS.length)])
+        const [bx, by, bw, bh] = [randInt(w) - 1, randInt(h) - 1, 2 + randInt(w), 2 + randInt(h)]
+        const sides = randInt(16)
+        const packed = sides | (randInt(2) << 4) | (randInt(3) << 5) | (randInt(3) << 7)
+        const [bc, bgc, tc] = [randColor(), randColor(), randColor()]
+        const useTitle = rand() < 0.5
+        const titleBytes = new TextEncoder().encode(useTitle ? TEXTS[randInt(TEXTS.length)] : "")
+        opsLog.push(`drawBox(${bx},${by},${bw},${bh},p=${packed.toString(2)})`)
+        zig.bufferDrawBox(zh, bx, by, bw, bh, ptr(chars), packed, ptr(bc), ptr(bgc), ptr(tc), titleBytes.length ? ptr(titleBytes) : null, titleBytes.length, null, 0)
+        rust.bufferDrawBox(rh, bx, by, bw, bh, Number(ptr(chars)), packed, Number(ptr(bc)), Number(ptr(bgc)), Number(ptr(tc)), titleBytes.length ? Number(ptr(titleBytes)) : 0, titleBytes.length, 0, 0)
+      } else {
+        // blit a small scratch buffer into the main one
+        const sw = 2 + randInt(6)
+        const sh = 2 + randInt(4)
+        const srcRespectAlpha = randInt(2)
+        const zSrc = zig.createOptimizedBuffer(sw, sh, srcRespectAlpha, 1, ptr(idBytes), idBytes.length)
+        const rSrc = rust.createOptimizedBuffer(sw, sh, srcRespectAlpha, 1, Number(ptr(idBytes)), idBytes.length)
+        const text = TEXTS[randInt(TEXTS.length)]
+        const tb = new TextEncoder().encode(text)
+        const [fg2, bg2] = [randColor(), randColor()]
+        zig.bufferDrawText(zSrc, ptr(tb), tb.length, 0, 0, ptr(fg2), ptr(bg2), 0)
+        rust.bufferDrawText(rSrc, Number(ptr(tb)), tb.length, 0, 0, Number(ptr(fg2)), Number(ptr(bg2)), 0)
+        const [dx, dy] = [randInt(w) - 1, randInt(h) - 1]
+        opsLog.push(`blit(${dx},${dy},${sw}x${sh})`)
+        zig.drawFrameBuffer(zh, dx, dy, zSrc, 0, 0, 0, 0)
+        rust.drawFrameBuffer(rh, dx, dy, rSrc, 0, 0, 0, 0)
+        zig.destroyOptimizedBuffer(zSrc)
+        rust.destroyOptimizedBuffer(rSrc)
       }
     } else if (rand() < 0.3) {
       const nw = 2 + randInt(24)
@@ -214,11 +253,12 @@ for (let s = 0; s < SEQUENCES; s++) {
       zig.bufferClearScissorRects(zh)
       rust.bufferClearScissorRects(rh)
     }
+    if (!compare(zh, rh, w, h, `seq ${s} op ${i} [${opsLog[opsLog.length - 1]}]`, opsLog)) {
+      failures++
+      break
+    }
   }
-  if (!compare(zh, rh, w, h, `seq ${s} (${opCount} ops)`, opsLog)) {
-    failures++
-    if (failures >= 5) break
-  }
+  if (failures >= 3) break
   const zOpacity = zig.bufferGetCurrentOpacity(zh)
   const rOpacity = rust.bufferGetCurrentOpacity(rh)
   if (Math.abs(zOpacity - rOpacity) > 1e-6) {

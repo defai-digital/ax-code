@@ -9,6 +9,10 @@
  */
 export declare function __axEncodeWidths(text: string, widthMethod: number): Array<number>
 
+export declare function attributesGetLinkId(attributes: number): number
+
+export declare function attributesWithLink(baseAttributes: number, linkId: number): number
+
 export declare function audioClearPlaybackDeviceSelection(engine: number): void
 
 export declare function audioCreateGroup(engine: number, a: number, b: number, c: number): number
@@ -57,6 +61,8 @@ export declare function bufferClearOpacity(handle: number): void
 
 export declare function bufferClearScissorRects(handle: number): void
 
+export declare function bufferDrawBox(handle: number, x: number, y: number, width: number, height: number, borderChars: number, packedOptions: number, borderColor: number, backgroundColor: number, titleColor: number, titlePtr: number, titleLen: number, bottomTitlePtr: number, bottomTitleLen: number): void
+
 export declare function bufferDrawChar(handle: number, char: number, x: number, y: number, fg: number, bg: number, attributes: number): void
 
 export declare function bufferDrawText(handle: number, textPtr: number, textLen: number, x: number, y: number, fg: number, bg: number, attributes: number): void
@@ -104,6 +110,8 @@ export declare function createOptimizedBuffer(width: number, height: number, res
 export declare function destroyAudioEngine(engine: number): void
 
 export declare function destroyOptimizedBuffer(handle: number): void
+
+export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
 export declare function yogaConfigCreate(): number
 

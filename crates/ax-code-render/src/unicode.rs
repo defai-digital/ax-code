@@ -198,7 +198,7 @@ pub(crate) struct GraphemeInfo {
 /// state machine (`gcb.rs`). Invalid codepoints (literal U+FFFD) force breaks
 /// inside `is_grapheme_break`, so they become single-codepoint clusters
 /// exactly like the Zig reference.
-fn clusters(text: &str) -> Vec<(usize, usize)> {
+pub(crate) fn clusters(text: &str) -> Vec<(usize, usize)> {
     let bytes = text.as_bytes();
     let mut out = Vec::new();
     let mut state = BreakState::default();
@@ -220,7 +220,7 @@ fn clusters(text: &str) -> Vec<(usize, usize)> {
     out
 }
 
-fn cluster_width_of(
+pub(crate) fn cluster_width_of(
     text: &str,
     start: usize,
     len: usize,
@@ -242,6 +242,12 @@ fn cluster_width_of(
     state.width
 }
 
+/// Zig `isAsciiOnly`: every byte in the PRINTABLE range [32, 126] (tabs and
+/// controls disqualify); empty text is not ASCII-only.
+pub(crate) fn is_ascii_only(text: &str) -> bool {
+    !text.is_empty() && text.bytes().all(|b| (32..=126).contains(&b))
+}
+
 /// Zig `findGraphemeInfo`: the "specials" table consumed by the encoder walk.
 pub(crate) fn find_grapheme_info(
     text: &str,
@@ -249,8 +255,8 @@ pub(crate) fn find_grapheme_info(
     tab_width: u8,
 ) -> Vec<GraphemeInfo> {
     let bytes = text.as_bytes();
-    if bytes.iter().all(|&b| b < 0x80) {
-        // Zig returns early for ASCII-only text in both modes.
+    if is_ascii_only(text) {
+        // Zig returns early for printable-ASCII-only text in both modes.
         return Vec::new();
     }
     let mut out = Vec::new();
@@ -369,4 +375,19 @@ pub fn encode_widths(text: &str, method: WidthMethod, tab_width: u8) -> Vec<(u32
         col += g_width;
     }
     out
+}
+
+/// Zig `calculateTextWidth`: total display width. ASCII-only text short-cuts
+/// to its byte length (tabs count 1 in that path — reference quirk).
+pub(crate) fn calculate_text_width(text: &str, tab_width: u8, method: WidthMethod) -> u32 {
+    if text.is_empty() {
+        return 0;
+    }
+    if is_ascii_only(text) {
+        return text.len() as u32;
+    }
+    clusters(text)
+        .iter()
+        .map(|&(start, len)| cluster_width_of(text, start, len, method, tab_width))
+        .sum()
 }

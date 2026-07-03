@@ -283,3 +283,35 @@ impl GraphemeTracker {
             .sum()
     }
 }
+
+/// Per-buffer hyperlink cell reference counts (Zig `link.LinkTracker`).
+/// The URL registry (LinkPool) has no observable surface in the buffer
+/// symbol family; cell counts drive the tracker-aware draw paths.
+#[derive(Default)]
+pub struct LinkTracker {
+    counts: HashMap<u32, u32>,
+}
+
+impl LinkTracker {
+    pub fn clear(&mut self) {
+        self.counts.clear();
+    }
+
+    pub fn add_cell_ref(&mut self, id: u32) {
+        *self.counts.entry(id).or_insert(0) += 1;
+    }
+
+    pub fn remove_cell_ref(&mut self, id: u32) {
+        if let Some(count) = self.counts.get_mut(&id) {
+            if *count > 1 {
+                *count -= 1;
+            } else {
+                self.counts.remove(&id);
+            }
+        }
+    }
+
+    pub fn has_any(&self) -> bool {
+        !self.counts.is_empty()
+    }
+}

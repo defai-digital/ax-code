@@ -1,20 +1,22 @@
 //! ADR-046 Slice B — OptimizedBuffer cell-buffer core, transliterated from
 //! the Zig reference (`buffer.zig` + `ansi.zig`, opentui v0.4.1).
 //!
-//! Tranche 1 scope: planes, clear/set/get, alpha-blended set (bit-exact
-//! integer blending: mulDiv255 with +127 rounding), fillRect fast paths,
-//! scissor stack (push intersects with the current top), multiplicative
-//! opacity stack, resize (realloc + clear to opaque black), and zero-copy
-//! plane exposure. Grapheme spans and hyperlink tracking land with the pool
-//! in the next tranche — cells written through this tranche must be simple
-//! (no 0x8/0xC flag bits in the char plane), which the differential harness
-//! guarantees.
+//! Covers the buffer symbol family through tranche 3: planes, clear/set/get,
+//! alpha-blended set (bit-exact integer blending — including the reference's
+//! round_div overflow-to-256 flowing into u16 lanes), fillRect fast paths,
+//! scissor/opacity stacks, resize, zero-copy plane exposure, grapheme spans
+//! (setInternal span cleanup + continuation cells + trackers), drawText,
+//! writeResolvedChars, drawBox (borders/titles/fill + transparent-border
+//! fast path), drawFrameBuffer (memcpy fast path + grapheme/link-aware
+//! blit), and hyperlink cell tracking. Still deferred: text/editor view
+//! draws (slices C/D) and grid/supersample/grayscale/packed/colorMatrix
+//! (tranche 4).
 //!
 //! RGBA is `[4]u16`: each lane keeps the 8-bit channel in the low byte and
 //! one byte of a 32-bit metadata word in the high byte (meta bits 0-7 =
 //! palette slot, bits 8-9 = ColorIntent rgb/indexed/default).
 
-use crate::pool::{GraphemePool, GraphemeTracker};
+use crate::pool::{GraphemePool, GraphemeTracker, LinkTracker};
 
 pub type Rgba = [u16; 4];
 
@@ -123,8 +125,23 @@ fn mul_div_255(a: u32, b: u32) -> u32 {
 }
 
 #[inline]
-fn round_div(n: u32, d: u32) -> u8 {
-    ((n + d / 2) / d) as u8
+fn round_div(n: u32, d: u32) -> u32 {
+    // The Zig reference @intCasts this to u8, but its rounding can reach 256
+    // (e.g. src a=128 over dst a=1) and the shipped ReleaseFast binary lets
+    // the overflowed value flow into the u16 lane verbatim. Mirrored: the
+    // caller stores the raw value as u16.
+    (n + d / 2) / d
+}
+
+/// Lane-raw color build for the blend path: values may exceed 255 (see
+/// round_div) and land in the u16 lanes unclamped, meta 0.
+fn rgb_color_raw(r: u32, g: u32, b: u32, a: u32) -> Rgba {
+    [
+        (r & 0xFFFF) as u16,
+        (g & 0xFFFF) as u16,
+        (b & 0xFFFF) as u16,
+        (a & 0xFFFF) as u16,
+    ]
 }
 
 fn is_rgba_with_alpha(c: Rgba) -> bool {
@@ -171,7 +188,7 @@ fn blend_colors(src: Rgba, dst0: Rgba, backdrop: Option<Rgba>) -> Rgba {
             255,
         );
     }
-    rgb_color(
+    rgb_color_raw(
         round_div(
             chan(src, 0) * sa + mul_div_255(chan(dst, 0) * da, inv),
             out_a,
@@ -184,7 +201,7 @@ fn blend_colors(src: Rgba, dst0: Rgba, backdrop: Option<Rgba>) -> Rgba {
             chan(src, 2) * sa + mul_div_255(chan(dst, 2) * da, inv),
             out_a,
         ),
-        out_a as u8,
+        out_a,
     )
 }
 
@@ -238,6 +255,7 @@ pub struct OptimizedBuffer {
     pub id: Vec<u8>,
     pub width_method: u32,
     pub tracker: GraphemeTracker,
+    pub link_tracker: LinkTracker,
 }
 
 impl OptimizedBuffer {
@@ -266,6 +284,7 @@ impl OptimizedBuffer {
             id,
             width_method,
             tracker: GraphemeTracker::default(),
+            link_tracker: LinkTracker::default(),
         })
     }
 
@@ -370,6 +389,7 @@ impl OptimizedBuffer {
 
     pub fn clear(&mut self, pool: &mut GraphemePool, bg: Rgba, char: Option<u32>) {
         let cell_char = char.unwrap_or(DEFAULT_SPACE_CHAR);
+        self.link_tracker.clear();
         self.tracker.clear(pool);
         self.char.fill(cell_char);
         self.attributes.fill(0);
@@ -388,11 +408,18 @@ impl OptimizedBuffer {
     }
 
     fn write_cell(&mut self, index: usize, cell: Cell) {
-        // Tranche 1: link tracker ref-counting is deferred with the pool.
+        let prev_link_id = link_id(self.attributes[index]);
+        let new_link_id = link_id(cell.attributes);
         self.char[index] = cell.char;
         self.fg[index] = cell.fg;
         self.bg[index] = cell.bg;
         self.attributes[index] = cell.attributes;
+        if prev_link_id != 0 && prev_link_id != new_link_id {
+            self.link_tracker.remove_cell_ref(prev_link_id);
+        }
+        if new_link_id != 0 && new_link_id != prev_link_id {
+            self.link_tracker.add_cell_ref(new_link_id);
+        }
     }
 
     pub fn get(&self, x: u32, y: u32) -> Option<Cell> {
@@ -415,6 +442,10 @@ impl OptimizedBuffer {
             return;
         };
         let prev_char = self.char[index];
+        // Zig captures this BEFORE span cleanup zeroes attributes; the
+        // grapheme branch below uses this pre-cleanup value while the simple
+        // path (write_cell) re-reads — mirrored asymmetry.
+        let prev_link_id_at_entry = link_id(self.attributes[index]);
         let mut tracker_replaced = false;
 
         // Overwriting part of a grapheme span with a different char clears the span.
@@ -450,6 +481,10 @@ impl OptimizedBuffer {
                 if grapheme_id_from_char(span_char) != id {
                     continue;
                 }
+                let span_link_id = link_id(self.attributes[i]);
+                if span_link_id != 0 {
+                    self.link_tracker.remove_cell_ref(span_link_id);
+                }
                 self.char[i] = DEFAULT_SPACE_CHAR;
                 self.attributes[i] = 0;
             }
@@ -462,13 +497,26 @@ impl OptimizedBuffer {
             if x + width > self.width {
                 // Start cell would overflow the row: fill to EOL with spaces.
                 let end_of_line = ((y + 1) * self.width) as usize;
+                for i in index..end_of_line {
+                    let eol_link_id = link_id(self.attributes[i]);
+                    if eol_link_id != 0 {
+                        self.link_tracker.remove_cell_ref(eol_link_id);
+                    }
+                }
                 self.char[index..end_of_line].fill(DEFAULT_SPACE_CHAR);
                 self.attributes[index..end_of_line].fill(cell.attributes);
                 self.fg[index..end_of_line].fill(cell.fg);
                 self.bg[index..end_of_line].fill(cell.bg);
+                let new_link_id = link_id(cell.attributes);
+                if new_link_id != 0 {
+                    for _ in index..end_of_line {
+                        self.link_tracker.add_cell_ref(new_link_id);
+                    }
+                }
                 return;
             }
 
+            let prev_link_id = prev_link_id_at_entry;
             self.char[index] = cell.char;
             self.fg[index] = cell.fg;
             self.bg[index] = cell.bg;
@@ -478,6 +526,14 @@ impl OptimizedBuffer {
             let is_same_grapheme_start = is_grapheme_char(prev_char) && prev_char == cell.char;
             if !tracker_replaced && !is_same_grapheme_start {
                 self.tracker.add(pool, id);
+            }
+
+            let new_link_id = link_id(cell.attributes);
+            if prev_link_id != 0 && prev_link_id != new_link_id {
+                self.link_tracker.remove_cell_ref(prev_link_id);
+            }
+            if new_link_id != 0 && new_link_id != prev_link_id {
+                self.link_tracker.add_cell_ref(new_link_id);
             }
 
             if width > 1 {
@@ -642,8 +698,8 @@ impl OptimizedBuffer {
         let ce_y = end_y.min((clipped.y + clipped.height as i32 - 1) as u32);
 
         let has_alpha = is_rgba_with_alpha(bg) || opacity < 1.0;
-        if self.tracker.has_any() {
-            // Grapheme-aware slow path: full blending setter per cell.
+        if self.tracker.has_any() || self.link_tracker.has_any() {
+            // Grapheme/link-aware slow path: full blending setter per cell.
             for fy in cs_y..=ce_y {
                 for fx in cs_x..=ce_x {
                     self.set_cell_with_alpha_blending(
@@ -868,6 +924,457 @@ impl OptimizedBuffer {
             if add_line_breaks && (i + 1) % self.width as usize == 0 {
                 out.push(b'\n');
             }
+        }
+    }
+
+    fn is_single_width_border_char(c: u32) -> bool {
+        if c == 0 {
+            return true;
+        }
+        if c > 0x10FFFF {
+            return false;
+        }
+        crate::unicode::codepoint_width(c) == 1
+    }
+
+    fn can_use_transparent_border_fast_path(
+        &self,
+        border_chars: &[u32; 11],
+        border_color: Rgba,
+        background_color: Rgba,
+    ) -> bool {
+        self.current_opacity() == 1.0
+            && alpha(border_color) == 255
+            && alpha(background_color) == 0
+            && !self.tracker.has_any()
+            && !self.link_tracker.has_any()
+            && Self::is_single_width_border_char(border_chars[0])
+            && Self::is_single_width_border_char(border_chars[1])
+            && Self::is_single_width_border_char(border_chars[2])
+            && Self::is_single_width_border_char(border_chars[3])
+            && Self::is_single_width_border_char(border_chars[4])
+            && Self::is_single_width_border_char(border_chars[5])
+    }
+
+    fn compute_box_title_layout(
+        &self,
+        title: Option<&str>,
+        border_side: bool,
+        is_at_actual_side: bool,
+        start_x: i32,
+        end_x: i32,
+        width: u32,
+        alignment: u8,
+    ) -> (bool, i32, i32, i32) {
+        let Some(text) = title else {
+            return (false, start_x, 0, 0);
+        };
+        if text.is_empty() || !border_side || !is_at_actual_side {
+            return (false, start_x, 0, 0);
+        }
+        let method = crate::unicode::WidthMethod::from_code(self.width_method);
+        let title_length = crate::unicode::calculate_text_width(text, 2, method) as i32;
+        let min_title_space = 4;
+        if (width as i32) < title_length + min_title_space {
+            return (false, start_x, 0, 0);
+        }
+        let padding = 2;
+        let mut title_x = start_x + padding;
+        if alignment == 1 {
+            title_x = start_x + padding.max((width as i32 - title_length).div_euclid(2));
+        } else if alignment == 2 {
+            title_x = start_x + width as i32 - padding - title_length;
+        }
+        title_x = (start_x + padding).max(title_x.min(end_x - title_length));
+        (true, title_x, title_x, title_x + title_length - 1)
+    }
+
+    /// Zig `drawBox`. border_chars layout: [topLeft, topRight, bottomLeft,
+    /// bottomRight, horizontal, vertical, topT, bottomT, leftT, rightT, cross].
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_box(
+        &mut self,
+        pool: &mut GraphemePool,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+        border_chars: &[u32; 11],
+        sides: (bool, bool, bool, bool), // top, right, bottom, left
+        border_color: Rgba,
+        background_color: Rgba,
+        title_color: Rgba,
+        should_fill: bool,
+        title: Option<&str>,
+        title_alignment: u8,
+        bottom_title: Option<&str>,
+        bottom_title_alignment: u8,
+    ) {
+        let (top, right_side, bottom, left) = sides;
+        let opacity = self.current_opacity();
+        let border_bg_transparent = is_fully_transparent(opacity, border_color, background_color);
+        let has_title = title.is_some() || bottom_title.is_some();
+        let title_visible =
+            has_title && !is_fully_transparent(opacity, title_color, background_color);
+        if border_bg_transparent && !title_visible {
+            return;
+        }
+
+        let start_x = x.max(0);
+        let start_y = y.max(0);
+        let end_x = (self.width as i32 - 1).min(x + width as i32 - 1);
+        let end_y = (self.height as i32 - 1).min(y + height as i32 - 1);
+        if start_x > end_x || start_y > end_y {
+            return;
+        }
+        let box_width = (end_x - start_x + 1) as u32;
+        let box_height = (end_y - start_y + 1) as u32;
+        if !self.rect_in_scissor(start_x, start_y, box_width, box_height) {
+            return;
+        }
+
+        let at_left = start_x == x;
+        let at_right = end_x == x + width as i32 - 1;
+        let at_top = start_y == y;
+        let at_bottom = end_y == y + height as i32 - 1;
+
+        let title_layout = self.compute_box_title_layout(
+            title,
+            top,
+            at_top,
+            start_x,
+            end_x,
+            width,
+            title_alignment,
+        );
+        let bottom_layout = self.compute_box_title_layout(
+            bottom_title,
+            bottom,
+            at_bottom,
+            start_x,
+            end_x,
+            width,
+            bottom_title_alignment,
+        );
+
+        if should_fill {
+            if !top && !right_side && !bottom && !left {
+                self.fill_rect(
+                    pool,
+                    start_x as u32,
+                    start_y as u32,
+                    box_width,
+                    box_height,
+                    background_color,
+                );
+            } else {
+                let inner_start_x = start_x + if left && at_left { 1 } else { 0 };
+                let inner_start_y = start_y + if top && at_top { 1 } else { 0 };
+                let inner_end_x = end_x - if right_side && at_right { 1 } else { 0 };
+                let inner_end_y = end_y - if bottom && at_bottom { 1 } else { 0 };
+                if inner_end_x >= inner_start_x && inner_end_y >= inner_start_y {
+                    self.fill_rect(
+                        pool,
+                        inner_start_x as u32,
+                        inner_start_y as u32,
+                        (inner_end_x - inner_start_x + 1) as u32,
+                        (inner_end_y - inner_start_y + 1) as u32,
+                        background_color,
+                    );
+                }
+            }
+        }
+
+        let left_border_only = left && at_left && !top && !bottom;
+        let right_border_only = right_side && at_right && !top && !bottom;
+        let bottom_only_with_verticals = bottom && at_bottom && !top && (left || right_side);
+        let top_only_with_verticals = top && at_top && !bottom && (left || right_side);
+        let extend_to_top = left_border_only || right_border_only || bottom_only_with_verticals;
+        let extend_to_bottom = left_border_only || right_border_only || top_only_with_verticals;
+        let fast =
+            self.can_use_transparent_border_fast_path(border_chars, border_color, background_color);
+
+        let mut put = |buf: &mut Self, cx: i32, cy: i32, ch: u32| {
+            if fast {
+                let index = buf.index(cx as u32, cy as u32);
+                buf.char[index] = ch;
+                buf.fg[index] = border_color;
+                buf.attributes[index] = 0;
+            } else {
+                buf.set_cell_with_alpha_blending(
+                    pool,
+                    cx as u32,
+                    cy as u32,
+                    Cell {
+                        char: ch,
+                        fg: border_color,
+                        bg: background_color,
+                        attributes: 0,
+                    },
+                );
+            }
+        };
+
+        if top || bottom {
+            if top && at_top {
+                for draw_x in start_x..=end_x {
+                    if start_y >= 0 && start_y < self.height as i32 {
+                        if title_layout.0 && draw_x >= title_layout.2 && draw_x <= title_layout.3 {
+                            continue;
+                        }
+                        let mut ch = border_chars[4];
+                        if draw_x == start_x && at_left {
+                            ch = if left {
+                                border_chars[0]
+                            } else {
+                                border_chars[4]
+                            };
+                        } else if draw_x == end_x && at_right {
+                            ch = if right_side {
+                                border_chars[1]
+                            } else {
+                                border_chars[4]
+                            };
+                        }
+                        put(self, draw_x, start_y, ch);
+                    }
+                }
+            }
+            if bottom && at_bottom {
+                for draw_x in start_x..=end_x {
+                    if end_y >= 0 && end_y < self.height as i32 {
+                        if bottom_layout.0 && draw_x >= bottom_layout.2 && draw_x <= bottom_layout.3
+                        {
+                            continue;
+                        }
+                        let mut ch = border_chars[4];
+                        if draw_x == start_x && at_left {
+                            ch = if left {
+                                border_chars[2]
+                            } else {
+                                border_chars[4]
+                            };
+                        } else if draw_x == end_x && at_right {
+                            ch = if right_side {
+                                border_chars[3]
+                            } else {
+                                border_chars[4]
+                            };
+                        }
+                        put(self, draw_x, end_y, ch);
+                    }
+                }
+            }
+        }
+
+        let vertical_start_y = if extend_to_top {
+            start_y
+        } else {
+            start_y + if top && at_top { 1 } else { 0 }
+        };
+        let vertical_end_y = if extend_to_bottom {
+            end_y
+        } else {
+            end_y - if bottom && at_bottom { 1 } else { 0 }
+        };
+
+        if left || right_side {
+            for draw_y in vertical_start_y..=vertical_end_y {
+                if left && at_left && start_x >= 0 && start_x < self.width as i32 {
+                    put(self, start_x, draw_y, border_chars[5]);
+                }
+                if right_side && at_right && end_x >= 0 && end_x < self.width as i32 {
+                    put(self, end_x, draw_y, border_chars[5]);
+                }
+            }
+        }
+
+        if title_layout.0 {
+            if let Some(text) = title {
+                self.draw_text(
+                    pool,
+                    text,
+                    title_layout.1 as u32,
+                    start_y as u32,
+                    title_color,
+                    Some(background_color),
+                    0,
+                );
+            }
+        }
+        if bottom_layout.0 {
+            if let Some(text) = bottom_title {
+                self.draw_text(
+                    pool,
+                    text,
+                    bottom_layout.1 as u32,
+                    end_y as u32,
+                    title_color,
+                    Some(background_color),
+                    0,
+                );
+            }
+        }
+    }
+
+    /// Zig `drawFrameBuffer`: blit another buffer into this one. Fast path
+    /// memcpy when neither side tracks graphemes/links and the source ignores
+    /// alpha; otherwise per-cell blending with continuation-cell awareness.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_frame_buffer(
+        &mut self,
+        pool: &mut GraphemePool,
+        dest_x: i32,
+        dest_y: i32,
+        src: &OptimizedBuffer,
+        source_x: Option<u32>,
+        source_y: Option<u32>,
+        source_width: Option<u32>,
+        source_height: Option<u32>,
+    ) {
+        if self.width == 0 || self.height == 0 || src.width == 0 || src.height == 0 {
+            return;
+        }
+        let opacity = self.current_opacity();
+        if opacity == 0.0 {
+            return;
+        }
+        let src_x = source_x.unwrap_or(0);
+        let src_y = source_y.unwrap_or(0);
+        let src_w = source_width.unwrap_or(src.width);
+        let src_h = source_height.unwrap_or(src.height);
+        if src_x >= src.width || src_y >= src.height || src_w == 0 || src_h == 0 {
+            return;
+        }
+        let clamped_w = src_w.min(src.width - src_x);
+        let clamped_h = src_h.min(src.height - src_y);
+
+        let start_dx = dest_x.max(0);
+        let start_dy = dest_y.max(0);
+        let end_dx = (self.width as i32 - 1).min(dest_x + clamped_w as i32 - 1);
+        let end_dy = (self.height as i32 - 1).min(dest_y + clamped_h as i32 - 1);
+        if start_dx > end_dx || start_dy > end_dy {
+            return;
+        }
+        let dest_w = (end_dx - start_dx + 1) as u32;
+        let dest_h = (end_dy - start_dy + 1) as u32;
+        if !self.rect_in_scissor(start_dx, start_dy, dest_w, dest_h) {
+            return;
+        }
+
+        let grapheme_aware = self.tracker.has_any() || src.tracker.has_any();
+        let link_aware = self.link_tracker.has_any() || src.link_tracker.has_any();
+
+        let Some(clipped) = self.clip_rect_to_scissor(start_dx, start_dy, dest_w, dest_h) else {
+            return;
+        };
+        let cs_x = start_dx.max(clipped.x);
+        let cs_y = start_dy.max(clipped.y);
+        let ce_x = end_dx.min(clipped.x + clipped.width as i32 - 1);
+        let ce_y = end_dy.min(clipped.y + clipped.height as i32 - 1);
+
+        if !grapheme_aware && !src.respect_alpha && !link_aware {
+            let mut dy = cs_y;
+            while dy <= ce_y {
+                let rel_dy = dy - dest_y;
+                let sy = src_y + rel_dy as u32;
+                if sy < src.height {
+                    let rel_dx = cs_x - dest_x;
+                    let sx = src_x + rel_dx as u32;
+                    if sx < src.width {
+                        let dest_row = self.index(cs_x as u32, dy as u32);
+                        let src_row = ((sy * src.width) + sx) as usize;
+                        let copy_w = ((ce_x - cs_x + 1) as u32).min(src.width - sx) as usize;
+                        self.char[dest_row..dest_row + copy_w]
+                            .copy_from_slice(&src.char[src_row..src_row + copy_w]);
+                        self.fg[dest_row..dest_row + copy_w]
+                            .copy_from_slice(&src.fg[src_row..src_row + copy_w]);
+                        self.bg[dest_row..dest_row + copy_w]
+                            .copy_from_slice(&src.bg[src_row..src_row + copy_w]);
+                        self.attributes[dest_row..dest_row + copy_w]
+                            .copy_from_slice(&src.attributes[src_row..src_row + copy_w]);
+                    }
+                }
+                dy += 1;
+            }
+            return;
+        }
+
+        let mut dy = cs_y;
+        while dy <= ce_y {
+            let mut last_drawn_grapheme_id: u32 = 0;
+            let mut dx = cs_x;
+            while dx <= ce_x {
+                let rel_dx = dx - dest_x;
+                let rel_dy = dy - dest_y;
+                let sx = src_x + rel_dx as u32;
+                let sy = src_y + rel_dy as u32;
+                if sx >= src.width || sy >= src.height {
+                    dx += 1;
+                    continue;
+                }
+                let src_index = ((sy * src.width) + sx) as usize;
+                if src_index >= src.char.len() {
+                    dx += 1;
+                    continue;
+                }
+                let src_char = src.char[src_index];
+                let src_fg = src.fg[src_index];
+                let src_bg = src.bg[src_index];
+                let src_attr = src.attributes[src_index];
+                if alpha(src_bg) == 0 && alpha(src_fg) == 0 {
+                    dx += 1;
+                    continue;
+                }
+                if grapheme_aware {
+                    if is_continuation_char(src_char) {
+                        let gid = grapheme_id_from_char(src_char);
+                        if gid != last_drawn_grapheme_id {
+                            self.set_cell_with_alpha_blending(
+                                pool,
+                                dx as u32,
+                                dy as u32,
+                                Cell {
+                                    char: DEFAULT_SPACE_CHAR,
+                                    fg: src_fg,
+                                    bg: src_bg,
+                                    attributes: src_attr,
+                                },
+                            );
+                        }
+                        dx += 1;
+                        continue;
+                    }
+                    if is_grapheme_char(src_char) {
+                        last_drawn_grapheme_id = grapheme_id_from_char(src_char);
+                    }
+                    self.set_cell_with_alpha_blending(
+                        pool,
+                        dx as u32,
+                        dy as u32,
+                        Cell {
+                            char: src_char,
+                            fg: src_fg,
+                            bg: src_bg,
+                            attributes: src_attr,
+                        },
+                    );
+                    dx += 1;
+                    continue;
+                }
+                self.set_cell_with_alpha_blending_raw(
+                    dx as u32,
+                    dy as u32,
+                    Cell {
+                        char: src_char,
+                        fg: src_fg,
+                        bg: src_bg,
+                        attributes: src_attr,
+                    },
+                );
+                dx += 1;
+            }
+            dy += 1;
         }
     }
 
