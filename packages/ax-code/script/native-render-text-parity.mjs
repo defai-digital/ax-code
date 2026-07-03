@@ -79,6 +79,21 @@ function state(sym, handle, isZig) {
     bytes: Number(sym.textBufferGetByteSize(handle)),
     lines: Number(sym.textBufferGetLineCount(handle)),
     tab: Number(sym.textBufferGetTabWidth(handle)),
+    hlCount: Number(sym.textBufferGetHighlightCount(handle)),
+    hls: (() => {
+      const lines = Number(sym.textBufferGetLineCount(handle))
+      const dump = []
+      for (let l = 0; l < Math.min(lines, 8); l++) {
+        const countBuf = new Uint32Array(1)
+        const p = sym.textBufferGetLineHighlightsPtr(handle, l, isZig ? ptr(countBuf) : Number(ptr(countBuf)))
+        const n = countBuf[0]
+        if (!n || !p) { dump.push(""); continue }
+        const addr = typeof p === "bigint" ? p : BigInt(Math.round(Number(p)))
+        dump.push(Buffer.from(ffi.toArrayBuffer(addr, n * 16).slice(0)).toString("hex"))
+        sym.textBufferFreeLineHighlights(isZig ? p : Number(p), n)
+      }
+      return dump
+    })(),
   }
 }
 
@@ -131,6 +146,42 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
         continue outer
       }
       if (zid !== 0xffff) memIds.push(zid)
+    } else if (op === 9 && rand() < 0.6) {
+      const kind = randInt(4)
+      const hl = new ArrayBuffer(16)
+      const dv = new DataView(hl)
+      const u8hl = new Uint8Array(hl)
+      keepAlive.push(u8hl)
+      const a = randInt(30), b = a + randInt(12)
+      dv.setUint32(0, a, true); dv.setUint32(4, b, true)
+      dv.setUint32(8, 1 + randInt(20), true)
+      dv.setUint8(12, randInt(4)); dv.setUint16(14, randInt(5), true)
+      if (kind === 0) {
+        const line = randInt(6)
+        opsLog.push(`hl(line=${line},${a}..${b})`)
+        zig.textBufferAddHighlight(zh, line, ptr(u8hl))
+        rust.textBufferAddHighlight(rh, line, Number(ptr(u8hl)))
+      } else if (kind === 1) {
+        opsLog.push(`hlRange(${a}..${b})`)
+        zig.textBufferAddHighlightByCharRange(zh, ptr(u8hl))
+        rust.textBufferAddHighlightByCharRange(rh, Number(ptr(u8hl)))
+      } else if (kind === 2) {
+        const ref = randInt(5)
+        opsLog.push(`hlRemoveRef(${ref})`)
+        zig.textBufferRemoveHighlightsByRef(zh, ref)
+        rust.textBufferRemoveHighlightsByRef(rh, ref)
+      } else {
+        if (rand() < 0.5) {
+          const line = randInt(6)
+          opsLog.push(`hlClearLine(${line})`)
+          zig.textBufferClearLineHighlights(zh, line)
+          rust.textBufferClearLineHighlights(rh, line)
+        } else {
+          opsLog.push("hlClearAll")
+          zig.textBufferClearAllHighlights(zh)
+          rust.textBufferClearAllHighlights(rh)
+        }
+      }
     } else if (memIds.length > 0) {
       const id = memIds[randInt(memIds.length)]
       if (rand() < 0.5) {

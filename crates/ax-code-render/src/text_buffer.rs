@@ -35,6 +35,8 @@ pub struct TextBuffer {
     pub default_bg: Option<Rgba>,
     pub default_attributes: Option<u32>,
     styled_text_mem_id: Option<u8>,
+    line_highlights: Vec<Vec<crate::segment::Highlight>>,
+    internal_highlight_count: u32,
 }
 
 impl TextBuffer {
@@ -48,6 +50,8 @@ impl TextBuffer {
             default_bg: None,
             default_attributes: None,
             styled_text_mem_id: None,
+            line_highlights: Vec::new(),
+            internal_highlight_count: 0,
         }
     }
 
@@ -89,6 +93,8 @@ impl TextBuffer {
 
     /// Zig `reset`: drop highlights/styled buffer, clear the registry AND the rope.
     pub fn reset(&mut self) {
+        self.line_highlights.clear();
+        self.internal_highlight_count = 0;
         self.styled_text_mem_id = None;
         self.registry.clear();
         self.rope = Rope::new();
@@ -171,6 +177,7 @@ impl TextBuffer {
     }
 
     pub fn set_text(&mut self, buffer: MemBuffer, len: usize) -> Option<u8> {
+        self.clear_internal_highlights();
         self.clear();
         let mem_id = self.registry.register(buffer)?;
         self.set_text_internal(mem_id, len);
@@ -212,9 +219,11 @@ impl TextBuffer {
         let total_len: usize = chunks.iter().map(|c| c.text.len()).sum();
         if chunks.is_empty() || total_len == 0 {
             self.clear();
+            self.clear_all_highlights();
             return;
         }
         self.clear();
+        self.clear_all_highlights();
         let mut full_text = Vec::with_capacity(total_len);
         for chunk in chunks {
             full_text.extend_from_slice(chunk.text);
@@ -397,6 +406,134 @@ impl TextBuffer {
             return Vec::new();
         };
         self.get_text_range(start, end, max_len)
+    }
+
+    // --- highlights (C4) --------------------------------------------------------
+
+    fn ensure_highlight_storage(&mut self, line_idx: usize) {
+        while self.line_highlights.len() <= line_idx {
+            self.line_highlights.push(Vec::new());
+        }
+    }
+
+    /// Zig `addHighlightInternal`: line-scoped column-range highlight. Fails
+    /// silently past the line count; empty ranges are ignored.
+    pub fn add_highlight(
+        &mut self,
+        line_idx: usize,
+        col_start: u32,
+        col_end: u32,
+        style_id: u32,
+        priority: u8,
+        hl_ref: u16,
+        internal: bool,
+    ) {
+        if line_idx as u32 >= self.get_line_count() {
+            return; // Zig returns InvalidIndex; the FFI glue swallows it
+        }
+        if col_start >= col_end {
+            return;
+        }
+        self.ensure_highlight_storage(line_idx);
+        self.line_highlights[line_idx].push(crate::segment::Highlight {
+            col_start,
+            col_end,
+            style_id,
+            priority,
+            hl_ref,
+            internal,
+        });
+        if internal {
+            self.internal_highlight_count += 1;
+        }
+    }
+
+    /// Zig `addHighlightByCharRange`: weight-space range distributed across
+    /// the intersecting lines (each break occupies one weight unit).
+    pub fn add_highlight_by_char_range(
+        &mut self,
+        char_start: u32,
+        char_end: u32,
+        style_id: u32,
+        priority: u8,
+        hl_ref: u16,
+        internal: bool,
+    ) {
+        let line_count = self.get_line_count();
+        if char_start >= char_end || line_count == 0 {
+            return;
+        }
+        // NOTE: this char space is CUMULATIVE COLUMNS (line widths summed,
+        // breaks excluded) — a different coordinate system from the weight
+        // space used by getTextRange (found by differential fuzz: off-by-one
+        // per preceding line).
+        let mut line_start: u32 = 0;
+        for row in 0..line_count {
+            let width = self.line_width_at(row);
+            let line_end = line_start + width;
+            if line_end > char_start && line_start < char_end {
+                let col_start = char_start.saturating_sub(line_start);
+                let col_end = if char_end < line_end {
+                    char_end - line_start
+                } else {
+                    width
+                };
+                self.add_highlight(
+                    row as usize,
+                    col_start,
+                    col_end,
+                    style_id,
+                    priority,
+                    hl_ref,
+                    internal,
+                );
+            }
+            line_start = line_end;
+        }
+    }
+
+    fn clear_internal_highlights(&mut self) {
+        if self.internal_highlight_count == 0 {
+            return;
+        }
+        for list in self.line_highlights.iter_mut() {
+            list.retain(|hl| !hl.internal);
+        }
+        self.internal_highlight_count = 0;
+    }
+
+    pub fn remove_highlights_by_ref(&mut self, hl_ref: u16) {
+        for list in self.line_highlights.iter_mut() {
+            list.retain(|hl| hl.hl_ref != hl_ref);
+        }
+    }
+
+    pub fn clear_line_highlights(&mut self, line_idx: usize) {
+        if line_idx < self.line_highlights.len() {
+            for hl in &self.line_highlights[line_idx] {
+                if hl.internal && self.internal_highlight_count > 0 {
+                    self.internal_highlight_count -= 1;
+                }
+            }
+            self.line_highlights[line_idx].clear();
+        }
+    }
+
+    pub fn clear_all_highlights(&mut self) {
+        for list in self.line_highlights.iter_mut() {
+            list.clear();
+        }
+        self.internal_highlight_count = 0;
+    }
+
+    pub fn get_highlight_count(&self) -> u32 {
+        self.line_highlights.iter().map(|l| l.len() as u32).sum()
+    }
+
+    pub fn line_highlights_at(&self, line_idx: usize) -> &[crate::segment::Highlight] {
+        self.line_highlights
+            .get(line_idx)
+            .map_or(&[], |l| l.as_slice())
     }
 }
 

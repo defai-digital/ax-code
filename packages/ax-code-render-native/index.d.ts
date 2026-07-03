@@ -131,19 +131,33 @@ export declare function destroyTextBuffer(handle: number): void
 
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
+export declare function textBufferAddHighlight(handle: number, lineIdx: number, hlPtr: number): void
+
+export declare function textBufferAddHighlightByCharRange(handle: number, hlPtr: number): void
+
 export declare function textBufferAppend(handle: number, dataPtr: number, dataLen: number): void
 
 export declare function textBufferAppendFromMemId(handle: number, id: number): void
 
 export declare function textBufferClear(handle: number): void
 
+export declare function textBufferClearAllHighlights(handle: number): void
+
+export declare function textBufferClearLineHighlights(handle: number, lineIdx: number): void
+
 export declare function textBufferClearMemRegistry(handle: number): void
 
+export declare function textBufferFreeLineHighlights(ptr: number, count: number): void
+
 export declare function textBufferGetByteSize(handle: number): number
+
+export declare function textBufferGetHighlightCount(handle: number): number
 
 export declare function textBufferGetLength(handle: number): number
 
 export declare function textBufferGetLineCount(handle: number): number
+
+export declare function textBufferGetLineHighlightsPtr(handle: number, lineIdx: number, outCount: number): number
 
 export declare function textBufferGetPlainText(handle: number, outPtr: number, maxLen: number): number
 
@@ -154,6 +168,8 @@ export declare function textBufferGetTextRange(handle: number, startOffset: numb
 export declare function textBufferGetTextRangeByCoords(handle: number, startRow: number, startCol: number, endRow: number, endCol: number, outPtr: number, maxLen: number): number
 
 export declare function textBufferRegisterMemBuffer(handle: number, dataPtr: number, dataLen: number, owned: boolean): number
+
+export declare function textBufferRemoveHighlightsByRef(handle: number, hlRef: number): void
 
 export declare function textBufferReplaceMemBuffer(handle: number, id: number, dataPtr: number, dataLen: number, owned: boolean): boolean
 

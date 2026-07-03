@@ -271,6 +271,118 @@ pub fn text_buffer_get_text_range_by_coords(
     out.len() as u32
 }
 
+/// ExternalHighlight extern layout: start@0 u32, end@4 u32, style_id@8 u32,
+/// priority@12 u8, hl_ref@14 u16 (size 16).
+fn read_external_highlight(addr: usize) -> (u32, u32, u32, u8, u16) {
+    unsafe {
+        (
+            std::ptr::read_unaligned(addr as *const u32),
+            std::ptr::read_unaligned((addr + 4) as *const u32),
+            std::ptr::read_unaligned((addr + 8) as *const u32),
+            std::ptr::read_unaligned((addr + 12) as *const u8),
+            std::ptr::read_unaligned((addr + 14) as *const u16),
+        )
+    }
+}
+
+#[napi(js_name = "textBufferAddHighlight")]
+pub fn text_buffer_add_highlight(handle: u32, line_idx: u32, hl_ptr: f64) {
+    let Some(tb) = resolve(handle) else { return };
+    if hl_ptr == 0.0 {
+        return;
+    }
+    let (start, end, style_id, priority, hl_ref) =
+        read_external_highlight((hl_ptr as u64) as usize);
+    tb.add_highlight(
+        line_idx as usize,
+        start,
+        end,
+        style_id,
+        priority,
+        hl_ref,
+        false,
+    );
+}
+
+#[napi(js_name = "textBufferAddHighlightByCharRange")]
+pub fn text_buffer_add_highlight_by_char_range(handle: u32, hl_ptr: f64) {
+    let Some(tb) = resolve(handle) else { return };
+    if hl_ptr == 0.0 {
+        return;
+    }
+    let (start, end, style_id, priority, hl_ref) =
+        read_external_highlight((hl_ptr as u64) as usize);
+    tb.add_highlight_by_char_range(start, end, style_id, priority, hl_ref, false);
+}
+
+#[napi(js_name = "textBufferRemoveHighlightsByRef")]
+pub fn text_buffer_remove_highlights_by_ref(handle: u32, hl_ref: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.remove_highlights_by_ref(hl_ref as u16);
+    }
+}
+
+#[napi(js_name = "textBufferClearLineHighlights")]
+pub fn text_buffer_clear_line_highlights(handle: u32, line_idx: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.clear_line_highlights(line_idx as usize);
+    }
+}
+
+#[napi(js_name = "textBufferClearAllHighlights")]
+pub fn text_buffer_clear_all_highlights(handle: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.clear_all_highlights();
+    }
+}
+
+#[napi(js_name = "textBufferGetHighlightCount")]
+pub fn text_buffer_get_highlight_count(handle: u32) -> u32 {
+    resolve(handle).map_or(0, |tb| tb.get_highlight_count())
+}
+
+#[napi(js_name = "textBufferGetLineHighlightsPtr")]
+pub fn text_buffer_get_line_highlights_ptr(handle: u32, line_idx: u32, out_count: f64) -> f64 {
+    let Some(tb) = resolve(handle) else {
+        return 0.0;
+    };
+    if out_count == 0.0 {
+        return 0.0;
+    }
+    let out_count_ptr = (out_count as u64) as usize as *mut u32;
+    let highs = tb.line_highlights_at(line_idx as usize);
+    if highs.is_empty() {
+        unsafe { *out_count_ptr = 0 };
+        return 0.0;
+    }
+    let mut packed: Vec<u8> = Vec::with_capacity(highs.len() * 16);
+    for hl in highs {
+        packed.extend_from_slice(&hl.col_start.to_le_bytes());
+        packed.extend_from_slice(&hl.col_end.to_le_bytes());
+        packed.extend_from_slice(&hl.style_id.to_le_bytes());
+        packed.push(hl.priority);
+        packed.push(0); // padding
+        packed.extend_from_slice(&hl.hl_ref.to_le_bytes());
+    }
+    unsafe { *out_count_ptr = highs.len() as u32 };
+    let boxed = packed.into_boxed_slice();
+    let len = boxed.len();
+    let ptr = Box::into_raw(boxed) as *mut u8;
+    // freeLineHighlights reconstructs from (ptr, count*16)
+    let _ = len;
+    ptr as usize as f64
+}
+
+#[napi(js_name = "textBufferFreeLineHighlights")]
+pub fn text_buffer_free_line_highlights(ptr: f64, count: u32) {
+    if ptr == 0.0 || count == 0 {
+        return;
+    }
+    let raw = (ptr as u64) as usize as *mut u8;
+    let len = count as usize * 16;
+    drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(raw, len)) });
+}
+
 #[napi(js_name = "textBufferAppendFromMemId")]
 pub fn text_buffer_append_from_mem_id(handle: u32, id: u32) {
     if let Some(tb) = resolve(handle) {
