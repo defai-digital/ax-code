@@ -134,3 +134,92 @@ pub fn text_buffer_view_get_plain_text(handle: u32, out_ptr: f64, max_len: u32) 
     };
     copy as u32
 }
+
+// --- selection (C5b) --------------------------------------------------------
+
+fn read_rgba_ptr(addr: f64) -> Option<crate::buffer::Rgba> {
+    if addr == 0.0 {
+        return None;
+    }
+    let p = (addr as u64) as usize as *const u16;
+    Some(unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] })
+}
+
+#[napi(js_name = "textBufferViewSetSelection")]
+pub fn text_buffer_view_set_selection(handle: u32, start: u32, end: u32, bg: f64, fg: f64) {
+    if let Some(view) = resolve(handle) {
+        view.set_selection(start, end, read_rgba_ptr(bg), read_rgba_ptr(fg));
+    }
+}
+
+#[napi(js_name = "textBufferViewUpdateSelection")]
+pub fn text_buffer_view_update_selection(handle: u32, end: u32, bg: f64, fg: f64) {
+    if let Some(view) = resolve(handle) {
+        view.update_selection(end, read_rgba_ptr(bg), read_rgba_ptr(fg));
+    }
+}
+
+#[napi(js_name = "textBufferViewResetSelection")]
+pub fn text_buffer_view_reset_selection(handle: u32) {
+    if let Some(view) = resolve(handle) {
+        view.reset_selection();
+    }
+}
+
+#[napi(js_name = "textBufferViewGetSelectionInfo")]
+pub fn text_buffer_view_get_selection_info(handle: u32) -> i64 {
+    resolve(handle).map_or(-1, |view| view.pack_selection_info() as i64)
+}
+
+#[napi(js_name = "textBufferViewSetLocalSelection")]
+pub fn text_buffer_view_set_local_selection(
+    handle: u32,
+    ax: i32,
+    ay: i32,
+    fx: i32,
+    fy: i32,
+    bg: f64,
+    fg: f64,
+) -> bool {
+    resolve(handle).is_some_and(|view| {
+        view.set_local_selection(ax, ay, fx, fy, read_rgba_ptr(bg), read_rgba_ptr(fg))
+    })
+}
+
+#[napi(js_name = "textBufferViewUpdateLocalSelection")]
+pub fn text_buffer_view_update_local_selection(
+    handle: u32,
+    ax: i32,
+    ay: i32,
+    fx: i32,
+    fy: i32,
+    bg: f64,
+    fg: f64,
+) -> bool {
+    resolve(handle).is_some_and(|view| {
+        view.update_local_selection(ax, ay, fx, fy, read_rgba_ptr(bg), read_rgba_ptr(fg))
+    })
+}
+
+#[napi(js_name = "textBufferViewResetLocalSelection")]
+pub fn text_buffer_view_reset_local_selection(handle: u32) {
+    if let Some(view) = resolve(handle) {
+        view.reset_local_selection();
+    }
+}
+
+#[napi(js_name = "textBufferViewGetSelectedText")]
+pub fn text_buffer_view_get_selected_text(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
+    let Some(view) = resolve(handle) else {
+        return 0;
+    };
+    if out_ptr == 0.0 || max_len == 0 {
+        return 0;
+    }
+    let text = view.selected_text(max_len as usize);
+    let copy = text.len().min(max_len as usize);
+    unsafe {
+        std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
+    };
+    copy as u32
+}

@@ -8,6 +8,7 @@
 //! highlights use; found by differential fuzz). char/word wrapping and
 //! drawing land in later tranches.
 
+use crate::buffer::Rgba;
 use crate::handles::{self, Kind};
 use crate::segment::WrapMode;
 use crate::text_buffer::TextBuffer;
@@ -30,8 +31,18 @@ pub struct VirtualLineCaches {
     pub vline_counts: Vec<u32>,
 }
 
+#[derive(Clone, Copy)]
+pub struct Selection {
+    pub start: u32,
+    pub end: u32,
+    pub bg: Option<Rgba>,
+    pub fg: Option<Rgba>,
+}
+
 pub struct TextBufferView {
     pub text_buffer: u32, // handle
+    pub selection: Option<Selection>,
+    selection_anchor_offset: Option<u32>,
     pub viewport: Option<Viewport>,
     pub wrap_width: Option<u32>,
     pub wrap_mode: WrapMode,
@@ -53,6 +64,8 @@ impl TextBufferView {
     pub fn new(text_buffer: u32) -> TextBufferView {
         TextBufferView {
             text_buffer,
+            selection: None,
+            selection_anchor_offset: None,
             viewport: None,
             wrap_width: None,
             wrap_mode: WrapMode::None,
@@ -174,5 +187,199 @@ impl TextBufferView {
 
     pub fn plain_text(&self) -> Vec<u8> {
         resolve_tb(self.text_buffer).map_or_else(Vec::new, |tb| tb.plain_text())
+    }
+
+    // --- selection (C5b) --------------------------------------------------------
+
+    pub fn set_selection(&mut self, start: u32, end: u32, bg: Option<Rgba>, fg: Option<Rgba>) {
+        self.selection = Some(Selection { start, end, bg, fg });
+    }
+
+    pub fn update_selection(&mut self, end: u32, bg: Option<Rgba>, fg: Option<Rgba>) {
+        if let Some(sel) = self.selection {
+            self.selection = Some(Selection {
+                start: sel.start,
+                end,
+                bg,
+                fg,
+            });
+        }
+    }
+
+    pub fn reset_selection(&mut self) {
+        self.selection = None;
+    }
+
+    /// Zig `packSelectionInfo`: (start << 32) | end, all-ones when empty.
+    pub fn pack_selection_info(&self) -> u64 {
+        match self.selection {
+            Some(sel) if sel.start != sel.end => ((sel.start as u64) << 32) | sel.end as u64,
+            _ => u64::MAX,
+        }
+    }
+
+    pub fn selected_text(&mut self, max_len: usize) -> Vec<u8> {
+        let Some(sel) = self.selection else {
+            return Vec::new();
+        };
+        if sel.start == sel.end {
+            return Vec::new();
+        }
+        resolve_tb(self.text_buffer).map_or_else(Vec::new, |tb| {
+            tb.get_text_range(sel.start, sel.end, max_len)
+        })
+    }
+
+    fn text_end_offset(&mut self) -> u32 {
+        self.update_virtual_lines();
+        let n = self.caches.starts.len();
+        if n == 0 {
+            return 0;
+        }
+        self.caches.starts[n - 1] + self.caches.widths[n - 1]
+    }
+
+    /// Zig `coordsToCharOffset`: local (x, y) through the viewport into a
+    /// weight offset, clamped to the virtual line grid.
+    fn coords_to_char_offset(&mut self, x: i32, y: i32) -> Option<u32> {
+        self.update_virtual_lines();
+        let (y_off, x_off) = match self.viewport {
+            Some(vp) => (
+                vp.y as i32,
+                if self.wrap_mode == WrapMode::None {
+                    vp.x as i32
+                } else {
+                    0
+                },
+            ),
+            None => (0, 0),
+        };
+        let n = self.caches.starts.len();
+        if n == 0 {
+            return Some(0);
+        }
+        let abs_y = y + y_off;
+        let abs_x = x + x_off;
+        let clamped_y = abs_y.clamp(0, n as i32 - 1) as usize;
+        let line_start = self.caches.starts[clamped_y];
+        let line_width = self.caches.widths[clamped_y] as i32;
+        let local_x = abs_x.clamp(0, line_width);
+        Some(line_start + local_x as u32)
+    }
+
+    /// Zig `setLocalSelectionStyle` (truncation paths land in C5c).
+    pub fn set_local_selection(
+        &mut self,
+        anchor_x: i32,
+        anchor_y: i32,
+        focus_x: i32,
+        focus_y: i32,
+        bg: Option<Rgba>,
+        fg: Option<Rgba>,
+    ) -> bool {
+        self.update_virtual_lines();
+        let max_y = self.caches.starts.len() as i32 - 1;
+        let anchor_above = anchor_y < 0;
+        let focus_above = focus_y < 0;
+        let anchor_below = anchor_y > max_y;
+        let focus_below = focus_y > max_y;
+        if (anchor_above && focus_above) || (anchor_below && focus_below) {
+            let had = self.selection.is_some();
+            self.selection = None;
+            self.selection_anchor_offset = None;
+            return had;
+        }
+        let end_offset = self.text_end_offset();
+        let anchor_offset = if anchor_above || anchor_x < 0 {
+            0
+        } else if anchor_below {
+            end_offset
+        } else {
+            match self.coords_to_char_offset(anchor_x, anchor_y) {
+                Some(v) => v,
+                None => {
+                    let had = self.selection.is_some();
+                    self.selection = None;
+                    self.selection_anchor_offset = None;
+                    return had;
+                }
+            }
+        };
+        let focus_offset = if focus_above || focus_x < 0 {
+            0
+        } else if focus_below {
+            end_offset
+        } else {
+            match self.coords_to_char_offset(focus_x, focus_y) {
+                Some(v) => v,
+                None => {
+                    let had = self.selection.is_some();
+                    self.selection = None;
+                    self.selection_anchor_offset = None;
+                    return had;
+                }
+            }
+        };
+        self.selection_anchor_offset = Some(anchor_offset);
+        let new_start = anchor_offset.min(focus_offset);
+        let new_end = anchor_offset.max(focus_offset);
+        let changed = match self.selection {
+            Some(old) => old.start != new_start || old.end != new_end,
+            None => true,
+        };
+        self.selection = Some(Selection {
+            start: new_start,
+            end: new_end,
+            bg,
+            fg,
+        });
+        changed
+    }
+
+    /// Zig `updateLocalSelectionStyle`: with an anchor pinned, only the focus
+    /// moves; otherwise identical to setLocalSelection.
+    pub fn update_local_selection(
+        &mut self,
+        anchor_x: i32,
+        anchor_y: i32,
+        focus_x: i32,
+        focus_y: i32,
+        bg: Option<Rgba>,
+        fg: Option<Rgba>,
+    ) -> bool {
+        let Some(anchor_offset) = self.selection_anchor_offset else {
+            return self.set_local_selection(anchor_x, anchor_y, focus_x, focus_y, bg, fg);
+        };
+        self.update_virtual_lines();
+        let max_y = self.caches.starts.len() as i32 - 1;
+        let end_offset = self.text_end_offset();
+        let focus_offset = if focus_y < 0 || focus_x < 0 {
+            0
+        } else if focus_y > max_y {
+            end_offset
+        } else {
+            match self.coords_to_char_offset(focus_x, focus_y) {
+                Some(v) => v,
+                None => return false,
+            }
+        };
+        let new_start = anchor_offset.min(focus_offset);
+        let new_end = anchor_offset.max(focus_offset);
+        let changed = match self.selection {
+            Some(old) => old.start != new_start || old.end != new_end,
+            None => true,
+        };
+        self.selection = Some(Selection {
+            start: new_start,
+            end: new_end,
+            bg,
+            fg,
+        });
+        changed
+    }
+
+    pub fn reset_local_selection(&mut self) {
+        self.selection = None;
+        self.selection_anchor_offset = None;
     }
 }

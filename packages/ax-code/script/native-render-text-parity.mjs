@@ -226,6 +226,34 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
           rust.textBufferClearAllHighlights(rh)
         }
       }
+    } else if (op === 9 && rand() < 0.5) {
+      const kind = randInt(4)
+      if (kind === 0) {
+        const a = randInt(40), b = randInt(40)
+        opsLog.push(`sel(${a},${b})`)
+        zig.textBufferViewSetSelection(zView, a, b, 0, 0)
+        rust.textBufferViewSetSelection(rView, a, b, 0, 0)
+      } else if (kind === 1) {
+        const [ax, ay, fx, fy] = [randInt(30) - 5, randInt(8) - 2, randInt(30) - 5, randInt(8) - 2]
+        opsLog.push(`localSel(${ax},${ay},${fx},${fy})`)
+        const zr = zig.textBufferViewSetLocalSelection(zView, ax, ay, fx, fy, 0, 0)
+        const rr = rust.textBufferViewSetLocalSelection(rView, ax, ay, fx, fy, 0, 0)
+        if (Boolean(zr) !== Boolean(rr)) { opsLog.push(`RETDIFF z=${zr} r=${rr}`) }
+      } else if (kind === 2) {
+        const [fx, fy] = [randInt(30) - 5, randInt(8) - 2]
+        opsLog.push(`updLocalSel(${fx},${fy})`)
+        zig.textBufferViewUpdateLocalSelection(zView, 0, 0, fx, fy, 0, 0)
+        rust.textBufferViewUpdateLocalSelection(rView, 0, 0, fx, fy, 0, 0)
+      } else {
+        opsLog.push(rand() < 0.5 ? "resetSel" : "resetLocalSel")
+        if (opsLog[opsLog.length - 1] === "resetSel") {
+          zig.textBufferViewResetSelection(zView)
+          rust.textBufferViewResetSelection(rView)
+        } else {
+          zig.textBufferViewResetLocalSelection(zView)
+          rust.textBufferViewResetLocalSelection(rView)
+        }
+      }
     } else if (memIds.length > 0) {
       const id = memIds[randInt(memIds.length)]
       if (rand() < 0.5) {
@@ -263,6 +291,15 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
     rs.vlines = Number(rust.textBufferViewGetVirtualLineCount(rView))
     zs.lineInfo = lineInfo(zig, zView, true)
     rs.lineInfo = lineInfo(rust, rView, false)
+    zs.selInfo = String(zig.textBufferViewGetSelectionInfo(zView))
+    rs.selInfo = String(BigInt.asUintN(64, BigInt(rust.textBufferViewGetSelectionInfo(rView))))
+    {
+      const zOut = new Uint8Array(2048), rOut = new Uint8Array(2048)
+      const zl = Number(zig.textBufferViewGetSelectedText(zView, ptr(zOut), zOut.length))
+      const rl = Number(rust.textBufferViewGetSelectedText(rView, Number(ptr(rOut)), rOut.length))
+      zs.selText = Buffer.from(zOut.subarray(0, zl)).toString("hex")
+      rs.selText = Buffer.from(rOut.subarray(0, rl)).toString("hex")
+    }
     if (JSON.stringify(zs) !== JSON.stringify(rs)) {
       console.error(`✗ seq ${s} op ${i} [${opsLog[opsLog.length - 1]}]`)
       console.error(`  zig : ${JSON.stringify(zs)}`)

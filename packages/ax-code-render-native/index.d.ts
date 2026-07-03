@@ -210,9 +210,21 @@ export declare function textBufferViewGetLineInfoDirect(handle: number, outPtr: 
 
 export declare function textBufferViewGetPlainText(handle: number, outPtr: number, maxLen: number): number
 
+export declare function textBufferViewGetSelectedText(handle: number, outPtr: number, maxLen: number): number
+
+export declare function textBufferViewGetSelectionInfo(handle: number): number
+
 export declare function textBufferViewGetVirtualLineCount(handle: number): number
 
+export declare function textBufferViewResetLocalSelection(handle: number): void
+
+export declare function textBufferViewResetSelection(handle: number): void
+
 export declare function textBufferViewSetFirstLineOffset(handle: number, offset: number): void
+
+export declare function textBufferViewSetLocalSelection(handle: number, ax: number, ay: number, fx: number, fy: number, bg: number, fg: number): boolean
+
+export declare function textBufferViewSetSelection(handle: number, start: number, end: number, bg: number, fg: number): void
 
 export declare function textBufferViewSetViewport(handle: number, x: number, y: number, width: number, height: number): void
 
@@ -221,6 +233,10 @@ export declare function textBufferViewSetViewportSize(handle: number, width: num
 export declare function textBufferViewSetWrapMode(handle: number, mode: number): void
 
 export declare function textBufferViewSetWrapWidth(handle: number, width: number): void
+
+export declare function textBufferViewUpdateLocalSelection(handle: number, ax: number, ay: number, fx: number, fy: number, bg: number, fg: number): boolean
+
+export declare function textBufferViewUpdateSelection(handle: number, end: number, bg: number, fg: number): void
 
 export declare function yogaConfigCreate(): number
 
