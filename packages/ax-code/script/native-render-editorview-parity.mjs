@@ -11,6 +11,10 @@ import { createRequire } from "node:module"
 
 const require = createRequire(import.meta.url)
 const ffi = require("node:ffi")
+// ADR-046: the native-render overlay is ON BY DEFAULT; force the bundled Zig
+// library for this differential harness's reference side. require("@ax-code/render")
+// below still returns the raw Rust addon to compare against.
+process.env.AX_CODE_NATIVE_RENDER = "0"
 const { resolveRenderLib } = await import("@ax-code/opentui-core")
 const zig = resolveRenderLib().opentui.symbols
 

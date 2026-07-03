@@ -11880,17 +11880,22 @@ function ffiCellOrigin(x, y) {
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) return null;
   return { x, y };
 }
-// ax-code local fix (ADR-046 Phase 1): when AX_CODE_NATIVE_RENDER=1, route the
-// yoga/audio symbol families to the @ax-code/render napi addon (Rust, vendored
-// facebook/yoga v3.2.1 — the same tag the upstream Zig library pins). Load
-// failure falls back to the bundled Zig library silently, mirroring the
-// AX_CODE_NATIVE_* addon pattern. BigInt arguments (backend ptr()/callback
-// pointers) are narrowed to numbers — addresses stay below 2^53 so this is
-// exact — because the napi addon takes f64 parameters.
+// ax-code local fix (ADR-046): route the render pipeline (renderer/buffer/text/
+// edit/editor/feed/terminal families) plus yoga/audio to the @ax-code/render
+// napi addon (Rust, vendored facebook/yoga v3.2.1 — the same tag the upstream
+// Zig library pins). This is ON BY DEFAULT; AX_CODE_NATIVE_RENDER=0 (or off/
+// false) forces the bundled Zig library, and AX_CODE_NATIVE_RENDER_SCOPE=yoga
+// routes only yoga/audio. If the addon can't be loaded (JS-only install, unbuilt
+// dev checkout) it falls back to Zig silently. BigInt args (backend ptr()/
+// callback pointers) are narrowed to numbers — addresses stay below 2^53 so this
+// is exact — because the napi addon takes f64 parameters.
 var nativeRenderAddon;
 var nativeRenderAddonFailed = false;
 function applyNativeRenderOverlay(symbols) {
-  if (process.env.AX_CODE_NATIVE_RENDER !== "1" || nativeRenderAddonFailed) {
+  const flag = (process.env.AX_CODE_NATIVE_RENDER || "").toLowerCase();
+  const explicitlyOn = flag === "1" || flag === "true" || flag === "on";
+  const disabled = flag === "0" || flag === "false" || flag === "off";
+  if (disabled || nativeRenderAddonFailed) {
     return symbols;
   }
   if (!nativeRenderAddon) {
@@ -11898,10 +11903,15 @@ function applyNativeRenderOverlay(symbols) {
       nativeRenderAddon = requireModule("@ax-code/render");
     } catch (error) {
       nativeRenderAddonFailed = true;
-      console.warn(
-        "AX_CODE_NATIVE_RENDER=1 but @ax-code/render failed to load; falling back to the bundled native library:",
-        error instanceof Error ? error.message : error
-      );
+      // A missing addon is a valid state (JS-only install / unbuilt dev
+      // checkout) — fall back to Zig silently. Only warn when the user
+      // explicitly asked for the Rust core.
+      if (explicitlyOn) {
+        console.warn(
+          "AX_CODE_NATIVE_RENDER requested but @ax-code/render failed to load; falling back to the bundled native library:",
+          error instanceof Error ? error.message : error
+        );
+      }
       return symbols;
     }
   }

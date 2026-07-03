@@ -44,13 +44,20 @@ pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-
 
 The vendored core must also preserve the ADR-046 native-render overlay
 (`applyNativeRenderOverlay` in the main bundle, applied at the end of
-`getOpenTUILib`). With `AX_CODE_NATIVE_RENDER=1`, the ENTIRE render pipeline —
-the renderer, buffer, text-buffer/view, edit-buffer, editor-view,
-native-span-feed and terminal families, plus yoga and audio — routes to the
-`@ax-code/render` napi addon (Rust; yoga is vendored facebook/yoga v3.2.1, the
-same tag the upstream Zig build pins). Any load failure falls back to the
-bundled Zig library. `@ax-code/render` is declared as a workspace
-optionalDependency of this package.
+`getOpenTUILib`). **It is ON BY DEFAULT**: the ENTIRE render pipeline — the
+renderer, buffer, text-buffer/view, edit-buffer, editor-view, native-span-feed
+and terminal families, plus yoga and audio — routes to the `@ax-code/render`
+napi addon (Rust; yoga is vendored facebook/yoga v3.2.1, the same tag the
+upstream Zig build pins). If the addon can't be loaded (JS-only install, unbuilt
+dev checkout) it falls back to the bundled Zig library silently (a warning is
+printed only when `AX_CODE_NATIVE_RENDER=1` was set explicitly). `@ax-code/render`
+is declared as a workspace optionalDependency of this package and is built +
+shipped per platform by the release workflow.
+
+Switches (case-insensitive):
+- `AX_CODE_NATIVE_RENDER=0` (or `off`/`false`) — force the bundled Zig library.
+- `AX_CODE_NATIVE_RENDER_SCOPE=yoga` — route only yoga/audio to Rust; the render
+  pipeline stays on Zig (the Phase-1 behavior).
 
 The render families share a backend-specific handle registry, so they flip
 atomically (a Zig renderer handle can't be used by a Rust buffer call). The
@@ -59,18 +66,17 @@ args to 0, matching node:ffi's coercion for the Zig library. FFI boolean
 parameters use the numeric node:ffi convention (1/0), so the addon's few
 bool-argument symbols take f64.
 
-`AX_CODE_NATIVE_RENDER_SCOPE=yoga` is the escape hatch back to the Phase-1
-behavior — only the yoga/audio families route to Rust and the render pipeline
-stays on the bundled Zig library.
-
-Parity gate (all must byte-match):
+Parity gate (all must byte-match the committed goldens):
 
 ```sh
-pnpm --dir packages/ax-code run check:golden-frames                          # Zig baseline
-AX_CODE_NATIVE_RENDER=1 pnpm --dir packages/ax-code run check:golden-frames  # Rust FULL pipeline (default)
-AX_CODE_NATIVE_RENDER=1 AX_CODE_NATIVE_RENDER_SCOPE=yoga \
-  pnpm --dir packages/ax-code run check:golden-frames                        # Rust yoga/audio only
+AX_CODE_NATIVE_RENDER=0 pnpm --dir packages/ax-code run check:golden-frames    # bundled Zig (off-switch)
+pnpm --dir packages/ax-code run check:golden-frames                            # Rust FULL pipeline (default)
+AX_CODE_NATIVE_RENDER_SCOPE=yoga pnpm --dir packages/ax-code run check:golden-frames  # Rust yoga/audio only
 ```
+
+The differential `script/native-render-*-parity.mjs` harnesses set
+`AX_CODE_NATIVE_RENDER=0` themselves so their `resolveRenderLib()` reference side
+is the real Zig backend (they compare it against `require("@ax-code/render")`).
 
 ## Update Workflow
 

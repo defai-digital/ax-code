@@ -1136,6 +1136,49 @@ describe("file/index Filesystem patterns", () => {
     })
   })
 
+  describe("home directory scan", () => {
+    // Regression: launching a managed `ax-code serve` with cwd set to the user's
+    // home directory (as the desktop web UI does) must not trigger a full
+    // recursive walk of the entire home tree. A plain home directory has no
+    // `.git`, so it resolves to a directory-hash project id rather than the
+    // "global" id — the shallow scan must still apply based on the directory
+    // being home, not on the project id.
+    test("scans the home directory shallowly regardless of project id", async () => {
+      await using tmp = await tmpdir()
+      // Three directory levels deep — only reachable via a full recursive walk.
+      await fs.mkdir(path.join(tmp.path, "one", "two", "three"), { recursive: true })
+      await fs.writeFile(path.join(tmp.path, "one", "two", "three", "deep.txt"), "deep", "utf-8")
+      // Nested node_modules must be skipped by the shallow listing.
+      await fs.mkdir(path.join(tmp.path, "pkg", "node_modules", "left"), { recursive: true })
+
+      const previousTestHome = process.env.AX_CODE_TEST_HOME
+      process.env.AX_CODE_TEST_HOME = tmp.path
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            // Not a git repo → project id is a directory hash, not "global".
+            expect(Instance.project.id).not.toBe("global")
+
+            await File.init()
+            const dirs = await File.search({ query: "", type: "directory", limit: 1000 })
+
+            // Shallow: top level and one nested level are listed.
+            expect(dirs).toContain("one/")
+            expect(dirs).toContain("one/two/")
+            // But the third level is absent — proving no full recursive walk ran.
+            expect(dirs).not.toContain("one/two/three/")
+            // Nested node_modules is excluded from the shallow listing.
+            expect(dirs).not.toContain("pkg/node_modules/")
+          },
+        })
+      } finally {
+        if (previousTestHome === undefined) delete process.env.AX_CODE_TEST_HOME
+        else process.env.AX_CODE_TEST_HOME = previousTestHome
+      }
+    })
+  })
+
   describe("File.read() - diff/patch", () => {
     test("returns diff and patch for modified tracked file", async () => {
       await using tmp = await tmpdir({ git: true })

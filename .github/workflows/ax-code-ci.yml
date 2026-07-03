@@ -207,20 +207,21 @@ jobs:
       - name: Build @ax-code/render native addon
         run: pnpm run build:native render
 
-      - name: Golden frames (Zig baseline)
+      - name: Golden frames (Zig — off-switch, must byte-match)
+        # AX_CODE_NATIVE_RENDER=0 forces the bundled Zig library; this pins the
+        # committed goldens to Zig so the Rust-default run below is a real cross-
+        # check (both must match the same goldens => Rust == Zig).
+        env:
+          AX_CODE_NATIVE_RENDER: "0"
         run: pnpm --dir packages/ax-code run check:golden-frames
 
       - name: Golden frames (Rust FULL render pipeline — default, must byte-match)
-        # ADR-046 render-core gate: AX_CODE_NATIVE_RENDER=1 now routes the entire
-        # renderer/buffer/text/edit/editor/feed pipeline to the Rust addon by
-        # default and requires byte-identical frames.
-        env:
-          AX_CODE_NATIVE_RENDER: "1"
+        # ADR-046 render-core gate: the render pipeline now routes to the Rust
+        # addon BY DEFAULT (no env), so this is the path real users get.
         run: pnpm --dir packages/ax-code run check:golden-frames
 
       - name: Golden frames (Rust yoga/audio escape hatch, must byte-match)
         env:
-          AX_CODE_NATIVE_RENDER: "1"
           AX_CODE_NATIVE_RENDER_SCOPE: "yoga"
         run: pnpm --dir packages/ax-code run check:golden-frames
 

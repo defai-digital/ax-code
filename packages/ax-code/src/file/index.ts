@@ -411,10 +411,20 @@ export namespace File {
 
   async function scan() {
     if (Instance.directory === path.parse(Instance.directory).root) return
-    const isGlobalHome = Instance.directory === Global.Path.home && Instance.project.id === "global"
+    // The home directory is never a sensible target for a full recursive file
+    // index: it spans ~/Library, caches, and countless nested node_modules. The
+    // full-scan branch below walks the whole tree synchronously via the native
+    // Ripgrep walker, which can block the event loop for tens of seconds (e.g.
+    // when the desktop web UI launches a managed `ax-code serve` with cwd set to
+    // the user's home). Trigger the shallow two-level listing whenever the
+    // instance directory IS the home directory, regardless of how the project id
+    // resolved — a plain home directory without a `.git` gets a directory-hash
+    // id rather than the "global" id, so gating on the id let the expensive path
+    // through and stalled startup.
+    const isHomeDirectory = Instance.directory === Global.Path.home
     const next: Entry = { files: [], dirs: [] }
 
-    if (isGlobalHome) {
+    if (isHomeDirectory) {
       const dirs = new Set<string>()
       const protectedNames = Protected.names()
       const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
