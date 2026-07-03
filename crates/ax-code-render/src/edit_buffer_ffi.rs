@@ -418,14 +418,19 @@ pub fn edit_buffer_get_text_range_by_coords(
     copy as u32
 }
 
-// Alternate mem-buffer input paths (set/replace the whole document from a
-// registered mem id) are a documented follow-up — they need the mem-registry
-// read plumbing; accepted as no-ops so callers don't fail.
 #[napi(js_name = "editBufferSetTextFromMem")]
-pub fn edit_buffer_set_text_from_mem(_handle: u32, _mem_id: u32) {}
+pub fn edit_buffer_set_text_from_mem(handle: u32, mem_id: u32) {
+    if let Some(eb) = resolve(handle) {
+        eb.set_text_from_mem(mem_id as u8);
+    }
+}
 
 #[napi(js_name = "editBufferReplaceTextFromMem")]
-pub fn edit_buffer_replace_text_from_mem(_handle: u32, _mem_id: u32) {}
+pub fn edit_buffer_replace_text_from_mem(handle: u32, mem_id: u32) {
+    if let Some(eb) = resolve(handle) {
+        eb.replace_text_from_mem(mem_id as u8);
+    }
+}
 
 #[napi(js_name = "editBufferDebugLogRope")]
 pub fn edit_buffer_debug_log_rope(_handle: u32) {}

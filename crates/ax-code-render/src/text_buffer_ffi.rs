@@ -491,8 +491,23 @@ pub fn text_buffer_set_syntax_style(handle: u32, style_handle: u32) -> bool {
 }
 
 #[napi(js_name = "textBufferLoadFile")]
-pub fn text_buffer_load_file(_handle: u32, _path_ptr: f64, _path_len: u32) -> bool {
-    // File loading (read + styled set) is a documented follow-up; the TUI feeds
-    // text buffers through setStyledText/setText rather than this path.
-    false
+pub fn text_buffer_load_file(handle: u32, path_ptr: f64, path_len: u32) -> bool {
+    let Some(tb) = resolve(handle) else {
+        return false;
+    };
+    if path_ptr == 0.0 || path_len == 0 {
+        return false;
+    }
+    let bytes = unsafe {
+        std::slice::from_raw_parts((path_ptr as u64) as usize as *const u8, path_len as usize)
+    };
+    let Ok(path) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let Ok(contents) = std::fs::read(path) else {
+        return false;
+    };
+    let len = contents.len();
+    tb.set_text(crate::mem_registry::MemBuffer::Owned(contents), len)
+        .is_some()
 }

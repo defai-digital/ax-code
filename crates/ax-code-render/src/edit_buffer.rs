@@ -479,6 +479,27 @@ impl EditBuffer {
         self.set_cursor(0, 0);
     }
 
+    /// Zig `setTextFromMemId` — rebuild the document from a previously
+    /// registered mem buffer, clearing undo history and resetting the cursor.
+    /// Only the add-buffer length is reset (Zig `add_buffer.len = 0`); the
+    /// registry must NOT be cleared here — it holds the mem_id being loaded.
+    pub fn set_text_from_mem(&mut self, mem_id: u8) -> bool {
+        self.tb.rope.clear_history();
+        self.add_len = 0;
+        let ok = self.tb.set_text_from_mem(mem_id);
+        self.set_cursor(0, 0);
+        ok
+    }
+
+    /// Zig `replaceTextFromMemId` — like set_text_from_mem but stores an undo
+    /// entry instead of clearing history.
+    pub fn replace_text_from_mem(&mut self, mem_id: u8) -> bool {
+        self.auto_store_undo();
+        let ok = self.tb.set_text_from_mem(mem_id);
+        self.set_cursor(0, 0);
+        ok
+    }
+
     pub fn get_text(&self) -> Vec<u8> {
         self.tb.plain_text()
     }
