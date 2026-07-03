@@ -273,14 +273,14 @@ pub fn buffer_write_resolved_chars(
     handle: u32,
     output_ptr: f64,
     output_len: u32,
-    add_line_breaks: bool,
+    add_line_breaks: f64,
 ) -> u32 {
     let Some(buf) = resolve(handle) else { return 0 };
     if output_len == 0 || output_ptr == 0.0 {
         return 0;
     }
     let mut resolved = Vec::new();
-    buf.write_resolved_chars(&mut global_pool(), &mut resolved, add_line_breaks);
+    buf.write_resolved_chars(&mut global_pool(), &mut resolved, add_line_breaks != 0.0);
     if resolved.len() > output_len as usize {
         return 0; // Zig: BufferTooSmall -> catch 0 in the export glue
     }

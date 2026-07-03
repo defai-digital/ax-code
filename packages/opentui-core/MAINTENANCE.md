@@ -48,11 +48,24 @@ The vendored core must also preserve the ADR-046 native-render overlay
 families route to the `@ax-code/render` napi addon (Rust, vendored
 facebook/yoga v3.2.1 — the same tag the upstream Zig build pins); any load
 failure falls back to the bundled Zig library. `@ax-code/render` is declared
-as a workspace optionalDependency of this package. Parity gate:
+as a workspace optionalDependency of this package.
+
+`AX_CODE_NATIVE_RENDER_SCOPE=full` additionally routes the ENTIRE render
+pipeline — the renderer, buffer, text-buffer/view, edit-buffer, editor-view,
+native-span-feed and terminal families — to the Rust addon. The render families
+share a backend-specific handle registry, so they flip atomically (a Zig
+renderer handle can't be used by a Rust buffer call). The overlay bridge narrows
+BigInt pointer args to Number and null/undefined pointer args to 0, matching
+node:ffi's coercion for the Zig library. FFI boolean parameters use the numeric
+node:ffi convention (1/0), so the addon's few bool-argument symbols take f64.
+
+Parity gate (all three must byte-match):
 
 ```sh
 pnpm --dir packages/ax-code run check:golden-frames                          # Zig baseline
-AX_CODE_NATIVE_RENDER=1 pnpm --dir packages/ax-code run check:golden-frames  # Rust overlay, must byte-match
+AX_CODE_NATIVE_RENDER=1 pnpm --dir packages/ax-code run check:golden-frames  # Rust yoga/audio overlay
+AX_CODE_NATIVE_RENDER=1 AX_CODE_NATIVE_RENDER_SCOPE=full \
+  pnpm --dir packages/ax-code run check:golden-frames                        # Rust FULL render pipeline
 ```
 
 ## Update Workflow

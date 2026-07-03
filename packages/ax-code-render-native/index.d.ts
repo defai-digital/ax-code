@@ -125,7 +125,7 @@ export declare function bufferSetCellWithAlphaBlending(handle: number, x: number
 
 export declare function bufferSetRespectAlpha(handle: number, respectAlpha: number): void
 
-export declare function bufferWriteResolvedChars(handle: number, outputPtr: number, outputLen: number, addLineBreaks: boolean): number
+export declare function bufferWriteResolvedChars(handle: number, outputPtr: number, outputLen: number, addLineBreaks: number): number
 
 export declare function checkHit(handle: number, x: number, y: number): number
 
@@ -518,11 +518,11 @@ export declare function textBufferGetTextRangeByCoords(handle: number, startRow:
 
 export declare function textBufferLoadFile(handle: number, pathPtr: number, pathLen: number): boolean
 
-export declare function textBufferRegisterMemBuffer(handle: number, dataPtr: number, dataLen: number, owned: boolean): number
+export declare function textBufferRegisterMemBuffer(handle: number, dataPtr: number, dataLen: number, owned: number): number
 
 export declare function textBufferRemoveHighlightsByRef(handle: number, hlRef: number): void
 
-export declare function textBufferReplaceMemBuffer(handle: number, id: number, dataPtr: number, dataLen: number, owned: boolean): boolean
+export declare function textBufferReplaceMemBuffer(handle: number, id: number, dataPtr: number, dataLen: number, owned: number): boolean
 
 export declare function textBufferReset(handle: number): void
 

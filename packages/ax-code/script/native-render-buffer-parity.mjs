@@ -92,7 +92,7 @@ function compare(zh, rh, w, h, tag, opsLog) {
   const zOut = new Uint8Array(n * 130)
   const rOut = new Uint8Array(n * 130)
   const zLen = zig.bufferWriteResolvedChars(zh, ptr(zOut), zOut.length, 1)
-  const rLen = rust.bufferWriteResolvedChars(rh, Number(ptr(rOut)), rOut.length, true)
+  const rLen = rust.bufferWriteResolvedChars(rh, Number(ptr(rOut)), rOut.length, 1)
   const zText = Buffer.from(zOut.subarray(0, Number(zLen))).toString("hex")
   const rText = Buffer.from(rOut.subarray(0, Number(rLen))).toString("hex")
   if (zText !== rText) return fail(`resolved chars differ\n  zig : ${zText.slice(0, 160)}\n  rust: ${rText.slice(0, 160)}`)

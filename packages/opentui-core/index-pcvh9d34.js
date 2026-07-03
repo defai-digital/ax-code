@@ -11906,10 +11906,24 @@ function applyNativeRenderOverlay(symbols) {
     }
   }
   const addon = nativeRenderAddon;
-  const bridge = (fn) => (...args) => fn(...args.map((arg) => typeof arg === "bigint" ? Number(arg) : arg));
+  // Narrow FFI args to what the napi addon accepts: BigInt pointers -> Number
+  // (addresses stay < 2^53), and null/undefined pointer args -> 0 (a null
+  // pointer). node:ffi coerces null to a null ptr for the Zig library, so the
+  // Rust addon must see the same 0 rather than reject Null as a non-f64.
+  const bridge = (fn) => (...args) =>
+    fn(...args.map((arg) => (typeof arg === "bigint" ? Number(arg) : arg == null ? 0 : arg)));
   const overlaid = { ...symbols };
+  // ADR-046 integration: AX_CODE_NATIVE_RENDER_SCOPE=full routes the ENTIRE
+  // render pipeline (renderer/buffer/text/edit/editor/feed/terminal families) to
+  // the Rust addon, not just yoga/audio. The render families share a
+  // backend-specific handle registry, so they must flip atomically — a Zig
+  // renderer handle can't be used by a Rust buffer call. Default scope ("yoga")
+  // keeps the Phase-1 behavior; "full" is validated by check:golden-frames before
+  // promotion.
+  const routeAll = process.env.AX_CODE_NATIVE_RENDER_SCOPE === "full";
   for (const key of Object.keys(overlaid)) {
-    const isOverlayFamily = key.startsWith("yoga") || key.startsWith("audio") || key === "createAudioEngine" || key === "destroyAudioEngine";
+    const isOverlayFamily =
+      routeAll || key.startsWith("yoga") || key.startsWith("audio") || key === "createAudioEngine" || key === "destroyAudioEngine";
     if (isOverlayFamily && typeof addon[key] === "function") {
       overlaid[key] = bridge(addon[key]);
     }

@@ -199,7 +199,7 @@ for (let s = 0; s < SEQUENCES; s++) {
   const zOut = new Uint8Array(n * 130)
   const rOut = new Uint8Array(n * 130)
   const zLen = zig.bufferWriteResolvedChars(zbuf, ptr(zOut), zOut.length, 1)
-  const rLen = rust.bufferWriteResolvedChars(rbuf, Number(ptr(rOut)), rOut.length, true)
+  const rLen = rust.bufferWriteResolvedChars(rbuf, Number(ptr(rOut)), rOut.length, 1)
   const zText = Buffer.from(zOut.subarray(0, Number(zLen))).toString("hex")
   const rText = Buffer.from(rOut.subarray(0, Number(rLen))).toString("hex")
 

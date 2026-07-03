@@ -210,9 +210,17 @@ jobs:
       - name: Golden frames (Zig baseline)
         run: pnpm --dir packages/ax-code run check:golden-frames
 
-      - name: Golden frames (Rust overlay, must byte-match)
+      - name: Golden frames (Rust yoga/audio overlay, must byte-match)
         env:
           AX_CODE_NATIVE_RENDER: "1"
+        run: pnpm --dir packages/ax-code run check:golden-frames
+
+      - name: Golden frames (Rust FULL render pipeline, must byte-match)
+        # ADR-046 render-core gate: routes the entire renderer/buffer/text/edit/
+        # editor/feed pipeline to the Rust addon and requires byte-identical frames.
+        env:
+          AX_CODE_NATIVE_RENDER: "1"
+          AX_CODE_NATIVE_RENDER_SCOPE: "full"
         run: pnpm --dir packages/ax-code run check:golden-frames
 
       - name: Yoga + unicode parity regression

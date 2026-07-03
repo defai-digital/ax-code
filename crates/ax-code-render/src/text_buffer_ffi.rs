@@ -156,8 +156,9 @@ pub fn text_buffer_register_mem_buffer(
     handle: u32,
     data_ptr: f64,
     data_len: u32,
-    owned: bool,
+    owned: f64,
 ) -> u32 {
+    let owned = owned != 0.0;
     let Some(tb) = resolve(handle) else {
         return 0xFFFF;
     };
@@ -188,8 +189,9 @@ pub fn text_buffer_replace_mem_buffer(
     id: u32,
     data_ptr: f64,
     data_len: u32,
-    owned: bool,
+    owned: f64,
 ) -> bool {
+    let owned = owned != 0.0;
     let Some(tb) = resolve(handle) else {
         return false;
     };

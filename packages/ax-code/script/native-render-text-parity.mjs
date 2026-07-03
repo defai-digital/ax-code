@@ -195,7 +195,7 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
     } else if (op === 8) {
       const text = encode(TEXTS[randInt(TEXTS.length)])
       const zid = Number(zig.textBufferRegisterMemBuffer(zh, ptr(text), text.length, 0))
-      const rid = Number(rust.textBufferRegisterMemBuffer(rh, Number(ptr(text)), text.length, false))
+      const rid = Number(rust.textBufferRegisterMemBuffer(rh, Number(ptr(text)), text.length, 0))
       opsLog.push(`regMem(z=${zid},r=${rid})`)
       if (zid !== rid) {
         console.error(`✗ seq ${s}: mem id divergence z=${zid} r=${rid}\n  ops: ${opsLog.join(" | ")}`)
