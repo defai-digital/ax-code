@@ -78,3 +78,6 @@ planning/
 
 # Apple signing/notarization creds (local only)
 desktop/.env.local
+
+# ADR-046 renderer parity harness scratch output
+buffer_dump/
