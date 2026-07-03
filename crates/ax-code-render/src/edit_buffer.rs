@@ -194,7 +194,12 @@ impl EditBuffer {
         }
         self.auto_store_undo();
         let cursor = self.cursor;
-        let insert_offset = self.coords_to_offset(cursor.row, cursor.col);
+        // Zig: coordsToOffset ... orelse return InvalidCursor. An invalid cursor
+        // aborts the insert — it must NOT fall back to offset 0 (which would
+        // splice the text at the buffer start).
+        let Some(insert_offset) = self.tb.coords_to_offset(cursor.row, cursor.col) else {
+            return;
+        };
         let (mem_id, base_start) = self.add_buffer_append(bytes);
         let segments = self.tb.text_to_segments(bytes, mem_id, base_start, false);
 

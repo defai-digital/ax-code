@@ -283,6 +283,12 @@ impl RopeItem for Segment {
                 l.byte_start,
                 r.byte_end,
                 l.width.saturating_add(r.width),
+                // Zig keeps the LEFT chunk's flags verbatim (flags = left.flags),
+                // which can leave ASCII_ONLY set over non-ASCII bytes. Mirroring
+                // that exactly would need byte-oriented (non-str) width/grapheme
+                // paths everywhere to avoid UTF-8-boundary panics; until that
+                // lands we AND the flags (correct ASCII-ness), which only
+                // differs from the reference in rare merge-of-mixed-chunks cases.
                 l.flags & r.flags,
             )),
             _ => left.clone(),
