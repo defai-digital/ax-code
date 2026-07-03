@@ -573,6 +573,76 @@ impl TextBuffer {
             .get(line_idx)
             .map_or(&[], |l| l.as_slice())
     }
+    /// Chunk refs + widths for one logical line, in rope order (view support).
+    pub fn line_chunks(&self, row: u32) -> Vec<(crate::text_buffer_view::ChunkRef, u32)> {
+        let mut out = Vec::new();
+        let mut line: u32 = 0;
+        self.rope.walk(&mut |segment, _| {
+            match segment {
+                Segment::LineStart => {}
+                Segment::Brk => line += 1,
+                Segment::Text(chunk) => {
+                    if line == row {
+                        out.push((
+                            crate::text_buffer_view::ChunkRef {
+                                mem_id: chunk.mem_id,
+                                byte_start: chunk.byte_start,
+                                byte_end: chunk.byte_end,
+                                flags: chunk.flags,
+                            },
+                            chunk.width as u32,
+                        ));
+                    }
+                }
+            }
+            line <= row
+        });
+        out
+    }
+
+    /// Chunk refs + width + bytes + grapheme table + wrap offsets for one line
+    /// (the wrap engine's working set).
+    #[allow(clippy::type_complexity)]
+    pub fn line_chunks_full(
+        &mut self,
+        row: u32,
+    ) -> Vec<(
+        crate::text_buffer_view::ChunkRef,
+        u32,
+        Vec<u8>,
+        std::rc::Rc<Vec<crate::unicode::GraphemeInfo>>,
+        std::rc::Rc<Vec<crate::unicode::WordWrapBreak>>,
+    )> {
+        let tab_width = self.tab_width;
+        let method = self.width_method;
+        let mut out = Vec::new();
+        let mut line: u32 = 0;
+        let registry = &self.registry;
+        self.rope.walk(&mut |segment, _| {
+            match segment {
+                Segment::LineStart => {}
+                Segment::Brk => line += 1,
+                Segment::Text(chunk) => {
+                    if line == row {
+                        out.push((
+                            crate::text_buffer_view::ChunkRef {
+                                mem_id: chunk.mem_id,
+                                byte_start: chunk.byte_start,
+                                byte_end: chunk.byte_end,
+                                flags: chunk.flags,
+                            },
+                            chunk.width as u32,
+                            chunk.bytes(registry).to_vec(),
+                            chunk.graphemes(registry, tab_width, method),
+                            chunk.wrap_offsets(registry),
+                        ));
+                    }
+                }
+            }
+            line <= row
+        });
+        out
+    }
 }
 
 #[cfg(test)]

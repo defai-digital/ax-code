@@ -140,6 +140,19 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
     rust.textBufferViewSetViewport(rView, vx, vy, vw, vh)
   }
   if (rand() < 0.6) {
+    const mode = 1 + randInt(2) // char | word
+    const width = 2 + randInt(20)
+    zig.textBufferViewSetWrapMode(zView, mode)
+    rust.textBufferViewSetWrapMode(rView, mode)
+    zig.textBufferViewSetWrapWidth(zView, width)
+    rust.textBufferViewSetWrapWidth(rView, width)
+    if (rand() < 0.3) {
+      const flo = randInt(10)
+      zig.textBufferViewSetFirstLineOffset(zView, flo)
+      rust.textBufferViewSetFirstLineOffset(rView, flo)
+    }
+  }
+  if (rand() < 0.6) {
     zig.textBufferSetSyntaxStyle(zh, zStyle)
     rust.textBufferSetSyntaxStyle(rh, rStyle)
   }

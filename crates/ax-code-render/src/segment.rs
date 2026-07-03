@@ -10,7 +10,9 @@
 
 use crate::mem_registry::MemRegistry;
 use crate::rope::RopeItem;
-use crate::unicode::{GraphemeInfo, WidthMethod, WrapBreak, find_grapheme_info, find_line_breaks};
+use crate::unicode::{
+    GraphemeInfo, WidthMethod, WordWrapBreak, find_grapheme_info, find_word_wrap_breaks,
+};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -48,7 +50,7 @@ pub struct TextChunk {
     pub width: u16,
     pub flags: u8,
     graphemes: RefCell<Option<Rc<Vec<GraphemeInfo>>>>,
-    wrap_offsets: RefCell<Option<Rc<Vec<WrapBreak>>>>,
+    wrap_offsets: RefCell<Option<Rc<Vec<WordWrapBreak>>>>,
 }
 
 impl Clone for TextChunk {
@@ -123,15 +125,13 @@ impl TextChunk {
         computed
     }
 
-    /// Lazily computed newline positions within the chunk. NOTE: the Zig
-    /// reference caches word-wrap boundaries here (findWrapBreaks) — that
-    /// scanner lands with the view in C5; line breaks are a placeholder.
-    pub fn wrap_offsets(&self, registry: &MemRegistry) -> Rc<Vec<WrapBreak>> {
+    /// Lazily computed word-wrap break opportunities (Zig findWrapBreaks).
+    pub fn wrap_offsets(&self, registry: &MemRegistry) -> Rc<Vec<WordWrapBreak>> {
         if let Some(cached) = self.wrap_offsets.borrow().as_ref() {
             return cached.clone();
         }
         let bytes = self.bytes(registry);
-        let computed = Rc::new(find_line_breaks(bytes));
+        let computed = Rc::new(find_word_wrap_breaks(bytes));
         *self.wrap_offsets.borrow_mut() = Some(computed.clone());
         computed
     }
@@ -384,12 +384,15 @@ mod tests {
 
     #[test]
     fn wrap_offsets_cache() {
-        let (reg, id) = registry_with("a\nb\r\nc\rd");
-        let c = TextChunk::new(id, 0, 8, 4, 0);
+        let (reg, id) = registry_with("foo bar-baz\u{3000}end");
+        let c = TextChunk::new(id, 0, 17, 16, 0);
         let breaks = c.wrap_offsets(&reg);
-        let kinds: Vec<_> = breaks.iter().map(|b| (b.pos, b.kind)).collect();
-        use crate::unicode::LineBreakKind::*;
-        assert_eq!(kinds, vec![(1, Lf), (4, Crlf), (6, Cr)]);
+        let got: Vec<_> = breaks
+            .iter()
+            .map(|b| (b.byte_offset, b.char_offset))
+            .collect();
+        // delimiters: ' '@3, '-'@7; ideographic space U+3000 @11 (char 11)
+        assert_eq!(got, vec![(3, 3), (7, 7), (11, 11)]);
     }
 
     #[test]

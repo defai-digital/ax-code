@@ -21,8 +21,33 @@ pub struct Viewport {
     pub height: u32,
 }
 
+#[derive(Clone, Copy)]
+pub struct ChunkRef {
+    pub mem_id: u8,
+    pub byte_start: u32,
+    pub byte_end: u32,
+    pub flags: u8,
+}
+
+#[derive(Clone, Copy)]
+pub struct VirtualChunk {
+    pub grapheme_start: u32, // column offset into the source chunk
+    pub width: u32,
+    pub chunk: ChunkRef,
+}
+
+#[derive(Clone, Default)]
+pub struct VirtualLine {
+    pub chunks: Vec<VirtualChunk>,
+    pub width_cols: u32,
+    pub col_offset: u32,
+    pub source_line: u32,
+    pub source_col_offset: u32,
+}
+
 #[derive(Default)]
 pub struct VirtualLineCaches {
+    pub vlines: Vec<VirtualLine>,
     pub starts: Vec<u32>,
     pub widths: Vec<u32>,
     pub sources: Vec<u32>,
@@ -137,15 +162,372 @@ impl TextBufferView {
                 let idx = self.caches.starts.len() as u32;
                 self.caches.first_vline.push(idx);
                 self.caches.vline_counts.push(1);
+                let mut vline = VirtualLine {
+                    width_cols: width,
+                    col_offset,
+                    source_line: row,
+                    source_col_offset: 0,
+                    chunks: Vec::new(),
+                };
+                Self::collect_line_chunks(tb, row, &mut vline.chunks);
                 self.caches.starts.push(col_offset);
                 self.caches.widths.push(width);
                 self.caches.sources.push(row);
                 self.caches.wrap_indices.push(0);
+                self.caches.vlines.push(vline);
                 col_offset += width + 1; // weight space: the break costs 1
             }
+        } else {
+            self.wrap_virtual_lines(tb);
         }
-        // char/word wrap: later tranche
         self.dirty = false;
+    }
+
+    fn collect_line_chunks(tb: &mut TextBuffer, row: u32, out: &mut Vec<VirtualChunk>) {
+        for (chunk_ref, width) in tb.line_chunks(row) {
+            out.push(VirtualChunk {
+                grapheme_start: 0,
+                width,
+                chunk: chunk_ref,
+            });
+        }
+    }
+
+    /// Faithful port of the Zig wrap engine (WrapContext): word mode backtracks
+    /// to the last recorded wrap opportunity (possibly splitting a virtual
+    /// chunk); char mode fits whole clusters per line with force-splits for
+    /// oversize clusters at column 0.
+    fn wrap_virtual_lines(&mut self, tb: &mut TextBuffer) {
+        struct Wctx {
+            out: VirtualLineCaches,
+            wrap_w: u32,
+            first_line_offset: u32,
+            first_line_pending: bool,
+            global_char_offset: u32,
+            line_idx: u32,
+            line_col_offset: u32,
+            line_position: u32,
+            current: VirtualLine,
+            current_line_first_vline_idx: u32,
+            current_line_vline_count: u32,
+            last_wrap_chunk_count: u32,
+            last_wrap_line_position: u32,
+            last_wrap_global_offset: u32,
+        }
+        impl Wctx {
+            fn line_wrap_width(&self) -> u32 {
+                if !self.first_line_pending
+                    || self.first_line_offset == 0
+                    || self.first_line_offset >= self.wrap_w
+                {
+                    self.wrap_w
+                } else {
+                    self.wrap_w - self.first_line_offset
+                }
+            }
+            fn commit(&mut self) {
+                self.current.width_cols = self.line_position;
+                self.current.source_line = self.line_idx;
+                self.current.source_col_offset = self.line_col_offset;
+                let v = std::mem::take(&mut self.current);
+                self.out.starts.push(v.col_offset);
+                self.out.widths.push(v.width_cols);
+                self.out.sources.push(self.line_idx);
+                self.out.wrap_indices.push(self.current_line_vline_count);
+                self.out.vlines.push(v);
+                self.current_line_vline_count += 1;
+                self.line_col_offset += self.line_position;
+                self.current = VirtualLine {
+                    col_offset: self.global_char_offset,
+                    ..Default::default()
+                };
+                self.line_position = 0;
+                self.first_line_pending = false;
+                self.last_wrap_chunk_count = 0;
+                self.last_wrap_line_position = 0;
+                self.last_wrap_global_offset = 0;
+            }
+            fn add_chunk(&mut self, chunk: ChunkRef, start: u32, width: u32) {
+                self.current.chunks.push(VirtualChunk {
+                    grapheme_start: start,
+                    width,
+                    chunk,
+                });
+                self.global_char_offset += width;
+                self.line_position += width;
+            }
+        }
+        let wrap_w = self.wrap_width.unwrap_or(0);
+        let mut w = Wctx {
+            out: VirtualLineCaches::default(),
+            wrap_w,
+            first_line_offset: self.first_line_offset,
+            first_line_pending: self.first_line_offset > 0,
+            global_char_offset: 0,
+            line_idx: 0,
+            line_col_offset: 0,
+            line_position: 0,
+            current: VirtualLine::default(),
+            current_line_first_vline_idx: 0,
+            current_line_vline_count: 0,
+            last_wrap_chunk_count: 0,
+            last_wrap_line_position: 0,
+            last_wrap_global_offset: 0,
+        };
+        let tab_width = tb.tab_width;
+        let method = tb.width_method;
+        let is_word = self.wrap_mode == WrapMode::Word;
+        let line_count = tb.get_line_count();
+        for row in 0..line_count {
+            let chunks = tb.line_chunks_full(row);
+            for (chunk_ref, chunk_width, bytes, graphemes, wrap_offsets) in &chunks {
+                let chunk_bytes: &[u8] = bytes;
+                let is_ascii = (chunk_ref.flags & crate::segment::FLAG_ASCII_ONLY) != 0;
+                if is_word {
+                    let mut grapheme_idx: usize = 0;
+                    let mut col_delta: i64 = 0;
+                    let mut char_offset: u32 = 0;
+                    let mut byte_offset: u32 = 0;
+                    let mut wrap_idx: usize = 0;
+                    while char_offset < *chunk_width {
+                        let line_wrap_w = w.line_wrap_width();
+                        let remaining_in_chunk = *chunk_width - char_offset;
+                        let remaining_on_line = line_wrap_w.saturating_sub(w.line_position);
+                        let mut last_wrap_that_fits: Option<u32> = None;
+                        let mut saved_wrap_idx = wrap_idx;
+                        while wrap_idx < wrap_offsets.len() {
+                            let wb = wrap_offsets[wrap_idx];
+                            let (break_col, break_width) = crate::unicode::char_offset_to_column(
+                                wb.char_offset,
+                                graphemes,
+                                &mut grapheme_idx,
+                                &mut col_delta,
+                            );
+                            if break_col < char_offset {
+                                wrap_idx += 1;
+                                continue;
+                            }
+                            let width_to_boundary = break_col - char_offset + break_width;
+                            if width_to_boundary > remaining_on_line
+                                || width_to_boundary > remaining_in_chunk
+                            {
+                                break;
+                            }
+                            last_wrap_that_fits = Some(width_to_boundary);
+                            saved_wrap_idx = wrap_idx + 1;
+                            wrap_idx += 1;
+                        }
+                        wrap_idx = saved_wrap_idx;
+                        let mut to_add: u32 = 0;
+                        let mut has_wrap_after = false;
+                        if remaining_in_chunk <= remaining_on_line {
+                            if let Some(boundary_w) = last_wrap_that_fits {
+                                let would_fill =
+                                    w.line_position + remaining_in_chunk >= line_wrap_w;
+                                if would_fill && boundary_w < remaining_in_chunk {
+                                    to_add = boundary_w;
+                                } else {
+                                    to_add = remaining_in_chunk;
+                                }
+                                has_wrap_after = true;
+                            } else {
+                                to_add = remaining_in_chunk;
+                            }
+                        } else if let Some(boundary_w) = last_wrap_that_fits {
+                            to_add = boundary_w;
+                            has_wrap_after = true;
+                        } else if w.line_position == 0 {
+                            let remaining = &chunk_bytes[byte_offset as usize..];
+                            let r = crate::unicode::find_wrap_pos_by_width(
+                                remaining,
+                                remaining_on_line,
+                                tab_width,
+                                is_ascii,
+                                method,
+                            );
+                            to_add = r.columns_used;
+                            byte_offset += r.byte_offset;
+                            if to_add == 0 {
+                                to_add = 1;
+                                let single = crate::unicode::find_wrap_pos_by_width(
+                                    remaining, 1, tab_width, is_ascii, method,
+                                );
+                                byte_offset += single.byte_offset;
+                            }
+                        } else if w.last_wrap_chunk_count > 0
+                            && w.last_wrap_chunk_count as usize <= w.current.chunks.len()
+                        {
+                            // backtrack: move everything after the last wrap point to a new line
+                            let lw_count = w.last_wrap_chunk_count as usize;
+                            let mut accumulated: u32 =
+                                w.current.chunks[..lw_count].iter().map(|c| c.width).sum();
+                            let mut saved: Vec<VirtualChunk> = Vec::new();
+                            if accumulated > w.last_wrap_line_position {
+                                let last = w.current.chunks[lw_count - 1];
+                                let overhang = accumulated - w.last_wrap_line_position;
+                                saved.push(VirtualChunk {
+                                    grapheme_start: last.grapheme_start + last.width - overhang,
+                                    width: overhang,
+                                    chunk: last.chunk,
+                                });
+                                w.current.chunks[lw_count - 1].width -= overhang;
+                                accumulated -= overhang;
+                            }
+                            let _ = accumulated;
+                            saved.extend_from_slice(&w.current.chunks[lw_count..]);
+                            w.line_position = w.last_wrap_line_position;
+                            w.global_char_offset = w.last_wrap_global_offset;
+                            w.current.chunks.truncate(lw_count);
+                            w.commit();
+                            for vc in saved {
+                                w.current.chunks.push(vc);
+                                w.global_char_offset += vc.width;
+                                w.line_position += vc.width;
+                            }
+                            continue;
+                        } else {
+                            w.commit();
+                            if char_offset > 0 {
+                                let pr = crate::unicode::find_pos_by_width(
+                                    std::str::from_utf8(chunk_bytes).unwrap_or(""),
+                                    char_offset,
+                                    tab_width,
+                                    is_ascii,
+                                    false,
+                                    method,
+                                );
+                                byte_offset = pr.byte_offset;
+                            }
+                            let remaining = &chunk_bytes[byte_offset as usize..];
+                            let r = crate::unicode::find_wrap_pos_by_width(
+                                remaining,
+                                w.line_wrap_width(),
+                                tab_width,
+                                is_ascii,
+                                method,
+                            );
+                            to_add = r.columns_used;
+                            byte_offset += r.byte_offset;
+                            if to_add == 0 {
+                                to_add = 1;
+                                let single = crate::unicode::find_wrap_pos_by_width(
+                                    remaining, 1, tab_width, is_ascii, method,
+                                );
+                                byte_offset += single.byte_offset;
+                            }
+                        }
+                        if to_add > 0 {
+                            let position_before = w.line_position;
+                            let offset_before = w.global_char_offset;
+                            w.add_chunk(*chunk_ref, char_offset, to_add);
+                            char_offset += to_add;
+                            if has_wrap_after {
+                                let wrap_pos_in_added =
+                                    last_wrap_that_fits.map_or(to_add, |b| b.min(to_add));
+                                w.last_wrap_chunk_count = w.current.chunks.len() as u32;
+                                w.last_wrap_line_position = position_before + wrap_pos_in_added;
+                                w.last_wrap_global_offset = offset_before + wrap_pos_in_added;
+                            }
+                            if w.line_position >= line_wrap_w
+                                && char_offset < *chunk_width
+                                && (has_wrap_after || w.last_wrap_chunk_count > 0)
+                            {
+                                w.commit();
+                            }
+                        }
+                    }
+                } else {
+                    // char wrap
+                    let mut byte_offset: usize = 0;
+                    let mut char_offset: u32 = 0;
+                    while char_offset < *chunk_width {
+                        let line_wrap_w = w.line_wrap_width();
+                        let remaining_width = line_wrap_w.saturating_sub(w.line_position);
+                        if remaining_width == 0 {
+                            if w.line_position > 0 {
+                                w.commit();
+                                continue;
+                            }
+                            let remaining = &chunk_bytes[byte_offset..];
+                            let force = crate::unicode::find_wrap_pos_by_width(
+                                remaining, 1, tab_width, is_ascii, method,
+                            );
+                            if force.grapheme_count > 0 {
+                                w.add_chunk(*chunk_ref, char_offset, force.columns_used);
+                                char_offset += force.columns_used;
+                                byte_offset += force.byte_offset as usize;
+                            } else {
+                                break;
+                            }
+                            continue;
+                        }
+                        let remaining = &chunk_bytes[byte_offset..];
+                        let r = crate::unicode::find_wrap_pos_by_width(
+                            remaining,
+                            remaining_width,
+                            tab_width,
+                            is_ascii,
+                            method,
+                        );
+                        if r.grapheme_count == 0 {
+                            if w.line_position > 0 {
+                                w.commit();
+                                continue;
+                            }
+                            let force = crate::unicode::find_wrap_pos_by_width(
+                                remaining, 1000, tab_width, is_ascii, method,
+                            );
+                            if force.grapheme_count > 0 {
+                                w.add_chunk(*chunk_ref, char_offset, force.columns_used);
+                                char_offset += force.columns_used;
+                                byte_offset += force.byte_offset as usize;
+                                if char_offset < *chunk_width {
+                                    w.commit();
+                                }
+                            }
+                            break;
+                        }
+                        w.add_chunk(*chunk_ref, char_offset, r.columns_used);
+                        char_offset += r.columns_used;
+                        byte_offset += r.byte_offset as usize;
+                        if w.line_position >= line_wrap_w && char_offset < *chunk_width {
+                            w.commit();
+                        }
+                    }
+                }
+            }
+            // line end
+            let line_width = tb.line_width_at(row);
+            if !w.current.chunks.is_empty() || line_width == 0 {
+                w.current.width_cols = w.line_position;
+                w.current.source_line = w.line_idx;
+                w.current.source_col_offset = w.line_col_offset;
+                let v = std::mem::take(&mut w.current);
+                w.out.starts.push(v.col_offset);
+                w.out.widths.push(v.width_cols);
+                w.out.sources.push(w.line_idx);
+                w.out.wrap_indices.push(w.current_line_vline_count);
+                w.out.vlines.push(v);
+                w.current_line_vline_count += 1;
+            }
+            w.out.first_vline.push(w.current_line_first_vline_idx);
+            w.out.vline_counts.push(w.current_line_vline_count);
+            w.global_char_offset += 1;
+            w.line_idx += 1;
+            w.line_col_offset = 0;
+            w.line_position = 0;
+            w.first_line_pending = false;
+            w.current = VirtualLine {
+                col_offset: w.global_char_offset,
+                ..Default::default()
+            };
+            w.last_wrap_chunk_count = 0;
+            w.last_wrap_line_position = 0;
+            w.last_wrap_global_offset = 0;
+            w.current_line_first_vline_idx = w.out.vlines.len() as u32;
+            w.current_line_vline_count = 0;
+        }
+        self.caches = w.out;
     }
 
     pub fn virtual_line_count(&mut self) -> u32 {

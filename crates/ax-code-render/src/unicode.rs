@@ -536,3 +536,225 @@ pub fn find_pos_by_width(
         columns_used,
     }
 }
+
+// --- word wrap support (C5c) --------------------------------------------------
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WordClass {
+    AsciiWord,
+    CjkWord,
+    Other,
+}
+
+fn is_cjk_word_codepoint(cp: u32) -> bool {
+    matches!(cp,
+        0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF |
+        0x20000..=0x2A6DF | 0x2A700..=0x2B73F | 0x2B740..=0x2B81F |
+        0x2B820..=0x2CEAF | 0x2CEB0..=0x2EBEF | 0x2EBF0..=0x2EE5D |
+        0x2F800..=0x2FA1F | 0x3040..=0x309F | 0x30A0..=0x30FF |
+        0x31F0..=0x31FF | 0xFF66..=0xFF9D | 0x1100..=0x11FF |
+        0x3130..=0x318F | 0xA960..=0xA97F | 0xAC00..=0xD7AF | 0xD7B0..=0xD7FF)
+}
+
+fn classify_word_class(cp: u32) -> WordClass {
+    if cp <= 0x7F {
+        let b = cp as u8;
+        if b.is_ascii_alphanumeric() || b == b'_' {
+            WordClass::AsciiWord
+        } else {
+            WordClass::Other
+        }
+    } else if is_cjk_word_codepoint(cp) {
+        WordClass::CjkWord
+    } else {
+        WordClass::Other
+    }
+}
+
+fn is_ascii_wrap_break(b: u8) -> bool {
+    matches!(
+        b,
+        b' ' | b'\t'
+            | b'-'
+            | b'/'
+            | b'\\'
+            | b'.'
+            | b','
+            | b';'
+            | b':'
+            | b'!'
+            | b'?'
+            | b'('
+            | b')'
+            | b'['
+            | b']'
+            | b'{'
+            | b'}'
+    )
+}
+
+fn is_unicode_wrap_break(cp: u32) -> bool {
+    matches!(
+        cp,
+        0x00A0 | 0x1680 | 0x2000
+            ..=0x200A
+                | 0x202F
+                | 0x205F
+                | 0x3000
+                | 0x200B
+                | 0x00AD
+                | 0x2010
+                | 0x3001
+                | 0x3002
+                | 0xFF01
+                | 0xFF0C
+                | 0xFF1A
+                | 0xFF1F
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WordWrapBreak {
+    pub byte_offset: u32,
+    /// Grapheme-cluster index of the break opportunity.
+    pub char_offset: u32,
+}
+
+/// Zig `findWrapBreaks`: word-wrap break opportunities — whitespace/dash/
+/// slash/punctuation/bracket delimiters (recorded AT the delimiter) plus
+/// CJK<->ASCII word-class transitions (recorded at the LAST grapheme of the
+/// previous run). char_offset advances once per grapheme cluster.
+pub fn find_word_wrap_breaks(bytes: &[u8]) -> Vec<WordWrapBreak> {
+    let mut out = Vec::new();
+    let mut state = BreakState::default();
+    let mut prev: Option<u32> = None;
+    let mut char_offset: u32 = 0;
+    let mut have_grapheme = false;
+    let mut g_byte: u32 = 0;
+    let mut g_char: u32 = 0;
+    let mut g_class = WordClass::Other;
+    let mut pos = 0usize;
+    while pos < bytes.len() {
+        let (cp, len) = zig_decode(bytes, pos);
+        let is_break = if cp == 0xFFFD || cp > 0x10FFFF {
+            true
+        } else {
+            match prev {
+                Some(p) if p != 0xFFFD && p <= 0x10FFFF => {
+                    is_grapheme_break(Some(p), cp, &mut state)
+                }
+                Some(_) => true,
+                None => true,
+            }
+        };
+        if is_break {
+            let class = classify_word_class(cp);
+            if have_grapheme
+                && ((g_class == WordClass::CjkWord && class == WordClass::AsciiWord)
+                    || (g_class == WordClass::AsciiWord && class == WordClass::CjkWord))
+            {
+                out.push(WordWrapBreak {
+                    byte_offset: g_byte,
+                    char_offset: g_char,
+                });
+            }
+            have_grapheme = true;
+            g_byte = pos as u32;
+            g_char = char_offset;
+            g_class = class;
+        }
+        let delim = if cp < 0x80 {
+            is_ascii_wrap_break(cp as u8)
+        } else {
+            is_unicode_wrap_break(cp)
+        };
+        if delim {
+            out.push(WordWrapBreak {
+                byte_offset: pos as u32,
+                char_offset,
+            });
+        }
+        if is_break {
+            char_offset += 1;
+        }
+        prev = Some(cp);
+        pos += len;
+    }
+    out
+}
+
+/// Zig `findWrapPosByWidth`: how many whole clusters fit within max_columns
+/// (uniform rule for interior AND trailing clusters, unlike findPosByWidth).
+pub fn find_wrap_pos_by_width(
+    text: &[u8],
+    max_columns: u32,
+    tab_width: u8,
+    is_ascii: bool,
+    method: WidthMethod,
+) -> PosByWidth {
+    if text.is_empty() || max_columns == 0 {
+        return PosByWidth {
+            byte_offset: 0,
+            grapheme_count: 0,
+            columns_used: 0,
+        };
+    }
+    if is_ascii {
+        let n = text.len() as u32;
+        let cut = max_columns.min(n);
+        return PosByWidth {
+            byte_offset: cut,
+            grapheme_count: cut,
+            columns_used: cut,
+        };
+    }
+    let s = std::str::from_utf8(text).unwrap_or("");
+    let mut columns_used: u32 = 0;
+    let mut graphemes: u32 = 0;
+    for (start, len) in clusters(s) {
+        let w = cluster_width_of(s, start, len, method, tab_width);
+        if columns_used + w > max_columns {
+            return PosByWidth {
+                byte_offset: start as u32,
+                grapheme_count: graphemes,
+                columns_used,
+            };
+        }
+        columns_used += w;
+        graphemes += 1;
+    }
+    PosByWidth {
+        byte_offset: text.len() as u32,
+        grapheme_count: graphemes,
+        columns_used,
+    }
+}
+
+/// Zig iterators `charOffsetToColumn`: translate a grapheme index into a
+/// column using the chunk's special-cluster table (stateful across calls —
+/// grapheme_idx/col_delta persist while walking one chunk's breaks in order).
+pub fn char_offset_to_column(
+    char_offset: u32,
+    graphemes: &[GraphemeInfo],
+    grapheme_idx: &mut usize,
+    col_delta: &mut i64,
+) -> (u32, u32) {
+    while *grapheme_idx < graphemes.len() {
+        let info = &graphemes[*grapheme_idx];
+        let info_char_offset = info.col_offset as i64 - *col_delta;
+        if info_char_offset >= char_offset as i64 {
+            break;
+        }
+        *col_delta += info.width as i64 - 1;
+        *grapheme_idx += 1;
+    }
+    let break_col = (char_offset as i64 + *col_delta).max(0) as u32;
+    let mut width: u32 = 1;
+    if *grapheme_idx < graphemes.len() {
+        let info = &graphemes[*grapheme_idx];
+        if info.col_offset as i64 - *col_delta == char_offset as i64 {
+            width = info.width;
+        }
+    }
+    (break_col, width)
+}
