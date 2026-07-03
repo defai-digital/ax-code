@@ -852,6 +852,10 @@ impl CliRenderer {
         self.render_offset = offset;
     }
 
+    pub fn render_offset(&self) -> u32 {
+        self.render_offset
+    }
+
     /// Zig `setPaletteState` — reset to the fallback palette, overlay the
     /// provided 256-entry palette + default fg/bg, and bump the epoch (forcing
     /// a full repaint) when it changed. Only `palette_rgba` (nearest-palette

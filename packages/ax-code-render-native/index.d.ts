@@ -129,6 +129,8 @@ export declare function bufferWriteResolvedChars(handle: number, outputPtr: numb
 
 export declare function checkHit(handle: number, x: number, y: number): number
 
+export declare function clearClipboardOSC52(handle: number, target: number): boolean
+
 export declare function clearCurrentHitGrid(handle: number): void
 
 export declare function clearGlobalLinkPool(): void
@@ -137,11 +139,17 @@ export declare function clearPendingSplitFooterTransition(handle: number): void
 
 export declare function clearTerminal(handle: number): void
 
+export declare function commitSplitFooterSnapshot(handle: number): bigint
+
+export declare function copyToClipboardOSC52(handle: number, target: number, payloadPtr: number, payloadLen: number): boolean
+
 export declare function createAudioEngine(options: number): number
 
 export declare function createEditBuffer(widthMethod: number, eventSinkHandle: number): number
 
 export declare function createEditorView(editHandle: number, viewportWidth: number, viewportHeight: number): number
+
+export declare function createEventSink(callback: number): number
 
 export declare function createNativeSpanFeed(optionsPtr: number): number
 
@@ -160,6 +168,8 @@ export declare function destroyAudioEngine(engine: number): void
 export declare function destroyEditBuffer(handle: number): void
 
 export declare function destroyEditorView(handle: number): void
+
+export declare function destroyEventSink(handle: number): void
 
 export declare function destroyFrameBuffer(handle: number): void
 
@@ -181,6 +191,8 @@ export declare function disableMouse(handle: number): void
 
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
 
+export declare function dumpBuffers(handle: number, timestamp: number): void
+
 export declare function dumpHitGrid(handle: number): void
 
 export declare function dumpOutputBuffer(handle: number, timestamp: number): void
@@ -192,6 +204,8 @@ export declare function editBufferCanUndo(handle: number): boolean
 export declare function editBufferClear(handle: number): void
 
 export declare function editBufferClearHistory(handle: number): void
+
+export declare function editBufferDebugLogRope(handle: number): void
 
 export declare function editBufferDeleteChar(handle: number): void
 
@@ -221,6 +235,8 @@ export declare function editBufferGetTextBuffer(handle: number): number
 
 export declare function editBufferGetTextRange(handle: number, start: number, end: number, outPtr: number, maxLen: number): number
 
+export declare function editBufferGetTextRangeByCoords(handle: number, startRow: number, startCol: number, endRow: number, endCol: number, outPtr: number, maxLen: number): number
+
 export declare function editBufferGotoLine(handle: number, line: number): void
 
 export declare function editBufferInsertChar(handle: number, textPtr: number, textLen: number): void
@@ -245,6 +261,8 @@ export declare function editBufferRedo(handle: number, outPtr: number, maxLen: n
 
 export declare function editBufferReplaceText(handle: number, textPtr: number, textLen: number): void
 
+export declare function editBufferReplaceTextFromMem(handle: number, memId: number): void
+
 export declare function editBufferSetCursor(handle: number, row: number, col: number): void
 
 export declare function editBufferSetCursorByOffset(handle: number, offset: number): void
@@ -252,6 +270,8 @@ export declare function editBufferSetCursorByOffset(handle: number, offset: numb
 export declare function editBufferSetCursorToLineCol(handle: number, row: number, col: number): void
 
 export declare function editBufferSetText(handle: number, textPtr: number, textLen: number): void
+
+export declare function editBufferSetTextFromMem(handle: number, memId: number): void
 
 export declare function editBufferUndo(handle: number, outPtr: number, maxLen: number): number
 
@@ -327,11 +347,19 @@ export declare function enableKittyKeyboard(handle: number, flags: number): void
 
 export declare function enableMouse(handle: number, enableMovement: number): void
 
+export declare function encodeUnicode(textPtr: number, textLen: number, outPtr: number, outLenPtr: number, widthMethod: number): boolean
+
+export declare function freeUnicode(charsPtr: number, charsLen: number): void
+
+export declare function getAllocatorStats(outPtr: number): void
+
 export declare function getArenaAllocatedBytes(): bigint
 
 export declare function getBufferHeight(handle: number): number
 
 export declare function getBufferWidth(handle: number): number
+
+export declare function getBuildOptions(outPtr: number): void
 
 export declare function getCurrentBuffer(handle: number): number
 
@@ -358,11 +386,19 @@ export declare function getRenderStats(handle: number, outPtr: number): void
 
 export declare function getSplitOutputOffset(handle: number, surfaceOffset: number): number
 
+export declare function getTerminalCapabilities(handle: number, capsPtr: number): void
+
 export declare function hitGridClearScissorRects(handle: number): void
 
 export declare function hitGridPopScissorRect(handle: number): void
 
 export declare function hitGridPushScissorRect(handle: number, x: number, y: number, width: number, height: number): void
+
+export declare function linkAlloc(urlPtr: number, urlLen: number): number
+
+export declare function linkGetUrl(id: number, outPtr: number, maxLen: number): number
+
+export declare function processCapabilityResponse(handle: number, respPtr: number, respLen: number): void
 
 export declare function queryPixelResolution(handle: number): void
 
@@ -396,6 +432,8 @@ export declare function setCursorPosition(handle: number, x: number, y: number, 
  */
 export declare function setCursorStyleOptions(handle: number, optionsPtr: number): void
 
+export declare function setDebugOverlay(handle: number, enabled: number, corner: number): void
+
 export declare function setHyperlinksCapability(handle: number, enabled: number): void
 
 export declare function setKittyKeyboardFlags(handle: number, flags: number): void
@@ -405,6 +443,8 @@ export declare function setLogCallback(callback: number): void
 export declare function setPendingSplitFooterTransition(handle: number, mode: number, sourceTopLine: number, sourceHeight: number, targetTopLine: number, targetHeight: number, scrollLines: number): void
 
 export declare function setRenderOffset(handle: number, offset: number): void
+
+export declare function setTerminalEnvVar(handle: number, keyPtr: number, keyLen: number, valPtr: number, valLen: number): boolean
 
 export declare function setTerminalTitle(handle: number, titlePtr: number, titleLen: number): void
 
@@ -476,6 +516,8 @@ export declare function textBufferGetTextRange(handle: number, startOffset: numb
 
 export declare function textBufferGetTextRangeByCoords(handle: number, startRow: number, startCol: number, endRow: number, endCol: number, outPtr: number, maxLen: number): number
 
+export declare function textBufferLoadFile(handle: number, pathPtr: number, pathLen: number): boolean
+
 export declare function textBufferRegisterMemBuffer(handle: number, dataPtr: number, dataLen: number, owned: boolean): number
 
 export declare function textBufferRemoveHighlightsByRef(handle: number, hlRef: number): void
@@ -511,6 +553,8 @@ export declare function textBufferSetTextFromMem(handle: number, id: number): vo
  */
 export declare function textBufferViewGetLineInfoDirect(handle: number, outPtr: number): void
 
+export declare function textBufferViewGetLogicalLineInfoDirect(handle: number, outPtr: number): void
+
 export declare function textBufferViewGetPlainText(handle: number, outPtr: number, maxLen: number): number
 
 export declare function textBufferViewGetSelectedText(handle: number, outPtr: number, maxLen: number): number
@@ -518,6 +562,8 @@ export declare function textBufferViewGetSelectedText(handle: number, outPtr: nu
 export declare function textBufferViewGetSelectionInfo(handle: number): number
 
 export declare function textBufferViewGetVirtualLineCount(handle: number): number
+
+export declare function textBufferViewMeasureForDimensions(handle: number, width: number, height: number, outPtr: number): boolean
 
 export declare function textBufferViewResetLocalSelection(handle: number): void
 
@@ -533,6 +579,8 @@ export declare function textBufferViewSetTabIndicator(handle: number, indicator:
 
 export declare function textBufferViewSetTabIndicatorColor(handle: number, color: number): void
 
+export declare function textBufferViewSetTruncate(handle: number, truncate: number): void
+
 export declare function textBufferViewSetViewport(handle: number, x: number, y: number, width: number, height: number): void
 
 export declare function textBufferViewSetViewportSize(handle: number, width: number, height: number): void
@@ -544,6 +592,8 @@ export declare function textBufferViewSetWrapWidth(handle: number, width: number
 export declare function textBufferViewUpdateLocalSelection(handle: number, ax: number, ay: number, fx: number, fy: number, bg: number, fg: number): boolean
 
 export declare function textBufferViewUpdateSelection(handle: number, end: number, bg: number, fg: number): void
+
+export declare function triggerNotification(handle: number, msgPtr: number, msgLen: number, titlePtr: number, titleLen: number): boolean
 
 export declare function updateMemoryStats(handle: number, heapUsed: number, heapTotal: number, arrayBuffers: number): void
 

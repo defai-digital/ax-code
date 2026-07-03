@@ -359,9 +359,6 @@ pub fn destroy_frame_buffer(handle: u32) {
     crate::buffer_ffi::destroy_optimized_buffer(handle);
 }
 
-#[napi(js_name = "clearGlobalLinkPool")]
-pub fn clear_global_link_pool() {}
-
 #[napi(js_name = "setLogCallback")]
 pub fn set_log_callback(_callback: f64) {}
 

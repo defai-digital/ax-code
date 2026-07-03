@@ -489,3 +489,10 @@ pub fn text_buffer_set_syntax_style(handle: u32, style_handle: u32) -> bool {
     };
     true
 }
+
+#[napi(js_name = "textBufferLoadFile")]
+pub fn text_buffer_load_file(_handle: u32, _path_ptr: f64, _path_len: u32) -> bool {
+    // File loading (read + styled set) is a documented follow-up; the TUI feeds
+    // text buffers through setStyledText/setText rather than this path.
+    false
+}

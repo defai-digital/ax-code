@@ -226,6 +226,32 @@ pub fn text_buffer_view_get_selected_text(handle: u32, out_ptr: f64, max_len: u3
 
 // --- draw + defaults + tab indicator (C5d) -----------------------------------
 
+#[napi(js_name = "textBufferViewSetTruncate")]
+pub fn text_buffer_view_set_truncate(handle: u32, truncate: f64) {
+    if let Some(view) = resolve(handle) {
+        view.truncate = truncate != 0.0;
+    }
+}
+
+#[napi(js_name = "textBufferViewGetLogicalLineInfoDirect")]
+pub fn text_buffer_view_get_logical_line_info_direct(handle: u32, out_ptr: f64) {
+    // Delegates to the cached (virtual) line info — exact for wrap=none; a
+    // dedicated logical variant lands with the wrap-aware pass.
+    text_buffer_view_get_line_info_direct(handle, out_ptr);
+}
+
+#[napi(js_name = "textBufferViewMeasureForDimensions")]
+pub fn text_buffer_view_measure_for_dimensions(
+    _handle: u32,
+    _width: u32,
+    _height: u32,
+    _out_ptr: f64,
+) -> bool {
+    // Content measurement for arbitrary dimensions is a documented follow-up;
+    // reports "not measured" (leaves the caller's zeroed struct).
+    false
+}
+
 #[napi(js_name = "bufferDrawTextBufferView")]
 pub fn buffer_draw_text_buffer_view(buffer_handle: u32, view_handle: u32, x: i32, y: i32) {
     let Some(buf_ptr) = handles::get(buffer_handle, Kind::OptimizedBuffer) else {

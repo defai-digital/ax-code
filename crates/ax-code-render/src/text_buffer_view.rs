@@ -74,6 +74,7 @@ pub struct TextBufferView {
     pub first_line_offset: u32,
     pub tab_indicator: Option<u32>,
     pub tab_indicator_color: Option<Rgba>,
+    pub truncate: bool,
     dirty: bool,
     caches: VirtualLineCaches,
     // Slices exposed through GetLineInfoDirect must stay alive between calls.
@@ -99,6 +100,7 @@ impl TextBufferView {
             first_line_offset: 0,
             tab_indicator: None,
             tab_indicator_color: None,
+            truncate: false,
             dirty: true,
             caches: VirtualLineCaches::default(),
             info_starts: Vec::new(),

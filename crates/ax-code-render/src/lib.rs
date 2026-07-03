@@ -33,6 +33,7 @@ pub mod gcb;
 mod gcb_table;
 pub mod handles;
 pub mod mem_registry;
+mod misc_ffi;
 pub mod native_span_feed;
 pub mod pool;
 pub mod renderer;

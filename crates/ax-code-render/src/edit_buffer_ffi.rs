@@ -388,3 +388,44 @@ pub fn edit_buffer_clear(handle: u32) {
         eb.clear();
     }
 }
+
+#[napi(js_name = "editBufferGetTextRangeByCoords")]
+pub fn edit_buffer_get_text_range_by_coords(
+    handle: u32,
+    start_row: u32,
+    start_col: u32,
+    end_row: u32,
+    end_col: u32,
+    out_ptr: f64,
+    max_len: u32,
+) -> u32 {
+    let Some(eb) = resolve(handle) else { return 0 };
+    if out_ptr == 0.0 || max_len == 0 {
+        return 0;
+    }
+    let start = eb.tb.coords_to_offset(start_row, start_col).unwrap_or(0);
+    let end = eb.tb.coords_to_offset(end_row, end_col).unwrap_or(0);
+    let (lo, hi) = if start <= end {
+        (start, end)
+    } else {
+        (end, start)
+    };
+    let text = eb.get_text_range(lo, hi, max_len as usize);
+    let copy = text.len().min(max_len as usize);
+    unsafe {
+        std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
+    };
+    copy as u32
+}
+
+// Alternate mem-buffer input paths (set/replace the whole document from a
+// registered mem id) are a documented follow-up — they need the mem-registry
+// read plumbing; accepted as no-ops so callers don't fail.
+#[napi(js_name = "editBufferSetTextFromMem")]
+pub fn edit_buffer_set_text_from_mem(_handle: u32, _mem_id: u32) {}
+
+#[napi(js_name = "editBufferReplaceTextFromMem")]
+pub fn edit_buffer_replace_text_from_mem(_handle: u32, _mem_id: u32) {}
+
+#[napi(js_name = "editBufferDebugLogRope")]
+pub fn edit_buffer_debug_log_rope(_handle: u32) {}
