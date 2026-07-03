@@ -386,6 +386,216 @@ pub fn attributes_get_link_id(attributes: u32) -> u32 {
     crate::buffer::link_id(attributes)
 }
 
+#[napi(js_name = "bufferDrawSuperSampleBuffer")]
+pub fn buffer_draw_super_sample_buffer(
+    handle: u32,
+    x: u32,
+    y: u32,
+    pixel_data: f64,
+    len: u32,
+    format: u32,
+    aligned_bytes_per_row: u32,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    if pixel_data == 0.0 {
+        return;
+    }
+    let p = (pixel_data as u64) as usize as *const u8;
+    let data = unsafe { std::slice::from_raw_parts(p, len as usize) };
+    buf.draw_super_sample_buffer(
+        &mut global_pool(),
+        x,
+        y,
+        data,
+        format as u8,
+        aligned_bytes_per_row,
+    );
+}
+
+#[napi(js_name = "bufferDrawPackedBuffer")]
+pub fn buffer_draw_packed_buffer(
+    handle: u32,
+    data: f64,
+    data_len: u32,
+    pos_x: u32,
+    pos_y: u32,
+    terminal_width_cells: u32,
+    terminal_height_cells: u32,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    if data == 0.0 {
+        return;
+    }
+    let p = (data as u64) as usize as *const u8;
+    let bytes = unsafe { std::slice::from_raw_parts(p, data_len as usize) };
+    buf.draw_packed_buffer(
+        &mut global_pool(),
+        bytes,
+        pos_x,
+        pos_y,
+        terminal_width_cells,
+        terminal_height_cells,
+    );
+}
+
+#[napi(js_name = "bufferDrawGrayscaleBuffer")]
+#[allow(clippy::too_many_arguments)]
+pub fn buffer_draw_grayscale_buffer(
+    handle: u32,
+    pos_x: i32,
+    pos_y: i32,
+    intensities: f64,
+    src_width: u32,
+    src_height: u32,
+    fg: f64,
+    bg: f64,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    if intensities == 0.0 {
+        return;
+    }
+    let p = (intensities as u64) as usize as *const f32;
+    let data = unsafe { std::slice::from_raw_parts(p, (src_width * src_height) as usize) };
+    let fg_color = if fg == 0.0 {
+        None
+    } else {
+        Some(unsafe { read_rgba(fg) })
+    };
+    let bg_color = if bg == 0.0 {
+        None
+    } else {
+        Some(unsafe { read_rgba(bg) })
+    };
+    buf.draw_grayscale_buffer(
+        &mut global_pool(),
+        pos_x,
+        pos_y,
+        data,
+        src_width,
+        src_height,
+        fg_color,
+        bg_color,
+    );
+}
+
+#[napi(js_name = "bufferDrawGrayscaleBufferSupersampled")]
+#[allow(clippy::too_many_arguments)]
+pub fn buffer_draw_grayscale_buffer_supersampled(
+    handle: u32,
+    pos_x: i32,
+    pos_y: i32,
+    intensities: f64,
+    src_width: u32,
+    src_height: u32,
+    fg: f64,
+    bg: f64,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    if intensities == 0.0 {
+        return;
+    }
+    let p = (intensities as u64) as usize as *const f32;
+    let data = unsafe { std::slice::from_raw_parts(p, (src_width * src_height) as usize) };
+    let fg_color = if fg == 0.0 {
+        None
+    } else {
+        Some(unsafe { read_rgba(fg) })
+    };
+    let bg_color = if bg == 0.0 {
+        None
+    } else {
+        Some(unsafe { read_rgba(bg) })
+    };
+    buf.draw_grayscale_buffer_supersampled(
+        &mut global_pool(),
+        pos_x,
+        pos_y,
+        data,
+        src_width,
+        src_height,
+        fg_color,
+        bg_color,
+    );
+}
+
+#[napi(js_name = "bufferDrawGrid")]
+#[allow(clippy::too_many_arguments)]
+pub fn buffer_draw_grid(
+    handle: u32,
+    border_chars: f64,
+    border_fg: f64,
+    border_bg: f64,
+    column_offsets: f64,
+    column_count: u32,
+    row_offsets: f64,
+    row_count: u32,
+    options: f64,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    if border_chars == 0.0 || column_offsets == 0.0 || row_offsets == 0.0 || options == 0.0 {
+        return;
+    }
+    let bc_ptr = (border_chars as u64) as usize as *const u32;
+    let mut chars = [0u32; 11];
+    unsafe { std::ptr::copy_nonoverlapping(bc_ptr, chars.as_mut_ptr(), 11) };
+    let cols = unsafe {
+        std::slice::from_raw_parts(
+            (column_offsets as u64) as usize as *const i32,
+            column_count as usize + 1,
+        )
+    };
+    let rows = unsafe {
+        std::slice::from_raw_parts(
+            (row_offsets as u64) as usize as *const i32,
+            row_count as usize + 1,
+        )
+    };
+    let opts = (options as u64) as usize as *const u8;
+    let (draw_inner, draw_outer) = unsafe { (*opts != 0, *opts.add(1) != 0) };
+    buf.draw_grid(
+        &chars,
+        unsafe { read_rgba(border_fg) },
+        unsafe { read_rgba(border_bg) },
+        cols,
+        rows,
+        draw_inner,
+        draw_outer,
+    );
+}
+
+#[napi(js_name = "bufferColorMatrix")]
+pub fn buffer_color_matrix(
+    handle: u32,
+    matrix: f64,
+    cell_mask: f64,
+    cell_mask_count: u32,
+    strength: f64,
+    target: u32,
+) {
+    let Some(buf) = resolve(handle) else { return };
+    if matrix == 0.0 || cell_mask == 0.0 || cell_mask_count == 0 {
+        return;
+    }
+    let mat = unsafe { std::slice::from_raw_parts((matrix as u64) as usize as *const f32, 16) };
+    let mask = unsafe {
+        std::slice::from_raw_parts(
+            (cell_mask as u64) as usize as *const f32,
+            cell_mask_count as usize * 3,
+        )
+    };
+    buf.color_matrix(mat, mask, strength as f32, target as u8);
+}
+
+#[napi(js_name = "bufferColorMatrixUniform")]
+pub fn buffer_color_matrix_uniform(handle: u32, matrix: f64, strength: f64, target: u32) {
+    let Some(buf) = resolve(handle) else { return };
+    if matrix == 0.0 {
+        return;
+    }
+    let mat = unsafe { std::slice::from_raw_parts((matrix as u64) as usize as *const f32, 16) };
+    buf.color_matrix_uniform(mat, strength as f32, target as u8);
+}
+
 #[napi(js_name = "bufferGetId")]
 pub fn buffer_get_id(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
     let Some(buf) = resolve(handle) else { return 0 };

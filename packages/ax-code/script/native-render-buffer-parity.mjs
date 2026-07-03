@@ -240,6 +240,64 @@ for (let s = 0; s < SEQUENCES; s++) {
         zig.destroyOptimizedBuffer(zSrc)
         rust.destroyOptimizedBuffer(rSrc)
       }
+    } else if (op === 11 && rand() < 0.7) {
+      const kind = randInt(5)
+      if (kind === 0) {
+        // colorMatrixUniform: random 4x4 + strength
+        const mat = new Float32Array(16)
+        for (let m = 0; m < 16; m++) mat[m] = (rand() * 2 - 0.5)
+        const strength = [0.25, 0.5, 1][randInt(3)]
+        const target = 1 + randInt(3)
+        opsLog.push(`matrixU(t=${target})`)
+        zig.bufferColorMatrixUniform(zh, ptr(mat), strength, target)
+        rust.bufferColorMatrixUniform(rh, Number(ptr(mat)), strength, target)
+      } else if (kind === 1) {
+        const mat = new Float32Array(16)
+        for (let m = 0; m < 16; m++) mat[m] = (rand() * 2 - 0.5)
+        const count = 1 + randInt(6)
+        const mask = new Float32Array(count * 3)
+        for (let c = 0; c < count; c++) { mask[c*3] = randInt(w + 1); mask[c*3+1] = randInt(h + 1); mask[c*3+2] = rand() }
+        const target = 1 + randInt(3)
+        opsLog.push(`matrix(n=${count})`)
+        zig.bufferColorMatrix(zh, ptr(mat), ptr(mask), count, 0.8, target)
+        rust.bufferColorMatrix(rh, Number(ptr(mat)), Number(ptr(mask)), count, 0.8, target)
+      } else if (kind === 2) {
+        // grayscale (sometimes supersampled)
+        const gw = 2 + randInt(8), gh = 2 + randInt(6)
+        const inten = new Float32Array(gw * gh)
+        for (let g = 0; g < inten.length; g++) inten[g] = rand()
+        const [gx, gy] = [randInt(w) - 2, randInt(h) - 2]
+        const useFg = rand() < 0.7 ? randColor() : null
+        const ss = rand() < 0.5
+        opsLog.push(`gray${ss ? "SS" : ""}(${gx},${gy},${gw}x${gh})`)
+        const zf = useFg ? ptr(useFg) : null, rf = useFg ? Number(ptr(useFg)) : 0
+        if (ss) { zig.bufferDrawGrayscaleBufferSupersampled(zh, gx, gy, ptr(inten), gw, gh, zf, null); rust.bufferDrawGrayscaleBufferSupersampled(rh, gx, gy, Number(ptr(inten)), gw, gh, rf, 0) }
+        else { zig.bufferDrawGrayscaleBuffer(zh, gx, gy, ptr(inten), gw, gh, zf, null); rust.bufferDrawGrayscaleBuffer(rh, gx, gy, Number(ptr(inten)), gw, gh, rf, 0) }
+      } else if (kind === 3) {
+        // supersample quadrant pixels
+        const cw = 2 + randInt(5), chh = 2 + randInt(3)
+        const rowBytes = cw * 2 * 4
+        const px = new Uint8Array(rowBytes * chh * 2)
+        for (let b = 0; b < px.length; b++) px[b] = randInt(256)
+        const format = randInt(2)
+        const [ssx, ssy] = [randInt(w), randInt(h)]
+        opsLog.push(`superSample(f=${format}@${ssx},${ssy})`)
+        zig.bufferDrawSuperSampleBuffer(zh, ssx, ssy, ptr(px), px.length, format, rowBytes)
+        rust.bufferDrawSuperSampleBuffer(rh, ssx, ssy, Number(ptr(px)), px.length, format, rowBytes)
+      } else {
+        // packed cells
+        const cells = 1 + randInt(8)
+        const data = new Uint8Array(cells * 48)
+        const dv = new DataView(data.buffer)
+        for (let c = 0; c < cells; c++) {
+          for (let ch2 = 0; ch2 < 8; ch2++) dv.setFloat32(c*48 + ch2*4, rand() * 1.2 - 0.1, true)
+          dv.setUint32(c*48 + 32, randInt(0x3000), true)
+        }
+        const [px2, py2] = [randInt(w), randInt(h)]
+        opsLog.push(`packed(${cells}@${px2},${py2})`)
+        zig.bufferDrawPackedBuffer(zh, ptr(data), data.length, px2, py2, w, h)
+        rust.bufferDrawPackedBuffer(rh, Number(ptr(data)), data.length, px2, py2, w, h)
+      }
     } else if (rand() < 0.3) {
       const nw = 2 + randInt(24)
       const nh = 2 + randInt(12)

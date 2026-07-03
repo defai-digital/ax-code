@@ -223,6 +223,165 @@ fn apply_opacity(color: Rgba, opacity: u8) -> Rgba {
     )
 }
 
+// --- graphics helpers (buffer.zig tranche 4) -----------------------------------
+
+const BLOCK_CHAR: u32 = 0x2588;
+const GRAYSCALE_CHARS: &[u8] =
+    b" .'^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+
+const QUADRANT_CHARS: [u32; 16] = [
+    32, 0x2597, 0x2596, 0x2584, 0x259D, 0x2590, 0x259E, 0x259F, 0x2598, 0x259A, 0x258C, 0x2599,
+    0x2580, 0x259C, 0x259B, 0x2588,
+];
+
+fn color_distance(a: Rgba, b: Rgba) -> f32 {
+    let dr = chan(a, 0) as f32 - chan(b, 0) as f32;
+    let dg = chan(a, 1) as f32 - chan(b, 1) as f32;
+    let db = chan(a, 2) as f32 - chan(b, 2) as f32;
+    dr * dr + dg * dg + db * db
+}
+
+fn closest_color_index(pixel: Rgba, candidates: [Rgba; 2]) -> usize {
+    if color_distance(pixel, candidates[0]) <= color_distance(pixel, candidates[1]) {
+        0
+    } else {
+        1
+    }
+}
+
+fn average_color_rgba(pixels: &[Rgba]) -> Rgba {
+    if pixels.is_empty() {
+        return rgb_color(0, 0, 0, 0);
+    }
+    let (mut r, mut g, mut b, mut a) = (0u32, 0u32, 0u32, 0u32);
+    for p in pixels {
+        r += chan(*p, 0);
+        g += chan(*p, 1);
+        b += chan(*p, 2);
+        a += alpha(*p);
+    }
+    let len = pixels.len() as u32;
+    rgb_color(
+        ((r + len / 2) / len) as u8,
+        ((g + len / 2) / len) as u8,
+        ((b + len / 2) / len) as u8,
+        ((a + len / 2) / len) as u8,
+    )
+}
+
+fn chan_f(c: Rgba, i: usize) -> f32 {
+    chan(c, i) as f32 / 255.0
+}
+
+fn luminance(color: Rgba) -> f32 {
+    0.2126 * chan_f(color, 0) + 0.7152 * chan_f(color, 1) + 0.0722 * chan_f(color, 2)
+}
+
+fn get_pixel_color(idx: usize, data: &[u8], bgra: bool) -> Rgba {
+    if idx + 3 >= data.len() {
+        return rgb_color(255, 0, 255, 0); // transparent magenta for out-of-bounds
+    }
+    if bgra {
+        rgb_color(data[idx + 2], data[idx + 1], data[idx], data[idx + 3])
+    } else {
+        rgb_color(data[idx], data[idx + 1], data[idx + 2], data[idx + 3])
+    }
+}
+
+fn render_quadrant_block(pixels: [Rgba; 4]) -> (u32, Rgba, Rgba) {
+    let mut idx_a = 0usize;
+    let mut idx_b = 1usize;
+    let mut max_dist = color_distance(pixels[0], pixels[1]);
+    for i in 0..4 {
+        for j in (i + 1)..4 {
+            let dist = color_distance(pixels[i], pixels[j]);
+            if dist > max_dist {
+                idx_a = i;
+                idx_b = j;
+                max_dist = dist;
+            }
+        }
+    }
+    let (cand_a, cand_b) = (pixels[idx_a], pixels[idx_b]);
+    let (dark, light) = if luminance(cand_a) <= luminance(cand_b) {
+        (cand_a, cand_b)
+    } else {
+        (cand_b, cand_a)
+    };
+
+    let bit_values = [8u8, 4, 2, 1];
+    let mut bits = 0u8;
+    for i in 0..4 {
+        if closest_color_index(pixels[i], [dark, light]) == 0 {
+            bits |= bit_values[i];
+        }
+    }
+    if bits == 0 {
+        (32, dark, average_color_rgba(&pixels))
+    } else if bits == 15 {
+        (QUADRANT_CHARS[15], average_color_rgba(&pixels), light)
+    } else {
+        (QUADRANT_CHARS[bits as usize], dark, light)
+    }
+}
+
+fn get_grayscale_char(intensity: f32) -> u32 {
+    if intensity < 0.01 {
+        return b' ' as u32;
+    }
+    let clamped = intensity.clamp(0.0, 1.0);
+    let index = (clamped * (GRAYSCALE_CHARS.len() - 1) as f32) as usize;
+    GRAYSCALE_CHARS[index] as u32
+}
+
+fn rgba_component_to_u8(v: f32) -> u8 {
+    if !v.is_finite() {
+        return 0;
+    }
+    (v.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+fn rgba_from_floats(r: f32, g: f32, b: f32, a: f32) -> Rgba {
+    rgb_color(
+        rgba_component_to_u8(r),
+        rgba_component_to_u8(g),
+        rgba_component_to_u8(b),
+        rgba_component_to_u8(a),
+    )
+}
+
+fn apply_matrix4x4(
+    matrix: &[f32; 16],
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+    strength: f32,
+) -> (f32, f32, f32, f32) {
+    let nr = matrix[0] * r + matrix[1] * g + matrix[2] * b + matrix[3] * a;
+    let ng = matrix[4] * r + matrix[5] * g + matrix[6] * b + matrix[7] * a;
+    let nb = matrix[8] * r + matrix[9] * g + matrix[10] * b + matrix[11] * a;
+    let na = matrix[12] * r + matrix[13] * g + matrix[14] * b + matrix[15] * a;
+    (
+        r + (nr - r) * strength,
+        g + (ng - g) * strength,
+        b + (nb - b) * strength,
+        a + (na - a) * strength,
+    )
+}
+
+fn matrix_apply_to(color: Rgba, matrix: &[f32; 16], strength: f32) -> Rgba {
+    let (r, g, b, a) = apply_matrix4x4(
+        matrix,
+        chan_f(color, 0),
+        chan_f(color, 1),
+        chan_f(color, 2),
+        alpha(color) as f32 / 255.0,
+        strength,
+    );
+    rgba_from_floats(r, g, b, a)
+}
+
 // --- OptimizedBuffer -----------------------------------------------------------
 
 #[derive(Clone, Copy)]
@@ -1378,10 +1537,488 @@ impl OptimizedBuffer {
         }
     }
 
+    /// Zig `drawSuperSampleBuffer`: 2x2 pixel quadrant-block rendering.
+    pub fn draw_super_sample_buffer(
+        &mut self,
+        pool: &mut GraphemePool,
+        pos_x: u32,
+        pos_y: u32,
+        pixel_data: &[u8],
+        format: u8,
+        aligned_bytes_per_row: u32,
+    ) {
+        let bpp = 4usize;
+        let is_bgra = format == 0;
+        for y_cell in pos_y..self.height {
+            for x_cell in pos_x..self.width {
+                if !self.point_in_scissor(x_cell as i32, y_cell as i32) {
+                    continue;
+                }
+                let rx = ((x_cell - pos_x) * 2) as usize;
+                let ry = ((y_cell - pos_y) * 2) as usize;
+                let tl = ry * aligned_bytes_per_row as usize + rx * bpp;
+                let bl = (ry + 1) * aligned_bytes_per_row as usize + rx * bpp;
+                let pixels = [
+                    get_pixel_color(tl, pixel_data, is_bgra),
+                    get_pixel_color(tl + bpp, pixel_data, is_bgra),
+                    get_pixel_color(bl, pixel_data, is_bgra),
+                    get_pixel_color(bl + bpp, pixel_data, is_bgra),
+                ];
+                let (ch, fg, bg) = render_quadrant_block(pixels);
+                self.set_cell_with_alpha_blending(
+                    pool,
+                    x_cell,
+                    y_cell,
+                    Cell {
+                        char: ch,
+                        fg,
+                        bg,
+                        attributes: 0,
+                    },
+                );
+            }
+        }
+    }
+
+    /// Zig `drawPackedBuffer`: 48-byte packed cells (bg f32x4, fg f32x4, char u32).
+    pub fn draw_packed_buffer(
+        &mut self,
+        pool: &mut GraphemePool,
+        data: &[u8],
+        pos_x: u32,
+        pos_y: u32,
+        terminal_width_cells: u32,
+        terminal_height_cells: u32,
+    ) {
+        const CELL_SIZE: usize = 48;
+        let num_cells = data.len() / CELL_SIZE;
+        for i in 0..num_cells {
+            let off = i * CELL_SIZE;
+            let cell_x = pos_x + (i as u32 % terminal_width_cells);
+            let cell_y = pos_y + (i as u32 / terminal_width_cells);
+            if cell_x >= terminal_width_cells || cell_y >= terminal_height_cells {
+                continue;
+            }
+            if cell_x >= self.width || cell_y >= self.height {
+                continue;
+            }
+            if !self.point_in_scissor(cell_x as i32, cell_y as i32) {
+                continue;
+            }
+            let f = |o: usize| f32::from_le_bytes(data[off + o..off + o + 4].try_into().unwrap());
+            let bg = rgba_from_floats(f(0), f(4), f(8), f(12));
+            let fg = rgba_from_floats(f(16), f(20), f(24), f(28));
+            let mut ch = u32::from_le_bytes(data[off + 32..off + 36].try_into().unwrap());
+            if ch == 0 || ch > 0x10FFFF {
+                ch = DEFAULT_SPACE_CHAR;
+            }
+            if ch < 32 || (ch > 126 && ch < 0x2580) {
+                ch = BLOCK_CHAR;
+            }
+            self.set_cell_with_alpha_blending(
+                pool,
+                cell_x,
+                cell_y,
+                Cell {
+                    char: ch,
+                    fg,
+                    bg,
+                    attributes: 0,
+                },
+            );
+        }
+    }
+
+    /// Zig `drawGrayscaleBuffer`: intensity map to ASCII ramp.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_grayscale_buffer(
+        &mut self,
+        pool: &mut GraphemePool,
+        pos_x: i32,
+        pos_y: i32,
+        intensities: &[f32],
+        src_width: u32,
+        src_height: u32,
+        fg_color: Option<Rgba>,
+        bg_color: Option<Rgba>,
+    ) {
+        let bg = bg_color.unwrap_or(rgb_color(0, 0, 0, 0));
+        if src_width == 0 || src_height == 0 {
+            return;
+        }
+        if pos_x >= self.width as i32 || pos_y >= self.height as i32 {
+            return;
+        }
+        let start_x: u32 = if pos_x < 0 { (-pos_x) as u32 } else { 0 };
+        let start_y: u32 = if pos_y < 0 { (-pos_y) as u32 } else { 0 };
+        let dest_start_x: u32 = if pos_x < 0 { 0 } else { pos_x as u32 };
+        let dest_start_y: u32 = if pos_y < 0 { 0 } else { pos_y as u32 };
+        if start_x >= src_width || start_y >= src_height {
+            return;
+        }
+        let visible_w = (src_width - start_x).min(self.width - dest_start_x);
+        let visible_h = (src_height - start_y).min(self.height - dest_start_y);
+        if visible_w == 0 || visible_h == 0 {
+            return;
+        }
+        let base_fg = fg_color.unwrap_or(rgb_color(255, 255, 255, 255));
+        let opacity = self.current_opacity();
+        let aware = self.tracker.has_any() || self.link_tracker.has_any();
+
+        for dy in 0..visible_h {
+            for dx in 0..visible_w {
+                let dest_x = dest_start_x + dx;
+                let dest_y = dest_start_y + dy;
+                if !self.point_in_scissor(dest_x as i32, dest_y as i32) {
+                    continue;
+                }
+                let intensity = intensities[((start_y + dy) * src_width + (start_x + dx)) as usize];
+                if intensity < 0.01 {
+                    continue;
+                }
+                let ch = get_grayscale_char(intensity);
+                let gray = intensity.clamp(0.0, 1.0);
+                let fg = apply_opacity(base_fg, opacity_to_u8(gray * opacity));
+                let cell = Cell {
+                    char: ch,
+                    fg,
+                    bg,
+                    attributes: 0,
+                };
+                if aware {
+                    self.set_cell_with_alpha_blending(pool, dest_x, dest_y, cell);
+                } else {
+                    self.set_cell_with_alpha_blending_raw(dest_x, dest_y, cell);
+                }
+            }
+        }
+    }
+
+    /// Zig `drawGrayscaleBufferSupersampled`: 2x2 intensity averaging.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_grayscale_buffer_supersampled(
+        &mut self,
+        pool: &mut GraphemePool,
+        pos_x: i32,
+        pos_y: i32,
+        intensities: &[f32],
+        src_width: u32,
+        src_height: u32,
+        fg_color: Option<Rgba>,
+        bg_color: Option<Rgba>,
+    ) {
+        let bg = bg_color.unwrap_or(rgb_color(0, 0, 0, 0));
+        let term_w = src_width / 2;
+        let term_h = src_height / 2;
+        if term_w == 0 || term_h == 0 {
+            return;
+        }
+        if pos_x >= self.width as i32 || pos_y >= self.height as i32 {
+            return;
+        }
+        let start_x: u32 = if pos_x < 0 { (-pos_x) as u32 } else { 0 };
+        let start_y: u32 = if pos_y < 0 { (-pos_y) as u32 } else { 0 };
+        let dest_start_x: u32 = if pos_x < 0 { 0 } else { pos_x as u32 };
+        let dest_start_y: u32 = if pos_y < 0 { 0 } else { pos_y as u32 };
+        if start_x >= term_w || start_y >= term_h {
+            return;
+        }
+        let visible_w = (term_w - start_x).min(self.width - dest_start_x);
+        let visible_h = (term_h - start_y).min(self.height - dest_start_y);
+        if visible_w == 0 || visible_h == 0 {
+            return;
+        }
+        let base_fg = fg_color.unwrap_or(rgb_color(255, 255, 255, 255));
+        let opacity = self.current_opacity();
+        let aware = self.tracker.has_any() || self.link_tracker.has_any();
+        let max_idx = (src_height * src_width) as usize;
+
+        for dy in 0..visible_h {
+            for dx in 0..visible_w {
+                let dest_x = dest_start_x + dx;
+                let dest_y = dest_start_y + dy;
+                if !self.point_in_scissor(dest_x as i32, dest_y as i32) {
+                    continue;
+                }
+                let qx = (start_x + dx) * 2;
+                let qy = (start_y + dy) * 2;
+                let idx = |x: u32, y: u32| (y * src_width + x) as usize;
+                let tl = if idx(qx, qy) < max_idx {
+                    intensities[idx(qx, qy)]
+                } else {
+                    0.0
+                };
+                let tr = if idx(qx + 1, qy) < max_idx && qx + 1 < src_width {
+                    intensities[idx(qx + 1, qy)]
+                } else {
+                    0.0
+                };
+                let bl = if idx(qx, qy + 1) < max_idx && qy + 1 < src_height {
+                    intensities[idx(qx, qy + 1)]
+                } else {
+                    0.0
+                };
+                let br =
+                    if idx(qx + 1, qy + 1) < max_idx && qx + 1 < src_width && qy + 1 < src_height {
+                        intensities[idx(qx + 1, qy + 1)]
+                    } else {
+                        0.0
+                    };
+                let avg = (tl + tr + bl + br) / 4.0;
+                if avg < 0.01 {
+                    continue;
+                }
+                let ch = get_grayscale_char(avg);
+                let gray = avg.clamp(0.0, 1.0);
+                let fg = apply_opacity(base_fg, opacity_to_u8(gray * opacity));
+                let cell = Cell {
+                    char: ch,
+                    fg,
+                    bg,
+                    attributes: 0,
+                };
+                if aware {
+                    self.set_cell_with_alpha_blending(pool, dest_x, dest_y, cell);
+                } else {
+                    self.set_cell_with_alpha_blending_raw(dest_x, dest_y, cell);
+                }
+            }
+        }
+    }
+
+    /// Zig `drawGrid`: table borders with intersection glyph selection. Raw
+    /// plane writes for runs (no scissor on the memset segments — reference
+    /// behavior), setRaw (scissored) for intersections.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_grid(
+        &mut self,
+        border_chars: &[u32; 11],
+        border_fg: Rgba,
+        border_bg: Rgba,
+        column_offsets: &[i32],
+        row_offsets: &[i32],
+        draw_inner: bool,
+        draw_outer: bool,
+    ) {
+        let column_count = column_offsets.len().saturating_sub(1) as u32;
+        let row_count = row_offsets.len().saturating_sub(1) as u32;
+        if row_count == 0 || column_count == 0 {
+            return;
+        }
+        if !draw_inner && !draw_outer {
+            return;
+        }
+        let opacity = self.current_opacity();
+        if is_fully_transparent(opacity, border_fg, border_bg) {
+            return;
+        }
+        let h_char = border_chars[4];
+        let v_char = border_chars[5];
+        let buf_w = self.width as i32;
+        let buf_h = self.height as i32;
+
+        for row_idx in 0..=row_count {
+            let is_outer_row = row_idx == 0 || row_idx == row_count;
+            let should_draw_horizontal = if is_outer_row { draw_outer } else { draw_inner };
+            let border_y = row_offsets[row_idx as usize];
+            if border_y >= buf_h {
+                break;
+            }
+            if should_draw_horizontal && border_y >= 0 {
+                for col_border_idx in 0..=column_count {
+                    let is_outer_col = col_border_idx == 0 || col_border_idx == column_count;
+                    let should_draw_vertical = if is_outer_col { draw_outer } else { draw_inner };
+                    if !should_draw_vertical {
+                        continue;
+                    }
+                    let bx = column_offsets[col_border_idx as usize];
+                    if bx >= buf_w {
+                        break;
+                    }
+                    if bx < 0 {
+                        continue;
+                    }
+                    let has_up = row_idx > 0 && should_draw_vertical;
+                    let has_down = row_idx < row_count && should_draw_vertical;
+                    let has_left = col_border_idx > 0;
+                    let has_right = col_border_idx < column_count;
+                    let ch = table_border_intersection(
+                        border_chars,
+                        has_up,
+                        has_down,
+                        has_left,
+                        has_right,
+                    );
+                    // setRaw: scissored plane write with link upkeep
+                    if let Some(index) = self.validate_and_index(bx as u32, border_y as u32) {
+                        self.write_cell(
+                            index,
+                            Cell {
+                                char: ch,
+                                fg: border_fg,
+                                bg: border_bg,
+                                attributes: 0,
+                            },
+                        );
+                    }
+                }
+                for col_idx in 0..column_count {
+                    let has_boundary_after = if col_idx < column_count - 1 {
+                        draw_inner
+                    } else {
+                        draw_outer
+                    };
+                    let boundary_padding: i32 = if has_boundary_after { 0 } else { 1 };
+                    let start_x = column_offsets[col_idx as usize] + 1;
+                    let end_x = column_offsets[col_idx as usize + 1] + boundary_padding;
+                    if start_x >= buf_w {
+                        break;
+                    }
+                    if end_x <= 0 {
+                        continue;
+                    }
+                    let cs = start_x.max(0) as usize;
+                    let ce = end_x.min(buf_w) as usize;
+                    if cs < ce {
+                        let row_base = border_y as usize * self.width as usize;
+                        self.char[row_base + cs..row_base + ce].fill(h_char);
+                        self.fg[row_base + cs..row_base + ce].fill(border_fg);
+                        self.bg[row_base + cs..row_base + ce].fill(border_bg);
+                        self.attributes[row_base + cs..row_base + ce].fill(0);
+                    }
+                }
+            }
+            if row_idx >= row_count {
+                break;
+            }
+            let has_row_boundary_after = if row_idx < row_count - 1 {
+                draw_inner
+            } else {
+                draw_outer
+            };
+            let row_boundary_padding: i32 = if has_row_boundary_after { 0 } else { 1 };
+            let content_start_y = border_y + 1;
+            let content_end_y = row_offsets[row_idx as usize + 1] + row_boundary_padding;
+            let mut cy = content_start_y;
+            while cy < content_end_y && cy < buf_h {
+                if cy < 0 {
+                    cy += 1;
+                    continue;
+                }
+                let row_base = cy as usize * self.width as usize;
+                for col_border_idx in 0..=column_count {
+                    let is_outer_col = col_border_idx == 0 || col_border_idx == column_count;
+                    let should_draw_vertical = if is_outer_col { draw_outer } else { draw_inner };
+                    if !should_draw_vertical {
+                        continue;
+                    }
+                    let bx = column_offsets[col_border_idx as usize];
+                    if bx >= buf_w {
+                        break;
+                    }
+                    if bx < 0 {
+                        continue;
+                    }
+                    let idx = row_base + bx as usize;
+                    self.char[idx] = v_char;
+                    self.fg[idx] = border_fg;
+                    self.bg[idx] = border_bg;
+                    self.attributes[idx] = 0;
+                }
+                cy += 1;
+            }
+        }
+    }
+
+    /// Zig `colorMatrix` (masked per-cell 4x4 color transform).
+    pub fn color_matrix(&mut self, matrix: &[f32], cell_mask: &[f32], strength: f32, target: u8) {
+        if matrix.len() < 16 || cell_mask.len() < 3 {
+            return;
+        }
+        if target == 0 {
+            return;
+        }
+        if !strength.is_finite() {
+            return;
+        }
+        let mat: [f32; 16] = matrix[0..16].try_into().unwrap();
+        let max_u32_f = u32::MAX as f32;
+        let len = cell_mask.len() - (cell_mask.len() % 3);
+        let mut i = 0;
+        while i < len {
+            let x_f = cell_mask[i];
+            let y_f = cell_mask[i + 1];
+            if x_f < 0.0
+                || y_f < 0.0
+                || !x_f.is_finite()
+                || !y_f.is_finite()
+                || x_f > max_u32_f
+                || y_f > max_u32_f
+            {
+                i += 3;
+                continue;
+            }
+            let x = x_f as u32;
+            let y = y_f as u32;
+            let cell_strength = cell_mask[i + 2] * strength;
+            if x >= self.width
+                || y >= self.height
+                || !cell_strength.is_finite()
+                || cell_strength == 0.0
+            {
+                i += 3;
+                continue;
+            }
+            let index = (y * self.width + x) as usize;
+            if target & 1 != 0 {
+                self.fg[index] = matrix_apply_to(self.fg[index], &mat, cell_strength);
+            }
+            if target & 2 != 0 {
+                self.bg[index] = matrix_apply_to(self.bg[index], &mat, cell_strength);
+            }
+            i += 3;
+        }
+    }
+
+    /// Zig `colorMatrixUniform`: whole-buffer 4x4 color transform.
+    pub fn color_matrix_uniform(&mut self, matrix: &[f32], strength: f32, target: u8) {
+        if matrix.len() < 16 || strength == 0.0 || target == 0 || !strength.is_finite() {
+            return;
+        }
+        let mat: [f32; 16] = matrix[0..16].try_into().unwrap();
+        let size = (self.width * self.height) as usize;
+        for index in 0..size {
+            if target & 1 != 0 {
+                self.fg[index] = matrix_apply_to(self.fg[index], &mat, strength);
+            }
+            if target & 2 != 0 {
+                self.bg[index] = matrix_apply_to(self.bg[index], &mat, strength);
+            }
+        }
+    }
+
     pub fn get_real_char_size(&self, pool: &mut GraphemePool) -> u32 {
         let total_chars = self.width * self.height;
         let grapheme_count = self.tracker.cell_count();
         let total_grapheme_bytes = self.tracker.total_bytes(pool);
         (total_chars - grapheme_count) * 4 + total_grapheme_bytes
+    }
+}
+
+/// Zig `tableBorderIntersectionByConnections`.
+fn table_border_intersection(bc: &[u32; 11], up: bool, down: bool, left: bool, right: bool) -> u32 {
+    match (up, down, left, right) {
+        (true, true, true, true) => bc[10],
+        (false, true, false, true) => bc[0],
+        (false, true, true, false) => bc[1],
+        (true, false, false, true) => bc[2],
+        (true, false, true, false) => bc[3],
+        (true, true, false, true) => bc[8],
+        (true, true, true, false) => bc[9],
+        (false, true, true, true) => bc[6],
+        (true, false, true, true) => bc[7],
+        (false, false, l, r) if l || r => bc[4],
+        (u, d, false, false) if u || d => bc[5],
+        _ => bc[10],
     }
 }

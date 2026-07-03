@@ -61,9 +61,23 @@ export declare function bufferClearOpacity(handle: number): void
 
 export declare function bufferClearScissorRects(handle: number): void
 
+export declare function bufferColorMatrix(handle: number, matrix: number, cellMask: number, cellMaskCount: number, strength: number, target: number): void
+
+export declare function bufferColorMatrixUniform(handle: number, matrix: number, strength: number, target: number): void
+
 export declare function bufferDrawBox(handle: number, x: number, y: number, width: number, height: number, borderChars: number, packedOptions: number, borderColor: number, backgroundColor: number, titleColor: number, titlePtr: number, titleLen: number, bottomTitlePtr: number, bottomTitleLen: number): void
 
 export declare function bufferDrawChar(handle: number, char: number, x: number, y: number, fg: number, bg: number, attributes: number): void
+
+export declare function bufferDrawGrayscaleBuffer(handle: number, posX: number, posY: number, intensities: number, srcWidth: number, srcHeight: number, fg: number, bg: number): void
+
+export declare function bufferDrawGrayscaleBufferSupersampled(handle: number, posX: number, posY: number, intensities: number, srcWidth: number, srcHeight: number, fg: number, bg: number): void
+
+export declare function bufferDrawGrid(handle: number, borderChars: number, borderFg: number, borderBg: number, columnOffsets: number, columnCount: number, rowOffsets: number, rowCount: number, options: number): void
+
+export declare function bufferDrawPackedBuffer(handle: number, data: number, dataLen: number, posX: number, posY: number, terminalWidthCells: number, terminalHeightCells: number): void
+
+export declare function bufferDrawSuperSampleBuffer(handle: number, x: number, y: number, pixelData: number, len: number, format: number, alignedBytesPerRow: number): void
 
 export declare function bufferDrawText(handle: number, textPtr: number, textLen: number, x: number, y: number, fg: number, bg: number, attributes: number): void
 
