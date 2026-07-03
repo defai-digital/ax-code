@@ -127,6 +127,41 @@ pub fn set_background_color(handle: u32, color: f64) {
     }
 }
 
+#[napi(js_name = "rendererSetPaletteState")]
+pub fn renderer_set_palette_state(
+    handle: u32,
+    palette_ptr: f64,
+    palette_len: u32,
+    default_fg_ptr: f64,
+    default_bg_ptr: f64,
+    palette_epoch: u32,
+) {
+    let Some(r) = resolve(handle) else { return };
+    if palette_len < 256 || palette_ptr == 0.0 {
+        return;
+    }
+    // palette is 256 x RGBA([4]u16) laid out contiguously.
+    let base = (palette_ptr as u64) as usize as *const u16;
+    let mut palette = [[0u16; 4]; 256];
+    for (i, entry) in palette.iter_mut().enumerate() {
+        let off = i * 4;
+        *entry = unsafe {
+            [
+                *base.add(off),
+                *base.add(off + 1),
+                *base.add(off + 2),
+                *base.add(off + 3),
+            ]
+        };
+    }
+    r.set_palette_state(
+        &palette,
+        unsafe { read_rgba(default_fg_ptr) },
+        unsafe { read_rgba(default_bg_ptr) },
+        palette_epoch,
+    );
+}
+
 #[napi(js_name = "setupTerminal")]
 pub fn setup_terminal(handle: u32, use_alternate_screen: f64) {
     if let Some(r) = resolve(handle) {

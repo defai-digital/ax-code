@@ -350,6 +350,35 @@ impl CliRenderer {
         self.render_offset = offset;
     }
 
+    /// Zig `setPaletteState` — reset to the fallback palette, overlay the
+    /// provided 256-entry palette + default fg/bg, and bump the epoch (forcing
+    /// a full repaint) when it changed. Only `palette_rgba` (nearest-palette
+    /// lookup, active when rgb=false && ansi256) and the epoch are observable in
+    /// the emit path; default fg/bg are stored but unread there.
+    pub fn set_palette_state(
+        &mut self,
+        palette: &[Rgba],
+        default_fg: Rgba,
+        default_bg: Rgba,
+        palette_epoch: u32,
+    ) {
+        for (i, slot_color) in self.palette_rgba.iter_mut().enumerate() {
+            *slot_color = fallback_ansi256_color(i);
+        }
+        self.default_fg_rgba = default_color(255, 255, 255, 255);
+        self.default_bg_rgba = default_color(0, 0, 0, 255);
+
+        let copy_len = palette.len().min(self.palette_rgba.len());
+        self.palette_rgba[..copy_len].copy_from_slice(&palette[..copy_len]);
+        self.default_fg_rgba = default_fg;
+        self.default_bg_rgba = default_bg;
+
+        if self.palette_epoch != palette_epoch {
+            self.palette_epoch = palette_epoch;
+            self.force_full_repaint = true;
+        }
+    }
+
     pub fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 || (width == self.width && height == self.height) {
             return;

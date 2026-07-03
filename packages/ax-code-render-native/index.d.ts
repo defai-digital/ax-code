@@ -229,6 +229,8 @@ export declare function getNextBuffer(handle: number): number
 
 export declare function render(handle: number, force: number): number
 
+export declare function rendererSetPaletteState(handle: number, palettePtr: number, paletteLen: number, defaultFgPtr: number, defaultBgPtr: number, paletteEpoch: number): void
+
 export declare function resizeRenderer(handle: number, width: number, height: number): void
 
 export declare function restoreTerminalModes(handle: number): void

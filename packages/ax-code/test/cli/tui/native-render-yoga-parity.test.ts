@@ -70,6 +70,15 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("rendererSetPaletteState nearest-palette output matches the Zig backend", () => {
+    // Self-spawns under an ansi256-only profile so the custom palette is
+    // actually consulted (emitColor's nearest-palette fallback).
+    const result = runNode([path.join(pkgDir, "script/native-render-palette-parity.mjs"), "--seqs=60"])
+    expect(result.stderr).not.toContain("palette output differs")
+    expect(result.stdout).toContain("palette parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
   it("setupTerminal/restoreTerminalModes/clearTerminal escape output matches the Zig backend", () => {
     // Drives the stdout backend in child processes and diffs the emitted
     // control sequences (dumpOutputBuffer can't see writeOut output).
