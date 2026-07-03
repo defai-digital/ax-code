@@ -176,16 +176,29 @@ pub fn clear_clipboard_osc52(handle: u32, target: u32) -> bool {
     r.clear_clipboard_osc52(clipboard_target_char(target))
 }
 
-// --- notification (gated on notification protocol detection) -----------------
+// --- notification (OSC 9 / 777 / 99, gated on protocol detection) ------------
 #[napi(js_name = "triggerNotification")]
 pub fn trigger_notification(
-    _handle: u32,
-    _msg_ptr: f64,
-    _msg_len: u32,
-    _title_ptr: f64,
-    _title_len: u32,
+    handle: u32,
+    msg_ptr: f64,
+    msg_len: u32,
+    title_ptr: f64,
+    title_len: u32,
 ) -> bool {
-    false
+    let Some(r) = renderer(handle) else {
+        return false;
+    };
+    let slice = |ptr: f64, len: u32| -> Option<&'static [u8]> {
+        if ptr == 0.0 || len == 0 {
+            None
+        } else {
+            Some(unsafe {
+                std::slice::from_raw_parts((ptr as u64) as usize as *const u8, len as usize)
+            })
+        }
+    };
+    let message = slice(msg_ptr, msg_len).unwrap_or(&[]);
+    r.trigger_notification(message, slice(title_ptr, title_len))
 }
 
 // --- debug / diagnostics -----------------------------------------------------

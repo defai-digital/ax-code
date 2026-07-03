@@ -35,6 +35,7 @@ pub struct Capabilities {
     pub bracketed_paste: bool,
     pub focus_tracking: bool,
     pub osc52: bool,
+    pub notifications: bool,
 }
 
 impl Default for Capabilities {
@@ -50,8 +51,82 @@ impl Default for Capabilities {
             bracketed_paste: false,
             focus_tracking: false,
             osc52: false,
+            notifications: false,
         }
     }
+}
+
+/// terminal.zig NotificationProtocol. Discriminant order matches priority
+/// (higher = preferred): none < osc9 < osc777 < osc99.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NotificationProtocol {
+    None = 0,
+    Osc9 = 1,
+    Osc777 = 2,
+    Osc99 = 3,
+}
+
+/// terminal.zig detectNotificationProtocol — terminal-name → protocol.
+fn detect_np(value: &str) -> Option<NotificationProtocol> {
+    let has = |n: &str| contains_ignore_case(value, n);
+    if has("kitty") || has("foot") {
+        return Some(NotificationProtocol::Osc99);
+    }
+    for n in [
+        "ghostty",
+        "wezterm",
+        "warp",
+        "hterm",
+        "blink",
+        "contour",
+        "vte",
+        "gnome",
+        "tilix",
+        "terminator",
+        "xfce",
+        "urxvt",
+        "rxvt",
+        "windows terminal",
+        "windows_terminal",
+    ] {
+        if has(n) {
+            return Some(NotificationProtocol::Osc777);
+        }
+    }
+    for n in ["iterm", "Apple_Terminal", "Terminal.app", "conemu"] {
+        if has(n) {
+            return Some(NotificationProtocol::Osc9);
+        }
+    }
+    None
+}
+
+/// terminal.zig termFeaturesHasCode — uppercase-initial tokens (e.g. "No").
+fn term_features_has_code(features: &str, code: &str) -> bool {
+    let bytes = features.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if !c.is_ascii_alphanumeric() {
+            break;
+        }
+        if !c.is_ascii_uppercase() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_lowercase() {
+            i += 1;
+        }
+        if &features[start..i] == code {
+            return true;
+        }
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+    }
+    false
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -203,6 +278,8 @@ pub struct Terminal {
     is_foot: bool,
     remote: bool,
     sty: bool,
+    notification_protocol: NotificationProtocol,
+    notification_id_counter: u64,
     remote_mode: RemoteMode,
     env_overrides: std::collections::HashMap<String, String>,
     // These are reset to false at every checkEnvironmentOverrides and only ever
@@ -225,6 +302,8 @@ impl Terminal {
             is_foot: detected.is_foot,
             remote: detected.remote,
             sty: detected.sty,
+            notification_protocol: detected.notification_protocol,
+            notification_id_counter: 0,
             remote_mode,
             env_overrides: overrides,
             skip_explicit_width_query: false,
@@ -254,6 +333,7 @@ impl Terminal {
         self.is_foot = detected.is_foot;
         self.remote = detected.remote;
         self.sty = detected.sty;
+        self.notification_protocol = detected.notification_protocol;
     }
 
     pub fn kitty_keyboard_flags(&self) -> u8 {
@@ -319,6 +399,85 @@ impl Terminal {
         } else {
             out.extend_from_slice(&osc52);
         }
+        true
+    }
+
+    /// tmux/screen DCS passthrough wrap (ESC doubled), matching
+    /// writePassthroughSequence.
+    fn passthrough_wrap(&self, out: &mut Vec<u8>, seq: &[u8]) {
+        let wrap = |out: &mut Vec<u8>, start: &[u8]| {
+            out.extend_from_slice(start);
+            for &c in seq {
+                if c == 0x1b {
+                    out.push(0x1b);
+                }
+                out.push(c);
+            }
+            out.extend_from_slice(b"\x1b\\");
+        };
+        if self.is_in_tmux() {
+            wrap(out, b"\x1bPtmux;");
+        } else if !self.remote && self.sty {
+            wrap(out, b"\x1bP");
+        } else {
+            out.extend_from_slice(seq);
+        }
+    }
+
+    /// terminal.zig `writeNotification` — emit the desktop-notification escape
+    /// for the detected protocol (OSC 99 base64 / OSC 777 / OSC 9). Returns
+    /// false when notifications are unsupported.
+    pub fn write_notification(
+        &mut self,
+        out: &mut Vec<u8>,
+        message: &[u8],
+        title: Option<&[u8]>,
+    ) -> bool {
+        if !self.caps.notifications || self.notification_protocol == NotificationProtocol::None {
+            return false;
+        }
+        self.notification_id_counter = self.notification_id_counter.wrapping_add(1);
+        let mut seq: Vec<u8> = Vec::new();
+        match self.notification_protocol {
+            NotificationProtocol::None => return false,
+            NotificationProtocol::Osc99 => {
+                let id = format!("opentui-{}", self.notification_id_counter);
+                match title {
+                    Some(t) if !t.is_empty() => {
+                        write_osc99_payload(&mut seq, &id, "title", t, false);
+                        write_osc99_payload(&mut seq, &id, "body", message, true);
+                    }
+                    _ => write_osc99_payload(&mut seq, &id, "body", message, true),
+                }
+            }
+            NotificationProtocol::Osc777 => {
+                seq.extend_from_slice(b"\x1b]777;notify;");
+                match title {
+                    Some(t) => {
+                        write_sanitized(&mut seq, t, true);
+                        seq.push(b';');
+                        write_sanitized(&mut seq, message, true);
+                    }
+                    None => {
+                        write_sanitized(&mut seq, message, true);
+                        seq.push(b';');
+                    }
+                }
+                seq.extend_from_slice(b"\x1b\\");
+            }
+            NotificationProtocol::Osc9 => {
+                seq.extend_from_slice(b"\x1b]9;");
+                if let Some(t) = title {
+                    if !t.is_empty() {
+                        write_sanitized(&mut seq, t, false);
+                        seq.extend_from_slice(b": ");
+                    }
+                }
+                write_sanitized(&mut seq, message, false);
+                seq.extend_from_slice(b"\x1b\\");
+            }
+        }
+        self.passthrough_wrap(out, &seq);
         true
     }
 
@@ -625,6 +784,7 @@ struct Detected {
     is_foot: bool,
     remote: bool,
     sty: bool,
+    notification_protocol: NotificationProtocol,
 }
 
 /// `checkEnvironmentOverrides`, scoped to the state the setup/teardown escape
@@ -677,6 +837,7 @@ fn detect(
             is_foot: false,
             remote: true,
             sty: false,
+            notification_protocol: NotificationProtocol::None,
         };
     }
 
@@ -784,6 +945,58 @@ fn detect(
         }
     }
 
+    // Notification protocol (checkEnvironmentOverrides). Heuristic sources have
+    // equal priority, so the highest-priority protocol among them wins; an
+    // override replaces it. In zellij, heuristics are ignored (only overrides
+    // survive — enforceNotificationProtocolForMultiplexer).
+    let mut notification_protocol = NotificationProtocol::None;
+    if !zellij {
+        let mut best = NotificationProtocol::None;
+        let mut consider = |p: Option<NotificationProtocol>| {
+            if let Some(p) = p {
+                if (p as u8) > (best as u8) {
+                    best = p;
+                }
+            }
+        };
+        if let Some(term) = env("TERM") {
+            consider(detect_np(&term));
+        }
+        if let Some(f) = env("TERM_FEATURES") {
+            if term_features_has_code(&f, "No") {
+                consider(Some(NotificationProtocol::Osc9));
+            }
+        }
+        if let Some(prog) = env("TERM_PROGRAM") {
+            consider(detect_np(&prog));
+        }
+        if env("WT_SESSION").is_some() {
+            consider(Some(NotificationProtocol::Osc777));
+        }
+        notification_protocol = best;
+    }
+    if let Some(v) = env("OPENTUI_NOTIFICATION_PROTOCOL") {
+        let lv = v.to_ascii_lowercase();
+        if v == "0" || lv == "false" || lv == "off" || lv == "none" {
+            notification_protocol = NotificationProtocol::None;
+        } else if v == "1" || lv == "true" || lv == "on" {
+            // explicit-on keeps the detected protocol
+        } else if lv == "osc99" {
+            notification_protocol = NotificationProtocol::Osc99;
+        } else if lv == "osc777" {
+            notification_protocol = NotificationProtocol::Osc777;
+        } else if lv == "osc9" {
+            notification_protocol = NotificationProtocol::Osc9;
+        }
+    }
+    if let Some(v) = env("OPENTUI_NOTIFICATIONS") {
+        let lv = v.to_ascii_lowercase();
+        if v == "0" || lv == "false" || lv == "off" {
+            notification_protocol = NotificationProtocol::None;
+        }
+    }
+    caps.notifications = notification_protocol != NotificationProtocol::None;
+
     let remote = match remote_mode {
         RemoteMode::Auto => {
             env("SSH_CONNECTION").is_some()
@@ -800,6 +1013,7 @@ fn detect(
         is_foot,
         remote,
         sty,
+        notification_protocol,
     }
 }
 
@@ -827,4 +1041,64 @@ fn contains_ignore_case(haystack: &str, needle: &str) -> bool {
     haystack
         .to_ascii_lowercase()
         .contains(&needle.to_ascii_lowercase())
+}
+
+/// terminal.zig writeOsc99Payload — `\x1b]99;i={id}:p={type}:e=1:d={done};<b64>\x1b\\`.
+fn write_osc99_payload(
+    out: &mut Vec<u8>,
+    id: &str,
+    payload_type: &str,
+    payload: &[u8],
+    done: bool,
+) {
+    let _ = write!(
+        out,
+        "\x1b]99;i={}:p={}:e=1:d={};",
+        id, payload_type, done as u8
+    );
+    base64_encode(out, payload);
+    out.extend_from_slice(b"\x1b\\");
+}
+
+/// terminal.zig writeSanitizedNotificationText — control chars / ESC (and
+/// optionally ';') become spaces.
+fn write_sanitized(out: &mut Vec<u8>, text: &[u8], replace_semicolon: bool) {
+    for &c in text {
+        if c < 0x20 || c == 0x7f || c == 0x1b || (replace_semicolon && c == b';') {
+            out.push(b' ');
+        } else {
+            out.push(c);
+        }
+    }
+}
+
+/// Standard base64 (std.base64.standard.Encoder) with '=' padding.
+fn base64_encode(out: &mut Vec<u8>, data: &[u8]) {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut chunks = data.chunks_exact(3);
+    for c in &mut chunks {
+        let n = (c[0] as u32) << 16 | (c[1] as u32) << 8 | c[2] as u32;
+        out.push(T[(n >> 18) as usize & 63]);
+        out.push(T[(n >> 12) as usize & 63]);
+        out.push(T[(n >> 6) as usize & 63]);
+        out.push(T[n as usize & 63]);
+    }
+    let rem = chunks.remainder();
+    match rem.len() {
+        1 => {
+            let n = (rem[0] as u32) << 16;
+            out.push(T[(n >> 18) as usize & 63]);
+            out.push(T[(n >> 12) as usize & 63]);
+            out.push(b'=');
+            out.push(b'=');
+        }
+        2 => {
+            let n = (rem[0] as u32) << 16 | (rem[1] as u32) << 8;
+            out.push(T[(n >> 18) as usize & 63]);
+            out.push(T[(n >> 12) as usize & 63]);
+            out.push(T[(n >> 6) as usize & 63]);
+            out.push(b'=');
+        }
+        _ => {}
+    }
 }

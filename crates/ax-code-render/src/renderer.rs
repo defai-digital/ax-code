@@ -1124,6 +1124,16 @@ impl CliRenderer {
         self.terminal.set_terminal_env_var(key, value);
     }
 
+    /// Zig `triggerNotification` — emit a desktop notification, false if unsupported.
+    pub fn trigger_notification(&mut self, message: &[u8], title: Option<&[u8]>) -> bool {
+        let mut out = Vec::new();
+        if !self.terminal.write_notification(&mut out, message, title) {
+            return false;
+        }
+        self.write_out(&out);
+        true
+    }
+
     /// Zig `getTerminalCapabilities` — write the capability booleans into the
     /// ExternalCapabilities out-struct. Terminal name/version pointers are left
     /// null/zero (name bookkeeping is not tracked in this port); the boolean
@@ -1149,6 +1159,7 @@ impl CliRenderer {
             b(12, caps.bracketed_paste);
             b(13, caps.hyperlinks);
             b(14, caps.osc52);
+            b(15, caps.notifications);
             b(16, caps.explicit_cursor_positioning);
             b(17, self.terminal.is_remote());
             ((base + 18) as *mut u8).write_unaligned(self.terminal.multiplexer_code());

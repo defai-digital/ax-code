@@ -74,6 +74,10 @@ async function runChild(which) {
   const clip = new TextEncoder().encode("SGVsbG8=")
   sym.copyToClipboardOSC52(rh, 0, p(clip), clip.length)
   sym.clearClipboardOSC52(rh, 0)
+  const nmsg = new TextEncoder().encode("build done"),
+    ntitle = new TextEncoder().encode("ax-code")
+  sym.triggerNotification(rh, p(nmsg), nmsg.length, p(ntitle), ntitle.length)
+  sym.triggerNotification(rh, p(nmsg), nmsg.length, 0, 0) // no title
   sym.disableMouse(rh)
   sym.disableKittyKeyboard(rh)
 
@@ -110,6 +114,9 @@ const PROFILES = [
   { name: "tmux", env: { TERM: "tmux-256color", TMUX: "/tmp/tmux-1/default,1,0", COLORTERM: "truecolor" } },
   { name: "foot", env: { TERM: "foot", COLORTERM: "truecolor" } },
   { name: "no color", env: { TERM: "dumb" } },
+  { name: "ghostty (osc777)", env: { TERM: "xterm-256color", TERM_PROGRAM: "ghostty", COLORTERM: "truecolor" } },
+  { name: "iterm (osc9)", env: { TERM: "xterm-256color", TERM_PROGRAM: "iTerm.app", COLORTERM: "truecolor" } },
+  { name: "kitty+tmux (osc99 dcs)", env: { TERM: "xterm-kitty", TMUX: "/tmp/t,1,0", COLORTERM: "truecolor" } },
 ]
 
 const emitArg = process.argv.find((a) => a.startsWith("--emit="))
