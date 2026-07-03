@@ -240,16 +240,27 @@ pub fn text_buffer_view_get_logical_line_info_direct(handle: u32, out_ptr: f64) 
     text_buffer_view_get_line_info_direct(handle, out_ptr);
 }
 
+/// ExternalMeasureResult: line_count u32@0, width_cols_max u32@4.
 #[napi(js_name = "textBufferViewMeasureForDimensions")]
 pub fn text_buffer_view_measure_for_dimensions(
-    _handle: u32,
-    _width: u32,
-    _height: u32,
-    _out_ptr: f64,
+    handle: u32,
+    width: u32,
+    height: u32,
+    out_ptr: f64,
 ) -> bool {
-    // Content measurement for arbitrary dimensions is a documented follow-up;
-    // reports "not measured" (leaves the caller's zeroed struct).
-    false
+    let Some(view) = resolve(handle) else {
+        return false;
+    };
+    if out_ptr == 0.0 {
+        return false;
+    }
+    let (line_count, width_cols_max) = view.measure_for_dimensions(width, height);
+    let base = (out_ptr as u64) as usize;
+    unsafe {
+        (base as *mut u32).write_unaligned(line_count);
+        ((base + 4) as *mut u32).write_unaligned(width_cols_max);
+    }
+    true
 }
 
 #[napi(js_name = "bufferDrawTextBufferView")]

@@ -563,6 +563,7 @@ export declare function textBufferViewGetSelectionInfo(handle: number): number
 
 export declare function textBufferViewGetVirtualLineCount(handle: number): number
 
+/** ExternalMeasureResult: line_count u32@0, width_cols_max u32@4. */
 export declare function textBufferViewMeasureForDimensions(handle: number, width: number, height: number, outPtr: number): boolean
 
 export declare function textBufferViewResetLocalSelection(handle: number): void

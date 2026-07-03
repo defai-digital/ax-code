@@ -162,6 +162,39 @@ impl TextBufferView {
         self.viewport
     }
 
+    /// Zig `measureForDimensions` — (line_count, width_cols_max) laid out for
+    /// `width`. No-wrap / width 0 uses logical line widths; wrap modes count
+    /// virtual lines at `width` without permanently disturbing the view (the
+    /// caches are rebuilt on the next real access).
+    pub fn measure_for_dimensions(&mut self, width: u32, _height: u32) -> (u32, u32) {
+        if width == 0 || self.wrap_mode == WrapMode::None {
+            let Some(tb) = resolve_tb(self.text_buffer) else {
+                return (0, 0);
+            };
+            let line_count = tb.get_line_count();
+            let mut max = 0u32;
+            for row in 0..line_count {
+                max = max.max(tb.line_width_at(row));
+            }
+            return (line_count, max);
+        }
+        let saved_wrap = self.wrap_width;
+        self.wrap_width = Some(width);
+        self.dirty = true;
+        self.update_virtual_lines();
+        let line_count = self.caches.vlines.len() as u32;
+        let max = self
+            .caches
+            .vlines
+            .iter()
+            .map(|v| v.width_cols)
+            .max()
+            .unwrap_or(0);
+        self.wrap_width = saved_wrap;
+        self.dirty = true;
+        (line_count, max)
+    }
+
     pub fn selection_anchor(&self) -> Option<u32> {
         self.selection_anchor_offset
     }
