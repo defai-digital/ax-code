@@ -184,6 +184,16 @@ pub fn buffer_resize(handle: u32, width: u32, height: u32) {
     }
 }
 
+#[napi(js_name = "getBufferWidth")]
+pub fn get_buffer_width(handle: u32) -> u32 {
+    resolve(handle).map_or(0, |buf| buf.width)
+}
+
+#[napi(js_name = "getBufferHeight")]
+pub fn get_buffer_height(handle: u32) -> u32 {
+    resolve(handle).map_or(0, |buf| buf.height)
+}
+
 #[napi(js_name = "bufferGetCharPtr")]
 pub fn buffer_get_char_ptr(handle: u32) -> f64 {
     resolve(handle).map_or(0.0, |buf| buf.char.as_ptr() as usize as f64)

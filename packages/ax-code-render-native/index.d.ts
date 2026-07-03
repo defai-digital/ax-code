@@ -241,6 +241,10 @@ export declare function enableKittyKeyboard(handle: number, flags: number): void
 
 export declare function enableMouse(handle: number, enableMovement: number): void
 
+export declare function getBufferHeight(handle: number): number
+
+export declare function getBufferWidth(handle: number): number
+
 export declare function getCurrentBuffer(handle: number): number
 
 export declare function getHitGridDirty(handle: number): boolean
@@ -297,6 +301,8 @@ export declare function setRenderOffset(handle: number, offset: number): void
 export declare function setTerminalTitle(handle: number, titlePtr: number, titleLen: number): void
 
 export declare function setupTerminal(handle: number, useAlternateScreen: number): void
+
+export declare function setUseThread(handle: number, useThread: number): void
 
 export declare function suspendRenderer(handle: number): void
 
@@ -410,6 +416,10 @@ export declare function textBufferViewSetWrapWidth(handle: number, width: number
 export declare function textBufferViewUpdateLocalSelection(handle: number, ax: number, ay: number, fx: number, fy: number, bg: number, fg: number): boolean
 
 export declare function textBufferViewUpdateSelection(handle: number, end: number, bg: number, fg: number): void
+
+export declare function updateMemoryStats(handle: number, heapUsed: number, heapTotal: number, arrayBuffers: number): void
+
+export declare function updateStats(handle: number, time: number, fps: number, frameCallbackTime: number): void
 
 export declare function yogaConfigCreate(): number
 

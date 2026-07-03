@@ -243,6 +243,25 @@ pub struct CliRenderer {
     stat_output_write_time: Option<f64>,
     stat_last_frame_samples: Vec<f64>,
     stat_cells_samples: Vec<u32>,
+
+    // Render thread + JS-supplied stats. Threading is output-invariant (frames
+    // are byte-identical whether written inline or on a thread); the memory
+    // backend can't thread, so this stays false there. No FFI getter surfaces
+    // these, so they are pure state sinks.
+    #[allow(dead_code)]
+    use_thread: bool,
+    #[allow(dead_code)]
+    stat_overall_frame_time: f64,
+    #[allow(dead_code)]
+    stat_fps: u32,
+    #[allow(dead_code)]
+    stat_frame_callback_time: f64,
+    #[allow(dead_code)]
+    stat_heap_used: u32,
+    #[allow(dead_code)]
+    stat_heap_total: u32,
+    #[allow(dead_code)]
+    stat_array_buffers: u32,
 }
 
 const MAX_STAT_SAMPLES: usize = 30;
@@ -384,7 +403,39 @@ impl CliRenderer {
             stat_output_write_time: None,
             stat_last_frame_samples: Vec::new(),
             stat_cells_samples: Vec::new(),
+            use_thread: false,
+            stat_overall_frame_time: 0.0,
+            stat_fps: 0,
+            stat_frame_callback_time: 0.0,
+            stat_heap_used: 0,
+            stat_heap_total: 0,
+            stat_array_buffers: 0,
         }))
+    }
+
+    /// Zig `setUseThread` — gated on the backend supporting threading. The
+    /// memory backend never does; the port writes frames inline (byte-identical
+    /// output) rather than owning a write thread, so this only records intent.
+    pub fn set_use_thread(&mut self, use_thread: bool) {
+        let supports = matches!(self.backend, OutputBackend::Stdout { .. });
+        if use_thread && !supports {
+            return;
+        }
+        self.use_thread = use_thread;
+    }
+
+    /// Zig `updateStats` — JS-supplied frame timing (debug overlay only).
+    pub fn update_stats(&mut self, time: f64, fps: u32, frame_callback_time: f64) {
+        self.stat_overall_frame_time = time;
+        self.stat_fps = fps;
+        self.stat_frame_callback_time = frame_callback_time;
+    }
+
+    /// Zig `updateMemoryStats` — JS-supplied heap figures (debug overlay only).
+    pub fn update_memory_stats(&mut self, heap_used: u32, heap_total: u32, array_buffers: u32) {
+        self.stat_heap_used = heap_used;
+        self.stat_heap_total = heap_total;
+        self.stat_array_buffers = array_buffers;
     }
 
     pub fn next_handle(&self) -> u32 {

@@ -303,6 +303,27 @@ pub fn dump_output_buffer(handle: u32, timestamp: f64) {
     }
 }
 
+#[napi(js_name = "setUseThread")]
+pub fn set_use_thread(handle: u32, use_thread: f64) {
+    if let Some(r) = resolve(handle) {
+        r.set_use_thread(use_thread != 0.0);
+    }
+}
+
+#[napi(js_name = "updateStats")]
+pub fn update_stats(handle: u32, time: f64, fps: u32, frame_callback_time: f64) {
+    if let Some(r) = resolve(handle) {
+        r.update_stats(time, fps, frame_callback_time);
+    }
+}
+
+#[napi(js_name = "updateMemoryStats")]
+pub fn update_memory_stats(handle: u32, heap_used: u32, heap_total: u32, array_buffers: u32) {
+    if let Some(r) = resolve(handle) {
+        r.update_memory_stats(heap_used, heap_total, array_buffers);
+    }
+}
+
 #[napi(js_name = "resizeRenderer")]
 pub fn resize_renderer(handle: u32, width: u32, height: u32) {
     if let Some(r) = resolve(handle) {
