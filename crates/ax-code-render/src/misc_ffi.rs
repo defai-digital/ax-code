@@ -205,14 +205,26 @@ pub fn set_debug_overlay(_handle: u32, _enabled: f64, _corner: u32) {
 
 #[napi(js_name = "setTerminalEnvVar")]
 pub fn set_terminal_env_var(
-    _handle: u32,
-    _key_ptr: f64,
-    _key_len: u32,
-    _val_ptr: f64,
-    _val_len: u32,
+    handle: u32,
+    key_ptr: f64,
+    key_len: u32,
+    val_ptr: f64,
+    val_len: u32,
 ) -> bool {
-    // Capabilities are computed from the process environment at init; per-renderer
-    // env overrides + recompute are a documented follow-up.
+    let Some(r) = renderer(handle) else {
+        return false;
+    };
+    let read = |ptr: f64, len: u32| -> String {
+        if ptr == 0.0 || len == 0 {
+            String::new()
+        } else {
+            let bytes = unsafe {
+                std::slice::from_raw_parts((ptr as u64) as usize as *const u8, len as usize)
+            };
+            String::from_utf8_lossy(bytes).into_owned()
+        }
+    };
+    r.set_terminal_env_var(&read(key_ptr, key_len), &read(val_ptr, val_len));
     true
 }
 

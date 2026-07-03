@@ -203,6 +203,8 @@ pub struct Terminal {
     is_foot: bool,
     remote: bool,
     sty: bool,
+    remote_mode: RemoteMode,
+    env_overrides: std::collections::HashMap<String, String>,
     // These are reset to false at every checkEnvironmentOverrides and only ever
     // set true by query responses, which the headless port never processes.
     skip_explicit_width_query: bool,
@@ -212,7 +214,8 @@ pub struct Terminal {
 
 impl Terminal {
     pub fn init(remote_mode: RemoteMode) -> Terminal {
-        let detected = detect(remote_mode);
+        let overrides = std::collections::HashMap::new();
+        let detected = detect(remote_mode, &overrides, false, false);
         Terminal {
             caps: detected.caps,
             cursor: CursorState::default(),
@@ -222,6 +225,8 @@ impl Terminal {
             is_foot: detected.is_foot,
             remote: detected.remote,
             sty: detected.sty,
+            remote_mode,
+            env_overrides: overrides,
             skip_explicit_width_query: false,
             // Options.kitty_keyboard_flags default = 0b00101 (disambiguate +
             // alternate keys), not 0.
@@ -231,6 +236,24 @@ impl Terminal {
 
     pub fn get_capabilities(&self) -> Capabilities {
         self.caps
+    }
+
+    /// Zig `setTerminalEnvVar` — inject a host env override and recompute the
+    /// capabilities (checkEnvironmentOverrides). Mode state is preserved.
+    pub fn set_terminal_env_var(&mut self, key: &str, value: &str) {
+        self.env_overrides
+            .insert(key.to_string(), value.to_string());
+        let detected = detect(
+            self.remote_mode,
+            &self.env_overrides,
+            self.caps.rgb,
+            self.caps.osc52,
+        );
+        self.caps = detected.caps;
+        self.multiplexer = detected.multiplexer;
+        self.is_foot = detected.is_foot;
+        self.remote = detected.remote;
+        self.sty = detected.sty;
     }
 
     pub fn kitty_keyboard_flags(&self) -> u8 {
@@ -596,10 +619,6 @@ fn push_wrap_for_tmux(out: &mut Vec<u8>, seq: &[u8]) {
     out.extend_from_slice(b"\x1b\\"); // tmuxDcsEnd
 }
 
-fn env(key: &str) -> Option<String> {
-    std::env::var(key).ok()
-}
-
 struct Detected {
     caps: Capabilities,
     multiplexer: Multiplexer,
@@ -613,9 +632,36 @@ struct Detected {
 /// protocol / terminal-name bookkeeping is intentionally omitted. Both the Rust
 /// renderer and the Zig backend read the same process env, so mirroring this
 /// yields identical setup output.
-fn detect(remote_mode: RemoteMode) -> Detected {
+fn detect(
+    remote_mode: RemoteMode,
+    overrides: &std::collections::HashMap<String, String>,
+    prev_rgb: bool,
+    prev_osc52: bool,
+) -> Detected {
+    // Env lookup mirrors Zig `setHostEnvVar`: once ANY override is injected,
+    // opts.env_map points at the host_env_map, so detection reads ONLY the
+    // injected vars (the process env is used only at init, when there are none).
+    let env = |k: &str| -> Option<String> {
+        if overrides.is_empty() {
+            std::env::var(k).ok()
+        } else {
+            overrides.get(k).cloned()
+        }
+    };
     let mut caps = Capabilities::default();
     let mut multiplexer = Multiplexer::None;
+
+    // checkEnvironmentOverrides mutates caps in place across calls; the rgb ->
+    // ansi256+hyperlinks coupling at the top fires when rgb was ALREADY set
+    // before this call (e.g. the 2nd call via setTerminalEnvVar). prev_rgb
+    // carries that pre-existing state (false at init).
+    if prev_rgb {
+        caps.rgb = true;
+        caps.ansi256 = true;
+        caps.hyperlinks = true;
+    }
+    // osc52 also persists once set (the detection block is `if !caps.osc52`).
+    caps.osc52 = prev_osc52;
 
     // Always try to enable bracketed paste (checkEnvironmentOverrides).
     caps.bracketed_paste = true;
@@ -707,36 +753,44 @@ fn detect(remote_mode: RemoteMode) -> Detected {
         caps.ansi256 = true;
     }
 
-    // osc52 detection (checkEnvironmentOverrides, !from_xtversion path).
+    // osc52 detection (checkEnvironmentOverrides, `if !caps.osc52` — skipped
+    // entirely once osc52 is already set).
     let sty = env("STY").is_some();
-    if env("WT_SESSION").is_some() {
-        caps.osc52 = true;
-    }
-    if !caps.osc52
-        && (multiplexer == Multiplexer::Tmux || multiplexer == Multiplexer::Screen || sty)
-    {
-        caps.osc52 = true;
-    }
     if !caps.osc52 {
-        if let Some(prog) = env("TERM_PROGRAM") {
-            if is_osc52_term(&prog) {
-                caps.osc52 = true;
+        if env("WT_SESSION").is_some() {
+            caps.osc52 = true;
+        }
+        if !caps.osc52
+            && (multiplexer == Multiplexer::Tmux || multiplexer == Multiplexer::Screen || sty)
+        {
+            caps.osc52 = true;
+        }
+        if !caps.osc52 {
+            if let Some(prog) = env("TERM_PROGRAM") {
+                if is_osc52_term(&prog) {
+                    caps.osc52 = true;
+                }
             }
         }
-    }
-    if !caps.osc52 {
-        if let Some(term) = env("TERM") {
-            if is_osc52_term(&term)
-                || contains_ignore_case(&term, "256color")
-                || contains_ignore_case(&term, "xterm")
-            {
-                caps.osc52 = true;
+        if !caps.osc52 {
+            if let Some(term) = env("TERM") {
+                if is_osc52_term(&term)
+                    || contains_ignore_case(&term, "256color")
+                    || contains_ignore_case(&term, "xterm")
+                {
+                    caps.osc52 = true;
+                }
             }
         }
     }
 
     let remote = match remote_mode {
-        RemoteMode::Auto => is_remote_session_env(),
+        RemoteMode::Auto => {
+            env("SSH_CONNECTION").is_some()
+                || env("SSH_CLIENT").is_some()
+                || env("SSH_TTY").is_some()
+                || env("MOSH_CONNECTION").is_some()
+        }
         _ => false,
     };
 
@@ -767,13 +821,6 @@ fn is_osc52_term(value: &str) -> bool {
         }
     }
     false
-}
-
-fn is_remote_session_env() -> bool {
-    env("SSH_CONNECTION").is_some()
-        || env("SSH_CLIENT").is_some()
-        || env("SSH_TTY").is_some()
-        || env("MOSH_CONNECTION").is_some()
 }
 
 fn contains_ignore_case(haystack: &str, needle: &str) -> bool {

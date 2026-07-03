@@ -1120,6 +1120,10 @@ impl CliRenderer {
         self.terminal.caps.hyperlinks = enabled;
     }
 
+    pub fn set_terminal_env_var(&mut self, key: &str, value: &str) {
+        self.terminal.set_terminal_env_var(key, value);
+    }
+
     /// Zig `getTerminalCapabilities` — write the capability booleans into the
     /// ExternalCapabilities out-struct. Terminal name/version pointers are left
     /// null/zero (name bookkeeping is not tracked in this port); the boolean
