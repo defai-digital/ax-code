@@ -1,0 +1,231 @@
+//! ADR-046 Slice C3a — napi exports for the TextBuffer core symbol subset.
+//! Signatures mirror the Zig `lib.zig` glue. External text pointers are
+//! registered as borrowed memory exactly like the reference (the JS side
+//! keeps the allocation alive for the registration's lifetime).
+
+#![allow(clippy::too_many_arguments)]
+
+use crate::handles::{self, Kind};
+use crate::mem_registry::MemBuffer;
+use crate::text_buffer::{StyledChunkIn, TextBuffer};
+use crate::unicode::WidthMethod;
+use napi_derive::napi;
+
+fn resolve(handle: u32) -> Option<&'static mut TextBuffer> {
+    handles::get(handle, Kind::TextBuffer).map(|ptr| unsafe { &mut *(ptr as *mut TextBuffer) })
+}
+
+#[napi(js_name = "createTextBuffer")]
+pub fn create_text_buffer(width_method: u32) -> u32 {
+    let tb = TextBuffer::new(WidthMethod::from_code(width_method));
+    let ptr = Box::into_raw(Box::new(tb)) as usize;
+    let handle = handles::insert(Kind::TextBuffer, ptr);
+    if handle == 0 {
+        drop(unsafe { Box::from_raw(ptr as *mut TextBuffer) });
+    }
+    handle
+}
+
+#[napi(js_name = "destroyTextBuffer")]
+pub fn destroy_text_buffer(handle: u32) {
+    if let Some(ptr) = handles::remove(handle, Kind::TextBuffer) {
+        drop(unsafe { Box::from_raw(ptr as *mut TextBuffer) });
+    }
+}
+
+/// StyledChunk extern-struct layout (64-bit): text_ptr@0, text_len@8,
+/// fg_ptr@16, bg_ptr@24, attributes@32 (u32 + 4 pad), link_ptr@40, link_len@48.
+#[napi(js_name = "textBufferSetStyledText")]
+pub fn text_buffer_set_styled_text(handle: u32, chunks_ptr: f64, chunk_count: u32) {
+    let Some(tb) = resolve(handle) else { return };
+    if chunks_ptr == 0.0 || chunk_count == 0 {
+        return;
+    }
+    let base = (chunks_ptr as u64) as usize;
+    const STRIDE: usize = 56;
+    let read_usize =
+        |addr: usize| -> usize { unsafe { std::ptr::read_unaligned(addr as *const usize) } };
+    let read_u32 = |addr: usize| -> u32 { unsafe { std::ptr::read_unaligned(addr as *const u32) } };
+    let mut chunks: Vec<StyledChunkIn> = Vec::with_capacity(chunk_count as usize);
+    for i in 0..chunk_count as usize {
+        let off = base + i * STRIDE;
+        let text_ptr = read_usize(off);
+        let text_len = read_usize(off + 8);
+        let text: &[u8] = if text_ptr == 0 || text_len == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(text_ptr as *const u8, text_len) }
+        };
+        let link_ptr = read_usize(off + 40);
+        let link_len = read_usize(off + 48);
+        let link = if link_ptr == 0 || link_len == 0 {
+            None
+        } else {
+            Some(unsafe { std::slice::from_raw_parts(link_ptr as *const u8, link_len) })
+        };
+        let read_rgba = |addr: usize| -> Option<crate::buffer::Rgba> {
+            if addr == 0 {
+                return None;
+            }
+            let p = addr as *const u16;
+            Some(unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] })
+        };
+        chunks.push(StyledChunkIn {
+            text,
+            fg: read_rgba(read_usize(off + 16)),
+            bg: read_rgba(read_usize(off + 24)),
+            attributes: read_u32(off + 32),
+            link,
+        });
+    }
+    tb.set_styled_text(&chunks);
+}
+
+#[napi(js_name = "textBufferGetPlainText")]
+pub fn text_buffer_get_plain_text(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
+    let Some(tb) = resolve(handle) else { return 0 };
+    if out_ptr == 0.0 || max_len == 0 {
+        return 0;
+    }
+    let text = tb.plain_text();
+    let copy = text.len().min(max_len as usize);
+    unsafe {
+        std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
+    };
+    copy as u32
+}
+
+#[napi(js_name = "textBufferGetLength")]
+pub fn text_buffer_get_length(handle: u32) -> u32 {
+    resolve(handle).map_or(0, |tb| tb.get_length())
+}
+
+#[napi(js_name = "textBufferGetByteSize")]
+pub fn text_buffer_get_byte_size(handle: u32) -> u32 {
+    resolve(handle).map_or(0, |tb| tb.get_byte_size())
+}
+
+#[napi(js_name = "textBufferGetLineCount")]
+pub fn text_buffer_get_line_count(handle: u32) -> u32 {
+    resolve(handle).map_or(0, |tb| tb.get_line_count())
+}
+
+#[napi(js_name = "textBufferGetTabWidth")]
+pub fn text_buffer_get_tab_width(handle: u32) -> u32 {
+    resolve(handle).map_or(0, |tb| tb.tab_width as u32)
+}
+
+#[napi(js_name = "textBufferSetTabWidth")]
+pub fn text_buffer_set_tab_width(handle: u32, width: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.set_tab_width(width as u8);
+    }
+}
+
+#[napi(js_name = "textBufferReset")]
+pub fn text_buffer_reset(handle: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.reset();
+    }
+}
+
+#[napi(js_name = "textBufferClear")]
+pub fn text_buffer_clear(handle: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.clear();
+    }
+}
+
+#[napi(js_name = "textBufferAppend")]
+pub fn text_buffer_append(handle: u32, data_ptr: f64, data_len: u32) {
+    let Some(tb) = resolve(handle) else { return };
+    if data_ptr == 0.0 || data_len == 0 {
+        return;
+    }
+    tb.append(
+        MemBuffer::External {
+            ptr: (data_ptr as u64) as usize,
+            len: data_len as usize,
+        },
+        data_len as usize,
+    );
+}
+
+#[napi(js_name = "textBufferRegisterMemBuffer")]
+pub fn text_buffer_register_mem_buffer(
+    handle: u32,
+    data_ptr: f64,
+    data_len: u32,
+    owned: bool,
+) -> u32 {
+    let Some(tb) = resolve(handle) else {
+        return 0xFFFF;
+    };
+    // Zig sliceFromPtrLen(null, n) yields an empty slice — registration of
+    // empty/null data succeeds and consumes a slot.
+    if data_ptr == 0.0 || data_len == 0 {
+        return tb
+            .registry
+            .register(MemBuffer::Owned(Vec::new()))
+            .map_or(0xFFFF, |id| id as u32);
+    }
+    let addr = (data_ptr as u64) as usize;
+    let buffer = if owned {
+        let bytes = unsafe { std::slice::from_raw_parts(addr as *const u8, data_len as usize) };
+        MemBuffer::Owned(bytes.to_vec())
+    } else {
+        MemBuffer::External {
+            ptr: addr,
+            len: data_len as usize,
+        }
+    };
+    tb.registry.register(buffer).map_or(0xFFFF, |id| id as u32)
+}
+
+#[napi(js_name = "textBufferReplaceMemBuffer")]
+pub fn text_buffer_replace_mem_buffer(
+    handle: u32,
+    id: u32,
+    data_ptr: f64,
+    data_len: u32,
+    owned: bool,
+) -> bool {
+    let Some(tb) = resolve(handle) else {
+        return false;
+    };
+    if data_ptr == 0.0 || data_len == 0 {
+        return tb.registry.replace(id as u8, MemBuffer::Owned(Vec::new()));
+    }
+    let addr = (data_ptr as u64) as usize;
+    let buffer = if owned {
+        let bytes = unsafe { std::slice::from_raw_parts(addr as *const u8, data_len as usize) };
+        MemBuffer::Owned(bytes.to_vec())
+    } else {
+        MemBuffer::External {
+            ptr: addr,
+            len: data_len as usize,
+        }
+    };
+    tb.registry.replace(id as u8, buffer)
+}
+
+#[napi(js_name = "textBufferClearMemRegistry")]
+pub fn text_buffer_clear_mem_registry(handle: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.registry.clear();
+    }
+}
+
+#[napi(js_name = "textBufferSetTextFromMem")]
+pub fn text_buffer_set_text_from_mem(handle: u32, id: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.set_text_from_mem(id as u8);
+    }
+}
+
+#[napi(js_name = "textBufferAppendFromMemId")]
+pub fn text_buffer_append_from_mem_id(handle: u32, id: u32) {
+    if let Some(tb) = resolve(handle) {
+        tb.append_from_mem(id as u8);
+    }
+}

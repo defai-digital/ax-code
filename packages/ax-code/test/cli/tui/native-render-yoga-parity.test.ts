@@ -49,6 +49,13 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
+  it("text-buffer core matches the Zig backend", () => {
+    const result = runNode([path.join(pkgDir, "script/native-render-text-parity.mjs"), "--seqs=100"])
+    expect(result.stderr).not.toContain("failing sequence")
+    expect(result.stdout).toContain("text parity: MATCH")
+    expect(result.status).toBe(0)
+  })
+
   it("overlay engages under AX_CODE_NATIVE_RENDER=1 (audio-stub fingerprint)", () => {
     const fingerprint = `
       import { Yoga } from "@ax-code/opentui-core"

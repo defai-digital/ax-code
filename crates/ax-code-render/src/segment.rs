@@ -10,7 +10,7 @@
 
 use crate::mem_registry::MemRegistry;
 use crate::rope::RopeItem;
-use crate::unicode::{GraphemeInfo, WidthMethod, WrapBreak, find_grapheme_info, find_wrap_breaks};
+use crate::unicode::{GraphemeInfo, WidthMethod, WrapBreak, find_grapheme_info, find_line_breaks};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -123,13 +123,15 @@ impl TextChunk {
         computed
     }
 
-    /// Lazily computed newline positions within the chunk.
+    /// Lazily computed newline positions within the chunk. NOTE: the Zig
+    /// reference caches word-wrap boundaries here (findWrapBreaks) — that
+    /// scanner lands with the view in C5; line breaks are a placeholder.
     pub fn wrap_offsets(&self, registry: &MemRegistry) -> Rc<Vec<WrapBreak>> {
         if let Some(cached) = self.wrap_offsets.borrow().as_ref() {
             return cached.clone();
         }
         let bytes = self.bytes(registry);
-        let computed = Rc::new(find_wrap_breaks(bytes));
+        let computed = Rc::new(find_line_breaks(bytes));
         *self.wrap_offsets.borrow_mut() = Some(computed.clone());
         computed
     }
@@ -242,6 +244,18 @@ impl RopeItem for Segment {
             Segment::Brk => Some(0),
             Segment::LineStart => Some(1),
             Segment::Text(_) => None,
+        }
+    }
+
+    fn rewrite_ends(
+        first: Option<&Segment>,
+        last: Option<&Segment>,
+    ) -> crate::rope::RopeBoundary<Segment> {
+        let action = rewrite_ends(first, last);
+        crate::rope::RopeBoundary {
+            delete_left: action.delete_left,
+            delete_right: action.delete_right,
+            insert_between: action.insert_between,
         }
     }
 }

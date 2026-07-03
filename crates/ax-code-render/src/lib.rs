@@ -32,6 +32,8 @@ pub mod mem_registry;
 pub mod pool;
 pub mod rope;
 pub mod segment;
+pub mod text_buffer;
+mod text_buffer_ffi;
 pub mod unicode;
 mod width_table;
 mod yoga_sys;

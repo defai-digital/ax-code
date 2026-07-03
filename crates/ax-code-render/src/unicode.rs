@@ -406,9 +406,10 @@ pub struct WrapBreak {
     pub kind: LineBreakKind,
 }
 
-/// Zig `findWrapBreaks`: newline positions. CRLF records at the LF byte and
-/// consumes both; lone CR records at the CR byte.
-pub fn find_wrap_breaks(bytes: &[u8]) -> Vec<WrapBreak> {
+/// Zig `findLineBreaks`: newline positions. CRLF records at the LF byte and
+/// consumes both; lone CR records at the CR byte. (The reference's separate
+/// `findWrapBreaks` is the word-wrap boundary scanner — Slice C5.)
+pub fn find_line_breaks(bytes: &[u8]) -> Vec<WrapBreak> {
     let mut out = Vec::new();
     let mut pos = 0usize;
     while pos < bytes.len() {

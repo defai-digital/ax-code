@@ -23,6 +23,33 @@ pub trait RopeItem: Clone {
     fn metrics_weight(m: &Self::Metrics) -> Option<u32>;
     /// Which marker slot this item occupies, if any.
     fn marker_slot(&self) -> Option<usize>;
+
+    /// Ends invariant (Zig `rewriteEnds`), applied after every mutation:
+    /// returns items to PREPEND when the first item is unacceptable, and/or
+    /// edge deletions. Default: no invariant.
+    fn rewrite_ends(_first: Option<&Self>, _last: Option<&Self>) -> RopeBoundary<Self>
+    where
+        Self: Sized,
+    {
+        RopeBoundary::default()
+    }
+}
+
+/// Boundary action returned by the ends/seam rewrite hooks.
+pub struct RopeBoundary<T> {
+    pub delete_left: bool,
+    pub delete_right: bool,
+    pub insert_between: Vec<T>,
+}
+
+impl<T> Default for RopeBoundary<T> {
+    fn default() -> RopeBoundary<T> {
+        RopeBoundary {
+            delete_left: false,
+            delete_right: false,
+            insert_between: Vec::new(),
+        }
+    }
 }
 
 pub struct Metrics<T: RopeItem> {
@@ -157,7 +184,7 @@ pub type LeafSplitFn<T> = dyn Fn(&T, u32) -> Option<(T, T)>;
 
 impl<T: RopeItem> Rope<T> {
     pub fn new() -> Rope<T> {
-        Rope {
+        let mut rope = Rope {
             root: Node::sentinel(),
             version: 0,
             max_undo_depth: None,
@@ -167,7 +194,9 @@ impl<T: RopeItem> Rope<T> {
             undo_depth: 0,
             marker_cache: vec![Vec::new(); T::MARKER_COUNT],
             marker_cache_version: u64::MAX,
-        }
+        };
+        rope.apply_ends_invariant();
+        rope
     }
 
     pub fn with_max_undo_depth(mut self, depth: Option<usize>) -> Rope<T> {
@@ -178,6 +207,7 @@ impl<T: RopeItem> Rope<T> {
     pub fn from_slice(items: &[T]) -> Rope<T> {
         let mut rope = Rope::new();
         rope.root = Self::build_balanced(items);
+        rope.apply_ends_invariant();
         rope
     }
 
@@ -197,6 +227,31 @@ impl<T: RopeItem> Rope<T> {
 
     fn touch(&mut self) {
         self.version += 1;
+    }
+
+    /// Zig `applyEndsInvariant`: runs after every mutation (and on init).
+    fn apply_ends_invariant(&mut self) {
+        let first = self.get(0).cloned();
+        let count = self.count();
+        let last = if count > 0 {
+            self.get(count - 1).cloned()
+        } else {
+            None
+        };
+        let action = T::rewrite_ends(first.as_ref(), last.as_ref());
+        if action.delete_left && self.count() > 0 {
+            let (_, right) = Self::split_at(&self.root, 1);
+            self.root = right;
+        }
+        if action.delete_right && self.count() > 0 {
+            let cnt = self.count();
+            let (left, _) = Self::split_at(&self.root, cnt - 1);
+            self.root = left;
+        }
+        if !action.insert_between.is_empty() {
+            let prefix = Self::build_balanced(&action.insert_between);
+            self.root = Self::join(&prefix, &self.root.clone());
+        }
     }
 
     pub fn count(&self) -> u32 {
@@ -371,6 +426,7 @@ impl<T: RopeItem> Rope<T> {
         let (left, right) = Self::split_at(&self.root, index);
         let mid = Self::build_balanced(items);
         self.root = Self::join(&Self::join(&left, &mid), &right);
+        self.apply_ends_invariant();
         self.touch();
         self.maybe_rebalance();
     }
@@ -383,17 +439,20 @@ impl<T: RopeItem> Rope<T> {
         let (mid_left, right) = Self::split_at(&self.root, end);
         let (left, _) = Self::split_at(&mid_left, start);
         self.root = Self::join(&left, &right);
+        self.apply_ends_invariant();
         self.touch();
         self.maybe_rebalance();
     }
 
     pub fn clear(&mut self) {
         self.root = Node::sentinel();
+        self.apply_ends_invariant();
         self.touch();
     }
 
     pub fn set_items(&mut self, items: &[T]) {
         self.root = Self::build_balanced(items);
+        self.apply_ends_invariant();
         self.touch();
     }
 
@@ -499,6 +558,7 @@ impl<T: RopeItem> Rope<T> {
         }
         let items = self.weight_edit(start, end, split_leaf, None);
         self.root = Self::build_balanced(&items);
+        self.apply_ends_invariant();
         self.touch();
         self.maybe_rebalance();
     }
@@ -511,6 +571,7 @@ impl<T: RopeItem> Rope<T> {
     ) {
         let items = self.weight_edit(weight, weight, split_leaf, Some(new_items));
         self.root = Self::build_balanced(&items);
+        self.apply_ends_invariant();
         self.touch();
         self.maybe_rebalance();
     }

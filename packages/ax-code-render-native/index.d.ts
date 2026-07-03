@@ -121,11 +121,49 @@ export declare function createAudioEngine(options: number): number
 
 export declare function createOptimizedBuffer(width: number, height: number, respectAlpha: number, widthMethod: number, idPtr: number, idLen: number): number
 
+export declare function createTextBuffer(widthMethod: number): number
+
 export declare function destroyAudioEngine(engine: number): void
 
 export declare function destroyOptimizedBuffer(handle: number): void
 
+export declare function destroyTextBuffer(handle: number): void
+
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
+
+export declare function textBufferAppend(handle: number, dataPtr: number, dataLen: number): void
+
+export declare function textBufferAppendFromMemId(handle: number, id: number): void
+
+export declare function textBufferClear(handle: number): void
+
+export declare function textBufferClearMemRegistry(handle: number): void
+
+export declare function textBufferGetByteSize(handle: number): number
+
+export declare function textBufferGetLength(handle: number): number
+
+export declare function textBufferGetLineCount(handle: number): number
+
+export declare function textBufferGetPlainText(handle: number, outPtr: number, maxLen: number): number
+
+export declare function textBufferGetTabWidth(handle: number): number
+
+export declare function textBufferRegisterMemBuffer(handle: number, dataPtr: number, dataLen: number, owned: boolean): number
+
+export declare function textBufferReplaceMemBuffer(handle: number, id: number, dataPtr: number, dataLen: number, owned: boolean): boolean
+
+export declare function textBufferReset(handle: number): void
+
+/**
+ * StyledChunk extern-struct layout (64-bit): text_ptr@0, text_len@8,
+ * fg_ptr@16, bg_ptr@24, attributes@32 (u32 + 4 pad), link_ptr@40, link_len@48.
+ */
+export declare function textBufferSetStyledText(handle: number, chunksPtr: number, chunkCount: number): void
+
+export declare function textBufferSetTabWidth(handle: number, width: number): void
+
+export declare function textBufferSetTextFromMem(handle: number, id: number): void
 
 export declare function yogaConfigCreate(): number
 
