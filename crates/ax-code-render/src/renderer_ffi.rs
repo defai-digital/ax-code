@@ -67,6 +67,44 @@ pub fn destroy_renderer(handle: u32) {
     }
 }
 
+/// ExternalRenderStats extern struct (C ABI, 56 bytes):
+///   f64 last_frame_time @0, f64 average_frame_time @8, f64 render_time @16,
+///   f64 stdout_write_time @24, u64 frame_count @32, u32 cells_updated @40,
+///   u32 average_cells_updated @44, bool render_time_valid @48,
+///   bool stdout_write_time_valid @49.
+#[napi(js_name = "getRenderStats")]
+pub fn get_render_stats(handle: u32, out_ptr: f64) {
+    if out_ptr == 0.0 {
+        return;
+    }
+    let base = (out_ptr as u64) as usize;
+    let (
+        last_frame_time,
+        average_frame_time,
+        render_time,
+        write_time,
+        frame_count,
+        cells_updated,
+        average_cells_updated,
+        render_time_valid,
+        write_time_valid,
+    ) = match resolve(handle) {
+        Some(r) => r.get_render_stats(),
+        None => (0.0, 0.0, 0.0, 0.0, 0, 0, 0, false, false),
+    };
+    unsafe {
+        (base as *mut f64).write_unaligned(last_frame_time);
+        ((base + 8) as *mut f64).write_unaligned(average_frame_time);
+        ((base + 16) as *mut f64).write_unaligned(render_time);
+        ((base + 24) as *mut f64).write_unaligned(write_time);
+        ((base + 32) as *mut u64).write_unaligned(frame_count);
+        ((base + 40) as *mut u32).write_unaligned(cells_updated);
+        ((base + 44) as *mut u32).write_unaligned(average_cells_updated);
+        ((base + 48) as *mut u8).write_unaligned(render_time_valid as u8);
+        ((base + 49) as *mut u8).write_unaligned(write_time_valid as u8);
+    }
+}
+
 #[napi(js_name = "addToHitGrid")]
 pub fn add_to_hit_grid(handle: u32, x: i32, y: i32, width: u32, height: u32, id: u32) {
     if let Some(r) = resolve(handle) {

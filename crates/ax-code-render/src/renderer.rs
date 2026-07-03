@@ -231,6 +231,27 @@ pub struct CliRenderer {
     hit_scissor_stack: Vec<HitClipRect>,
     hit_grid_dirty: bool,
     hit_grid_resize_invalidated: bool,
+
+    // Render stats (renderer.zig renderStats/statSamples). Timing fields carry
+    // best-effort values (not part of the deterministic parity surface); the
+    // deterministic fields are frame_count / cells_updated / average +
+    // valid flags.
+    stat_frame_count: u64,
+    stat_cells_updated: u32,
+    stat_last_frame_time_ms: f64,
+    stat_render_time: Option<f64>,
+    stat_output_write_time: Option<f64>,
+    stat_last_frame_samples: Vec<f64>,
+    stat_cells_samples: Vec<u32>,
+}
+
+const MAX_STAT_SAMPLES: usize = 30;
+
+fn push_sample<T: Copy>(samples: &mut Vec<T>, value: T) {
+    samples.push(value);
+    if samples.len() > MAX_STAT_SAMPLES {
+        samples.remove(0);
+    }
 }
 
 /// Screen-space clip rect for hit-grid scissoring (buf.ClipRect).
@@ -356,6 +377,13 @@ impl CliRenderer {
             hit_scissor_stack: Vec::new(),
             hit_grid_dirty: false,
             hit_grid_resize_invalidated: false,
+            stat_frame_count: 0,
+            stat_cells_updated: 0,
+            stat_last_frame_time_ms: 0.0,
+            stat_render_time: None,
+            stat_output_write_time: None,
+            stat_last_frame_samples: Vec::new(),
+            stat_cells_samples: Vec::new(),
         }))
     }
 
@@ -613,7 +641,57 @@ impl CliRenderer {
         let mut out = Vec::new();
         self.prepare_render_frame(&mut out, force);
         self.backend.commit_frame(&out);
+        self.collect_frame_stats();
         RenderStatus::Rendered
+    }
+
+    /// Zig `collectFrameStats` (deterministic subset). Timing values are
+    /// best-effort — only frame_count / cells_updated / averages + valid flags
+    /// are part of the parity surface.
+    fn collect_frame_stats(&mut self) {
+        self.stat_output_write_time = Some(0.0); // backend committed a frame
+        self.stat_last_frame_time_ms = 0.0;
+        self.stat_frame_count += 1;
+        push_sample(
+            &mut self.stat_last_frame_samples,
+            self.stat_last_frame_time_ms,
+        );
+        push_sample(&mut self.stat_cells_samples, self.stat_cells_updated);
+    }
+
+    /// Zig `getRenderStats` — snapshot written into the ExternalRenderStats
+    /// out-struct. Returns (last_frame_time, average_frame_time, render_time,
+    /// output_write_time, frame_count, cells_updated, average_cells_updated,
+    /// render_time_valid, output_write_time_valid).
+    #[allow(clippy::type_complexity)]
+    pub fn get_render_stats(&self) -> (f64, f64, f64, f64, u64, u32, u32, bool, bool) {
+        let avg_frame = if self.stat_last_frame_samples.is_empty() {
+            0.0
+        } else {
+            self.stat_last_frame_samples.iter().sum::<f64>()
+                / self.stat_last_frame_samples.len() as f64
+        };
+        let avg_cells = if self.stat_cells_samples.is_empty() {
+            0
+        } else {
+            (self
+                .stat_cells_samples
+                .iter()
+                .map(|&v| v as u64)
+                .sum::<u64>()
+                / self.stat_cells_samples.len() as u64) as u32
+        };
+        (
+            self.stat_last_frame_time_ms,
+            avg_frame,
+            self.stat_render_time.unwrap_or(0.0),
+            self.stat_output_write_time.unwrap_or(0.0),
+            self.stat_frame_count,
+            self.stat_cells_updated,
+            avg_cells,
+            self.stat_render_time.is_some(),
+            self.stat_output_write_time.is_some(),
+        )
     }
 
     /// Emit a pre-built control sequence through the active backend.
@@ -738,6 +816,7 @@ impl CliRenderer {
         let mut current_bg: Option<Rgba> = None;
         let mut current_attributes: Option<u32> = None;
         let mut current_link_id: u32 = 0;
+        let mut cells_updated: u32 = 0;
 
         let mut pool = global_pool();
 
@@ -845,6 +924,7 @@ impl CliRenderer {
                 run_length += 1;
 
                 self.current_buffer.sync_cell(&mut pool, x, y, cell);
+                cells_updated += 1;
             }
         }
 
@@ -961,6 +1041,8 @@ impl CliRenderer {
             out.extend_from_slice(b"\x1b[?2026l");
         }
 
+        self.stat_cells_updated = cells_updated;
+        self.stat_render_time = Some(0.0); // best-effort; timing not in parity surface
         self.last_rendered_palette_epoch = Some(self.palette_epoch);
         self.force_full_repaint = false;
 

@@ -239,6 +239,15 @@ export declare function getHitGridDirty(handle: number): boolean
 
 export declare function getNextBuffer(handle: number): number
 
+/**
+ * ExternalRenderStats extern struct (C ABI, 56 bytes):
+ *   f64 last_frame_time @0, f64 average_frame_time @8, f64 render_time @16,
+ *   f64 stdout_write_time @24, u64 frame_count @32, u32 cells_updated @40,
+ *   u32 average_cells_updated @44, bool render_time_valid @48,
+ *   bool stdout_write_time_valid @49.
+ */
+export declare function getRenderStats(handle: number, outPtr: number): void
+
 export declare function hitGridClearScissorRects(handle: number): void
 
 export declare function hitGridPopScissorRect(handle: number): void
