@@ -33,6 +33,36 @@ pub trait RopeItem: Clone {
     {
         RopeBoundary::default()
     }
+
+    /// Seam invariant (Zig `rewriteBoundary`), applied when two partitions are
+    /// joined by a *ByWeight edit. Default: no rewrite.
+    fn rewrite_boundary(_left: Option<&Self>, _right: Option<&Self>) -> RopeBoundary<Self>
+    where
+        Self: Sized,
+    {
+        RopeBoundary::default()
+    }
+
+    /// Whether two adjacent items can merge at a join seam (Zig `canMerge`).
+    fn can_merge(_left: &Self, _right: &Self) -> bool {
+        false
+    }
+
+    /// Merge two mergeable adjacent items (Zig `merge`).
+    fn merge(left: &Self, _right: &Self) -> Self {
+        left.clone()
+    }
+
+    /// The sentinel "empty leaf" a split produces for an empty partition. It
+    /// participates in seam boundary rewrites (Zig's `empty_leaf`) but is not
+    /// materialized in the output. `None` means the type has no sentinel and
+    /// empty partitions skip the rewrite.
+    fn sentinel() -> Option<Self>
+    where
+        Self: Sized,
+    {
+        None
+    }
 }
 
 /// Boundary action returned by the ends/seam rewrite hooks.
@@ -556,8 +586,11 @@ impl<T: RopeItem> Rope<T> {
         if start >= end {
             return;
         }
-        let items = self.weight_edit(start, end, split_leaf, None);
-        self.root = Self::build_balanced(&items);
+        let items = self.collect_items();
+        let (left, rest) = Self::split_at_weight_items(&items, start, split_leaf);
+        let (_mid, right) = Self::split_at_weight_items(&rest, end - start, split_leaf);
+        let joined = Self::join_with_boundary(left, right);
+        self.root = Self::build_balanced(&joined);
         self.apply_ends_invariant();
         self.touch();
         self.maybe_rebalance();
@@ -569,70 +602,93 @@ impl<T: RopeItem> Rope<T> {
         new_items: &[T],
         split_leaf: &LeafSplitFn<T>,
     ) {
-        let items = self.weight_edit(weight, weight, split_leaf, Some(new_items));
-        self.root = Self::build_balanced(&items);
+        // Zig insertSliceByWeight: split at `weight`, then
+        // join_with_boundary(join_with_boundary(left, insert), right).
+        let items = self.collect_items();
+        let (left, right) = Self::split_at_weight_items(&items, weight, split_leaf);
+        let left_joined = Self::join_with_boundary(left, new_items.to_vec());
+        let joined = Self::join_with_boundary(left_joined, right);
+        self.root = Self::build_balanced(&joined);
         self.apply_ends_invariant();
         self.touch();
         self.maybe_rebalance();
     }
 
-    /// Rebuild the item list with [start, end) weight range removed and
-    /// `insert` (if any) placed at the cut.
-    fn weight_edit(
-        &self,
-        start: u32,
-        end: u32,
-        split_leaf: &LeafSplitFn<T>,
-        insert: Option<&[T]>,
-    ) -> Vec<T> {
-        let mut out: Vec<T> = Vec::new();
-        let mut acc = 0u32;
-        let mut inserted = false;
+    fn collect_items(&self) -> Vec<T> {
+        let mut items = Vec::new();
         self.walk(&mut |item, _| {
-            let mut m = Metrics::<T>::default();
-            m.count = 1;
-            m.custom = item.measure();
-            let w = m.weight();
-            let item_start = acc;
-            let item_end = acc + w;
-            acc = item_end;
-
-            if item_end <= start || item_start >= end {
-                // Entirely outside the cut; but check insertion point.
-                if !inserted && item_start >= end {
-                    if let Some(new_items) = insert {
-                        out.extend_from_slice(new_items);
-                    }
-                    inserted = true;
-                }
-                out.push(item.clone());
-                return true;
-            }
-            // Overlaps the cut range.
-            if item_start < start {
-                if let Some((l, _)) = split_leaf(item, start - item_start) {
-                    out.push(l);
-                }
-            }
-            if !inserted {
-                if let Some(new_items) = insert {
-                    out.extend_from_slice(new_items);
-                }
-                inserted = true;
-            }
-            if item_end > end {
-                if let Some((_, r)) = split_leaf(item, end - item_start) {
-                    out.push(r);
-                }
-            }
+            items.push(item.clone());
             true
         });
-        if !inserted {
-            if let Some(new_items) = insert {
-                out.extend_from_slice(new_items);
+        items
+    }
+
+    /// Zig `split_at_weight` (item-list form): split the item list at `target`
+    /// weight into (left, right). A leaf reached with zero remaining target
+    /// (i.e. the split falls exactly at its start) goes entirely RIGHT; a leaf
+    /// fully within the remaining target goes LEFT; a straddled leaf splits.
+    fn split_at_weight_items(items: &[T], target: u32, split_leaf: &LeafSplitFn<T>) -> (Vec<T>, Vec<T>) {
+        let mut left: Vec<T> = Vec::new();
+        let mut right: Vec<T> = Vec::new();
+        let mut remaining = target;
+        let mut done = false;
+        for item in items {
+            if done {
+                right.push(item.clone());
+                continue;
+            }
+            if remaining == 0 {
+                right.push(item.clone());
+                done = true;
+                continue;
+            }
+            let w = T::metrics_weight(&item.measure()).unwrap_or(1);
+            if remaining >= w {
+                left.push(item.clone());
+                remaining -= w;
+            } else {
+                // 0 < remaining < w: split this leaf
+                if let Some((l, r)) = split_leaf(item, remaining) {
+                    left.push(l);
+                    right.push(r);
+                }
+                done = true;
             }
         }
-        out
+        (left, right)
+    }
+
+    /// Zig `joinWithBoundary` (item-list form): merge or rewrite the seam
+    /// between the tail of `left` and the head of `right`.
+    fn join_with_boundary(mut left: Vec<T>, mut right: Vec<T>) -> Vec<T> {
+        // Zig models an empty partition as the empty_leaf sentinel, which still
+        // participates in the boundary rewrite (e.g. a trailing break + the
+        // sentinel materializes a trailing linestart). The sentinel itself is
+        // absorbed, not emitted.
+        let sentinel = T::sentinel();
+        let l_last = left.last().cloned().or_else(|| sentinel.clone());
+        let r_first = right.first().cloned().or_else(|| sentinel.clone());
+        if let (Some(l), Some(r)) = (left.last().cloned(), right.first().cloned()) {
+            if T::can_merge(&l, &r) {
+                let merged = T::merge(&l, &r);
+                left.pop();
+                right.remove(0);
+                left.push(merged);
+                left.extend(right);
+                return left;
+            }
+        }
+        let action = T::rewrite_boundary(l_last.as_ref(), r_first.as_ref());
+        // delete_left/right act on real items only (never on the sentinel).
+        if action.delete_left && !left.is_empty() {
+            left.pop();
+        }
+        if action.delete_right && !right.is_empty() {
+            right.remove(0);
+        }
+        left.extend(action.insert_between);
+        left.extend(right);
+        left
     }
 
     // --- markers ------------------------------------------------------------------
@@ -686,6 +742,11 @@ impl<T: RopeItem> Rope<T> {
         self.undo_history = Some(node);
         self.undo_depth += 1;
         self.curr_history = None;
+        // Zig push_redo_branch: a new edit branches the pending redo chain onto
+        // the top undo node and clears redo_history. The branches are never
+        // restored in this version, so the only observable effect is that redo
+        // is invalidated after any new edit.
+        self.redo_history = None;
         if let Some(max) = self.max_undo_depth {
             if self.undo_depth > max {
                 self.trim_undo(max);

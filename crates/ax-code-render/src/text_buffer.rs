@@ -283,15 +283,24 @@ impl TextBuffer {
         }
     }
 
-    /// Zig `getPlainTextIntoBuffer` semantics: chunk bytes joined with a
-    /// newline per break (equivalently: '\n' between lines, none trailing).
+    /// Zig `getPlainTextIntoBuffer`: LINE-based — chunk bytes with a newline
+    /// BETWEEN lines (lines delimited by linestart markers, not Brk segments),
+    /// none trailing. A Brk not paired with content (possible after edits) is
+    /// therefore not rendered as an extra newline — the reference walks lines,
+    /// not breaks.
     pub fn plain_text(&self) -> Vec<u8> {
         let mut out = Vec::new();
+        let mut first_line = true;
         self.rope.walk(&mut |segment, _| {
             match segment {
+                Segment::LineStart => {
+                    if !first_line {
+                        out.push(b'\n');
+                    }
+                    first_line = false;
+                }
                 Segment::Text(chunk) => out.extend_from_slice(chunk.bytes(&self.registry)),
-                Segment::Brk => out.push(b'\n'),
-                Segment::LineStart => {}
+                Segment::Brk => {}
             }
             true
         });
@@ -573,6 +582,132 @@ impl TextBuffer {
             .get(line_idx)
             .map_or(&[], |l| l.as_slice())
     }
+
+    // --- editor support (Slice D) -----------------------------------------------
+
+    /// Zig `offsetToCoords`: weight offset -> (row, col) via binary search over
+    /// linestart markers.
+    pub fn offset_to_coords(&mut self, offset: u32) -> Option<(u32, u32)> {
+        let count = self.rope.marker_count(MARKER_LINESTART);
+        if count == 0 {
+            return None;
+        }
+        let total_weight = self.rope.total_weight();
+        if offset > total_weight {
+            return None;
+        }
+        let mut left = 0u32;
+        let mut right = count;
+        while left < right {
+            let mid = left + (right - left) / 2;
+            let line_start = self.rope.get_marker(MARKER_LINESTART, mid)?.global_weight;
+            if offset < line_start {
+                right = mid;
+            } else {
+                let next_line_start = if mid + 1 < count {
+                    self.rope.get_marker(MARKER_LINESTART, mid + 1)?.global_weight
+                } else {
+                    total_weight
+                };
+                if offset < next_line_start || (offset == total_weight && mid + 1 == count) {
+                    return Some((mid, offset - line_start));
+                }
+                left = mid + 1;
+            }
+        }
+        None
+    }
+
+    /// Cell width of the grapheme at (row, col) — Zig `getGraphemeWidthAt`.
+    pub fn grapheme_width_at(&mut self, row: u32, col: u32) -> u32 {
+        let line_width = self.line_width_at(row);
+        if col >= line_width {
+            return 0;
+        }
+        let tab = self.tab_width;
+        let method = self.width_method;
+        let mut cols_before: u32 = 0;
+        for (chunk_ref, width, bytes) in self.line_text_chunks(row) {
+            let next = cols_before + width;
+            if col < next {
+                let local = col - cols_before;
+                let text = std::str::from_utf8(&bytes).unwrap_or("");
+                let is_ascii = (chunk_ref.flags & FLAG_ASCII_ONLY) != 0;
+                let pos = find_pos_by_width(text, local, tab, is_ascii, false, method);
+                if pos.byte_offset as usize >= bytes.len() {
+                    return 0;
+                }
+                let start_col = pos.columns_used;
+                let w = crate::unicode::width_at(text, pos.byte_offset as usize, tab, method);
+                return start_col + w - local;
+            }
+            cols_before = next;
+        }
+        0
+    }
+
+    /// Cell width of the grapheme ending at (row, col) — Zig `getPrevGraphemeWidth`.
+    pub fn prev_grapheme_width(&mut self, row: u32, col: u32) -> u32 {
+        if col == 0 {
+            return 0;
+        }
+        let line_width = self.line_width_at(row);
+        let clamped = col.min(line_width);
+        let tab = self.tab_width;
+        let method = self.width_method;
+        let mut cols_before: u32 = 0;
+        let mut prev: Option<(Vec<u8>, u32)> = None;
+        for (chunk_ref, width, bytes) in self.line_text_chunks(row) {
+            let next = cols_before + width;
+            if clamped <= next {
+                if clamped == cols_before {
+                    if let Some((pbytes, _)) = &prev {
+                        let ptext = std::str::from_utf8(pbytes).unwrap_or("");
+                        return crate::unicode::prev_grapheme_width(ptext, pbytes.len(), tab, method);
+                    }
+                    return 0;
+                }
+                let text = std::str::from_utf8(&bytes).unwrap_or("");
+                let is_ascii = (chunk_ref.flags & FLAG_ASCII_ONLY) != 0;
+                let local = clamped - cols_before;
+                let here = find_pos_by_width(text, local, tab, is_ascii, false, method);
+                return crate::unicode::prev_grapheme_width(text, here.byte_offset as usize, tab, method);
+            }
+            cols_before = next;
+            prev = Some((bytes, cols_before));
+        }
+        0
+    }
+
+    /// Text chunks (ref + width + bytes) for one line, in rope order.
+    fn line_text_chunks(&self, row: u32) -> Vec<(crate::text_buffer_view::ChunkRef, u32, Vec<u8>)> {
+        let mut out = Vec::new();
+        let mut line: u32 = 0;
+        let registry = &self.registry;
+        self.rope.walk(&mut |segment, _| {
+            match segment {
+                Segment::LineStart => {}
+                Segment::Brk => line += 1,
+                Segment::Text(chunk) => {
+                    if line == row {
+                        out.push((
+                            crate::text_buffer_view::ChunkRef {
+                                mem_id: chunk.mem_id,
+                                byte_start: chunk.byte_start,
+                                byte_end: chunk.byte_end,
+                                flags: chunk.flags,
+                            },
+                            chunk.width as u32,
+                            chunk.bytes(registry).to_vec(),
+                        ));
+                    }
+                }
+            }
+            line <= row
+        });
+        out
+    }
+
     /// Chunk refs + widths for one logical line, in rope order (view support).
     pub fn line_chunks(&self, row: u32) -> Vec<(crate::text_buffer_view::ChunkRef, u32)> {
         let mut out = Vec::new();

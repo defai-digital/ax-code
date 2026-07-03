@@ -24,6 +24,7 @@ process.chdir(dir)
 
 const buildVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
 const buildChannel = process.env.AX_CODE_CHANNEL ?? "latest"
+const appleCodesignIdentity = process.env.AX_CODE_APPLE_CODESIGN_IDENTITY?.trim()
 const solidStoreClientEntry = require.resolve("solid-js/store/dist/store.js")
 const solidWebClientEntry = require.resolve("solid-js/web/dist/web.js")
 
@@ -345,12 +346,12 @@ for (const [name, src] of nativePkgs) {
 
 // macOS Gatekeeper rejects unsigned native code. Unlike the single Bun-SEA
 // binary, a node-bundled dist carries many native libraries (.node addons and
-// OpenTUI's .dylib); ad-hoc sign each so the bundle runs after download. Real
-// (notarized) signing happens in CI with a Developer ID; ad-hoc keeps local and
-// unsigned-CI builds runnable. The bundled Node runtime under node/ is
-// deliberately NOT re-signed: the copied binary keeps its original signature
-// (official Node releases ship Developer ID signed), and overwriting it with
-// an ad-hoc signature would be a downgrade.
+// OpenTUI's .dylib). Release CI passes AX_CODE_APPLE_CODESIGN_IDENTITY after
+// importing the Developer ID certificate; local and fork builds fall back to
+// ad-hoc signatures so the bundle remains runnable without Apple secrets. The
+// bundled Node runtime under node/ is deliberately NOT re-signed: official Node
+// releases already ship with their own Developer ID signature, and local Node
+// builds may require entitlements we should not overwrite.
 if (process.platform === "darwin") {
   const nativeLibs: string[] = []
   const walk = (root: string) => {
@@ -363,10 +364,32 @@ if (process.platform === "darwin") {
   }
   walk(path.join(outRoot, "node_modules"))
   for (const lib of nativeLibs) {
-    const signed = spawnSync("codesign", ["--force", "--sign", "-", lib], { stdio: "inherit" })
-    if (signed.status !== 0) console.warn(`codesign failed for ${path.relative(outRoot, lib)}`)
+    const signArgs = appleCodesignIdentity
+      ? ["--force", "--timestamp", "--options", "runtime", "--sign", appleCodesignIdentity, lib]
+      : ["--force", "--sign", "-", lib]
+    const signed = spawnSync("codesign", signArgs, { stdio: "inherit" })
+    if (signed.status !== 0) {
+      const message = `codesign failed for ${path.relative(outRoot, lib)}`
+      if (appleCodesignIdentity) {
+        console.error(message)
+        process.exit(1)
+      }
+      console.warn(message)
+      continue
+    }
+    const verified = spawnSync("codesign", ["--verify", "--strict", lib], { stdio: "inherit" })
+    if (verified.status !== 0) {
+      const message = `codesign verification failed for ${path.relative(outRoot, lib)}`
+      if (appleCodesignIdentity) {
+        console.error(message)
+        process.exit(1)
+      }
+      console.warn(message)
+    }
   }
-  console.log(`Ad-hoc signed ${nativeLibs.length} native libraries`)
+  console.log(
+    `${appleCodesignIdentity ? "Developer ID signed" : "Ad-hoc signed"} ${nativeLibs.length} native libraries`,
+  )
 }
 
 if (release) {

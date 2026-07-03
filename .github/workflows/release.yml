@@ -89,6 +89,7 @@ jobs:
       AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
       AX_CODE_DISABLE_MODELS_FETCH: "1"
       AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+      HAS_APPLE_CERT: ${{ matrix.targets == 'darwin-arm64' && secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -116,6 +117,65 @@ jobs:
 
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build
+
+      - name: Install Apple certificate
+        if: ${{ env.HAS_APPLE_CERT == 'true' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/ax-code-cli-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          CERTIFICATE_PATH="$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERTIFICATE_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk -F '"' '/Developer ID Application/ { print $2; exit }')"
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Developer ID Application identity found in imported Apple certificate."
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH" || true
+            exit 1
+          fi
+          if [ -n "${APPLE_TEAM_ID:-}" ] && [[ "$IDENTITY" != *"($APPLE_TEAM_ID)"* ]]; then
+            echo "::error::Developer ID identity does not match APPLE_TEAM_ID."
+            echo "identity: $IDENTITY"
+            exit 1
+          fi
+          echo "AX_CODE_APPLE_CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      # Notarize via the App Store Connect API key (not Apple ID + app password).
+      # Exported only when the Apple certificate is configured so fork and local
+      # release dry-runs can still produce ad-hoc-signed macOS archives.
+      - name: Configure Apple API key for notarization
+        if: ${{ env.HAS_APPLE_CERT == 'true' }}
+        env:
+          APPLE_API_KEY_B64: ${{ secrets.APPLE_API_KEY_B64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          if [ -z "$APPLE_API_KEY_B64" ] || [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER" ]; then
+            echo "::error::APPLE_API_KEY_B64, APPLE_API_KEY_ID, and APPLE_API_ISSUER are required for macOS CLI notarization."
+            exit 1
+          fi
+          KEY_PATH="$RUNNER_TEMP/apple-api-key.p8"
+          echo "$APPLE_API_KEY_B64" | base64 --decode > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          {
+            echo "APPLE_API_KEY=$KEY_PATH"
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+          } >> "$GITHUB_ENV"
+
+      - name: Note unsigned macOS CLI notarization state
+        if: ${{ matrix.targets == 'darwin-arm64' && env.HAS_APPLE_CERT != 'true' }}
+        run: echo "::warning::No Apple signing certificate configured; macOS CLI archive will use ad-hoc native-library signing and will not be notarized."
 
       - name: Build
         working-directory: packages/ax-code
@@ -147,6 +207,18 @@ jobs:
             echo "FAIL: release runtime did not report ${{ matrix.smoke-runtime }}"
             exit 1
           fi
+
+      - name: Notarize macOS CLI archive
+        if: ${{ env.HAS_APPLE_CERT == 'true' }}
+        run: |
+          set -euo pipefail
+          ARCHIVE="packages/ax-code/dist/ax-code-${{ matrix.targets }}.zip"
+          if [ ! -f "$ARCHIVE" ]; then
+            echo "::error::macOS CLI archive not found: $ARCHIVE"
+            exit 1
+          fi
+          xcrun notarytool submit "$ARCHIVE" --key "$APPLE_API_KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+          echo "macOS CLI ZIP notarized. ZIP archives cannot be stapled; do not modify $ARCHIVE after this step."
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7

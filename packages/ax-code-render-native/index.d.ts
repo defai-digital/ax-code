@@ -121,6 +121,8 @@ export declare function bufferWriteResolvedChars(handle: number, outputPtr: numb
 
 export declare function createAudioEngine(options: number): number
 
+export declare function createEditBuffer(widthMethod: number, eventSinkHandle: number): number
+
 export declare function createOptimizedBuffer(width: number, height: number, respectAlpha: number, widthMethod: number, idPtr: number, idLen: number): number
 
 export declare function createSyntaxStyle(): number
@@ -131,6 +133,8 @@ export declare function createTextBufferView(tbHandle: number): number
 
 export declare function destroyAudioEngine(engine: number): void
 
+export declare function destroyEditBuffer(handle: number): void
+
 export declare function destroyOptimizedBuffer(handle: number): void
 
 export declare function destroySyntaxStyle(handle: number): void
@@ -140,6 +144,76 @@ export declare function destroyTextBuffer(handle: number): void
 export declare function destroyTextBufferView(handle: number): void
 
 export declare function drawFrameBuffer(handle: number, destX: number, destY: number, srcHandle: number, sourceX: number, sourceY: number, sourceWidth: number, sourceHeight: number): void
+
+export declare function editBufferCanRedo(handle: number): boolean
+
+export declare function editBufferCanUndo(handle: number): boolean
+
+export declare function editBufferClear(handle: number): void
+
+export declare function editBufferClearHistory(handle: number): void
+
+export declare function editBufferDeleteChar(handle: number): void
+
+export declare function editBufferDeleteCharBackward(handle: number): void
+
+export declare function editBufferDeleteLine(handle: number): void
+
+export declare function editBufferDeleteRange(handle: number, startRow: number, startCol: number, endRow: number, endCol: number): void
+
+export declare function editBufferGetCursor(handle: number, outPtr: number): void
+
+export declare function editBufferGetCursorPosition(handle: number, outPtr: number): void
+
+export declare function editBufferGetEOL(handle: number, outPtr: number): void
+
+export declare function editBufferGetId(handle: number): number
+
+export declare function editBufferGetLineStartOffset(handle: number, row: number): number
+
+export declare function editBufferGetNextWordBoundary(handle: number, outPtr: number): void
+
+export declare function editBufferGetPrevWordBoundary(handle: number, outPtr: number): void
+
+export declare function editBufferGetText(handle: number, outPtr: number, maxLen: number): number
+
+export declare function editBufferGetTextBuffer(handle: number): number
+
+export declare function editBufferGetTextRange(handle: number, start: number, end: number, outPtr: number, maxLen: number): number
+
+export declare function editBufferGotoLine(handle: number, line: number): void
+
+export declare function editBufferInsertChar(handle: number, textPtr: number, textLen: number): void
+
+export declare function editBufferInsertText(handle: number, textPtr: number, textLen: number): void
+
+export declare function editBufferMoveCursorDown(handle: number): void
+
+export declare function editBufferMoveCursorLeft(handle: number): void
+
+export declare function editBufferMoveCursorRight(handle: number): void
+
+export declare function editBufferMoveCursorUp(handle: number): void
+
+export declare function editBufferNewLine(handle: number): void
+
+export declare function editBufferOffsetToPosition(handle: number, offset: number, outPtr: number): boolean
+
+export declare function editBufferPositionToOffset(handle: number, row: number, col: number): number
+
+export declare function editBufferRedo(handle: number, outPtr: number, maxLen: number): number
+
+export declare function editBufferReplaceText(handle: number, textPtr: number, textLen: number): void
+
+export declare function editBufferSetCursor(handle: number, row: number, col: number): void
+
+export declare function editBufferSetCursorByOffset(handle: number, offset: number): void
+
+export declare function editBufferSetCursorToLineCol(handle: number, row: number, col: number): void
+
+export declare function editBufferSetText(handle: number, textPtr: number, textLen: number): void
+
+export declare function editBufferUndo(handle: number, outPtr: number, maxLen: number): number
 
 export declare function syntaxStyleGetStyleCount(handle: number): number
 

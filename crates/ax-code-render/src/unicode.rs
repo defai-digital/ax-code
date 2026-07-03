@@ -758,3 +758,52 @@ pub fn char_offset_to_column(
     }
     (break_col, width)
 }
+
+// --- editor width helpers (Slice D) -------------------------------------------
+
+/// Zig `getWidthAt`: cell width of the grapheme cluster starting at
+/// `byte_offset` within `text`.
+pub fn width_at(text: &str, byte_offset: usize, tab_width: u8, method: WidthMethod) -> u32 {
+    let bytes = text.as_bytes();
+    if byte_offset >= bytes.len() {
+        return 0;
+    }
+    for (start, len) in clusters(text) {
+        if start == byte_offset {
+            return cluster_width_of(text, start, len, method, tab_width);
+        }
+        if start > byte_offset {
+            break;
+        }
+    }
+    // byte_offset not on a cluster boundary: fall back to the first codepoint's width
+    let (cp, _) = zig_decode(bytes, byte_offset);
+    char_width(bytes[byte_offset], cp, tab_width)
+}
+
+/// Zig `getPrevGraphemeStart`: width of the last grapheme cluster ending at
+/// `byte_len` (i.e. the cluster whose end is the end of the slice).
+pub fn prev_grapheme_width(text: &str, byte_len: usize, tab_width: u8, method: WidthMethod) -> u32 {
+    if byte_len == 0 {
+        return 0;
+    }
+    let sub = &text[..byte_len.min(text.len())];
+    let mut last: Option<(usize, usize)> = None;
+    for (start, len) in clusters(sub) {
+        last = Some((start, len));
+    }
+    match last {
+        Some((start, len)) => cluster_width_of(sub, start, len, method, tab_width),
+        None => 0,
+    }
+}
+
+/// Zig `isWordCodepoint`: ascii-word or CJK-word class.
+pub fn is_word_codepoint(cp: u32) -> bool {
+    classify_word_class(cp) != WordClass::Other
+}
+
+/// Public wrapper over the reference's unchecked UTF-8 decode.
+pub fn decode_at(bytes: &[u8], pos: usize) -> (u32, usize) {
+    zig_decode(bytes, pos)
+}

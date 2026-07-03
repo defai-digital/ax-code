@@ -258,6 +258,41 @@ impl RopeItem for Segment {
             insert_between: action.insert_between,
         }
     }
+
+    fn rewrite_boundary(
+        left: Option<&Segment>,
+        right: Option<&Segment>,
+    ) -> crate::rope::RopeBoundary<Segment> {
+        let action = rewrite_boundary(left, right);
+        crate::rope::RopeBoundary {
+            delete_left: action.delete_left,
+            delete_right: action.delete_right,
+            insert_between: action.insert_between,
+        }
+    }
+
+    fn can_merge(left: &Segment, right: &Segment) -> bool {
+        Segment::can_merge(left, right)
+    }
+
+    fn merge(left: &Segment, right: &Segment) -> Segment {
+        // Adjacent same-memory chunks: union the byte ranges; widths sum.
+        match (left, right) {
+            (Segment::Text(l), Segment::Text(r)) => Segment::Text(TextChunk::new(
+                l.mem_id,
+                l.byte_start,
+                r.byte_end,
+                l.width.saturating_add(r.width),
+                l.flags & r.flags,
+            )),
+            _ => left.clone(),
+        }
+    }
+
+    fn sentinel() -> Option<Segment> {
+        // Zig empty_leaf = Segment.empty() = an empty text chunk.
+        Some(Segment::Text(TextChunk::empty()))
+    }
 }
 
 pub const MARKER_BRK: usize = 0;

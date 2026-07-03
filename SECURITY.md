@@ -99,6 +99,25 @@ encrypted `minisign.key` minisign secret key. The workflow writes it to a
 temporary `0600` key file, verifies the pinned public key, signs each release
 archive, and uploads the matching `.minisig` assets with the archives.
 
+For macOS CLI archives, the workflow also imports the Apple Developer ID
+certificate when these repository secrets are configured:
+
+```text
+APPLE_CERTIFICATE
+APPLE_CERTIFICATE_PASSWORD
+APPLE_TEAM_ID
+APPLE_API_KEY_B64
+APPLE_API_KEY_ID
+APPLE_API_ISSUER
+```
+
+In that path, bundled native libraries are signed with the imported Developer
+ID Application identity, the macOS ZIP is submitted to Apple's notary service,
+and the unchanged ZIP is then protected by the detached minisign signature. ZIP
+archives cannot be stapled, so notarization must happen before artifact upload
+and before `.minisig` generation. Builds without Apple signing secrets fall back
+to ad-hoc native-library signatures and must not be described as notarized.
+
 ### Release signing key history
 
 | Effective date | Key ID             | Public key                                                 | Status      |

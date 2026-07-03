@@ -12,6 +12,7 @@ const filterDispatchChannelScript = path.join(repoRoot, ".github/scripts/filter-
 const validateInstallMatrixInputsScript = path.join(repoRoot, ".github/scripts/validate-install-matrix-inputs.sh")
 const assertRuntimeModeScript = path.join(repoRoot, ".github/scripts/assert-runtime-mode.sh")
 const axCodePackageJson = path.join(repoRoot, "packages/ax-code/package.json")
+const axCodeNodeTuiBuildScript = path.join(repoRoot, "packages/ax-code/script/build-node-tui.ts")
 const axCodeCiWorkflow = path.join(repoRoot, ".github/workflows/ax-code-ci.yml")
 
 const retiredNpmDistributionFiles = [
@@ -151,6 +152,41 @@ describe("distribution support guardrails", () => {
     expect(job).not.toContain('gh release upload "$TAG" "$f" --clobber || true')
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Create GitHub release"))
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Upload release assets"))
+  })
+
+  test("release workflow Developer ID signs and notarizes the macOS CLI archive when Apple certs are configured", async () => {
+    const text = await readFile(releaseWorkflow, "utf-8")
+    const buildJob = text.match(/\n  build:[\s\S]*?(?=\n  publish:|$)/)
+    expect(buildJob).not.toBeNull()
+    const job = buildJob![0]
+
+    expect(job).toContain("HAS_APPLE_CERT")
+    expect(job).toContain("secrets.APPLE_CERTIFICATE")
+    expect(job).toContain("Install Apple certificate")
+    expect(job).toContain("Developer ID Application")
+    expect(job).toContain("AX_CODE_APPLE_CODESIGN_IDENTITY")
+    expect(job).toContain("Configure Apple API key for notarization")
+    expect(job).toContain("APPLE_API_KEY_B64")
+    expect(job).toContain("Note unsigned macOS CLI notarization state")
+    expect(job).toContain("Notarize macOS CLI archive")
+    expect(job).toContain('ARCHIVE="packages/ax-code/dist/ax-code-${{ matrix.targets }}.zip"')
+    expect(job).toContain("xcrun notarytool submit")
+    expect(job).toContain("ZIP archives cannot be stapled")
+    expect(job.indexOf("Notarize macOS CLI archive")).toBeGreaterThan(job.indexOf("Smoke — release runtime"))
+    expect(job.indexOf("Notarize macOS CLI archive")).toBeLessThan(job.indexOf("Upload build artifacts"))
+  })
+
+  test("node-bundled macOS build supports Developer ID signing without requiring Apple secrets locally", async () => {
+    const text = await readFile(axCodeNodeTuiBuildScript, "utf-8")
+
+    expect(text).toContain("AX_CODE_APPLE_CODESIGN_IDENTITY")
+    expect(text).toContain('"--timestamp"')
+    expect(text).toContain('"--options", "runtime"')
+    expect(text).toContain('"--sign", appleCodesignIdentity')
+    expect(text).toContain('"--sign", "-"')
+    expect(text).toContain('"--verify", "--strict"')
+    expect(text).toContain("Developer ID signed")
+    expect(text).toContain("Ad-hoc signed")
   })
 
   test("release workflow auto-publishes the Homebrew tap but never npm", async () => {

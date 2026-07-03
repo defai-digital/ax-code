@@ -96,4 +96,16 @@ impl MemRegistry {
     pub fn used_slots(&self) -> usize {
         self.slots.iter().filter(|s| s.active).count()
     }
+
+    /// Snapshot of all active slots as owned byte vecs (editor chunk splitter
+    /// needs chunk bytes without holding a borrow on the registry).
+    pub fn snapshot(&self) -> std::collections::HashMap<u8, Vec<u8>> {
+        let mut map = std::collections::HashMap::new();
+        for id in 0..self.slots.len() {
+            if let Some(bytes) = self.get(id as u8) {
+                map.insert(id as u8, bytes.to_vec());
+            }
+        }
+        map
+    }
 }
