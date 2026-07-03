@@ -37,6 +37,7 @@ pub mod text_buffer;
 mod text_buffer_ffi;
 pub mod text_buffer_view;
 mod text_buffer_view_ffi;
+mod text_view_draw;
 pub mod unicode;
 mod width_table;
 mod yoga_sys;

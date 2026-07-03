@@ -81,6 +81,8 @@ export declare function bufferDrawSuperSampleBuffer(handle: number, x: number, y
 
 export declare function bufferDrawText(handle: number, textPtr: number, textLen: number, x: number, y: number, fg: number, bg: number, attributes: number): void
 
+export declare function bufferDrawTextBufferView(bufferHandle: number, viewHandle: number, x: number, y: number): void
+
 export declare function bufferFillRect(handle: number, x: number, y: number, width: number, height: number, bg: number): void
 
 export declare function bufferGetAttributesPtr(handle: number): number
@@ -189,6 +191,14 @@ export declare function textBufferReplaceMemBuffer(handle: number, id: number, d
 
 export declare function textBufferReset(handle: number): void
 
+export declare function textBufferResetDefaults(handle: number): void
+
+export declare function textBufferSetDefaultAttributes(handle: number, attrPtr: number): void
+
+export declare function textBufferSetDefaultBg(handle: number, bg: number): void
+
+export declare function textBufferSetDefaultFg(handle: number, fg: number): void
+
 /**
  * StyledChunk extern-struct layout (64-bit): text_ptr@0, text_len@8,
  * fg_ptr@16, bg_ptr@24, attributes@32 (u32 + 4 pad), link_ptr@40, link_len@48.
@@ -225,6 +235,10 @@ export declare function textBufferViewSetFirstLineOffset(handle: number, offset:
 export declare function textBufferViewSetLocalSelection(handle: number, ax: number, ay: number, fx: number, fy: number, bg: number, fg: number): boolean
 
 export declare function textBufferViewSetSelection(handle: number, start: number, end: number, bg: number, fg: number): void
+
+export declare function textBufferViewSetTabIndicator(handle: number, indicator: number): void
+
+export declare function textBufferViewSetTabIndicatorColor(handle: number, color: number): void
 
 export declare function textBufferViewSetViewport(handle: number, x: number, y: number, width: number, height: number): void
 

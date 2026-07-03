@@ -227,6 +227,9 @@ jobs:
       - name: Text-buffer parity sweep
         run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-text-parity.mjs --seqs=2000
 
+      - name: TextBufferView draw parity sweep
+        run: node --experimental-ffi --disable-warning=ExperimentalWarning packages/ax-code/script/native-render-textview-draw-parity.mjs --seqs=2000
+
   live:
     if: github.event_name == 'workflow_dispatch' && inputs.live
     runs-on: ubuntu-latest

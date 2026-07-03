@@ -223,3 +223,70 @@ pub fn text_buffer_view_get_selected_text(handle: u32, out_ptr: f64, max_len: u3
     };
     copy as u32
 }
+
+// --- draw + defaults + tab indicator (C5d) -----------------------------------
+
+#[napi(js_name = "bufferDrawTextBufferView")]
+pub fn buffer_draw_text_buffer_view(buffer_handle: u32, view_handle: u32, x: i32, y: i32) {
+    let Some(buf_ptr) = handles::get(buffer_handle, Kind::OptimizedBuffer) else {
+        return;
+    };
+    let Some(view) = resolve(view_handle) else {
+        return;
+    };
+    let buffer = unsafe { &mut *(buf_ptr as *mut crate::buffer::OptimizedBuffer) };
+    let mut pool = crate::buffer_ffi::global_pool();
+    buffer.draw_text_buffer_view(&mut pool, view, x, y);
+}
+
+#[napi(js_name = "textBufferViewSetTabIndicator")]
+pub fn text_buffer_view_set_tab_indicator(handle: u32, indicator: u32) {
+    if let Some(view) = resolve(handle) {
+        view.tab_indicator = Some(indicator);
+    }
+}
+
+#[napi(js_name = "textBufferViewSetTabIndicatorColor")]
+pub fn text_buffer_view_set_tab_indicator_color(handle: u32, color: f64) {
+    if let Some(view) = resolve(handle) {
+        view.tab_indicator_color = read_rgba_ptr(color);
+    }
+}
+
+#[napi(js_name = "textBufferSetDefaultFg")]
+pub fn text_buffer_set_default_fg(handle: u32, fg: f64) {
+    if let Some(ptr) = handles::get(handle, Kind::TextBuffer) {
+        let tb = unsafe { &mut *(ptr as *mut crate::text_buffer::TextBuffer) };
+        tb.default_fg = read_rgba_ptr(fg);
+    }
+}
+
+#[napi(js_name = "textBufferSetDefaultBg")]
+pub fn text_buffer_set_default_bg(handle: u32, bg: f64) {
+    if let Some(ptr) = handles::get(handle, Kind::TextBuffer) {
+        let tb = unsafe { &mut *(ptr as *mut crate::text_buffer::TextBuffer) };
+        tb.default_bg = read_rgba_ptr(bg);
+    }
+}
+
+#[napi(js_name = "textBufferSetDefaultAttributes")]
+pub fn text_buffer_set_default_attributes(handle: u32, attr_ptr: f64) {
+    if let Some(ptr) = handles::get(handle, Kind::TextBuffer) {
+        let tb = unsafe { &mut *(ptr as *mut crate::text_buffer::TextBuffer) };
+        tb.default_attributes = if attr_ptr == 0.0 {
+            None
+        } else {
+            Some(unsafe { std::ptr::read_unaligned((attr_ptr as u64) as usize as *const u32) })
+        };
+    }
+}
+
+#[napi(js_name = "textBufferResetDefaults")]
+pub fn text_buffer_reset_defaults(handle: u32) {
+    if let Some(ptr) = handles::get(handle, Kind::TextBuffer) {
+        let tb = unsafe { &mut *(ptr as *mut crate::text_buffer::TextBuffer) };
+        tb.default_fg = None;
+        tb.default_bg = None;
+        tb.default_attributes = None;
+    }
+}

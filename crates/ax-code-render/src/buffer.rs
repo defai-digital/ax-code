@@ -455,7 +455,7 @@ impl OptimizedBuffer {
         self.scissor_stack.last().copied()
     }
 
-    fn point_in_scissor(&self, x: i32, y: i32) -> bool {
+    pub(crate) fn point_in_scissor(&self, x: i32, y: i32) -> bool {
         let Some(s) = self.current_scissor() else {
             return true;
         };

@@ -14,7 +14,7 @@ use napi_derive::napi;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 /// Process-global grapheme pool, mirroring the Zig `initGlobalPool` arena.
-fn global_pool() -> MutexGuard<'static, GraphemePool> {
+pub(crate) fn global_pool() -> MutexGuard<'static, GraphemePool> {
     static POOL: OnceLock<Mutex<GraphemePool>> = OnceLock::new();
     POOL.get_or_init(|| Mutex::new(GraphemePool::new()))
         .lock()

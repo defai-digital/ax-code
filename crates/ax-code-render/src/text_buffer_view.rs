@@ -72,6 +72,8 @@ pub struct TextBufferView {
     pub wrap_width: Option<u32>,
     pub wrap_mode: WrapMode,
     pub first_line_offset: u32,
+    pub tab_indicator: Option<u32>,
+    pub tab_indicator_color: Option<Rgba>,
     dirty: bool,
     caches: VirtualLineCaches,
     // Slices exposed through GetLineInfoDirect must stay alive between calls.
@@ -95,6 +97,8 @@ impl TextBufferView {
             wrap_width: None,
             wrap_mode: WrapMode::None,
             first_line_offset: 0,
+            tab_indicator: None,
+            tab_indicator_color: None,
             dirty: true,
             caches: VirtualLineCaches::default(),
             info_starts: Vec::new(),
@@ -129,19 +133,27 @@ impl TextBufferView {
         }
     }
 
+    /// Zig `setViewport`: setting a viewport CLOBBERS wrap_width with the
+    /// viewport width (found by differential draw fuzz — a wrap width set
+    /// before a viewport is silently overridden).
     pub fn set_viewport(&mut self, vp: Option<Viewport>) {
         self.viewport = vp;
+        if let Some(viewport) = vp {
+            if self.wrap_width != Some(viewport.width) {
+                self.wrap_width = Some(viewport.width);
+                self.dirty = true;
+            }
+        }
     }
 
     pub fn set_viewport_size(&mut self, width: u32, height: u32) {
         let (x, y) = self.viewport.map_or((0, 0), |vp| (vp.x, vp.y));
-        self.viewport = Some(Viewport {
+        self.set_viewport(Some(Viewport {
             x,
             y,
             width,
             height,
-        });
-        self.dirty = true;
+        }));
     }
 
     /// Zig `updateVirtualLines`. NOTE: the view has no cheap content-epoch
@@ -556,6 +568,10 @@ impl TextBufferView {
         // GetLineInfoDirect regardless of viewport (the max lives in
         // measureForDimensions instead).
         0
+    }
+
+    pub fn caches_ref(&self) -> &VirtualLineCaches {
+        &self.caches
     }
 
     pub fn info_slices(&self) -> (&[u32], &[u32], &[u32], &[u32]) {
