@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.9.1] - 2026-07-04
+
+### Fixed
+
+- CLI: stabilizes TUI slash-command autocomplete so typing `/` keeps the menu open while textarea cursor state settles.
+- Desktop: refreshes signed Desktop release assets from the current monorepo release line.
+- Release: refreshes signed CLI and Desktop assets with Homebrew formula and cask updates.
+
 ## [6.9.0] - 2026-07-04
 
 ### Changed
