@@ -12,6 +12,7 @@ describe("smoke-packaged-app args", () => {
     ).toEqual({
       app: "/tmp/AX Code.app",
       artifacts: "/tmp/artifacts",
+      skipIfMissing: false,
       timeoutMs: 12000,
     })
   })
@@ -26,8 +27,14 @@ describe("smoke-packaged-app args", () => {
     ).toEqual({
       app: "/tmp/Other.app",
       artifacts: "/tmp/other-artifacts",
+      skipIfMissing: false,
       timeoutMs: 7000,
     })
+  })
+
+  test("allows missing packaged apps to be skipped explicitly", () => {
+    expect(parseArgs(["--skip-if-missing"], {}).skipIfMissing).toBe(true)
+    expect(parseArgs([], { AX_CODE_DESKTOP_SMOKE_SKIP_IF_MISSING: "1" }).skipIfMissing).toBe(true)
   })
 
   test("falls back when timeout values are invalid", () => {

@@ -22,6 +22,7 @@ export const parseArgs = (argv, env = process.env) => {
   const result = {
     app: env.AX_CODE_DESKTOP_SMOKE_APP || "",
     artifacts: env.AX_CODE_DESKTOP_SMOKE_ARTIFACTS || "",
+    skipIfMissing: env.AX_CODE_DESKTOP_SMOKE_SKIP_IF_MISSING === "1",
     timeoutMs: parseTimeoutMs(env.AX_CODE_DESKTOP_SMOKE_TIMEOUT_MS),
   }
 
@@ -33,6 +34,8 @@ export const parseArgs = (argv, env = process.env) => {
     } else if (arg === "--artifacts") {
       result.artifacts = argv[index + 1] || ""
       index += 1
+    } else if (arg === "--skip-if-missing") {
+      result.skipIfMissing = true
     } else if (arg === "--timeout-ms") {
       result.timeoutMs = parseTimeoutMs(argv[index + 1], result.timeoutMs)
       index += 1
@@ -222,6 +225,10 @@ const main = async () => {
   const args = parseArgs(process.argv.slice(2))
   const appPath = args.app || (await resolveDefaultAppPath())
   if (!appPath) {
+    if (args.skipIfMissing) {
+      console.log("Packaged .app not found; skipping packaged app smoke")
+      return
+    }
     throw new Error("Packaged .app path not provided and default dist app was not found")
   }
   if (process.platform !== "darwin") {

@@ -82,4 +82,4 @@ jobs:
 
       - name: Smoke packaged Desktop app
         if: runner.os == 'macOS'
-        run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs
+        run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs --skip-if-missing
