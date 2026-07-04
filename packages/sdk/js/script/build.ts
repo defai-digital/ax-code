@@ -45,16 +45,17 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.Pro
 
 async function patchGeneratedSseClient(outputPath: string) {
   const file = path.join(dir, outputPath, "core", "serverSentEvents.gen.ts")
+  await run(process.execPath, [packageBin("prettier"), "--write", file])
   let source = await fs.readFile(file, "utf8")
 
   const replacements: Array<[RegExp, string]> = [
     [
-      /    while \(true\) \{\n      if \(signal\.aborted\) break;\n\n      attempt\+\+;/,
+      /    while \(true\) \{\n      if \(signal\.aborted\) break\n\n      attempt\+\+/,
       `    while (true) {
       if (signal.aborted) break;`,
     ],
     [
-      /        const reader = response\.body\n          \.pipeThrough\(new TextDecoderStream\(\)\)\n          \.getReader\(\);\n\n        let buffer = '';/,
+      /        const reader = response\.body\.pipeThrough\(new TextDecoderStream\(\)\)\.getReader\(\)\n\n        let buffer = ""/,
       `        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
         attempt = 0
 
@@ -62,7 +63,7 @@ async function patchGeneratedSseClient(outputPath: string) {
         let completed = false`,
     ],
     [
-      /            const \{ done, value \} = await reader\.read\(\);\n            if \(done\) break;/,
+      /            const \{ done, value \} = await reader\.read\(\)\n            if \(done\) break/,
       `            const { done, value } = await reader.read()
             if (done) {
               completed = true
@@ -70,7 +71,7 @@ async function patchGeneratedSseClient(outputPath: string) {
             }`,
     ],
     [
-      /        \} finally \{\n          signal\.removeEventListener\('abort', abortHandler\);\n          reader\.releaseLock\(\);\n        \}/,
+      /        \} finally \{\n          signal\.removeEventListener\("abort", abortHandler\)\n          reader\.releaseLock\(\)\n        \}/,
       `        } finally {
           signal.removeEventListener("abort", abortHandler)
           if (!completed) {
@@ -80,7 +81,7 @@ async function patchGeneratedSseClient(outputPath: string) {
         }`,
     ],
     [
-      /        onSseError\?\.\(error\);\n\n        if \(\n          sseMaxRetryAttempts !== undefined &&\n          attempt >= sseMaxRetryAttempts\n        \) \{\n          break; \/\/ stop after firing error\n        \}\n\n        \/\/ exponential backoff: double retry each attempt, cap at 30s\n        const backoff = Math\.min\(\n          retryDelay \* 2 \*\* \(attempt - 1\),\n          sseMaxRetryDelay \?\? 30000,\n        \);/,
+      /        onSseError\?\.\(error\)\n\n        if \(sseMaxRetryAttempts !== undefined && attempt >= sseMaxRetryAttempts\) \{\n          break \/\/ stop after firing error\n        \}\n\n        \/\/ exponential backoff: double retry each attempt, cap at 30s\n        const backoff = Math\.min\(retryDelay \* 2 \*\* \(attempt - 1\), sseMaxRetryDelay \?\? 30000\)/,
       `        onSseError?.(error)
         attempt += 1
 

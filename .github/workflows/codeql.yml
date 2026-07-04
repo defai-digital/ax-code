@@ -73,11 +73,7 @@ jobs:
         with:
           languages: rust
           queries: +security-extended,security-and-quality
-          build-mode: manual
-
-      - name: Build Rust workspace
-        run: cargo build --workspace --all-targets
-        working-directory: crates
+          build-mode: none
 
       - name: Analyze
         uses: github/codeql-action/analyze@v4
