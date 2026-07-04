@@ -110,7 +110,11 @@ jobs:
         with:
           checkout: "false"
 
-      - run: pnpm install --frozen-lockfile
+      # The build matrix later installs dist runtime dependencies with
+      # lifecycle scripts disabled and treats node-pty rebuild as optional.
+      # Keep root install the same way here so Windows releases are not blocked
+      # by optional native postinstall fallout under new Node/toolchain pairs.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SDK
         run: pnpm exec tsc

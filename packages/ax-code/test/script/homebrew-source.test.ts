@@ -177,6 +177,22 @@ describe("distribution support guardrails", () => {
     expect(job.indexOf("Notarize macOS CLI archive")).toBeLessThan(job.indexOf("Upload build artifacts"))
   })
 
+  test("release build jobs do not let optional native postinstall scripts block artifacts", async () => {
+    const text = await readFile(releaseWorkflow, "utf-8")
+    const validateJob = text.match(/\n  validate:[\s\S]*?(?=\n  build:|$)/)
+    const buildJob = text.match(/\n  build:[\s\S]*?(?=\n  publish:|$)/)
+    expect(validateJob).not.toBeNull()
+    expect(buildJob).not.toBeNull()
+
+    expect(validateJob![0]).toContain("pnpm install --frozen-lockfile")
+    expect(validateJob![0]).not.toContain("pnpm install --frozen-lockfile --ignore-scripts")
+    expect(buildJob![0]).toContain("pnpm install --frozen-lockfile --ignore-scripts")
+    expect(buildJob![0]).toContain("node-pty rebuild as optional")
+    expect(buildJob![0].indexOf("pnpm install --frozen-lockfile --ignore-scripts")).toBeLessThan(
+      buildJob![0].indexOf("Build SDK"),
+    )
+  })
+
   test("node-bundled macOS build supports Developer ID signing without requiring Apple secrets locally", async () => {
     const text = await readFile(axCodeNodeTuiBuildScript, "utf-8")
 
