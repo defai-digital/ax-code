@@ -160,6 +160,7 @@ describe("distribution support guardrails", () => {
     expect(buildJob).not.toBeNull()
     const job = buildJob![0]
 
+    expect(job).toContain("fail-fast: false")
     expect(job).toContain("HAS_APPLE_CERT")
     expect(job).toContain("secrets.APPLE_CERTIFICATE")
     expect(job).toContain("Install Apple certificate")

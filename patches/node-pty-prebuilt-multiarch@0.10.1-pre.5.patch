@@ -1,18 +1,38 @@
 diff --git a/scripts/install.js b/scripts/install.js
-index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..3700c3765e9248e206e4171e9f7a3b4092071b62 100644
+index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..40b8d6fb5733456deadc2c35b368f9a83929be1c 100644
 --- a/scripts/install.js
 +++ b/scripts/install.js
-@@ -8,9 +8,11 @@ const gypArgs = ['rebuild'];
+@@ -8,9 +8,31 @@ const gypArgs = ['rebuild'];
  if (process.env.NODE_PTY_DEBUG) {
    gypArgs.push('--debug');
  }
 -const gypProcess = spawn(os.platform() === 'win32' ? 'node-gyp.cmd' : 'node-gyp', gypArgs, {
 +const isWindows = os.platform() === 'win32';
++const env = { ...process.env };
++if (isWindows) {
++  for (const name of [
++    'CFLAGS',
++    'CXXFLAGS',
++    'CPPFLAGS',
++    'LDFLAGS',
++    'CL',
++    '_CL_',
++    'LINK',
++    '_LINK_',
++    'npm_config_cflags',
++    'npm_config_cxxflags',
++    'npm_config_cppflags',
++    'npm_config_ldflags'
++  ]) {
++    delete env[name];
++  }
++}
 +const gypProcess = spawn(isWindows ? 'node-gyp.cmd' : 'node-gyp', gypArgs, {
    cwd: path.join(__dirname, '..'),
 -  stdio: 'inherit'
 +  stdio: 'inherit',
-+  shell: isWindows
++  shell: isWindows,
++  env
  });
  
  gypProcess.on('exit', function (code) {

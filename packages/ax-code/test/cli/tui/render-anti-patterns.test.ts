@@ -130,7 +130,12 @@ describe("tui OpenTUI stability guardrails", () => {
     const patch = await fs.readFile(NODE_PTY_PATCH_SRC, "utf8")
 
     expect(patch).toContain("const isWindows = os.platform() === 'win32';")
+    expect(patch).toContain("const env = { ...process.env };")
     expect(patch).toContain("shell: isWindows")
+    expect(patch).toContain("'CL'")
+    expect(patch).toContain("'LINK'")
+    expect(patch).toContain("'npm_config_ldflags'")
+    expect(patch).toContain("delete env[name];")
   })
 
   test("keeps TUI startup smoke resilient to missing workspace node-pty builds", async () => {
