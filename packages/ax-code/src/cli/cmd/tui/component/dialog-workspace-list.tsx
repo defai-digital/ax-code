@@ -69,7 +69,8 @@ async function openWorkspace(input: {
       })
       return
     }
-    if (result.response.status >= 500 && result.response.status < 600) {
+    const status = result.response?.status
+    if (status !== undefined && status >= 500 && status < 600) {
       await sleep(1000)
       continue
     }
