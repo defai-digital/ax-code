@@ -22,9 +22,15 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 **macOS**
 
 ```bash
-brew install defai-digital/ax-code/ax-code
-brew install --cask defai-digital/ax-code-desktop/ax-code
+brew tap defai-digital/ax-code
+brew tap defai-digital/ax-code-desktop
+brew install ax-code          # CLI/runtime
+brew install --cask ax-code   # Desktop app
 ```
+
+The CLI formula and Desktop cask live in separate Homebrew taps and are installed separately. If you prefer
+one-line commands that auto-tap, the equivalent forms are `brew install defai-digital/ax-code/ax-code` for
+the CLI and `brew install --cask defai-digital/ax-code-desktop/ax-code` for Desktop.
 
 **Windows**
 
@@ -53,7 +59,8 @@ Use this path for terminals, headless tasks, CI jobs, bots, servers, and SDK/int
 **macOS**
 
 ```bash
-brew install defai-digital/ax-code/ax-code
+brew tap defai-digital/ax-code
+brew install ax-code
 ```
 
 **Windows**

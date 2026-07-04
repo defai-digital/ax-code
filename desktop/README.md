@@ -20,12 +20,19 @@ tap because Homebrew taps are distribution indexes, not source-code repositories
 The recommended way to install on macOS is via Homebrew:
 
 ```bash
-brew install --cask defai-digital/ax-code-desktop/ax-code
+brew tap defai-digital/ax-code
+brew tap defai-digital/ax-code-desktop
+brew install ax-code          # CLI/runtime
+brew install --cask ax-code   # Desktop app
 ```
+
+The Desktop cask token is `ax-code`. The old `ax-code-desktop` cask remains as a deprecated compatibility
+alias only.
 
 To update:
 
 ```bash
+brew upgrade ax-code
 brew upgrade --cask ax-code
 ```
 

@@ -2,18 +2,19 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-26
+Last reviewed: 2026-07-04
 Owner: ax-code runtime
 
-The root [README](../README.md) keeps the shortest install path. This page is the source of truth for supported installer channels, `ax-code doctor` runtime labels, and local launcher behavior.
+The root [README](../README.md) keeps the primary install path. This page is the source of truth for supported installer channels, `ax-code doctor` runtime labels, and local launcher behavior.
 
 ## Recommended Path
 
 Use a supported packaged installer unless you are developing from a checkout. Prefer Homebrew on macOS and the native PowerShell installer on Windows.
 
 ```bash
-# Homebrew (macOS)
-brew install defai-digital/ax-code/ax-code
+# Homebrew (macOS CLI)
+brew tap defai-digital/ax-code
+brew install ax-code
 
 # GitHub release installer (Windows PowerShell)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
@@ -40,7 +41,7 @@ Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on b
 
 | Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
-| Homebrew                             | `brew install defai-digital/ax-code/ax-code`                                                                                                   | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
+| Homebrew formula                     | `brew tap defai-digital/ax-code && brew install ax-code`                                                                                       | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `node-bundled`         | Manual               | Manual validation or troubleshooting                               |
 | Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
@@ -57,6 +58,9 @@ Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on b
 ## Platform Policy
 
 - macOS: use Homebrew as the documented user path. Contributor builds use `pnpm run setup:cli`.
+- Fully qualified Homebrew commands such as `brew install defai-digital/ax-code/ax-code` are supported one-line
+  equivalents and are useful for CI, but user-facing docs should prefer the clearer `brew tap ...` plus
+  `brew install ax-code` form.
 - Windows: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. The Bash installer is not the canonical Windows user experience.
 - npm: not a supported install or upgrade channel.
 
