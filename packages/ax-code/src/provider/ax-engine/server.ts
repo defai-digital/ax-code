@@ -164,7 +164,13 @@ async function waitForReady(
     timeoutMs?: number
   } = {},
 ): Promise<WaitForReadyResult> {
-  const deadline = Date.now() + (options.timeoutMs ?? 90_000)
+  // Cold-loading a local model (mmap + weight load + first-token warmup for a
+  // 12B-35B param model) can legitimately take minutes, not seconds.
+  // session/llm-impl.ts gives the ax-engine provider a 300s outer setup
+  // envelope specifically to cover this — keep this default comfortably under
+  // that so a slow-but-successful start isn't cut off here first, before the
+  // outer envelope ever gets a chance to matter.
+  const deadline = Date.now() + (options.timeoutMs ?? 240_000)
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ready: false, reason: "aborted" }
     if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
@@ -343,12 +349,16 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
 }
 
 async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEngineServerState> {
-  // Held across the entire cold start: process spawn + up to 90s readiness wait,
-  // or up to 120s model reload. Wait well past that worst case so a genuine
-  // cross-process start (e.g. the desktop server alongside a CLI) queues instead
-  // of failing at 30s; a dead holder is still reclaimed immediately via the
-  // staleMs / pid-liveness checks inside FileLock.
-  using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 180_000, staleMs: 5 * 60_000 })
+  // Held across the entire cold start: process spawn + up to 240s readiness wait
+  // (see waitForReady), or up to 120s model reload. Wait well past that worst
+  // case so a genuine cross-process start (e.g. the desktop server alongside a
+  // CLI) queues instead of failing while the first holder is still legitimately
+  // loading the model; a dead holder is still reclaimed immediately via the
+  // staleMs / pid-liveness checks inside FileLock. Previously this was 180_000,
+  // shorter than waitForReady's 240_000 — any second caller queued behind a
+  // slow cold load would hit "timed out waiting for file lock" well before the
+  // first start ever finished, surfacing as "start never works".
+  using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 260_000, staleMs: 5 * 60_000 })
   const existingResult = await readServerState()
   if (existingResult.error) {
     throw new Error(`${AX_ENGINE_ERROR.ServerStartFailed}: failed to read server state`)
