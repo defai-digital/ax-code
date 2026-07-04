@@ -205,9 +205,9 @@ describe("script.quality-rollout promotion summary", () => {
     const reportOut = path.join(tmp, "promotion-summary.md")
 
     try {
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -222,10 +222,12 @@ describe("script.quality-rollout promotion summary", () => {
           summaryOut,
           "--report-out",
           reportOut,
-        ], {
+        ],
+        {
           cwd: path.join(import.meta.dirname, "../.."),
           env: process.env,
-        })
+        },
+      )
 
       expect(result.status).toBe(0)
       expect(result.stdout.toString()).toContain("current stage: post_signing_reviewed")
@@ -310,9 +312,9 @@ describe("script.quality-rollout replay readiness", () => {
         })
 
         const summaryOut = path.join(tmp.path, "replay-readiness.json")
-        const result = spawnSync(process.execPath, [
-            "--experimental-ffi",
-            "--disable-warning=ExperimentalWarning",
+        const result = spawnSync(
+          process.execPath,
+          [
             "--import",
             "tsx",
             "--import",
@@ -327,10 +329,12 @@ describe("script.quality-rollout replay readiness", () => {
             sid,
             "--out",
             summaryOut,
-          ], {
-          cwd: path.join(import.meta.dirname, "../.."),
-          env: process.env,
-        })
+          ],
+          {
+            cwd: path.join(import.meta.dirname, "../.."),
+            env: process.env,
+          },
+        )
 
         expect(result.status).toBe(0)
         expect(result.stdout.toString()).toContain("workflow: review")
@@ -404,9 +408,9 @@ describe("script.quality-rollout replay readiness", () => {
         })
 
         const summaryOut = path.join(tmp.path, "qa-replay-readiness.json")
-        const result = spawnSync(process.execPath, [
-            "--experimental-ffi",
-            "--disable-warning=ExperimentalWarning",
+        const result = spawnSync(
+          process.execPath,
+          [
             "--import",
             "tsx",
             "--import",
@@ -421,10 +425,12 @@ describe("script.quality-rollout replay readiness", () => {
             sid,
             "--out",
             summaryOut,
-          ], {
-          cwd: path.join(import.meta.dirname, "../.."),
-          env: process.env,
-        })
+          ],
+          {
+            cwd: path.join(import.meta.dirname, "../.."),
+            env: process.env,
+          },
+        )
 
         expect(result.status).toBe(0)
         expect(result.stdout.toString()).toContain("workflow: qa")

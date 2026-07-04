@@ -701,9 +701,9 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
       const wrongRecordFile = path.join(tmp.path, "wrong-attestation-record.json")
       await fs.writeFile(wrongRecordFile, JSON.stringify(wrongRecord, null, 2))
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -716,10 +716,12 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
           promotionRecord.promotionID,
           "--signed-archive-attestation-record",
           wrongRecordFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).not.toBe(0)
       expect(result.stderr.toString()).toContain(
@@ -820,9 +822,9 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
       const tamperedRecordFile = path.join(tmp.path, "tampered-attestation-record.json")
       await fs.writeFile(tamperedRecordFile, JSON.stringify(tamperedRecord, null, 2))
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -835,10 +837,12 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
           promotionRecord.promotionID,
           "--signed-archive-attestation-record",
           tamperedRecordFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).not.toBe(0)
       expect(result.stderr.toString()).toContain(
@@ -1106,9 +1110,9 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
       const wrongPacketFile = path.join(tmp.path, "wrong-attestation-packet.json")
       await fs.writeFile(wrongPacketFile, JSON.stringify(wrongPacket, null, 2))
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -1121,10 +1125,12 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
           promotionRecord.promotionID,
           "--signed-archive-attestation-packet",
           wrongPacketFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).not.toBe(0)
       expect(result.stderr.toString()).toContain(
@@ -1217,9 +1223,9 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
       const recordFile = path.join(tmp.path, "attestation-record.json")
       await fs.writeFile(recordFile, JSON.stringify(record, null, 2))
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -1232,10 +1238,12 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
           promotionRecord.promotionID,
           "--signed-archive-attestation-record",
           recordFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).toBe(0)
       expect(result.stdout.toString()).toContain(`promotion id: ${promotionRecord.promotionID}`)
@@ -1351,9 +1359,9 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
       const tamperedPacketFile = path.join(tmp.path, "tampered-attestation-packet.json")
       await fs.writeFile(tamperedPacketFile, JSON.stringify(tamperedPacket, null, 2))
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -1366,10 +1374,12 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
           promotionRecord.promotionID,
           "--signed-archive-attestation-packet",
           tamperedPacketFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).not.toBe(0)
       expect(result.stderr.toString()).toContain(
@@ -1621,9 +1631,9 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
       await fs.writeFile(releasePacketFile, JSON.stringify(releasePacket, null, 2))
       await fs.writeFile(recordFile, JSON.stringify(record, null, 2))
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -1638,10 +1648,12 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
           releasePacketFile,
           "--signed-archive-attestation-record",
           recordFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).toBe(0)
       expect(result.stdout.toString()).toContain(`promotion id: ${promotionRecord.promotionID}`)
@@ -1762,9 +1774,9 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
       const tamperedPacketFile = path.join(tmp.path, "tampered-governance-packet.json")
       await fs.writeFile(tamperedPacketFile, JSON.stringify(tamperedPacket, null, 2))
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -1777,10 +1789,12 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
           promotionRecord.promotionID,
           "--signed-archive-governance-packet",
           tamperedPacketFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).not.toBe(0)
       expect(result.stderr.toString()).toContain(
@@ -2014,9 +2028,9 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
       const tamperedDossierFile = path.join(tmp.path, "tampered-signed-archive-review-dossier.json")
       await fs.writeFile(tamperedDossierFile, JSON.stringify(tamperedDossier, null, 2))
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -2029,10 +2043,12 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
           promotionRecord.promotionID,
           "--signed-archive-review-dossier",
           tamperedDossierFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).not.toBe(0)
       expect(result.stderr.toString()).toContain(
@@ -2149,9 +2165,9 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
         JSON.stringify(signedArchive.packagedArchive.portableExport.handoffPackage, null, 2),
       )
 
-      const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
+      const result = spawnSync(
+        process.execPath,
+        [
           "--import",
           "tsx",
           "--import",
@@ -2166,10 +2182,12 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
           governancePacketFile,
           "--handoff-package",
           handoffPackageFile,
-      ], {
-        cwd: path.join(import.meta.dirname, "../.."),
-        env: process.env,
-      })
+        ],
+        {
+          cwd: path.join(import.meta.dirname, "../.."),
+          env: process.env,
+        },
+      )
 
       expect(result.status).toBe(0)
       expect(result.stdout.toString()).toContain(`promotion id: ${promotionRecord.promotionID}`)
