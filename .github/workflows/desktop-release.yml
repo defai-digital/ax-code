@@ -289,7 +289,11 @@ jobs:
 
       - name: Install deps
         shell: bash
-        run: pnpm install --frozen-lockfile
+        # Keep root lifecycle scripts disabled on Windows. The workspace includes
+        # the CLI/TUI node-pty-prebuilt-multiarch dependency, which has no Node
+        # 24 Windows prebuild and fails native compilation before Desktop build
+        # steps run. Electron native modules are rebuilt explicitly later.
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SDK
         shell: bash
@@ -374,7 +378,11 @@ jobs:
 
       - name: Install deps
         shell: bash
-        run: pnpm install --frozen-lockfile
+        # Keep root lifecycle scripts disabled on Windows. The workspace includes
+        # the CLI/TUI node-pty-prebuilt-multiarch dependency, which has no Node
+        # 24 Windows prebuild and fails native compilation before Desktop build
+        # steps run. Electron native modules are rebuilt explicitly later.
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SDK
         shell: bash
