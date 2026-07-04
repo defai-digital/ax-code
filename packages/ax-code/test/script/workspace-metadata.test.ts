@@ -55,6 +55,9 @@ describe("script.workspace-metadata", () => {
       import: "./scripts/solid-transform.js",
     })
     expect(Object.keys(corePackage.optionalDependencies ?? {}).sort()).toEqual([
+      // ADR-046: the Rust native render addon; the overlay require()s it and
+      // falls back to the bundled Zig library if it is absent.
+      "@ax-code/render",
       "@opentui/core-darwin-arm64",
       "@opentui/core-darwin-x64",
       "@opentui/core-linux-arm64",
