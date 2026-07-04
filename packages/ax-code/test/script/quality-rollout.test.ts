@@ -206,8 +206,6 @@ describe("script.quality-rollout promotion summary", () => {
 
     try {
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -311,8 +309,6 @@ describe("script.quality-rollout replay readiness", () => {
 
         const summaryOut = path.join(tmp.path, "replay-readiness.json")
         const result = spawnSync(process.execPath, [
-            "--experimental-ffi",
-            "--disable-warning=ExperimentalWarning",
             "--import",
             "tsx",
             "--import",
@@ -405,8 +401,6 @@ describe("script.quality-rollout replay readiness", () => {
 
         const summaryOut = path.join(tmp.path, "qa-replay-readiness.json")
         const result = spawnSync(process.execPath, [
-            "--experimental-ffi",
-            "--disable-warning=ExperimentalWarning",
             "--import",
             "tsx",
             "--import",

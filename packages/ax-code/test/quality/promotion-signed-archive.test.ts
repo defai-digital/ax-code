@@ -702,8 +702,6 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
       await fs.writeFile(wrongRecordFile, JSON.stringify(wrongRecord, null, 2))
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -821,8 +819,6 @@ describe("QualityPromotionSignedArchiveAttestationRecord", () => {
       await fs.writeFile(tamperedRecordFile, JSON.stringify(tamperedRecord, null, 2))
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -1107,8 +1103,6 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
       await fs.writeFile(wrongPacketFile, JSON.stringify(wrongPacket, null, 2))
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -1218,8 +1212,6 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
       await fs.writeFile(recordFile, JSON.stringify(record, null, 2))
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -1352,8 +1344,6 @@ describe("QualityPromotionSignedArchiveAttestationPacket", () => {
       await fs.writeFile(tamperedPacketFile, JSON.stringify(tamperedPacket, null, 2))
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -1622,8 +1612,6 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
       await fs.writeFile(recordFile, JSON.stringify(record, null, 2))
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -1763,8 +1751,6 @@ describe("QualityPromotionSignedArchiveGovernancePacket", () => {
       await fs.writeFile(tamperedPacketFile, JSON.stringify(tamperedPacket, null, 2))
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -2015,8 +2001,6 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
       await fs.writeFile(tamperedDossierFile, JSON.stringify(tamperedDossier, null, 2))
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
@@ -2150,8 +2134,6 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
       )
 
       const result = spawnSync(process.execPath, [
-          "--experimental-ffi",
-          "--disable-warning=ExperimentalWarning",
           "--import",
           "tsx",
           "--import",
