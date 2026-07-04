@@ -98,7 +98,7 @@ export function routeMessage(params: {
 
     // Slash commands — fire and forget, SSE delivers messages and status
     if (params.content.startsWith("/")) {
-      const [head, ...tail] = params.content.split(" ")
+      const [head = "", ...tail] = params.content.split(" ")
       const cmdName = head.slice(1)
 
       const dirState = getDirectoryState(params.directory ?? undefined)

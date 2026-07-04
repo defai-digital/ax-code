@@ -266,7 +266,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install deps
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build @ax-code/render native addon (MSVC + vendored yoga C++)
         run: pnpm run build:native render
