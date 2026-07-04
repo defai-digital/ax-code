@@ -65,6 +65,11 @@ fn build_line_spans(tb: &TextBuffer, line_idx: usize, line_width: u32) -> Vec<St
     let mut active: Vec<usize> = Vec::new();
     let mut current_col: u32 = 0;
     for event in &events {
+        // Stop processing events beyond the line boundary. The trailing span
+        // logic below will emit any remaining styled region to line_width.
+        if event.col >= line_width {
+            break;
+        }
         let mut current_priority: i32 = -1;
         let mut current_style: u32 = 0;
         for &hl_idx in &active {
@@ -90,10 +95,22 @@ fn build_line_spans(tb: &TextBuffer, line_idx: usize, line_width: u32) -> Vec<St
             active.retain(|&i| i != event.hl_idx);
         }
     }
-    if !events.is_empty() && active.is_empty() && current_col < line_width {
+    // Emit the trailing span to line_width. Active highlights whose end events
+    // were not processed (they extend past the last event / to line end) still
+    // carry a style that must be applied to the remainder of the line.
+    if !events.is_empty() && current_col < line_width {
+        let mut trailing_priority: i32 = -1;
+        let mut trailing_style: u32 = 0;
+        for &hl_idx in &active {
+            let hl = &highlights[hl_idx];
+            if hl.priority as i32 > trailing_priority {
+                trailing_priority = hl.priority as i32;
+                trailing_style = hl.style_id;
+            }
+        }
         spans.push(StyleSpan {
             col: current_col,
-            style_id: 0,
+            style_id: trailing_style,
             next_col: line_width,
         });
     }
@@ -451,13 +468,13 @@ impl OptimizedBuffer {
                             if current_x + tab_col as i32 >= self.width as i32 {
                                 break;
                             }
-                            let ch = if tab_col == 0 && tab_indicator.is_some() {
-                                tab_indicator.unwrap()
+                            let ch = if tab_col == 0 {
+                                tab_indicator.unwrap_or(DEFAULT_SPACE_CHAR)
                             } else {
                                 DEFAULT_SPACE_CHAR
                             };
-                            let fg = if tab_col == 0 && tab_indicator_color.is_some() {
-                                tab_indicator_color.unwrap()
+                            let fg = if tab_col == 0 {
+                                tab_indicator_color.unwrap_or(draw_fg)
                             } else {
                                 draw_fg
                             };
@@ -555,5 +572,68 @@ impl OptimizedBuffer {
             }
             current_y += 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mem_registry::MemBuffer;
+    use crate::text_buffer::TextBuffer;
+    use crate::unicode::WidthMethod;
+
+    fn tb_with(text: &str) -> TextBuffer {
+        let mut tb = TextBuffer::new(WidthMethod::Unicode);
+        tb.set_text(MemBuffer::Owned(text.as_bytes().to_vec()), text.len());
+        tb
+    }
+
+    #[test]
+    fn highlight_extending_past_line_end_emits_trailing_span() {
+        // Highlight covers cols 3..20 on a 10-wide line. The end event at col 20
+        // is processed (sweep doesn't stop at line_width), leaving active NON-EMPTY
+        // at the trailing-span check. OLD CODE: skipped the trailing span because
+        // active.is_empty() was false. FIX: emit with highest-priority active style.
+        let mut tb = tb_with("0123456789");
+        let line_width = tb.line_width_at(0);
+        assert_eq!(line_width, 10);
+        tb.add_highlight(0, 3, 20, /*style_id=*/ 7, /*priority=*/ 1, 0, false);
+        let spans = build_line_spans(&tb, 0, line_width);
+        // Expect: default span [0..3) + styled span [3..10) (clamped to line_width)
+        let cols: Vec<_> = spans.iter().map(|s| (s.col, s.style_id, s.next_col)).collect();
+        assert_eq!(cols, vec![(0, 0, 3), (3, 7, 10)]);
+    }
+
+    #[test]
+    fn highlight_at_start_extending_past_line_end() {
+        // Highlight from col 0 past the line end. Active set is non-empty after
+        // the end event at col 100; trailing span must still be emitted.
+        let mut tb = tb_with("hello");
+        let line_width = tb.line_width_at(0);
+        assert_eq!(line_width, 5);
+        tb.add_highlight(0, 0, 100, /*style_id=*/ 3, /*priority=*/ 2, 0, false);
+        let spans = build_line_spans(&tb, 0, line_width);
+        let cols: Vec<_> = spans.iter().map(|s| (s.col, s.style_id, s.next_col)).collect();
+        assert_eq!(cols, vec![(0, 3, 5)]);
+    }
+
+    #[test]
+    fn two_highlights_one_extends_past_line_end() {
+        // hl0: [2..6) style=1 priority=1 — ends within the line
+        // hl1: [5..20) style=2 priority=2 — extends PAST the line end
+        // After hl0's end event at col 6, hl1 is still active (end at col 20).
+        // Trailing span [6..10) must use hl1's style (priority 2).
+        let mut tb = tb_with("0123456789");
+        let line_width = tb.line_width_at(0);
+        tb.add_highlight(0, 2, 6, 1, 1, 0, false);
+        tb.add_highlight(0, 5, 20, 2, 2, 0, false);
+        let spans = build_line_spans(&tb, 0, line_width);
+        let cols: Vec<_> = spans.iter().map(|s| (s.col, s.style_id, s.next_col)).collect();
+        // [0..2) default, [2..5) hl0 only, [5..6) hl1 wins (priority 2 > 1),
+        // [6..10) hl1 only (hl0 ended at 6, hl1 still active past 20)
+        assert_eq!(
+            cols,
+            vec![(0, 0, 2), (2, 1, 5), (5, 2, 6), (6, 2, 10)]
+        );
     }
 }
