@@ -326,6 +326,9 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Build SDK
+        run: pnpm --dir packages/sdk/js run build
+
       - name: Install source launcher
         run: AX_CODE_BIN_DIR="$GITHUB_WORKSPACE/.tmp/tui-smoke-bin" pnpm run setup:cli -- --source
 
