@@ -3,12 +3,14 @@
 // Feeds terminal query-response strings (DECRPM capability reports, DA1 sixel,
 // osc52-/hyperlink-term names, the rgb->hyperlinks coupling) through both the
 // Zig backend and the Rust addon in-process and diffs the resulting
-// ExternalCapabilities struct byte-for-byte.
+// ExternalCapabilities struct for the ported capability fields.
 //
 // Scope: the xtversion path (\x1bP>|name...) is intentionally excluded — it
 // needs parseXtversion (terminal name/version + notification-from-name +
 // multiplexer) plus the renderer's enableDetectedFeatures/sendPendingQueries
-// emit, which are not ported. Those response types are not covered here.
+// emit, which are not ported. Kitty keyboard/graphics mode flags are also
+// excluded because Zig toggles those in the unported enableDetectedFeatures
+// path on some platforms. Those response types/flags are not covered here.
 
 import { createRequire } from "node:module"
 const require = createRequire(import.meta.url)
@@ -26,8 +28,6 @@ const rp = (v) => ffi.getRawPointer(v)
 
 // ExternalCapabilities boolean/u8 field offsets (0..18).
 const NAMES = {
-  0: "kitty_kbd",
-  1: "kitty_gfx",
   2: "rgb",
   3: "ansi256",
   4: "unicode",
