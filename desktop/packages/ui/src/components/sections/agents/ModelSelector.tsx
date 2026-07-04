@@ -90,6 +90,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       input: t("chat.modelControls.input"),
       output: t("chat.modelControls.output"),
       costPerMillion: t("chat.modelControls.costPerMillion"),
+      local: t("chat.modelControls.local"),
+      localTooltip: t("chat.modelControls.localTooltip"),
     }),
     [placeholder, t],
   )

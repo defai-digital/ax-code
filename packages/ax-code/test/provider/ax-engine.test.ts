@@ -437,6 +437,65 @@ describe("ax-engine server lifecycle", () => {
       ;(AxEnginePaths as { serverState: string; serverLock: string }).serverLock = originalServerLock
     }
   })
+
+  test("surfaces early server exits with recent server log output", async () => {
+    await using tmp = await tmpdir()
+    type MutableAxEnginePaths = typeof AxEnginePaths & {
+      state: string
+      log: string
+      serverState: string
+      serverLock: string
+      serverLog: string
+    }
+    const mutablePaths = AxEnginePaths as MutableAxEnginePaths
+    const originalState = mutablePaths.state
+    const originalLog = mutablePaths.log
+    const originalServerState = mutablePaths.serverState
+    const originalServerLock = mutablePaths.serverLock
+    const originalServerLog = mutablePaths.serverLog
+    const state = path.join(tmp.path, "state")
+    const log = path.join(tmp.path, "log")
+    const serverState = path.join(state, "server.json")
+    const serverLock = path.join(state, "server")
+    const serverLog = path.join(log, "server.log")
+    const binary = path.join(tmp.path, "ax-engine")
+    await fs.writeFile(
+      binary,
+      [
+        "#!/bin/sh",
+        "echo 'dyld: Library not loaded: /opt/homebrew/opt/mlx/lib/libmlx.dylib' >&2",
+        "echo 'Reason: mapped file has a different Team ID' >&2",
+        "exit 134",
+        "",
+      ].join("\n"),
+    )
+    await fs.chmod(binary, 0o755)
+
+    try {
+      mutablePaths.state = state
+      mutablePaths.log = log
+      mutablePaths.serverState = serverState
+      mutablePaths.serverLock = serverLock
+      mutablePaths.serverLog = serverLog
+
+      await expect(
+        ensureServer({
+          binaryPath: binary,
+          modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
+          apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
+          modelPath: "/models/qwen",
+        }),
+      ).rejects.toThrow(
+        /AX_ENGINE_SERVER_START_FAILED:[\s\S]*exited before becoming ready[\s\S]*Recent ax-engine server log:[\s\S]*Library not loaded:[\s\S]*different Team ID/,
+      )
+    } finally {
+      mutablePaths.state = originalState
+      mutablePaths.log = originalLog
+      mutablePaths.serverState = originalServerState
+      mutablePaths.serverLock = originalServerLock
+      mutablePaths.serverLog = originalServerLog
+    }
+  })
 })
 
 describe("ax-engine server launch args", () => {

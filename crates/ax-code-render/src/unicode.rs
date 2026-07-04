@@ -188,11 +188,11 @@ impl ClusterWidth {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct GraphemeInfo {
-    pub(crate) byte_offset: usize,
-    pub(crate) byte_len: usize,
-    pub(crate) width: u32,
-    pub(crate) col_offset: u32,
+pub struct GraphemeInfo {
+    pub byte_offset: usize,
+    pub byte_len: usize,
+    pub width: u32,
+    pub col_offset: u32,
 }
 
 /// Cluster boundaries of the (valid UTF-8) text, using the uucode-matching

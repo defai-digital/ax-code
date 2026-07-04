@@ -3,6 +3,7 @@
 //! `lib.zig` glue. The view is a borrowed TextBufferView handle child of the
 //! editor view (shared with the buffer-draw + line-info paths).
 
+#![allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
 #![allow(clippy::too_many_arguments)]
 
 use crate::editor_view::{EditorView, VisualCursor};
@@ -14,6 +15,7 @@ fn resolve(handle: u32) -> Option<&'static mut EditorView> {
     handles::get(handle, Kind::EditorView).map(|ptr| unsafe { &mut *(ptr as *mut EditorView) })
 }
 
+#[allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
 unsafe fn opt_rgba(addr: f64) -> Option<[u16; 4]> {
     if addr == 0.0 {
         return None;
@@ -372,6 +374,7 @@ pub fn editor_view_get_prev_word_boundary(handle: u32, out_ptr: f64) {
     }
 }
 
+#[allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
 #[napi(js_name = "editorViewGetEOL")]
 pub fn editor_view_get_eol(handle: u32, out_ptr: f64) {
     if let Some(v) = resolve(handle) {

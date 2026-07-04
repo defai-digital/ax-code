@@ -4,6 +4,7 @@
 //! keeps the allocation alive for the registration's lifetime).
 
 #![allow(clippy::too_many_arguments)]
+#![allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
 
 use crate::handles::{self, Kind};
 use crate::mem_registry::MemBuffer;
@@ -105,6 +106,7 @@ pub fn text_buffer_get_byte_size(handle: u32) -> u32 {
     resolve(handle).map_or(0, |tb| tb.get_byte_size())
 }
 
+#[allow(dead_code)]
 #[napi(js_name = "textBufferGetLineCount")]
 pub fn text_buffer_get_line_count(handle: u32) -> u32 {
     resolve(handle).map_or(0, |tb| tb.get_line_count())

@@ -16,6 +16,10 @@ use crate::events::{
     MessageData, MessageInfo, MessagePartData, MessagePartInfo, MessageRole, RuntimeEvent,
 };
 
+/// Maximum number of consecutive SSE reconnection attempts before giving up.
+/// With exponential backoff (1s→30s cap), 20 attempts ≈ 5–10 minutes.
+const MAX_SSE_RETRIES: u32 = 20;
+
 /// Default server URL for the headless runtime.
 pub const DEFAULT_SERVER_URL: &str = "http://127.0.0.1:4096";
 
@@ -121,6 +125,7 @@ impl HeadlessClient {
 
         tokio::spawn(async move {
             let mut retry_ms = 1_000_u64;
+            let mut retries = 0_u32;
             let mut next_response = Some(initial_response);
             loop {
                 match match next_response.take() {
@@ -129,6 +134,7 @@ impl HeadlessClient {
                 } {
                     Ok(response) => {
                         retry_ms = 1_000;
+                        retries = 0;
                         if tx.send(RuntimeEvent::ServerConnected).await.is_err() {
                             return;
                         }
@@ -137,7 +143,13 @@ impl HeadlessClient {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("SSE subscription failed: {}", e);
+                        retries += 1;
+                        tracing::error!("SSE subscription failed (attempt {}/{}): {}", retries, MAX_SSE_RETRIES, e);
+                        if retries >= MAX_SSE_RETRIES {
+                            tracing::error!("SSE reconnect limit reached; giving up");
+                            let _ = tx.send(RuntimeEvent::ServerDisconnected).await;
+                            return;
+                        }
                     }
                 }
 
@@ -507,7 +519,7 @@ pub(crate) fn drain_complete_sse_lines(buffer: &mut String) -> Vec<RuntimeEvent>
     while let Some(newline_pos) = buffer.find('\n') {
         let line = buffer[..newline_pos].trim_end_matches('\r').to_string();
         // Advance the buffer past the consumed line + its newline.
-        *buffer = buffer[newline_pos + 1..].to_string();
+        buffer.drain(..newline_pos + 1);
 
         if let Some(data) = line
             .strip_prefix("data:")

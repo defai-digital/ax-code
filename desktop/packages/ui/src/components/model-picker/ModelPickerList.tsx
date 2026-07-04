@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { mergeModelMetadataWithLiveModel } from "@/lib/modelMetadata"
 import { getNextSelectableModelPickerIndex, normalizeModelPickerSelectionIndex } from "@/lib/modelPickerSelection"
 import { getProviderModelDisabledReason } from "@/lib/providerModelAvailability"
+import { isLocalProvider } from "@/lib/ax-code/providerApi"
 import { cn } from "@/lib/utils"
 import type { ModelMetadata } from "@/types"
 
@@ -302,6 +303,8 @@ interface ModelPickerListProps {
     input?: string
     output?: string
     costPerMillion?: string
+    local?: string
+    localTooltip?: string
   }
   selectedModel?: { providerID: string; modelID: string } | null
   hiddenModels?: HiddenModel[]
@@ -630,6 +633,14 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
                   <ProviderLogo providerId={entry.providerID} className="h-3.5 w-3.5 flex-shrink-0" />
                 ) : null}
                 <span className="font-medium truncate">{getModelDisplayName(entry.model)}</span>
+                {isLocalProvider(entry.providerID) ? (
+                  <span
+                    className="inline-flex flex-shrink-0 rounded-full border border-border bg-background px-1.5 py-0 text-[10px] leading-4 text-muted-foreground"
+                    title={labels.localTooltip}
+                  >
+                    {labels.local}
+                  </span>
+                ) : null}
                 {contextTokens ? (
                   <span className="typography-micro text-muted-foreground flex-shrink-0">{contextTokens}</span>
                 ) : null}

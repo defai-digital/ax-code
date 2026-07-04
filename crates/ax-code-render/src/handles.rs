@@ -58,7 +58,7 @@ fn registry() -> MutexGuard<'static, Registry> {
             })
         })
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
 }
 
 fn encode(index: u32, generation: u32, kind: Kind) -> u32 {
@@ -73,6 +73,7 @@ pub fn insert(kind: Kind, ptr: usize) -> u32 {
         free as usize
     } else {
         if reg.slots.len() > MAX_SLOTS {
+            eprintln!("ax-code-render: handle registry full ({} slots); returning invalid handle", reg.slots.len());
             return 0;
         }
         reg.slots.push(Slot::default());

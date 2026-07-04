@@ -1799,6 +1799,8 @@ export const dict = {
   "chat.modelControls.default": "Default",
   "chat.modelControls.selectAgent": "Select agent",
   "chat.modelControls.costPerMillion": "Cost ($/1M tokens)",
+  "chat.modelControls.local": "Local",
+  "chat.modelControls.localTooltip": "Runs on this machine — no per-token cost",
   "chat.modelControls.metadataUnavailable": "Model metadata unavailable.",
   "chat.modelControls.addNewProvider": "Add new provider",
   "chat.modelControls.noAgentSelected": "No agent selected.",

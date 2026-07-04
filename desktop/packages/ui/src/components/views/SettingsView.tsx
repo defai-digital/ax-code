@@ -9,7 +9,9 @@ import { useSnippetsStore } from "@/stores/useSnippetsStore"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Input } from "@/components/ui/input"
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary"
+import { filterByFuzzyQuery } from "@/lib/search/fuzzySearch"
 import { AgentsSidebar } from "@/components/sections/agents/AgentsSidebar"
 import { AgentsPage } from "@/components/sections/agents/AgentsPage"
 import { BehaviorPage } from "@/components/sections/behavior/BehaviorPage"
@@ -223,6 +225,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
 
   const [mobileStage, setMobileStage] = React.useState<MobileStage>("nav")
   const autoNavSlugRef = React.useRef<string | null>(null)
+  const [navQuery, setNavQuery] = React.useState("")
 
   const [navWidth, setNavWidth] = React.useState(216)
   const [hasManuallyResized, setHasManuallyResized] = React.useState(false)
@@ -426,6 +429,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
     [t],
   )
 
+  const navSearchablePages = React.useMemo(() => {
+    if (!navQuery.trim()) {
+      return sortedFilteredPages
+    }
+    return filterByFuzzyQuery(sortedFilteredPages, navQuery, (page) =>
+      [getPageTitle(page.slug), page.group, ...(page.keywords ?? [])].join(" "),
+    )
+  }, [sortedFilteredPages, navQuery, getPageTitle])
+
   const renderUnavailable = React.useCallback(() => {
     return (
       <div className="flex h-full items-center justify-center px-6">
@@ -625,10 +637,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
   const renderSettingsNav = () => {
     return (
       <div className="flex h-full flex-col overflow-hidden">
+        <div className="px-2 pt-3">
+          <div className="relative">
+            <Icon
+              name="search"
+              className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
+            />
+            <Input
+              value={navQuery}
+              onChange={(e) => setNavQuery(e.target.value)}
+              placeholder={t("settings.view.nav.searchPlaceholder")}
+              className="h-7 pl-8 w-full"
+            />
+          </div>
+        </div>
+
         {/* Scrollable nav items */}
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-          <div className="flex flex-col gap-0.5 pt-4 pb-2 px-2">
-            {sortedFilteredPages.map((page) => {
+          <div className="flex flex-col gap-0.5 pt-2 pb-2 px-2">
+            {navSearchablePages.length === 0 && (
+              <div className="px-2 py-3 typography-meta text-muted-foreground">
+                {t("settings.view.nav.searchNoResults")}
+              </div>
+            )}
+            {navSearchablePages.map((page) => {
               const selected = settingsSlug === page.slug
               const iconName = getSettingsNavIcon(page.slug)
               if (!iconName) return null

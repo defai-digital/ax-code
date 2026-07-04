@@ -199,7 +199,7 @@ impl OutputBackend {
             out.extend_from_slice(b"(no output rendered yet)\n");
         }
         out.extend_from_slice(b"\n================\n");
-        let _ = write!(out, "Buffer size: {} bytes\n", last.len());
+        let _ = writeln!(out, "Buffer size: {} bytes", last.len());
         out.extend_from_slice(b"Active buffer: A\n");
         out.extend_from_slice(b"Last committed buffer: A\n");
     }
@@ -641,7 +641,7 @@ impl CliRenderer {
         self.collect_frame_stats();
 
         // status rendered = 0
-        (self.render_offset as u64) | (0u64 << 32)
+        self.render_offset as u64
     }
 
     /// Zig `setUseThread` — gated on the backend supporting threading. The
@@ -1536,7 +1536,7 @@ impl CliRenderer {
         let _ = std::fs::create_dir_all("buffer_dump");
         let filename = format!("buffer_dump/output_buffer_{}.txt", timestamp);
         let mut body: Vec<u8> = Vec::new();
-        let _ = write!(body, "Output Buffer Dump (timestamp: {}):\n", timestamp);
+        let _ = writeln!(body, "Output Buffer Dump (timestamp: {}):", timestamp);
         body.extend_from_slice(b"Last Rendered ANSI Output:\n");
         body.extend_from_slice(b"================\n");
         self.backend.dump_to(&mut body);

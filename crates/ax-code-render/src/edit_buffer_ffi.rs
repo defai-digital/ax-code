@@ -1,5 +1,6 @@
 //! ADR-046 Slice D — napi exports for EditBuffer. Cursor structs marshal
 //! through the 12-byte ExternalLogicalCursor layout (row@0, col@4, offset@8).
+#![allow(dead_code)] // napi macro generates extern "C" wrappers; rustc can't see the calls
 
 use crate::edit_buffer::{Cursor, EditBuffer};
 use crate::handles::{self, Kind};

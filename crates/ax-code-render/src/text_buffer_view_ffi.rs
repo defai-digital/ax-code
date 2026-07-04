@@ -2,6 +2,8 @@
 //! (create/destroy, wrap + viewport config, virtual line count, line info,
 //! plain text). Drawing and selection land in later tranches.
 
+#![allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
+
 use crate::handles::{self, Kind};
 use crate::segment::WrapMode;
 use crate::text_buffer_view::{TextBufferView, Viewport};

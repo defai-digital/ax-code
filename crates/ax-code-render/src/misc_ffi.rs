@@ -6,6 +6,7 @@
 //! detection, allocator/build diagnostics, debug overlay draw, snapshot commit).
 
 #![allow(clippy::missing_safety_doc)]
+#![allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
 
 use crate::handles::{self, Kind};
 use crate::renderer::CliRenderer;
@@ -33,7 +34,7 @@ pub fn link_alloc(url_ptr: f64, url_len: u32) -> u32 {
     let p = (url_ptr as u64) as usize as *const u8;
     let bytes = unsafe { std::slice::from_raw_parts(p, url_len as usize) };
     let url = String::from_utf8_lossy(bytes).into_owned();
-    let mut pool = link_pool().lock().unwrap();
+    let mut pool = link_pool().lock().unwrap_or_else(|e| e.into_inner());
     pool.push(url);
     pool.len() as u32 // ids are 1-based
 }
@@ -43,7 +44,7 @@ pub fn link_get_url(id: u32, out_ptr: f64, max_len: u32) -> u32 {
     if id == 0 || out_ptr == 0.0 || max_len == 0 {
         return 0;
     }
-    let pool = link_pool().lock().unwrap();
+    let pool = link_pool().lock().unwrap_or_else(|e| e.into_inner());
     let Some(url) = pool.get(id as usize - 1) else {
         return 0;
     };
@@ -56,7 +57,7 @@ pub fn link_get_url(id: u32, out_ptr: f64, max_len: u32) -> u32 {
 
 #[napi(js_name = "clearGlobalLinkPool")]
 pub fn clear_global_link_pool_misc() {
-    link_pool().lock().unwrap().clear();
+    link_pool().lock().unwrap_or_else(|e| e.into_inner()).clear();
 }
 
 // --- encodeUnicode / freeUnicode (utf8.zig) ----------------------------------

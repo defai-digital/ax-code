@@ -105,7 +105,7 @@ impl TextChunk {
     }
 
     /// Lazily computed grapheme info (empty for printable-ASCII chunks).
-    pub fn graphemes(
+    pub(crate) fn graphemes(
         &self,
         registry: &MemRegistry,
         tab_width: u8,
@@ -126,7 +126,7 @@ impl TextChunk {
     }
 
     /// Lazily computed word-wrap break opportunities (Zig findWrapBreaks).
-    pub fn wrap_offsets(&self, registry: &MemRegistry) -> Rc<Vec<WordWrapBreak>> {
+    pub(crate) fn wrap_offsets(&self, registry: &MemRegistry) -> Rc<Vec<WordWrapBreak>> {
         if let Some(cached) = self.wrap_offsets.borrow().as_ref() {
             return cached.clone();
         }

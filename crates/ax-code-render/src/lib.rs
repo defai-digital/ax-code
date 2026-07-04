@@ -118,7 +118,7 @@ unsafe extern "C" fn measure_trampoline(
 ) -> YGSize {
     let cb = callback_registry()
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .get(&(node as usize))
         .and_then(|c| c.measure);
     match cb {
@@ -149,7 +149,7 @@ unsafe extern "C" fn measure_trampoline(
 unsafe extern "C" fn dirtied_trampoline(node: YGNodeRef) {
     let cb = callback_registry()
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .get(&(node as usize))
         .and_then(|c| c.dirtied);
     if let Some(cb) = cb {
@@ -158,7 +158,7 @@ unsafe extern "C" fn dirtied_trampoline(node: YGNodeRef) {
 }
 
 fn drop_node_callbacks(node: usize) {
-    callback_registry().lock().unwrap().remove(&node);
+    callback_registry().lock().unwrap_or_else(|e| e.into_inner()).remove(&node);
 }
 
 fn collect_subtree(node: YGNodeRef, out: &mut Vec<usize>) {
@@ -586,7 +586,7 @@ pub fn yoga_node_set_measure_func(node: f64, callback: f64) {
     let cb: JsMeasureCb = unsafe { std::mem::transmute::<*mut c_void, JsMeasureCb>(cb_ptr) };
     callback_registry()
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .entry(raw as usize)
         .or_default()
         .measure = Some(cb);
@@ -596,7 +596,7 @@ pub fn yoga_node_set_measure_func(node: f64, callback: f64) {
 #[napi(js_name = "yogaNodeUnsetMeasureFunc")]
 pub fn yoga_node_unset_measure_func(node: f64) {
     let raw = ptr_of(node);
-    if let Some(cbs) = callback_registry().lock().unwrap().get_mut(&(raw as usize)) {
+    if let Some(cbs) = callback_registry().lock().unwrap_or_else(|e| e.into_inner()).get_mut(&(raw as usize)) {
         cbs.measure = None;
     }
     unsafe { YGNodeSetMeasureFunc(raw, None) }
@@ -617,7 +617,7 @@ pub fn yoga_node_set_dirtied_func(node: f64, callback: f64) {
     let cb: JsDirtiedCb = unsafe { std::mem::transmute::<*mut c_void, JsDirtiedCb>(cb_ptr) };
     callback_registry()
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .entry(raw as usize)
         .or_default()
         .dirtied = Some(cb);
@@ -627,7 +627,7 @@ pub fn yoga_node_set_dirtied_func(node: f64, callback: f64) {
 #[napi(js_name = "yogaNodeUnsetDirtiedFunc")]
 pub fn yoga_node_unset_dirtied_func(node: f64) {
     let raw = ptr_of(node);
-    if let Some(cbs) = callback_registry().lock().unwrap().get_mut(&(raw as usize)) {
+    if let Some(cbs) = callback_registry().lock().unwrap_or_else(|e| e.into_inner()).get_mut(&(raw as usize)) {
         cbs.dirtied = None;
     }
     unsafe { YGNodeSetDirtiedFunc(raw, None) }

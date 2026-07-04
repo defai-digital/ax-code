@@ -1,4 +1,5 @@
 import fs from "fs/promises"
+import { Socket } from "node:net"
 import z from "zod"
 import { FileLock } from "@/util/filelock"
 import { Filesystem } from "@/util/filesystem"
@@ -124,6 +125,17 @@ function pidLive(pid: number) {
   }
 }
 
+type WaitForReadyResult =
+  | {
+      ready: true
+    }
+  | {
+      ready: false
+      reason: "aborted" | "process-exited" | "timeout"
+    }
+
+type SpawnedServerProcess = Pick<ReturnType<typeof Process.spawn>, "pid" | "exitCode" | "signalCode">
+
 export async function isServerReady(baseURL: string, signal?: AbortSignal) {
   return fetch(`${baseURL.replace(/\/+$/, "")}/models`, {
     signal: signal ?? AbortSignal.timeout(2000),
@@ -137,21 +149,86 @@ export async function isServerReady(baseURL: string, signal?: AbortSignal) {
     .catch(() => false)
 }
 
-async function waitForReady(baseURL: string, signal?: AbortSignal) {
-  const deadline = Date.now() + 90_000
+function processHasExited(proc: SpawnedServerProcess | undefined) {
+  if (!proc) return false
+  if (proc.exitCode !== null && proc.exitCode !== undefined) return true
+  if (proc.signalCode !== null && proc.signalCode !== undefined) return true
+  return proc.pid !== undefined && !pidLive(proc.pid)
+}
+
+async function waitForReady(
+  baseURL: string,
+  options: {
+    signal?: AbortSignal
+    process?: SpawnedServerProcess
+    timeoutMs?: number
+  } = {},
+): Promise<WaitForReadyResult> {
+  const deadline = Date.now() + (options.timeoutMs ?? 90_000)
   while (Date.now() < deadline) {
-    if (signal?.aborted) return false
-    if (await isServerReady(baseURL, signal)) return true
+    if (options.signal?.aborted) return { ready: false, reason: "aborted" }
+    if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
+    if (await isServerReady(baseURL, options.signal)) return { ready: true }
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
-  return false
+  return { ready: false, reason: "timeout" }
+}
+
+const SERVER_LOG_EXCERPT_BYTES = 8192
+const SERVER_LOG_EXCERPT_LINES = 40
+
+async function serverLogSize() {
+  try {
+    return (await fs.stat(AxEnginePaths.serverLog)).size
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return 0
+    return 0
+  }
+}
+
+async function readServerLogExcerpt(startOffset: number) {
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+  try {
+    const stat = await fs.stat(AxEnginePaths.serverLog)
+    if (stat.size <= 0) return ""
+    const boundedOffset = startOffset >= 0 && startOffset <= stat.size ? startOffset : 0
+    const readStart = Math.max(boundedOffset, stat.size - SERVER_LOG_EXCERPT_BYTES)
+    const length = Math.min(SERVER_LOG_EXCERPT_BYTES, stat.size - readStart)
+    if (length <= 0) return ""
+    const buffer = Buffer.alloc(length)
+    handle = await fs.open(AxEnginePaths.serverLog, "r")
+    const result = await handle.read(buffer, 0, length, readStart)
+    return buffer
+      .subarray(0, result.bytesRead)
+      .toString("utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter(Boolean)
+      .slice(-SERVER_LOG_EXCERPT_LINES)
+      .join("\n")
+      .trim()
+  } catch {
+    return ""
+  } finally {
+    await handle?.close().catch(() => undefined)
+  }
+}
+
+export function formatServerStartupFailure(input: {
+  code: (typeof AX_ENGINE_ERROR)[keyof typeof AX_ENGINE_ERROR]
+  origin: string
+  message: string
+  logExcerpt?: string
+}) {
+  const lines = [`${input.code}: ${input.message} at ${input.origin}`]
+  if (input.logExcerpt) lines.push("Recent ax-engine server log:", input.logExcerpt)
+  return lines.join("\n")
 }
 
 async function portOpen(port: number) {
   return new Promise<boolean>((resolve) => {
-    const net = require("net")
-    const socket = new net.Socket()
-    
+    const socket = new Socket()
+
     socket.setTimeout(1000)
     socket.on("connect", () => {
       socket.end()
@@ -334,6 +411,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     : await selectPort(options.preferredPort)
   const resolvedBaseURL = baseURL ?? baseURLForPort(port)
   const origin = originFromBaseURL(resolvedBaseURL)
+  const serverLogStart = await serverLogSize()
   const logFile = await fs.open(AxEnginePaths.serverLog, "a")
   const serverArgs = axEngineServerLaunchArgs({
     apiModelID: options.apiModelID,
@@ -357,10 +435,18 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   }
   proc.unref?.()
 
-  const ready = await waitForReady(resolvedBaseURL, options.signal)
-  if (!ready) {
+  const ready = await waitForReady(resolvedBaseURL, { signal: options.signal, process: proc })
+  if (!ready.ready) {
     await Process.killProcessTree(proc).catch(() => undefined)
-    throw new Error(`${AX_ENGINE_ERROR.ServerHealthFailed}: ax-engine server did not become ready at ${origin}`)
+    if (ready.reason === "aborted") options.signal?.throwIfAborted()
+    const logExcerpt = await readServerLogExcerpt(serverLogStart)
+    const code =
+      ready.reason === "process-exited" ? AX_ENGINE_ERROR.ServerStartFailed : AX_ENGINE_ERROR.ServerHealthFailed
+    const message =
+      ready.reason === "process-exited"
+        ? "ax-engine server exited before becoming ready"
+        : "ax-engine server did not become ready"
+    throw new Error(formatServerStartupFailure({ code, origin, message, logExcerpt }))
   }
 
   const state: AxEngineServerState = {

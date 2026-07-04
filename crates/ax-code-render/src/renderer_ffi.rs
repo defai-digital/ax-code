@@ -4,6 +4,8 @@
 //! full symbol set. Handles are u32 generational registry handles (renderers
 //! and their borrowed child buffers share the same registry as `buffer_ffi`).
 
+#![allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
+
 use crate::buffer::Rgba;
 use crate::buffer_ffi::global_pool;
 use crate::handles::{self, Kind};
@@ -18,6 +20,9 @@ fn resolve(handle: u32) -> Option<&'static mut CliRenderer> {
 
 unsafe fn read_rgba(addr: f64) -> Rgba {
     let p = (addr as u64) as usize as *const u16;
+    if p.is_null() {
+        return [0, 0, 0, 0];
+    }
     unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] }
 }
 
@@ -47,7 +52,7 @@ pub fn create_renderer(
     let ptr = Box::into_raw(renderer) as usize;
     let handle = handles::insert(Kind::Renderer, ptr);
     if handle == 0 {
-        let mut boxed = unsafe { Box::from_raw(ptr as *mut CliRenderer) };
+        let boxed = unsafe { Box::from_raw(ptr as *mut CliRenderer) };
         boxed.invalidate_child_handles();
         return 0;
     }

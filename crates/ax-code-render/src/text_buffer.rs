@@ -465,6 +465,7 @@ impl TextBuffer {
 
     /// Zig `addHighlightInternal`: line-scoped column-range highlight. Fails
     /// silently past the line count; empty ranges are ignored.
+    #[allow(clippy::too_many_arguments)]
     pub fn add_highlight(
         &mut self,
         line_idx: usize,

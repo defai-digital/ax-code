@@ -66,6 +66,8 @@ export namespace LLM {
   export type StreamOutput = StreamTextResult<ToolSet, any>
 
   const STREAM_ERROR = Symbol("ax-code.llm.streamError")
+  const DEFAULT_SETUP_TIMEOUT_MS = 90_000
+  const LOCAL_ENGINE_SETUP_TIMEOUT_MS = 300_000
 
   // The AI SDK reports stream errors through the `onError` callback WITHOUT
   // throwing, so a stream that errors mid-flight still completes its async
@@ -107,16 +109,18 @@ export namespace LLM {
     if (input.abort?.aborted) {
       throw new DOMException("Aborted", "AbortError")
     }
-    // 90s timeout: getLanguage() may call getSDK() → BunProc.install() which
-    // has its own 60s timeout. A 30s outer timeout would kill a legitimate
-    // first-run SDK install on a slow network.
+    // 90s default: getLanguage() may call getSDK() with its own 60s install
+    // timeout. Local ax-engine gets a wider envelope because startup can queue
+    // behind a cross-process model load before it can report its own error.
+    const setupTimeoutMs =
+      input.model.providerID === "ax-engine" ? LOCAL_ENGINE_SETUP_TIMEOUT_MS : DEFAULT_SETUP_TIMEOUT_MS
     const [language, cfg, provider] = await withTimeout(
       Promise.all([
         Provider.getLanguage(input.model),
         input.config ?? Config.get(),
         Provider.getProvider(input.model.providerID),
       ]),
-      90_000,
+      setupTimeoutMs,
       `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
     )
 

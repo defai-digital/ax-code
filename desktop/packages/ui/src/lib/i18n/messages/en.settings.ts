@@ -23,6 +23,8 @@ export const settingsDict = {
   "settings.view.actions.closeSettingsWithShortcut": "Close Settings ({shortcut}+,)",
   "settings.view.actions.back": "Back",
   "settings.view.actions.resizeNavigation": "Resize settings navigation",
+  "settings.view.nav.searchPlaceholder": "Search settings",
+  "settings.view.nav.searchNoResults": "No settings match your search.",
   "settings.page.projects.title": "Projects",
   "settings.page.models.title": "Models",
   "settings.page.remoteInstances.title": "Remote Instances",

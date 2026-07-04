@@ -537,9 +537,13 @@ impl<T: RopeItem> Rope<T> {
         let mut right_items: Vec<T> = Vec::new();
         let mut acc = 0u32;
         self.walk(&mut |item, _| {
-            let mut m = Metrics::<T>::default();
-            m.count = 1;
-            m.custom = item.measure();
+            #[allow(clippy::field_reassign_with_default)]
+            let m = {
+                let mut m = Metrics::<T>::default();
+                m.count = 1;
+                m.custom = item.measure();
+                m
+            };
             let w = m.weight();
             let (istart, iend) = (acc, acc + w);
             acc = iend;
@@ -717,7 +721,6 @@ impl<T: RopeItem> Rope<T> {
     /// Zig `joinWithBoundary` (item-list form): merge or rewrite the seam
     /// between the tail of `left` and the head of `right`.
     // --- markers ------------------------------------------------------------------
-
     fn ensure_marker_cache(&mut self) {
         if self.marker_cache_version == self.version {
             return;
@@ -735,9 +738,13 @@ impl<T: RopeItem> Rope<T> {
                     global_weight: current_weight,
                 });
             }
-            let mut m = Metrics::<T>::default();
-            m.count = 1;
-            m.custom = item.measure();
+            #[allow(clippy::field_reassign_with_default)]
+            let m = {
+                let mut m = Metrics::<T>::default();
+                m.count = 1;
+                m.custom = item.measure();
+                m
+            };
             current_weight += m.weight();
             current_leaf += 1;
             true

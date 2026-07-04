@@ -1019,6 +1019,7 @@ impl OptimizedBuffer {
 
     /// Zig `drawText`: walks the Slice A grapheme pipeline, allocating pool
     /// ids for non-trivial clusters and writing start + continuation cells.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw_text(
         &mut self,
         pool: &mut GraphemePool,
@@ -1213,6 +1214,7 @@ impl OptimizedBuffer {
             && Self::is_single_width_border_char(border_chars[5])
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn compute_box_title_layout(
         &self,
         title: Option<&str>,
@@ -1703,10 +1705,10 @@ impl OptimizedBuffer {
             if !self.point_in_scissor(cell_x as i32, cell_y as i32) {
                 continue;
             }
-            let f = |o: usize| f32::from_le_bytes(data[off + o..off + o + 4].try_into().unwrap());
+            let f = |o: usize| f32::from_le_bytes(data[off + o..off + o + 4].try_into().unwrap_or_default());
             let bg = rgba_from_floats(f(0), f(4), f(8), f(12));
             let fg = rgba_from_floats(f(16), f(20), f(24), f(28));
-            let mut ch = u32::from_le_bytes(data[off + 32..off + 36].try_into().unwrap());
+            let mut ch = u32::from_le_bytes(data[off + 32..off + 36].try_into().unwrap_or_default());
             if ch == 0 || ch > 0x10FFFF {
                 ch = DEFAULT_SPACE_CHAR;
             }
@@ -2039,7 +2041,10 @@ impl OptimizedBuffer {
         if !strength.is_finite() {
             return;
         }
-        let mat: [f32; 16] = matrix[0..16].try_into().unwrap();
+        let mat: [f32; 16] = match matrix[0..16].try_into() {
+            Ok(m) => m,
+            Err(_) => return,
+        };
         let max_u32_f = u32::MAX as f32;
         let len = cell_mask.len() - (cell_mask.len() % 3);
         let mut i = 0;
@@ -2083,7 +2088,10 @@ impl OptimizedBuffer {
         if matrix.len() < 16 || strength == 0.0 || target == 0 || !strength.is_finite() {
             return;
         }
-        let mat: [f32; 16] = matrix[0..16].try_into().unwrap();
+        let mat: [f32; 16] = match matrix[0..16].try_into() {
+            Ok(m) => m,
+            Err(_) => return,
+        };
         let size = (self.width * self.height) as usize;
         for index in 0..size {
             if target & 1 != 0 {

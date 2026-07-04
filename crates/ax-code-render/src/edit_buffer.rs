@@ -158,6 +158,7 @@ impl EditBuffer {
         (self.add_mem_id, start)
     }
 
+    #[allow(clippy::type_complexity)]
     fn chunk_splitter(
         tb_tab: u8,
         method: WidthMethod,
@@ -264,6 +265,7 @@ impl EditBuffer {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn make_splitter(&self) -> Box<dyn Fn(&Segment, u32) -> Option<(Segment, Segment)>> {
         let tab = self.tb.tab_width;
         let method = self.tb.width_method;

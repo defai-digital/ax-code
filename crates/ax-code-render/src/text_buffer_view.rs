@@ -436,7 +436,7 @@ impl TextBufferView {
                             wrap_idx += 1;
                         }
                         wrap_idx = saved_wrap_idx;
-                        let mut to_add: u32 = 0;
+                        let mut to_add: u32;
                         let mut has_wrap_after = false;
                         if remaining_in_chunk <= remaining_on_line {
                             if let Some(boundary_w) = last_wrap_that_fits {
@@ -598,7 +598,6 @@ impl TextBufferView {
                             if force.grapheme_count > 0 {
                                 w.add_chunk(*chunk_ref, char_offset, force.columns_used);
                                 char_offset += force.columns_used;
-                                byte_offset += force.byte_offset as usize;
                                 if char_offset < *chunk_width {
                                     w.commit();
                                 }

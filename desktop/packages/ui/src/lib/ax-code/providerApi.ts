@@ -13,12 +13,18 @@ const CLI_PROVIDER_IDS = new Set([
   "antigravity-cli",
 ])
 
+// Providers whose CUSTOM_LOADERS entry (packages/ax-code/src/provider/loaders.ts) talks to a
+// local runtime by default (ollama, ax-studio, ax-engine), rather than a metered cloud API.
+const LOCAL_PROVIDER_IDS = new Set(["ollama", "ax-studio", "ax-engine"])
+
 export { PROVIDER_REQUEST_RETRY_DELAYS_MS, PROVIDER_RESTART_POLL_MS }
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null
 
 export const isCliProvider = (providerId: string): boolean => CLI_PROVIDER_IDS.has(providerId)
+
+export const isLocalProvider = (providerId: string): boolean => LOCAL_PROVIDER_IDS.has(providerId)
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 

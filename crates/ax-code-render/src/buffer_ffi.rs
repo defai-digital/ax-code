@@ -6,6 +6,7 @@
 //! the overlay bridge narrows BigInt pointers to f64 numbers.
 
 #![allow(clippy::too_many_arguments)]
+#![allow(dead_code)] // napi exports are consumed via generated extern "C" wrappers invisible to dead-code analysis
 
 use crate::buffer::{Cell, OptimizedBuffer, Rgba};
 use crate::handles::{self, Kind};
@@ -18,16 +19,19 @@ pub(crate) fn global_pool() -> MutexGuard<'static, GraphemePool> {
     static POOL: OnceLock<Mutex<GraphemePool>> = OnceLock::new();
     POOL.get_or_init(|| Mutex::new(GraphemePool::new()))
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
 }
 
-fn resolve(handle: u32) -> Option<&'static mut OptimizedBuffer> {
+pub(crate) fn resolve(handle: u32) -> Option<&'static mut OptimizedBuffer> {
     handles::get(handle, Kind::OptimizedBuffer)
         .map(|ptr| unsafe { &mut *(ptr as *mut OptimizedBuffer) })
 }
 
 unsafe fn read_rgba(addr: f64) -> Rgba {
     let p = (addr as u64) as usize as *const u16;
+    if p.is_null() {
+        return [0, 0, 0, 0];
+    }
     unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] }
 }
 
