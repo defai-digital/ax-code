@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.9.0] - 2026-07-04
+
+### Changed
+
+- CLI: enables the ADR-046 Rust native render core by default. The render pipeline (renderer, buffer, text/edit/editor, terminal, plus yoga/audio) routes to the in-house `@ax-code/render` addon, which is byte-parity with the bundled Zig backend across the golden-frame gate; `AX_CODE_NATIVE_RENDER=0` forces the previous library and `AX_CODE_NATIVE_RENDER_SCOPE=yoga` routes only yoga/audio. The addon ships per platform (macOS arm64, Windows x64/arm64).
+- Desktop: aligns the app version with the ax-code CLI v6.9.0 release.
+
 ## [6.8.5] - 2026-07-01
 
 ### Added
