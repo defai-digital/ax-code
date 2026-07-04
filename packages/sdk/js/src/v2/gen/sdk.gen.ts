@@ -31,6 +31,7 @@ import type {
   ConfigUpdateResponses,
   DebugEngineCorrelatedDiagnosticsResponses,
   DebugEnginePendingPlansResponses,
+  EventSubscribeResponse,
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiPromptAppend,
@@ -53,6 +54,7 @@ import type {
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
   GlobalDisposeResponses,
+  GlobalEventResponse,
   GlobalEventResponses,
   GlobalHealthResponses,
   GlobalUpgradeErrors,
@@ -333,10 +335,11 @@ import type {
   WorktreeResetResponses,
 } from "./types.gen.js"
 
-export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<
-  TData,
-  ThrowOnError
-> & {
+export type Options<
+  TData extends TDataShape = TDataShape,
+  ThrowOnError extends boolean = boolean,
+  TResponse = unknown,
+> = Options2<TData, ThrowOnError, TResponse> & {
   /**
    * You can provide a client instance returned by `createClient()` instead of
    * individual options. This might be also useful if you want to implement a
@@ -444,7 +447,7 @@ export class Global extends HeyApiClient {
    *
    * Subscribe to global events from the ax-code system using server-sent events.
    */
-  public event<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+  public event<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError, GlobalEventResponse>) {
     return (options?.client ?? this.client).sse.get<GlobalEventResponses, unknown, ThrowOnError>({
       url: "/global/event",
       ...options,
@@ -957,9 +960,9 @@ export class Isolation extends HeyApiClient {
    * Update the runtime isolation mode. Sets the environment variable so it takes effect immediately.
    */
   public set<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      mode?: "read-only" | "workspace-write" | "full-access"
+      mode: "read-only" | "workspace-write" | "full-access"
       network?: boolean
     },
     options?: Options<never, ThrowOnError>,
@@ -1015,9 +1018,9 @@ export class Autonomous extends HeyApiClient {
    * Toggle autonomous mode on or off. Persists to ax-code.json.
    */
   public set<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      enabled?: boolean
+      enabled: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1071,9 +1074,9 @@ export class SmartLlm extends HeyApiClient {
    * Toggle LLM-based agent routing on or off. Persists to ax-code.json.
    */
   public set<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      enabled?: boolean
+      enabled: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1127,9 +1130,9 @@ export class SuperLong extends HeyApiClient {
    * Toggle Super-Long mode on or off. Persists to ax-code.json.
    */
   public set<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      enabled?: boolean
+      enabled: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1226,9 +1229,9 @@ export class PromptHistory extends HeyApiClient {
    * Append one prompt recall entry to the current project history.
    */
   public append<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      input?: string
+      input: string
       mode?: "normal" | "shell"
       parts?: Array<
         {
@@ -1318,11 +1321,11 @@ export class TaskQueue extends HeyApiClient {
    * Add a durable server-owned task queue item for the current project.
    */
   public enqueue<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       sessionID?: string
-      kind?: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
-      title?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      title: string
       worktree?: string
       agent?: string
       model?: unknown
@@ -1437,7 +1440,7 @@ export class TaskQueue extends HeyApiClient {
       "x-ax-code-internal-task-queue-lifecycle": "1"
       taskID: string
       directory?: string
-      status?:
+      status:
         | "queued"
         | "waiting_for_idle"
         | "running"
@@ -1685,7 +1688,7 @@ export class TaskQueue extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
-      position?: number
+      position: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1755,11 +1758,11 @@ export class ScheduledTask extends HeyApiClient {
    * Create a project-scoped scheduled automation task.
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      title?: string
-      prompt?: string
-      schedule?:
+      title: string
+      prompt: string
+      schedule:
         | {
             type: "once"
             runAt: number
@@ -2599,7 +2602,7 @@ export class WorkflowRun extends HeyApiClient {
     parameters: {
       runID: string
       directory?: string
-      scope?: "user" | "project"
+      scope: "user" | "project"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2829,10 +2832,10 @@ export class WorkflowTemplate extends HeyApiClient {
    * Save a user-local or project-local workflow template candidate. Promote after review to trust it.
    */
   public save<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      scope?: "user" | "project"
-      spec?: {
+      scope: "user" | "project"
+      spec: {
         schemaVersion: 1
         id: string
         name: string
@@ -3111,10 +3114,10 @@ export class WorkflowRoutine extends HeyApiClient {
    * Create a user-local or project-local routine trigger from an existing workflow template. API routines can be run directly; scheduled routines are listed as reusable trigger metadata.
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      templateID?: string
-      scope?: "user" | "project"
+      templateID: string
+      scope: "user" | "project"
       trust?: "candidate" | "trusted"
       mode?: "api" | "scheduled" | "webhook"
       route?: string
@@ -3168,9 +3171,9 @@ export class WorkflowRoutine extends HeyApiClient {
    * Run a trusted enabled local API workflow routine by route.
    */
   public run<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      route?: string
+      route: string
       parentSessionID?: string
       modelPolicy?: {
         defaultModel?: string
@@ -4015,9 +4018,9 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      modelID?: string
-      providerID?: string
-      messageID?: string
+      modelID: string
+      providerID: string
+      messageID: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4155,8 +4158,8 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      providerID?: string
-      modelID?: string
+      providerID: string
+      modelID: string
       auto?: boolean
     },
     options?: Options<never, ThrowOnError>,
@@ -4250,7 +4253,7 @@ export class Session2 extends HeyApiClient {
       format?: OutputFormat
       system?: string
       variant?: string
-      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4387,7 +4390,7 @@ export class Session2 extends HeyApiClient {
       format?: OutputFormat
       system?: string
       variant?: string
-      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4439,8 +4442,8 @@ export class Session2 extends HeyApiClient {
       messageID?: string
       agent?: string
       model?: string
-      arguments?: string
-      command?: string
+      arguments: string
+      command: string
       variant?: string
       parts?: Array<FilePartInput>
     },
@@ -4490,8 +4493,8 @@ export class Session2 extends HeyApiClient {
       messageID?: string
       agent?: string
       model?: string
-      arguments?: string
-      command?: string
+      arguments: string
+      command: string
       variant?: string
       parts?: Array<FilePartInput>
     },
@@ -4536,12 +4539,12 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      agent?: string
+      agent: string
       model?: {
         providerID: string
         modelID: string
       }
-      command?: string
+      command: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4580,12 +4583,12 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      agent?: string
+      agent: string
       model?: {
         providerID: string
         modelID: string
       }
-      command?: string
+      command: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4624,7 +4627,7 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      messageID?: string
+      messageID: string
       partID?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -4771,7 +4774,7 @@ export class Permission extends HeyApiClient {
       sessionID: string
       permissionID: string
       directory?: string
-      response?: "once" | "always" | "reject"
+      response: "once" | "always" | "reject"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4809,7 +4812,7 @@ export class Permission extends HeyApiClient {
     parameters: {
       requestID: string
       directory?: string
-      reply?: "once" | "always" | "reject"
+      reply: "once" | "always" | "reject"
       message?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -5054,7 +5057,7 @@ export class Question extends HeyApiClient {
     parameters: {
       requestID: string
       directory?: string
-      answers?: Array<QuestionAnswer>
+      answers: Array<QuestionAnswer>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5444,7 +5447,7 @@ export class Oauth extends HeyApiClient {
     parameters: {
       providerID: string
       directory?: string
-      method?: number
+      method: number
       inputs?: {
         [key: string]: string
       }
@@ -5489,7 +5492,7 @@ export class Oauth extends HeyApiClient {
     parameters: {
       providerID: string
       directory?: string
-      method?: number
+      method: number
       code?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -5672,7 +5675,7 @@ export class Find extends HeyApiClient {
   }
 }
 
-export class File extends HeyApiClient {
+export class File_ extends HeyApiClient {
   /**
    * List files
    *
@@ -5753,7 +5756,7 @@ export class File extends HeyApiClient {
   }
 }
 
-export class Event extends HeyApiClient {
+export class Event_ extends HeyApiClient {
   /**
    * Subscribe to events
    *
@@ -5763,7 +5766,7 @@ export class Event extends HeyApiClient {
     parameters?: {
       directory?: string
     },
-    options?: Options<never, ThrowOnError>,
+    options?: Options<never, ThrowOnError, EventSubscribeResponse>,
   ) {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).sse.get<EventSubscribeResponses, unknown, ThrowOnError>({
@@ -5844,7 +5847,7 @@ export class Auth2 extends HeyApiClient {
     parameters: {
       name: string
       directory?: string
-      code?: string
+      code: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5931,10 +5934,10 @@ export class Mcp extends HeyApiClient {
    * Dynamically add a new Model Context Protocol (MCP) server to the system.
    */
   public add<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      name?: string
-      config?: McpLocalConfig | McpRemoteConfig
+      name: string
+      config: McpLocalConfig | McpRemoteConfig
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6031,9 +6034,9 @@ export class Tui extends HeyApiClient {
    * Append prompt to the TUI
    */
   public appendPrompt<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      text?: string
+      text: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6180,9 +6183,9 @@ export class Tui extends HeyApiClient {
    * Execute a TUI command (e.g. agent_cycle)
    */
   public executeCommand<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      command?: string
+      command: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6215,11 +6218,11 @@ export class Tui extends HeyApiClient {
    * Show a toast notification in the TUI
    */
   public showToast<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       title?: string
-      message?: string
-      variant?: "info" | "success" | "warning" | "error"
+      message: string
+      variant: "info" | "success" | "warning" | "error"
       duration?: number
     },
     options?: Options<never, ThrowOnError>,
@@ -6291,9 +6294,9 @@ export class Tui extends HeyApiClient {
    * Navigate the TUI to display the specified session.
    */
   public selectSession<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      sessionID?: string
+      sessionID: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6452,11 +6455,11 @@ export class App extends HeyApiClient {
    * Write a log entry to the server logs with specified level and metadata.
    */
   public log<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      service?: string
-      level?: "debug" | "info" | "error" | "warn"
-      message?: string
+      service: string
+      level: "debug" | "info" | "error" | "warn"
+      message: string
       extra?: {
         [key: string]: unknown
       }
@@ -6533,9 +6536,9 @@ export class App extends HeyApiClient {
    * Create a recommended rules or checklist file for the current project context.
    */
   public contextTemplateCreate<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      key?: "repo-rules" | "dir-rules" | "review-checklist" | "frontend-style-guide" | "release-checklist"
+      key: "repo-rules" | "dir-rules" | "review-checklist" | "frontend-style-guide" | "release-checklist"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6627,10 +6630,10 @@ export class Skill extends HeyApiClient {
    * Create a local Agent Skill skeleton in the current worktree.
    */
   public create<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      name?: string
-      description?: string
+      name: string
+      description: string
       path?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -7010,14 +7013,14 @@ export class OpencodeClient extends HeyApiClient {
     return (this._find ??= new Find({ client: this.client }))
   }
 
-  private _file?: File
-  get file(): File {
-    return (this._file ??= new File({ client: this.client }))
+  private _file?: File_
+  get file(): File_ {
+    return (this._file ??= new File_({ client: this.client }))
   }
 
-  private _event?: Event
-  get event(): Event {
-    return (this._event ??= new Event({ client: this.client }))
+  private _event?: Event_
+  get event(): Event_ {
+    return (this._event ??= new Event_({ client: this.client }))
   }
 
   private _mcp?: Mcp
