@@ -1,8 +1,8 @@
 diff --git a/scripts/install.js b/scripts/install.js
-index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..40b8d6fb5733456deadc2c35b368f9a83929be1c 100644
+index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..f919d490b0afee45ceac758a3c14aa1d0cf0eb6c 100644
 --- a/scripts/install.js
 +++ b/scripts/install.js
-@@ -8,9 +8,31 @@ const gypArgs = ['rebuild'];
+@@ -8,9 +8,37 @@ const gypArgs = ['rebuild'];
  if (process.env.NODE_PTY_DEBUG) {
    gypArgs.push('--debug');
  }
@@ -26,6 +26,12 @@ index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..40b8d6fb5733456deadc2c35b368f9a8
 +  ]) {
 +    delete env[name];
 +  }
++  env.GYP_DEFINES = [
++    env.GYP_DEFINES,
++    'enable_lto=false',
++    'enable_thin_lto=false',
++    'lto_jobs='
++  ].filter(Boolean).join(' ');
 +}
 +const gypProcess = spawn(isWindows ? 'node-gyp.cmd' : 'node-gyp', gypArgs, {
    cwd: path.join(__dirname, '..'),

@@ -136,6 +136,10 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(patch).toContain("'LINK'")
     expect(patch).toContain("'npm_config_ldflags'")
     expect(patch).toContain("delete env[name];")
+    expect(patch).toContain("env.GYP_DEFINES")
+    expect(patch).toContain("'enable_lto=false'")
+    expect(patch).toContain("'enable_thin_lto=false'")
+    expect(patch).toContain("'lto_jobs='")
   })
 
   test("keeps TUI startup smoke resilient to missing workspace node-pty builds", async () => {
