@@ -295,9 +295,20 @@ export namespace Ripgrep {
     hidden?: boolean
     follow?: boolean
     maxDepth?: number
+    /**
+     * Stop after yielding this many files. Bounded callers (a preview tree, LSP
+     * language probing) should always set this: the native walker collects its
+     * whole result set before yielding, so without a limit a huge directory
+     * forces a full synchronous walk even when the consumer `break`s early.
+     */
+    limit?: number
     signal?: AbortSignal
   }) {
     input.signal?.throwIfAborted()
+
+    // A non-positive limit means "no limit" so callers can pass a computed value
+    // through without a sentinel.
+    const limit = typeof input.limit === "number" && input.limit > 0 ? Math.trunc(input.limit) : undefined
 
     // Native fast-path: in-process file walker via Rust addon
     const native = NativeAddon.fs()
@@ -318,6 +329,7 @@ export namespace Ripgrep {
                 glob: input.glob,
                 hidden: input.hidden,
                 maxDepth: input.maxDepth,
+                limit,
               }),
             ),
         )
@@ -372,6 +384,7 @@ export namespace Ripgrep {
 
     try {
       let buffer = ""
+      let yielded = 0
       const stream = proc.stdout as AsyncIterable<Buffer | string>
       for await (const chunk of stream) {
         input.signal?.throwIfAborted()
@@ -382,11 +395,15 @@ export namespace Ripgrep {
         buffer = lines.pop() || ""
 
         for (const line of lines) {
-          if (line) yield line
+          if (!line) continue
+          yield line
+          // Match the native walker's early-stop so both backends honor `limit`.
+          // Returning kills the subprocess via the `finally` block below.
+          if (limit !== undefined && ++yielded >= limit) return
         }
       }
 
-      if (buffer) yield buffer
+      if (buffer && !(limit !== undefined && yielded >= limit)) yield buffer
       await proc.exited
 
       input.signal?.throwIfAborted()
@@ -397,7 +414,9 @@ export namespace Ripgrep {
 
   export async function tree(input: { cwd: string; limit?: number; signal?: AbortSignal }) {
     log.info("tree", input)
-    const files = await Array.fromAsync(Ripgrep.files({ cwd: input.cwd, signal: input.signal }))
+    const files = await Array.fromAsync(
+      Ripgrep.files({ cwd: input.cwd, limit: input.limit, signal: input.signal }),
+    )
     interface Node {
       name: string
       children: Map<string, Node>

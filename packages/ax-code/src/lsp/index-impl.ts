@@ -45,6 +45,15 @@ export namespace LSP {
   const RPC_TIMEOUT_MS = 5_000
   const RPC_TIMEOUT_LONG_MS = 15_000
 
+  // Upper bound on files scanned when probing a workspace for which language
+  // servers to prime. The native file walker is not lazy — it collects its full
+  // result set before yielding — so an unbounded walk of a very large tree can
+  // block the event loop for tens of seconds. Any real project surfaces all of
+  // its languages within the first few thousand files; this cap keeps the probe
+  // fast everywhere while still finding representative files. Missing a language
+  // that only appears past the cap just defers that server's spawn to first use.
+  const WORKSPACE_PROBE_SCAN_LIMIT = 10_000
+
   // How often the health-check loop runs. A dead-process probe is cheap
   // (kill -0 syscall), so we can run it frequently without concern. 60s is
   // responsive enough for interactive use without generating log noise.
@@ -438,7 +447,7 @@ export namespace LSP {
     // Cold workspace symbol should not spawn every configured server.
     // Scan the workspace once and only prime servers for languages that
     // actually exist in the current project.
-    for await (const rel of Ripgrep.files({ cwd: Instance.directory })) {
+    for await (const rel of Ripgrep.files({ cwd: Instance.directory, limit: WORKSPACE_PROBE_SCAN_LIMIT })) {
       const probe = path.join(Instance.directory, rel)
       const extension = path.parse(probe).ext || probe
       for (const server of eligibleServers) {
@@ -614,7 +623,7 @@ export namespace LSP {
     const selected: string[] = []
     const seenLanguages = new Set<string>()
 
-    for await (const rel of Ripgrep.files({ cwd: Instance.directory })) {
+    for await (const rel of Ripgrep.files({ cwd: Instance.directory, limit: WORKSPACE_PROBE_SCAN_LIMIT })) {
       if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
 
       const probe = path.join(Instance.directory, rel)

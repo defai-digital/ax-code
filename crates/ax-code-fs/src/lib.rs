@@ -31,6 +31,11 @@ struct WalkOptions {
     glob: Option<Vec<String>>,
     hidden: Option<bool>,
     max_depth: Option<usize>,
+    /// Stop after collecting this many files. `None` (or 0) walks the whole
+    /// tree. Callers that only need a bounded sample (e.g. LSP prewarm probing
+    /// one file per language) pass a small limit so a huge directory does not
+    /// force a full synchronous walk.
+    limit: Option<usize>,
 }
 
 #[derive(Deserialize, Default)]
@@ -147,6 +152,10 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
         .filter_map(|p| Glob::new(p).ok().map(|g| g.compile_matcher()))
         .collect();
 
+    // A limit of 0 is treated as "no limit" so callers can pass through an
+    // unbounded default without a sentinel.
+    let limit = opts.limit.filter(|&n| n > 0);
+
     let mut results = Vec::new();
 
     for entry in builder.build().flatten() {
@@ -179,6 +188,15 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
         // `cwd` themselves; keeping it relative preserves existing test contracts
         // (e.g. `files.includes("visible.txt")`).
         results.push(rel_str.to_string());
+
+        // Stop as soon as the requested number of files has been collected. This
+        // is what lets a bounded caller avoid walking an entire (possibly huge)
+        // tree — the `ignore` walker stops descending once we break.
+        if let Some(max) = limit {
+            if results.len() >= max {
+                break;
+            }
+        }
     }
 
     Ok(results)
@@ -1237,6 +1255,30 @@ mod tests {
 
         assert!(results.contains(&"src/main.rs".to_string()));
         assert!(results.contains(&"README.md".to_string()));
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn walk_files_respects_limit() {
+        let dir = make_tmp_dir("walk_limit");
+
+        for i in 0..20 {
+            fs::write(dir.join(format!("file{i}.txt")), "x").unwrap();
+        }
+
+        let opts = serde_json::json!({ "limit": 5 }).to_string();
+        let results = walk_files(dir.to_str().unwrap().into(), opts).unwrap();
+        assert_eq!(results.len(), 5);
+
+        // A limit of 0 means "no limit" — walk everything.
+        let opts_zero = serde_json::json!({ "limit": 0 }).to_string();
+        let all = walk_files(dir.to_str().unwrap().into(), opts_zero).unwrap();
+        assert_eq!(all.len(), 20);
+
+        // Absent limit also walks everything.
+        let none = walk_files(dir.to_str().unwrap().into(), "{}".into()).unwrap();
+        assert_eq!(none.len(), 20);
 
         cleanup(&dir);
     }

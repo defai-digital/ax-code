@@ -96,6 +96,62 @@ describe("file.ripgrep", () => {
     expect(hasHidden).toBe(false)
   })
 
+  test("files() honors limit and stops early", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        for (let i = 0; i < 20; i++) {
+          await fs.writeFile(path.join(dir, `file${String(i).padStart(2, "0")}.txt`), "x")
+        }
+      },
+    })
+
+    // Works for whichever backend is active — native and the ripgrep fallback
+    // both cap the result set at `limit`.
+    const limited = await Array.fromAsync(Ripgrep.files({ cwd: tmp.path, limit: 5 }))
+    expect(limited).toHaveLength(5)
+
+    // A non-positive limit means "no limit".
+    const unlimited = await Array.fromAsync(Ripgrep.files({ cwd: tmp.path, limit: 0 }))
+    expect(unlimited).toHaveLength(20)
+
+    const all = await Array.fromAsync(Ripgrep.files({ cwd: tmp.path }))
+    expect(all).toHaveLength(20)
+  })
+
+  test("files() fallback terminates ripgrep once the limit is reached", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, "a.txt"), "a")
+      },
+    })
+
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    const proc = {
+      exitCode: null,
+      signalCode: null,
+      exited: new Promise<number>(() => {}),
+      stdout: new PassThrough(),
+    }
+    vi.spyOn(Process, "spawn").mockReturnValue(proc as never)
+    const killProcessTree = vi.spyOn(Process, "killProcessTree").mockResolvedValue(undefined)
+
+    const collected: string[] = []
+    const iterator = Ripgrep.files({ cwd: tmp.path, limit: 2 })[Symbol.asyncIterator]()
+    proc.stdout.write("one.txt\ntwo.txt\nthree.txt\n")
+
+    // The generator returns on its own after yielding `limit` entries.
+    for (let i = 0; i < 2; i++) {
+      const next = await iterator.next()
+      expect(next.done).toBe(false)
+      collected.push(next.value as string)
+    }
+    const end = await iterator.next()
+
+    expect(collected).toEqual(["one.txt", "two.txt"])
+    expect(end.done).toBe(true)
+    expect(killProcessTree).toHaveBeenCalledWith(proc as never)
+  })
+
   test("search returns empty when nothing matches", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
