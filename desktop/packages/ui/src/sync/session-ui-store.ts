@@ -88,8 +88,8 @@ export function routeMessage(params: {
       return sdk.session
         .shell({
           sessionID: params.sessionId,
-          directory: dir,
-          agent: params.agent,
+          ...(dir ? { directory: dir } : {}),
+          agent: params.agent ?? "build",
           model: { providerID: params.providerID, modelID: params.modelID },
           command: params.content,
         })
