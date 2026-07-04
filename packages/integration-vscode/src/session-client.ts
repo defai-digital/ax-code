@@ -84,8 +84,8 @@ export class SessionClient {
       { signal },
     )
 
-    if (error || !response.ok) {
-      throw new ServerError(response.status, typeof error === "string" ? error : JSON.stringify(error ?? {}))
+    if (error || !response?.ok) {
+      throw new ServerError(response?.status ?? 0, typeof error === "string" ? error : JSON.stringify(error ?? {}))
     }
 
     const result = data as any
