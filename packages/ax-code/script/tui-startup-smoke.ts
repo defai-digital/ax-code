@@ -22,6 +22,7 @@ const TUI_STARTUP_FAILURE_EVENTS = new Set([
   "worker.uncaughtException",
   "worker.unhandledRejection",
 ])
+const DEFAULT_TUI_STARTUP_WORKER_READY_TIMEOUT_MS = 15_000
 
 type ProcessEvent = {
   eventType?: string
@@ -51,14 +52,24 @@ export type TuiStartupSmokeOptions = {
   label?: string
 }
 
-function positiveIntegerEnv(names: string[], fallback: number) {
+function positiveIntegerEnv(names: string[], fallback: number, env: NodeJS.ProcessEnv = process.env) {
   for (const name of names) {
-    const value = process.env[name]
+    const value = env[name]
     if (!value) continue
     const parsed = Number(value)
     if (Number.isInteger(parsed) && parsed > 0) return parsed
   }
   return fallback
+}
+
+export function tuiStartupWorkerReadyTimeoutMs(timeoutMs: number, env: NodeJS.ProcessEnv = process.env) {
+  return String(
+    positiveIntegerEnv(
+      ["AX_CODE_TUI_WORKER_READY_TIMEOUT_MS"],
+      Math.min(timeoutMs, DEFAULT_TUI_STARTUP_WORKER_READY_TIMEOUT_MS),
+      env,
+    ),
+  )
 }
 
 function stringEnv(input: Record<string, string | undefined>) {
@@ -344,7 +355,7 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
     AX_CODE_TUI_ADVANCED_TERMINAL:
       input.terminalProfile === "advanced" ? "1" : input.terminalProfile === "compatible" ? "0" : undefined,
     AX_CODE_TUI_UPGRADE_CHECK_DELAY_MS: "0",
-    AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: "5000",
+    AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: tuiStartupWorkerReadyTimeoutMs(timeoutMs),
     COLORTERM: "truecolor",
     TERM: "xterm-256color",
   })

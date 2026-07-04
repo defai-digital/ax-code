@@ -2,8 +2,9 @@ import { cmd } from "@/cli/cmd/cmd"
 import { cliBooleanFlagValue } from "@/cli/boolean-flag"
 import { Rpc } from "@/util/rpc"
 import { type rpc } from "./worker"
+import { createRequire } from "module"
 import path from "path"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { UI } from "@/cli/ui"
 import { Log } from "@/util/log"
 import { Env } from "@/util/env"
@@ -44,6 +45,7 @@ declare global {
 
 type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
 const log = Log.create({ service: "tui.thread" })
+const require = createRequire(import.meta.url)
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
 export const DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS = 30_000
@@ -115,6 +117,10 @@ export function tuiUpgradeCheckIntervalMs(env: Record<string, string | undefined
   })
 }
 
+export function tsxLoaderImportSpecifier() {
+  return pathToFileURL(require.resolve("tsx")).href
+}
+
 function tuiUpgradeCheckStatePath() {
   return path.join(Global.Path.state, "upgrade-check.json")
 }
@@ -173,7 +179,7 @@ function backendProcessCommand() {
   // natively; on Node + tsx the solid-loader's resolve hook is required.
   let loaderArgs: string[] = []
   if (/\.[cm]?tsx?$/.test(resolvedEntry)) {
-    loaderArgs = ["--import", "tsx"]
+    loaderArgs = ["--import", tsxLoaderImportSpecifier()]
     // Forward the solid-loader if the parent process uses it. Convert relative
     // paths to absolute so the child process resolves correctly regardless of
     // its CWD.

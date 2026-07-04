@@ -55,9 +55,9 @@ export function getInstallBinDir(
   which: WhichFn = whichSync,
   platform: NodeJS.Platform = process.platform,
 ): string {
+  if (env.AX_CODE_BIN_DIR) return env.AX_CODE_BIN_DIR
   const existing = which("ax-code")
   if (existing) return path.dirname(existing)
-  if (env.AX_CODE_BIN_DIR) return env.AX_CODE_BIN_DIR
   if (env.PNPM_HOME) return env.PNPM_HOME
   if (platform === "win32") {
     return path.join(env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "ax-code", "bin")

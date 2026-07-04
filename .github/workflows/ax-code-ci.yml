@@ -326,5 +326,8 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Install source launcher
+        run: AX_CODE_BIN_DIR="$GITHUB_WORKSPACE/.tmp/tui-smoke-bin" pnpm run setup:cli -- --source
+
       - name: TUI startup smoke
-        run: pnpm --dir packages/ax-code run tui:startup-smoke
+        run: pnpm --dir packages/ax-code run tui:startup-smoke -- --bin "$GITHUB_WORKSPACE/.tmp/tui-smoke-bin/ax-code"

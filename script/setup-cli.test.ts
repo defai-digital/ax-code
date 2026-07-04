@@ -37,6 +37,11 @@ describe("setup-cli helpers", () => {
   })
 
   test("chooses a Node-era install bin directory without depending on Bun", () => {
+    expect(
+      getInstallBinDir({ AX_CODE_BIN_DIR: "/custom/bin" }, (command) =>
+        command === "ax-code" ? "/usr/local/bin/ax-code" : undefined,
+      ),
+    ).toBe("/custom/bin")
     expect(getInstallBinDir({}, (command) => (command === "ax-code" ? "/usr/local/bin/ax-code" : undefined))).toBe(
       "/usr/local/bin",
     )

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { tuiBackendTransport } from "../../../src/cli/cmd/tui/thread"
+import { tsxLoaderImportSpecifier, tuiBackendTransport } from "../../../src/cli/cmd/tui/thread"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
 const WORKER_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/worker.ts"), "utf8")
@@ -25,5 +25,13 @@ describe("tui backend entrypoint guardrails", () => {
     expect(tuiBackendTransport({ AX_CODE_TUI_BACKEND_TRANSPORT: "process" }, { hasBun: true, mode: "source" })).toBe(
       "process",
     )
+  })
+
+  test("uses an absolute tsx loader import for source backend subprocesses", () => {
+    const specifier = tsxLoaderImportSpecifier()
+
+    expect(specifier).toMatch(/^file:\/\//)
+    expect(specifier).toContain("/tsx/")
+    expect(specifier).not.toBe("tsx")
   })
 })

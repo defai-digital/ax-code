@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { isNodePtyDebugFallbackNoise, rendererProfileFromStartupEvents } from "../../script/tui-startup-smoke"
+import {
+  isNodePtyDebugFallbackNoise,
+  rendererProfileFromStartupEvents,
+  tuiStartupWorkerReadyTimeoutMs,
+} from "../../script/tui-startup-smoke"
 
 describe("tui startup smoke", () => {
   test("identifies node-pty debug fallback loader noise", () => {
@@ -42,5 +46,12 @@ describe("tui startup smoke", () => {
     expect(
       rendererProfileFromStartupEvents([{ eventType: "tui.startup.rendererProfile", data: { profile: 1 } }]),
     ).toBeUndefined()
+  })
+
+  test("sizes backend ready timeout for fresh startup work", () => {
+    expect(tuiStartupWorkerReadyTimeoutMs(20_000, {})).toBe("15000")
+    expect(tuiStartupWorkerReadyTimeoutMs(8_000, {})).toBe("8000")
+    expect(tuiStartupWorkerReadyTimeoutMs(20_000, { AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: "30000" })).toBe("30000")
+    expect(tuiStartupWorkerReadyTimeoutMs(20_000, { AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: "0" })).toBe("15000")
   })
 })
