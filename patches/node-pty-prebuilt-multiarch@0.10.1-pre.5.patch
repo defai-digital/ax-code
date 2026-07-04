@@ -1,0 +1,18 @@
+diff --git a/scripts/install.js b/scripts/install.js
+index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..3700c3765e9248e206e4171e9f7a3b4092071b62 100644
+--- a/scripts/install.js
++++ b/scripts/install.js
+@@ -8,9 +8,11 @@ const gypArgs = ['rebuild'];
+ if (process.env.NODE_PTY_DEBUG) {
+   gypArgs.push('--debug');
+ }
+-const gypProcess = spawn(os.platform() === 'win32' ? 'node-gyp.cmd' : 'node-gyp', gypArgs, {
++const isWindows = os.platform() === 'win32';
++const gypProcess = spawn(isWindows ? 'node-gyp.cmd' : 'node-gyp', gypArgs, {
+   cwd: path.join(__dirname, '..'),
+-  stdio: 'inherit'
++  stdio: 'inherit',
++  shell: isWindows
+ });
+ 
+ gypProcess.on('exit', function (code) {

@@ -132,6 +132,9 @@ patchedDependencies:
   gray-matter@4.0.3:
     hash: 3754dca03e5459f3f551402ecbeee1cd9588f9fde966158da964ae31a723dee7
     path: patches/gray-matter@4.0.3.patch
+  node-pty-prebuilt-multiarch@0.10.1-pre.5:
+    hash: 6ac780ef61dcc9cd51cd38a58e4a1ecf2428eaa3bdb95124e2259ac64c6f29f2
+    path: patches/node-pty-prebuilt-multiarch@0.10.1-pre.5.patch
 
 importers:
 
@@ -914,7 +917,7 @@ importers:
         version: 10.2.3
       node-pty-prebuilt-multiarch:
         specifier: 0.10.1-pre.5
-        version: 0.10.1-pre.5
+        version: 0.10.1-pre.5(patch_hash=6ac780ef61dcc9cd51cd38a58e4a1ecf2428eaa3bdb95124e2259ac64c6f29f2)
       open:
         specifier: 10.1.2
         version: 10.1.2
@@ -16856,7 +16859,7 @@ snapshots:
       - bluebird
       - supports-color
 
-  node-pty-prebuilt-multiarch@0.10.1-pre.5:
+  node-pty-prebuilt-multiarch@0.10.1-pre.5(patch_hash=6ac780ef61dcc9cd51cd38a58e4a1ecf2428eaa3bdb95124e2259ac64c6f29f2):
     dependencies:
       nan: 2.27.0
       prebuild-install: 6.1.4

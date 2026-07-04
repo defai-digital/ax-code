@@ -81,6 +81,7 @@ const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cm
 const BUILD_NODE_TUI_SRC = path.join(PACKAGE_ROOT, "script/build-node-tui.ts")
 const TUI_STARTUP_SMOKE_SRC = path.join(PACKAGE_ROOT, "script/tui-startup-smoke.ts")
 const SOURCE_SOLID_LOADER_SRC = path.join(REPO_ROOT, "script/solid-loader.mjs")
+const NODE_PTY_PATCH_SRC = path.join(REPO_ROOT, "patches/node-pty-prebuilt-multiarch@0.10.1-pre.5.patch")
 
 describe("tui OpenTUI stability guardrails", () => {
   test("keeps OpenTUI wired as the default renderer path", async () => {
@@ -123,6 +124,13 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(build).toContain('runNpm(["rebuild", "node-pty-prebuilt-multiarch"]')
     expect(build).toContain("node-pty build failed")
     expect(build).toContain("WINDOWS_UTF8_WARNING")
+  })
+
+  test("keeps node-pty Windows fallback compatible with Node 26 release runners", async () => {
+    const patch = await fs.readFile(NODE_PTY_PATCH_SRC, "utf8")
+
+    expect(patch).toContain("const isWindows = os.platform() === 'win32';")
+    expect(patch).toContain("shell: isWindows")
   })
 
   test("keeps TUI startup smoke resilient to missing workspace node-pty builds", async () => {
