@@ -1,5 +1,8 @@
 import { describe, expect, test } from "vitest"
-import { rankSlashAutocompleteOptions } from "../../../src/cli/cmd/tui/component/prompt/autocomplete"
+import {
+  rankSlashAutocompleteOptions,
+  shouldHideAutocompleteOnInput,
+} from "../../../src/cli/cmd/tui/component/prompt/autocomplete"
 import { commandAutocompleteSuffix } from "../../../src/cli/cmd/tui/component/prompt/autocomplete-command"
 
 describe("tui command autocomplete", () => {
@@ -33,5 +36,27 @@ describe("tui command autocomplete", () => {
 
     expect(rankSlashAutocompleteOptions(options, "models").map((option) => option.display.trim())).toEqual(["/model"])
     expect(rankSlashAutocompleteOptions(options, "/agents").map((option) => option.display.trim())).toEqual(["/agent"])
+  })
+
+  test("keeps slash autocomplete open while the trigger cursor settles", () => {
+    expect(
+      shouldHideAutocompleteOnInput({
+        mode: "/",
+        value: "/",
+        triggerIndex: 0,
+        cursorOffset: 0,
+      }),
+    ).toBe(false)
+  })
+
+  test("hides slash autocomplete after command arguments without implying prompt deletion", () => {
+    expect(
+      shouldHideAutocompleteOnInput({
+        mode: "/",
+        value: "/review staged",
+        triggerIndex: 0,
+        cursorOffset: "/review staged".length,
+      }),
+    ).toBe(true)
   })
 })

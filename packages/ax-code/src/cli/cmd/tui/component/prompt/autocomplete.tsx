@@ -142,6 +142,26 @@ export function rankSlashAutocompleteOptions(options: AutocompleteOption[], quer
     .map((entry) => entry.option)
 }
 
+export function shouldHideAutocompleteOnInput(input: {
+  mode: "@" | "/"
+  value: string
+  triggerIndex: number
+  cursorOffset: number
+}): boolean {
+  const { mode, value, triggerIndex, cursorOffset } = input
+
+  if (cursorOffset <= triggerIndex) {
+    // Textarea cursor state can lag the text mutation by one tick after
+    // typing the trigger key. Keep the dropdown open if the trigger is now
+    // present at the expected index; a later cursor refresh will settle it.
+    return !(cursorOffset === triggerIndex && value.at(triggerIndex) === mode)
+  }
+
+  if (value.slice(triggerIndex, cursorOffset).match(/\s/)) return true
+  if (mode === "/" && value.match(/^\S+\s+\S+\s*$/)) return true
+  return false
+}
+
 export function Autocomplete(props: {
   value: string
   sessionID?: string
@@ -627,15 +647,10 @@ export function Autocomplete(props: {
   }
 
   function hide() {
-    const text = props.input().plainText
-    if (store.visible === "/" && !text.endsWith(" ") && text.startsWith("/")) {
-      const cursor = props.input().logicalCursor
-      props.input().deleteRange(0, 0, cursor.row, cursor.col)
-      // Sync the prompt store immediately since onContentChange is async
-      props.setPrompt((draft) => {
-        draft.input = props.input().plainText
-      })
-    }
+    // Hiding autocomplete must not mutate prompt text. Slash command input can
+    // become temporarily non-autocompleteable while the user is typing
+    // arguments, and clearing here made "/" look broken when event ordering
+    // caused an early hide.
     command.keybinds(true)
     setStore("visible", false)
   }
@@ -648,12 +663,12 @@ export function Autocomplete(props: {
       onInput(value) {
         if (store.visible) {
           if (
-            // Typed text before the trigger
-            props.input().cursorOffset <= store.index ||
-            // There is a space between the trigger and the cursor
-            props.input().getTextRange(store.index, props.input().cursorOffset).match(/\s/) ||
-            // "/<command>" is not the sole content
-            (store.visible === "/" && value.match(/^\S+\s+\S+\s*$/))
+            shouldHideAutocompleteOnInput({
+              mode: store.visible,
+              value,
+              triggerIndex: store.index,
+              cursorOffset: props.input().cursorOffset,
+            })
           ) {
             hide()
           }
@@ -722,9 +737,7 @@ export function Autocomplete(props: {
             e.preventDefault()
             return
           }
-          if (["left", "right", "home", "end"].includes(name ?? "")) {
-            refreshCursorAfterKey()
-          }
+          refreshCursorAfterKey()
         }
         if (!store.visible) {
           if (e.name === "@") {
@@ -732,11 +745,17 @@ export function Autocomplete(props: {
             const charBeforeCursor =
               cursorOffset === 0 ? undefined : props.input().getTextRange(cursorOffset - 1, cursorOffset)
             const canTrigger = charBeforeCursor === undefined || charBeforeCursor === "" || /\s/.test(charBeforeCursor)
-            if (canTrigger) show("@")
+            if (canTrigger) {
+              show("@")
+              refreshCursorAfterKey()
+            }
           }
 
           if (e.name === "/") {
-            if (props.input().cursorOffset === 0) show("/")
+            if (props.input().cursorOffset === 0) {
+              show("/")
+              refreshCursorAfterKey()
+            }
           }
         }
       },
