@@ -1567,6 +1567,54 @@ mod tests {
     // === helper coverage ===
 
     #[test]
+    fn test_tool_call_start_deduplicates_on_replay() {
+        // SSE reconnections can replay tool.call.start events for the same
+        // call_id. The handler must upsert, not push a duplicate. A duplicate
+        // would create a zombie "Running" entry that ToolCallComplete can
+        // never clear (it only updates the first match by call_id).
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+
+        app.handle_event(RuntimeEvent::ToolCallStart {
+            properties: crate::events::ToolCallStartProps {
+                session_id: "s1".to_string(),
+                call_id: "call_1".to_string(),
+                tool_name: "bash".to_string(),
+            },
+        });
+        assert_eq!(app.tool_calls.len(), 1);
+        assert_eq!(app.tool_calls[0].status, ToolCallStatus::Running);
+
+        // Simulate SSE replay: same call_id arrives again.
+        app.handle_event(RuntimeEvent::ToolCallStart {
+            properties: crate::events::ToolCallStartProps {
+                session_id: "s1".to_string(),
+                call_id: "call_1".to_string(),
+                tool_name: "bash".to_string(),
+            },
+        });
+        // Must still be exactly one entry, not two.
+        assert_eq!(app.tool_calls.len(), 1);
+        assert_eq!(app.tool_calls[0].call_id, "call_1");
+        assert_eq!(app.tool_calls[0].status, ToolCallStatus::Running);
+
+        // Complete the call — the single entry must transition.
+        app.handle_event(RuntimeEvent::ToolCallComplete {
+            properties: crate::events::ToolCallCompleteProps {
+                session_id: "s1".to_string(),
+                call_id: "call_1".to_string(),
+                tool_name: "bash".to_string(),
+                result: Some("ok".to_string()),
+                error: None,
+            },
+        });
+        assert_eq!(app.tool_calls.len(), 1);
+        assert_eq!(app.tool_calls[0].status, ToolCallStatus::Completed);
+        // No running tools → session must be idle (no zombie running entry).
+        assert_eq!(app.session_status, SessionStatus::Idle);
+    }
+
+    #[test]
     fn test_byte_index_at_char_helper() {
         // 'a' = 1 byte, '日' = 3 bytes. char idx 2 -> byte idx 4.
         assert_eq!(byte_index_at_char("a日b", 0), 0);

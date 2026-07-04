@@ -246,13 +246,27 @@ impl App {
                 if !self.event_targets_current_session(&properties.session_id) {
                     return;
                 }
-                self.tool_calls.push(ToolCall {
-                    call_id: properties.call_id,
-                    tool_name: properties.tool_name,
-                    status: ToolCallStatus::Running,
-                    result: None,
-                    error: None,
-                });
+                // Upsert: if the call_id already exists (e.g. from an SSE
+                // replay after reconnection), reset it to Running instead of
+                // pushing a duplicate that would become a zombie entry.
+                if let Some(existing) = self
+                    .tool_calls
+                    .iter_mut()
+                    .find(|t| t.call_id == properties.call_id)
+                {
+                    existing.tool_name = properties.tool_name;
+                    existing.status = ToolCallStatus::Running;
+                    existing.result = None;
+                    existing.error = None;
+                } else {
+                    self.tool_calls.push(ToolCall {
+                        call_id: properties.call_id,
+                        tool_name: properties.tool_name,
+                        status: ToolCallStatus::Running,
+                        result: None,
+                        error: None,
+                    });
+                }
                 self.session_status = SessionStatus::Running;
             }
             RuntimeEvent::ToolCallComplete { properties } => {
