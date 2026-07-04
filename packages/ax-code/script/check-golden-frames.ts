@@ -333,7 +333,12 @@ const SCENES: Scene[] = [
       sceneTextarea = textarea
     },
     settle() {
-      if (sceneTextarea) sceneTextarea.setSelection(4, 22, "#3b4252", "#eceff4")
+      // setSelection's runtime signature accepts optional bg/fg colors that the
+      // current type declaration omits; cast to the full 4-arg form.
+      const setSelection = sceneTextarea?.setSelection as
+        | ((start: number, end: number, bg?: string, fg?: string) => void)
+        | undefined
+      setSelection?.call(sceneTextarea, 4, 22, "#3b4252", "#eceff4")
     },
   },
   {
