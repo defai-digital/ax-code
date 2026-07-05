@@ -3,6 +3,7 @@ import { and, Database, eq } from "../storage/db"
 import { ProjectTable } from "./project.sql"
 import { SessionTable } from "../session/session.sql"
 import { Log } from "../util/log"
+import { uniqueStrings } from "../util/string-list"
 import { Flag } from "@/flag/flag"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
@@ -65,7 +66,7 @@ export namespace Project {
     })()
     const sandboxes = (() => {
       const next = z.array(z.string()).safeParse(row.sandboxes)
-      if (next.success) return [...new Set(next.data.map(normalizeSandboxDirectory))]
+      if (next.success) return uniqueStrings(next.data.map(normalizeSandboxDirectory))
       log.warn("invalid project sandboxes", { projectID: row.id })
       return []
     })()
@@ -406,7 +407,7 @@ export namespace Project {
     const result = Database.transaction((d) => {
       const row = d.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get()
       if (!row) throw new Error(`Project not found: ${id}`)
-      const sandboxes = [...new Set((safe(row)?.sandboxes ?? []).map(normalizeSandboxDirectory))]
+      const sandboxes = uniqueStrings((safe(row)?.sandboxes ?? []).map(normalizeSandboxDirectory))
       if (!sandboxes.includes(normalized)) sandboxes.push(normalized)
       return d
         .update(ProjectTable)
