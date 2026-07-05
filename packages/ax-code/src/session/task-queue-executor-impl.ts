@@ -967,17 +967,14 @@ function messageTextOutput(parts: unknown) {
 
 function messageToolNames(parts: unknown) {
   if (!Array.isArray(parts)) return []
-  return Array.from(
-    new Set(
-      parts
-        .map((part) => {
-          if (!part || typeof part !== "object") return undefined
-          const record = part as { type?: unknown; tool?: unknown }
-          return record.type === "tool" && typeof record.tool === "string" ? record.tool : undefined
-        })
-        .filter((tool): tool is string => typeof tool === "string" && tool.length > 0),
-    ),
+  const tools = stringArray(
+    parts.map((part) => {
+      if (!part || typeof part !== "object") return undefined
+      const record = part as { type?: unknown; tool?: unknown }
+      return record.type === "tool" ? record.tool : undefined
+    }),
   )
+  return Array.from(new Set(tools ?? []))
 }
 
 function truncateArtifactSummary(text: string) {
