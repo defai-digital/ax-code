@@ -45,16 +45,19 @@ function parseMarkdownFile(filePath) {
   }
 }
 
-function normalizeAliases(frontmatter) {
-  const raw = frontmatter.aliases ?? frontmatter.alias
+function normalizeAliasList(raw) {
   if (!raw) return []
   const aliases = Array.isArray(raw) ? raw : [raw]
   return aliases.map((alias) => String(alias).trim()).filter(Boolean)
 }
 
+function normalizeAliases(frontmatter) {
+  return normalizeAliasList(frontmatter.aliases ?? frontmatter.alias)
+}
+
 function writeMarkdownFile(filePath, { content, aliases = [], description }) {
   const frontmatter = {}
-  const normalizedAliases = aliases.map((alias) => String(alias).trim()).filter(Boolean)
+  const normalizedAliases = normalizeAliasList(aliases)
   if (normalizedAliases.length > 0) frontmatter.aliases = normalizedAliases
   if (description?.trim()) frontmatter.description = description.trim()
 

@@ -78,7 +78,7 @@ describe("snippets", () => {
   })
 
   test("creates updates and deletes snippets", () => {
-    expect(createSnippet("custom-one", { content: "Body", aliases: ["co"] }, projectDir, "project")).toEqual(
+    expect(createSnippet("custom-one", { content: "Body", aliases: [" co ", ""] }, projectDir, "project")).toEqual(
       expect.objectContaining({ name: "custom-one", content: "Body", aliases: ["co"] }),
     )
     expect(updateSnippet("custom-one", { content: "Updated" }, projectDir)).toEqual(
