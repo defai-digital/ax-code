@@ -1,0 +1,6 @@
+- Takes a text snapshot of the page's accessibility tree
+- Each interactive element receives a unique identifier (UID)
+- ALWAYS call this tool before interacting with page elements
+- The snapshot is more token-efficient than a screenshot for understanding page structure
+- Use UIDs from the latest snapshot to target elements in click, fill, hover, and other actions
+- Set verbose=true for additional element details (computed styles, bounding boxes)

@@ -214,6 +214,14 @@ export namespace Flag {
   export const AX_CODE_DISABLE_CHANNEL_DB = truthy("AX_CODE_DISABLE_CHANNEL_DB")
   export const AX_CODE_SKIP_MIGRATIONS = truthy("AX_CODE_SKIP_MIGRATIONS")
   export const AX_CODE_STRICT_CONFIG_DEPS = truthy("AX_CODE_STRICT_CONFIG_DEPS")
+  // Visual Browser Agent (ADR-047): snapshot-first browser automation for
+  // local web UI review and repair. Gated behind feature flag until the
+  // Playwright runtime dependency and permission model are stable.
+  export const AX_CODE_EXPERIMENTAL_BROWSER_AGENT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_BROWSER_AGENT")
+  // Visual artifact storage: enables `.ax-code/visual-runs/` directory
+  // for screenshot, DOM, console, and network evidence from visual runs.
+  export const AX_CODE_EXPERIMENTAL_VISUAL_ARTIFACTS =
+    AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_VISUAL_ARTIFACTS")
 
   function number(key: string) {
     return parsePositiveIntegerFlagValue(process.env[key])

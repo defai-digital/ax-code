@@ -1,0 +1,13 @@
+- Performs an action on a page element in the browser
+- Actions: click, fill, press, hover, scroll, select, navigate, waitFor, drag, uploadFile
+- IMPORTANT: Always call browser_snapshot first to get element UIDs before using click, fill, hover, select, or drag
+- click: clicks an element by UID (supports dblClick)
+- fill: types text into an input, textarea, or selects an option
+- press: presses a key or key combination (e.g. "Enter", "Control+A", "Escape")
+- hover: moves mouse over an element by UID
+- scroll: scrolls the page (direction: up/down/left/right, amount in pixels)
+- select: selects an option from a <select> element by UID
+- navigate: navigates to a URL, or back/forward/reload
+- waitFor: waits for specified text to appear on the page
+- drag: drags an element from one UID to another
+- uploadFile: uploads files to a file input element by UID

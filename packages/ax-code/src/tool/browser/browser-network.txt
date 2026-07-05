@@ -1,0 +1,5 @@
+- Inspects network requests from the browser page
+- Filter by resource type: document, stylesheet, image, script, xhr, fetch, websocket
+- Supports pagination for large request lists
+- Use this tool to check for failed requests, slow resources, and network issues
+- Requests are collected since the last page navigation

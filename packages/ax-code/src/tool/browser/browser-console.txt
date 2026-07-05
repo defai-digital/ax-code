@@ -1,0 +1,5 @@
+- Inspects console messages from the browser page
+- Filter by message type: log, error, warn, info, debug
+- Supports pagination for large message lists
+- Use this tool to check for JavaScript errors, warnings, and debug output
+- Messages are collected since the last page navigation

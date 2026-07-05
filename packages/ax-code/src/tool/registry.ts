@@ -44,6 +44,13 @@ import { VerifyProjectTool } from "./verify_project"
 import { ReviewCompleteTool } from "./review_complete"
 import { MemorySaveTool } from "./memory"
 import { GetGoalTool, CreateGoalTool, UpdateGoalTool } from "./goal"
+import { BrowserOpenTool } from "./browser/open"
+import { BrowserSnapshotTool } from "./browser/snapshot"
+import { BrowserActionTool } from "./browser/action"
+import { BrowserCaptureTool } from "./browser/capture"
+import { BrowserConsoleTool } from "./browser/console"
+import { BrowserNetworkTool } from "./browser/network"
+import { BrowserEvaluateTool } from "./browser/evaluate"
 import { DebugOpenCaseTool } from "./debug_open_case"
 import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
 import { DebugPlanInstrumentationTool } from "./debug_plan_instrumentation"
@@ -172,6 +179,7 @@ export namespace ToolRegistry {
       Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE,
       Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE,
+      Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT,
       experimental,
     ].join(":")
   }
@@ -218,6 +226,17 @@ export namespace ToolRegistry {
       ...(debugEngineEnabled ? [...DEBUG_ENGINE_TOOLS] : []),
       ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE && Flag.AX_CODE_CLIENT === "cli" ? [PlanExitTool] : []),
+      ...(Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT
+        ? [
+            BrowserOpenTool,
+            BrowserSnapshotTool,
+            BrowserActionTool,
+            BrowserCaptureTool,
+            BrowserConsoleTool,
+            BrowserNetworkTool,
+            BrowserEvaluateTool,
+          ]
+        : []),
       ...custom,
     ]
   }

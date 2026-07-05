@@ -1,0 +1,6 @@
+- Evaluates JavaScript in the browser page context for custom inspection
+- The function must be a JavaScript function declaration string
+- Return value must be JSON-serializable
+- Can reference page elements by UID from the latest snapshot
+- Use for DOM queries, computed styles, or any inspection not covered by other browser tools
+- Example: "() => document.title" or "(el) => el.innerText" with uid argument

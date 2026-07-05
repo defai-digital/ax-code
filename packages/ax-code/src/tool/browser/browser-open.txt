@@ -1,0 +1,6 @@
+- Opens a URL in the Browser Agent's isolated browser instance
+- Returns the page ID, URL, title, and viewport dimensions
+- Use this tool to start visual inspection of a local web app or public page
+- Only http:// and https:// protocols are allowed
+- Localhost and local development servers are supported
+- The browser uses an isolated profile (no cookies, history, or signed-in state)

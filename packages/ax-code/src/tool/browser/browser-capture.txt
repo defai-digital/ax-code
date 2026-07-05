@@ -1,0 +1,7 @@
+- Captures a screenshot of the browser page or a specific element
+- Supports viewport screenshots and full-page screenshots
+- Can capture a specific element by UID from the latest snapshot
+- Format options: png (default) or jpeg
+- Quality setting for jpeg (1-100)
+- Returns the screenshot as an image attachment
+- Use this tool to capture visual evidence for review and comparison
