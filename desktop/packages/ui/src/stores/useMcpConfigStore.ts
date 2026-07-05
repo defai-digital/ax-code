@@ -4,8 +4,7 @@ import { getSafeStorage } from "./utils/safeStorage"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { startConfigUpdate, finishConfigUpdate } from "@/lib/configUpdate"
 import { refreshAfterAxCodeRestart } from "@/stores/useAgentsStore"
-import { useProjectsStore } from "@/stores/useProjectsStore"
-import { axCodeClient } from "@/lib/ax-code/client"
+import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
 
 export type McpScope = "user" | "project"
 
@@ -16,23 +15,7 @@ type McpMutationResult = {
   warning?: string
 }
 
-const getConfigDirectory = (): string | null => {
-  try {
-    const projectsStore = useProjectsStore.getState()
-    const activeProject = projectsStore.getActiveProject?.()
-    if (activeProject?.path?.trim()) {
-      return activeProject.path.trim()
-    }
-
-    const clientDir = axCodeClient.getDirectory()
-    if (clientDir?.trim()) {
-      return clientDir.trim()
-    }
-  } catch (err) {
-    console.warn("[McpConfigStore] Error resolving config directory:", err)
-  }
-  return null
-}
+const getConfigDirectory = (): string | null => getActiveConfigDirectory("McpConfigStore")
 
 // ============== TYPES ==============
 

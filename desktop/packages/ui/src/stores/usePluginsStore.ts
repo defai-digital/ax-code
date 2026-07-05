@@ -3,9 +3,8 @@ import { devtools, persist, createJSONStorage } from "zustand/middleware"
 import { getSafeStorage } from "./utils/safeStorage"
 import { startConfigUpdate, finishConfigUpdate } from "@/lib/configUpdate"
 import { refreshAfterAxCodeRestart } from "@/stores/useAgentsStore"
-import { useProjectsStore } from "@/stores/useProjectsStore"
-import { axCodeClient } from "@/lib/ax-code/client"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
+import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
 
 export type PluginScope = "user" | "project"
 export type PluginParsedKind = "npm" | "path"
@@ -123,23 +122,7 @@ type PluginFileContent = {
   content: string
 }
 
-const getConfigDirectory = (): string | null => {
-  try {
-    const projectsStore = useProjectsStore.getState()
-    const activeProject = projectsStore.getActiveProject?.()
-    if (activeProject?.path?.trim()) {
-      return activeProject.path.trim()
-    }
-
-    const clientDir = axCodeClient.getDirectory()
-    if (clientDir?.trim()) {
-      return clientDir.trim()
-    }
-  } catch (err) {
-    console.warn("[PluginsStore] Error resolving config directory:", err)
-  }
-  return null
-}
+const getConfigDirectory = (): string | null => getActiveConfigDirectory("PluginsStore")
 
 const CLIENT_RELOAD_DELAY_MS = 800
 export const PLUGINS_LOAD_CACHE_TTL_MS = 5000

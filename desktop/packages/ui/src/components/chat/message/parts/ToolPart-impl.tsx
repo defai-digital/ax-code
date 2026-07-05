@@ -36,6 +36,7 @@ import { areRenderRelevantPartsEqual } from "../renderCompare"
 import { useI18n } from "@/lib/i18n"
 import { getDiffPatchEntries, getPatchText, isRecord } from "./toolDiffUtils"
 import { LazyToolDiffPreview as DiffPreview } from "./LazyToolDiffPreview"
+import { getToolRelativePath, normalizeToolDisplayPath } from "./toolPathDisplay"
 
 const TOOL_ROW_TEXT_CLASS = "!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal"
 const TOOL_ROW_TITLE_CLASS = cn("typography-meta font-medium", TOOL_ROW_TEXT_CLASS)
@@ -348,41 +349,6 @@ const getFirstChangedLineFromMetadata = (tool: string, metadata?: Record<string,
   return undefined
 }
 
-const normalizeDisplayPath = (value: string): string => {
-  const trimmed = value
-    .trim()
-    .replace(/\\/g, "/")
-    .replace(/\/{2,}/g, "/")
-  if (!trimmed || trimmed === "/") {
-    return trimmed
-  }
-  return trimmed.replace(/\/+$/, "")
-}
-
-const getRelativePath = (absolutePath: string, currentDirectory: string): string => {
-  const normalizedAbsolutePath = normalizeDisplayPath(absolutePath)
-  const normalizedCurrentDirectory = normalizeDisplayPath(currentDirectory)
-
-  if (!normalizedAbsolutePath) {
-    return ""
-  }
-
-  if (!normalizedCurrentDirectory) {
-    return normalizedAbsolutePath
-  }
-
-  if (normalizedAbsolutePath === normalizedCurrentDirectory) {
-    return "."
-  }
-
-  const prefix = `${normalizedCurrentDirectory}/`
-  if (normalizedAbsolutePath.startsWith(prefix)) {
-    return normalizedAbsolutePath.slice(prefix.length)
-  }
-
-  return normalizedAbsolutePath
-}
-
 type ToolDiagnostic = {
   message: string
   line: number
@@ -496,10 +462,10 @@ const getToolDiagnosticSection = (
     return null
   }
 
-  const normalizedPath = normalizeDisplayPath(primaryPath)
+  const normalizedPath = normalizeToolDisplayPath(primaryPath)
   const absolutePath = normalizedPath.startsWith("/")
     ? normalizedPath
-    : `${normalizeDisplayPath(currentDirectory)}/${normalizedPath}`.replace(/\/+/g, "/")
+    : `${normalizeToolDisplayPath(currentDirectory)}/${normalizedPath}`.replace(/\/+/g, "/")
 
   const rawDiagnostics =
     (metadata.diagnostics as Record<string, unknown>)[normalizedPath] ??
@@ -517,7 +483,7 @@ const getToolDiagnosticSection = (
 
   const visible = diagnostics.slice(0, TOOL_DIAGNOSTICS_MAX_PER_FILE)
   return {
-    displayPath: normalizedPath.startsWith("/") ? getRelativePath(normalizedPath, currentDirectory) : normalizedPath,
+    displayPath: normalizedPath.startsWith("/") ? getToolRelativePath(normalizedPath, currentDirectory) : normalizedPath,
     diagnostics: visible,
     remaining: Math.max(0, diagnostics.length - visible.length),
   }
@@ -555,7 +521,7 @@ const getToolDescriptionPath = (part: ToolPartType, state: ToolStateUnion, curre
     const filePath = firstFile?.relativePath || firstFile?.filePath
     if (files.length > 1) return null
     if (typeof filePath === "string") {
-      return getRelativePath(filePath, currentDirectory)
+      return getToolRelativePath(filePath, currentDirectory)
     }
     return null
   }
@@ -564,7 +530,7 @@ const getToolDescriptionPath = (part: ToolPartType, state: ToolStateUnion, curre
     const filePath =
       input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path
     if (typeof filePath === "string") {
-      return getRelativePath(filePath, currentDirectory)
+      return getToolRelativePath(filePath, currentDirectory)
     }
   }
 
@@ -572,14 +538,14 @@ const getToolDescriptionPath = (part: ToolPartType, state: ToolStateUnion, curre
     const filePath =
       input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path
     if (typeof filePath === "string") {
-      return getRelativePath(filePath, currentDirectory)
+      return getToolRelativePath(filePath, currentDirectory)
     }
   }
 
   if (["write", "create", "file_write"].includes(part.tool) && input) {
     const filePath = input?.filePath || input?.file_path || input?.path
     if (typeof filePath === "string") {
-      return getRelativePath(filePath, currentDirectory)
+      return getToolRelativePath(filePath, currentDirectory)
     }
   }
 
@@ -1315,7 +1281,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(
       getPatchText(fileDiff?.diff) ??
       null
     const diffEntries = React.useMemo(
-      () => getDiffPatchEntries(metadata, diffContent ?? undefined, (path) => getRelativePath(path, currentDirectory)),
+      () =>
+        getDiffPatchEntries(metadata, diffContent ?? undefined, (path) =>
+          getToolRelativePath(path, currentDirectory),
+        ),
       [currentDirectory, diffContent, metadata],
     )
     const hasVisualDiffEntry = diffEntries.some((entry) => entry.renderMode === "diff")

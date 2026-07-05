@@ -1,9 +1,8 @@
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
 import type { Snippet } from "@/types/snippet"
-import { axCodeClient } from "@/lib/ax-code/client"
-import { useProjectsStore } from "@/stores/useProjectsStore"
 import { API_ENDPOINTS } from "@/lib/http"
+import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
 
 export type SnippetScope = "global" | "project"
 
@@ -58,17 +57,7 @@ const invalidateSnippetsCache = (directory: string | null): void => {
   snippetsCacheVersions.set(cacheKey, getSnippetsCacheVersion(cacheKey) + 1)
 }
 
-const getRequestDirectory = (): string | null => {
-  try {
-    const activeProject = useProjectsStore.getState().getActiveProject?.()
-    if (activeProject?.path?.trim()) return activeProject.path.trim()
-    const clientDir = axCodeClient.getDirectory()
-    if (clientDir?.trim()) return clientDir.trim()
-  } catch (error) {
-    console.warn("[SnippetsStore] Error resolving config directory:", error)
-  }
-  return null
-}
+const getRequestDirectory = (): string | null => getActiveConfigDirectory("SnippetsStore")
 
 export const useSnippetsStore = create<SnippetsStore>()(
   devtools(
