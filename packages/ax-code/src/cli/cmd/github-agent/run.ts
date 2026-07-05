@@ -59,14 +59,12 @@ import {
 } from "./github-api"
 import {
   getUserPrompt,
-  getReviewCommentContext,
   buildPromptDataForIssue,
   buildPromptDataForPR,
   fetchIssueData,
   fetchPRData,
 } from "./prompts"
 import type { PromptFile } from "./prompts"
-import { GithubInstallCommand } from "./install"
 
 function requireOidcBaseUrl(): string {
   const value = process.env["OIDC_BASE_URL"]
