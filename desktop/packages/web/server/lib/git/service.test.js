@@ -11,6 +11,7 @@ import {
   countStashFiles,
   getStatus,
   resetToCommit,
+  resolveRepositoryFilePath,
   resolveBaseRefForLog,
   revertCommit,
   stageFiles,
@@ -108,6 +109,19 @@ describe("resolveBaseRefForLog", () => {
 // ---------------------------------------------------------------------------
 
 describe("git index path validation", () => {
+  it("resolves repository file paths inside the repository", () => {
+    expect(resolveRepositoryFilePath("/repo", "src/file.ts")).toBe(path.resolve("/repo/src/file.ts"))
+  })
+
+  it("rejects repository file path escapes", () => {
+    expect(() => resolveRepositoryFilePath("/repo", "../secret.txt")).toThrow(
+      "Path is outside repository: ../secret.txt",
+    )
+    expect(() => resolveRepositoryFilePath("/repo", "/repo2/secret.txt")).toThrow(
+      "Path is outside repository: /repo2/secret.txt",
+    )
+  })
+
   it("allows Windows repository paths that differ only by case", () => {
     expect(() =>
       validateRepositoryFilePaths("C:\\Users\\Alice\\Repo", ["c:\\users\\alice\\repo\\src\\file.ts"], path.win32),

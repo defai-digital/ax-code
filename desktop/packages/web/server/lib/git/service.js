@@ -403,6 +403,22 @@ const isInsideOrSameDirectory = (root, target) => {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
 }
 
+export const resolveRepositoryFilePath = (repoRoot, filePath) => {
+  const absolutePath = path.resolve(repoRoot, filePath)
+  if (!isInsideOrSameDirectory(repoRoot, absolutePath)) {
+    throw new Error(`Path is outside repository: ${filePath}`)
+  }
+  return absolutePath
+}
+
+const resolveChildPath = (root, childName) => {
+  const absolutePath = path.resolve(root, childName)
+  if (!isInsideOrSameDirectory(root, absolutePath)) {
+    throw new Error(`Path is outside directory: ${childName}`)
+  }
+  return absolutePath
+}
+
 const resolveGitRepositoryRoot = async (directoryPath, git) => {
   const topLevel = await git.raw(["rev-parse", "--show-toplevel"])
   const normalizedTopLevel = topLevel.trim()
@@ -421,7 +437,17 @@ const createRepositoryGitContext = async (directory) => {
 
 const resolveGitInternalPath = async (repoRoot, git, gitPath) => {
   const resolved = await git.raw(["rev-parse", "--git-path", gitPath])
-  return path.resolve(repoRoot, resolved.trim())
+  const rawPath = resolved.trim()
+  const absolutePath = path.isAbsolute(rawPath) ? path.resolve(rawPath) : path.resolve(repoRoot, rawPath)
+  const gitDirRaw = await git.raw(["rev-parse", "--absolute-git-dir"]).catch(() => "")
+  const gitDir = gitDirRaw.trim()
+    ? path.resolve(repoRoot, gitDirRaw.trim())
+    : resolveRepositoryFilePath(repoRoot, ".git")
+
+  if (!isInsideOrSameDirectory(gitDir, absolutePath)) {
+    throw new Error(`Git internal path is outside git directory: ${gitPath}`)
+  }
+  return absolutePath
 }
 
 const resolveGitFileContext = async (directoryPath, git, filePath, repoRootOverride = null) => {
@@ -1549,7 +1575,13 @@ export async function getStatus(directory, options = {}) {
 
       const estimateNewFileStat = async (file) => {
         const existing = diffStats[file.path]
-        const absolutePath = path.join(repoRoot, file.path)
+        let absolutePath
+        try {
+          absolutePath = resolveRepositoryFilePath(repoRoot, file.path)
+        } catch (error) {
+          console.warn("Skipping new file outside repository", file.path, error)
+          return null
+        }
 
         try {
           const stat = await fsp.stat(absolutePath)
@@ -1708,8 +1740,10 @@ export async function getStatus(directory, options = {}) {
 
       if (rebaseMergeExists || rebaseApplyExists) {
         const rebasePath = rebaseMergeExists ? rebaseMergePath : rebaseApplyPath
-        const headName = await fsp.readFile(path.join(rebasePath, "head-name"), "utf8").catch(() => "")
-        const onto = await fsp.readFile(path.join(rebasePath, "onto"), "utf8").catch(() => "")
+        const headNamePath = resolveChildPath(rebasePath, "head-name")
+        const ontoPath = resolveChildPath(rebasePath, "onto")
+        const headName = await fsp.readFile(headNamePath, "utf8").catch(() => "")
+        const onto = await fsp.readFile(ontoPath, "utf8").catch(() => "")
 
         const headNameTrimmed = headName.trim().replace("refs/heads/", "")
         const ontoTrimmed = onto.trim().slice(0, 7)
