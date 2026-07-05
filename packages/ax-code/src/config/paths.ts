@@ -8,6 +8,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Env } from "@/util/env"
 import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
+import { uniqueStrings } from "@/util/string-list"
 
 export namespace ConfigPaths {
   export async function projectFiles(name: string, directory: string, worktree: string) {
@@ -60,7 +61,7 @@ export namespace ConfigPaths {
       }
     }
 
-    return [...new Set([...projectDirs, ...userDirs])]
+    return uniqueStrings([...projectDirs, ...userDirs])
   }
 
   export function fileInDirectory(dir: string, name: string) {
