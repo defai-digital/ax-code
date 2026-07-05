@@ -75,6 +75,7 @@ import {
   promptEscapeClearIntent,
   isPromptExitCommand,
   promptSubmissionView,
+  sanitizePromptInput,
   windowsClipboardTextPaste,
 } from "./view-model"
 import { OpenTuiSpinner } from "../spinner"
@@ -233,7 +234,18 @@ export function Prompt(props: PromptProps) {
     )
   }
 
-  function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean } = {}) {
+  function syncPromptInputFromRenderable() {
+    if (!isRenderableAlive(input)) return
+    const raw = input.plainText
+    const value = sanitizePromptInput(raw)
+    if (value !== raw) input.setText(value)
+    setStore("prompt", "input", value)
+    autocomplete?.onInput(value)
+    syncExtmarksWithPromptParts()
+  }
+
+  function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean; syncPromptInput?: boolean } = {}) {
+    if (options.syncPromptInput !== false) syncPromptInputFromRenderable()
     scheduleMicrotaskTask(
       () => {
         if (!isRenderableAlive(input)) return
@@ -1313,6 +1325,7 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
+    requestInputLayoutRefresh()
   }
 
   async function pasteImage(file: { filename?: string; content: string; mime: string }) {
@@ -1355,6 +1368,7 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
+    requestInputLayoutRefresh()
     return
   }
 
@@ -1500,19 +1514,7 @@ export function Prompt(props: PromptProps) {
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
-                const raw = input.plainText
-                // SGR mouse residue: \x1b[<Cb;Cx;CyM/m arrives as <digits;digits;digitsM
-                // when the escape sequence parser partially processes a mouse event during
-                // focus transitions (dialog open/close, session switching). Strip before
-                // the text lands in the prompt buffer.
-                const value = raw.replace(/(?:<)?\d+;\d+;\d+[Mm]/g, "")
-                if (value !== raw) {
-                  input.setText(value)
-                  return
-                }
-                setStore("prompt", "input", value)
-                autocomplete.onInput(value)
-                syncExtmarksWithPromptParts()
+                syncPromptInputFromRenderable()
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e: KeyEvent) => {
@@ -1718,8 +1720,10 @@ export function Prompt(props: PromptProps) {
                   return
                 }
 
-                // Force layout update and render for the pasted content
+                event.preventDefault()
+                input.insertText(normalizedText)
                 requestInputLayoutRefresh()
+                return
               }}
               ref={(r: TextareaRenderable) => {
                 input = r

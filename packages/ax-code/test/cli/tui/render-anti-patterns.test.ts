@@ -1026,6 +1026,27 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("return undefined")
   })
 
+  test("syncs prompt store immediately after terminal paste inserts", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const refreshStart = prompt.indexOf("function requestInputLayoutRefresh")
+    const refreshEnd = prompt.indexOf("function clearPromptDraft", refreshStart)
+    const refreshBody = prompt.slice(refreshStart, refreshEnd)
+    const syncStart = prompt.indexOf("function syncPromptInputFromRenderable")
+    const syncEnd = prompt.indexOf("function requestInputLayoutRefresh", syncStart)
+    const syncBody = prompt.slice(syncStart, syncEnd)
+    const pasteStart = prompt.indexOf("onPaste={async (event: PasteEvent)")
+    const pasteEnd = prompt.indexOf("ref={(r: TextareaRenderable)", pasteStart)
+    const pasteBody = prompt.slice(pasteStart, pasteEnd)
+
+    expect(refreshBody).toContain("syncPromptInputFromRenderable()")
+    expect(syncBody).toContain("sanitizePromptInput(raw)")
+    expect(syncBody).toContain('setStore("prompt", "input", value)')
+    expect(syncBody).toContain("autocomplete?.onInput(value)")
+    expect(pasteBody).toContain("event.preventDefault()")
+    expect(pasteBody).toContain("input.insertText(normalizedText)")
+    expect(pasteBody).toContain("requestInputLayoutRefresh()")
+  })
+
   test("keeps dialog selection post-update work on cancellable microtasks", async () => {
     const dialogSelect = await fs.readFile(DIALOG_SELECT_SRC, "utf8")
 
@@ -1129,7 +1150,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("input.cursorOffset = stringWidth(input.plainText)")
     expect(prompt).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
     expect(prompt).toContain("if (!sessionChanged && msg.model) local.model.set(msg.model)")
-    expect(prompt).toContain("raw.replace(/(?:<)?\\d+;\\d+;\\d+[Mm]/g")
+    expect(prompt).toContain("sanitizePromptInput(raw)")
     expect(prompt).toContain("if (!isRenderableAlive(input)) return")
     expect(prompt).toContain("syncInputCursorColor()")
     expect(prompt).not.toContain("if (inputBlocked()) input.cursorColor")

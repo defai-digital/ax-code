@@ -18,6 +18,12 @@ export type ClipboardContentView = {
 
 export const DOUBLE_ESCAPE_CLEAR_MS = 3_000
 
+export function sanitizePromptInput(input: string) {
+  // SGR mouse residue: \x1b[<Cb;Cx;CyM/m can arrive as <digits;digits;digitsM
+  // if the escape parser partially processes mouse input during focus changes.
+  return input.replace(/(?:<)?\d+;\d+;\d+[Mm]/g, "")
+}
+
 export function promptEscapeClearIntent(input: {
   keyName?: string
   hasDraft: boolean

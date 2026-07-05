@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   DOUBLE_ESCAPE_CLEAR_MS,
   promptEscapeClearIntent,
+  sanitizePromptInput,
   windowsClipboardTextPaste,
 } from "../../../src/cli/cmd/tui/component/prompt/view-model"
 
@@ -100,5 +101,13 @@ describe("prompt view model", () => {
         content: { mime: "text/plain", data: "hello" },
       }),
     ).toBeUndefined()
+  })
+
+  test("strips SGR mouse residue from prompt input", () => {
+    expect(sanitizePromptInput("hello <0;12;34Mworld 35;46;57m")).toBe("hello world ")
+  })
+
+  test("preserves ordinary semicolon-separated prompt text", () => {
+    expect(sanitizePromptInput("versions 1;2;3 and keep 4;5;6x")).toBe("versions 1;2;3 and keep 4;5;6x")
   })
 })
