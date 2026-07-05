@@ -119,35 +119,25 @@ export const createSettingsRuntime = (deps) => {
     const newPlanFiles = remapPlanPaths(newValue.projectPlanFiles, oldStorageDir, newStorageDir)
     const oldNotes = typeof oldValue.projectNotes === "string" ? oldValue.projectNotes : ""
     const newNotes = typeof newValue.projectNotes === "string" ? newValue.projectNotes : ""
+    const setupWorktree = uniqueStrings([
+      ...(Array.isArray(oldValue["setup-worktree"]) ? oldValue["setup-worktree"] : []),
+      ...(Array.isArray(newValue["setup-worktree"]) ? newValue["setup-worktree"] : []),
+    ])
+    const projectTodos = mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id)
+    const projectActions = mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id)
+    const scheduledTasks = mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id)
+    const projectPlanFiles = mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path)
 
     return {
       ...oldValue,
       ...newValue,
       ...(typeof projectPath === "string" && projectPath.trim().length > 0 ? { projectPath } : {}),
-      ...(uniqueStrings([
-        ...(Array.isArray(oldValue["setup-worktree"]) ? oldValue["setup-worktree"] : []),
-        ...(Array.isArray(newValue["setup-worktree"]) ? newValue["setup-worktree"] : []),
-      ]).length > 0
-        ? {
-            "setup-worktree": uniqueStrings([
-              ...(Array.isArray(oldValue["setup-worktree"]) ? oldValue["setup-worktree"] : []),
-              ...(Array.isArray(newValue["setup-worktree"]) ? newValue["setup-worktree"] : []),
-            ]),
-          }
-        : {}),
+      ...(setupWorktree.length > 0 ? { "setup-worktree": setupWorktree } : {}),
       ...(oldNotes || newNotes ? { projectNotes: newNotes || oldNotes } : {}),
-      ...(mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id).length > 0
-        ? { projectTodos: mergeByKey(oldValue.projectTodos, newValue.projectTodos, (item) => item.id) }
-        : {}),
-      ...(mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id).length > 0
-        ? { projectActions: mergeByKey(oldValue.projectActions, newValue.projectActions, (item) => item.id) }
-        : {}),
-      ...(mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id).length > 0
-        ? { scheduledTasks: mergeByKey(oldValue.scheduledTasks, newValue.scheduledTasks, (item) => item.id) }
-        : {}),
-      ...(mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path).length > 0
-        ? { projectPlanFiles: mergeByKey(oldPlanFiles, newPlanFiles, (item) => item.id || item.path) }
-        : {}),
+      ...(projectTodos.length > 0 ? { projectTodos } : {}),
+      ...(projectActions.length > 0 ? { projectActions } : {}),
+      ...(scheduledTasks.length > 0 ? { scheduledTasks } : {}),
+      ...(projectPlanFiles.length > 0 ? { projectPlanFiles } : {}),
       ...(typeof newValue.projectActionsPrimaryId === "string" && newValue.projectActionsPrimaryId.trim().length > 0
         ? { projectActionsPrimaryId: newValue.projectActionsPrimaryId }
         : typeof oldValue.projectActionsPrimaryId === "string" && oldValue.projectActionsPrimaryId.trim().length > 0

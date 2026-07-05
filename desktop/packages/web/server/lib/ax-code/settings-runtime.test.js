@@ -64,9 +64,29 @@ describe("settings runtime", () => {
         path.join(projectsRoot, `${oldProjectId}.json`),
         JSON.stringify(
           {
+            "setup-worktree": ["pnpm install", "", null, "pnpm install"],
+            projectTodos: [
+              { id: "shared", title: "old shared" },
+              { id: "old", title: "old only" },
+            ],
             projectPlanFiles: [
               { id: "inside", path: path.join(oldStorageDir, "plans", "inside.md") },
               { id: "sibling", path: path.join(siblingStorageDir, "plans", "outside.md") },
+            ],
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      )
+      await fsPromises.writeFile(
+        path.join(projectsRoot, `${newProjectId}.json`),
+        JSON.stringify(
+          {
+            "setup-worktree": ["npm install", "pnpm install"],
+            projectTodos: [
+              { id: "new", title: "new only" },
+              { id: "shared", title: "new shared" },
             ],
           },
           null,
@@ -80,6 +100,12 @@ describe("settings runtime", () => {
       const migratedConfig = JSON.parse(
         await fsPromises.readFile(path.join(projectsRoot, `${newProjectId}.json`), "utf8"),
       )
+      expect(migratedConfig["setup-worktree"]).toEqual(["pnpm install", "npm install"])
+      expect(migratedConfig.projectTodos).toEqual([
+        { id: "new", title: "new only" },
+        { id: "shared", title: "new shared" },
+        { id: "old", title: "old only" },
+      ])
       expect(migratedConfig.projectPlanFiles).toEqual([
         { id: "inside", path: path.join(newStorageDir, "plans", "inside.md") },
         { id: "sibling", path: path.join(siblingStorageDir, "plans", "outside.md") },
