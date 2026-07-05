@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { connect, type Socket } from "node:net"
-import { AX_CODE_DIRECTORY_HEADER, encodeDirectoryHeader, LEGACY_OPENCODE_DIRECTORY_HEADER } from "../protocol.js"
+import { withDirectoryHeaders, withWorkspaceHeaders } from "../protocol.js"
 import type { Event } from "../v2/index.js"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command.js"
 import type { HeadlessTransport, HeadlessTransportRequest, HeadlessTransportSubscribeOptions } from "./transport.js"
@@ -322,15 +322,12 @@ function generateRequestId(): string {
 }
 
 function buildBaseHeaders(options: IpcTransportOptions): Record<string, string> {
-  const headers: Record<string, string> = { ...options.headers }
+  let headers: Record<string, string> = { ...options.headers }
   if (options.directory) {
-    const encodedDirectory = encodeDirectoryHeader(options.directory)
-    headers[AX_CODE_DIRECTORY_HEADER] = encodedDirectory
-    headers[LEGACY_OPENCODE_DIRECTORY_HEADER] = encodedDirectory
+    headers = withDirectoryHeaders(headers, options.directory)
   }
   if (options.experimental_workspaceID) {
-    headers["x-ax-code-workspace-id"] = options.experimental_workspaceID
-    headers["x-opencode-workspace-id"] = options.experimental_workspaceID
+    headers = withWorkspaceHeaders(headers, options.experimental_workspaceID)
   }
   return headers
 }
