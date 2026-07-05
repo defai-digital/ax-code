@@ -98,6 +98,32 @@ describe("Log.init", () => {
     expect(Log.file()).toBe(path.join(fallback, "open-fallback-test.log"))
     expect(warnings.join("")).toContain(`falling back to ${fallback}`)
   })
+
+  test("uses a private temp directory for the default fallback log path", async () => {
+    await using tmp = await tmpdir()
+    const preferred = path.join(tmp.path, "preferred-default-fallback")
+    const warnings: string[] = []
+
+    await Log.init(
+      { print: false, dir: preferred, name: "default-fallback-test" },
+      {
+        mkdir: async (dir, options) => {
+          if (path.resolve(String(dir)) === path.resolve(preferred)) throw new Error("disk unavailable")
+          await fs.mkdir(dir, options)
+        },
+        tmpDir: () => tmp.path,
+        stderrWrite: (msg) => {
+          warnings.push(msg)
+        },
+      },
+    )
+
+    const file = Log.file()
+    expect(file).toBeDefined()
+    expect(path.basename(file!)).toBe("default-fallback-test.log")
+    expect(path.basename(path.dirname(file!))).toMatch(/^ax-code-log-/)
+    expect(warnings.join("")).toContain("falling back to")
+  })
 })
 
 describe("Log.create", () => {

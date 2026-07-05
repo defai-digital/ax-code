@@ -164,6 +164,46 @@ test("project MCP trust is invalidated when the command fingerprint changes", as
   })
 })
 
+test("MCP trust fingerprints do not derive from secret values", () => {
+  const first = McpTrust.fingerprint("remote", {
+    type: "remote",
+    url: "https://mcp.example.com",
+    headers: {
+      Authorization: "Bearer first-token",
+    },
+    oauth: {
+      clientId: "client",
+      clientSecret: "first-secret",
+    },
+  })
+  const rotated = McpTrust.fingerprint("remote", {
+    type: "remote",
+    url: "https://mcp.example.com",
+    headers: {
+      Authorization: "Bearer rotated-token",
+    },
+    oauth: {
+      clientId: "client",
+      clientSecret: "rotated-secret",
+    },
+  })
+  const withExtraHeader = McpTrust.fingerprint("remote", {
+    type: "remote",
+    url: "https://mcp.example.com",
+    headers: {
+      Authorization: "Bearer rotated-token",
+      "X-Workspace": "workspace-a",
+    },
+    oauth: {
+      clientId: "client",
+      clientSecret: "rotated-secret",
+    },
+  })
+
+  expect(rotated).toBe(first)
+  expect(withExtraHeader).not.toBe(first)
+})
+
 test("project MCP trust updates do not overwrite malformed trust JSON", async () => {
   await using tmp = await tmpdir({ git: true })
   const malformed = "{not json"

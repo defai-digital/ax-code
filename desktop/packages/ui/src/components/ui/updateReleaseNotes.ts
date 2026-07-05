@@ -60,11 +60,16 @@ function removeRawTextElementBlocks(value: string, tagName: string): string {
   return output
 }
 
+function tagNameStartOffset(value: string, index: number): number | undefined {
+  if (value[index] !== "<") return undefined
+  const offset = value[index + 1] === "/" ? 2 : 1
+  const next = value[index + offset]
+  return next && /[a-z]/i.test(next) ? offset : undefined
+}
+
 function hasHtmlTag(value: string): boolean {
   for (let i = 0; i < value.length - 2; i++) {
-    if (value[i] !== "<") continue
-    const next = value[i + 1] === "/" ? value[i + 2] : value[i + 1]
-    if (next && /[a-z]/i.test(next)) return true
+    if (tagNameStartOffset(value, i) !== undefined) return true
   }
   return false
 }
@@ -104,6 +109,12 @@ function htmlToMarkdownText(value: string): string {
     }
 
     output += remaining.slice(0, start)
+    if (tagNameStartOffset(remaining, start) === undefined) {
+      output += "<"
+      remaining = remaining.slice(start + 1)
+      continue
+    }
+
     const end = remaining.indexOf(">", start + 1)
     if (end === -1) {
       output += remaining.slice(start)

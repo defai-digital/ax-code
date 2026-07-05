@@ -67,6 +67,7 @@ export namespace Log {
 
   export interface InitDeps {
     mkdir?: typeof fs.mkdir
+    mkdtemp?: typeof fs.mkdtemp
     truncate?: typeof fs.truncate
     open?: typeof fs.open
     cleanup?: (dir: string) => Promise<void> | void
@@ -167,16 +168,23 @@ export namespace Log {
     dep: InitDeps
   }): Promise<{ path?: string; warning?: string }> {
     const mkdir = options.dep.mkdir ?? fs.mkdir
+    const mkdtemp = options.dep.mkdtemp ?? fs.mkdtemp
     const truncate = options.dep.truncate ?? fs.truncate
     const open = options.dep.open ?? fs.open
     const cleanupDir = options.dep.cleanup ?? cleanup
     const withTimeoutFn = options.dep.withTimeout ?? withTimeout
     const ioTimeoutMs = options.dep.ioTimeoutMs ?? LOG_INIT_IO_TIMEOUT_MS
-    const fallbackDir = options.dep.fallbackDir ?? path.join((options.dep.tmpDir ?? os.tmpdir)(), "ax-code-log")
-    const attempts = [options.dir, ...(path.resolve(fallbackDir) === path.resolve(options.dir) ? [] : [fallbackDir])]
+    const fallbackDir = async () => {
+      if (options.dep.fallbackDir) return options.dep.fallbackDir
+      const base = (options.dep.tmpDir ?? os.tmpdir)()
+      return mkdtemp(path.join(base, "ax-code-log-"))
+    }
+    const attempts = [options.dir]
     const failures: string[] = []
+    let triedFallback = false
 
-    for (const dir of attempts) {
+    while (attempts.length > 0) {
+      const dir = attempts.shift()!
       try {
         await withTimeoutFn(
           mkdir(dir, { recursive: true }).then(() => undefined),
@@ -211,6 +219,14 @@ export namespace Log {
         return { path: next }
       } catch (error) {
         failures.push(`${dir}: ${toErrorMessage(error)}`)
+        if (!triedFallback) {
+          triedFallback = true
+          const nextFallback = await fallbackDir().catch((fallbackError) => {
+            failures.push(`fallback: ${toErrorMessage(fallbackError)}`)
+            return undefined
+          })
+          if (nextFallback && path.resolve(nextFallback) !== path.resolve(options.dir)) attempts.push(nextFallback)
+        }
       }
     }
 

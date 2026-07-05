@@ -61,12 +61,12 @@ export namespace McpTrust {
       .digest("hex")
   }
 
-  function secretRecordHash(record: Record<string, string> | undefined) {
+  function sensitiveRecordShape(record: Record<string, string> | undefined) {
     if (!record) return undefined
     return Object.fromEntries(
       Object.entries(record)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, value]) => [key, sha256(value)]),
+        .map(([key, value]) => [key, value.length > 0]),
     )
   }
 
@@ -85,7 +85,7 @@ export namespace McpTrust {
         name,
         type: config.type,
         command: config.command,
-        environment: secretRecordHash(config.environment),
+        environment: sensitiveRecordShape(config.environment),
       })
     }
 
@@ -94,7 +94,7 @@ export namespace McpTrust {
       name,
       type: config.type,
       url: normalizedRemoteUrl(config.url),
-      headers: secretRecordHash(config.headers),
+      headers: sensitiveRecordShape(config.headers),
       oauth:
         config.oauth === false
           ? false

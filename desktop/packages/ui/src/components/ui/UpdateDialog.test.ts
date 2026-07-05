@@ -35,6 +35,10 @@ describe("normalizeReleaseNotesForMarkdown", () => {
       "Fixed comparisons like a < b and trailing <note",
     )
   })
+
+  test("preserves literal less-than comparisons inside HTML text", () => {
+    expect(normalizeReleaseNotesForMarkdown("<p>Use a < b before closing.</p>")).toBe("Use a < b before closing.")
+  })
 })
 
 describe("buildUpdateReleaseUrl", () => {
