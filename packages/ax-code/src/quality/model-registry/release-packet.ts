@@ -39,23 +39,11 @@ import {
 } from "../model-registry-record-summary"
 import { QualityModelRegistry } from "./index"
 import { promoteReleaseDecisionRecord } from "./promote-bundle"
+import { assertPromotionSummaryPass, firstFailureDetail } from "./promotion-summary"
 
 type PromotionMetadata = QualityModelRegistry.PromotionMetadata
 
 const encode = QualityStorageKey.encode
-
-function firstFailureDetail(gates: readonly { status: string; detail?: string | null }[], fallback = "unknown failure") {
-  return gates.find((gate) => gate.status === "fail")?.detail ?? fallback
-}
-
-function assertPromotionSummaryPass(
-  source: string,
-  reason: string,
-  summary: { overallStatus: string; gates: readonly { status: string; detail?: string | null }[] },
-) {
-  if (summary.overallStatus === "pass") return
-  throw new Error(`Cannot promote model ${source}: ${reason} (${firstFailureDetail(summary.gates)})`)
-}
 
 function createPromotionMetadata(source: string): PromotionMetadata {
   return QualityModelRegistry.PromotionMetadata.parse({
