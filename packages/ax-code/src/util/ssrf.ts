@@ -245,6 +245,70 @@ export namespace Ssrf {
     })
   }
 
+  async function nodePinnedHttpFetch(input: {
+    originalUrl: URL
+    resolvedAddress: string
+    headers: Headers
+    init: PinnedFetchInit | undefined
+  }): Promise<Response> {
+    const method = input.init?.method ?? "GET"
+    const body = requestBody(input.init)
+    const requestHeaders = Object.fromEntries(input.headers.entries())
+
+    return new Promise<Response>((resolve, reject) => {
+      const req = http.request(
+        {
+          protocol: input.originalUrl.protocol,
+          host: input.resolvedAddress,
+          hostname: input.resolvedAddress,
+          port: input.originalUrl.port || 80,
+          method,
+          path: `${input.originalUrl.pathname}${input.originalUrl.search}`,
+          headers: requestHeaders,
+        },
+        (res) => {
+          const webBody = Readable.toWeb(res) as ReadableStream<Uint8Array>
+          resolve(
+            new Response(webBody, {
+              status: res.statusCode ?? 0,
+              statusText: res.statusMessage,
+              headers: responseHeaders(res.headers),
+            }),
+          )
+        },
+      )
+
+      req.on("error", reject)
+      input.init?.signal?.addEventListener(
+        "abort",
+        () => {
+          req.destroy(input.init?.signal?.reason)
+          reject(input.init?.signal?.reason ?? new DOMException("The operation was aborted", "AbortError"))
+        },
+        { once: true },
+      )
+
+      if (body === undefined || method.toUpperCase() === "GET" || method.toUpperCase() === "HEAD") {
+        req.end()
+        return
+      }
+      if (typeof body === "string" || body instanceof Uint8Array) {
+        req.end(body)
+        return
+      }
+      if (body instanceof ArrayBuffer) {
+        req.end(new Uint8Array(body))
+        return
+      }
+      if (body instanceof URLSearchParams) {
+        req.end(body.toString())
+        return
+      }
+      reject(new TypeError("ssrf: unsupported HTTP pinned fetch body type"))
+      req.destroy()
+    })
+  }
+
   /**
    * Reject if the URL's scheme is anything other than http/https, or
    * if any address it resolves to is in a private / reserved range.
@@ -312,7 +376,28 @@ export namespace Ssrf {
       const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
       const { label: _, ...fetchInit } = init ?? {}
-      return (fetchFn ?? globalThis.fetch)(url, { ...fetchInit, redirect: "manual" })
+      if (fetchFn) {
+        return fetchFn(url, { ...fetchInit, redirect: "manual" })
+      }
+      const headers = new Headers(init?.headers)
+      if (!headers.has("Host")) {
+        headers.set("Host", parsed.host)
+      }
+      if (parsed.protocol === "https:") {
+        return nodePinnedHttpsFetch({
+          originalUrl: parsed,
+          resolvedAddress: hostname,
+          headers,
+          init: fetchInit,
+          hostname,
+        })
+      }
+      return nodePinnedHttpFetch({
+        originalUrl: parsed,
+        resolvedAddress: hostname,
+        headers,
+        init: fetchInit,
+      })
     }
 
     // Resolve DNS once
@@ -351,6 +436,13 @@ export namespace Ssrf {
     }
 
     const { label: _, ...fetchInit } = init ?? {}
+    if (fetchFn) {
+      return fetchFn(pinnedUrl.toString(), {
+        ...fetchInit,
+        headers,
+        redirect: "manual",
+      } as RequestInit)
+    }
     if (parsed.protocol === "https:" && !fetchFn) {
       return nodePinnedHttpsFetch({
         originalUrl: parsed,
@@ -361,11 +453,12 @@ export namespace Ssrf {
       })
     }
 
-    return (fetchFn ?? globalThis.fetch)(pinnedUrl.toString(), {
-      ...fetchInit,
+    return nodePinnedHttpFetch({
+      originalUrl: pinnedUrl,
+      resolvedAddress: resolved.address,
       headers,
-      redirect: "manual",
-    } as RequestInit)
+      init: fetchInit,
+    })
   }
 
   export async function pinnedFetch(

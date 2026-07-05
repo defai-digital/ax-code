@@ -4,6 +4,8 @@
 // See action.yml for the production code path.
 
 import path from "node:path"
+import https from "node:https"
+import { Readable } from "node:stream"
 import { Octokit } from "@octokit/rest"
 import { graphql } from "@octokit/graphql"
 import * as core from "@actions/core"
@@ -447,6 +449,51 @@ function parseGitHubUserAttachmentUrl(rawUrl: string): URL | null {
   return new URL(`https://github.com${parsedUrl.pathname}${parsedUrl.search}`)
 }
 
+function responseHeaders(headers: Record<string, string | string[] | undefined>): Headers {
+  const result = new Headers()
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) continue
+    if (Array.isArray(value)) {
+      for (const item of value) result.append(key, item)
+    } else {
+      result.set(key, value)
+    }
+  }
+  return result
+}
+
+async function fetchGitHubUserAttachment(attachmentUrl: URL): Promise<Response> {
+  return new Promise<Response>((resolve, reject) => {
+    const req = https.request(
+      {
+        protocol: "https:",
+        hostname: "github.com",
+        servername: "github.com",
+        port: 443,
+        method: "GET",
+        path: `${attachmentUrl.pathname}${attachmentUrl.search}`,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      },
+      (res) => {
+        const webBody = Readable.toWeb(res) as ReadableStream<Uint8Array>
+        resolve(
+          new Response(webBody, {
+            status: res.statusCode ?? 0,
+            statusText: res.statusMessage,
+            headers: responseHeaders(res.headers),
+          }),
+        )
+      },
+    )
+
+    req.on("error", reject)
+    req.end()
+  })
+}
+
 async function getUserPrompt() {
   const context = useContext()
   const payload = context.payload as IssueCommentEvent | PullRequestReviewCommentEvent
@@ -503,12 +550,7 @@ async function getUserPrompt() {
     const filename = path.basename(attachmentUrl.pathname)
 
     // Download image
-    const res = await fetch(attachmentUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/vnd.github.v3+json",
-      },
-    })
+    const res = await fetchGitHubUserAttachment(attachmentUrl)
     if (!res.ok) {
       console.error(`Failed to download image: ${attachmentUrl.toString()}`)
       continue
