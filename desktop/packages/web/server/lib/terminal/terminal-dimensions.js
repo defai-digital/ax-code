@@ -3,14 +3,11 @@ export const DEFAULT_TERMINAL_ROWS = 24
 export const MAX_TERMINAL_DIMENSION = 1000
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
+const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
 export function parseTerminalDimension(value, fieldName) {
-  const numberValue =
-    typeof value === "number"
-      ? value
-      : typeof value === "string" && value.trim().length > 0
-        ? Number(value.trim())
-        : NaN
+  const stringValue = asTrimmedString(value)
+  const numberValue = typeof value === "number" ? value : stringValue ? Number(stringValue) : NaN
 
   if (!Number.isFinite(numberValue) || !Number.isInteger(numberValue)) {
     return { ok: false, error: `${fieldName} must be an integer` }

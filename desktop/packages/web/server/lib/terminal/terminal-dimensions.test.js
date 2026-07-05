@@ -18,7 +18,7 @@ describe("terminal dimensions", () => {
   })
 
   it("accepts integer numbers and integer strings", () => {
-    expect(resolveTerminalDimensions({ cols: 120, rows: "30" })).toEqual({
+    expect(resolveTerminalDimensions({ cols: 120, rows: " 30 " })).toEqual({
       ok: true,
       cols: 120,
       rows: 30,

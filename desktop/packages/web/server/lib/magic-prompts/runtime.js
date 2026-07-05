@@ -2,6 +2,7 @@ const FILE_VERSION = 1
 const MAX_PROMPT_TEXT_LENGTH = 200_000
 const PROMPT_ID_PATTERN = /^[a-z0-9._-]{1,160}$/
 const isVisiblePromptID = (id) => typeof id === "string" && id.endsWith(".visible")
+const normalizePromptID = (id) => (typeof id === "string" ? id.trim() : "")
 
 const hasOwn = (input, key) => Object.prototype.hasOwnProperty.call(input, key)
 
@@ -60,7 +61,7 @@ export const createMagicPromptRuntime = (dependencies) => {
   }
 
   const setOverride = async (id, text) => {
-    const normalizedId = typeof id === "string" ? id.trim() : ""
+    const normalizedId = normalizePromptID(id)
     if (!PROMPT_ID_PATTERN.test(normalizedId)) {
       throw new Error("Invalid prompt id")
     }
@@ -84,7 +85,7 @@ export const createMagicPromptRuntime = (dependencies) => {
   }
 
   const resetOverride = async (id) => {
-    const normalizedId = typeof id === "string" ? id.trim() : ""
+    const normalizedId = normalizePromptID(id)
     if (!PROMPT_ID_PATTERN.test(normalizedId)) {
       throw new Error("Invalid prompt id")
     }
