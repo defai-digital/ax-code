@@ -8,6 +8,7 @@ import {
   formatWorkflowRunList,
   formatWorkflowRoutineList,
   formatWorkflowTemplateList,
+  parseAllowedProvidersOption,
   parseOptionalSessionID,
   parseWorkflowChildID,
   parseWorkflowPhaseID,
@@ -37,6 +38,15 @@ const artifactID = "workflow_artifact_01" as WorkflowArtifactID
 const projectID = "project_01" as ProjectID
 
 describe("workflow command helpers", () => {
+  test("parseAllowedProvidersOption trims comma-separated providers and preserves first unique order", () => {
+    expect(parseAllowedProvidersOption(["anthropic, openai", "openai", " google "])).toEqual([
+      "anthropic",
+      "openai",
+      "google",
+    ])
+    expect(parseAllowedProvidersOption(" , ")).toBeUndefined()
+  })
+
   test("formats template list with tags", () => {
     const output = formatWorkflowTemplateList([
       {

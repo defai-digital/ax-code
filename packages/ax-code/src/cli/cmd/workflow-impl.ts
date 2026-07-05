@@ -26,6 +26,7 @@ import {
   type WorkflowEvalCaseID,
   type WorkflowEvalCaseRunSummary,
 } from "../../workflow/eval-corpus"
+import { uniqueStrings } from "../../util/string-list"
 
 type JsonOption = {
   json?: boolean
@@ -738,7 +739,7 @@ function modelPolicyFromStartOptions(
   return Object.keys(modelPolicy).length > 0 ? modelPolicy : undefined
 }
 
-function parseAllowedProvidersOption(input: unknown): string[] | undefined {
+export function parseAllowedProvidersOption(input: unknown): string[] | undefined {
   const values = input === undefined ? [] : Array.isArray(input) ? input : [input]
   const providers = values.flatMap((value) => {
     if (typeof value !== "string") throw new Error("Workflow allowed providers must be provider ID strings.")
@@ -747,7 +748,7 @@ function parseAllowedProvidersOption(input: unknown): string[] | undefined {
       .map((provider) => provider.trim())
       .filter(Boolean)
   })
-  const unique = [...new Set(providers)]
+  const unique = uniqueStrings(providers)
   return unique.length > 0 ? unique : undefined
 }
 
