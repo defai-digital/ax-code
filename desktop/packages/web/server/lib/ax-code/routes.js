@@ -6,6 +6,12 @@ import os from "os"
 import path from "path"
 
 const PROMPT_ASYNC_IDEMPOTENCY_TTL_MS = 2 * 60 * 1000
+const PROVIDER_AUTH_SCOPES = new Set(["auth", "user", "project", "custom", "all"])
+
+const normalizeProviderAuthScope = (scope) => {
+  if (typeof scope !== "string") return "auth"
+  return PROVIDER_AUTH_SCOPES.has(scope) ? scope : null
+}
 
 export const registerAxCodeRoutes = (app, dependencies) => {
   const {
@@ -510,39 +516,33 @@ export const registerAxCodeRoutes = (app, dependencies) => {
         return res.status(400).json({ error: "Provider ID is required" })
       }
 
-      const scope = typeof req.query?.scope === "string" ? req.query.scope : "auth"
+      const scope = normalizeProviderAuthScope(req.query?.scope)
+      if (!scope) {
+        return res.status(400).json({ error: "Invalid scope" })
+      }
       const headerDirectory = typeof req.get === "function" ? req.get("x-ax-code-directory") : null
       const queryDirectory = Array.isArray(req.query?.directory) ? req.query.directory[0] : req.query?.directory
       const requestedDirectory = headerDirectory || queryDirectory || null
-      let directory = null
-
-      if (scope === "project" || requestedDirectory) {
-        const resolved = await resolveProjectDirectory(req)
-        if (!resolved.directory) {
-          return res.status(400).json({ error: resolved.error })
-        }
-        directory = resolved.directory
-      } else {
-        const resolved = await resolveProjectDirectory(req)
-        if (resolved.directory) {
-          directory = resolved.directory
-        }
+      const resolved = await resolveProjectDirectory(req)
+      if ((scope === "project" || requestedDirectory) && !resolved.directory) {
+        return res.status(400).json({ error: resolved.error })
       }
+      const directory = resolved.directory || null
 
-      let removed = false
-      if (scope === "auth") {
-        removed = await removeProviderAuthViaApi(providerId)
-      } else if (scope === "user" || scope === "project" || scope === "custom") {
-        removed = removeProviderConfig(providerId, directory, scope)
-      } else if (scope === "all") {
-        const authRemoved = await removeProviderAuthViaApi(providerId)
-        const userRemoved = removeProviderConfig(providerId, directory, "user")
-        const projectRemoved = directory ? removeProviderConfig(providerId, directory, "project") : false
-        const customRemoved = removeProviderConfig(providerId, directory, "custom")
-        removed = authRemoved || userRemoved || projectRemoved || customRemoved
-      } else {
-        return res.status(400).json({ error: "Invalid scope" })
+      const removeByScope = {
+        auth: () => removeProviderAuthViaApi(providerId),
+        user: () => removeProviderConfig(providerId, directory, "user"),
+        project: () => removeProviderConfig(providerId, directory, "project"),
+        custom: () => removeProviderConfig(providerId, directory, "custom"),
+        all: async () => {
+          const authRemoved = await removeProviderAuthViaApi(providerId)
+          const userRemoved = removeProviderConfig(providerId, directory, "user")
+          const projectRemoved = directory ? removeProviderConfig(providerId, directory, "project") : false
+          const customRemoved = removeProviderConfig(providerId, directory, "custom")
+          return authRemoved || userRemoved || projectRemoved || customRemoved
+        },
       }
+      const removed = await removeByScope[scope]()
 
       let reload = null
       if (removed) {
