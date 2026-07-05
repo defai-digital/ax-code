@@ -2,46 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import path from "path"
 
 import { registerSessionFoldersRoutes } from "./routes.js"
-
-const createRouteRegistry = () => {
-  const routes = new Map()
-
-  return {
-    app: {
-      get(routePath, handler) {
-        routes.set(`GET ${routePath}`, handler)
-      },
-      post(routePath, handler) {
-        routes.set(`POST ${routePath}`, handler)
-      },
-    },
-    getRoute(method, routePath) {
-      return routes.get(`${method} ${routePath}`)
-    },
-  }
-}
-
-const createMockResponse = () => {
-  let statusCode = 200
-  let body = null
-
-  return {
-    status(code) {
-      statusCode = code
-      return this
-    },
-    json(payload) {
-      body = payload
-      return this
-    },
-    get statusCode() {
-      return statusCode
-    },
-    get body() {
-      return body
-    },
-  }
-}
+import { createMockResponse, createRouteRegistry } from "../../test-helpers/route-harness.js"
 
 describe("session folders routes", () => {
   it("uses unique temp files for concurrent saves", async () => {

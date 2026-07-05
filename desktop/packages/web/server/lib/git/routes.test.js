@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { createMockResponse, createRouteRegistry } from "../../test-helpers/route-harness.js"
 
 const gitLibraries = {
   stageFiles: vi.fn(),
@@ -11,52 +12,6 @@ vi.doMock("./index.js", () => ({
 }))
 
 const { registerGitRoutes } = await import("./routes.js")
-
-const createRouteRegistry = () => {
-  const routes = new Map()
-
-  return {
-    app: {
-      get(routePath, handler) {
-        routes.set(`GET ${routePath}`, handler)
-      },
-      post(routePath, handler) {
-        routes.set(`POST ${routePath}`, handler)
-      },
-      put(routePath, handler) {
-        routes.set(`PUT ${routePath}`, handler)
-      },
-      delete(routePath, handler) {
-        routes.set(`DELETE ${routePath}`, handler)
-      },
-    },
-    getRoute(method, routePath) {
-      return routes.get(`${method} ${routePath}`)
-    },
-  }
-}
-
-const createMockResponse = () => {
-  let statusCode = 200
-  let body = null
-
-  return {
-    status(code) {
-      statusCode = code
-      return this
-    },
-    json(payload) {
-      body = payload
-      return this
-    },
-    get statusCode() {
-      return statusCode
-    },
-    get body() {
-      return body
-    },
-  }
-}
 
 describe("git routes index mutations", () => {
   beforeEach(() => {
