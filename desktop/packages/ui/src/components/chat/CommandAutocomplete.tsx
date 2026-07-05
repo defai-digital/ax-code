@@ -7,6 +7,7 @@ import { useSkillsStore } from "@/stores/useSkillsStore"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
+import { buildBuiltInCommands } from "./CommandAutocompleteCommands"
 
 type CommandSource = "openchamber" | "ax-code" | "skill"
 
@@ -127,128 +128,12 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             scope: skill.scope,
           }))
 
-          const builtInCommands: CommandInfo[] = [
-            ...(hasSession && !hasMessagesInCurrentSession
-              ? [
-                  {
-                    id: "openchamber:init",
-                    name: "init",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.initDescription"),
-                    isBuiltIn: true,
-                  },
-                ]
-              : []),
-            ...(hasSession // Show when session exists, not when hasMessages
-              ? [
-                  {
-                    id: "openchamber:undo",
-                    name: "undo",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.undoDescription"),
-                    isBuiltIn: true,
-                  },
-                  {
-                    id: "openchamber:redo",
-                    name: "redo",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.redoDescription"),
-                    isBuiltIn: true,
-                  },
-                  {
-                    id: "openchamber:timeline",
-                    name: "timeline",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.timelineDescription"),
-                    isBuiltIn: true,
-                  },
-                ]
-              : []),
-            {
-              id: "openchamber:compact",
-              name: "compact",
-              source: "openchamber" as const,
-              description: t("chat.commandAutocomplete.command.compactDescription"),
-              isBuiltIn: true,
-            },
-            ...(hasSession
-              ? [
-                  {
-                    id: "openchamber:summary",
-                    name: "summary",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.summaryDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:workspace-review",
-                    name: "workspace-review",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.workspaceReviewDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:plan-feature",
-                    name: "plan-feature",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.featurePlanDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:catch-up",
-                    name: "catch-up",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.catchUpDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:debug",
-                    name: "debug",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.debugDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:weigh",
-                    name: "weigh",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.weighDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:explore",
-                    name: "explore",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.exploreDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-          ]
+          const builtInCommands = buildBuiltInCommands({
+            hasSession,
+            hasMessagesInCurrentSession,
+            canStartSessionCommand,
+            t,
+          })
           const allCommands = [...builtInCommands, ...customCommands, ...skillCommands]
 
           const allowInitCommand = !hasMessagesInCurrentSession
@@ -272,128 +157,12 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
           setCommands(filtered)
         } catch {
           const allowInitCommand = !hasMessagesInCurrentSession
-          const builtInCommands: CommandInfo[] = [
-            ...(hasSession && !hasMessagesInCurrentSession
-              ? [
-                  {
-                    id: "openchamber:init",
-                    name: "init",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.initDescription"),
-                    isBuiltIn: true,
-                  },
-                ]
-              : []),
-            ...(hasSession // Show when session exists, not when hasMessages
-              ? [
-                  {
-                    id: "openchamber:undo",
-                    name: "undo",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.undoDescription"),
-                    isBuiltIn: true,
-                  },
-                  {
-                    id: "openchamber:redo",
-                    name: "redo",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.redoDescription"),
-                    isBuiltIn: true,
-                  },
-                  {
-                    id: "openchamber:timeline",
-                    name: "timeline",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.timelineDescription"),
-                    isBuiltIn: true,
-                  },
-                ]
-              : []),
-            {
-              id: "openchamber:compact",
-              name: "compact",
-              source: "openchamber" as const,
-              description: t("chat.commandAutocomplete.command.compactDescription"),
-              isBuiltIn: true,
-            },
-            ...(hasSession
-              ? [
-                  {
-                    id: "openchamber:summary",
-                    name: "summary",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.summaryDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:workspace-review",
-                    name: "workspace-review",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.workspaceReviewDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:plan-feature",
-                    name: "plan-feature",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.featurePlanDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:catch-up",
-                    name: "catch-up",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.catchUpDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:debug",
-                    name: "debug",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.debugDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:weigh",
-                    name: "weigh",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.weighDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-            ...(canStartSessionCommand
-              ? [
-                  {
-                    id: "openchamber:explore",
-                    name: "explore",
-                    source: "openchamber" as const,
-                    description: t("chat.commandAutocomplete.command.exploreDescription"),
-                    isOpenChamber: true,
-                  },
-                ]
-              : []),
-          ]
+          const builtInCommands = buildBuiltInCommands({
+            hasSession,
+            hasMessagesInCurrentSession,
+            canStartSessionCommand,
+            t,
+          })
 
           const filtered = (
             searchQuery
