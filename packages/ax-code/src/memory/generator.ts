@@ -14,6 +14,7 @@ import {
   packageJsonStringMap,
   parsePackageJsonObject,
 } from "@/util/package-json"
+import { uniqueStrings } from "@/util/string-list"
 
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
@@ -47,7 +48,7 @@ export function decodeMemoryPackageJsonValue(value: unknown): MemoryPackageJsonI
     scripts,
     dependencies,
     devDependencies,
-    allDependencies: [...new Set([...dependencies, ...devDependencies])],
+    allDependencies: uniqueStrings([...dependencies, ...devDependencies]),
   }
 }
 
