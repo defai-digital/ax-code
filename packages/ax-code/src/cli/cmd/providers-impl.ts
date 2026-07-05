@@ -333,8 +333,6 @@ export const ProvidersAxEngineCommand = cmd({
   async handler(args) {
     const prompts = await import("@clack/prompts")
     const {
-      AX_ENGINE_MODEL_IDS,
-      AX_ENGINE_QUANTIZATION_IDS,
       getAxEngineStatus,
       installAxEngineBinary,
       normalizeModelID,

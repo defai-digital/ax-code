@@ -15,7 +15,6 @@ import { Lock } from "../../util/lock"
 import { Bus } from "../../bus"
 import { isRecord } from "../../util/record"
 import { Permission } from "../../permission"
-import { Log } from "../../util/log"
 import { parseJsonPayload } from "../../util/json-value"
 import { toErrorMessage } from "../../util/error-message"
 import { parseShellArgs } from "../../util/shell-args"
@@ -25,7 +24,6 @@ import { parseShellArgs } from "../../util/shell-args"
 // ceiling Cursor users hit (~40 across all servers) — we warn earlier to
 // give users room to deny rules before hitting it.
 const TOOL_COUNT_WARN_THRESHOLD = 30
-const log = Log.create({ service: "cli.mcp" })
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {

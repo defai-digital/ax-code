@@ -419,7 +419,6 @@ export const SessionListCommand = cmd({
   handler: async (args) => {
     const { Session } = await import("../../../session")
     const { Process } = await import("../../../util/process")
-    const { ProjectIdentity } = await import("../../../project/project-identity")
     await bootstrap(process.cwd(), async () => {
       const sessions = [...Session.list({ roots: true, limit: args.maxCount })]
 
