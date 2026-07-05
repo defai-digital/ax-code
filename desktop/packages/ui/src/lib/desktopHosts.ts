@@ -72,7 +72,7 @@ export const redactSensitiveUrl = (raw: string): string => {
       url.password = ""
     }
 
-    const keys = Array.from(new Set(Array.from(url.searchParams.keys())))
+    const keys = Array.from(new Set(url.searchParams.keys()))
     for (const key of keys) {
       if (SENSITIVE_QUERY_KEY.test(key)) {
         url.searchParams.set(key, "[REDACTED]")
