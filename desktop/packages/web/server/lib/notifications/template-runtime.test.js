@@ -84,6 +84,25 @@ describe("notification template variables", () => {
     })
   })
 
+  it("formats numeric model version pairs consistently", async () => {
+    const runtime = createRuntime()
+
+    await expect(
+      runtime.buildTemplateVariables(
+        {
+          properties: {
+            info: {
+              modelID: "glm-5-1-air",
+            },
+          },
+        },
+        "ses_test",
+      ),
+    ).resolves.toMatchObject({
+      model_name: "Glm 5.1 Air",
+    })
+  })
+
   it("falls back to default agent and model labels", async () => {
     const runtime = createRuntime()
 

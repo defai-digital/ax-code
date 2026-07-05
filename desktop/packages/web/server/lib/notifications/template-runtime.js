@@ -1,4 +1,9 @@
 import { summarizeText as summarizeSharedText } from "../text/summarization.js"
+import {
+  formatNotificationModeLabel,
+  formatNotificationModelLabel,
+  formatNotificationProjectLabel,
+} from "./label-format.js"
 
 export const createNotificationTemplateRuntime = (deps) => {
   const { readSettingsFromDisk, buildAxCodeUrl, getAxCodeAuthHeaders, resolveGitBinaryForSpawn } = deps
@@ -18,21 +23,6 @@ export const createNotificationTemplateRuntime = (deps) => {
       signal: controller.signal,
       cleanup: () => clearTimeout(timer),
     }
-  }
-
-  const formatProjectLabel = (label) => {
-    if (!label || typeof label !== "string") return ""
-    return label.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())
-  }
-
-  const formatTokenLabel = (value, separatorPattern, fallback) => {
-    const normalized = typeof value === "string" ? value.trim() : ""
-    if (!normalized) return fallback
-    return normalized
-      .split(separatorPattern)
-      .filter(Boolean)
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-      .join(" ")
   }
 
   const resolveNotificationTemplate = (template, variables) => {
@@ -249,14 +239,12 @@ export const createNotificationTemplateRuntime = (deps) => {
       }
     }
 
-    const agentName = formatTokenLabel(
+    const agentName = formatNotificationModeLabel(
       typeof info.agent === "string" && info.agent.trim().length > 0
         ? info.agent
         : typeof info.mode === "string"
           ? info.mode
           : "",
-      /[-_\s]+/,
-      "Agent",
     )
 
     const modelName = (() => {
@@ -266,7 +254,7 @@ export const createNotificationTemplateRuntime = (deps) => {
           : typeof info.model?.modelID === "string"
             ? info.model.modelID.trim()
             : ""
-      return formatTokenLabel(raw, /[-_]+/, "Assistant")
+      return formatNotificationModelLabel(raw)
     })()
 
     let projectName = ""
@@ -330,7 +318,7 @@ export const createNotificationTemplateRuntime = (deps) => {
     }
 
     return {
-      project_name: formatProjectLabel(projectName),
+      project_name: formatNotificationProjectLabel(projectName),
       worktree: worktreeDir,
       branch: typeof branch === "string" ? branch.trim() : "",
       session_name: sessionTitle,
@@ -345,7 +333,7 @@ export const createNotificationTemplateRuntime = (deps) => {
 
   return {
     createTimeoutSignal,
-    formatProjectLabel,
+    formatProjectLabel: formatNotificationProjectLabel,
     resolveNotificationTemplate,
     shouldApplyResolvedTemplateMessage,
     fetchFreeZenModels,

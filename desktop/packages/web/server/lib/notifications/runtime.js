@@ -1,3 +1,5 @@
+import { formatNotificationModeLabel, formatNotificationModelLabel } from "./label-format.js"
+
 export const createNotificationTriggerRuntime = (deps) => {
   const {
     readSettingsFromDisk,
@@ -141,36 +143,6 @@ export const createNotificationTriggerRuntime = (deps) => {
     return typeof sessionId === "string" && sessionId.length > 0 ? sessionId : null
   }
 
-  const titleCaseTokens = (tokens) => tokens.map((token) => token.charAt(0).toUpperCase() + token.slice(1)).join(" ")
-
-  const formatMode = (raw) => {
-    const value = typeof raw === "string" ? raw.trim() : ""
-    const normalized = value.length > 0 ? value : "agent"
-    return titleCaseTokens(normalized.split(/[-_\s]+/).filter(Boolean))
-  }
-
-  const formatModelId = (raw) => {
-    const value = typeof raw === "string" ? raw.trim() : ""
-    if (!value) {
-      return "Assistant"
-    }
-
-    const tokens = value.split(/[-_]+/).filter(Boolean)
-    const result = []
-    for (let i = 0; i < tokens.length; i += 1) {
-      const current = tokens[i]
-      const next = tokens[i + 1]
-      if (/^\d+$/.test(current) && next && /^\d+$/.test(next)) {
-        result.push(`${current}.${next}`)
-        i += 1
-        continue
-      }
-      result.push(current)
-    }
-
-    return titleCaseTokens(result)
-  }
-
   const maybeDispatchNotificationForTrigger = async (payload) => {
     if (!payload || typeof payload !== "object") {
       return
@@ -208,8 +180,8 @@ export const createNotificationTriggerRuntime = (deps) => {
         }
         lastReadyNotificationAt.set(sessionId, now)
 
-        let title = `${formatMode(info?.mode)} agent is ready`
-        let body = `${formatModelId(info?.modelID)} completed the task`
+        let title = `${formatNotificationModeLabel(info?.mode)} agent is ready`
+        let body = `${formatNotificationModelLabel(info?.modelID)} completed the task`
 
         try {
           const templates = settings.notificationTemplates || {}
