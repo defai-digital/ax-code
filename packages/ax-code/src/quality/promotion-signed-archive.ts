@@ -9,7 +9,7 @@ import { QualityPromotionPackagedArchive } from "./promotion-packaged-archive"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionSignedArchive {
   export const SignatureAlgorithm = z.literal("hmac-sha256")
@@ -286,13 +286,10 @@ export namespace QualityPromotionSignedArchive {
     archives: ArchiveArtifact[] = [],
   ) {
     const persisted = (await list(promotion.source)).filter((archive) => matchesPromotion(promotion, archive))
-    const deduped = new Map<string, ArchiveArtifact>()
-    for (const archive of [...persisted, ...archives]) {
-      if (!matchesPromotion(promotion, archive)) continue
-      if (verify(archive).length > 0) continue
-      deduped.set(archive.signedArchiveID, archive)
-    }
-    return sortArchives([...deduped.values()])
+    const validArchives = [...persisted, ...archives].filter(
+      (archive) => matchesPromotion(promotion, archive) && verify(archive).length === 0,
+    )
+    return sortArchives(uniqueBy(validArchives, (archive) => archive.signedArchiveID))
   }
 
   export async function get(input: { source: string; signedArchiveID: string }) {

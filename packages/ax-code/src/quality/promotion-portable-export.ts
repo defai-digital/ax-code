@@ -8,7 +8,7 @@ import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionPortableExport {
   export const File = z.object({
@@ -256,13 +256,10 @@ export namespace QualityPromotionPortableExport {
     const persisted = (await list(promotion.source)).filter((exportArtifact) =>
       matchesPromotion(promotion, exportArtifact),
     )
-    const deduped = new Map<string, ExportArtifact>()
-    for (const exportArtifact of [...persisted, ...exports]) {
-      if (!matchesPromotion(promotion, exportArtifact)) continue
-      if (verify(exportArtifact).length > 0) continue
-      deduped.set(exportArtifact.exportID, exportArtifact)
-    }
-    return sortExports([...deduped.values()])
+    const validExports = [...persisted, ...exports].filter(
+      (exportArtifact) => matchesPromotion(promotion, exportArtifact) && verify(exportArtifact).length === 0,
+    )
+    return sortExports(uniqueBy(validExports, (exportArtifact) => exportArtifact.exportID))
   }
 
   export async function get(input: { source: string; exportID: string }) {

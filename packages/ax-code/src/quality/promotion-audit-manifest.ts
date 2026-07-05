@@ -5,7 +5,7 @@ import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decis
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionAuditManifest {
   export const PromotionSnapshot = z.object({
@@ -295,13 +295,10 @@ export namespace QualityPromotionAuditManifest {
 
   export async function resolveForPromotion(promotion: PromotionSnapshot, manifests: ManifestArtifact[] = []) {
     const persisted = (await list(promotion.source)).filter((manifest) => matchesPromotion(promotion, manifest))
-    const deduped = new Map<string, ManifestArtifact>()
-    for (const manifest of [...persisted, ...manifests]) {
-      if (!matchesPromotion(promotion, manifest)) continue
-      if (verify(manifest.releasePacket, manifest).length > 0) continue
-      deduped.set(manifest.manifestID, manifest)
-    }
-    return sortManifests([...deduped.values()])
+    const validManifests = [...persisted, ...manifests].filter(
+      (manifest) => matchesPromotion(promotion, manifest) && verify(manifest.releasePacket, manifest).length === 0,
+    )
+    return sortManifests(uniqueBy(validManifests, (manifest) => manifest.manifestID))
   }
 
   export async function get(input: { source: string; manifestID: string }) {
