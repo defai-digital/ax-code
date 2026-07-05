@@ -11,6 +11,7 @@ import { MessageV2 } from "../../session/message-v2"
 import { SessionVerifications } from "../../session/verifications"
 import { Database, NotFoundError, and, eq, inArray } from "../../storage/db"
 import { Log } from "../../util/log"
+import { uniqueItems } from "../../util/string-list"
 import { compactWorkflowArtifact, defaultWorkflowArtifactRedaction } from "../artifact"
 import { classifyWorkflowFindingArtifact, evaluateWorkflowRun, type WorkflowEvalFindingStatus } from "../eval"
 import {
@@ -233,7 +234,7 @@ export function touchRun(db: Database.TxOrDb, runID: WorkflowRunID, now: number)
 }
 
 export function unique<T>(items: T[]): T[] {
-  return [...new Set(items)]
+  return uniqueItems(items)
 }
 
 export function uniqueEvidenceRefs(items: WorkflowChildRecord["evidenceRefs"]): WorkflowChildRecord["evidenceRefs"] {
@@ -319,7 +320,9 @@ export function publishVerificationAttached(run: WorkflowRunState.Info, envelope
 
 function publishRunStatusChanged(run: WorkflowRunState.Info, previousStatus: WorkflowRunState.Status) {
   if (run.status === "running") {
-    Bus.publishDetached(previousStatus === "paused" ? WorkflowRunState.Event.Resumed : WorkflowRunState.Event.Started, { run })
+    Bus.publishDetached(previousStatus === "paused" ? WorkflowRunState.Event.Resumed : WorkflowRunState.Event.Started, {
+      run,
+    })
     return
   }
   if (run.status === "blocked") Bus.publishDetached(WorkflowRunState.Event.Blocked, { run })
