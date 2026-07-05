@@ -105,7 +105,10 @@ function htmlToMarkdownText(value: string): string {
 
     output += remaining.slice(0, start)
     const end = remaining.indexOf(">", start + 1)
-    if (end === -1) break
+    if (end === -1) {
+      output += remaining.slice(start)
+      break
+    }
     output += markdownForTag(remaining.slice(start + 1, end))
     remaining = remaining.slice(end + 1)
   }

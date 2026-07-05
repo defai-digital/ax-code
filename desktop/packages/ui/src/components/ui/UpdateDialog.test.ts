@@ -29,6 +29,12 @@ describe("normalizeReleaseNotesForMarkdown", () => {
       ),
     ).toBe("## Safe\n\nDone")
   })
+
+  test("preserves trailing text after an unterminated tag-like fragment", () => {
+    expect(normalizeReleaseNotesForMarkdown("<p>Fixed comparisons like a < b and trailing <note")).toBe(
+      "Fixed comparisons like a < b and trailing <note",
+    )
+  })
 })
 
 describe("buildUpdateReleaseUrl", () => {
