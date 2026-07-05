@@ -18,6 +18,7 @@ import { hasSelectableProviderModel, isProviderModelSelectable } from "@/lib/pro
 import type { ProviderModel, ProviderWithModelList } from "@/types/providerModels"
 import { API_ENDPOINTS } from "@/lib/http"
 import { withTimeout } from "@/lib/asyncTimeout"
+import { isRecord } from "@/lib/record"
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json"
 const MODELS_DEV_PROXY_URL = API_ENDPOINTS.openchamber.modelsMetadata
@@ -199,8 +200,6 @@ interface ModelsDevProviderEntry {
   id?: string
   models?: Record<string, ModelsDevModelEntry | undefined>
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string")
