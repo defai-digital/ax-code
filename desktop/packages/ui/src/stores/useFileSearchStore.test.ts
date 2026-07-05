@@ -151,6 +151,19 @@ describe("useFileSearchStore", () => {
     expect(cacheEntries[0]?.files).toEqual([{ path: "/project-other/src/fresh.ts" }])
   })
 
+  test("normalizes Windows search directory cache keys for invalidation", async () => {
+    const searchPromise = useFileSearchStore.getState().searchFiles("c:\\Repo\\src\\", "foo")
+    searchRequests[0].resolve([{ path: "C:/Repo/src/file.ts" }])
+    await searchPromise
+
+    expect(Object.keys(useFileSearchStore.getState().cache)).toHaveLength(1)
+
+    useFileSearchStore.getState().invalidateDirectory("C:/Repo/")
+
+    expect(useFileSearchStore.getState().cache).toEqual({})
+    expect(useFileSearchStore.getState().cacheKeys).toEqual([])
+  })
+
   test("invalidates absolute descendant cache entries from the filesystem root", async () => {
     const searchPromise = useFileSearchStore.getState().searchFiles("/project/src", "foo")
     searchRequests[0].resolve([{ path: "/project/src/stale.ts" }])

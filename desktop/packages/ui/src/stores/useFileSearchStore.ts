@@ -8,18 +8,13 @@ import {
   isTauriShell,
   recordDesktopStartupEvent,
 } from "@/lib/desktop"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 
 const CACHE_TTL_MS = 30_000
 const MAX_CACHE_ENTRIES = 40
 const DEFAULT_SEARCH_LIMIT = 60
 
-const normalizeSearchDirectory = (input: string): string => {
-  const normalized = input.trim().replace(/\\/g, "/")
-  if (normalized.length > 1) {
-    return normalized.replace(/\/+$/, "")
-  }
-  return normalized
-}
+const normalizeSearchDirectory = (input: string): string => normalizeProjectPath(input) ?? ""
 
 const normalizeSearchQuery = (input: string): string => input.trim().toLowerCase()
 
@@ -205,7 +200,7 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
           return
         }
 
-        const normalizedDirectory = directory.trim()
+        const normalizedDirectory = normalizeSearchDirectory(directory)
 
         set((state) => {
           const nextCache = { ...state.cache }
