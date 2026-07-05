@@ -1,5 +1,7 @@
 export const createHmrStateRuntime = (dependencies) => {
   const { globalThisLike, os, processLike, stateKey } = dependencies
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+  const asNonEmptyString = (value) => asTrimmedString(value) || null
 
   const getOrCreateHmrState = () => {
     if (!globalThisLike[stateKey]) {
@@ -21,27 +23,14 @@ export const createHmrStateRuntime = (dependencies) => {
     if (typeof hmrState.userProvidedAxCodePassword !== "undefined") {
       return
     }
-    const initialPassword =
-      typeof processLike.env.AX_CODE_SERVER_PASSWORD === "string" ? processLike.env.AX_CODE_SERVER_PASSWORD.trim() : ""
-    hmrState.userProvidedAxCodePassword = initialPassword || null
+    hmrState.userProvidedAxCodePassword = asNonEmptyString(processLike.env.AX_CODE_SERVER_PASSWORD)
   }
 
-  const getUserProvidedAxCodePassword = (hmrState) =>
-    typeof hmrState.userProvidedAxCodePassword === "string" && hmrState.userProvidedAxCodePassword.length > 0
-      ? hmrState.userProvidedAxCodePassword
-      : null
+  const getUserProvidedAxCodePassword = (hmrState) => asNonEmptyString(hmrState.userProvidedAxCodePassword)
 
   const resolveAxCodeAuthFromState = ({ hmrState, userProvidedAxCodePassword }) => ({
-    axCodeAuthPassword:
-      typeof hmrState.axCodeAuthPassword === "string" && hmrState.axCodeAuthPassword.length > 0
-        ? hmrState.axCodeAuthPassword
-        : userProvidedAxCodePassword,
-    axCodeAuthSource:
-      typeof hmrState.axCodeAuthSource === "string" && hmrState.axCodeAuthSource.length > 0
-        ? hmrState.axCodeAuthSource
-        : userProvidedAxCodePassword
-          ? "user-env"
-          : null,
+    axCodeAuthPassword: asNonEmptyString(hmrState.axCodeAuthPassword) || userProvidedAxCodePassword,
+    axCodeAuthSource: asNonEmptyString(hmrState.axCodeAuthSource) || (userProvidedAxCodePassword ? "user-env" : null),
   })
 
   const syncStateFromRuntime = (hmrState, runtime) => {
