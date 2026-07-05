@@ -37,6 +37,8 @@ const isPortInUseError = (error: unknown): boolean => {
   )
 }
 
+const remoteInstanceKey = (instance: DesktopSshInstance): string => JSON.stringify(instance)
+
 const phaseLabelKey = (phase?: string): I18nKey => {
   switch (phase) {
     case "config_resolved":
@@ -342,7 +344,7 @@ export const RemoteInstancesPage: React.FC = () => {
 
   const hasChanges = React.useMemo(() => {
     if (!draft || !selectedInstance) return false
-    return JSON.stringify(draft) !== JSON.stringify(selectedInstance)
+    return remoteInstanceKey(draft) !== remoteInstanceKey(selectedInstance)
   }, [draft, selectedInstance])
 
   const updateDraft = React.useCallback((updater: (current: DesktopSshInstance) => DesktopSshInstance) => {
