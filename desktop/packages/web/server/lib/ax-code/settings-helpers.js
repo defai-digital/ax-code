@@ -10,6 +10,7 @@ export const createSettingsHelpers = (dependencies) => {
   } = dependencies
 
   const nonEmptyStrings = (values) => values.filter((value) => typeof value === "string" && value.length > 0)
+  const uniqueNonEmptyStrings = (values) => Array.from(new Set(nonEmptyStrings(values)))
 
   const normalizePathStringArray = (values) =>
     normalizeStringArray(
@@ -553,8 +554,8 @@ export const createSettingsHelpers = (dependencies) => {
     const next = {
       ...current,
       ...changes,
-      approvedDirectories: Array.from(new Set(nonEmptyStrings(approvedSource))),
-      securityScopedBookmarks: Array.from(new Set(nonEmptyStrings(baseBookmarks))),
+      approvedDirectories: uniqueNonEmptyStrings(approvedSource),
+      securityScopedBookmarks: uniqueNonEmptyStrings(baseBookmarks),
       typographySizes: nextTypographySizes,
     }
 

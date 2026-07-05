@@ -131,4 +131,25 @@ describe("settings helpers", () => {
       pinnedDirectories: ["/real/pinned"],
     })
   })
+
+  it("deduplicates merged approved directories and security scoped bookmarks with the shared string filter", () => {
+    const helpers = createTestHelpers()
+
+    expect(
+      helpers.mergePersistedSettings(
+        {
+          approvedDirectories: ["/repo", "", null, "/repo"],
+          securityScopedBookmarks: ["bookmark-a", "", undefined, "bookmark-a"],
+        },
+        {
+          lastDirectory: "/repo",
+          homeDirectory: "/home/user",
+          projects: [{ path: "/project" }, { path: "" }, null],
+        },
+      ),
+    ).toMatchObject({
+      approvedDirectories: ["/repo", "/home/user", "/project"],
+      securityScopedBookmarks: ["bookmark-a"],
+    })
+  })
 })
