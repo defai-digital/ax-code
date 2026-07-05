@@ -1,3 +1,4 @@
+import { uniqueSortedStrings } from "@/util/string-list"
 import type { QualityPromotionEligibility } from "./promotion-eligibility"
 import { normalizeApprovalReportingChain, normalizeApprovalTeam } from "./promotion-approval-policy-contract"
 
@@ -54,20 +55,16 @@ export function sortRollbackRecords<T extends RegistryRollbackRecord>(records: r
   return [...records].sort((a, b) => a.rolledBackAt.localeCompare(b.rolledBackAt) || a.source.localeCompare(b.source))
 }
 
-function uniqueSorted(values: Iterable<string>) {
-  return [...new Set(values)].sort()
-}
-
 function approvalList(promotion: RegistryPromotionRecord) {
   return [...(promotion.approvals ?? []), ...(promotion.approval ? [promotion.approval] : [])]
 }
 
 export function promotionApprovers(promotion: RegistryPromotionRecord) {
-  return uniqueSorted(approvalList(promotion).map((approval) => approval.approver))
+  return uniqueSortedStrings(approvalList(promotion).map((approval) => approval.approver))
 }
 
 export function promotionTeams(promotion: RegistryPromotionRecord) {
-  return uniqueSorted(
+  return uniqueSortedStrings(
     approvalList(promotion)
       .map((approval) => normalizeRegistryTeam(approval.team))
       .filter((value): value is string => value !== null),
@@ -75,7 +72,7 @@ export function promotionTeams(promotion: RegistryPromotionRecord) {
 }
 
 export function promotionReportingChains(promotion: RegistryPromotionRecord) {
-  return uniqueSorted(
+  return uniqueSortedStrings(
     approvalList(promotion)
       .map((approval) => normalizeRegistryReportingChain(approval.reportingChain))
       .filter((value): value is string => value !== null),

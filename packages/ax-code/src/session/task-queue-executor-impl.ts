@@ -6,6 +6,7 @@ import { Question } from "@/question"
 import { EventQuery } from "@/replay/query"
 import { Log } from "@/util/log"
 import { KeyedSerialQueue } from "@/util/queue"
+import { uniqueSortedStrings } from "@/util/string-list"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { SessionPrompt } from "./prompt"
@@ -136,10 +137,6 @@ function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[
 
 function uniqueValues<T>(values: T[]): T[] {
   return Array.from(new Set(values))
-}
-
-function uniqueSortedStrings(values: string[]): string[] {
-  return uniqueValues(values).sort()
 }
 
 async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecution) {
