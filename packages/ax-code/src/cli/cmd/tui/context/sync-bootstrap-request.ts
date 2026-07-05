@@ -1,4 +1,4 @@
-import type { OpencodeClient } from "@ax-code/sdk/v2"
+import type { AxCodeClient } from "@ax-code/sdk/v2"
 import { isRecord } from "@/util/record"
 
 export interface TimedBootstrapRequest<T> {
@@ -41,7 +41,7 @@ export function createTimedBootstrapRequests<const T extends Record<string, Time
 }
 
 export type SyncBootstrapRequestClient = Pick<
-  OpencodeClient,
+  AxCodeClient,
   | "app"
   | "command"
   | "config"

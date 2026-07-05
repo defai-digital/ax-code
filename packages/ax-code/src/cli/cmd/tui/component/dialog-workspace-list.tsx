@@ -8,7 +8,7 @@ import { useSDK } from "../context/sdk"
 import { useToast } from "../ui/toast"
 import { useKeybind } from "../context/keybind"
 import { DialogSessionList } from "./workspace/dialog-session-list"
-import { createOpencodeClient } from "@ax-code/sdk/v2"
+import { createAxCodeClient } from "@ax-code/sdk/v2"
 import { setTimeout as sleep } from "node:timers/promises"
 import path from "path"
 import { normalizeDialogSessions } from "./session-list-data"
@@ -32,7 +32,7 @@ async function openWorkspace(input: {
     )
   }
 
-  const client = createOpencodeClient({
+  const client = createAxCodeClient({
     baseUrl: input.sdk.url,
     fetch: input.sdk.fetch,
     directory: input.workspaceID,
@@ -210,7 +210,7 @@ export function DialogWorkspaceList() {
       await open(workspaceID)
       return
     }
-    const client = createOpencodeClient({
+    const client = createAxCodeClient({
       baseUrl: sdk.url,
       fetch: sdk.fetch,
       directory: workspaceID,
@@ -260,7 +260,7 @@ export function DialogWorkspaceList() {
     setCounts(Object.fromEntries(workspaces.map((workspace) => [workspace, undefined])))
     void Promise.all(
       workspaces.map(async (workspace) => {
-        const client = createOpencodeClient({
+        const client = createAxCodeClient({
           baseUrl: sdk.url,
           fetch: sdk.fetch,
           directory: workspace,

@@ -1,4 +1,4 @@
-import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
+import { createAxCodeClient, type Event } from "@ax-code/sdk/v2"
 import { createSimpleContext } from "./helper"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { batch, createSignal, onCleanup, onMount } from "solid-js"
@@ -43,7 +43,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     const [sseConnected, setSseConnected] = createSignal(props.events?.status?.()?.connected ?? false)
 
     function createSDK() {
-      return createOpencodeClient({
+      return createAxCodeClient({
         baseUrl: props.url,
         signal: abort.signal,
         directory: workspaceID() ?? props.directory,
