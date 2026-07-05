@@ -19,6 +19,7 @@ import { Database } from "../storage/db"
 import { DebugPatternTable, type DebugPatternCategory } from "./schema.sql"
 import { DebugPatternID } from "./id"
 import type { ProjectID } from "../project/schema"
+import { uniqueStrings } from "../util/string-list"
 
 const log = Log.create({ service: "debug-engine.pattern-memory" })
 
@@ -310,7 +311,7 @@ function extractKeywords(...texts: string[]): string[] {
   }
 
   // Return unique keywords, capped at 20
-  return [...new Set(words)].slice(0, 20)
+  return uniqueStrings(words).slice(0, 20)
 }
 
 function toGlobPatterns(files: string[]): string[] {
