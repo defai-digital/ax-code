@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest"
 import os from "os"
 import path from "path"
 import { mkdtemp, rm, readFile, writeFile } from "fs/promises"
-import { createProjectConfigRuntime } from "./project-config.js"
+import {
+  MAX_LAST_ERROR_LENGTH,
+  MAX_TASK_NAME_LENGTH,
+  MAX_TASK_PROMPT_LENGTH,
+  createProjectConfigRuntime,
+} from "./project-config.js"
 
 const createRuntime = async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "oc-scheduled-project-config-"))
@@ -71,6 +76,35 @@ describe("project-config runtime", () => {
       })
 
       expect(result.task.schedule.times).toEqual(["09:30", "16:00"])
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("trims and clamps scheduled task string fields", async () => {
+    const { runtime, cleanup } = await createRuntime()
+    try {
+      const result = await runtime.upsertScheduledTask("project-test", {
+        name: ` ${"n".repeat(MAX_TASK_NAME_LENGTH + 8)} `,
+        enabled: true,
+        schedule: {
+          kind: "daily",
+          time: "09:30",
+          timezone: "UTC",
+        },
+        execution: {
+          prompt: ` ${"p".repeat(MAX_TASK_PROMPT_LENGTH + 8)} `,
+          providerID: "openai",
+          modelID: "gpt-4.1",
+        },
+        state: {
+          lastError: ` ${"e".repeat(MAX_LAST_ERROR_LENGTH + 8)} `,
+        },
+      })
+
+      expect(result.task.name).toBe("n".repeat(MAX_TASK_NAME_LENGTH))
+      expect(result.task.execution.prompt).toBe("p".repeat(MAX_TASK_PROMPT_LENGTH))
+      expect(result.task.state.lastError).toBe("e".repeat(MAX_LAST_ERROR_LENGTH))
     } finally {
       await cleanup()
     }

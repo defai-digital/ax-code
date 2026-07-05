@@ -23,6 +23,8 @@ const clampLength = (value, maxLength) => {
   return value.length > maxLength ? value.slice(0, maxLength) : value
 }
 
+const asLimitedString = (value, maxLength) => clampLength(asNonEmptyString(value) || "", maxLength)
+
 const normalizeStatus = (value) => {
   if (value === "running" || value === "success" || value === "error" || value === "idle") {
     return value
@@ -147,7 +149,7 @@ const normalizeSchedule = (value, existingSchedule) => {
     return { kind, date, time, timezone }
   }
 
-  const cron = clampLength(asNonEmptyString(value.cron) || "", MAX_CRON_LENGTH)
+  const cron = asLimitedString(value.cron, MAX_CRON_LENGTH)
   if (!cron) {
     throw new Error("schedule.cron is required for cron schedule")
   }
@@ -164,7 +166,7 @@ const normalizeExecution = (value) => {
     throw new Error("execution is required")
   }
 
-  const prompt = clampLength(asNonEmptyString(value.prompt) || "", MAX_TASK_PROMPT_LENGTH)
+  const prompt = asLimitedString(value.prompt, MAX_TASK_PROMPT_LENGTH)
   const providerID = asNonEmptyString(value.providerID)
   const modelID = asNonEmptyString(value.modelID)
   const variant = asNonEmptyString(value.variant)
@@ -204,8 +206,7 @@ const normalizeState = (value, fallback) => {
       ? Math.max(0, Math.round(source.nextRunAt))
       : undefined
   const lastSessionId = asNonEmptyString(source.lastSessionId)
-  const lastErrorRaw = asNonEmptyString(source.lastError)
-  const lastError = lastErrorRaw ? clampLength(lastErrorRaw, MAX_LAST_ERROR_LENGTH) : undefined
+  const lastError = asLimitedString(source.lastError, MAX_LAST_ERROR_LENGTH)
 
   return {
     createdAt:
@@ -246,7 +247,7 @@ const normalizeTaskForStorage = (value, options) => {
   }
 
   const id = existingId || incomingId || createId()
-  const name = clampLength(asNonEmptyString(value.name) || "", MAX_TASK_NAME_LENGTH)
+  const name = asLimitedString(value.name, MAX_TASK_NAME_LENGTH)
   if (!name) {
     throw new Error("task.name is required")
   }
