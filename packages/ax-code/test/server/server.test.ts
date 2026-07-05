@@ -151,6 +151,22 @@ test("path route still decodes encoded directory headers", async () => {
   expect(body.directory).toBe(target)
 })
 
+test("path route accepts canonical AX Code directory headers", async () => {
+  await using tmp = await tmpdir()
+  const target = path.join(tmp.path, "canonical header")
+  await fs.mkdir(target, { recursive: true })
+
+  const response = await Server.Default().request("/path", {
+    headers: {
+      "x-ax-code-directory": encodeURIComponent(target),
+    },
+  })
+
+  expect(response.status).toBe(200)
+  const body = (await response.json()) as { directory: string }
+  expect(body.directory).toBe(target)
+})
+
 test("path route rejects null byte query directories with 400 instead of 500", async () => {
   await using tmp = await tmpdir()
   const response = await Server.Default().request(`/path?directory=${encodeURIComponent(path.join(tmp.path, "\0bad"))}`)

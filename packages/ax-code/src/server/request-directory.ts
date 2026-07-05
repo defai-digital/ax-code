@@ -3,6 +3,7 @@ import type { Context } from "hono"
 import os from "os"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
+import { AX_CODE_DIRECTORY_HEADER, LEGACY_OPENCODE_DIRECTORY_HEADER } from "@/util/directory-headers"
 import { invalidRequest } from "./error"
 
 const DANGEROUS_ROOTS = new Set([
@@ -25,7 +26,7 @@ const SENSITIVE_HOME_DIRECTORIES = [".ssh", ".gnupg", ".aws", ".azure", ".config
 
 export function requestDirectory(c: Context): string | Response {
   const queryDirectory = c.req.query("directory")
-  const headerDirectory = c.req.header("x-ax-code-directory") || c.req.header("x-opencode-directory")
+  const headerDirectory = c.req.header(AX_CODE_DIRECTORY_HEADER) || c.req.header(LEGACY_OPENCODE_DIRECTORY_HEADER)
   const decoded = (() => {
     if (queryDirectory) return queryDirectory
     const raw = headerDirectory || process.cwd()
