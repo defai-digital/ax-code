@@ -3,6 +3,7 @@ import { EventQuery } from "../../replay/query"
 import { Snapshot } from "../../snapshot"
 import { FindingSchema, type Finding } from "../finding"
 import { asRecordOrUndefined } from "@/util/record"
+import { uniqueStrings } from "@/util/string-list"
 import * as ProbabilisticRolloutReadiness from "../probabilistic-rollout-readiness"
 import * as ProbabilisticRolloutSchema from "../probabilistic-rollout-schema"
 
@@ -114,7 +115,7 @@ export function summarizeDiff(diffs: Snapshot.FileDiff[]) {
 }
 
 export function touchedFiles(diffs: Snapshot.FileDiff[]) {
-  return [...new Set(diffs.map((diff) => diff.file))]
+  return uniqueStrings(diffs.map((diff) => diff.file))
 }
 
 export function collectToolCalls(events: ReturnType<typeof EventQuery.bySessionWithTimestamp>) {
@@ -197,9 +198,7 @@ export function debugMetadataCaseId(metadata: Record<string, unknown> | undefine
 }
 
 export function debugMetadataHypothesisId(metadata: Record<string, unknown> | undefined) {
-  return (
-    stringField(metadata, "hypothesisId") ?? stringField(recordField(metadata, "debugHypothesis"), "hypothesisId")
-  )
+  return stringField(metadata, "hypothesisId") ?? stringField(recordField(metadata, "debugHypothesis"), "hypothesisId")
 }
 
 export function toolCallCommand(call: ToolCall | undefined) {
@@ -284,7 +283,12 @@ export function qaFramework(command: string) {
   return null
 }
 
-export function qaCommandFailed(input: { command: string; status: "completed" | "error"; output: string; error?: string }) {
+export function qaCommandFailed(input: {
+  command: string
+  status: "completed" | "error"
+  output: string
+  error?: string
+}) {
   if (input.status === "error") return true
   if (!isQATestCommand(input.command)) return false
 
@@ -302,7 +306,7 @@ export function qaCommandFailed(input: { command: string; status: "completed" | 
 export function qaRecommendationCommands(runs: QARunExtract[]) {
   const prioritized = runs.filter((run) => run.failed)
   const selected = prioritized.length > 0 ? prioritized : runs
-  return [...new Set(selected.map((run) => run.command.trim()).filter(Boolean))].slice(0, 3)
+  return uniqueStrings(selected.map((run) => run.command.trim()).filter(Boolean)).slice(0, 3)
 }
 
 export function extractQARuns(rows: ReturnType<typeof toolResultRows>, calls: Map<string, ToolCall>): QARunExtract[] {
