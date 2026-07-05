@@ -17,7 +17,7 @@ export const createAxCodeAuthStateRuntime = (dependencies) => {
     return value.trim()
   }
 
-  const isValidAxCodePassword = (password) => typeof password === "string" && password.trim().length > 0
+  const isValidAxCodePassword = (password) => normalizeAxCodePassword(password).length > 0
 
   const generateSecureAxCodePassword = () =>
     crypto.randomBytes(32).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
