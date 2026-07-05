@@ -1,9 +1,10 @@
-import { createHash, createHmac, timingSafeEqual } from "crypto"
+import { createHmac, timingSafeEqual } from "crypto"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
+import { sha256Hex } from "./digest"
 import { QualityPromotionPackagedArchive } from "./promotion-packaged-archive"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -98,7 +99,7 @@ export namespace QualityPromotionSignedArchive {
   }
 
   function digest(input: string) {
-    return createHash("sha256").update(input).digest("hex")
+    return sha256Hex(input)
   }
 
   function sign(payloadDigest: string, keyMaterial: string) {

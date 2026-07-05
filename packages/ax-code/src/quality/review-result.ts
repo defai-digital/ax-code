@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto"
 import z from "zod"
+import { sha256Hex } from "./digest"
 import { FindingSource, FINDING_ID_PATTERN, type Finding } from "./finding"
 import { emptySeverityCounts, type SeverityCounts } from "./finding-counts"
 import { ENVELOPE_ID_PATTERN, type VerificationEnvelope } from "./verification-envelope"
@@ -64,18 +64,15 @@ export function computeReviewResultId(input: {
   findingIds: string[]
   verificationEnvelopeIds: string[]
 }): string {
-  return createHash("sha256")
-    .update(
-      canonicalJSON({
-        sessionID: input.sessionID,
-        decision: input.decision,
-        summary: input.summary,
-        findingIds: [...input.findingIds].sort(),
-        verificationEnvelopeIds: [...input.verificationEnvelopeIds].sort(),
-      }),
-    )
-    .digest("hex")
-    .slice(0, 16)
+  return sha256Hex(
+    canonicalJSON({
+      sessionID: input.sessionID,
+      decision: input.decision,
+      summary: input.summary,
+      findingIds: [...input.findingIds].sort(),
+      verificationEnvelopeIds: [...input.verificationEnvelopeIds].sort(),
+    }),
+  ).slice(0, 16)
 }
 
 export function countSeverities(findings: readonly Finding[]): SeverityCounts {

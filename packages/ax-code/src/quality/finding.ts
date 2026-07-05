@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto"
 import z from "zod"
 import { JsonNumber } from "@/util/schema"
+import { sha256Hex } from "./digest"
 import { ArtifactRefKind, Category, EvidenceRefKind, Severity, Workflow } from "./finding-registry"
 
 export const SeverityEnum = z.enum(Severity)
@@ -71,5 +71,5 @@ export type FindingIdInput = {
 export function computeFindingId(input: FindingIdInput): string {
   const anchorRef = input.anchor.kind === "line" ? `line:${input.anchor.line}` : `symbol:${input.anchor.symbolId}`
   const payload = [input.workflow, input.category, input.file, anchorRef, input.ruleId ?? ""].join("\u0000")
-  return createHash("sha256").update(payload).digest("hex").slice(0, 16)
+  return sha256Hex(payload).slice(0, 16)
 }

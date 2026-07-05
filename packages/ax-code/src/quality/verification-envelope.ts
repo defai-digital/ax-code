@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto"
 import z from "zod"
+import { sha256Hex } from "./digest"
 import { ArtifactRefKindEnum, FindingSource, WorkflowEnum } from "./finding"
 
 // VerificationEnvelope is the publishable, cross-process shape that wraps a
@@ -126,7 +126,7 @@ export const ENVELOPE_ID_PATTERN = /^[0-9a-f]{16}$/
 // content but different key insertion order produce the same id (JSON
 // canonicalisation).
 export function computeEnvelopeId(envelope: VerificationEnvelope): string {
-  return createHash("sha256").update(canonicalJSON(envelope)).digest("hex").slice(0, 16)
+  return sha256Hex(canonicalJSON(envelope)).slice(0, 16)
 }
 
 function canonicalJSON(value: unknown): string {

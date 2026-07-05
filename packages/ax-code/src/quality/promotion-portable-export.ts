@@ -1,9 +1,9 @@
-import { createHash } from "crypto"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
+import { sha256Hex } from "./digest"
 import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -73,7 +73,7 @@ export namespace QualityPromotionPortableExport {
   }
 
   function digest(input: string) {
-    return createHash("sha256").update(input).digest("hex")
+    return sha256Hex(input)
   }
 
   function sortExports(exports: ExportArtifact[]) {

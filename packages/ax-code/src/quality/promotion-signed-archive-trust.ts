@@ -1,7 +1,7 @@
-import { createHash } from "crypto"
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
+import { sha256Hex } from "./digest"
 import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
 
 export namespace QualityPromotionSignedArchiveTrust {
@@ -109,7 +109,7 @@ export namespace QualityPromotionSignedArchiveTrust {
   }
 
   export function fingerprintKeyMaterial(keyMaterial: string) {
-    return createHash("sha256").update(keyMaterial).digest("hex")
+    return sha256Hex(keyMaterial)
   }
 
   function matchesArchive(archive: QualityPromotionSignedArchive.ArchiveArtifact, trust: TrustArtifact) {
