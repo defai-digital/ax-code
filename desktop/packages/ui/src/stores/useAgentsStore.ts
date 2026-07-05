@@ -2,7 +2,13 @@ import { create } from "zustand"
 import { devtools, persist, createJSONStorage } from "zustand/middleware"
 import type { Agent, PermissionConfig } from "@ax-code/sdk/v2"
 import { axCodeClient } from "@/lib/ax-code/client"
-import { emitConfigChange, scopeMatches, subscribeToConfigChanges, type ConfigChangeScope } from "@/lib/configSync"
+import {
+  emitConfigChange,
+  normalizeConfigChangeScopes,
+  scopeMatches,
+  subscribeToConfigChanges,
+  type ConfigChangeScope,
+} from "@/lib/configSync"
 import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from "@/lib/configUpdate"
 import { getSafeStorage } from "./utils/safeStorage"
 import { sleep, waitForAxCodeConnection } from "./utils/axCodeConnection"
@@ -515,16 +521,7 @@ if (typeof window !== "undefined") {
 type ConfigRefreshMode = "active" | "projects"
 
 const normalizeRefreshScopes = (scopes?: ConfigChangeScope[]): ConfigChangeScope[] => {
-  if (!scopes || scopes.length === 0) {
-    return ["all"]
-  }
-
-  const unique = Array.from(new Set(scopes))
-  if (unique.includes("all")) {
-    return ["all"]
-  }
-
-  return unique
+  return normalizeConfigChangeScopes(scopes)
 }
 
 async function performConfigRefresh(

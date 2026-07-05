@@ -10,6 +10,19 @@ type ConfigChangeListener = (event: ConfigChangeEvent) => void | Promise<void>
 
 const listeners = new Set<ConfigChangeListener>()
 
+export function normalizeConfigChangeScopes(
+  scopes?: ConfigChangeScope | ConfigChangeScope[] | null,
+): ConfigChangeScope[] {
+  const normalized = Array.isArray(scopes) ? scopes : scopes ? [scopes] : []
+  const uniqueScopes = Array.from(new Set(normalized))
+
+  if (uniqueScopes.length === 0 || uniqueScopes.includes("all")) {
+    return ["all"]
+  }
+
+  return uniqueScopes
+}
+
 export function subscribeToConfigChanges(listener: ConfigChangeListener): () => void {
   listeners.add(listener)
   return () => {
@@ -18,16 +31,11 @@ export function subscribeToConfigChanges(listener: ConfigChangeListener): () => 
 }
 
 export function emitConfigChange(scopes: ConfigChangeScope | ConfigChangeScope[], options?: { source?: string }): void {
-  const normalized = Array.isArray(scopes) ? scopes : [scopes]
-  const uniqueScopes = Array.from(new Set(normalized))
-
-  if (uniqueScopes.length === 0) {
+  if (Array.isArray(scopes) && scopes.length === 0) {
     return
   }
 
-  if (uniqueScopes.includes("all")) {
-    uniqueScopes.splice(0, uniqueScopes.length, "all")
-  }
+  const uniqueScopes = normalizeConfigChangeScopes(scopes)
 
   const event: ConfigChangeEvent = {
     scopes: uniqueScopes,
