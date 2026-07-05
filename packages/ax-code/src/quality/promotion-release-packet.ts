@@ -4,7 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionReleasePacket {
   export const PacketSummary = z.object({
@@ -195,13 +195,10 @@ export namespace QualityPromotionReleasePacket {
     const persisted = (await list(decisionBundle.source)).filter((packet) =>
       matchesDecisionBundle(decisionBundle, packet),
     )
-    const deduped = new Map<string, PacketArtifact>()
-    for (const packet of [...persisted, ...packets]) {
-      if (!matchesDecisionBundle(decisionBundle, packet)) continue
-      if (verify(decisionBundle, packet).length > 0) continue
-      deduped.set(packet.packetID, packet)
-    }
-    return sortPackets([...deduped.values()])
+    const validPackets = [...persisted, ...packets].filter(
+      (packet) => matchesDecisionBundle(decisionBundle, packet) && verify(decisionBundle, packet).length === 0,
+    )
+    return sortPackets(uniqueBy(validPackets, (packet) => packet.packetID))
   }
 
   export async function get(input: { source: string; packetID: string }) {

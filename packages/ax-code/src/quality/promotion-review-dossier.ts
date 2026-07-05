@@ -4,7 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionReviewDossier {
   export const Recommendation = z.enum(["approve_promotion", "requires_override_review", "hold"])
@@ -196,13 +196,10 @@ export namespace QualityPromotionReviewDossier {
     const persisted = (await list(decisionBundle.source)).filter((dossier) =>
       matchesDecisionBundle(decisionBundle, dossier),
     )
-    const deduped = new Map<string, DossierArtifact>()
-    for (const dossier of [...persisted, ...dossiers]) {
-      if (!matchesDecisionBundle(decisionBundle, dossier)) continue
-      if (verify(decisionBundle, dossier).length > 0) continue
-      deduped.set(dossier.dossierID, dossier)
-    }
-    return sortDossiers([...deduped.values()])
+    const validDossiers = [...persisted, ...dossiers].filter(
+      (dossier) => matchesDecisionBundle(decisionBundle, dossier) && verify(decisionBundle, dossier).length === 0,
+    )
+    return sortDossiers(uniqueBy(validDossiers, (dossier) => dossier.dossierID))
   }
 
   export async function get(input: { source: string; dossierID: string }) {

@@ -7,7 +7,7 @@ import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionAdoptionReview {
   export const Disposition = z.enum(["accepted", "accepted_override", "rejected"])
@@ -299,12 +299,8 @@ export namespace QualityPromotionAdoptionReview {
     reviews: ReviewArtifact[] = [],
   ) {
     const persisted = (await list(bundle.source)).filter((review) => matchesBundle(bundle, review))
-    const deduped = new Map<string, ReviewArtifact>()
-    for (const review of [...persisted, ...reviews]) {
-      if (!matchesBundle(bundle, review)) continue
-      deduped.set(review.reviewID, review)
-    }
-    return sort([...deduped.values()])
+    const matchingReviews = [...persisted, ...reviews].filter((review) => matchesBundle(bundle, review))
+    return sort(uniqueBy(matchingReviews, (review) => review.reviewID))
   }
 
   export async function get(input: { source: string; reviewID: string }) {
