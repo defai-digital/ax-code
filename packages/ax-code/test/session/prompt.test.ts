@@ -14,8 +14,6 @@ import { autonomousDecisionLedgerReminder } from "../../src/session/prompt-auton
 import { resolvePromptParts } from "../../src/session/prompt-helpers"
 import { isolationRetryState } from "../../src/session/prompt-tools"
 import { applyPromptIsolationPolicy } from "../../src/session/prompt-runtime-policy"
-import { EventQuery } from "../../src/replay/query"
-import { Recorder } from "../../src/replay/recorder"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { LSP } from "../../src/lsp"

@@ -106,17 +106,6 @@ function mockStream(events: AsyncIterable<any>) {
   streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({ fullStream: events } as any)
 }
 
-function* finishStep(opts?: { tokens?: boolean; reason?: string }) {
-  yield {
-    type: "finish-step",
-    finishReason: opts?.reason ?? "stop",
-    usage:
-      opts?.tokens !== false
-        ? { inputTokens: 100, outputTokens: 10, totalTokens: 110 }
-        : { inputTokens: 0, outputTokens: 0 },
-  }
-}
-
 // ============================================================
 // STREAM FAILURE SCENARIOS
 // ============================================================
@@ -226,7 +215,7 @@ describe("chaos: stream failures", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         let calls = 0
         streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
           calls++
@@ -339,7 +328,7 @@ describe("chaos: abort signal", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         const controller = new AbortController()
         const err = new MessageV2.APIError({ message: "Rate limited", isRetryable: true }).toObject()
         streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
@@ -364,7 +353,7 @@ describe("chaos: tool failures", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         mockStream(
           (async function* () {
             yield { type: "start" }
@@ -396,7 +385,7 @@ describe("chaos: tool failures", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         mockStream(
           (async function* () {
             yield { type: "start" }
@@ -426,7 +415,7 @@ describe("chaos: tool failures", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         mockStream(
           (async function* () {
             yield { type: "start" }
@@ -618,7 +607,7 @@ describe("chaos: usage edge cases", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         mockStream(
           (async function* () {
             yield { type: "start" }
@@ -641,7 +630,7 @@ describe("chaos: usage edge cases", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         mockStream(
           (async function* () {
             yield { type: "start" }
@@ -688,7 +677,7 @@ describe("chaos: reasoning", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         mockStream(
           (async function* () {
             yield { type: "start" }
@@ -724,7 +713,7 @@ describe("chaos: incomplete tools", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, process } = await setup(tmp)
+        const { process } = await setup(tmp)
         mockStream(
           (async function* () {
             yield { type: "start" }

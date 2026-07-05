@@ -4,13 +4,11 @@ import fs from "fs/promises"
 import { tool, type ModelMessage } from "ai"
 import z from "zod"
 import { LLM } from "../../src/session/llm"
-import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { ProviderTransform } from "../../src/provider/transform"
 import { ModelsDev } from "../../src/provider/models"
 import { ProviderID, ModelID } from "../../src/provider/schema"
-import { Env } from "../../src/env"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
@@ -334,7 +332,6 @@ describe("session.llm.stream", () => {
     const providerID = "alibaba-token-plan"
     const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
-    const provider = fixture.provider
     const model = fixture.model
 
     const request = waitRequest(
@@ -640,7 +637,6 @@ describe("session.llm.stream", () => {
     const providerID = "alibaba-coding-plan"
     const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
-    const provider = fixture.provider
     const model = fixture.model
 
     const request = waitRequest(
@@ -940,7 +936,6 @@ describe("session.llm.stream", () => {
     const providerID = "google"
     const modelID = "gemini-3-flash-preview"
     const fixture = await loadFixture(providerID, modelID)
-    const provider = fixture.provider
     const model = fixture.model
     const pathSuffix = `/v1beta/models/${model.id}:streamGenerateContent`
 

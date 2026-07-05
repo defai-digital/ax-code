@@ -1,16 +1,13 @@
-import { describe, expect, test, beforeEach, afterEach } from "vitest"
-import path from "path"
+import { describe, expect, test } from "vitest"
 import { Session } from "../../src/session"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { SessionRevert } from "../../src/session/revert"
-import { SessionCompaction } from "../../src/session/compaction"
 import { MessageV2 } from "../../src/session/message-v2"
 import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
 import { MessageID, PartID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 
-const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
 
 describe("revert + compact workflow", () => {
