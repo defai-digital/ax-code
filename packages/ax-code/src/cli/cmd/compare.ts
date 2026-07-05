@@ -7,6 +7,7 @@ import { Session } from "../../session"
 import { SessionID } from "../../session/schema"
 import type { ReplayEvent } from "../../replay/event"
 import { getRequiredSession } from "./session-required"
+import { uniqueSortedStrings } from "@/util/string-list"
 
 export const CompareCommand = cmd({
   command: "compare <session1> <session2>",
@@ -114,7 +115,7 @@ export const CompareCommand = cmd({
         console.log("  " + "-".repeat(40))
         const counts1 = countByType(e1)
         const counts2 = countByType(e2)
-        const allTypes = [...new Set([...Object.keys(counts1), ...Object.keys(counts2)])].sort()
+        const allTypes = compareEventTypes(counts1, counts2)
         for (const t of allTypes) {
           const c1 = counts1[t] ?? 0
           const c2 = counts2[t] ?? 0
@@ -164,6 +165,10 @@ function countByType(events: ReplayEvent[]): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const e of events) counts[e.type] = (counts[e.type] ?? 0) + 1
   return counts
+}
+
+export function compareEventTypes(counts1: Record<string, number>, counts2: Record<string, number>): string[] {
+  return uniqueSortedStrings([...Object.keys(counts1), ...Object.keys(counts2)])
 }
 
 function diff(
