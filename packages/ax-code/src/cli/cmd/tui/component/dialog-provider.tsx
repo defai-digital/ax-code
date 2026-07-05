@@ -26,7 +26,6 @@ import {
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
-  providerModelSelectable,
   selectableProviderDefaultModelID,
 } from "./dialog-provider-options"
 
@@ -809,7 +808,6 @@ function ApiMethod(props: ApiMethodProps) {
   const sdk = useSDK()
   const sync = useSync()
   const toast = useToast()
-  const { theme } = useTheme()
 
   return (
     <DialogPrompt
