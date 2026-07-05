@@ -341,21 +341,4 @@ describe("control-plane/session-proxy-middleware", () => {
     expect(forwarded!["x-normal-metadata"]).toBeUndefined()
   })
 
-  // It will behave this way when we have syncing
-  //
-  // test("does not forward GET requests", async () => {
-  //   const state: State = {
-  //     workspace: "first",
-  //     calls: [],
-  //   }
-
-  //   const ctx = await setup(state)
-
-  //   ctx.app.get("/session/foo", (c) => c.text("local", 200))
-  //   const response = await ctx.request("http://workspace.test/session/foo?x=1")
-
-  //   expect(response.status).toBe(200)
-  //   expect(await response.text()).toBe("local")
-  //   expect(state.calls).toEqual([])
-  // })
 })
