@@ -8,6 +8,7 @@ import simpleGit from "simple-git"
 import {
   checkoutCommit,
   cherryPick,
+  countStashFiles,
   getStatus,
   resetToCommit,
   resolveBaseRefForLog,
@@ -398,6 +399,29 @@ describe("resetToCommit", () => {
     expect(log.latest.hash).toBe(firstCommit.commit)
     const content = await fs.promises.readFile(filePath, "utf8")
     expect(content).toBe("first\n")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// stashes
+// ---------------------------------------------------------------------------
+
+describe("countStashFiles", () => {
+  it("normalizes duplicate stash refs before counting files", async () => {
+    if (!canRunGit()) return
+
+    const { tmpDir, git } = await createTempRepo()
+    const filePath = path.join(tmpDir, "file.txt")
+    await fs.promises.writeFile(filePath, "first\n", "utf8")
+    await git.add("file.txt")
+    await git.commit("Initial commit")
+
+    await fs.promises.writeFile(filePath, "first\nsecond\n", "utf8")
+    await git.raw(["stash", "push", "-m", "test stash"])
+
+    const counts = await countStashFiles(tmpDir, [" stash@{0} ", "", null, "stash@{0}"])
+
+    expect(counts).toEqual({ "stash@{0}": 1 })
   })
 })
 

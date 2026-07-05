@@ -377,10 +377,12 @@ const withGitIndexMutationQueue = async (directory, task) => {
   }
 }
 
-const normalizeFilePathList = (paths) =>
+const normalizeStringList = (values) =>
   Array.from(
-    new Set((Array.isArray(paths) ? paths : [paths]).map((value) => String(value || "").trim()).filter(Boolean)),
+    new Set((Array.isArray(values) ? values : [values]).map((value) => String(value || "").trim()).filter(Boolean)),
   )
+
+const normalizeFilePathList = (paths) => normalizeStringList(paths)
 
 export const validateRepositoryFilePaths = (directoryPath, filePaths, pathTools = path) => {
   const repoRoot = pathTools.resolve(directoryPath)
@@ -2205,9 +2207,7 @@ export async function listStashes(directory) {
 
 export async function countStashFiles(directory, refs = []) {
   const { git } = await createRepositoryGitContext(directory)
-  const uniqueRefs = Array.from(
-    new Set((Array.isArray(refs) ? refs : []).map((ref) => String(ref || "").trim()).filter(Boolean)),
-  )
+  const uniqueRefs = normalizeStringList(refs)
   const counts = {}
   const concurrency = 4
   let cursor = 0
