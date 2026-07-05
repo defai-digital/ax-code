@@ -77,13 +77,8 @@ export namespace QualityPromotionAdoptionDissentSupersession {
   })
   export type SupersessionSummary = z.output<typeof SupersessionSummary>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, supersessionID: string) {
     return ["quality_model_adoption_dissent_supersession", encode(source), supersessionID]

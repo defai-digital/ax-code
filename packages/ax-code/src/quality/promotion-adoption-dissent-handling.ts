@@ -74,13 +74,8 @@ export namespace QualityPromotionAdoptionDissentHandling {
   })
   export type HandlingRecord = z.output<typeof HandlingRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, handlingID: string) {
     return ["quality_model_adoption_dissent_handling", encode(source), handlingID]

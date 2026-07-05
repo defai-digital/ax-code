@@ -72,13 +72,8 @@ export namespace QualityPromotionAdoptionDissentResolution {
   })
   export type ResolutionSummary = z.output<typeof ResolutionSummary>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, resolutionID: string) {
     return ["quality_model_adoption_dissent_resolution", encode(source), resolutionID]

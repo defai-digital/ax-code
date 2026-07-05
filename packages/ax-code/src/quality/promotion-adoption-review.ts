@@ -70,13 +70,8 @@ export namespace QualityPromotionAdoptionReview {
   })
   export type ConsensusSummary = z.output<typeof ConsensusSummary>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, reviewID: string) {
     return ["quality_model_adoption_review", encode(source), reviewID]
