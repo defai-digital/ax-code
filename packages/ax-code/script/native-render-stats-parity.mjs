@@ -9,6 +9,7 @@
 // Exit: 0 = parity, 1 = mismatch, 2 = rust symbols not built.
 
 import { createRequire } from "node:module"
+import { jsonEqual } from "./native-render-json-equal.mjs"
 
 const require = createRequire(import.meta.url)
 const ffi = require("node:ffi")
@@ -34,7 +35,7 @@ const ptr = (v) => ffi.getRawPointer(v)
 const enc = new TextEncoder()
 const keep = []
 let seed = 0x5a7c1
-const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000)
+const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000
 const randInt = (n) => Math.floor(rand() * n)
 
 function packColor(r, g, b, a) {
@@ -51,7 +52,16 @@ function drawFrame(sym, rh, isZig, w, h) {
     const t = enc.encode(s)
     keep.push(t)
     const fg = packColor(randInt(256), randInt(256), randInt(256), 255)
-    sym.bufferDrawText(buf, isZig ? ptr(t) : Number(ptr(t)), t.length, randInt(w), randInt(h), isZig ? ptr(fg) : Number(ptr(fg)), 0, 0)
+    sym.bufferDrawText(
+      buf,
+      isZig ? ptr(t) : Number(ptr(t)),
+      t.length,
+      randInt(w),
+      randInt(h),
+      isZig ? ptr(fg) : Number(ptr(fg)),
+      0,
+      0,
+    )
   }
 }
 
@@ -83,7 +93,7 @@ for (let s = 0; s < SEQUENCES; s++) {
   // Stats before any render should match (both zeroed / invalid).
   const z0 = readStats(zig, zh, true)
   const r0 = readStats(rust, rh, false)
-  if (JSON.stringify(z0) !== JSON.stringify(r0)) {
+  if (!jsonEqual(z0, r0)) {
     console.error(`✗ seq ${s} pre-render: ${JSON.stringify(z0)} vs ${JSON.stringify(r0)}`)
     failures++
     if (failures >= 5) break
@@ -103,7 +113,7 @@ for (let s = 0; s < SEQUENCES; s++) {
 
   const z = readStats(zig, zh, true)
   const r = readStats(rust, rh, false)
-  if (JSON.stringify(z) !== JSON.stringify(r)) {
+  if (!jsonEqual(z, r)) {
     console.error(`✗ seq ${s} (${w}x${h}, ${cycles} cycles): ${JSON.stringify(z)} vs ${JSON.stringify(r)}`)
     failures++
     if (failures >= 5) break

@@ -7,6 +7,7 @@
 // Exit codes: 0 = parity, 1 = mismatch, 2 = Rust addon not built (skip).
 
 import { createRequire } from "node:module"
+import { jsonEqual } from "./native-render-json-equal.mjs"
 
 const require = createRequire(import.meta.url)
 let rust
@@ -25,7 +26,7 @@ const { resolveRenderLib } = await import("@ax-code/opentui-core")
 const zig = resolveRenderLib().opentui.symbols
 
 let seed = 0x7e57b0f
-const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000)
+const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000
 const randInt = (n) => Math.floor(rand() * n)
 const ptr = (v) => ffi.getRawPointer(v)
 
@@ -101,7 +102,10 @@ function state(sym, handle, isZig) {
         const countBuf = new Uint32Array(1)
         const p = sym.textBufferGetLineHighlightsPtr(handle, l, isZig ? ptr(countBuf) : Number(ptr(countBuf)))
         const n = countBuf[0]
-        if (!n || !p) { dump.push(""); continue }
+        if (!n || !p) {
+          dump.push("")
+          continue
+        }
         const addr = typeof p === "bigint" ? p : BigInt(Math.round(Number(p)))
         dump.push(Buffer.from(ffi.toArrayBuffer(addr, n * 16).slice(0)).toString("hex"))
         sym.textBufferFreeLineHighlights(isZig ? p : Number(p), n)
@@ -120,7 +124,10 @@ function lineInfo(sym, view, isZig) {
   for (let f = 0; f < 4; f++) {
     const p = dv.getBigUint64(f * 16, true)
     const n = dv.getUint32(f * 16 + 8, true)
-    if (!p || !n) { dump.push("") ; continue }
+    if (!p || !n) {
+      dump.push("")
+      continue
+    }
     dump.push(Buffer.from(ffi.toArrayBuffer(p, n * 4).slice(0)).toString("hex"))
   }
   dump.push(dv.getUint32(64, true))
@@ -213,10 +220,13 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
       const dv = new DataView(hl)
       const u8hl = new Uint8Array(hl)
       keepAlive.push(u8hl)
-      const a = randInt(30), b = a + randInt(12)
-      dv.setUint32(0, a, true); dv.setUint32(4, b, true)
+      const a = randInt(30),
+        b = a + randInt(12)
+      dv.setUint32(0, a, true)
+      dv.setUint32(4, b, true)
       dv.setUint32(8, 1 + randInt(20), true)
-      dv.setUint8(12, randInt(4)); dv.setUint16(14, randInt(5), true)
+      dv.setUint8(12, randInt(4))
+      dv.setUint16(14, randInt(5), true)
       if (kind === 0) {
         const line = randInt(6)
         opsLog.push(`hl(line=${line},${a}..${b})`)
@@ -246,7 +256,8 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
     } else if (op === 9 && rand() < 0.5) {
       const kind = randInt(4)
       if (kind === 0) {
-        const a = randInt(40), b = randInt(40)
+        const a = randInt(40),
+          b = randInt(40)
         opsLog.push(`sel(${a},${b})`)
         zig.textBufferViewSetSelection(zView, a, b, 0, 0)
         rust.textBufferViewSetSelection(rView, a, b, 0, 0)
@@ -255,7 +266,9 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
         opsLog.push(`localSel(${ax},${ay},${fx},${fy})`)
         const zr = zig.textBufferViewSetLocalSelection(zView, ax, ay, fx, fy, 0, 0)
         const rr = rust.textBufferViewSetLocalSelection(rView, ax, ay, fx, fy, 0, 0)
-        if (Boolean(zr) !== Boolean(rr)) { opsLog.push(`RETDIFF z=${zr} r=${rr}`) }
+        if (Boolean(zr) !== Boolean(rr)) {
+          opsLog.push(`RETDIFF z=${zr} r=${rr}`)
+        }
       } else if (kind === 2) {
         const [fx, fy] = [randInt(30) - 5, randInt(8) - 2]
         opsLog.push(`updLocalSel(${fx},${fy})`)
@@ -311,13 +324,14 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
     zs.selInfo = String(zig.textBufferViewGetSelectionInfo(zView))
     rs.selInfo = String(BigInt.asUintN(64, BigInt(rust.textBufferViewGetSelectionInfo(rView))))
     {
-      const zOut = new Uint8Array(2048), rOut = new Uint8Array(2048)
+      const zOut = new Uint8Array(2048),
+        rOut = new Uint8Array(2048)
       const zl = Number(zig.textBufferViewGetSelectedText(zView, ptr(zOut), zOut.length))
       const rl = Number(rust.textBufferViewGetSelectedText(rView, Number(ptr(rOut)), rOut.length))
       zs.selText = Buffer.from(zOut.subarray(0, zl)).toString("hex")
       rs.selText = Buffer.from(rOut.subarray(0, rl)).toString("hex")
     }
-    if (JSON.stringify(zs) !== JSON.stringify(rs)) {
+    if (!jsonEqual(zs, rs)) {
       console.error(`✗ seq ${s} op ${i} [${opsLog[opsLog.length - 1]}]`)
       console.error(`  zig : ${JSON.stringify(zs)}`)
       console.error(`  rust: ${JSON.stringify(rs)}`)

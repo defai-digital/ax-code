@@ -10,6 +10,7 @@
 // them (wrapping is cluster-aligned). Tracked as an open question for Slice C.
 
 import { createRequire } from "node:module"
+import { jsonEqual } from "./native-render-json-equal.mjs"
 
 const require = createRequire(import.meta.url)
 let rust
@@ -69,7 +70,7 @@ const corpus = [
 
 // Deterministic LCG fuzz — reproducible corpus extension.
 let seed = 0x2f6e2b1
-const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000)
+const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000
 const POOLS = [
   [0x20, 0x7e],
   [0xa0, 0x2ff],
@@ -106,7 +107,7 @@ for (const text of inputs) {
   for (const method of ["unicode", "wcwidth"]) {
     const expected = oracle(text, method)
     const actual = rustCells(text, method)
-    if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+    if (!jsonEqual(expected, actual)) {
       failures++
       if (failures <= 8) {
         console.error(`✗ [${method}] ${JSON.stringify(text)}`)

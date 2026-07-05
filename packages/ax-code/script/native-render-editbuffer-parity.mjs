@@ -8,6 +8,7 @@
 // Exit: 0 = parity, 1 = mismatch, 2 = addon not built (skip).
 
 import { createRequire } from "node:module"
+import { jsonEqual } from "./native-render-json-equal.mjs"
 
 const require = createRequire(import.meta.url)
 let rust
@@ -26,7 +27,7 @@ const { resolveRenderLib } = await import("@ax-code/opentui-core")
 const zig = resolveRenderLib().opentui.symbols
 
 let seed = 0x3d17b9
-const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000)
+const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000
 const randInt = (n) => Math.floor(rand() * n)
 const ptr = (v) => ffi.getRawPointer(v)
 const keepAlive = []
@@ -134,14 +135,20 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
       rust.editBufferDeleteLine(rh)
     } else if (op === 13) {
       opsLog.push("undo")
-      { const ub = new Uint8Array(64); keepAlive.push(ub)
+      {
+        const ub = new Uint8Array(64)
+        keepAlive.push(ub)
         zig.editBufferUndo(zh, ptr(ub), ub.length)
-        rust.editBufferUndo(rh, Number(ptr(ub)), ub.length) }
+        rust.editBufferUndo(rh, Number(ptr(ub)), ub.length)
+      }
     } else if (op === 14) {
       opsLog.push("redo")
-      { const ub = new Uint8Array(64); keepAlive.push(ub)
+      {
+        const ub = new Uint8Array(64)
+        keepAlive.push(ub)
         zig.editBufferRedo(zh, ptr(ub), ub.length)
-        rust.editBufferRedo(rh, Number(ptr(ub)), ub.length) }
+        rust.editBufferRedo(rh, Number(ptr(ub)), ub.length)
+      }
     } else {
       const line = randInt(5)
       opsLog.push(`gotoLine(${line})`)
@@ -151,7 +158,7 @@ outer: for (let s = 0; s < SEQUENCES; s++) {
 
     const zs = state(zig, zh, true)
     const rs = state(rust, rh, false)
-    if (JSON.stringify(zs) !== JSON.stringify(rs)) {
+    if (!jsonEqual(zs, rs)) {
       console.error(`✗ seq ${s} op ${i} [${opsLog[opsLog.length - 1]}]`)
       console.error(`  zig : ${JSON.stringify(zs)}`)
       console.error(`  rust: ${JSON.stringify(rs)}`)

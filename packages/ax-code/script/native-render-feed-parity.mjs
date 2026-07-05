@@ -9,6 +9,7 @@
 // Exit: 0 = parity, 1 = mismatch, 2 = rust symbols not built.
 
 import { createRequire } from "node:module"
+import { jsonEqual } from "./native-render-json-equal.mjs"
 
 const require = createRequire(import.meta.url)
 const ffi = require("node:ffi")
@@ -34,7 +35,7 @@ const rawPtr = (v) => ffi.getRawPointer(v)
 const enc = new TextEncoder()
 const keep = []
 let seed = 0xfeed42
-const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000)
+const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x80000000
 const randInt = (n) => Math.floor(rand() * n)
 
 // Per-side pointer arg for a typed array.
@@ -136,7 +137,7 @@ for (let s = 0; s < SEQUENCES && failures < 5; s++) {
   }
   const zs = statsTuple(zig, zf, true)
   const rs = statsTuple(rust, rf, false)
-  if (JSON.stringify(zs) !== JSON.stringify(rs)) {
+  if (!jsonEqual(zs, rs)) {
     console.error(`✗ seq ${s}: stats differ ${JSON.stringify(zs)} vs ${JSON.stringify(rs)}`)
     failures++
   }
