@@ -1,7 +1,8 @@
 export const createThemeRuntime = (dependencies) => {
   const { fsPromises, path, themesDir, maxThemeJsonBytes, logger } = dependencies
 
-  const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+  const isNonEmptyString = (value) => asTrimmedString(value).length > 0
   const isValidThemeColor = (value) => isNonEmptyString(value)
 
   const normalizeThemeJson = (raw) => {
@@ -86,18 +87,18 @@ export const createThemeRuntime = (dependencies) => {
     }
 
     const tags = Array.isArray(metadata.tags)
-      ? metadata.tags.filter((tag) => typeof tag === "string" && tag.trim().length > 0)
+      ? metadata.tags.map(asTrimmedString).filter((tag) => tag.length > 0)
       : []
+    const version = asTrimmedString(metadata.version) || "1.0.0"
 
     return {
       ...raw,
       metadata: {
         ...metadata,
-        id: id.trim(),
-        name: name.trim(),
+        id: asTrimmedString(id),
+        name: asTrimmedString(name),
         description: typeof metadata.description === "string" ? metadata.description : "",
-        version:
-          typeof metadata.version === "string" && metadata.version.trim().length > 0 ? metadata.version : "1.0.0",
+        version,
         variant,
         tags,
       },
