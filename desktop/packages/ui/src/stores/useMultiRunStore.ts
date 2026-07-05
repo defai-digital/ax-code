@@ -8,6 +8,7 @@ import { saveWorktreeSetupCommands } from "@/lib/openchamberConfig"
 import type { ProjectRef } from "@/lib/worktrees/worktreeManager"
 import { createWorktreeWithDefaults, resolveRootTrackingRemote } from "@/lib/worktrees/worktreeCreate"
 import { getRootBranch } from "@/lib/worktrees/worktreeStatus"
+import { normalizeWorktreePath } from "@/lib/worktrees/path"
 import { checkIsGitRepository } from "@/lib/gitApi"
 import { useDirectoryStore } from "./useDirectoryStore"
 import { useProjectsStore } from "./useProjectsStore"
@@ -34,16 +35,8 @@ const generateWorktreeNameSeed = (groupSlug: string, modelSlug: string): string 
   return `${groupSlug}/${modelSlug}`
 }
 
-const normalizePath = (value: string): string => {
-  const replaced = value.replace(/\\/g, "/")
-  if (replaced === "/") {
-    return "/"
-  }
-  return replaced.length > 1 ? replaced.replace(/\/+$/, "") : replaced
-}
-
 const registerCreatedSession = (session: Session, directory: string): Session => {
-  const normalizedDirectory = normalizePath(directory)
+  const normalizedDirectory = normalizeWorktreePath(directory)
   const sessionDirectory = (session as Session & { directory?: string | null }).directory
   const sessionWithDirectory =
     typeof sessionDirectory === "string" && sessionDirectory.trim().length > 0
@@ -90,7 +83,7 @@ const resolveActiveProject = (): ProjectRef | null => {
 
   const currentDirectory = useDirectoryStore.getState().currentDirectory ?? null
   if (currentDirectory && currentDirectory.trim().length > 0) {
-    const normalized = currentDirectory.replace(/\\/g, "/").replace(/\/+$/, "") || currentDirectory
+    const normalized = normalizeWorktreePath(currentDirectory)
     return { id: `path:${normalized}`, path: normalized }
   }
 
