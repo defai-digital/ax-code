@@ -17,10 +17,14 @@
 // config PATCH, command handling, and route validation this app relies on).
 export const MIN_SUPPORTED_AX_CODE_VERSION = "6.8.0"
 
-export const parseVersionForComparison = (value) => {
-  const normalized = String(value || "")
+const normalizeVersionText = (value) =>
+  String(value || "")
+    .trim()
     .replace(/^v/, "")
     .split("+")[0]
+
+export const parseVersionForComparison = (value) => {
+  const normalized = normalizeVersionText(value)
   const prereleaseIndex = normalized.indexOf("-")
   const core = prereleaseIndex >= 0 ? normalized.slice(0, prereleaseIndex) : normalized
   const suffix = prereleaseIndex >= 0 ? normalized.slice(prereleaseIndex + 1) : ""
@@ -46,8 +50,8 @@ export const compareVersions = (left, right) => {
 
 const normalizeVersion = (value) => {
   if (typeof value !== "string") return null
-  const trimmed = value.trim().replace(/^v/, "")
-  return /^\d+\.\d+/.test(trimmed) ? trimmed : null
+  const normalized = normalizeVersionText(value)
+  return /^\d+\.\d+/.test(normalized) ? normalized : null
 }
 
 /**

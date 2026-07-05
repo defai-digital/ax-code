@@ -15,6 +15,11 @@ describe("compareVersions", () => {
     expect(compareVersions("5.12.0-beta.1", "5.12.0")).toBeLessThan(0)
     expect(compareVersions("5.12.0-custombuild", "5.12.0")).toBe(0)
   })
+
+  it("trims version values before comparison", () => {
+    expect(compareVersions(" v5.12.0 ", "5.12.0")).toBe(0)
+    expect(compareVersions(" 5.12.1 ", "5.12.0")).toBeGreaterThan(0)
+  })
 })
 
 describe("evaluateAxCodeCompatibility", () => {
@@ -37,6 +42,10 @@ describe("evaluateAxCodeCompatibility", () => {
 
   it("normalizes v prefixes", () => {
     expect(evaluateAxCodeCompatibility("v5.11.1").version).toBe("5.11.1")
+  })
+
+  it("normalizes surrounding whitespace and build metadata", () => {
+    expect(evaluateAxCodeCompatibility(" v5.11.1+local ").version).toBe("5.11.1")
   })
 
   it("honors an explicit minimum override", () => {
