@@ -4,7 +4,7 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 
 import { createTerminalRuntime } from "./runtime.js"
-import { createMockResponse } from "../../test-helpers/route-harness.js"
+import { createMockResponse, createRouteRegistry } from "../../test-helpers/route-harness.js"
 
 function createRuntime(server, overrides = {}) {
   const app = overrides.app ?? {
@@ -34,14 +34,7 @@ function createRuntime(server, overrides = {}) {
 
 describe("terminal runtime", () => {
   it("rejects terminal working directories that are not approved", async () => {
-    const postRoutes = new Map()
-    const app = {
-      post(route, ...handlers) {
-        postRoutes.set(route, handlers.at(-1))
-      },
-      get() {},
-      delete() {},
-    }
+    const { app, getRoute } = createRouteRegistry()
     const server = new EventEmitter()
     const runtime = createRuntime(server, {
       app,
@@ -60,7 +53,7 @@ describe("terminal runtime", () => {
     })
 
     try {
-      const createRoute = postRoutes.get("/api/terminal/create")
+      const createRoute = getRoute("POST", "/api/terminal/create")
       const res = createMockResponse()
 
       await createRoute({ body: { cwd: "/tmp/not-approved" } }, res)
@@ -73,14 +66,7 @@ describe("terminal runtime", () => {
   })
 
   it("rejects regular files as terminal working directories", async () => {
-    const postRoutes = new Map()
-    const app = {
-      post(route, ...handlers) {
-        postRoutes.set(route, handlers.at(-1))
-      },
-      get() {},
-      delete() {},
-    }
+    const { app, getRoute } = createRouteRegistry()
     const server = new EventEmitter()
     const runtime = createRuntime(server, {
       app,
@@ -96,7 +82,7 @@ describe("terminal runtime", () => {
     })
 
     try {
-      const createRoute = postRoutes.get("/api/terminal/create")
+      const createRoute = getRoute("POST", "/api/terminal/create")
       const res = createMockResponse()
 
       await createRoute({ body: { cwd: "/tmp/not-a-directory" } }, res)

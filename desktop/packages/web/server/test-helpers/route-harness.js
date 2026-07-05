@@ -1,19 +1,22 @@
 export const createRouteRegistry = () => {
   const routes = new Map()
+  const register = (method, routePath, handlers) => {
+    routes.set(`${method} ${routePath}`, handlers.at(-1))
+  }
 
   return {
     app: {
-      get(routePath, handler) {
-        routes.set(`GET ${routePath}`, handler)
+      get(routePath, ...handlers) {
+        register("GET", routePath, handlers)
       },
-      post(routePath, handler) {
-        routes.set(`POST ${routePath}`, handler)
+      post(routePath, ...handlers) {
+        register("POST", routePath, handlers)
       },
-      put(routePath, handler) {
-        routes.set(`PUT ${routePath}`, handler)
+      put(routePath, ...handlers) {
+        register("PUT", routePath, handlers)
       },
-      delete(routePath, handler) {
-        routes.set(`DELETE ${routePath}`, handler)
+      delete(routePath, ...handlers) {
+        register("DELETE", routePath, handlers)
       },
     },
     getRoute(method, routePath) {
