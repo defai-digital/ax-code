@@ -6,6 +6,7 @@ import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionAdoptionReview {
   export const Disposition = z.enum(["accepted", "accepted_override", "rejected"])
@@ -322,9 +323,7 @@ export namespace QualityPromotionAdoptionReview {
     })
     try {
       const existing = await get({ source: review.source, reviewID: review.reviewID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Adoption review ${review.reviewID} already exists for source ${review.source} with different content`,
       )

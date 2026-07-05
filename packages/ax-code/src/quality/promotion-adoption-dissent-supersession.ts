@@ -6,6 +6,7 @@ import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionAdoptionDissentSupersession {
   export const Disposition = z.enum(["withdrawn", "re_reviewed_accept", "superseded_by_new_evidence"])
@@ -366,9 +367,7 @@ export namespace QualityPromotionAdoptionDissentSupersession {
     })
     try {
       const existing = await get({ source: supersession.source, supersessionID: supersession.supersessionID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Adoption dissent supersession ${supersession.supersessionID} already exists for source ${supersession.source} with different content`,
       )

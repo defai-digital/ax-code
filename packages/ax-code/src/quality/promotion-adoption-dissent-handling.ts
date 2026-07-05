@@ -8,6 +8,7 @@ import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionAdoptionDissentHandling {
   export const QualifiedRejectingReview = z.object({
@@ -342,9 +343,7 @@ export namespace QualityPromotionAdoptionDissentHandling {
     })
     try {
       const existing = await get({ source: handling.source, handlingID: handling.handlingID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Adoption dissent handling ${handling.handlingID} already exists for source ${handling.source} with different content`,
       )

@@ -6,6 +6,7 @@ import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionAdoptionDissentResolution {
   export const TargetReview = z.object({
@@ -337,9 +338,7 @@ export namespace QualityPromotionAdoptionDissentResolution {
     })
     try {
       const existing = await get({ source: resolution.source, resolutionID: resolution.resolutionID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Adoption dissent resolution ${resolution.resolutionID} already exists for source ${resolution.source} with different content`,
       )
