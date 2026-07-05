@@ -6,7 +6,7 @@ import { Question } from "@/question"
 import { EventQuery } from "@/replay/query"
 import { Log } from "@/util/log"
 import { KeyedSerialQueue } from "@/util/queue"
-import { uniqueSortedStrings } from "@/util/string-list"
+import { uniqueSortedStrings, uniqueStrings } from "@/util/string-list"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { SessionPrompt } from "./prompt"
@@ -971,7 +971,7 @@ function messageToolNames(parts: unknown) {
       return record.type === "tool" ? record.tool : undefined
     }),
   )
-  return Array.from(new Set(tools ?? []))
+  return uniqueStrings(tools ?? [])
 }
 
 function truncateArtifactSummary(text: string) {
