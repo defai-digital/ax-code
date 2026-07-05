@@ -90,4 +90,25 @@ describe("ui passkeys", () => {
       }),
     )
   })
+
+  it("trims passkey ids before revoking them", async () => {
+    const passkeys = createUiPasskeys({
+      passwordBinding: "password-binding",
+      readSettingsFromDiskMigrated: async () => ({}),
+      storeFile,
+    })
+    const req = createMockRequest({ host: "localhost:3000" })
+
+    const registration = await passkeys.beginRegistration(req)
+    await passkeys.finishRegistration({
+      requestId: registration.requestId,
+      response: { id: "credential-id" },
+    })
+
+    expect(passkeys.revokePasskey(req, " credential-id ")).toMatchObject({
+      revoked: true,
+      passkeyCount: 0,
+    })
+    expect(passkeys.listPasskeys(req)).toEqual([])
+  })
 })

@@ -21,6 +21,7 @@ const AX_CODE_DESKTOP_DATA_DIR = process.env.AX_CODE_DESKTOP_DATA_DIR
 const PASSKEY_STORE_FILE = path.join(AX_CODE_DESKTOP_DATA_DIR, "ui-passkeys.json")
 
 const createUserId = () => crypto.randomBytes(32).toString("base64url")
+const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
 const decodeUserId = (value) => {
   if (typeof value !== "string" || !value) {
@@ -155,8 +156,9 @@ export const createUiPasskeys = ({
 
     try {
       const settings = await readSettingsFromDiskMigrated?.()
-      if (typeof settings?.publicOrigin === "string" && settings.publicOrigin.trim().length > 0) {
-        origins.add(new URL(settings.publicOrigin.trim()).origin)
+      const publicOrigin = asTrimmedString(settings?.publicOrigin)
+      if (publicOrigin) {
+        origins.add(new URL(publicOrigin).origin)
       }
     } catch {}
 
@@ -206,7 +208,7 @@ export const createUiPasskeys = ({
   const revokePasskey = (req, passkeyId) => {
     assertEnabled()
 
-    const normalizedPasskeyId = typeof passkeyId === "string" ? passkeyId.trim() : ""
+    const normalizedPasskeyId = asTrimmedString(passkeyId)
     if (!normalizedPasskeyId) {
       const error = new Error("Passkey ID is required")
       error.statusCode = 400
