@@ -2,6 +2,9 @@
 
 import { execFileSync } from "child_process"
 
+const CONFLICT_RESOLVER_COMMAND = process.env.AX_CODE_BETA_RESOLVER_COMMAND ?? "ax-code"
+const CONFLICT_RESOLVER_MODEL = process.env.AX_CODE_BETA_RESOLVER_MODEL ?? "opencode/gpt-5.3-codex"
+
 // Run a command, throwing on non-zero (replaces Bun `$`). Args are passed as an
 // array so interpolated values are not shell-evaluated.
 function sh(cmd: string, args: string[]) {
@@ -62,7 +65,7 @@ async function cleanup() {
 }
 
 async function fix(pr: PR, files: string[]) {
-  console.log(`  Trying to auto-resolve ${files.length} conflict(s) with opencode...`)
+  console.log(`  Trying to auto-resolve ${files.length} conflict(s) with ${CONFLICT_RESOLVER_COMMAND}...`)
   const prompt = [
     `Resolve the current git merge conflicts while merging PR #${pr.number} into the beta branch.`,
     `Only touch these files: ${files.join(", ")}.`,
@@ -71,9 +74,9 @@ async function fix(pr: PR, files: string[]) {
   ].join("\n")
 
   try {
-    sh("opencode", ["run", "-m", "opencode/gpt-5.3-codex", prompt])
+    sh(CONFLICT_RESOLVER_COMMAND, ["run", "-m", CONFLICT_RESOLVER_MODEL, prompt])
   } catch (err) {
-    console.log(`  opencode failed: ${err}`)
+    console.log(`  ${CONFLICT_RESOLVER_COMMAND} failed: ${err}`)
     return false
   }
 
@@ -83,7 +86,7 @@ async function fix(pr: PR, files: string[]) {
     return false
   }
 
-  console.log("  Conflicts resolved with opencode")
+  console.log(`  Conflicts resolved with ${CONFLICT_RESOLVER_COMMAND}`)
   return true
 }
 
