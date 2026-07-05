@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, test } from "vitest"
 import type { Session } from "@ax-code/sdk/v2"
 
-import { useGlobalSessionsStore } from "./useGlobalSessionsStore"
+import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from "./useGlobalSessionsStore"
+
+type SessionOverrides = Partial<Session> & {
+  directory?: string | null
+  project?: { worktree?: string | null } | null
+}
 
 const buildSession = (shareUrl: string): Session =>
   ({
@@ -11,7 +16,7 @@ const buildSession = (shareUrl: string): Session =>
     share: { url: shareUrl },
   }) as Session
 
-const makeSession = (id: string, overrides: Partial<Session> = {}): Session =>
+const makeSession = (id: string, overrides: SessionOverrides = {}): Session =>
   ({
     id,
     title: `Session ${id}`,
@@ -55,6 +60,30 @@ describe("useGlobalSessionsStore", () => {
       id: "ses_a",
       title: "Newer title",
       time: { updated: 20 },
+    })
+  })
+
+  describe("resolveGlobalSessionDirectory", () => {
+    test("normalizes the session directory before falling back to project worktree", () => {
+      expect(
+        resolveGlobalSessionDirectory(
+          makeSession("ses_a", {
+            directory: " c:\\Users\\Alice\\Project\\ ",
+            project: { worktree: "/fallback/worktree" },
+          }),
+        ),
+      ).toBe("C:/Users/Alice/Project")
+    })
+
+    test("uses the project worktree when the session directory is empty", () => {
+      expect(
+        resolveGlobalSessionDirectory(
+          makeSession("ses_a", {
+            directory: " ",
+            project: { worktree: "/repo/worktree///" },
+          }),
+        ),
+      ).toBe("/repo/worktree")
     })
   })
 

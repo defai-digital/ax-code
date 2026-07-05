@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import type { Session } from "@ax-code/sdk/v2"
 import { axCodeClient } from "@/lib/ax-code/client"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 import { listGlobalSessionPages } from "@/stores/globalSessions"
 
 type GlobalSessionsStatus = "idle" | "loading" | "ready" | "error"
@@ -38,28 +39,13 @@ const PAGE_SIZE = 500
 
 let inflightLoad: Promise<LoadResult> | null = null
 
-const normalizePath = (value?: string | null): string | null => {
-  if (typeof value !== "string") {
-    return null
-  }
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return null
-  }
-  const replaced = trimmed.replace(/\\/g, "/")
-  if (replaced === "/") {
-    return "/"
-  }
-  return replaced.length > 1 ? replaced.replace(/\/+$/, "") : replaced
-}
-
 export const resolveGlobalSessionDirectory = (session: Session): string | null => {
   const record = session as Session & {
     directory?: string | null
     project?: { worktree?: string | null } | null
   }
 
-  return normalizePath(record.directory ?? null) ?? normalizePath(record.project?.worktree ?? null)
+  return normalizeProjectPath(record.directory ?? null) ?? normalizeProjectPath(record.project?.worktree ?? null)
 }
 
 const buildSessionsByDirectory = (sessions: Session[]): Map<string, Session[]> => {
