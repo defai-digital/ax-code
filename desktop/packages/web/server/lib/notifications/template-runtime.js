@@ -25,6 +25,16 @@ export const createNotificationTemplateRuntime = (deps) => {
     return label.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())
   }
 
+  const formatTokenLabel = (value, separatorPattern, fallback) => {
+    const normalized = typeof value === "string" ? value.trim() : ""
+    if (!normalized) return fallback
+    return normalized
+      .split(separatorPattern)
+      .filter(Boolean)
+      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+      .join(" ")
+  }
+
   const resolveNotificationTemplate = (template, variables) => {
     if (!template || typeof template !== "string") return ""
     return template.replace(/\{(\w+)\}/g, (_match, key) => {
@@ -239,20 +249,15 @@ export const createNotificationTemplateRuntime = (deps) => {
       }
     }
 
-    const agentName = (() => {
-      const mode =
-        typeof info.agent === "string" && info.agent.trim().length > 0
-          ? info.agent.trim()
-          : typeof info.mode === "string"
-            ? info.mode.trim()
-            : ""
-      if (!mode) return "Agent"
-      return mode
-        .split(/[-_\s]+/)
-        .filter(Boolean)
-        .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-        .join(" ")
-    })()
+    const agentName = formatTokenLabel(
+      typeof info.agent === "string" && info.agent.trim().length > 0
+        ? info.agent
+        : typeof info.mode === "string"
+          ? info.mode
+          : "",
+      /[-_\s]+/,
+      "Agent",
+    )
 
     const modelName = (() => {
       const raw =
@@ -261,12 +266,7 @@ export const createNotificationTemplateRuntime = (deps) => {
           : typeof info.model?.modelID === "string"
             ? info.model.modelID.trim()
             : ""
-      if (!raw) return "Assistant"
-      return raw
-        .split(/[-_]+/)
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ")
+      return formatTokenLabel(raw, /[-_]+/, "Assistant")
     })()
 
     let projectName = ""

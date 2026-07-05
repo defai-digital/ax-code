@@ -60,3 +60,36 @@ describe("notification template text extraction", () => {
     ).toBe("Alpha\nBeta")
   })
 })
+
+describe("notification template variables", () => {
+  it("formats agent and model labels from payload metadata", async () => {
+    const runtime = createRuntime()
+
+    await expect(
+      runtime.buildTemplateVariables(
+        {
+          properties: {
+            info: {
+              agent: "debug-agent",
+              modelID: "gpt-5-mini",
+            },
+          },
+        },
+        "ses_test",
+      ),
+    ).resolves.toMatchObject({
+      agent_name: "Debug Agent",
+      model_name: "Gpt 5 Mini",
+      session_id: "ses_test",
+    })
+  })
+
+  it("falls back to default agent and model labels", async () => {
+    const runtime = createRuntime()
+
+    await expect(runtime.buildTemplateVariables({ properties: { info: {} } }, "")).resolves.toMatchObject({
+      agent_name: "Agent",
+      model_name: "Assistant",
+    })
+  })
+})
