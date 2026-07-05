@@ -16,6 +16,7 @@ import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
 import { Lock } from "@/util/lock"
 import { Log } from "../util/log"
+import { uniqueItems } from "../util/string-list"
 import { MessageV2 } from "./message-v2"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
@@ -698,7 +699,7 @@ export namespace Session {
       return query.orderBy(desc(SessionTable.time_updated), desc(SessionTable.id)).limit(limit).all()
     })
 
-    const ids = [...new Set(rows.map((row) => row.project_id))]
+    const ids = uniqueItems(rows.map((row) => row.project_id))
     const projects = new Map<string, ProjectInfo>()
 
     if (ids.length > 0) {
