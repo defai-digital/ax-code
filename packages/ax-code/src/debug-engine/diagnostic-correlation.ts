@@ -4,6 +4,7 @@ import { LSPClient } from "../lsp/client"
 import { CodeIntelligence } from "../code-intelligence"
 import { Instance } from "../project/instance"
 import { ProjectID } from "../project/schema"
+import { uniqueStrings } from "../util/string-list"
 import { DebugEngine } from "./index"
 
 // diagnostic-correlation — Cross-file root-cause analysis for LSP diagnostics.
@@ -142,7 +143,15 @@ export function __testFindCrossFileRootCause(
   severity: number,
   symbol: CodeIntelligence.Symbol,
 ): DebugEngine.CorrelatedDiagnostic {
-  return findCrossFileRootCause(ProjectID.make(projectID), file, line, message, severity, symbol, defaultLspProvenance())
+  return findCrossFileRootCause(
+    ProjectID.make(projectID),
+    file,
+    line,
+    message,
+    severity,
+    symbol,
+    defaultLspProvenance(),
+  )
 }
 
 export function __testRenderCorrelationBlock(
@@ -203,10 +212,7 @@ function scheduleCorrelation(current: CorrelationState, file: string): void {
       log.warn("correlation failed", { file, error: err })
     }
   })
-  current.pendingTimers.set(
-    key,
-    setTimeout(run, DEBOUNCE_MS),
-  )
+  current.pendingTimers.set(key, setTimeout(run, DEBOUNCE_MS))
 }
 
 async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagnostic[]> {
@@ -301,10 +307,7 @@ async function runCorrelation(file: string): Promise<DebugEngine.CorrelatedDiagn
   return correlations
 }
 
-function findEnclosingSymbol(
-  symbols: CodeIntelligence.Symbol[],
-  line: number,
-): CodeIntelligence.Symbol | null {
+function findEnclosingSymbol(symbols: CodeIntelligence.Symbol[], line: number): CodeIntelligence.Symbol | null {
   // Find the symbol whose range contains the diagnostic line. If multiple
   // match, prefer the innermost (smallest range).
   let best: CodeIntelligence.Symbol | null = null
@@ -333,8 +336,10 @@ function findCrossFileRootCause(
   lspProvenance: LspProvenance,
 ): DebugEngine.CorrelatedDiagnostic {
   // Walk callers at depth 1 first (direct callers in other files).
-  const callers = CodeIntelligence.findCallers(projectID, symbol.id, { scope: "worktree" })
-    .slice(0, MAX_CALLERS_PER_SYMBOL)
+  const callers = CodeIntelligence.findCallers(projectID, symbol.id, { scope: "worktree" }).slice(
+    0,
+    MAX_CALLERS_PER_SYMBOL,
+  )
 
   // Depth-2 expansion: for each depth-1 caller in a different file, find
   // its callers too. This catches "A calls B calls C, error in C but root
@@ -343,8 +348,7 @@ function findCrossFileRootCause(
   for (const caller of callers) {
     allCandidates.push({ sym: caller.symbol, depth: 1 })
     if (caller.symbol.file !== file && allCandidates.length < MAX_CALLERS_PER_SYMBOL * 2) {
-      const deeperCallers = CodeIntelligence.findCallers(projectID, caller.symbol.id, { scope: "worktree" })
-        .slice(0, 3)
+      const deeperCallers = CodeIntelligence.findCallers(projectID, caller.symbol.id, { scope: "worktree" }).slice(0, 3)
       for (const dc of deeperCallers) {
         allCandidates.push({ sym: dc.symbol, depth: 2 })
       }
@@ -472,7 +476,7 @@ function defaultLspProvenance(): LspProvenance {
 
 function graphProvenance(symbols: CodeIntelligence.Symbol[]): GraphProvenance {
   const explains = symbols.map((symbol) => symbol.explain)
-  const queryIds = [...new Set(explains.map((explain) => explain.queryId))]
+  const queryIds = uniqueStrings(explains.map((explain) => explain.queryId))
   const indexedAt = explains.length === 0 ? 0 : Math.min(...explains.map((explain) => explain.indexedAt))
   let completeness: DebugEngine.Completeness = "full"
   for (const explain of explains) {
