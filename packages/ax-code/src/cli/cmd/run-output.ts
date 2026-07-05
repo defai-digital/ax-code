@@ -33,9 +33,19 @@ export function resolveRunOutputPath(callerCwd: string, target: string) {
   return path.isAbsolute(target) ? target : path.resolve(callerCwd, target)
 }
 
-export function resolveRunOutputFile(options: { outputFile?: string; outputLastMessage?: string }): string | undefined {
+export function resolveRunOutputFile(
+  options: { outputFile?: string; outputLastMessage?: string },
+  callerCwd?: string,
+): string | undefined {
   if (!options.outputFile) return options.outputLastMessage
-  if (!options.outputLastMessage || options.outputLastMessage === options.outputFile) return options.outputFile
+  if (!options.outputLastMessage) return options.outputFile
+  if (options.outputLastMessage === options.outputFile) return options.outputFile
+  if (
+    callerCwd &&
+    resolveRunOutputPath(callerCwd, options.outputLastMessage) === resolveRunOutputPath(callerCwd, options.outputFile)
+  ) {
+    return options.outputFile
+  }
   throw new Error("--output-file and --output-last-message must not point to different files")
 }
 
@@ -85,7 +95,7 @@ export async function writeRunOutputFile(callerCwd: string, target: string, cont
 }
 
 export async function handleRunStructuredOutput(finalMessage: string | undefined, options: RunStructuredOutputOptions) {
-  const outputFile = resolveRunOutputFile(options)
+  const outputFile = resolveRunOutputFile(options, options.callerCwd)
   if (!outputFile && !options.outputSchema) return
 
   const text = finalMessage?.trim()

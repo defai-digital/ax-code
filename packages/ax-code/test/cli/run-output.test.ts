@@ -25,6 +25,17 @@ test("run structured output rejects conflicting output file aliases", () => {
   )
 })
 
+test("run structured output allows aliases that resolve to the same path", async () => {
+  await using tmp = await tmpdir()
+
+  expect(resolveRunOutputFile({ outputFile: "result.json", outputLastMessage: "./result.json" }, tmp.path)).toBe(
+    "result.json",
+  )
+  expect(resolveRunOutputFile({ outputFile: "nested/../result.json", outputLastMessage: "result.json" }, tmp.path)).toBe(
+    "nested/../result.json",
+  )
+})
+
 test("run structured output extracts text only from the current assistant message", () => {
   const messages = [
     {
