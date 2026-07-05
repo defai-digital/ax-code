@@ -11,15 +11,15 @@ export const ANTIGRAVITY_ACCOUNTS_PATHS = [
 ]
 
 export const readJsonFile = (filePath) => {
-  if (!fs.existsSync(filePath)) {
-    return null
-  }
   try {
     const raw = fs.readFileSync(filePath, "utf8")
     const trimmed = raw.trim()
     if (!trimmed) return null
     return JSON.parse(trimmed)
   } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return null
+    }
     console.warn(`Failed to read JSON file: ${filePath}`, error)
     return null
   }
