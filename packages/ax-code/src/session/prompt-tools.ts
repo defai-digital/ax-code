@@ -24,6 +24,7 @@ import { Isolation } from "@/isolation"
 import { Config } from "@/config/config"
 import { Instance } from "../project/instance"
 import { Truncate } from "@/tool/truncate"
+import { uniqueStrings } from "@/util/string-list"
 import type { SessionProcessor } from "./processor"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { estimateToolDefinitionTokens } from "./prompt-request"
@@ -102,7 +103,7 @@ export function isolationRetryState(input: {
   networkBypass: boolean
 }): Isolation.State | undefined {
   if (!input.isolation) return undefined
-  const bypass = Array.from(new Set([...(input.isolation.bypass ?? []), ...input.pathBypass]))
+  const bypass = uniqueStrings([...(input.isolation.bypass ?? []), ...input.pathBypass])
   return {
     ...input.isolation,
     network: input.networkBypass ? true : input.isolation.network,

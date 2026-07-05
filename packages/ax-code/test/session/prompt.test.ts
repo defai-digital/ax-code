@@ -81,6 +81,21 @@ describe("session.prompt isolation retry state", () => {
       bypass: ["/tmp/approved"],
     })
   })
+
+  test("deduplicates path bypasses while preserving approval order", () => {
+    const isolation: Isolation.State = {
+      ...Isolation.resolve({ mode: "workspace-write", network: false }, "/tmp/project"),
+      bypass: ["/tmp/already-approved", "/tmp/shared"],
+    }
+
+    const retry = isolationRetryState({
+      isolation,
+      pathBypass: ["/tmp/shared", "/tmp/newly-approved"],
+      networkBypass: false,
+    })
+
+    expect(retry?.bypass).toEqual(["/tmp/already-approved", "/tmp/shared", "/tmp/newly-approved"])
+  })
 })
 
 describe("session.prompt autonomous decision ledger", () => {
