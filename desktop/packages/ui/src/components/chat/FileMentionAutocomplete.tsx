@@ -12,6 +12,11 @@ import { Icon } from "@/components/icon/Icon"
 import { useDirectoryShowHidden } from "@/lib/directoryShowHidden"
 import { useFilesViewShowGitignored } from "@/lib/filesViewShowGitignored"
 import { useI18n } from "@/lib/i18n"
+import {
+  filesViewPathsEqual,
+  getFilesViewDisplayPath,
+  normalizeFilesViewPath,
+} from "@/components/views/filesViewPathUtils"
 
 type FileInfo = ProjectFileSearchHit
 type AgentInfo = {
@@ -45,10 +50,17 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     )
     const projectRoot = React.useMemo(() => {
       const candidate = activeProjectPath || currentDirectory
-      return candidate ? candidate.replace(/\\/g, "/").replace(/\/+$/, "") : null
+      const normalized = candidate ? normalizeFilesViewPath(candidate) : ""
+      return normalized || null
     }, [activeProjectPath, currentDirectory])
     const projectTabs = useFilesViewTabsStore(
-      React.useCallback((state) => (projectRoot ? state.byRoot[projectRoot] : undefined), [projectRoot]),
+      React.useCallback((state) => {
+        if (!projectRoot) return undefined
+        return (
+          state.byRoot[projectRoot] ??
+          Object.entries(state.byRoot).find(([root]) => filesViewPathsEqual(root, projectRoot))?.[1]
+        )
+      }, [projectRoot]),
     )
     const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents)
     const searchFiles = useFileSearchStore((state) => state.searchFiles)
@@ -85,17 +97,15 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         .filter((filePath) => {
           if (seen.has(filePath)) return false
           seen.add(filePath)
-          const relative = filePath.startsWith(`${projectRoot}/`) ? filePath.slice(projectRoot.length + 1) : filePath
+          const relative = getFilesViewDisplayPath(projectRoot, filePath)
           if (!queryLower) return true
           return relative.toLowerCase().includes(queryLower)
         })
         .slice(0, 6)
         .map((filePath) => {
-          const normalizedPath = filePath.replace(/\\/g, "/")
+          const normalizedPath = normalizeFilesViewPath(filePath)
           const name = normalizedPath.split("/").filter(Boolean).pop() || normalizedPath
-          const relativePath = normalizedPath.startsWith(`${projectRoot}/`)
-            ? normalizedPath.slice(projectRoot.length + 1)
-            : normalizedPath
+          const relativePath = getFilesViewDisplayPath(projectRoot, normalizedPath)
           return {
             name,
             path: normalizedPath,

@@ -27,6 +27,14 @@ export const isFilesViewPathWithinRoot = (path: string, root: string): boolean =
   return projectPathMatchesRoot(normalizedPath, normalizedRoot)
 }
 
+export const filesViewPathsEqual = (left: string, right: string): boolean =>
+  isFilesViewPathWithinRoot(left, right) && isFilesViewPathWithinRoot(right, left)
+
+const normalizeComparableFilesViewPath = (value: string): string => {
+  const normalized = normalizeFilesViewPath(value)
+  return normalized.startsWith("//") || /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized
+}
+
 const appendPathSegment = (base: string, segment: string): string =>
   base.endsWith("/") ? `${base}${segment}` : `${base}/${segment}`
 
@@ -57,6 +65,11 @@ export const getFilesViewDisplayPath = (root: string | null, path: string): stri
     return normalizedFilePath
   }
 
-  const relative = normalizedFilePath.slice(normalizedRoot.length)
+  const comparableFilePath = normalizeComparableFilesViewPath(normalizedFilePath)
+  const comparableRoot = normalizeComparableFilesViewPath(normalizedRoot)
+  const relative = normalizedFilePath.slice(comparableRoot.length)
+  if (comparableFilePath === comparableRoot) {
+    return "."
+  }
   return relative.startsWith("/") ? relative.slice(1) : relative
 }

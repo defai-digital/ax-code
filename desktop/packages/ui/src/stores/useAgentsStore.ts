@@ -20,29 +20,8 @@ import { useSkillsStore } from "@/stores/useSkillsStore"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { parseConfigPathGroup } from "@/lib/configPathGroup"
 import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
+import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
-
-const getConfigDirectory = (): string | null => {
-  try {
-    const projectsStore = useProjectsStore.getState()
-    const activeProject = projectsStore.getActiveProject?.()
-
-    // 1. Primary: Active project path from store
-    if (activeProject?.path?.trim()) {
-      return activeProject.path.trim()
-    }
-
-    // 2. Fallback: current ax-code directory (session / runtime)
-    const clientDir = axCodeClient.getDirectory()
-    if (clientDir?.trim()) {
-      return clientDir.trim()
-    }
-  } catch (err) {
-    console.warn("[AgentsStore] Error resolving config directory:", err)
-  }
-
-  return null
-}
 
 const AGENTS_LOAD_CACHE_TTL_MS = 5000
 const DEFAULT_AGENTS_CACHE_KEY = "__default__"
@@ -163,7 +142,7 @@ export const useAgentsStore = create<AgentsStore>()(
         },
 
         loadAgents: async () => {
-          const configDirectory = getConfigDirectory()
+          const configDirectory = getActiveConfigDirectory("AgentsStore")
           const cacheKey = getAgentsCacheKey(configDirectory)
           const now = Date.now()
           const loadedAt = agentsLastLoadedAt.get(cacheKey) ?? 0
@@ -299,7 +278,7 @@ export const useAgentsStore = create<AgentsStore>()(
               console.log("[AgentsStore] Agent config to save:", agentConfig)
             }
 
-            const configDirectory = getConfigDirectory()
+            const configDirectory = getActiveConfigDirectory("AgentsStore")
             const queryParams = configDirectory ? `?directory=${encodeURIComponent(configDirectory)}` : ""
 
             const response = await fetch(
@@ -364,8 +343,7 @@ export const useAgentsStore = create<AgentsStore>()(
             if (config.permission !== undefined) agentConfig.permission = config.permission
             if (config.disable !== undefined) agentConfig.disable = config.disable
 
-            // Use active project root for project-level agent support.
-            const configDirectory = getConfigDirectory()
+            const configDirectory = getActiveConfigDirectory("AgentsStore")
             const queryParams = configDirectory ? `?directory=${encodeURIComponent(configDirectory)}` : ""
 
             const response = await fetch(
@@ -419,8 +397,7 @@ export const useAgentsStore = create<AgentsStore>()(
           startConfigUpdate("Deleting agent configuration…")
           let requiresReload = false
           try {
-            // Use active project root for project-level agent support.
-            const configDirectory = getConfigDirectory()
+            const configDirectory = getActiveConfigDirectory("AgentsStore")
             const queryParams = configDirectory ? `?directory=${encodeURIComponent(configDirectory)}` : ""
 
             const response = await fetch(

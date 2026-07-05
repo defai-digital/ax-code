@@ -5,9 +5,9 @@ import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from
 import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync"
 import { getSafeStorage } from "./utils/safeStorage"
 import { sleep, waitForAxCodeConnection } from "./utils/axCodeConnection"
-import { useProjectsStore } from "@/stores/useProjectsStore"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
+import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
 
 export type CommandScope = "user" | "project"
 
@@ -59,28 +59,6 @@ const buildCommandsSignature = (commands: Command[]): string => {
     .join("||")
 }
 
-const getRequestDirectory = (): string | null => {
-  try {
-    const projectsStore = useProjectsStore.getState()
-    const activeProject = projectsStore.getActiveProject?.()
-
-    // 1. Primary: Active project path from store
-    if (activeProject?.path?.trim()) {
-      return activeProject.path.trim()
-    }
-
-    // 2. Fallback: current ax-code directory (session / runtime)
-    const clientDir = axCodeClient.getDirectory()
-    if (clientDir?.trim()) {
-      return clientDir.trim()
-    }
-  } catch (err) {
-    console.warn("[CommandsStore] Error resolving config directory:", err)
-  }
-
-  return null
-}
-
 export interface CommandDraft {
   name: string
   scope: CommandScope
@@ -123,7 +101,7 @@ export const useCommandsStore = create<CommandsStore>()(
         },
 
         loadCommands: async () => {
-          const directory = getRequestDirectory()
+          const directory = getActiveConfigDirectory("CommandsStore")
           const cacheKey = getCommandsCacheKey(directory)
           const now = Date.now()
           const loadedAt = commandsLastLoadedAt.get(cacheKey) ?? 0
@@ -259,7 +237,7 @@ export const useCommandsStore = create<CommandsStore>()(
               console.log("[CommandsStore] Command config to save:", commandConfig)
             }
 
-            const directory = getRequestDirectory()
+            const directory = getActiveConfigDirectory("CommandsStore")
             const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : ""
 
             const response = await fetch(
@@ -331,7 +309,7 @@ export const useCommandsStore = create<CommandsStore>()(
               console.log("[CommandsStore] Command config to update:", commandConfig)
             }
 
-            const directory = getRequestDirectory()
+            const directory = getActiveConfigDirectory("CommandsStore")
             const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : ""
 
             const response = await fetch(
@@ -387,8 +365,7 @@ export const useCommandsStore = create<CommandsStore>()(
           startConfigUpdate("Deleting command configuration…")
           let requiresReload = false
           try {
-            // Use active project root for project-level command support
-            const directory = getRequestDirectory()
+            const directory = getActiveConfigDirectory("CommandsStore")
             const queryParams = directory ? `?directory=${encodeURIComponent(directory)}` : ""
 
             const response = await fetch(
