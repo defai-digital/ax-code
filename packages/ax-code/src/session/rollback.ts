@@ -5,6 +5,7 @@ import { EventQuery } from "../replay/query"
 import { Session } from "."
 import { MessageID, PartID, SessionID } from "./schema"
 import { SessionRevert } from "./revert"
+import { uniqueStrings } from "../util/string-list"
 
 export namespace SessionRollback {
   export type Message = {
@@ -88,7 +89,7 @@ export namespace SessionRollback {
         .map((id) => input.graph.nodes.find((node) => node.id === id))
         .filter((node) => node?.type === "tool_call")
       const labels = tools.map((node) => node!.label)
-      const kinds = [...new Set(tools.flatMap((node) => (node?.tool ? [node.tool] : [])))]
+      const kinds = uniqueStrings(tools.flatMap((node) => (node?.tool ? [node.tool] : [])))
 
       return {
         ...item,
