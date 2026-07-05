@@ -5,6 +5,7 @@ import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
 import { QualityPromotionSignedArchiveAttestationPolicy } from "./promotion-signed-archive-attestation-policy"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
 import { summarizeOverallStatus } from "./status"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionSignedArchiveAttestationRecord {
   export const RecordSummary = z.object({
@@ -214,9 +215,7 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     })
     try {
       const existing = await get({ source: record.source, recordID: record.recordID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Signed archive attestation record ${record.recordID} already exists for source ${record.source} with different content`,
       )

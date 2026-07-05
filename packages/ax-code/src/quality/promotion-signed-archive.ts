@@ -8,6 +8,7 @@ import { sha256Hex } from "./digest"
 import { QualityPromotionPackagedArchive } from "./promotion-packaged-archive"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionSignedArchive {
   export const SignatureAlgorithm = z.literal("hmac-sha256")
@@ -313,9 +314,7 @@ export namespace QualityPromotionSignedArchive {
     })
     try {
       const existing = await get({ source: archive.source, signedArchiveID: archive.signedArchiveID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion signed archive ${archive.signedArchiveID} already exists for source ${archive.source} with different content`,
       )
