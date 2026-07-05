@@ -194,9 +194,7 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       }
 
       const normalized = normalizeStringArray(
-        settings[key]
-          .map((entry) => (typeof entry === "string" ? normalizePathForPersistence(entry) : entry))
-          .filter((entry) => typeof entry === "string" && entry.length > 0),
+        settings[key].map((entry) => (typeof entry === "string" ? normalizePathForPersistence(entry) : entry)),
       )
 
       if (!areStringArraysEqual(normalized, settings[key])) {

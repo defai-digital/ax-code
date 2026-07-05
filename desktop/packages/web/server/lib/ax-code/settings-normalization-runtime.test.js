@@ -143,5 +143,16 @@ describe("settings normalization runtime - symlink resolution", () => {
 
       expect(result.changed).toBe(false)
     })
+
+    it("normalizes path array fields through the shared string-array filter", () => {
+      const runtime = createTestRuntime()
+
+      const result = runtime.normalizeSettingsPaths({
+        approvedDirectories: [" /workspace/project ", "", "/workspace/project", null],
+      })
+
+      expect(result.changed).toBe(true)
+      expect(result.settings.approvedDirectories).toEqual(["/workspace/project"])
+    })
   })
 })
