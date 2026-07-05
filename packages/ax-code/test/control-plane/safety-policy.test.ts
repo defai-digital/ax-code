@@ -63,13 +63,28 @@ describe("SafetyPolicy", () => {
     expect(
       SafetyPolicy.decide({
         mode: "autonomous",
-        permission: "write",
+        permission: "edit",
         path: "src/app.ts",
       }),
     ).toEqual({
       action: "ask",
       risk: "high",
       reason: "autonomous_risky_permission",
+      checkpointRequired: true,
+      matchedRule: "edit",
+    })
+  })
+
+  test("does not classify stale tool aliases as default runtime permissions", () => {
+    expect(
+      SafetyPolicy.decide({
+        mode: "normal",
+        permission: "write",
+      }),
+    ).toEqual({
+      action: "allow_with_checkpoint",
+      risk: "low",
+      reason: "unknown_permission_checkpoint",
       checkpointRequired: true,
       matchedRule: "write",
     })

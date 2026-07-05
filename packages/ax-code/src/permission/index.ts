@@ -283,7 +283,7 @@ export namespace Permission {
 
     // Autonomous mode: hybrid policy (ADR-004 / PRD v4.2.0).
     //   - SAFE permissions (read/glob/grep/list/...) auto-approve.
-    //   - RISK permissions (edit/write/apply_patch/bash/network/...)
+    //   - RISK permissions (edit/bash/webfetch/task/...)
     //     fall through to the existing ruleset/ask path so user-defined
     //     deny rules still apply and pre-approved patterns still match.
     //   - Unknown permissions ask by default so enforcement matches

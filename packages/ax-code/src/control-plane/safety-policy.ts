@@ -44,34 +44,6 @@ export namespace SafetyPolicy {
     blastRadius?: BlastRadius
   }
 
-  const DEFAULT_SAFE_PERMISSIONS = [
-    "read",
-    "glob",
-    "grep",
-    "list",
-    "list_directory",
-    "codesearch",
-    "lsp",
-    "code_intelligence",
-    "skill",
-    "todoread",
-    "websearch",
-  ] as const
-
-  const DEFAULT_RISKY_PERMISSIONS = [
-    "edit",
-    "write",
-    "apply_patch",
-    "bash",
-    "network",
-    "package_install",
-    "webfetch",
-    "external_directory",
-    "task",
-    "todowrite",
-    "memorywrite",
-  ] as const
-
   const DEFAULT_PROTECTED_PATHS = [
     ".env",
     ".env.*",
@@ -166,21 +138,17 @@ export namespace SafetyPolicy {
 
     if (input.safePermissions) {
       if (input.safePermissions.includes(input.permission)) return "safe"
-    } else if (defaultClass === "safe" || includesPermission(DEFAULT_SAFE_PERMISSIONS, input.permission)) {
+    } else if (defaultClass === "safe") {
       return "safe"
     }
 
     if (input.riskyPermissions) {
       if (input.riskyPermissions.includes(input.permission)) return "risk"
-    } else if (defaultClass === "risk" || includesPermission(DEFAULT_RISKY_PERMISSIONS, input.permission)) {
+    } else if (defaultClass === "risk") {
       return "risk"
     }
 
     return "unknown"
-  }
-
-  function includesPermission(permissions: readonly string[], permission: string): boolean {
-    return permissions.includes(permission)
   }
 
   function blastRadiusDecision(input: BlastRadius | undefined): Decision | undefined {
