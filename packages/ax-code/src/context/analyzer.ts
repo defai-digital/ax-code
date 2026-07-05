@@ -12,6 +12,7 @@ import { toErrorMessage } from "../util/error-message"
 import { Log } from "../util/log"
 import { isNonEmptyRecord } from "../util/record"
 import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../util/package-json"
+import { uniqueStrings } from "../util/string-list"
 import { Glob } from "@/bun/node-compat"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
@@ -222,7 +223,7 @@ function detectTechStack(root: string, pkg: PackageJson | null): string[] {
   if (pathExists(root, "tsconfig.json")) stack.push("TypeScript")
   if (pathExists(root, "bunfig.toml")) stack.push("Bun")
 
-  return [...new Set(stack)]
+  return uniqueStrings(stack)
 }
 
 function detectProjectType(root: string, pkg: PackageJson | null): string {
@@ -412,9 +413,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
         if (batch.length >= 50 || fileCount + batch.length >= 5000) {
           const batchToRead = batch.splice(0, Math.max(0, 5000 - fileCount))
           const results = await Promise.all(
-            batchToRead.map((f) =>
-              readFile(path.join(cwd, f), "utf-8").catch(() => ""),
-            ),
+            batchToRead.map((f) => readFile(path.join(cwd, f), "utf-8").catch(() => "")),
           )
           for (const content of results) {
             fileCount++
@@ -426,11 +425,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
       }
       if (batch.length > 0 && fileCount < 5000) {
         const batchToRead = batch.slice(0, 5000 - fileCount)
-        const results = await Promise.all(
-          batchToRead.map((f) =>
-            readFile(path.join(cwd, f), "utf-8").catch(() => ""),
-          ),
-        )
+        const results = await Promise.all(batchToRead.map((f) => readFile(path.join(cwd, f), "utf-8").catch(() => "")))
         for (const content of results) {
           fileCount++
           loc += countLines(content)
