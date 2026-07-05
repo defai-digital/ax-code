@@ -20,23 +20,13 @@ import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import { buildSessionContextUsage, findLatestAssistantTokenUsage } from "@/lib/messages/assistantTokens"
 import type { SessionContextUsage } from "@/stores/types/sessionTypes"
 import { buildMiniChatMainHandoffPayload } from "./miniChatMainHandoff"
+import { compactMiniChatPath, findMiniChatProjectForDirectory } from "./miniChatPath"
 import type { MiniChatMode } from "./types"
 
 type MiniChatLayoutProps = {
   mode: MiniChatMode
   autoOpenDraft?: boolean
   unavailable?: boolean
-}
-
-const compactPath = (value: string | null | undefined): string => {
-  const path = typeof value === "string" ? value.trim() : ""
-  if (!path) return ""
-  const home = typeof window !== "undefined" ? window.__AX_CODE_DESKTOP_HOME__ : ""
-  if (home && path === home) return "~"
-  if (home && path.startsWith(`${home}/`)) return `~/${path.slice(home.length + 1)}`
-  const segments = path.split("/").filter(Boolean)
-  if (segments.length <= 3) return path
-  return `.../${segments.slice(-3).join("/")}`
 }
 
 const normalizePath = (value: string | null | undefined): string => {
@@ -107,7 +97,8 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
   )
   const currentDirectoryNormalized = normalizePath(currentDirectory)
   const openDirectory = worktreeDirectory || sessionDirectory || draftDirectory || currentDirectoryNormalized
-  const directoryLabel = compactPath(openDirectory)
+  const homeDirectory = typeof window !== "undefined" ? window.__AX_CODE_DESKTOP_HOME__ : ""
+  const directoryLabel = compactMiniChatPath(openDirectory, homeDirectory)
   const catalogWorktreeBranch = useSessionUIStore((state) => {
     const candidateDirectory = normalizePath(worktreeDirectory || sessionDirectory || "")
     if (!candidateDirectory) return null
@@ -127,18 +118,7 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     const projectDirectory = normalizePath(
       sessionWorktreeMetadata?.projectDirectory ?? worktreeAttachment?.worktreeRoot ?? null,
     )
-    const candidateDirectory = projectDirectory || openDirectory
-    if (!candidateDirectory) return null
-    return (
-      projects
-        .map((entry) => ({ ...entry, normalizedPath: normalizePath(entry.path) }))
-        .filter(
-          (entry) =>
-            entry.normalizedPath &&
-            (entry.normalizedPath === candidateDirectory || candidateDirectory.startsWith(`${entry.normalizedPath}/`)),
-        )
-        .sort((left, right) => right.path.length - left.path.length)[0] ?? null
-    )
+    return findMiniChatProjectForDirectory(projects, openDirectory, projectDirectory)
   }, [openDirectory, projects, sessionWorktreeMetadata?.projectDirectory, worktreeAttachment?.worktreeRoot])
   const projectLabel = React.useMemo(() => {
     const project = pathMatchedProject ?? activeProject
