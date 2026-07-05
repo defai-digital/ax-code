@@ -454,7 +454,7 @@ export const RunCommand = cmd({
         outputLastMessage: args["output-last-message"],
       })
     } catch (error) {
-      exitEarly(error instanceof Error ? error.message : String(error))
+      exitEarly(toErrorMessage(error))
     }
 
     const rules: Permission.Ruleset = [

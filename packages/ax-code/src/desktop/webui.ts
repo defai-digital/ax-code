@@ -2,6 +2,7 @@ import { spawn } from "child_process"
 import fs from "fs"
 import path from "path"
 import open from "open"
+import { toErrorMessage } from "@/util/error-message"
 
 export const DEFAULT_WEBUI_PORT = 3100
 
@@ -107,9 +108,7 @@ async function runDesktopJson<T>(invocation: DesktopInvocation, args: string[], 
   try {
     return JSON.parse(result.stdout.trim()) as T
   } catch (error) {
-    throw new Error(
-      `Could not parse ${invocation.displayName} JSON output: ${error instanceof Error ? error.message : String(error)}`,
-    )
+    throw new Error(`Could not parse ${invocation.displayName} JSON output: ${toErrorMessage(error)}`)
   }
 }
 

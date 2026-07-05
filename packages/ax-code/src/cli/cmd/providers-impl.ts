@@ -371,7 +371,7 @@ export const ProvidersAxEngineCommand = cmd({
           prompts.outro("Done")
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = toErrorMessage(error)
         if (args.json) console.log(JSON.stringify({ installed: false, error: message }, null, 2))
         else {
           prompts.log.error(message)
