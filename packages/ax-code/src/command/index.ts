@@ -8,6 +8,7 @@ import { Skill } from "../skill"
 import { Truncate } from "../tool/truncate"
 import { Policy } from "../quality/policy"
 import { Log } from "../util/log"
+import { uniqueStrings } from "../util/string-list"
 import { FileCommand } from "./file-command"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
@@ -77,7 +78,7 @@ export namespace Command {
     const result: string[] = []
     const numbered = template.match(/\$\d+(?![A-Za-z0-9_])/g)
     if (numbered) {
-      for (const match of [...new Set(numbered)].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))) {
+      for (const match of uniqueStrings(numbered).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))) {
         result.push(match)
       }
     }
