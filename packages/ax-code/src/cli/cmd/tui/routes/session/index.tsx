@@ -7,7 +7,6 @@ import { Spinner } from "@tui/component/spinner"
 import { Chip } from "@tui/ui/primitives/chip"
 import { selectedForeground, tint, useTheme } from "@tui/context/theme"
 import {
-  BoxRenderable,
   ScrollBoxRenderable,
   addDefaultParsers,
   MacOSScrollAccel,
@@ -18,7 +17,7 @@ import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type { AssistantMessage, Part, ToolPart, UserMessage, TextPart, ReasoningPart } from "@ax-code/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
-import { useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@ax-code/opentui-solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/opentui-solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
@@ -51,7 +50,7 @@ import { DialogDiffViewer } from "../../component/dialog-diff-viewer"
 import { SessionRollbackView } from "./rollback"
 import { Sidebar } from "./sidebar"
 import { sessionQualityActions, sessionQualityActionValue } from "./quality"
-import { computeSidebarWidth, computeSessionMainPaneWidth } from "./layout"
+import { computeSessionMainPaneWidth } from "./layout"
 import { Flag } from "@/flag/flag"
 import parsers from "../../../../../../parsers-config.ts"
 import { Toast, useToast } from "../../ui/toast"
@@ -62,7 +61,6 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
-import { normalize } from "./format"
 import { coalesceParts } from "./coalesce"
 import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
@@ -234,11 +232,10 @@ export function Session() {
     "auto",
   )
   const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
-  const [showAssistantMetadata, setShowAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
+  const [showAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", true)
   const [showHeader, setShowHeader] = kv.signal("header_visible", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
-  const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
   const [statusTick, setStatusTick] = createSignal(0)
 
