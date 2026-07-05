@@ -250,6 +250,157 @@ describe("applyDirectoryEvent", () => {
     )
   })
 
+  test("does not duplicate overlapping delta text after a newer part update", () => {
+    const draft = state()
+    const messageID = "msg_overlap"
+    const partID = "prt_overlap"
+
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID,
+          sessionID: "ses_1",
+          type: "text",
+          text: "Fix typo in ToolOutputDialog - ",
+        },
+      },
+    } as Event)
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID,
+          sessionID: "ses_1",
+          type: "text",
+          text: "Fix typo in ToolOutputDialog - toolFailedToReadDiagram vs toolFailedReadDiagram. Let me fix it.",
+        },
+      },
+    } as Event)
+    applyDirectoryEvent(draft, {
+      type: "message.part.delta",
+      properties: {
+        messageID,
+        partID,
+        field: "text",
+        delta: "toolFailedToReadDiagram vs toolFailedReadDiagram. Let me fix it.",
+      },
+    } as Event)
+
+    expect(draft.part[messageID]).toHaveLength(1)
+    expect((draft.part[messageID]?.[0] as Extract<Part, { type: "text" }> | undefined)?.text).toBe(
+      "Fix typo in ToolOutputDialog - toolFailedToReadDiagram vs toolFailedReadDiagram. Let me fix it.",
+    )
+  })
+
+  test("appends only the non-overlapping suffix of a streaming delta", () => {
+    const draft = state()
+    const messageID = "msg_suffix"
+    const partID = "prt_suffix"
+
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID,
+          sessionID: "ses_1",
+          type: "text",
+          text: "toolFailedToReadDiagram vs toolFailedRead",
+        },
+      },
+    } as Event)
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID,
+          sessionID: "ses_1",
+          type: "text",
+          text: "toolFailedToReadDiagram vs toolFailedReadDiagra",
+        },
+      },
+    } as Event)
+    applyDirectoryEvent(draft, {
+      type: "message.part.delta",
+      properties: {
+        messageID,
+        partID,
+        field: "text",
+        delta: "Diagram. Let me fix it.",
+      },
+    } as Event)
+
+    expect((draft.part[messageID]?.[0] as Extract<Part, { type: "text" }> | undefined)?.text).toBe(
+      "toolFailedToReadDiagram vs toolFailedReadDiagram. Let me fix it.",
+    )
+  })
+
+  test("appends a non-overlapping delta unchanged", () => {
+    const draft = state()
+    const messageID = "msg_non_overlap"
+    const partID = "prt_non_overlap"
+
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID,
+          sessionID: "ses_1",
+          type: "text",
+          text: "PR comment done - ",
+        },
+      },
+    } as Event)
+    applyDirectoryEvent(draft, {
+      type: "message.part.delta",
+      properties: {
+        messageID,
+        partID,
+        field: "text",
+        delta: "Let me fix it.",
+      },
+    } as Event)
+
+    expect((draft.part[messageID]?.[0] as Extract<Part, { type: "text" }> | undefined)?.text).toBe(
+      "PR comment done - Let me fix it.",
+    )
+  })
+
+  test("preserves legitimate repeated output without an update-to-delta dedupe window", () => {
+    const draft = state()
+    const messageID = "msg_repeat"
+    const partID = "prt_repeat"
+
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: partID,
+          messageID,
+          sessionID: "ses_1",
+          type: "text",
+          text: "ha",
+        },
+      },
+    } as Event)
+    applyDirectoryEvent(draft, {
+      type: "message.part.delta",
+      properties: {
+        messageID,
+        partID,
+        field: "text",
+        delta: "ha",
+      },
+    } as Event)
+
+    expect((draft.part[messageID]?.[0] as Extract<Part, { type: "text" }> | undefined)?.text).toBe("haha")
+  })
+
   test("preserves newer completed tool parts when a stale snapshot arrives later", () => {
     const draft = state()
     const newerToolPart = {
@@ -291,6 +442,47 @@ describe("applyDirectoryEvent", () => {
       output: "newer",
       time: { start: 1, end: 20 },
     })
+  })
+
+  test("does not preserve invalid tool end times over newer updates", () => {
+    const draft = state()
+    const invalidToolPart = {
+      id: "tool_invalid",
+      messageID: "msg_1",
+      sessionID: "ses_1",
+      type: "tool",
+      tool: "apply_patch",
+      callID: "call_1",
+      state: {
+        time: { start: 20, end: 10 },
+      },
+    } as unknown as ToolPart
+    const runningToolPart = {
+      ...invalidToolPart,
+      state: {
+        status: "running",
+        input: {},
+        time: { start: 20 },
+      },
+    } satisfies ToolPart
+
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: { part: invalidToolPart },
+    } as Event)
+    applyDirectoryEvent(draft, {
+      type: "message.part.updated",
+      properties: { part: runningToolPart },
+    } as Event)
+
+    expect((draft.part.msg_1?.[0] as Extract<Part, { type: "tool" }> | undefined)?.state).toMatchObject({
+      status: "running",
+      time: { start: 20 },
+    })
+    expect(
+      ((draft.part.msg_1?.[0] as Extract<Part, { type: "tool" }> | undefined)?.state as { time?: { end?: number } })
+        .time?.end,
+    ).toBeUndefined()
   })
 
   test("skips duplicate session status events", () => {
