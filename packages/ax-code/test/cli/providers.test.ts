@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import * as prompts from "@clack/prompts"
 import fs from "fs/promises"
 import path from "path"
-import { PassThrough } from "node:stream"
 import { Auth } from "../../src/auth"
 import {
   DEFAULT_LOGIN_PROVIDER_IDS,
@@ -196,44 +195,12 @@ describe("providers command", () => {
     expect(src).toContain("prompts.log.error(toErrorMessage(error))")
   })
 
-  test("auth command timeout waits for process kill to complete", async () => {
-    const originalSetTimeout = globalThis.setTimeout
-    const setTimeoutSpy = (
-      handler: (...args: any[]) => void,
-      timeout?: number,
-      ...args: any[]
-    ): ReturnType<typeof setTimeout> => {
-      return originalSetTimeout(handler, timeout === 30_000 ? 1 : timeout, ...args)
-    }
-
-    globalThis.setTimeout = setTimeoutSpy as typeof globalThis.setTimeout
-
+  test("well-known login stores a manually entered token", async () => {
     const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
-    const confirmSpy = vi.spyOn(prompts, "confirm").mockResolvedValue(true)
-    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
-
-    const stdout = new PassThrough()
-    const stderr = new PassThrough()
-
-    const proc = {
-      exited: new Promise<number>(() => {}),
-      stdout,
-      stderr,
-    }
-
-    let killStarted = false
-    let killCompleted = false
-    vi.spyOn(Process, "spawn").mockReturnValue(proc as any)
-    vi.spyOn(Process, "killProcessTree").mockImplementation(async () => {
-      killStarted = true
-      await new Promise<void>((resolve) => {
-        originalSetTimeout(() => {
-          killCompleted = true
-          resolve()
-        }, 20)
-      })
-    })
+    const passwordSpy = vi.spyOn(prompts, "password").mockResolvedValue("well-known-token")
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+    const spawnSpy = vi.spyOn(Process, "spawn")
 
     vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
     vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
@@ -241,7 +208,6 @@ describe("providers command", () => {
       async json() {
         return {
           auth: {
-            command: ["slow-auth-command"],
             env: "MY_AUTH_TOKEN",
           },
         }
@@ -250,37 +216,34 @@ describe("providers command", () => {
 
     try {
       await ProvidersLoginCommand.handler({ url: "https://example.com" } as any)
-      expect(killStarted).toBe(true)
-      expect(killCompleted).toBe(true)
-      expect(errorSpy).toHaveBeenCalledWith("Auth command timed out after 30000ms")
+
+      expect(passwordSpy).toHaveBeenCalledWith({
+        message: "Enter token for https://example.com",
+        validate: expect.any(Function),
+      })
+      expect(spawnSpy).not.toHaveBeenCalled()
+      expect(await Auth.get("https://example.com")).toEqual({
+        type: "wellknown",
+        key: "MY_AUTH_TOKEN",
+        token: "well-known-token",
+      })
+      expect(successSpy).toHaveBeenCalledWith("Logged into https://example.com")
       expect(outroSpy).toHaveBeenCalledWith("Done")
-      expect(introSpy).toHaveBeenCalledWith("Add credential")
     } finally {
-      confirmSpy.mockRestore()
       introSpy.mockRestore()
       outroSpy.mockRestore()
-      errorSpy.mockRestore()
-      globalThis.setTimeout = originalSetTimeout
+      passwordSpy.mockRestore()
+      successSpy.mockRestore()
+      spawnSpy.mockRestore()
     }
   })
 
-  test("well-known login rejects empty auth command tokens", async () => {
+  test("well-known login ignores remote auth commands", async () => {
     const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
-    const confirmSpy = vi.spyOn(prompts, "confirm").mockResolvedValue(true)
-    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
     const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
-
-    const stdout = new PassThrough()
-    const stderr = new PassThrough()
-    stdout.end(" \n")
-    stderr.end()
-
-    vi.spyOn(Process, "spawn").mockReturnValue({
-      exited: Promise.resolve(0),
-      stdout,
-      stderr,
-    } as any)
+    const passwordSpy = vi.spyOn(prompts, "password").mockResolvedValue("manual-token")
+    const spawnSpy = vi.spyOn(Process, "spawn")
     vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
     vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
       ok: true,
@@ -297,16 +260,20 @@ describe("providers command", () => {
     try {
       await ProvidersLoginCommand.handler({ url: "https://example.com" } as any)
 
-      expect(errorSpy).toHaveBeenCalledWith("Auth command returned an empty token")
-      expect(successSpy).not.toHaveBeenCalled()
-      expect(await Auth.get("https://example.com")).toBeUndefined()
+      expect(spawnSpy).not.toHaveBeenCalled()
+      expect(passwordSpy).toHaveBeenCalled()
+      expect(await Auth.get("https://example.com")).toEqual({
+        type: "wellknown",
+        key: "MY_AUTH_TOKEN",
+        token: "manual-token",
+      })
       expect(outroSpy).toHaveBeenCalledWith("Done")
     } finally {
-      confirmSpy.mockRestore()
       introSpy.mockRestore()
       outroSpy.mockRestore()
-      errorSpy.mockRestore()
       successSpy.mockRestore()
+      passwordSpy.mockRestore()
+      spawnSpy.mockRestore()
     }
   })
 
@@ -314,7 +281,8 @@ describe("providers command", () => {
     const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
     const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
-    const passwordSpy = vi.spyOn(prompts, "password").mockResolvedValue("should-not-prompt")
+    const successSpy = vi.spyOn(prompts.log, "success").mockImplementation(() => {})
+    const passwordSpy = vi.spyOn(prompts, "password").mockResolvedValue("case-token")
     const assertSpy = vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
     const fetchSpy = vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
       ok: true,
@@ -331,28 +299,35 @@ describe("providers command", () => {
     try {
       await ProvidersLoginCommand.handler({ url: "HTTPS://example.com" } as any)
 
-      expect(passwordSpy).not.toHaveBeenCalled()
+      expect(passwordSpy).toHaveBeenCalledWith({
+        message: "Enter token for HTTPS://example.com",
+        validate: expect.any(Function),
+      })
       expect(assertSpy).toHaveBeenCalledWith("HTTPS://example.com/.well-known/ax-code", "providers-add")
       expect(fetchSpy).toHaveBeenCalled()
-      expect(errorSpy).toHaveBeenCalledWith(
-        "Well-known config has missing or invalid auth.command (expected non-empty string array)",
-      )
+      expect(errorSpy).not.toHaveBeenCalled()
+      expect(await Auth.get("HTTPS://example.com")).toEqual({
+        type: "wellknown",
+        key: "MY_AUTH_TOKEN",
+        token: "case-token",
+      })
       expect(outroSpy).toHaveBeenCalledWith("Done")
     } finally {
       introSpy.mockRestore()
       outroSpy.mockRestore()
       errorSpy.mockRestore()
+      successSpy.mockRestore()
       passwordSpy.mockRestore()
       assertSpy.mockRestore()
       fetchSpy.mockRestore()
     }
   })
 
-  test("well-known login rejects malformed auth command before prompting or spawning", async () => {
+  test("well-known login rejects malformed auth env before prompting or spawning", async () => {
     const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
     const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
     const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
-    const confirmSpy = vi.spyOn(prompts, "confirm")
+    const passwordSpy = vi.spyOn(prompts, "password")
     const spawnSpy = vi.spyOn(Process, "spawn")
 
     vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
@@ -361,8 +336,8 @@ describe("providers command", () => {
       async json() {
         return {
           auth: {
-            command: ["auth-cli", 42],
-            env: "MY_AUTH_TOKEN",
+            command: ["auth-cli"],
+            env: "lowercase_token",
           },
         }
       },
@@ -372,16 +347,16 @@ describe("providers command", () => {
       await ProvidersLoginCommand.handler({ url: "https://example.com" } as any)
 
       expect(errorSpy).toHaveBeenCalledWith(
-        "Well-known config has missing or invalid auth.command (expected non-empty string array)",
+        "Well-known config has missing or invalid auth.env (expected uppercase env var name)",
       )
-      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(passwordSpy).not.toHaveBeenCalled()
       expect(spawnSpy).not.toHaveBeenCalled()
       expect(outroSpy).toHaveBeenCalledWith("Done")
     } finally {
       introSpy.mockRestore()
       outroSpy.mockRestore()
       errorSpy.mockRestore()
-      confirmSpy.mockRestore()
+      passwordSpy.mockRestore()
       spawnSpy.mockRestore()
     }
   })

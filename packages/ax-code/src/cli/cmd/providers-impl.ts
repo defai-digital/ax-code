@@ -36,10 +36,6 @@ async function removeProviderAuth(provider: string) {
   await Provider.invalidate().catch(() => {})
 }
 
-function isWellKnownAuthCommand(input: unknown): input is string[] {
-  return Array.isArray(input) && input.length > 0 && input.every((item) => typeof item === "string" && item.trim())
-}
-
 async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, methodName?: string): Promise<boolean> {
   const prompts = await import("@clack/prompts")
   let index = 0
@@ -511,8 +507,6 @@ export const ProvidersLoginCommand = cmd({
     const { getCliProviderDefinition } = await import("../../provider/cli/config")
     const { probeCliProvider } = await import("../../provider/cli/connect")
     const { map, pipe, sortBy, values } = await import("remeda")
-    const { Process } = await import("../../util/process")
-    const { text } = await import("node:stream/consumers")
     UI.empty()
     prompts.intro("Add credential")
 
@@ -558,69 +552,20 @@ export const ProvidersLoginCommand = cmd({
             prompts.outro("Done")
             return
           }
-          if (!isWellKnownAuthCommand(wellknown?.auth?.command)) {
-            prompts.log.error("Well-known config has missing or invalid auth.command (expected non-empty string array)")
-            prompts.outro("Done")
-            return
-          }
           if (typeof wellknown.auth.env !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(wellknown.auth.env)) {
             prompts.log.error("Well-known config has missing or invalid auth.env (expected uppercase env var name)")
             prompts.outro("Done")
             return
           }
-          const confirmed = await prompts.confirm({
-            message: `Run authentication command: ${wellknown.auth.command.join(" ")}?`,
+          const token = await prompts.password({
+            message: `Enter token for ${url}`,
+            validate: (value) => (value && value.trim().length > 0 ? undefined : "Required"),
           })
-          if (prompts.isCancel(confirmed) || !confirmed) {
+          if (prompts.isCancel(token)) {
             prompts.outro("Aborted")
             return
           }
-          prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
-          const proc = Process.spawn(wellknown.auth.command, {
-            stdout: "pipe",
-            stderr: "pipe",
-          })
-          if (!proc.stdout) {
-            prompts.log.error("Auth command failed to start")
-            prompts.outro("Done")
-            return
-          }
-          let timeout: ReturnType<typeof setTimeout> | undefined
-          let timeoutKill: Promise<void> = Promise.resolve()
-          const timeoutResult = new Promise<null>((resolve) => {
-            timeout = setTimeout(() => {
-              timeoutKill = Process.killProcessTree(proc).catch(() => undefined)
-              resolve(null)
-            }, 30_000)
-          })
-          let result: [number, string, string] | null = null
-
-          try {
-            result = await Promise.race([
-              Promise.all([proc.exited, text(proc.stdout), proc.stderr ? text(proc.stderr) : Promise.resolve("")]),
-              timeoutResult,
-            ])
-          } finally {
-            if (timeout) clearTimeout(timeout)
-          }
-          if (result === null) {
-            await timeoutKill
-            prompts.log.error("Auth command timed out after 30000ms")
-            prompts.outro("Done")
-            return
-          }
-          const [exit, token, stderr] = result
-          if (exit !== 0) {
-            prompts.log.error(`Auth command failed (exit ${exit})${stderr ? ": " + stderr.trim() : ""}`)
-            prompts.outro("Done")
-            return
-          }
           const trimmedToken = token.trim()
-          if (!trimmedToken) {
-            prompts.log.error("Auth command returned an empty token")
-            prompts.outro("Done")
-            return
-          }
           await setProviderAuth(url, {
             type: "wellknown",
             key: wellknown.auth.env,
