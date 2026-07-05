@@ -89,6 +89,20 @@ describe("git routes index mutations", () => {
     expect(gitLibraries.stageFiles).toHaveBeenCalledWith("/repo", ["a.ts", "b.ts"])
   })
 
+  it("filters invalid bulk stage path entries before calling git", async () => {
+    const { app, getRoute } = createRouteRegistry()
+    registerGitRoutes(app)
+    const response = createMockResponse()
+
+    await getRoute("POST", "/api/git/stage")(
+      { query: { directory: "/repo" }, body: { paths: [" a.ts ", "", null, "b.ts"] } },
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(gitLibraries.stageFiles).toHaveBeenCalledWith("/repo", ["a.ts", "b.ts"])
+  })
+
   it("accepts legacy unstage path payloads", async () => {
     const { app, getRoute } = createRouteRegistry()
     registerGitRoutes(app)
@@ -107,6 +121,20 @@ describe("git routes index mutations", () => {
 
     await getRoute("POST", "/api/git/unstage")(
       { query: { directory: "/repo" }, body: { paths: ["a.ts", "b.ts"] } },
+      response,
+    )
+
+    expect(response.statusCode).toBe(200)
+    expect(gitLibraries.unstageFiles).toHaveBeenCalledWith("/repo", ["a.ts", "b.ts"])
+  })
+
+  it("filters invalid bulk unstage path entries before calling git", async () => {
+    const { app, getRoute } = createRouteRegistry()
+    registerGitRoutes(app)
+    const response = createMockResponse()
+
+    await getRoute("POST", "/api/git/unstage")(
+      { query: { directory: "/repo" }, body: { paths: [" a.ts ", "", undefined, "b.ts"] } },
       response,
     )
 

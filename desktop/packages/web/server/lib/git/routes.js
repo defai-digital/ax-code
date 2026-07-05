@@ -7,6 +7,12 @@ export function registerGitRoutes(app) {
     return gitLibraries
   }
 
+  const parsePathPayload = (body) => {
+    const { path, paths } = body || {}
+    const rawPaths = Array.isArray(paths) ? paths : [path]
+    return rawPaths.map((value) => (typeof value === "string" ? value.trim() : "")).filter(Boolean)
+  }
+
   app.get("/api/git/identities", async (req, res) => {
     const { getProfiles } = await getGitLibraries()
     try {
@@ -310,9 +316,8 @@ export function registerGitRoutes(app) {
         return res.status(400).json({ error: "directory parameter is required" })
       }
 
-      const { path, paths } = req.body || {}
-      const filePaths = Array.isArray(paths) ? paths : [path]
-      if (!filePaths.some((value) => typeof value === "string" && value.trim())) {
+      const filePaths = parsePathPayload(req.body)
+      if (filePaths.length === 0) {
         return res.status(400).json({ error: "path parameter is required" })
       }
 
@@ -332,9 +337,8 @@ export function registerGitRoutes(app) {
         return res.status(400).json({ error: "directory parameter is required" })
       }
 
-      const { path, paths } = req.body || {}
-      const filePaths = Array.isArray(paths) ? paths : [path]
-      if (!filePaths.some((value) => typeof value === "string" && value.trim())) {
+      const filePaths = parsePathPayload(req.body)
+      if (filePaths.length === 0) {
         return res.status(400).json({ error: "path parameter is required" })
       }
 
