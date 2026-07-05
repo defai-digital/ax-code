@@ -73,23 +73,26 @@ export const createNotificationTemplateRuntime = (deps) => {
     return typeof result?.summary === "string" && result.summary.trim().length > 0 ? result.summary : text
   }
 
-  const extractTextFromParts = (parts, maxLength = NOTIFICATION_BODY_MAX_CHARS) => {
-    if (!Array.isArray(parts) || parts.length === 0) return ""
-
-    const textParts = parts
-      .filter(
-        (part) => part && (part.type === "text" || typeof part.text === "string" || typeof part.content === "string"),
-      )
-      .map((part) => part.text || part.content || "")
-      .filter(Boolean)
-
+  const joinNotificationTextLines = (lines, maxLength = NOTIFICATION_BODY_MAX_CHARS) => {
+    const textParts = lines.filter(Boolean)
     let text = textParts.length > 0 ? textParts.join("\n").trim() : ""
-
     if (maxLength > 0 && text.length > maxLength) {
       text = text.slice(0, maxLength)
     }
-
     return text
+  }
+
+  const extractTextFromParts = (parts, maxLength = NOTIFICATION_BODY_MAX_CHARS) => {
+    if (!Array.isArray(parts) || parts.length === 0) return ""
+
+    return joinNotificationTextLines(
+      parts
+        .filter(
+          (part) => part && (part.type === "text" || typeof part.text === "string" || typeof part.content === "string"),
+        )
+        .map((part) => part.text || part.content || ""),
+      maxLength,
+    )
   }
 
   const extractLastMessageText = (payload, maxLength = NOTIFICATION_BODY_MAX_CHARS) => {
@@ -102,17 +105,12 @@ export const createNotificationTemplateRuntime = (deps) => {
 
     const content = info.content
     if (Array.isArray(content)) {
-      const textContent = content
-        .filter((entry) => entry && (entry.type === "text" || typeof entry.text === "string"))
-        .map((entry) => entry.text || "")
-        .filter(Boolean)
-      if (textContent.length > 0) {
-        let result = textContent.join("\n").trim()
-        if (maxLength > 0 && result.length > maxLength) {
-          result = result.slice(0, maxLength)
-        }
-        return result
-      }
+      return joinNotificationTextLines(
+        content
+          .filter((entry) => entry && (entry.type === "text" || typeof entry.text === "string"))
+          .map((entry) => entry.text || ""),
+        maxLength,
+      )
     }
 
     return ""
