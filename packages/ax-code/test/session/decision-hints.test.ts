@@ -142,6 +142,15 @@ describe("DecisionHints", () => {
     expect(hints[0]!.evidence.join("\n")).toContain("/repo/src/app.ts")
   })
 
+  test("deduplicates changed paths across file-changing tools", () => {
+    const hints = DecisionHints.fromMessages([
+      toolMessage("m1", "edit", completed("edit", { filePath: "/repo/src/app.ts" })),
+      toolMessage("m2", "write", completed("write", { path: "/repo/src/app.ts" })),
+    ])
+
+    expect(hints[0]?.evidence).toContain("changed paths: /repo/src/app.ts")
+  })
+
   test("summarizes missing validation as a needs-validation advisory", () => {
     expect(
       DecisionHints.summarizeMessages([toolMessage("m1", "edit", completed("edit", { filePath: "/repo/src/app.ts" }))]),

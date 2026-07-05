@@ -481,7 +481,7 @@ export namespace DecisionHints {
   }
 
   function describeChangedFiles(writes: ToolAction[]): string {
-    const files = Array.from(new Set(writes.flatMap((write) => changedFiles(write)).filter(Boolean)))
+    const files = uniqueStrings(writes.flatMap((write) => changedFiles(write)))
     if (files.length === 0) return `file-changing tools: ${writes.map((write) => write.tool).join(", ")}`
     const shown = files.slice(0, 5)
     const suffix = files.length > shown.length ? `, +${files.length - shown.length} more` : ""
@@ -489,8 +489,15 @@ export namespace DecisionHints {
   }
 
   function changedFiles(action: ToolAction): string[] {
-    const candidates = [action.input.filePath, action.input.file, action.input.path, action.input.targetPath]
-    return candidates.filter((item): item is string => typeof item === "string" && item.length > 0)
+    return nonEmptyStrings([action.input.filePath, action.input.file, action.input.path, action.input.targetPath])
+  }
+
+  function nonEmptyStrings(values: unknown[]): string[] {
+    return values.filter((item): item is string => typeof item === "string" && item.length > 0)
+  }
+
+  function uniqueStrings(values: string[]): string[] {
+    return Array.from(new Set(values))
   }
 
   function safeText(text: string): string {
