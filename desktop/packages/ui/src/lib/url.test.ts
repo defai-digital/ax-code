@@ -47,6 +47,8 @@ describe("safe external URL helpers", () => {
     expect(getSafeExternalUrl("tel:+15551234567")).toBe("tel:+15551234567")
     expect(getSafeExternalUrl("javascript:alert(1)")).toBeNull()
     expect(getSafeExternalUrl("https://user:pass@example.com/docs")).toBeNull()
+    expect(getSafeExternalUrl("https://example.com\n.evil.test/docs")).toBeNull()
+    expect(getSafeExternalUrl("https://example.com\t.evil.test/docs")).toBeNull()
   })
 
   test("allows browser and OS-safe external protocols", () => {

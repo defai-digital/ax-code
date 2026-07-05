@@ -26,10 +26,24 @@ export const isExternalHttpUrl = (url: string): boolean => {
 
 const SAFE_EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"])
 
+const hasUrlControlCharacter = (value: string): boolean => {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+    if (code <= 0x1f || code === 0x7f) {
+      return true
+    }
+  }
+  return false
+}
+
 const hasUrlUserInfo = (parsed: URL): boolean => parsed.username.length > 0 || parsed.password.length > 0
 
 export const getSafeExternalUrl = (url: string): string | null => {
-  const parsed = parseUrlSafely(url.trim())
+  const target = url.trim()
+  if (hasUrlControlCharacter(target)) {
+    return null
+  }
+  const parsed = parseUrlSafely(target)
   if (!parsed) {
     return null
   }
