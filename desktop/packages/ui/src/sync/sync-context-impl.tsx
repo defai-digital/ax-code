@@ -55,6 +55,7 @@ import { getSessionMaterializationStatus, materializeSessionSnapshots } from "./
 import { setSessionPrefetch } from "./session-prefetch-cache"
 import { useSessionUIStore } from "./session-ui-store"
 import { getVisibleMessagesBeforeRevert } from "./revert-order"
+import { isPlainRecord } from "@/lib/record"
 
 // ---------------------------------------------------------------------------
 // Context
@@ -240,12 +241,8 @@ function haveEquivalentSyncSnapshots(left: unknown, right: unknown): boolean {
   return false
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-}
-
 function isSessionStatusSnapshot(value: unknown): value is SessionStatus {
-  if (!isRecord(value) || typeof value.type !== "string") return false
+  if (!isPlainRecord(value) || typeof value.type !== "string") return false
   return value.type === "idle" || value.type === "busy" || value.type === "retry"
 }
 
@@ -273,7 +270,7 @@ function areSessionStatusSnapshotsEqual(left: SessionStatus, right: SessionStatu
 }
 
 function isSessionSnapshot(value: unknown): value is Session {
-  return isRecord(value) && typeof value.id === "string" && "time" in value
+  return isPlainRecord(value) && typeof value.id === "string" && "time" in value
 }
 
 function areSessionSnapshotsEqual(left: Session, right: Session): boolean {
