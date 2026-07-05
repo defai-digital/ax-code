@@ -50,13 +50,8 @@ export namespace QualityModelRegistry {
 
   export const renderCanonicalPromotionReport = QualityModelRegistryCanonical.renderCanonicalPromotionReport
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function modelKey(source: string) {
     return ["quality_model", encode(source)]

@@ -7,9 +7,7 @@ import { QualityModelRegistry } from "./index"
 
 type PromotionRecord = QualityModelRegistry.PromotionRecord
 
-function encode(input: string) {
-  return QualityStorageKey.encode(input)
-}
+const encode = QualityStorageKey.encode
 
 export async function rollbackPromotion(
   promotion: PromotionRecord,

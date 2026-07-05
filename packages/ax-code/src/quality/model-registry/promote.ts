@@ -30,9 +30,7 @@ import { QualityModelRegistry } from "./index"
 type PromotionMetadata = QualityModelRegistry.PromotionMetadata
 type ActiveRecord = QualityModelRegistry.ActiveRecord
 
-function encode(input: string) {
-  return QualityStorageKey.encode(input)
-}
+const encode = QualityStorageKey.encode
 
 export function finalizePromotion(input: {
   bundle: QualityCalibrationModel.BenchmarkBundle

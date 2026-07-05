@@ -11,13 +11,8 @@ export namespace QualityShadowStore {
   })
   export type ShadowRecordEnvelope = z.output<typeof ShadowRecordEnvelope>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(sessionID: string, candidateSource: string, artifactID: string) {
     return ["quality_shadow", sessionID, encode(candidateSource), encode(artifactID)]

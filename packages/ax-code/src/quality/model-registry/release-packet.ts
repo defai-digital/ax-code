@@ -42,9 +42,7 @@ import { promoteReleaseDecisionRecord } from "./promote-bundle"
 
 type PromotionMetadata = QualityModelRegistry.PromotionMetadata
 
-function encode(input: string) {
-  return QualityStorageKey.encode(input)
-}
+const encode = QualityStorageKey.encode
 
 function firstFailureDetail(gates: readonly { status: string; detail?: string | null }[], fallback = "unknown failure") {
   return gates.find((gate) => gate.status === "fail")?.detail ?? fallback
