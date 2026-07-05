@@ -168,14 +168,20 @@ export namespace Config {
     return managedConfigDir()
   }
 
+  function mergeUniqueStrings(target: string[] | undefined, source: string[] | undefined) {
+    return target && source ? Array.from(new Set([...target, ...source])) : undefined
+  }
+
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
-    if (target.plugin && source.plugin) {
-      merged.plugin = Array.from(new Set([...target.plugin, ...source.plugin]))
+    const plugin = mergeUniqueStrings(target.plugin, source.plugin)
+    if (plugin) {
+      merged.plugin = plugin
     }
-    if (target.instructions && source.instructions) {
-      merged.instructions = Array.from(new Set([...target.instructions, ...source.instructions]))
+    const instructions = mergeUniqueStrings(target.instructions, source.instructions)
+    if (instructions) {
+      merged.instructions = instructions
     }
     return merged
   }
