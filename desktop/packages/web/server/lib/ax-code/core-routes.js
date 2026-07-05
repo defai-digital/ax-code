@@ -1,4 +1,15 @@
 import { createBackgroundAxCodeReloader } from "./background-reload.js"
+import { rateLimit } from "express-rate-limit"
+
+const createAuthRouteRateLimiter = () =>
+  rateLimit({
+    windowMs: 60_000,
+    limit: 1_200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    message: { error: "Too many requests" },
+  })
 
 const buildLoopbackProbeUrl = (rawUrl) => {
   if (typeof rawUrl !== "string") {
@@ -42,6 +53,7 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     getStartupDiagnosticsSnapshot = null,
     uiAuthController = null,
   } = dependencies
+  const authRouteRateLimiter = createAuthRouteRateLimiter()
 
   const allocateLoopbackPort = async () => {
     const net = await import("node:net")
@@ -201,7 +213,7 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     }, 10).unref?.()
   })
 
-  app.post("/api/system/shutdown", async (req, res, next) => {
+  app.post("/api/system/shutdown", authRouteRateLimiter, async (req, res, next) => {
     try {
       if (uiAuthController) {
         await uiAuthController.requireAuth(req, res, () => {
@@ -305,10 +317,11 @@ export const registerServerStatusRoutes = (app, dependencies) => {
 
 export const registerAuthAndAccessRoutes = (app, dependencies) => {
   const { express, uiAuthController } = dependencies
+  const authRouteRateLimiter = createAuthRouteRateLimiter()
 
   const requireApiAuth = (req, res, next) => uiAuthController.requireAuth(req, res, next)
 
-  app.get("/auth/session", async (req, res) => {
+  app.get("/auth/session", authRouteRateLimiter, async (req, res) => {
     try {
       await uiAuthController.handleSessionStatus(req, res)
     } catch {
@@ -316,23 +329,23 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   })
 
-  app.post("/auth/session", (req, res) => {
+  app.post("/auth/session", authRouteRateLimiter, (req, res) => {
     return uiAuthController.handleSessionCreate(req, res)
   })
 
-  app.get("/auth/passkey/status", (req, res) => {
+  app.get("/auth/passkey/status", authRouteRateLimiter, (req, res) => {
     return uiAuthController.handlePasskeyStatus(req, res)
   })
 
-  app.post("/auth/passkey/authenticate/options", (req, res) => {
+  app.post("/auth/passkey/authenticate/options", authRouteRateLimiter, (req, res) => {
     return uiAuthController.handlePasskeyAuthenticationOptions(req, res)
   })
 
-  app.post("/auth/passkey/authenticate/verify", (req, res) => {
+  app.post("/auth/passkey/authenticate/verify", authRouteRateLimiter, (req, res) => {
     return uiAuthController.handlePasskeyAuthenticationVerify(req, res)
   })
 
-  app.post("/auth/passkey/register/options", async (req, res, next) => {
+  app.post("/auth/passkey/register/options", authRouteRateLimiter, async (req, res, next) => {
     try {
       await uiAuthController.requireAuth(req, res, async () => {
         await uiAuthController.handlePasskeyRegistrationOptions(req, res)
@@ -342,7 +355,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   })
 
-  app.post("/auth/passkey/register/verify", async (req, res, next) => {
+  app.post("/auth/passkey/register/verify", authRouteRateLimiter, async (req, res, next) => {
     try {
       await uiAuthController.requireAuth(req, res, async () => {
         await uiAuthController.handlePasskeyRegistrationVerify(req, res)
@@ -352,7 +365,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   })
 
-  app.get("/api/passkeys", async (req, res, next) => {
+  app.get("/api/passkeys", authRouteRateLimiter, async (req, res, next) => {
     try {
       await uiAuthController.requireAuth(req, res, async () => {
         await uiAuthController.handlePasskeyList(req, res)
@@ -362,7 +375,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   })
 
-  app.delete("/api/passkeys/:id", async (req, res, next) => {
+  app.delete("/api/passkeys/:id", authRouteRateLimiter, async (req, res, next) => {
     try {
       await uiAuthController.requireAuth(req, res, async () => {
         await uiAuthController.handlePasskeyRevoke(req, res)
@@ -372,7 +385,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   })
 
-  app.post("/api/auth/reset", async (req, res, next) => {
+  app.post("/api/auth/reset", authRouteRateLimiter, async (req, res, next) => {
     try {
       await uiAuthController.requireAuth(req, res, async () => {
         await uiAuthController.handleResetAuth(req, res)
@@ -382,7 +395,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   })
 
-  app.post("/api/system/probe-url", express.json({ limit: "16kb" }), async (req, res, next) => {
+  app.post("/api/system/probe-url", authRouteRateLimiter, express.json({ limit: "16kb" }), async (req, res, next) => {
     try {
       await requireApiAuth(req, res, async () => {
         const url = buildLoopbackProbeUrl(req.body?.url)
@@ -407,7 +420,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     }
   })
 
-  app.use("/api", async (req, res, next) => {
+  app.use("/api", authRouteRateLimiter, async (req, res, next) => {
     try {
       await requireApiAuth(req, res, next)
     } catch (err) {
