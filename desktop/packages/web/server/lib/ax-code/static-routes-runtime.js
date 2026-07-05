@@ -1,9 +1,10 @@
 export const createStaticRoutesRuntime = (dependencies) => {
   const { fs, path, process, __dirname, express } = dependencies
 
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
   const resolveDistPath = () => {
-    const env =
-      typeof process.env.AX_CODE_DESKTOP_DIST_DIR === "string" ? process.env.AX_CODE_DESKTOP_DIST_DIR.trim() : ""
+    const env = asTrimmedString(process.env.AX_CODE_DESKTOP_DIST_DIR)
     if (env) {
       return path.resolve(env)
     }
