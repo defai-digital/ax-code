@@ -48,13 +48,8 @@ export namespace QualityPromotionReleasePacket {
   })
   export type PacketRecord = z.output<typeof PacketRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, packetID: string) {
     return ["quality_model_release_packet", encode(source), packetID]

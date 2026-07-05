@@ -45,13 +45,8 @@ export namespace QualityPromotionSubmissionBundle {
   })
   export type BundleRecord = z.output<typeof BundleRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, submissionID: string) {
     return ["quality_model_submission_bundle", encode(source), submissionID]

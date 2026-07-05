@@ -52,13 +52,8 @@ export namespace QualityPromotionReviewDossier {
   })
   export type DossierRecord = z.output<typeof DossierRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, dossierID: string) {
     return ["quality_model_review_dossier", encode(source), dossierID]

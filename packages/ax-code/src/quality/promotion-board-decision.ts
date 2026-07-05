@@ -50,13 +50,8 @@ export namespace QualityPromotionBoardDecision {
   })
   export type DecisionRecord = z.output<typeof DecisionRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, decisionID: string) {
     return ["quality_model_board_decision", encode(source), decisionID]
