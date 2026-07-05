@@ -224,9 +224,13 @@ export const BashTool = Tool.define("bash", async () => {
         .max(200)
         .describe(
           "Clear, concise description of what this command does in 5-10 words. Examples:\nInput: ls\nOutput: Lists files in current directory\n\nInput: git status\nOutput: Shows working tree status\n\nInput: npm install\nOutput: Installs package dependencies\n\nInput: mkdir foo\nOutput: Creates directory 'foo'",
-        ),
+        )
+        // Cosmetic only. Fall back to the command when a weaker tool-calling
+        // model omits it.
+        .optional(),
     }),
     async execute(params, ctx) {
+      const description = params.description ?? params.command.slice(0, 80)
       if (params.workdir !== undefined) {
         resolveToolFilePath(params.workdir, Instance.directory)
       }
@@ -249,11 +253,11 @@ export const BashTool = Tool.define("bash", async () => {
         })
         const msg = `[Browser open intercepted] Preview is ready at: ${browserOpenIntercept}\n\nThe browser was not opened automatically to avoid disrupting your active development session. Open it manually when ready, or ask to open it explicitly.`
         return {
-          title: params.description,
+          title: description,
           metadata: {
             output: msg,
             exit: 0,
-            description: params.description,
+            description,
             hang: {
               processId: null,
               signal: null,
@@ -735,7 +739,7 @@ export const BashTool = Tool.define("bash", async () => {
           ctx.metadata({
             metadata: {
               output: outputSnapshot,
-              description: params.description,
+              description,
               hang: hangMetadata(),
             },
           })
@@ -891,11 +895,11 @@ export const BashTool = Tool.define("bash", async () => {
         : { truncated: false as const }
 
       return {
-        title: params.description,
+        title: description,
         metadata: {
           output: truncateBashMetadata(output, MAX_METADATA_LENGTH),
           exit: procExitCode ?? proc.exitCode,
-          description: params.description,
+          description,
           hang: hangMetadata(),
           ...truncateMeta,
         },

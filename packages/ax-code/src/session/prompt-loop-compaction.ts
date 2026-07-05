@@ -140,6 +140,17 @@ export async function maybeSchedulePreflightCompaction(input: {
   const estimatedTokens = messageTokens + toolSchemaTokens
   if (estimatedTokens < tokenBudget.usable) return false
 
+  // Compaction can only shrink message history, not the fixed tool schema
+  // overhead. Skip futile preflight compaction when that overhead cannot fit.
+  if (toolSchemaTokens >= tokenBudget.usable) {
+    log.info("skipping preflight compaction: tool schema overhead alone exceeds budget", {
+      sessionID: input.sessionID,
+      toolSchemaTokens,
+      usableTokens: tokenBudget.usable,
+    })
+    return false
+  }
+
   log.info("prompt preflight scheduled compaction", {
     command: "session.prompt.preflight",
     status: "ok",

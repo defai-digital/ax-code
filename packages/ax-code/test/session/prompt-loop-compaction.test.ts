@@ -66,7 +66,53 @@ afterEach(() => {
 })
 
 describe("session.prompt preflight compaction", () => {
-  test("counts registry tool schemas before sending a provider request", async () => {
+  test("counts registry tool schemas toward the budget when history is large enough for compaction to help", async () => {
+    // A moderate tool schema (~120 tokens) plus a large message history: tool
+    // schemas alone fit comfortably under budget, so compacting the history
+    // can genuinely bring the total back under budget — this is the case
+    // preflight compaction is meant for.
+    budgetSpy = vi.spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    toolsSpy = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "small_tool",
+        description: "Tool with a modest provider schema",
+        parameters: z.object({
+          payload: z.string().describe("x".repeat(200)),
+        }),
+        execute: async () => ({ title: "", metadata: {}, output: "" }),
+      },
+    ] as any)
+
+    const scheduled = await maybeSchedulePreflightCompaction({
+      sessionID: "ses_test" as any,
+      agent: "build",
+      agentInfo: agent,
+      userModel: { providerID: "test" as any, modelID: "test-model" as any },
+      model,
+      userParts: [{ type: "text", text: "small request" } as any],
+      system: ["small system"],
+      requestMessages: [{ role: "user", content: "x".repeat(10_000) }],
+    })
+
+    expect(scheduled).toBe(true)
+    expect(createSpy).toHaveBeenCalledTimes(1)
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        triggerReason: "prompt_preflight",
+      }),
+    )
+  })
+
+  test("does not schedule preflight compaction when tool schema overhead alone already exceeds budget", async () => {
+    // Compaction only summarizes `messages` — it can never shrink the fixed
+    // tool-schema overhead. If that overhead alone already meets/exceeds the
+    // usable budget (as here: a lone huge tool schema vs. a tiny first
+    // message), scheduling compaction is guaranteed to be futile — the very
+    // next preflight check would trip the identical condition again with an
+    // unchanged, still-oversized tool-schema total. This was the root cause
+    // of local (small-context) models auto-compacting on literally the first
+    // prompt of a session, before there was anything to compact.
     budgetSpy = vi.spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
     createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
     toolsSpy = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
@@ -91,13 +137,8 @@ describe("session.prompt preflight compaction", () => {
       requestMessages: [{ role: "user", content: "small request" }],
     })
 
-    expect(scheduled).toBe(true)
-    expect(createSpy).toHaveBeenCalledTimes(1)
-    expect(createSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        triggerReason: "prompt_preflight",
-      }),
-    )
+    expect(scheduled).toBe(false)
+    expect(createSpy).not.toHaveBeenCalled()
   })
 
   test("does not compact before an unanswered media turn even when over budget (#259)", async () => {

@@ -26,6 +26,8 @@ import { DiffViewToggle } from "@/components/chat/message/DiffViewToggle"
 import type { DiffViewMode } from "@/components/chat/message/types"
 import { PierreDiffViewer } from "./PierreDiffViewer"
 import { DiffCommentSummaryBar } from "./DiffCommentSummaryBar"
+import { DiffHunkReviewList } from "./DiffHunkReviewList"
+import { useDiffHunkRevert } from "./useDiffHunkRevert"
 import { useDeviceInfo } from "@/lib/device"
 import { FileTypeIcon } from "@/components/icons/FileTypeIcon"
 import { Icon } from "@/components/icon/Icon"
@@ -451,25 +453,34 @@ const InlineImageDiffViewer = React.memo<InlineImageDiffViewerProps>(({ filePath
 })
 
 interface InlineDiffViewerProps {
+  directory: string | null
   filePath: string
   diff: DiffData
   renderSideBySide: boolean
   wrapLines: boolean
 }
 
-const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({ filePath, diff, renderSideBySide, wrapLines }) => {
+interface TextDiffViewerProps {
+  directory: string | null
+  filePath: string
+  diff: DiffData
+  renderSideBySide: boolean
+  wrapLines: boolean
+}
+
+const TextDiffViewer = React.memo<TextDiffViewerProps>(({ directory, filePath, diff, renderSideBySide, wrapLines }) => {
   const language = React.useMemo(() => getLanguageFromExtension(filePath) || "text", [filePath])
-
-  if (diff.isBinary) {
-    return <BinaryDiffPlaceholder />
-  }
-
-  if (isImageFile(filePath)) {
-    return <InlineImageDiffViewer filePath={filePath} diff={diff} renderSideBySide={renderSideBySide} />
-  }
+  const { revertingHunkIndex, handleRevertHunk } = useDiffHunkRevert({ directory, filePath, diff })
 
   return (
-    <div className="w-full" style={{ contain: "layout" }}>
+    <>
+      <DiffHunkReviewList
+        original={diff.original}
+        modified={diff.modified}
+        fileName={filePath}
+        onRevertHunk={handleRevertHunk}
+        revertingHunkIndex={revertingHunkIndex}
+      />
       <PierreDiffViewer
         original={diff.original}
         modified={diff.modified}
@@ -479,12 +490,39 @@ const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({ filePath, diff, re
         wrapLines={wrapLines}
         layout="inline"
       />
-    </div>
+    </>
   )
 })
 
+TextDiffViewer.displayName = "TextDiffViewer"
+
+const InlineDiffViewer = React.memo<InlineDiffViewerProps>(
+  ({ directory, filePath, diff, renderSideBySide, wrapLines }) => {
+    if (diff.isBinary) {
+      return <BinaryDiffPlaceholder />
+    }
+
+    if (isImageFile(filePath)) {
+      return <InlineImageDiffViewer filePath={filePath} diff={diff} renderSideBySide={renderSideBySide} />
+    }
+
+    return (
+      <div className="w-full" style={{ contain: "layout" }}>
+        <TextDiffViewer
+          directory={directory}
+          filePath={filePath}
+          diff={diff}
+          renderSideBySide={renderSideBySide}
+          wrapLines={wrapLines}
+        />
+      </div>
+    )
+  },
+)
+
 // Single diff viewer instance
 interface SingleDiffViewerProps {
+  directory: string | null
   filePath: string
   diff: DiffData
   isVisible: boolean
@@ -493,9 +531,7 @@ interface SingleDiffViewerProps {
 }
 
 const SingleDiffViewer = React.memo<SingleDiffViewerProps>(
-  ({ filePath, diff, isVisible, renderSideBySide, wrapLines }) => {
-    const language = React.useMemo(() => getLanguageFromExtension(filePath) || "text", [filePath])
-
+  ({ directory, filePath, diff, isVisible, renderSideBySide, wrapLines }) => {
     if (diff.isBinary) {
       return <BinaryDiffPlaceholder />
     }
@@ -521,14 +557,12 @@ const SingleDiffViewer = React.memo<SingleDiffViewerProps>(
         data-diff-virtual-root
         data-diff-virtual-content
       >
-        <PierreDiffViewer
-          original={diff.original}
-          modified={diff.modified}
-          language={language}
-          fileName={filePath}
+        <TextDiffViewer
+          directory={directory}
+          filePath={filePath}
+          diff={diff}
           renderSideBySide={renderSideBySide}
           wrapLines={wrapLines}
-          layout="inline"
         />
       </ScrollableOverlay>
     )
@@ -872,6 +906,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(
             ) : null}
             {diffData && (forceRenderLarge || file.insertions + file.deletions <= LARGE_DIFF_CHANGED_LINES) ? (
               <InlineDiffViewer
+                directory={directory}
                 filePath={file.path}
                 diff={diffData}
                 renderSideBySide={renderSideBySide}
@@ -1605,6 +1640,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     return (
       <SingleDiffViewer
         key={selectedFile}
+        directory={effectiveDirectory}
         filePath={selectedFile}
         diff={selectedDiffData}
         isVisible={true}

@@ -696,12 +696,12 @@ describe("ax-engine provider integration", () => {
       AX_ENGINE_GLM47_FLASH_MODEL_ID,
     ])
     expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([
-      32_768, 32_768, 32_768, 32_768, 32_768, 32_768,
+      65_536, 32_768, 32_768, 32_768, 32_768, 32_768,
     ])
     expect(provider.models[AX_ENGINE_QWEN36_27B_MODEL_ID]).toMatchObject({
       name: "Qwen3.6-27B 6-bit (Local MLX MTP)",
       tool_call: true,
-      limit: { context: 32_768, output: 16_384 },
+      limit: { context: 65_536, output: 16_384 },
       options: {
         modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
         quantization: "mlx6bit",

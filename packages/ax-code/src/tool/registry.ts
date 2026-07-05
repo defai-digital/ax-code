@@ -53,6 +53,7 @@ import { DebugRepairFromEnvelopeTool } from "./debug_repair_from_envelope"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { Instance } from "@/project/instance"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -179,9 +180,12 @@ export namespace ToolRegistry {
     ].join(":")
   }
 
-  async function all(custom: Tool.Info[], cfg?: ToolConfig): Promise<Tool.Info[]> {
+  async function all(custom: Tool.Info[], cfg?: ToolConfig, providerID?: ProviderID): Promise<Tool.Info[]> {
     cfg ??= await Config.get()
     const question = Flag.AX_CODE_CLIENT === "cli" || Flag.AX_CODE_ENABLE_QUESTION_TOOL
+    // Keep local ax-engine tool schemas focused; debug-engine tools are large,
+    // experimental, and unnecessary for the normal local-model path.
+    const debugEngineEnabled = Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE && providerID !== AX_ENGINE_PROVIDER_ID
 
     return [
       InvalidTool,
@@ -215,7 +219,7 @@ export namespace ToolRegistry {
       DebugRepairFromEnvelopeTool,
       ...(Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool] : []),
-      ...(Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE ? [...DEBUG_ENGINE_TOOLS] : []),
+      ...(debugEngineEnabled ? [...DEBUG_ENGINE_TOOLS] : []),
       ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE && Flag.AX_CODE_CLIENT === "cli" ? [PlanExitTool] : []),
       ...custom,
@@ -254,7 +258,7 @@ export namespace ToolRegistry {
     if (toolCache?.key === key) return toolCache.result
 
     const current = await state()
-    const allTools = await all(current.custom, cfg)
+    const allTools = await all(current.custom, cfg, model.providerID)
     // Per-tool try/catch so one broken tool (most commonly a
     // flaky MCP server whose `init()` rejects during tool
     // registration) doesn't reject Promise.all and leave the

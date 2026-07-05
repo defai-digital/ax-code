@@ -96,7 +96,9 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     defaultQuantization: "mlx6bit",
     toolcall: true,
     minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-    contextTokens: 32_768,
+    // Keep enough local context for the fixed tool schema plus real conversation
+    // history; smaller windows leave compaction with nothing useful to shrink.
+    contextTokens: 65_536,
     outputTokens: 16_384,
     quantizations: {
       mlx6bit: {
