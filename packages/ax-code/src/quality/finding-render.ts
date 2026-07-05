@@ -1,5 +1,5 @@
 import type { Finding } from "./finding"
-import type { Severity } from "./finding-registry"
+import { SEVERITY_RANK, type Severity } from "./finding-registry"
 import type { VerificationEnvelope } from "./verification-envelope"
 import { statusGlyph } from "./status-glyph"
 
@@ -11,14 +11,6 @@ export type RenderOptions = {
   // failure anchor) instead of as raw `<kind>: <id>` lines. Pass the
   // envelopes loaded from the same session for consistent rendering.
   envelopes?: ReadonlyMap<string, VerificationEnvelope>
-}
-
-const SEVERITY_RANK: Record<Severity, number> = {
-  CRITICAL: 0,
-  HIGH: 1,
-  MEDIUM: 2,
-  LOW: 3,
-  INFO: 4,
 }
 
 const SEVERITY_GLYPH: Record<Severity, string> = {

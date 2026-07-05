@@ -1,5 +1,5 @@
 import type { Finding } from "./finding"
-import type { Severity } from "./finding-registry"
+import { SEVERITY_RANK } from "./finding-registry"
 import type { PolicyRules } from "./policy"
 import { Glob } from "../util/glob"
 
@@ -11,14 +11,6 @@ import { Glob } from "../util/glob"
 //
 // Filter ordering: severity_floor → prohibited_categories → scope_glob.
 // Each filter contributes a reason string when it drops a finding.
-
-const SEVERITY_RANK: Record<Severity, number> = {
-  CRITICAL: 0,
-  HIGH: 1,
-  MEDIUM: 2,
-  LOW: 3,
-  INFO: 4,
-}
 
 export type DroppedFinding = {
   finding: Finding
