@@ -81,7 +81,6 @@ export const API_ENDPOINTS = {
   magicPrompts: `${API_PATHS.base}/magic-prompts`,
   openchamber: {
     events: `${API_PATHS.openchamber}/events`,
-    updateInstall: `${API_PATHS.openchamber}/update-install`,
     updateCheck: `${API_PATHS.openchamber}/update-check`,
     modelsMetadata: `${API_PATHS.openchamber}/models-metadata`,
   },
