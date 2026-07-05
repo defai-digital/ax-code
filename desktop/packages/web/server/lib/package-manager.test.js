@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-// Mock child_process to prevent real spawnSync calls that would hang in tests
-vi.mock("node:child_process", () => ({
-  spawn: vi.fn(),
-  spawnSync: vi.fn(() => ({ status: 0, stdout: "/usr/local/bin", stderr: "" })),
-}))
-
 const { checkForUpdates } = await import("./package-manager.js")
 
 describe("checkForUpdates (remote sources hard-disabled)", () => {
@@ -49,6 +43,7 @@ describe("checkForUpdates (remote sources hard-disabled)", () => {
     expect(result.available).toBe(false)
     expect(result.currentVersion).toBe("1.9.10")
     expect(result.error).toBeUndefined()
+    expect(result.packageManager).toBeUndefined()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -57,38 +52,5 @@ describe("checkForUpdates (remote sources hard-disabled)", () => {
 
     expect(result.available).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
-  })
-})
-
-describe("detectPackageManagerDetails", () => {
-  const ENV_KEYS = ["AX_CODE_DESKTOP_PACKAGE_MANAGER", "AX_CODE_DESKTOP_RUNTIME"]
-  let savedEnv
-
-  beforeEach(() => {
-    savedEnv = {}
-    for (const key of ENV_KEYS) {
-      savedEnv[key] = process.env[key]
-      delete process.env[key]
-    }
-  })
-
-  afterEach(() => {
-    for (const [key, value] of Object.entries(savedEnv)) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-  })
-
-  it("trims forced package manager env before detection", async () => {
-    vi.resetModules()
-    process.env.AX_CODE_DESKTOP_PACKAGE_MANAGER = " pnpm "
-
-    const { detectPackageManagerDetails } = await import("./package-manager.js")
-    const details = detectPackageManagerDetails()
-
-    expect(details).toMatchObject({
-      packageManager: "pnpm",
-      reason: "forced-env",
-    })
   })
 })
