@@ -22,6 +22,7 @@ import { parseConfigPathGroup } from "@/lib/configPathGroup"
 import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
 import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
 import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
+import { buildRecordSignature } from "@/stores/utils/signature"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
 
 const AGENTS_LOAD_CACHE_TTL_MS = 5000
@@ -30,21 +31,18 @@ const agentsLoadInFlight = new Map<string, Promise<boolean>>()
 const agentsLoadRequestIds = new Map<string, number>()
 let agentsLoadSequence = 0
 
-const buildAgentsSignature = (agents: Agent[]): string => {
-  return agents
-    .map((agent) => {
-      const extended = agent as AgentWithExtras
-      return [
-        agent.name,
-        extended.scope ?? "",
-        extended.group ?? "",
-        extended.description ?? "",
-        String(extended.hidden === true),
-        String(extended.native === true),
-      ].join("|")
-    })
-    .join("||")
-}
+const buildAgentsSignature = (agents: Agent[]): string =>
+  buildRecordSignature(agents, (agent) => {
+    const extended = agent as AgentWithExtras
+    return [
+      agent.name,
+      extended.scope,
+      extended.group,
+      extended.description,
+      extended.hidden === true,
+      extended.native === true,
+    ]
+  })
 
 export type AgentScope = "user" | "project"
 

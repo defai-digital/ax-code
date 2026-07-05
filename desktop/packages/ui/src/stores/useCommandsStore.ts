@@ -9,6 +9,7 @@ import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
 import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
 import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
+import { buildRecordSignature } from "@/stores/utils/signature"
 
 export type CommandScope = "user" | "project"
 
@@ -40,20 +41,15 @@ const commandsLoadInFlight = new Map<string, Promise<boolean>>()
 const commandsLoadRequestIds = new Map<string, number>()
 let commandsLoadSequence = 0
 
-const buildCommandsSignature = (commands: Command[]): string => {
-  return commands
-    .map((command) =>
-      [
-        command.name,
-        command.scope ?? "",
-        command.description ?? "",
-        command.agent ?? "",
-        command.model ?? "",
-        String(command.isBuiltIn === true),
-      ].join("|"),
-    )
-    .join("||")
-}
+const buildCommandsSignature = (commands: Command[]): string =>
+  buildRecordSignature(commands, (command) => [
+    command.name,
+    command.scope,
+    command.description,
+    command.agent,
+    command.model,
+    command.isBuiltIn === true,
+  ])
 
 export interface CommandDraft {
   name: string

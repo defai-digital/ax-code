@@ -12,6 +12,10 @@ describe("toolPathDisplay", () => {
     expect(getToolRelativePath("C:/Users/Alice/Project/src/app.ts", "c:/users/alice/project")).toBe("src/app.ts")
   })
 
+  test("returns Windows relative paths under drive roots", () => {
+    expect(getToolRelativePath("c:/Users/Alice/Project/src/app.ts", "C:/")).toBe("Users/Alice/Project/src/app.ts")
+  })
+
   test("keeps POSIX path matching case-sensitive", () => {
     expect(getToolRelativePath("/Users/Alice/Project/src/app.ts", "/users/alice/project")).toBe(
       "/Users/Alice/Project/src/app.ts",
