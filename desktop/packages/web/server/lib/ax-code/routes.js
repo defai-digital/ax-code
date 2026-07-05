@@ -488,15 +488,15 @@ export const registerAxCodeRoutes = (app, dependencies) => {
       // file removal so the entry is cleaned up even when ax-code
       // rejects the API call (e.g. auth header mismatch).
       await response.body?.cancel()
-      console.warn(
-        `ax-code DELETE /auth/${providerId} returned ${response.status}, falling back to direct file removal`,
-      )
+      console.warn("ax-code DELETE /auth returned non-success, falling back to direct file removal", {
+        providerId,
+        status: response.status,
+      })
     } catch (error) {
-      console.warn(
-        `Failed to call ax-code DELETE /auth/${providerId}:`,
-        error?.message || error,
-        "— falling back to direct file removal",
-      )
+      console.warn("Failed to call ax-code DELETE /auth, falling back to direct file removal", {
+        providerId,
+        error: error?.message || error,
+      })
     }
     // Fallback: direct auth.json manipulation
     const { removeProviderAuth } = await getAuthLibrary()
