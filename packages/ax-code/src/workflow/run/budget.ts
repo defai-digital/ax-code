@@ -1,5 +1,4 @@
 import { Database, NotFoundError, eq } from "../../storage/db"
-import { Log } from "../../util/log"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget, evaluateWorkflowChildBudget } from "../budget"
 import {
   EmptyWorkflowBudgetUsage,
@@ -9,12 +8,7 @@ import {
   WorkflowPhaseRecord,
   WorkflowRun as WorkflowRunState,
 } from "../state"
-import {
-  WorkflowBudgetLedgerTable,
-  WorkflowChildTable,
-  WorkflowPhaseTable,
-  WorkflowRunTable,
-} from "../workflow.sql"
+import { WorkflowBudgetLedgerTable, WorkflowChildTable, WorkflowPhaseTable, WorkflowRunTable } from "../workflow.sql"
 import {
   fromBudgetLedgerRow,
   fromChildRow,
@@ -34,8 +28,6 @@ import {
   publishUpdated,
 } from "./internal"
 
-const log = Log.create({ service: "workflow.run.budget" })
-
 export type AppendBudgetUsageChange = {
   entry: WorkflowBudgetLedgerEntry
   exceededEntry: WorkflowBudgetLedgerEntry | undefined
@@ -49,7 +41,9 @@ export type AppendBudgetUsageChange = {
   exceeded: string[]
 }
 
-export async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput): Promise<WorkflowBudgetLedgerEntry> {
+export async function appendBudgetUsage(
+  input: WorkflowRunState.AppendBudgetUsageInput,
+): Promise<WorkflowBudgetLedgerEntry> {
   const parsed = WorkflowRunState.AppendBudgetUsageInput.parse(input)
   await getRun(parsed.runID)
   if (parsed.phaseID) await assertPhaseBelongsToRun(parsed.phaseID, parsed.runID)

@@ -3,7 +3,6 @@ import type { Config } from "@/config/config"
 import type { ACPConfig } from "./types"
 import { ACPSessionManager } from "./session"
 import { Agent as AgentModule } from "@/agent/agent"
-import { providerModelKey } from "@/provider/model-key"
 import {
   buildAvailableModels,
   buildVariantMeta,
@@ -53,8 +52,7 @@ async function resolveModeState(
     (await (async () => {
       if (!availableModes.length) return undefined
       const defaultAgentName = await AgentModule.defaultAgent()
-      const resolvedModeId =
-        availableModes.find((mode) => mode.name === defaultAgentName)?.id ?? availableModes[0].id
+      const resolvedModeId = availableModes.find((mode) => mode.name === defaultAgentName)?.id ?? availableModes[0].id
       sessionManager.setMode(sessionId, resolvedModeId)
       return resolvedModeId
     })())
@@ -87,8 +85,7 @@ export async function loadSessionMode(
   const sessionId = params.sessionId
 
   const providersResp = await config.sdk.config.providers({ directory }, { throwOnError: true })
-  if (!providersResp.data?.providers)
-    throw new Error(`ACP loadSessionMode: empty providers response for ${directory}`)
+  if (!providersResp.data?.providers) throw new Error(`ACP loadSessionMode: empty providers response for ${directory}`)
   const providers = providersResp.data.providers
   const entries = sortProvidersByName(providers)
   const availableVariants = modelVariantsFromProviders(entries, model)
@@ -134,20 +131,26 @@ export async function loadSessionMode(
     if ("url" in server) {
       mcpServers[server.name] = {
         url: server.url,
-        headers: server.headers.reduce<Record<string, string>>((acc: Record<string, string>, h: { name: string; value: string }) => {
-          acc[h.name] = h.value
-          return acc
-        }, {}),
+        headers: server.headers.reduce<Record<string, string>>(
+          (acc: Record<string, string>, h: { name: string; value: string }) => {
+            acc[h.name] = h.value
+            return acc
+          },
+          {},
+        ),
         type: "remote",
       }
     } else {
       mcpServers[server.name] = {
         type: "local",
         command: [server.command, ...server.args],
-        environment: server.env.reduce<Record<string, string>>((acc: Record<string, string>, e: { name: string; value: string }) => {
-          acc[e.name] = e.value
-          return acc
-        }, {}),
+        environment: server.env.reduce<Record<string, string>>(
+          (acc: Record<string, string>, e: { name: string; value: string }) => {
+            acc[e.name] = e.value
+            return acc
+          },
+          {},
+        ),
       }
     }
   }

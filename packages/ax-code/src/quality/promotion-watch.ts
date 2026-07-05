@@ -1,7 +1,6 @@
 import z from "zod"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
 import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
-import { QualityPromotionReleasePolicyStore } from "./promotion-release-policy-store"
 
 export namespace QualityPromotionWatch {
   export const WatchGate = z.object({
@@ -116,7 +115,8 @@ export namespace QualityPromotionWatch {
         }
     const policy = effectiveReleasePolicy.policy.watch
     const minRecords = positiveInt(input.minRecords, policy.minRecords) ?? policy.minRecords
-    const maxRecords = input.maxRecords === undefined ? policy.maxRecords : positiveInt(input.maxRecords, policy.maxRecords)
+    const maxRecords =
+      input.maxRecords === undefined ? policy.maxRecords : positiveInt(input.maxRecords, policy.maxRecords)
     const records = windowedRecords({
       records: input.records,
       source: input.source,
