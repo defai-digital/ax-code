@@ -79,12 +79,36 @@ export const createUiPasskeys = ({
   const authenticationChallenges = new Map()
 
   const ensureStoreDirectory = () => {
-    fs.mkdirSync(path.dirname(storeFile), { recursive: true })
+    const storeDirectory = path.dirname(storeFile)
+    fs.mkdirSync(storeDirectory, { recursive: true, mode: 0o700 })
+    try {
+      fs.chmodSync(storeDirectory, 0o700)
+    } catch {}
+    return storeDirectory
   }
 
   const persistStore = (store) => {
-    ensureStoreDirectory()
-    fs.writeFileSync(storeFile, JSON.stringify(store, null, 2))
+    const storeDirectory = ensureStoreDirectory()
+    const tmpFile = path.join(
+      storeDirectory,
+      `.ui-passkeys.${process.pid}.${Date.now()}.${crypto.randomBytes(6).toString("hex")}.tmp`,
+    )
+
+    try {
+      fs.writeFileSync(tmpFile, `${JSON.stringify(store, null, 2)}\n`, { encoding: "utf8", mode: 0o600 })
+      try {
+        fs.chmodSync(tmpFile, 0o600)
+      } catch {}
+      fs.renameSync(tmpFile, storeFile)
+      try {
+        fs.chmodSync(storeFile, 0o600)
+      } catch {}
+    } catch (error) {
+      try {
+        fs.rmSync(tmpFile, { force: true })
+      } catch {}
+      throw error
+    }
   }
 
   const createEmptyStore = () => ({

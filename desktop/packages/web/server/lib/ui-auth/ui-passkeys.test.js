@@ -43,6 +43,24 @@ describe("ui passkeys", () => {
     fs.rmSync(tempRoot, { recursive: true, force: true })
   })
 
+  it("stores passkeys in a private directory and file", () => {
+    if (process.platform === "win32") {
+      return
+    }
+
+    storeFile = path.join(tempRoot, "nested", "ui-passkeys.json")
+    const passkeys = createUiPasskeys({
+      passwordBinding: "password-binding",
+      readSettingsFromDiskMigrated: async () => ({}),
+      storeFile,
+    })
+
+    passkeys.getStatus(createMockRequest({ host: "localhost:3000" }))
+
+    expect(fs.statSync(path.dirname(storeFile)).mode & 0o777).toBe(0o700)
+    expect(fs.statSync(storeFile).mode & 0o777).toBe(0o600)
+  })
+
   it("normalizes request origins before WebAuthn verification", async () => {
     const passkeys = createUiPasskeys({
       passwordBinding: "password-binding",
