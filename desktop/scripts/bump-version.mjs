@@ -21,11 +21,15 @@ console.log(`Bumping version to ${newVersion}\n`)
 // Update package.json files
 for (const pkgPath of PACKAGES) {
   const fullPath = path.join(DESKTOP_ROOT, pkgPath)
-  if (!fs.existsSync(fullPath)) {
+  let raw
+  try {
+    raw = fs.readFileSync(fullPath, "utf8")
+  } catch (error) {
+    if (!error || error.code !== "ENOENT") throw error
     console.log(`  ${pkgPath}: not present, skipping`)
     continue
   }
-  const pkg = JSON.parse(fs.readFileSync(fullPath, "utf8"))
+  const pkg = JSON.parse(raw)
   const oldVersion = pkg.version
   pkg.version = newVersion
   fs.writeFileSync(fullPath, JSON.stringify(pkg, null, 2) + "\n")

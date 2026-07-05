@@ -628,14 +628,12 @@ export const registerAxCodeRoutes = (app, dependencies) => {
 
   app.get("/api/behavior/agents-md", async (_req, res) => {
     try {
-      try {
-        await fs.promises.access(AGENTS_MD_PATH)
-      } catch {
-        return res.json({ content: "", exists: false })
-      }
       const content = await fs.promises.readFile(AGENTS_MD_PATH, "utf8")
       return res.json({ content, exists: true })
     } catch (error) {
+      if (error && typeof error === "object" && error.code === "ENOENT") {
+        return res.json({ content: "", exists: false })
+      }
       console.error("Failed to read AGENTS.md:", error)
       return res.status(500).json({ error: "Failed to read AGENTS.md" })
     }
@@ -651,11 +649,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
 
       // Ensure parent directory exists
       const parentDir = path.dirname(AGENTS_MD_PATH)
-      try {
-        await fs.promises.access(parentDir)
-      } catch {
-        await fs.promises.mkdir(parentDir, { recursive: true })
-      }
+      await fs.promises.mkdir(parentDir, { recursive: true })
 
       await fs.promises.writeFile(AGENTS_MD_PATH, content, "utf8")
 

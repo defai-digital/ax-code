@@ -10,7 +10,7 @@ import path from "path"
 import { analyze, type DepthLevel, type ProjectInfo } from "./analyzer"
 import { generate } from "./generator"
 import { Log } from "../util/log"
-import { readFile, writeFile, access } from "fs/promises"
+import { readFile, writeFile } from "fs/promises"
 
 export { type DepthLevel, type ProjectInfo } from "./analyzer"
 
@@ -41,9 +41,8 @@ export namespace Context {
     log.info("analyzing project", { root, depth })
 
     let existingContent: string | undefined
-    try {
-      await access(outputPath)
-      if (!opts.force) {
+    if (!opts.force) {
+      try {
         log.info("AGENTS.md already exists, use --force to regenerate")
         existingContent = await readFile(outputPath, "utf-8")
         const info = await analyze(root)
@@ -53,9 +52,9 @@ export namespace Context {
           info,
           created: false,
         }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") throw error
       }
-    } catch {
-      // File doesn't exist, continue
     }
 
     const info = await analyze(root)
@@ -85,9 +84,9 @@ export namespace Context {
   export async function read(root: string): Promise<string | null> {
     const outputPath = path.join(root, OUTPUT_FILENAME)
     try {
-      await access(outputPath)
       return await readFile(outputPath, "utf-8")
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") throw error
       return null
     }
   }

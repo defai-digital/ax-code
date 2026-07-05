@@ -2085,9 +2085,16 @@ handleCommand("desktop_read_file", async (args) => {
     throw new Error("Cannot resolve file path")
   }
   assertDesktopReadFileAllowed(realPath)
-  const stats = await fsp.stat(realPath)
-  if (stats.size > 50 * 1024 * 1024) throw new Error("File is too large. Maximum size is 50MB.")
-  const bytes = await fsp.readFile(realPath)
+  const handle = await fsp.open(realPath, "r")
+  let bytes
+  try {
+    const stats = await handle.stat()
+    if (!stats.isFile()) throw new Error("Path is not a file")
+    if (stats.size > 50 * 1024 * 1024) throw new Error("File is too large. Maximum size is 50MB.")
+    bytes = await handle.readFile()
+  } finally {
+    await handle.close()
+  }
   // Classify by the resolved target we actually read, not the (possibly
   // symlinked) requested path — otherwise the mime can mislabel the bytes.
   const ext = path.extname(realPath).toLowerCase()

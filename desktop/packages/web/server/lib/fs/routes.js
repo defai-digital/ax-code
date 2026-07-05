@@ -931,12 +931,17 @@ export const registerFsRoutes = (app, dependencies) => {
         return res.status(403).json({ error: "Access to file denied" })
       }
 
-      const stats = await fsPromises.stat(canonicalPath)
-      if (!stats.isFile()) {
-        return res.status(400).json({ error: "Specified path is not a file" })
+      const handle = await fsPromises.open(canonicalPath, "r")
+      let content
+      try {
+        const stats = await handle.stat()
+        if (!stats.isFile()) {
+          return res.status(400).json({ error: "Specified path is not a file" })
+        }
+        content = await handle.readFile("utf8")
+      } finally {
+        await handle.close()
       }
-
-      const content = await fsPromises.readFile(canonicalPath, "utf8")
       return res.type("text/plain").send(content)
     } catch (error) {
       const err = error
@@ -984,11 +989,6 @@ export const registerFsRoutes = (app, dependencies) => {
         return res.status(403).json({ error: "Access to file denied" })
       }
 
-      const stats = await fsPromises.stat(canonicalPath)
-      if (!stats.isFile()) {
-        return res.status(400).json({ error: "Specified path is not a file" })
-      }
-
       const ext = path.extname(canonicalPath).toLowerCase()
       const mimeMap = {
         ".png": "image/png",
@@ -1009,7 +1009,17 @@ export const registerFsRoutes = (app, dependencies) => {
         res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`)
       }
 
-      const content = await fsPromises.readFile(canonicalPath)
+      const handle = await fsPromises.open(canonicalPath, "r")
+      let content
+      try {
+        const stats = await handle.stat()
+        if (!stats.isFile()) {
+          return res.status(400).json({ error: "Specified path is not a file" })
+        }
+        content = await handle.readFile()
+      } finally {
+        await handle.close()
+      }
       res.setHeader("Cache-Control", "no-store")
       return res.type(mimeType).send(content)
     } catch (error) {

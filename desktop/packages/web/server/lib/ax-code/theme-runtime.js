@@ -86,9 +86,7 @@ export const createThemeRuntime = (dependencies) => {
       return null
     }
 
-    const tags = Array.isArray(metadata.tags)
-      ? metadata.tags.map(asTrimmedString).filter((tag) => tag.length > 0)
-      : []
+    const tags = Array.isArray(metadata.tags) ? metadata.tags.map(asTrimmedString).filter((tag) => tag.length > 0) : []
     const version = asTrimmedString(metadata.version) || "1.0.0"
 
     return {
@@ -116,15 +114,17 @@ export const createThemeRuntime = (dependencies) => {
         if (!entry.name.toLowerCase().endsWith(".json")) continue
 
         const filePath = path.join(themesDir, entry.name)
+        let handle
         try {
-          const stat = await fsPromises.stat(filePath)
+          handle = await fsPromises.open(filePath, "r")
+          const stat = await handle.stat()
           if (!stat.isFile()) continue
           if (stat.size > maxThemeJsonBytes) {
             logger.warn(`[themes] Skip ${entry.name}: too large (${stat.size} bytes)`)
             continue
           }
 
-          const rawText = await fsPromises.readFile(filePath, "utf8")
+          const rawText = await handle.readFile("utf8")
           const parsed = JSON.parse(rawText)
           const normalized = normalizeThemeJson(parsed)
           if (!normalized) {
@@ -142,6 +142,8 @@ export const createThemeRuntime = (dependencies) => {
           themes.push(normalized)
         } catch (error) {
           logger.warn(`[themes] Failed to read ${entry.name}:`, error)
+        } finally {
+          await handle?.close()
         }
       }
 

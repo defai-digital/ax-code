@@ -195,14 +195,14 @@ async function serverLogSize() {
 async function readServerLogExcerpt(startOffset: number) {
   let handle: Awaited<ReturnType<typeof fs.open>> | undefined
   try {
-    const stat = await fs.stat(AxEnginePaths.serverLog)
+    handle = await fs.open(AxEnginePaths.serverLog, "r")
+    const stat = await handle.stat()
     if (stat.size <= 0) return ""
     const boundedOffset = startOffset >= 0 && startOffset <= stat.size ? startOffset : 0
     const readStart = Math.max(boundedOffset, stat.size - SERVER_LOG_EXCERPT_BYTES)
     const length = Math.min(SERVER_LOG_EXCERPT_BYTES, stat.size - readStart)
     if (length <= 0) return ""
     const buffer = Buffer.alloc(length)
-    handle = await fs.open(AxEnginePaths.serverLog, "r")
     const result = await handle.read(buffer, 0, length, readStart)
     return buffer
       .subarray(0, result.bytesRead)

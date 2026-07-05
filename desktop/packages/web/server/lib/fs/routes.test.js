@@ -149,6 +149,12 @@ const callRoute = async (handler, req = {}) => {
   return res
 }
 
+const createReadHandle = (content) => ({
+  stat: vi.fn(async () => ({ isFile: () => true })),
+  readFile: vi.fn(async () => content),
+  close: vi.fn(async () => undefined),
+})
+
 describe("fs write", () => {
   it("does not rewrite a file when content is unchanged", async () => {
     const fsPromises = {
@@ -216,9 +222,9 @@ describe("fs outside workspace authorization", () => {
   })
 
   it("allows outside-workspace reads inside an approved directory", async () => {
+    const handle = createReadHandle("approved")
     const fsPromises = {
-      stat: vi.fn(async () => ({ isFile: () => true })),
-      readFile: vi.fn(async () => "approved"),
+      open: vi.fn(async () => handle),
     }
     const { getRoute } = registerFs(fsPromises, { approvedDirectories: ["/tmp/approved"] })
 
@@ -228,13 +234,17 @@ describe("fs outside workspace authorization", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.sent).toBe("approved")
-    expect(fsPromises.readFile).toHaveBeenCalledWith("/tmp/approved/file.txt", "utf8")
+    expect(fsPromises.open).toHaveBeenCalledWith("/tmp/approved/file.txt", "r")
+    expect(handle.stat).toHaveBeenCalled()
+    expect(handle.readFile).toHaveBeenCalledWith("utf8")
+    expect(handle.close).toHaveBeenCalled()
   })
 
   it("allows raw outside-workspace reads inside an approved directory", async () => {
+    const content = Buffer.from("approved image")
+    const handle = createReadHandle(content)
     const fsPromises = {
-      stat: vi.fn(async () => ({ isFile: () => true })),
-      readFile: vi.fn(async () => Buffer.from("approved image")),
+      open: vi.fn(async () => handle),
     }
     const { getRoute } = registerFs(fsPromises, { approvedDirectories: ["/tmp/approved"] })
 
@@ -244,8 +254,11 @@ describe("fs outside workspace authorization", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.contentType).toBe("image/png")
-    expect(res.sent).toEqual(Buffer.from("approved image"))
-    expect(fsPromises.readFile).toHaveBeenCalledWith("/tmp/approved/image.png")
+    expect(res.sent).toEqual(content)
+    expect(fsPromises.open).toHaveBeenCalledWith("/tmp/approved/image.png", "r")
+    expect(handle.stat).toHaveBeenCalled()
+    expect(handle.readFile).toHaveBeenCalledWith()
+    expect(handle.close).toHaveBeenCalled()
   })
 
   it("rejects directory listing through a workspace symlink that resolves outside the workspace", async () => {

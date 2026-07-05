@@ -15,9 +15,6 @@ function normalizeProviderID(providerID) {
 }
 
 function readAuthFile() {
-  if (!fs.existsSync(AUTH_FILE)) {
-    return {}
-  }
   try {
     const content = fs.readFileSync(AUTH_FILE, "utf8")
     const trimmed = content.trim()
@@ -26,6 +23,7 @@ function readAuthFile() {
     }
     return JSON.parse(trimmed)
   } catch (error) {
+    if (error && error.code === "ENOENT") return {}
     console.error("Failed to read auth file:", error)
     throw new Error("Failed to read ax-code auth configuration")
   }
@@ -33,14 +31,14 @@ function readAuthFile() {
 
 function writeAuthFile(auth) {
   try {
-    if (!fs.existsSync(AX_CODE_DATA_DIR)) {
-      fs.mkdirSync(AX_CODE_DATA_DIR, { recursive: true })
-    }
+    fs.mkdirSync(AX_CODE_DATA_DIR, { recursive: true })
 
-    if (fs.existsSync(AUTH_FILE)) {
-      const backupFile = `${AUTH_FILE}.openchamber.backup`
+    const backupFile = `${AUTH_FILE}.openchamber.backup`
+    try {
       fs.copyFileSync(AUTH_FILE, backupFile)
       console.log(`Created auth backup: ${backupFile}`)
+    } catch (error) {
+      if (!error || error.code !== "ENOENT") throw error
     }
 
     // Match ax-code's 0o600 permission — auth.json contains encrypted secrets.

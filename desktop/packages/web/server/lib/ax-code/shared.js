@@ -272,10 +272,12 @@ function getConfigForPath(layers, targetPath) {
 
 function writeConfig(config, filePath = CONFIG_FILE) {
   try {
-    if (fs.existsSync(filePath)) {
-      const backupFile = `${filePath}.openchamber.backup`
+    const backupFile = `${filePath}.openchamber.backup`
+    try {
       fs.copyFileSync(filePath, backupFile)
       console.log(`Created config backup: ${backupFile}`)
+    } catch (error) {
+      if (!error || error.code !== "ENOENT") throw error
     }
 
     fs.mkdirSync(path.dirname(filePath), { recursive: true })

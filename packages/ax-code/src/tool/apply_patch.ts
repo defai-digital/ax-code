@@ -101,25 +101,20 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
       switch (hunk.type) {
         case "add": {
-          const existed = await fs
-            .stat(filePath)
-            .then((stats) => {
-              if (stats.isDirectory()) throw new Error(`Path is a directory: ${filePath}`)
-              return true
-            })
-            .catch((error: unknown) => {
-              const code = Filesystem.errnoCode(error)
-              if (code === "ENOENT") return false
-              if (code === "ENOTDIR") {
-                throw new Error(`apply_patch verification failed: parent path is not a directory: ${filePath}`)
-              }
-              throw error
-            })
+          let existed = false
           let oldContent = ""
-          if (existed) {
-            try {
-              oldContent = await fs.readFile(filePath, "utf-8")
-            } catch {
+          try {
+            oldContent = await fs.readFile(filePath, "utf-8")
+            existed = true
+          } catch (error: unknown) {
+            const code = Filesystem.errnoCode(error)
+            if (code === "ENOENT") {
+              existed = false
+            } else if (code === "EISDIR") {
+              throw new Error(`Path is a directory: ${filePath}`)
+            } else if (code === "ENOTDIR") {
+              throw new Error(`apply_patch verification failed: parent path is not a directory: ${filePath}`)
+            } else {
               throw new Error(`apply_patch verification failed: Failed to read existing file: ${filePath}`)
             }
           }
@@ -153,11 +148,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           await FileTime.assert(ctx.sessionID, filePath)
           let oldContent: string
           try {
-            const stats = await fs.stat(filePath)
-            if (stats.isDirectory()) throw new Error(`Path is a directory: ${filePath}`)
             oldContent = await fs.readFile(filePath, "utf-8")
           } catch (error) {
-            if (error instanceof Error && error.message.startsWith("Path is a directory:")) throw error
+            if (Filesystem.errnoCode(error) === "EISDIR") throw new Error(`Path is a directory: ${filePath}`)
             throw new Error(`apply_patch verification failed: Failed to read file to update: ${filePath}`)
           }
           let newContent = oldContent
@@ -233,11 +226,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           // Match the update branch: reject directories explicitly so
           // a delete against a directory fails with a clear error
           // instead of a raw EISDIR from readFile/unlink.
-          const deleteStats = await fs.stat(filePath).catch(() => null)
-          if (deleteStats?.isDirectory()) {
-            throw new Error(`apply_patch: cannot delete a directory: ${filePath}`)
-          }
           const contentToDelete = await fs.readFile(filePath, "utf-8").catch((error) => {
+            if (Filesystem.errnoCode(error) === "EISDIR") {
+              throw new Error(`apply_patch: cannot delete a directory: ${filePath}`)
+            }
             const msg = toErrorMessage(error)
             throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
           })

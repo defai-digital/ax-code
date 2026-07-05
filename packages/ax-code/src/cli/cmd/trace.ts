@@ -275,14 +275,20 @@ export const TraceCommand: CommandModule = {
 
     const logPath = path.join(logDir, logFile)
     const MAX_LOG_SIZE = 50 * 1024 * 1024 // 50 MB
-    const stat = await fs.stat(logPath).catch(() => null)
-    if (stat && stat.size > MAX_LOG_SIZE) {
-      console.log(
-        `\n  Log file too large (${Math.round(stat.size / 1024 / 1024)}MB). Use --limit or filter with --service/--errors.\n`,
-      )
-      return
+    const handle = await fs.open(logPath, "r")
+    let content: string
+    try {
+      const stat = await handle.stat()
+      if (stat.size > MAX_LOG_SIZE) {
+        console.log(
+          `\n  Log file too large (${Math.round(stat.size / 1024 / 1024)}MB). Use --limit or filter with --service/--errors.\n`,
+        )
+        return
+      }
+      content = await handle.readFile("utf8")
+    } finally {
+      await handle.close()
     }
-    const content = await fs.readFile(logPath, "utf8")
     const lines = content.split("\n").filter(Boolean)
 
     // Parse entries

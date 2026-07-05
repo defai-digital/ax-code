@@ -1640,15 +1640,22 @@ function readTailLines(filePath, lineCount = DEFAULT_TAIL_LINES) {
 function followFile(filePath, onLine) {
   let position = 0
   try {
-    position = fs.statSync(filePath).size
+    const fd = fs.openSync(filePath, "r")
+    try {
+      position = fs.fstatSync(fd).size
+    } finally {
+      fs.closeSync(fd)
+    }
   } catch {
     position = 0
   }
 
   let remainder = ""
   const interval = setInterval(() => {
+    let fd
     try {
-      const stats = fs.statSync(filePath)
+      fd = fs.openSync(filePath, "r")
+      const stats = fs.fstatSync(fd)
       if (stats.size < position) {
         position = 0
       }
@@ -1656,22 +1663,20 @@ function followFile(filePath, onLine) {
         return
       }
 
-      const fd = fs.openSync(filePath, "r")
-      try {
-        const length = stats.size - position
-        const buffer = Buffer.alloc(length)
-        fs.readSync(fd, buffer, 0, length, position)
-        position = stats.size
-        const chunk = remainder + buffer.toString("utf8")
-        const parts = chunk.split(/\r?\n/)
-        remainder = parts.pop() || ""
-        for (const line of parts) {
-          onLine(line)
-        }
-      } finally {
-        fs.closeSync(fd)
+      const length = stats.size - position
+      const buffer = Buffer.alloc(length)
+      fs.readSync(fd, buffer, 0, length, position)
+      position = stats.size
+      const chunk = remainder + buffer.toString("utf8")
+      const parts = chunk.split(/\r?\n/)
+      remainder = parts.pop() || ""
+      for (const line of parts) {
+        onLine(line)
       }
-    } catch {}
+    } catch {
+    } finally {
+      if (fd !== undefined) fs.closeSync(fd)
+    }
   }, 400)
 
   return () => {

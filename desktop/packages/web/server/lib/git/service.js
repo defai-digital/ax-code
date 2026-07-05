@@ -2066,19 +2066,16 @@ export async function getFileDiff(directory, { path: filePath, staged = false } 
         modified = await git.show([`:${repoPath}`])
       }
     } else {
-      const stat = await fsp.stat(absolutePath)
-      if (stat.isFile()) {
-        if (isImage) {
-          // For images, read as binary and convert to data URL
-          const buffer = await fsp.readFile(absolutePath)
-          modified = `data:${mimeType};base64,${buffer.toString("base64")}`
-        } else {
-          modified = await fsp.readFile(absolutePath, "utf8")
-        }
+      if (isImage) {
+        // For images, read as binary and convert to data URL
+        const buffer = await fsp.readFile(absolutePath)
+        modified = `data:${mimeType};base64,${buffer.toString("base64")}`
+      } else {
+        modified = await fsp.readFile(absolutePath, "utf8")
       }
     }
   } catch (error) {
-    if (error && typeof error === "object" && error.code === "ENOENT") {
+    if (error && typeof error === "object" && (error.code === "ENOENT" || error.code === "EISDIR")) {
       modified = ""
     } else {
       console.error("Failed to read modified file contents for diff:", error)
