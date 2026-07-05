@@ -90,4 +90,27 @@ describe("settings helpers", () => {
     const response = helpers.formatSettingsResponse({})
     expect(response.collapsibleThinkingBlocks).toBe(true)
   })
+
+  it("sanitizes usage provider string maps with the shared filter", () => {
+    const helpers = createTestHelpers()
+
+    expect(
+      helpers.sanitizeSettingsUpdate({
+        usageSelectedModels: {
+          openai: ["gpt-4.1", "", 42],
+          empty: ["", null],
+        },
+        usageCollapsedFamilies: {
+          openai: ["legacy", ""],
+        },
+        usageExpandedFamilies: {
+          anthropic: ["claude", undefined],
+        },
+      }),
+    ).toEqual({
+      usageSelectedModels: { openai: ["gpt-4.1"] },
+      usageCollapsedFamilies: { openai: ["legacy"] },
+      usageExpandedFamilies: { anthropic: ["claude"] },
+    })
+  })
 })

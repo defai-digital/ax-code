@@ -9,6 +9,27 @@ export const createSettingsHelpers = (dependencies) => {
     sanitizeProjects,
   } = dependencies
 
+  const nonEmptyStrings = (values) => values.filter((value) => typeof value === "string" && value.length > 0)
+
+  const sanitizeProviderStringMap = (value) => {
+    if (!value || typeof value !== "object") {
+      return undefined
+    }
+
+    const sanitized = {}
+    for (const [providerId, values] of Object.entries(value)) {
+      if (typeof providerId !== "string" || !Array.isArray(values)) {
+        continue
+      }
+      const validValues = nonEmptyStrings(values)
+      if (validValues.length > 0) {
+        sanitized[providerId] = validValues
+      }
+    }
+
+    return Object.keys(sanitized).length > 0 ? sanitized : undefined
+  }
+
   const sanitizeSettingsUpdate = (payload) => {
     if (!payload || typeof payload !== "object") {
       return {}
@@ -385,51 +406,21 @@ export const createSettingsHelpers = (dependencies) => {
     }
 
     // Usage model selections - which models appear in dropdown
-    if (candidate.usageSelectedModels && typeof candidate.usageSelectedModels === "object") {
-      const sanitized = {}
-      for (const [providerId, models] of Object.entries(candidate.usageSelectedModels)) {
-        if (typeof providerId === "string" && Array.isArray(models)) {
-          const validModels = models.filter((m) => typeof m === "string" && m.length > 0)
-          if (validModels.length > 0) {
-            sanitized[providerId] = validModels
-          }
-        }
-      }
-      if (Object.keys(sanitized).length > 0) {
-        result.usageSelectedModels = sanitized
-      }
+    const usageSelectedModels = sanitizeProviderStringMap(candidate.usageSelectedModels)
+    if (usageSelectedModels) {
+      result.usageSelectedModels = usageSelectedModels
     }
 
     // Usage page collapsed families - for "Other Models" section
-    if (candidate.usageCollapsedFamilies && typeof candidate.usageCollapsedFamilies === "object") {
-      const sanitized = {}
-      for (const [providerId, families] of Object.entries(candidate.usageCollapsedFamilies)) {
-        if (typeof providerId === "string" && Array.isArray(families)) {
-          const validFamilies = families.filter((f) => typeof f === "string" && f.length > 0)
-          if (validFamilies.length > 0) {
-            sanitized[providerId] = validFamilies
-          }
-        }
-      }
-      if (Object.keys(sanitized).length > 0) {
-        result.usageCollapsedFamilies = sanitized
-      }
+    const usageCollapsedFamilies = sanitizeProviderStringMap(candidate.usageCollapsedFamilies)
+    if (usageCollapsedFamilies) {
+      result.usageCollapsedFamilies = usageCollapsedFamilies
     }
 
     // Header dropdown expanded families (inverted - stores EXPANDED, default all collapsed)
-    if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === "object") {
-      const sanitized = {}
-      for (const [providerId, families] of Object.entries(candidate.usageExpandedFamilies)) {
-        if (typeof providerId === "string" && Array.isArray(families)) {
-          const validFamilies = families.filter((f) => typeof f === "string" && f.length > 0)
-          if (validFamilies.length > 0) {
-            sanitized[providerId] = validFamilies
-          }
-        }
-      }
-      if (Object.keys(sanitized).length > 0) {
-        result.usageExpandedFamilies = sanitized
-      }
+    const usageExpandedFamilies = sanitizeProviderStringMap(candidate.usageExpandedFamilies)
+    if (usageExpandedFamilies) {
+      result.usageExpandedFamilies = usageExpandedFamilies
     }
 
     // Custom model groups configuration
@@ -563,12 +554,8 @@ export const createSettingsHelpers = (dependencies) => {
     const next = {
       ...current,
       ...changes,
-      approvedDirectories: Array.from(
-        new Set(approvedSource.filter((entry) => typeof entry === "string" && entry.length > 0)),
-      ),
-      securityScopedBookmarks: Array.from(
-        new Set(baseBookmarks.filter((entry) => typeof entry === "string" && entry.length > 0)),
-      ),
+      approvedDirectories: Array.from(new Set(nonEmptyStrings(approvedSource))),
+      securityScopedBookmarks: Array.from(new Set(nonEmptyStrings(baseBookmarks))),
       typographySizes: nextTypographySizes,
     }
 
