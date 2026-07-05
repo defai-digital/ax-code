@@ -4,6 +4,10 @@ const REDACTED = "[redacted]"
 const REDACT_KEY_RE = /authorization|cookie|password|secret|token|key/i
 
 const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
+const asNonEmptyString = (value) => {
+  const normalized = typeof value === "string" ? value.trim() : ""
+  return normalized.length > 0 ? normalized : null
+}
 
 const sanitizeDetails = (value, depth = 0) => {
   if (value === null || value === undefined) return value
@@ -25,16 +29,16 @@ const sanitizeDetails = (value, depth = 0) => {
 }
 
 const normalizeEvent = (event, fallbackSource, startedAtEpochMs, now) => {
-  if (!isPlainObject(event) || typeof event.name !== "string" || event.name.trim().length === 0) {
+  const name = isPlainObject(event) ? asNonEmptyString(event.name) : null
+  if (!name) {
     return null
   }
 
   const atEpochMs = Number.isFinite(event.atEpochMs) ? event.atEpochMs : now()
-  const source =
-    typeof event.source === "string" && event.source.trim().length > 0 ? event.source.trim() : fallbackSource
+  const source = asNonEmptyString(event.source) || fallbackSource
 
   return {
-    name: event.name.trim(),
+    name,
     source,
     atEpochMs,
     sinceStartMs: Math.max(0, Math.round(atEpochMs - startedAtEpochMs)),
@@ -52,10 +56,7 @@ export const createStartupDiagnosticsRuntime = (options = {}) => {
   } = options
 
   const startedAtEpochMs = Number.isFinite(initialSnapshot?.startedAtEpochMs) ? initialSnapshot.startedAtEpochMs : now()
-  const bootId =
-    typeof initialSnapshot?.bootId === "string" && initialSnapshot.bootId.trim().length > 0
-      ? initialSnapshot.bootId.trim()
-      : crypto.randomUUID()
+  const bootId = asNonEmptyString(initialSnapshot?.bootId) || crypto.randomUUID()
 
   const events = []
   const seenMilestones = new Set()
@@ -82,7 +83,7 @@ export const createStartupDiagnosticsRuntime = (options = {}) => {
   }
 
   const record = (name, details = {}, eventOptions = {}) => {
-    if (typeof name !== "string" || name.trim().length === 0) return null
+    if (!asNonEmptyString(name)) return null
     const event = normalizeEvent(
       {
         name,
