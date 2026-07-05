@@ -55,8 +55,10 @@ test("run command scopes the local SDK client to the runtime directory", async (
   expect(src).toContain("const runtimeDirectory = directory || callerCwd")
   expect(src).toContain("await bootstrap(runtimeDirectory")
   expect(src).toContain(
-    "createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn, directory: runtimeDirectory })",
+    "createAxCodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn, directory: runtimeDirectory })",
   )
+  expect(src).not.toContain("createOpencodeClient")
+  expect(src).not.toContain("OpencodeClient")
 })
 
 test("run command logs tool renderer fallback errors", async () => {

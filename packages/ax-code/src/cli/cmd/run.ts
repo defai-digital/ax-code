@@ -9,7 +9,7 @@ import { bootstrap } from "../bootstrap"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { EOL } from "os"
 import { Filesystem } from "../../util/filesystem"
-import { createOpencodeClient, type Message, type OpencodeClient, type ToolPart } from "@ax-code/sdk/v2"
+import { createAxCodeClient, type Message, type AxCodeClient, type ToolPart } from "@ax-code/sdk/v2"
 import type { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { toErrorMessage } from "../../util/error-message"
@@ -476,7 +476,7 @@ export const RunCommand = cmd({
       return message.slice(0, 50) + (message.length > 50 ? "..." : "")
     }
 
-    async function session(sdk: OpencodeClient) {
+    async function session(sdk: AxCodeClient) {
       const baseID = args.continue ? (await sdk.session.list()).data?.find((s) => !s.parentID)?.id : args.session
 
       if (baseID && args.fork) {
@@ -492,7 +492,7 @@ export const RunCommand = cmd({
     }
 
     async function readFinalAssistantText(
-      sdk: OpencodeClient,
+      sdk: AxCodeClient,
       sessionID: string,
       assistantMessageID: string | undefined,
     ): Promise<string | undefined> {
@@ -501,7 +501,7 @@ export const RunCommand = cmd({
       return extractRunFinalAssistantText(result.data, assistantMessageID)
     }
 
-    async function execute(sdk: OpencodeClient) {
+    async function execute(sdk: AxCodeClient) {
       function tool(part: ToolPart) {
         try {
           if (part.tool === "bash") return bash(props<typeof BashTool>(part))
@@ -812,7 +812,7 @@ export const RunCommand = cmd({
       if (args.attach) {
         await pathDisplayRootContext.run(pathDisplayRoot, async () => {
           const headers = buildAttachAuthHeaders(args.password)
-          const sdk = createOpencodeClient({ baseUrl: args.attach, directory, headers })
+          const sdk = createAxCodeClient({ baseUrl: args.attach, directory, headers })
           await execute(sdk)
         })
         return
@@ -827,7 +827,7 @@ export const RunCommand = cmd({
             ServerRuntimeAuth.apply(request.headers)
             return Server.Default().fetch(request)
           }) as typeof globalThis.fetch
-          const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn, directory: runtimeDirectory })
+          const sdk = createAxCodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn, directory: runtimeDirectory })
           await execute(sdk)
         })
       })
