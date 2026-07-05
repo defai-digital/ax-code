@@ -429,6 +429,24 @@ async function createComment() {
   })
 }
 
+function parseGitHubUserAttachmentUrl(rawUrl: string): URL | null {
+  let parsedUrl: URL
+  try {
+    parsedUrl = new URL(rawUrl)
+  } catch {
+    return null
+  }
+
+  if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "github.com") {
+    return null
+  }
+  if (!parsedUrl.pathname.startsWith("/user-attachments/")) {
+    return null
+  }
+
+  return new URL(`https://github.com${parsedUrl.pathname}${parsedUrl.search}`)
+}
+
 async function getUserPrompt() {
   const context = useContext()
   const payload = context.payload as IssueCommentEvent | PullRequestReviewCommentEvent
@@ -477,31 +495,22 @@ async function getUserPrompt() {
     const start = m.index
 
     if (!url) continue
-    const filename = path.basename(url)
-
-    // Only download images from known GitHub CDN hosts to prevent SSRF
-    let parsedUrl: URL
-    try {
-      parsedUrl = new URL(url)
-    } catch {
-      console.error(`Skipping invalid image URL: ${url}`)
+    const attachmentUrl = parseGitHubUserAttachmentUrl(url)
+    if (!attachmentUrl) {
+      console.error(`Skipping invalid GitHub attachment URL: ${url}`)
       continue
     }
-    const allowedHosts = ["githubusercontent.com", "github.com", "avatars.githubusercontent.com"]
-    if (!allowedHosts.some((h) => parsedUrl.hostname === h || parsedUrl.hostname.endsWith("." + h))) {
-      console.error(`Skipping image URL from non-GitHub host: ${parsedUrl.hostname}`)
-      continue
-    }
+    const filename = path.basename(attachmentUrl.pathname)
 
     // Download image
-    const res = await fetch(url, {
+    const res = await fetch(attachmentUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/vnd.github.v3+json",
       },
     })
     if (!res.ok) {
-      console.error(`Failed to download image: ${url}`)
+      console.error(`Failed to download image: ${attachmentUrl.toString()}`)
       continue
     }
 

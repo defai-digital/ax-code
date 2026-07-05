@@ -9,6 +9,20 @@ import {
 } from "./core-routes.js"
 
 describe("core-routes", () => {
+  const createAuthController = (requireAuth) => ({
+    requireAuth,
+    handleSessionStatus: vi.fn(),
+    handleSessionCreate: vi.fn(),
+    handlePasskeyStatus: vi.fn(),
+    handlePasskeyAuthenticationOptions: vi.fn(),
+    handlePasskeyAuthenticationVerify: vi.fn(),
+    handlePasskeyRegistrationOptions: vi.fn(),
+    handlePasskeyRegistrationVerify: vi.fn(),
+    handlePasskeyList: vi.fn(),
+    handlePasskeyRevoke: vi.fn(),
+    handleResetAuth: vi.fn(),
+  })
+
   it("should call gracefulShutdown with exitProcess: true on /api/system/shutdown", async () => {
     const app = express()
     let shutdownOpts = null
@@ -194,23 +208,54 @@ describe("core-routes", () => {
 
     registerAuthAndAccessRoutes(app, {
       express,
-      uiAuthController: {
-        requireAuth: (_req, res) => res.status(401).json({ error: "Unauthorized" }),
-        handleSessionStatus: vi.fn(),
-        handleSessionCreate: vi.fn(),
-        handlePasskeyStatus: vi.fn(),
-        handlePasskeyAuthenticationOptions: vi.fn(),
-        handlePasskeyAuthenticationVerify: vi.fn(),
-        handlePasskeyRegistrationOptions: vi.fn(),
-        handlePasskeyRegistrationVerify: vi.fn(),
-        handlePasskeyList: vi.fn(),
-        handlePasskeyRevoke: vi.fn(),
-        handleResetAuth: vi.fn(),
-      },
+      uiAuthController: createAuthController((_req, res) => res.status(401).json({ error: "Unauthorized" })),
     })
 
     try {
       await request(app).post("/api/system/probe-url").send({ url: "http://127.0.0.1:5173/" }).expect(401)
+
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("probes only a canonical loopback URL after API auth", async () => {
+    const app = express()
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => new Response("", { status: 204 }))
+    globalThis.fetch = fetchMock
+
+    registerAuthAndAccessRoutes(app, {
+      express,
+      uiAuthController: createAuthController((_req, _res, next) => next()),
+    })
+
+    try {
+      await request(app)
+        .post("/api/system/probe-url")
+        .send({ url: "http://localhost:5173/attacker-controlled/path?x=1#fragment" })
+        .expect(200)
+
+      expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:5173/", expect.objectContaining({ method: "GET" }))
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("rejects non-loopback preview probe URLs", async () => {
+    const app = express()
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn()
+    globalThis.fetch = fetchMock
+
+    registerAuthAndAccessRoutes(app, {
+      express,
+      uiAuthController: createAuthController((_req, _res, next) => next()),
+    })
+
+    try {
+      await request(app).post("/api/system/probe-url").send({ url: "https://example.com:5173/" }).expect(400)
 
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {

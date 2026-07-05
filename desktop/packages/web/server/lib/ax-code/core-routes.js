@@ -1,6 +1,6 @@
 import { createBackgroundAxCodeReloader } from "./background-reload.js"
 
-const parseLoopbackUrl = (rawUrl) => {
+const buildLoopbackProbeUrl = (rawUrl) => {
   if (typeof rawUrl !== "string") {
     return null
   }
@@ -21,7 +21,13 @@ const parseLoopbackUrl = (rawUrl) => {
     return null
   }
 
-  return url
+  const port = url.port ? Number.parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80
+  if (!Number.isFinite(port) || port <= 0 || port > 65535) {
+    return null
+  }
+
+  const protocol = url.protocol === "https:" ? "https" : "http"
+  return `${protocol}://127.0.0.1:${port}/`
 }
 
 export const registerServerStatusRoutes = (app, dependencies) => {
@@ -379,13 +385,13 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
   app.post("/api/system/probe-url", express.json({ limit: "16kb" }), async (req, res, next) => {
     try {
       await requireApiAuth(req, res, async () => {
-        const url = parseLoopbackUrl(req.body?.url)
+        const url = buildLoopbackProbeUrl(req.body?.url)
         if (!url) {
           return res.status(400).json({ ok: false, error: "Invalid loopback URL" })
         }
 
         try {
-          const response = await fetch(url.toString(), {
+          const response = await fetch(url, {
             method: "GET",
             redirect: "manual",
             signal: AbortSignal.timeout(1500),

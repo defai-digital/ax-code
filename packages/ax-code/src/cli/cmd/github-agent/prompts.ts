@@ -1,9 +1,5 @@
 import path from "path"
-import type {
-  IssueCommentEvent,
-  IssuesEvent,
-  PullRequestReviewCommentEvent,
-} from "@octokit/webhooks-types"
+import type { IssueCommentEvent, IssuesEvent, PullRequestReviewCommentEvent } from "@octokit/webhooks-types"
 import { Ssrf } from "../../../util/ssrf"
 import {
   type GitHubPullRequest,
@@ -32,6 +28,24 @@ export type ReviewCommentContext = {
   commitId: string
   originalCommitId: string
 } | null
+
+export function parseGitHubUserAttachmentUrl(rawUrl: string): URL | null {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    return null
+  }
+
+  if (parsed.protocol !== "https:" || parsed.hostname !== "github.com") {
+    return null
+  }
+  if (!parsed.pathname.startsWith("/user-attachments/")) {
+    return null
+  }
+
+  return new URL(`https://github.com${parsed.pathname}${parsed.search}`)
+}
 
 export function getReviewCommentContext(
   eventName: string,
@@ -72,9 +86,10 @@ export async function getUserPrompt(params: {
     return { userPrompt: customPrompt, promptFiles: [] }
   }
 
-  const reviewContext = eventName === "pull_request_review_comment"
-    ? getReviewCommentContext(eventName, payload as unknown as PullRequestReviewCommentEvent)
-    : null
+  const reviewContext =
+    eventName === "pull_request_review_comment"
+      ? getReviewCommentContext(eventName, payload as unknown as PullRequestReviewCommentEvent)
+      : null
 
   const mentions = (process.env["MENTIONS"] || "/ax-code,/oc")
     .split(",")
@@ -114,15 +129,15 @@ export async function getUserPrompt(params: {
     const tag = m[0]
     const url = m[1]
     const start = m.index ?? 0
-    const filename = path.basename(url)
-
-    const parsed = new URL(url)
-    if (parsed.hostname !== "github.com" && !parsed.hostname.endsWith(".githubusercontent.com")) {
-      console.error(`Skipping non-GitHub URL: ${url}`)
+    const attachmentUrl = parseGitHubUserAttachmentUrl(url)
+    if (!attachmentUrl) {
+      console.error(`Skipping invalid GitHub attachment URL: ${url}`)
       continue
     }
 
-    const res = await Ssrf.pinnedFetch(url, {
+    const filename = path.basename(attachmentUrl.pathname)
+
+    const res = await Ssrf.pinnedFetch(attachmentUrl.toString(), {
       label: "github-agent",
       headers: {
         Authorization: `Bearer ${appToken}`,
@@ -131,7 +146,7 @@ export async function getUserPrompt(params: {
       redirect: "manual",
     })
     if (!res.ok) {
-      console.error(`Failed to download image: ${url}`)
+      console.error(`Failed to download image: ${attachmentUrl.toString()}`)
       continue
     }
 
@@ -220,7 +235,11 @@ function githubActionContext() {
   ] as const
 }
 
-function buildComments(comments: GitHubComment[] | undefined, format: (comment: GitHubComment) => string, excludeId?: number) {
+function buildComments(
+  comments: GitHubComment[] | undefined,
+  format: (comment: GitHubComment) => string,
+  excludeId?: number,
+) {
   return (comments || [])
     .filter((comment) => {
       const id = parseInt(comment.databaseId, 10)
