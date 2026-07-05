@@ -32,11 +32,12 @@ const importStore = async () => {
       }),
     },
   }
+  const getScopedApiClient = vi.fn(() => apiClient)
 
   vi.doMock("@/lib/ax-code/client", () => ({
     axCodeClient: {
       getApiClient: () => apiClient,
-      getScopedApiClient: () => apiClient,
+      getScopedApiClient,
     },
   }))
 
@@ -49,6 +50,7 @@ const importStore = async () => {
   const storeModule = await import("./useMcpStore")
   return {
     ...storeModule,
+    getScopedApiClient,
     statusRequests,
   }
 }
@@ -74,5 +76,18 @@ describe("useMcpStore", () => {
     await staleRefresh
 
     expect(useMcpStore.getState().getStatusForDirectory("/repo").server?.status).toBe("connected")
+  })
+
+  test("normalizes scoped directory keys for Windows paths", async () => {
+    const { getScopedApiClient, statusRequests, useMcpStore } = await importStore()
+
+    const refresh = useMcpStore.getState().refresh({ directory: " c:\\Repo\\ " })
+    await Promise.resolve()
+
+    statusRequests[0].resolve({ data: { server: status("connected") } })
+    await refresh
+
+    expect(getScopedApiClient).toHaveBeenCalledWith("C:/Repo")
+    expect(useMcpStore.getState().getStatusForDirectory("C:/Repo/").server?.status).toBe("connected")
   })
 })

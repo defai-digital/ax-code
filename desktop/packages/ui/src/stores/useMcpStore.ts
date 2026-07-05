@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { devtools } from "zustand/middleware"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import { axCodeClient } from "@/lib/ax-code/client"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 
 export type McpStatusMap = Record<string, McpStatus>
@@ -21,13 +22,7 @@ type McpHealth = {
   hasAuthRequired: boolean
 }
 
-const normalizeDirectory = (directory: string | null | undefined): string | null => {
-  if (typeof directory !== "string") return null
-  const trimmed = directory.trim()
-  if (!trimmed) return null
-  const normalized = trimmed.replace(/\\/g, "/")
-  return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized
-}
+const normalizeDirectory = (directory: string | null | undefined): string | null => normalizeProjectPath(directory)
 
 const toKey = (directory: string | null | undefined): string => normalizeDirectory(directory) ?? "__global__"
 
