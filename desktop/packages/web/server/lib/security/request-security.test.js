@@ -22,6 +22,19 @@ describe("request security origin checks", () => {
     ).resolves.toBe(true)
   })
 
+  it("trims origin headers before comparing origins", async () => {
+    const runtime = createRuntime()
+
+    await expect(
+      runtime.isRequestOriginAllowed(
+        createMockRequest({
+          host: "localhost:3000",
+          origin: " http://localhost:3000 ",
+        }),
+      ),
+    ).resolves.toBe(true)
+  })
+
   it("treats IPv6 loopback host headers as localhost equivalents", async () => {
     const runtime = createRuntime()
 

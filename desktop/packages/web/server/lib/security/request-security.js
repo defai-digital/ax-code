@@ -2,6 +2,7 @@ import { addLocalhostOriginAliases, getRequestOrigin } from "./request-origin.js
 
 export const createRequestSecurityRuntime = (deps) => {
   const { readSettingsFromDiskMigrated } = deps
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
   const getUiSessionTokenFromRequest = (req) => {
     const cookieHeader = req?.headers?.cookie
@@ -29,7 +30,7 @@ export const createRequestSecurityRuntime = (deps) => {
       return
     }
 
-    const message = typeof reason === "string" && reason.trim().length > 0 ? reason.trim() : "Bad Request"
+    const message = asTrimmedString(reason) || "Bad Request"
     const body = Buffer.from(message, "utf8")
     const statusText =
       {
@@ -65,8 +66,9 @@ export const createRequestSecurityRuntime = (deps) => {
 
     try {
       const settings = await readSettingsFromDiskMigrated()
-      if (typeof settings?.publicOrigin === "string" && settings.publicOrigin.trim().length > 0) {
-        origins.add(new URL(settings.publicOrigin.trim()).origin)
+      const publicOrigin = asTrimmedString(settings?.publicOrigin)
+      if (publicOrigin) {
+        origins.add(new URL(publicOrigin).origin)
       }
     } catch {}
 
@@ -74,7 +76,7 @@ export const createRequestSecurityRuntime = (deps) => {
   }
 
   const isRequestOriginAllowed = async (req) => {
-    const originHeader = typeof req.headers.origin === "string" ? req.headers.origin.trim() : ""
+    const originHeader = asTrimmedString(req.headers.origin)
     if (!originHeader) {
       return false
     }
