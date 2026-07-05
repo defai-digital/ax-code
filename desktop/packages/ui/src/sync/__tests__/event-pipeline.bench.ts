@@ -6,34 +6,90 @@
  * multi-session workloads (parent + subagent token streaming).
  *
  * Run with:
- *   node --experimental-strip-types packages/ui/src/sync/__tests__/event-pipeline.bench.js
+ *   pnpm --dir desktop/packages/ui exec tsx src/sync/__tests__/event-pipeline.bench.ts
  *
  * This is NOT a test file — it prints a report and exits. Nothing here
  * asserts; it exists purely to give you intuition about the optimization
  * impact at varying concurrency levels.
  */
 
+import type { EventPipelineInput } from "../event-pipeline.ts"
 import { createEventPipeline } from "../event-pipeline.ts"
+import { installEventPipelineBrowserGlobals } from "./event-pipeline-test-helpers.ts"
 
-// ---------------------------------------------------------------------------
-// Minimal DOM stubs (same approach as the unit tests)
-// ---------------------------------------------------------------------------
-
-globalThis.document = {
-  visibilityState: "visible",
-  addEventListener() {},
-  removeEventListener() {},
+type SessionStatusEvent = {
+  directory: string
+  payload: {
+    type: "session.status"
+    properties: {
+      sessionID: string
+      status: { type: "busy" | "idle" }
+    }
+  }
 }
-globalThis.window = {
-  addEventListener() {},
-  removeEventListener() {},
+
+type MessagePartDeltaEvent = {
+  directory: string
+  payload: {
+    type: "message.part.delta"
+    properties: {
+      messageID: string
+      partID: string
+      field: "text"
+      delta: string
+    }
+  }
+}
+
+type MessagePartUpdatedEvent = {
+  directory: string
+  payload: {
+    type: "message.part.updated"
+    properties: {
+      part: {
+        id: string
+        type: "text"
+        messageID: string
+        text: string
+      }
+    }
+  }
+}
+
+type SyntheticEvent = SessionStatusEvent | MessagePartDeltaEvent | MessagePartUpdatedEvent
+
+type TokenStreamWorkloadInput = {
+  directoryCount: number
+  sessionsPerDirectory: number
+  tokensPerSession: number
+}
+
+type Scenario = {
+  label: string
+  workload: SyntheticEvent[]
+}
+
+type ScenarioResult = {
+  label: string
+  inputEvents: number
+  inputDeltas: number
+  inputDeltaBytes: number
+  deliveredEvents: number
+  deliveredDeltas: number
+  deliveredDeltaBytes: number
+  reductionPct: number
+  wallMs: number
+}
+
+function isMessagePartDeltaEvent(event: SyntheticEvent): event is MessagePartDeltaEvent {
+  return event.payload.type === "message.part.delta"
 }
 
 // ---------------------------------------------------------------------------
 // SDK mock that replays a pre-generated event list
 // ---------------------------------------------------------------------------
 
-function createReplaySdk(events, hold) {
+function createReplaySdk(events: SyntheticEvent[], hold: Promise<void>): EventPipelineInput["sdk"] {
   return {
     global: {
       event: async () => ({
@@ -43,7 +99,7 @@ function createReplaySdk(events, hold) {
         })(),
       }),
     },
-  }
+  } as EventPipelineInput["sdk"]
 }
 
 // ---------------------------------------------------------------------------
@@ -60,8 +116,12 @@ function createReplaySdk(events, hold) {
  *   message.part.updated                    (final state)
  *   session.status(idle)
  */
-function buildTokenStreamWorkload({ directoryCount, sessionsPerDirectory, tokensPerSession }) {
-  const events = []
+function buildTokenStreamWorkload({
+  directoryCount,
+  sessionsPerDirectory,
+  tokensPerSession,
+}: TokenStreamWorkloadInput): SyntheticEvent[] {
+  const events: SyntheticEvent[] = []
   for (let d = 0; d < directoryCount; d++) {
     const directory = `dir-${d}`
     for (let s = 0; s < sessionsPerDirectory; s++) {
@@ -125,20 +185,21 @@ function buildTokenStreamWorkload({ directoryCount, sessionsPerDirectory, tokens
 // Shuffle events within each directory bucket so arrivals are interleaved but
 // still ordered within a single (sessionID, partID) stream (deltas must stay
 // ordered relative to each other for append semantics to remain correct).
-function interleave(events) {
-  const buckets = new Map() // directory -> list of events (in original order)
+function interleave(events: SyntheticEvent[]): SyntheticEvent[] {
+  const buckets = new Map<string, SyntheticEvent[]>() // directory -> list of events (in original order)
   for (const e of events) {
     const bucket = buckets.get(e.directory) ?? []
     bucket.push(e)
     buckets.set(e.directory, bucket)
   }
-  const out = []
+  const out: SyntheticEvent[] = []
   let more = true
   while (more) {
     more = false
     for (const bucket of buckets.values()) {
       if (bucket.length > 0) {
-        out.push(bucket.shift())
+        const event = bucket.shift()
+        if (event) out.push(event)
         more = true
       }
     }
@@ -150,9 +211,9 @@ function interleave(events) {
 // Runner — pushes a workload through the pipeline and measures
 // ---------------------------------------------------------------------------
 
-async function runScenario(label, workload) {
-  let release
-  const hold = new Promise((resolve) => {
+async function runScenario(label: string, workload: SyntheticEvent[]): Promise<ScenarioResult> {
+  let release: () => void = () => {}
+  const hold = new Promise<void>((resolve) => {
     release = resolve
   })
 
@@ -186,10 +247,9 @@ async function runScenario(label, workload) {
   release()
 
   // Count input-side delta events for comparison
-  const inputDeltas = workload.filter((e) => e.payload.type === "message.part.delta").length
-  const inputDeltaBytes = workload
-    .filter((e) => e.payload.type === "message.part.delta")
-    .reduce((n, e) => n + e.payload.properties.delta.length, 0)
+  const deltaEvents = workload.filter(isMessagePartDeltaEvent)
+  const inputDeltas = deltaEvents.length
+  const inputDeltaBytes = deltaEvents.reduce((n, e) => n + e.payload.properties.delta.length, 0)
 
   const wallMs = endWall - startWall
   const reductionPct = inputDeltas === 0 ? 0 : (1 - deliveredDeltas / inputDeltas) * 100
@@ -207,7 +267,7 @@ async function runScenario(label, workload) {
   }
 }
 
-function formatRow(r) {
+function formatRow(r: ScenarioResult): string {
   const cols = [
     r.label.padEnd(44),
     String(r.inputEvents).padStart(8),
@@ -221,7 +281,7 @@ function formatRow(r) {
   return cols.join("  ")
 }
 
-function header() {
+function header(): string {
   const cols = [
     "scenario".padEnd(44),
     "in".padStart(8),
@@ -239,7 +299,7 @@ function header() {
 // Scenarios
 // ---------------------------------------------------------------------------
 
-const scenarios = [
+const scenarios: Scenario[] = [
   {
     label: "single project, 1 session, 500 tokens",
     workload: buildTokenStreamWorkload({
@@ -310,12 +370,14 @@ const scenarios = [
 // Main
 // ---------------------------------------------------------------------------
 
-async function main() {
+async function main(): Promise<void> {
+  installEventPipelineBrowserGlobals({ visibilityState: "visible", onLine: true })
+
   console.log("event-pipeline synthetic benchmark\n")
   console.log(header())
   console.log("-".repeat(header().length + 8))
 
-  const results = []
+  const results: ScenarioResult[] = []
   for (const { label, workload } of scenarios) {
     const r = await runScenario(label, workload)
     results.push(r)

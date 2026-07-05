@@ -27,7 +27,12 @@ import {
 
 // Use relative path by default (works with both dev and nginx proxy server)
 // Can be overridden with VITE_AX_CODE_URL for absolute URLs in special deployments
-const DEFAULT_BASE_URL = import.meta.env.VITE_AX_CODE_URL || API_PATHS.base
+const getConfiguredBaseUrl = (): string | undefined => {
+  const env = (import.meta as ImportMeta & { env?: { VITE_AX_CODE_URL?: unknown } }).env
+  return typeof env?.VITE_AX_CODE_URL === "string" && env.VITE_AX_CODE_URL.length > 0 ? env.VITE_AX_CODE_URL : undefined
+}
+
+const DEFAULT_BASE_URL = getConfiguredBaseUrl() || API_PATHS.base
 
 /**
  * Render an SDK error payload into a short string for Error messages.
