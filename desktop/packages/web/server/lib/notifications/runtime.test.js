@@ -67,4 +67,38 @@ describe("notification trigger runtime", () => {
     ])
     expect(broadcast).toEqual(emitted)
   })
+
+  it("trims question notification header and body text", async () => {
+    vi.useFakeTimers()
+    const { runtime, emitted, broadcast } = createRuntime()
+
+    try {
+      await runtime.maybeDispatchNotificationForTrigger({
+        type: "question.asked",
+        properties: {
+          sessionID: "ses_question",
+          questions: [
+            {
+              header: " Plan Mode ",
+              question: " Continue with plan? ",
+            },
+          ],
+        },
+      })
+
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(emitted).toEqual([
+        expect.objectContaining({
+          kind: "question",
+          title: "Switch to plan mode",
+          body: "Continue with plan?",
+          sessionId: "ses_question",
+        }),
+      ])
+      expect(broadcast).toEqual(emitted)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

@@ -29,6 +29,8 @@ export const createNotificationTriggerRuntime = (deps) => {
   const notifiedPermissionRequests = new Set()
   const lastReadyNotificationAt = new Map()
 
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
   const sessionParentIdCache = new Map()
   const SESSION_PARENT_CACHE_TTL_MS = 60 * 1000
 
@@ -300,8 +302,8 @@ export const createNotificationTriggerRuntime = (deps) => {
         }
 
         const firstQuestion = payload.properties?.questions?.[0]
-        const header = typeof firstQuestion?.header === "string" ? firstQuestion.header.trim() : ""
-        const questionText = typeof firstQuestion?.question === "string" ? firstQuestion.question.trim() : ""
+        const header = asTrimmedString(firstQuestion?.header)
+        const questionText = asTrimmedString(firstQuestion?.question)
 
         let title = /plan\s*mode/i.test(header)
           ? "Switch to plan mode"
@@ -410,9 +412,7 @@ export const createNotificationTriggerRuntime = (deps) => {
         const sessionTitle = payload.properties?.sessionTitle
         const permissionText = typeof permission === "string" && permission.length > 0 ? permission : ""
         const fallbackMessage =
-          typeof sessionTitle === "string" && sessionTitle.trim().length > 0
-            ? sessionTitle.trim()
-            : permissionText || "Agent is waiting for your approval"
+          asTrimmedString(sessionTitle) || permissionText || "Agent is waiting for your approval"
 
         let title = "Permission required"
         let body = fallbackMessage
