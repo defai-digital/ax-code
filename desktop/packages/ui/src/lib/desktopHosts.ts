@@ -1,4 +1,5 @@
 import { isTauriShell } from "@/lib/desktop"
+import { isRecord } from "@/lib/record"
 import { getTauriGlobal } from "@/lib/tauriGlobal"
 import type { TauriInvoke } from "@/lib/tauriGlobal"
 
@@ -111,10 +112,6 @@ export const locationMatchesHost = (locationHref: string, hostUrl: string): bool
   } catch {
     return false
   }
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null
 }
 
 const readString = (obj: Record<string, unknown>, key: string): string | null => {
