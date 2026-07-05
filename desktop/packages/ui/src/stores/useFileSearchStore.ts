@@ -13,6 +13,16 @@ const CACHE_TTL_MS = 30_000
 const MAX_CACHE_ENTRIES = 40
 const DEFAULT_SEARCH_LIMIT = 60
 
+const normalizeSearchDirectory = (input: string): string => {
+  const normalized = input.trim().replace(/\\/g, "/")
+  if (normalized.length > 1) {
+    return normalized.replace(/\/+$/, "")
+  }
+  return normalized
+}
+
+const normalizeSearchQuery = (input: string): string => input.trim().toLowerCase()
+
 interface FileSearchCacheEntry {
   files: ProjectFileSearchHit[]
   timestamp: number
@@ -39,8 +49,8 @@ const buildCacheKey = (
   respectGitignore: boolean,
   type: "file" | "directory",
 ) => {
-  const normalizedDirectory = directory.trim()
-  const normalizedQuery = query.trim().toLowerCase()
+  const normalizedDirectory = normalizeSearchDirectory(directory)
+  const normalizedQuery = normalizeSearchQuery(query)
   return JSON.stringify([normalizedDirectory, normalizedQuery, limit, includeHidden, respectGitignore, type])
 }
 
@@ -51,16 +61,8 @@ const cacheKeyMatchesDirectory = (cacheKey: string, directory: string) => {
       return false
     }
 
-    const normalize = (input: string) => {
-      const normalized = input.trim().replace(/\\/g, "/")
-      if (normalized.length > 1) {
-        return normalized.replace(/\/+$/, "")
-      }
-      return normalized
-    }
-
-    const cachedDirectory = normalize(value[0])
-    const invalidatedDirectory = normalize(directory)
+    const cachedDirectory = normalizeSearchDirectory(value[0])
+    const invalidatedDirectory = normalizeSearchDirectory(directory)
     if (invalidatedDirectory === "/") {
       return cachedDirectory === "/" || cachedDirectory.startsWith("/")
     }
@@ -92,7 +94,7 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
           return []
         }
 
-        const normalizedDirectory = directory.trim()
+        const normalizedDirectory = normalizeSearchDirectory(directory)
         const normalizedQuery = typeof query === "string" ? query.trim() : ""
         const includeHidden = Boolean(options?.includeHidden)
         const respectGitignore = options?.respectGitignore ?? true
