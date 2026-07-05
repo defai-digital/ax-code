@@ -1,6 +1,5 @@
 import React from "react"
 import type { Session } from "@ax-code/sdk/v2"
-import { toast } from "@/components/ui"
 import { useI18n } from "@/lib/i18n"
 import { useDeviceInfo } from "@/lib/device"
 import { isDesktopShell } from "@/lib/desktop"
@@ -308,7 +307,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft)
   const updateStore = useUpdateStore(
     useShallow((s) => ({
-      checkForUpdates: s.checkForUpdates,
       available: s.available,
       runtimeType: s.runtimeType,
       info: s.info,
@@ -526,22 +524,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     const current = useUpdateStore.getState()
     if (current.available && current.info) {
       setUpdateDialogOpen(true)
-      return
     }
-
-    void updateStore.checkForUpdates().then(() => {
-      const { available, error } = useUpdateStore.getState()
-      if (error) {
-        toast.error(t("sessions.sidebar.updateCheck.errorTitle"), { description: error })
-        return
-      }
-      if (!available) {
-        toast.success(t("sessions.sidebar.updateCheck.latestVersion"))
-        return
-      }
-      setUpdateDialogOpen(true)
-    })
-  }, [t, updateStore])
+  }, [])
 
   const handleOpenSettings = React.useCallback(() => {
     setSettingsDialogOpen(true)

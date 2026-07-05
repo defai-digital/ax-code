@@ -220,8 +220,6 @@ export const dict = {
   "sessions.switcher.openAria": "Open session switcher",
   "sessions.switcher.empty": "No recent sessions",
   "sessions.switcher.draftTitle": "New session",
-  "sessions.sidebar.updateCheck.errorTitle": "Failed to check for updates",
-  "sessions.sidebar.updateCheck.latestVersion": "You are on the latest version",
   "sessions.sidebar.directory.errorAddProjectTitle": "Failed to add project",
   "sessions.sidebar.directory.errorAddProjectDescription": "Please select a valid directory.",
   "sessions.sidebar.directory.errorSelectDirectoryTitle": "Failed to select directory",
