@@ -6,7 +6,7 @@ import { Question } from "@/question"
 import { EventQuery } from "@/replay/query"
 import { Log } from "@/util/log"
 import { KeyedSerialQueue } from "@/util/queue"
-import { uniqueSortedStrings, uniqueStrings } from "@/util/string-list"
+import { uniqueItems, uniqueSortedStrings, uniqueStrings } from "@/util/string-list"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { SessionPrompt } from "./prompt"
@@ -133,10 +133,6 @@ function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[
   const workflow = workflowPayload(item)
   if (workflow) keys.push(`workflow-phase:${item.projectID}:${workflow.runID}:${workflow.phaseID}`)
   return uniqueSortedStrings(keys)
-}
-
-function uniqueValues<T>(values: T[]): T[] {
-  return Array.from(new Set(values))
 }
 
 async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecution) {
@@ -572,7 +568,7 @@ async function attachWorkflowChildArtifacts(
 }
 
 function uniqueWorkflowArtifactIDs(ids: WorkflowArtifactID[]): WorkflowArtifactID[] {
-  return uniqueValues(ids)
+  return uniqueItems(ids)
 }
 
 function uniqueWorkflowEvidenceRefs(refs: WorkflowEvidenceRef[]): WorkflowEvidenceRef[] {
