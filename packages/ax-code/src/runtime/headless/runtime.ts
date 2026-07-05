@@ -1,4 +1,4 @@
-import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
+import { createAxCodeClient, type Event } from "@ax-code/sdk/v2"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command"
 import { parseJsonResult } from "../../util/json-value"
 
@@ -13,7 +13,7 @@ export type HeadlessAgentRuntime = ReturnType<typeof createHeadlessAgentRuntime>
 
 export function createHeadlessAgentRuntime(input: HeadlessAgentRuntimeInput) {
   const fetchFn = input.fetch ?? fetch
-  const client = createOpencodeClient({
+  const client = createAxCodeClient({
     baseUrl: input.baseUrl,
     directory: input.directory,
     fetch: fetchFn,
@@ -53,7 +53,7 @@ async function sendHeadlessRuntimeCommand(input: {
   fetch: typeof fetch
   headers?: RequestInit["headers"]
   directory?: string
-  client: ReturnType<typeof createOpencodeClient>
+  client: ReturnType<typeof createAxCodeClient>
 }): Promise<HeadlessRuntimeCommandResult> {
   switch (input.command.type) {
     case "session.prompt":

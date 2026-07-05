@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest"
+import { readFile } from "node:fs/promises"
+import path from "node:path"
 import {
   createHeadlessAgentRuntime,
   parseHeadlessRuntimeJsonBody,
@@ -45,5 +47,18 @@ describe("headless runtime", () => {
     expect(request?.headers.get("x-opencode-directory")).toBe("%2Ftmp%2F%E6%B8%AC%E8%A9%A6")
     expect(request?.headers.get("authorization")).toBe("Basic token")
     expect(headers).toEqual({ Authorization: "Basic token" })
+  })
+
+  test("runtime clients use AX Code SDK naming instead of OpenCode aliases", async () => {
+    const headlessRuntime = await readFile(
+      path.join(import.meta.dirname, "../../../src/runtime/headless/runtime.ts"),
+      "utf8",
+    )
+    const localClient = await readFile(path.join(import.meta.dirname, "../../../src/runtime/local-client.ts"), "utf8")
+
+    for (const source of [headlessRuntime, localClient]) {
+      expect(source).toContain("createAxCodeClient")
+      expect(source).not.toContain("createOpencodeClient")
+    }
   })
 })
