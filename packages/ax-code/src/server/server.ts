@@ -299,7 +299,7 @@ export namespace Server {
     return result
   }
 
-  /** @deprecated do not use this dumb shit */
+  /** @deprecated Use the returned listen URL instead of shared mutable server state. */
   export let url: URL
 
   export async function listen(opts: {
