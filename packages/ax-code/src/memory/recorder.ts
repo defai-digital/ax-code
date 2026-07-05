@@ -17,6 +17,7 @@ import { computeContentHash, renderEntry } from "./hash"
 import type { EntrySection, MemoryEntry, MemoryEntryKind, ProjectMemory } from "./types"
 import { FileLock } from "../util/filelock"
 import { Lock } from "../util/lock"
+import { uniqueStrings } from "../util/string-list"
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
@@ -93,7 +94,7 @@ function normalizeList(
   transform: (value: string) => string = (value) => value.trim(),
 ): string[] | undefined {
   const normalized = values?.map(transform).filter(Boolean)
-  return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
+  return normalized && normalized.length > 0 ? uniqueStrings(normalized) : undefined
 }
 
 function normalizeTags(values: string[] | undefined): string[] | undefined {

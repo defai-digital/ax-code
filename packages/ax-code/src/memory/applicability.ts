@@ -1,6 +1,7 @@
 import path from "path"
 import { minimatch } from "minimatch"
 import type { MemoryEntry } from "./types"
+import { uniqueStrings } from "../util/string-list"
 
 export interface MemoryApplicabilityOptions {
   projectRoot: string
@@ -39,7 +40,7 @@ export function normalizePathForMatch(projectRoot: string, targetPath: string): 
   if (isParentRelativePath(normalized)) return []
   const relative = path.isAbsolute(targetPath) ? path.relative(projectRoot, targetPath).replace(/\\/g, "/") : normalized
   if (path.isAbsolute(targetPath) && isParentRelativePath(relative)) return []
-  return Array.from(new Set([normalized, relative, path.basename(normalized)].filter(Boolean)))
+  return uniqueStrings([normalized, relative, path.basename(normalized)].filter(Boolean))
 }
 
 function isParentRelativePath(value: string): boolean {
