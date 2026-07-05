@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { createEventPipeline } from "../event-pipeline"
+import { createEventTarget } from "./event-pipeline-test-helpers"
 
 const savedDocument = globalThis.document
 const savedWindow = globalThis.window
@@ -10,31 +11,6 @@ afterEach(() => {
   globalThis.window = savedWindow
   globalThis.navigator = savedNavigator
 })
-
-// Multi-listener event-target stub. The simpler single-slot stub used in
-// event-pipeline-resume.test.js would break here because waitForRetry and the
-// top-level onOnline handler both register for `online`.
-function createEventTarget(extras = {}) {
-  const listeners = new Map()
-  return {
-    ...extras,
-    addEventListener(event, handler) {
-      const list = listeners.get(event)
-      if (list) list.add(handler)
-      else listeners.set(event, new Set([handler]))
-    },
-    removeEventListener(event, handler) {
-      listeners.get(event)?.delete(handler)
-    },
-    dispatch(event) {
-      const list = listeners.get(event)
-      if (!list) return
-      for (const handler of Array.from(list)) {
-        handler()
-      }
-    },
-  }
-}
 
 describe("createEventPipeline — online event", () => {
   it("does not spin reconnect attempts after the browser reports offline", async () => {

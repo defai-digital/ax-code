@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { createEventPipeline } from "../event-pipeline"
+import { createEventTarget } from "./event-pipeline-test-helpers"
 
 const savedDocument = globalThis.document
 const savedWindow = globalThis.window
@@ -10,28 +11,6 @@ afterEach(() => {
   globalThis.window = savedWindow
   globalThis.navigator = savedNavigator
 })
-
-function createEventTarget(extras = {}) {
-  const listeners = new Map()
-  return {
-    ...extras,
-    addEventListener(event, handler) {
-      const list = listeners.get(event)
-      if (list) list.add(handler)
-      else listeners.set(event, new Set([handler]))
-    },
-    removeEventListener(event, handler) {
-      listeners.get(event)?.delete(handler)
-    },
-    dispatch(event) {
-      const list = listeners.get(event)
-      if (!list) return
-      for (const handler of Array.from(list)) {
-        handler()
-      }
-    },
-  }
-}
 
 describe("createEventPipeline — permanent server errors", () => {
   it("uses the long backoff cap for 4xx so we do not hammer at 5s intervals", async () => {
