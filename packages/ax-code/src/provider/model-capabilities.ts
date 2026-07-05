@@ -12,6 +12,8 @@
  * @module model-capabilities
  */
 
+import { normalizeProviderModelId } from "./model-id"
+
 /**
  * Rate limit tier for pacing policy selection.
  * - `unlimited`: No rate limiting (local/self-hosted models)
@@ -412,14 +414,6 @@ const MODEL_REGISTRY: ModelRegistration[] = [
 ]
 
 /**
- * Normalize model ID for matching.
- * Removes common separators and converts to lowercase.
- */
-function normalizeModelId(modelId: string): string {
-  return modelId.toLowerCase().replace(/[._-]/g, "")
-}
-
-/**
  * Check if a model ID matches a pattern.
  *
  * For string patterns, both IDs are normalized (separators removed, lowercased).
@@ -427,10 +421,10 @@ function normalizeModelId(modelId: string): string {
  */
 function matchesPattern(modelId: string, pattern: string | RegExp): boolean {
   if (typeof pattern === "string") {
-    return normalizeModelId(modelId) === normalizeModelId(pattern)
+    return normalizeProviderModelId(modelId) === normalizeProviderModelId(pattern)
   }
   // Test both original and normalized to handle variations
-  return pattern.test(modelId) || pattern.test(normalizeModelId(modelId))
+  return pattern.test(modelId) || pattern.test(normalizeProviderModelId(modelId))
 }
 
 /**
@@ -536,7 +530,7 @@ export function getContextPackBudget(modelId: string, providerId?: string): numb
  * @returns true if the model is Qwen 3.7 Max
  */
 export function isQwen37MaxModel(modelId: string): boolean {
-  const normalized = normalizeModelId(modelId)
+  const normalized = normalizeProviderModelId(modelId)
   return normalized.includes("qwen37max")
 }
 
@@ -550,7 +544,7 @@ export function isQwen37MaxModel(modelId: string): boolean {
  * @returns true if the model is Qwen 3.7 Plus
  */
 export function isQwen37PlusModel(modelId: string): boolean {
-  const normalized = normalizeModelId(modelId)
+  const normalized = normalizeProviderModelId(modelId)
   return normalized.includes("qwen37plus")
 }
 

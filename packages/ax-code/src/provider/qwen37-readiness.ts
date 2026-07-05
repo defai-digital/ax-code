@@ -1,3 +1,5 @@
+import { normalizeProviderModelId } from "./model-id"
+
 export type FeatureSupport = "supported" | "experimental" | "blocked"
 
 export interface Qwen37ReadinessMatrix {
@@ -110,11 +112,11 @@ export function isQwen37MaxModel(modelId: string): boolean {
   // Providers spell the same model differently: "qwen3.7-max" (Alibaba,
   // most gateways), "Qwen/Qwen3.7-Max" (Together), "qwen-3-7-max" (Venice).
   // Normalize separators away so every spelling is recognized.
-  const normalized = modelId.toLowerCase().replace(/[._-]/g, "")
+  const normalized = normalizeProviderModelId(modelId)
   return normalized.includes("qwen37max")
 }
 
 export function isQwen37PlusModel(modelId: string): boolean {
-  const normalized = modelId.toLowerCase().replace(/[._-]/g, "")
+  const normalized = normalizeProviderModelId(modelId)
   return normalized.includes("qwen37plus")
 }
