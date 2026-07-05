@@ -1,7 +1,7 @@
 import { createAxCodeClient, type Event } from "@ax-code/sdk/v2"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command"
 import { parseJsonResult } from "../../util/json-value"
-import { withDirectoryHeaders } from "../../util/directory-headers"
+import { requestHeadersToRecord, withDirectoryHeaders } from "../../util/directory-headers"
 
 export type HeadlessAgentRuntimeInput = {
   baseUrl: string
@@ -139,15 +139,8 @@ export function parseHeadlessRuntimeJsonBody(text: string): unknown {
   return parsed.value
 }
 
-function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
-  if (!headers) return {}
-  if (headers instanceof Headers) return Object.fromEntries(headers.entries())
-  if (Array.isArray(headers)) return Object.fromEntries(headers)
-  return { ...headers }
-}
-
 function headlessHeaders(input: { headers?: RequestInit["headers"]; directory?: string }): Record<string, string> {
-  const headers = headersToRecord(input.headers)
+  const headers = requestHeadersToRecord(input.headers)
   if (input.directory) {
     withDirectoryHeaders(headers, input.directory)
   }
