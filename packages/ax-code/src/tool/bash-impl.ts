@@ -18,6 +18,7 @@ import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
 import { ToolNumber } from "./schema"
 import { isLocalHostname } from "@/util/local-host"
+import { uniqueStrings } from "@/util/string-list"
 
 import { BashArity } from "@/permission/arity"
 import { Config } from "@/config/config"
@@ -616,7 +617,7 @@ export const BashTool = Tool.define("bash", async () => {
         }
       }
       if (missingPaths.length > 0) {
-        const unique = [...new Set(missingPaths)]
+        const unique = uniqueStrings(missingPaths)
         throw new Error(
           `Path does not exist: ${unique.slice(0, 3).join(", ")}${unique.length > 3 ? ` (and ${unique.length - 3} more)` : ""}.\n` +
             `Hint: use the Glob or Read tool to discover available files before running commands against them.`,
