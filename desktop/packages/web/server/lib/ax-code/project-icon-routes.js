@@ -40,7 +40,9 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   ]
   const projectFaviconDirectories = ["", "public", "app", "src"]
 
-  const parseProjectIdParam = (req) => (typeof req.params?.projectId === "string" ? req.params.projectId.trim() : "")
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
+  const parseProjectIdParam = (req) => asTrimmedString(req.params?.projectId)
 
   const normalizeProjectIconMime = (value) => {
     if (typeof value !== "string") {
@@ -183,7 +185,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   }
 
   const projectFaviconPathCandidates = (projectPath) => {
-    const root = typeof projectPath === "string" ? projectPath.trim() : ""
+    const root = asTrimmedString(projectPath)
     if (!root) {
       return []
     }

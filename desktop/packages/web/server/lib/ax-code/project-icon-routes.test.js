@@ -137,7 +137,7 @@ describe("project icon routes", () => {
       openchamberDataDir: "/tmp/openchamber-test",
       sanitizeProjects: (projects) => projects,
       readSettingsFromDiskMigrated: async () => ({
-        projects: [{ id: "proj-1", path: "/repo" }],
+        projects: [{ id: "proj-1", path: " /repo " }],
       }),
       persistSettings: async () => ({ projects: [updatedProject] }),
       createFsSearchRuntime: () => ({ searchFilesystemFiles }),
