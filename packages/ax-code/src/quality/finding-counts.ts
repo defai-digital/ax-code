@@ -1,16 +1,12 @@
 import type { Finding } from "./finding"
-import type { Severity } from "./finding-registry"
+import { Severity } from "./finding-registry"
+import type { Severity as SeverityValue } from "./finding-registry"
 
 // Pure helpers for counting findings by workflow / severity. Lives outside
 // session/ so both server-side aggregators and client-side renderers can
 // import without pulling Node-only deps (EventQuery, Database).
 
-export type SeverityCounts = {
-  CRITICAL: number
-  HIGH: number
-  MEDIUM: number
-  LOW: number
-  INFO: number
+export type SeverityCounts = Record<SeverityValue, number> & {
   total: number
 }
 
@@ -21,7 +17,10 @@ export type Counts = {
 }
 
 export function emptySeverityCounts(): SeverityCounts {
-  return { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0, total: 0 }
+  return {
+    ...Object.fromEntries(Severity.map((severity) => [severity, 0])),
+    total: 0,
+  } as SeverityCounts
 }
 
 export function emptyCounts(): Counts {
@@ -36,7 +35,7 @@ export function countByWorkflow(findings: readonly Finding[]): Counts {
   const counts = emptyCounts()
   for (const finding of findings) {
     const bucket = counts[finding.workflow]
-    bucket[finding.severity as Severity] += 1
+    bucket[finding.severity as SeverityValue] += 1
     bucket.total += 1
   }
   return counts
