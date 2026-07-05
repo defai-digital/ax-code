@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityReentryContext {
   export const ContextArtifact = z.object({
@@ -88,11 +89,7 @@ export namespace QualityReentryContext {
   }
 
   function sort(contexts: ContextArtifact[]) {
-    return [...contexts].sort((a, b) => {
-      const byRolledBackAt = a.rolledBackAt.localeCompare(b.rolledBackAt)
-      if (byRolledBackAt !== 0) return byRolledBackAt
-      return a.contextID.localeCompare(b.contextID)
-    })
+    return [...contexts].sort((a, b) => compareStringFields(a, b, ["rolledBackAt", "contextID"]))
   }
 
   export function create(input: { rollback: RollbackLike; watch: WatchLike }): ContextArtifact {

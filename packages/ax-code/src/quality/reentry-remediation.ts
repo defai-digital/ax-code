@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { QualityReentryContext } from "./reentry-context"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityReentryRemediation {
   export const EvidenceKind = z.enum(["change", "validation", "finding", "note"])
@@ -45,11 +46,7 @@ export namespace QualityReentryRemediation {
   }
 
   function sort(remediations: RemediationArtifact[]) {
-    return [...remediations].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.remediationID.localeCompare(b.remediationID)
-    })
+    return [...remediations].sort((a, b) => compareStringFields(a, b, ["createdAt", "remediationID"]))
   }
 
   export function create(input: {
