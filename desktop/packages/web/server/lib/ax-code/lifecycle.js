@@ -231,6 +231,9 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     return parts.length > 0 ? parts.join("\n\n") : "No stdout/stderr captured"
   }
 
+  const countPathEntries = (value, separator) =>
+    typeof value === "string" && value.length > 0 ? value.split(separator).filter(Boolean).length : 0
+
   const createManagedAxCodeServerProcessLegacy = async ({
     hostname,
     port,
@@ -372,8 +375,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
         }
       }
 
-      const pathValue = typeof processEnv?.PATH === "string" ? processEnv.PATH : ""
-      const pathEntryCount = pathValue ? pathValue.split(pathSep).filter(Boolean).length : 0
+      const pathEntryCount = countPathEntries(processEnv?.PATH, pathSep)
       state.lastAxCodeLaunchDiagnostics = {
         launchedAt: new Date().toISOString(),
         binary,
@@ -415,7 +417,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
 
     const envPath = typeof processEnv?.PATH === "string" ? processEnv.PATH : process.env.PATH || ""
     const password = processEnv?.AX_CODE_SERVER_PASSWORD
-    const pathEntryCount = envPath ? envPath.split(pathSep).filter(Boolean).length : 0
+    const pathEntryCount = countPathEntries(envPath, pathSep)
     state.lastAxCodeLaunchDiagnostics = {
       launchedAt: new Date().toISOString(),
       binary,
