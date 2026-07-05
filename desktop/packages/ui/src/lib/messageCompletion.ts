@@ -1,5 +1,6 @@
 import type { Part } from "@ax-code/sdk/v2"
 import { isFullySyntheticMessage } from "@/lib/messages/synthetic"
+import { isRecord } from "@/lib/record"
 
 export interface MessageInfo {
   id: string
@@ -17,8 +18,6 @@ export interface MessageRecord {
   info: MessageInfo & Record<string, unknown>
   parts: Part[]
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
 
 const getRecordField = (value: unknown, key: string): unknown => (isRecord(value) ? value[key] : undefined)
 
