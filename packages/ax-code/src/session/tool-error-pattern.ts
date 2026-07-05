@@ -12,7 +12,6 @@
  */
 
 import { Log } from "../util/log"
-import { SessionID } from "../session/schema"
 
 export namespace ToolErrorPatternTracker {
   const log = Log.create({ service: "tool-error-pattern" })

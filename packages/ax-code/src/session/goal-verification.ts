@@ -74,11 +74,9 @@ export namespace GoalVerification {
 
   function isTrivialCommand(command: string) {
     const segments = command.split(/&&|\|\||;|\||\n/)
-    let sawWord = false
     for (const segment of segments) {
       const word = firstWord(segment)
       if (!word) continue
-      sawWord = true
       if (!TRIVIAL_COMMANDS.has(word)) return false
     }
     return true

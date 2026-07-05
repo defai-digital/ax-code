@@ -12,12 +12,8 @@
  */
 
 import { MessageV2 } from "./message-v2"
-import { SessionID } from "./schema"
-import { Log } from "../util/log"
 
 export namespace ContextTier {
-  const log = Log.create({ service: "context-tier" })
-
   export type Tier = 1 | 2 | 3
 
   export interface ClassifiedMessage {
