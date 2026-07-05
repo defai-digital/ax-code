@@ -132,8 +132,7 @@ function findDevScript(scripts: Record<string, string>): string | null {
 
 /**
  * Simple package manager detection based on lock files
- * Note: This is intentionally a simple client-side check.
- * For server-side operations, the server's package-manager.js is used.
+ * Note: This is intentionally a simple client-side check for dev-server hints.
  */
 async function detectPackageManager(directory: string): Promise<PackageManager> {
   const packageJsonContent = await readOptionalTextFile(`${directory}/package.json`)

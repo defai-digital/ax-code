@@ -9,24 +9,6 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
   let cachedModelsMetadata = null
   let cachedModelsMetadataTimestamp = 0
 
-  app.get("/api/openchamber/update-check", async (req, res) => {
-    try {
-      const { checkForUpdates } = await import("../package-manager.js")
-      const parseString = (value) => (typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined)
-      const updateInfo = await checkForUpdates({
-        appType: parseString(req.query.appType),
-        currentVersion: parseString(req.query.currentVersion),
-      })
-      res.json(updateInfo)
-    } catch (error) {
-      console.error("Failed to check for updates:", error)
-      res.status(500).json({
-        available: false,
-        error: error instanceof Error ? error.message : "Failed to check for updates",
-      })
-    }
-  })
-
   app.get("/api/openchamber/models-metadata", async (_req, res) => {
     const now = Date.now()
 

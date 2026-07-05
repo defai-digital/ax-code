@@ -6,10 +6,8 @@ import {
   restartToApplyUpdate,
   isDesktopLocalOriginActive,
   isDesktopShell,
-  isElectronShell,
   isWebRuntime,
 } from "@/lib/desktop"
-import { API_ENDPOINTS } from "@/lib/http"
 
 export type UpdateState = {
   checking: boolean
@@ -32,48 +30,10 @@ interface UpdateStore extends UpdateState {
   reset: () => void
 }
 
-type ClientRuntime = "desktop" | "web"
 const UPDATE_FAILED_MESSAGE = "Update failed. Please try again or open the release page."
 const RESTART_FAILED_MESSAGE = "Failed to restart AX Code Desktop."
 let updateCheckRequestId = 0
 let updateDownloadRequestId = 0
-
-function mapRuntimeParams(runtime: ClientRuntime): URLSearchParams {
-  const params = new URLSearchParams()
-  if (runtime === "desktop") {
-    params.set("appType", isElectronShell() ? "desktop-electron" : "desktop-tauri")
-    return params
-  }
-
-  params.set("appType", "web")
-  return params
-}
-
-async function checkForWebUpdates(runtime: ClientRuntime, currentVersion?: string): Promise<UpdateInfo | null> {
-  try {
-    const params = mapRuntimeParams(runtime)
-    if (currentVersion) params.set("currentVersion", currentVersion)
-    const response = await fetch(`${API_ENDPOINTS.openchamber.updateCheck}?${params.toString()}`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    })
-
-    if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}`)
-    }
-
-    const data = await response.json()
-    return {
-      available: data.available ?? false,
-      version: data.version,
-      currentVersion: data.currentVersion ?? "unknown",
-      body: data.body,
-    }
-  } catch (error) {
-    console.warn("Failed to check for updates:", error)
-    return null
-  }
-}
 
 function detectRuntimeType(): "desktop" | "web" | null {
   if (isDesktopShell()) {
@@ -110,8 +70,6 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
     set({ checking: true, error: null, runtimeType: runtime })
 
     try {
-      let info: UpdateInfo | null = null
-
       if (runtime === "desktop") {
         // The desktop shell updates itself via its native updater
         // (electron-updater against the AX Code Desktop GitHub releases). That
@@ -140,15 +98,12 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
         })
 
         return null
-      } else if (runtime === "web") {
-        info = await checkForWebUpdates("web")
-        if (!isCurrentRequest()) return null
       }
 
       set({
         checking: false,
-        available: info?.available ?? false,
-        info,
+        available: false,
+        info: null,
         lastChecked: Date.now(),
         nextCheckInSec: null,
       })

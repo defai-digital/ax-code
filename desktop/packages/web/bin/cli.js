@@ -5,7 +5,7 @@ import net from "net"
 import os from "os"
 import path from "path"
 import { spawn, spawnSync } from "child_process"
-import { fileURLToPath, pathToFileURL } from "url"
+import { fileURLToPath } from "url"
 import { isModuleCliExecution } from "./cli-entry.js"
 import {
   intro as clackIntro,
@@ -177,10 +177,6 @@ function findClosestMatch(input, candidates, maxDistance = 3) {
     }
   }
   return bestDistance <= maxDistance ? bestCandidate : null
-}
-
-function importFromFilePath(filePath) {
-  return import(pathToFileURL(filePath).href)
 }
 
 function hasUiPasswordConfigured(password) {
@@ -2787,10 +2783,7 @@ const commands = {
     const showOutput = shouldRenderHumanOutput(options)
     const updateSpin = createSpinner(options)
 
-    const packageManagerPath = path.join(__dirname, "..", "server", "lib", "package-manager.js")
-    const { checkForUpdates, getCurrentVersion } = await importFromFilePath(packageManagerPath)
-
-    const currentVersion = getCurrentVersion()
+    const currentVersion = typeof PACKAGE_JSON.version === "string" ? PACKAGE_JSON.version : "unknown"
 
     if (showOutput) {
       clackIntro("AX Code Desktop Update")
@@ -2800,42 +2793,24 @@ const commands = {
       logStatus("info", `current version: ${currentVersion}`)
     }
 
-    updateSpin?.start("Checking for updates...")
-
-    const updateInfo = await checkForUpdates()
-    if (updateInfo.error) {
-      updateSpin?.error("Update check failed")
-      if (showOutput) {
-        clackOutro("update failed")
-      }
-      throw new Error(updateInfo.error)
-    }
-    if (!updateInfo.available) {
-      if (isJsonMode(options)) {
-        printJson({
-          currentVersion,
-          latestVersion: updateInfo.version || currentVersion,
-          updated: false,
-        })
-        return
-      }
-      if (showOutput && !updateSpin) {
-        logStatus("success", "you are running the latest version")
-      }
-      updateSpin?.stop("Already up to date")
-      if (showOutput) {
-        clackOutro("no update needed")
-      } else if (isQuietMode(options)) {
-        process.stdout.write(`up-to-date ${currentVersion}\n`)
-      }
+    updateSpin?.start("Checking update status...")
+    if (isJsonMode(options)) {
+      printJson({
+        currentVersion,
+        latestVersion: currentVersion,
+        updated: false,
+      })
       return
     }
-
-    updateSpin?.error("Update install path disabled")
-    if (showOutput) {
-      clackOutro("update unavailable")
+    if (showOutput && !updateSpin) {
+      logStatus("success", "you are running the latest version")
     }
-    throw new Error("AX Code Desktop runtime updates are handled by desktop release channels, not this CLI.")
+    updateSpin?.stop("Already up to date")
+    if (showOutput) {
+      clackOutro("no update needed")
+    } else if (isQuietMode(options)) {
+      process.stdout.write(`up-to-date ${currentVersion}\n`)
+    }
   },
 }
 

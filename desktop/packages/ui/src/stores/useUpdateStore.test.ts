@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 import { useUpdateStore } from "./useUpdateStore"
 
 let invokedCommands: string[] = []
@@ -51,9 +51,33 @@ const mockElectronUpdaterWindow = (invoke?: (command: string) => Promise<unknown
 
 describe("useUpdateStore runtime detection", () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     invokedCommands = []
     mockElectronUpdaterWindow()
     useUpdateStore.getState().reset()
+  })
+
+  test("treats web runtime update checks as a local no-op", async () => {
+    restoreWindow()
+    ;(globalThis as Record<string, unknown>).window = {
+      location: { origin: "http://localhost:5173" },
+      __AX_CODE_DESKTOP_RUNTIME_APIS__: { runtime: { platform: "web" } },
+    }
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("unexpected fetch"))
+
+    try {
+      await useUpdateStore.getState().checkForUpdates()
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(useUpdateStore.getState()).toMatchObject({
+        checking: false,
+        available: false,
+        info: null,
+        runtimeType: "web",
+      })
+    } finally {
+      restoreWindow()
+    }
   })
 
   test("uses the native updater for the local Electron desktop shell", async () => {

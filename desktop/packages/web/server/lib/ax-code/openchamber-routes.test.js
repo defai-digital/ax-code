@@ -18,9 +18,10 @@ const createApp = () => {
 }
 
 describe("openchamber routes", () => {
-  it("does not register the removed server-side update installation route", async () => {
+  it("does not register removed server-side update routes", async () => {
     const { app } = createApp()
 
+    await request(app).get("/api/openchamber/update-check").expect(404)
     await request(app).post("/api/openchamber/update-install").expect(404)
   })
 })
