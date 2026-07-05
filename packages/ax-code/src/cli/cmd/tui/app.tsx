@@ -8,7 +8,6 @@ import {
   Switch,
   Match,
   createEffect,
-  untrack,
   ErrorBoundary,
   createSignal,
   onMount,
@@ -1180,7 +1179,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
       onSelect: (dialog) => {
         const previousMode = sync.data.isolation.mode
-        const previousNetwork = sync.data.isolation.network
         const next = previousMode === "full-access" ? "workspace-write" : "full-access"
         sandboxPutController?.abort()
         const controller = new AbortController()

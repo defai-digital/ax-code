@@ -1,6 +1,6 @@
 import { createStore } from "solid-js/store"
 import { createMemo, For, Match, Show, Switch } from "solid-js"
-import { Portal, useKeyboard, useRenderer, useTerminalDimensions, type JSX } from "@ax-code/opentui-solid"
+import { Portal, useKeyboard, useTerminalDimensions, type JSX } from "@ax-code/opentui-solid"
 import type { TextareaRenderable } from "@ax-code/opentui-core"
 import { useKeybind } from "../../context/keybind"
 import { useTheme, selectedForeground } from "../../context/theme"
@@ -724,7 +724,6 @@ function Prompt<const T extends Record<string, string>>(props: {
   })
 
   const hint = createMemo(() => (store.expanded ? "minimize" : "fullscreen"))
-  const renderer = useRenderer()
 
   const content = () => (
     <box
