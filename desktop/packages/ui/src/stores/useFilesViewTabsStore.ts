@@ -62,6 +62,9 @@ const isPathWithinRoot = (path: string, root: string): boolean => {
   return projectPathMatchesRoot(normalizedPath, normalizedRoot)
 }
 
+const mergeUniquePaths = (existing: readonly string[], incoming: readonly string[]): string[] =>
+  Array.from(new Set([...existing, ...incoming]))
+
 const sanitizeByRoot = (input: unknown): Record<string, RootTabsState> => {
   if (!input || typeof input !== "object") {
     return {}
@@ -117,8 +120,8 @@ const sanitizeByRoot = (input: unknown): Record<string, RootTabsState> => {
 
     const existing = next[root]
     if (existing) {
-      const mergedOpenPaths = Array.from(new Set([...existing.openPaths, ...openPaths]))
-      const mergedExpandedPaths = Array.from(new Set([...existing.expandedPaths, ...expandedPaths]))
+      const mergedOpenPaths = mergeUniquePaths(existing.openPaths, openPaths)
+      const mergedExpandedPaths = mergeUniquePaths(existing.expandedPaths, expandedPaths)
       const mergedSelectedPath = existing.selectedPath ?? selectedPath ?? mergedOpenPaths[0] ?? null
       next[root] = {
         openPaths: mergedOpenPaths,
