@@ -141,14 +141,12 @@ export const createNotificationTriggerRuntime = (deps) => {
     return typeof sessionId === "string" && sessionId.length > 0 ? sessionId : null
   }
 
+  const titleCaseTokens = (tokens) => tokens.map((token) => token.charAt(0).toUpperCase() + token.slice(1)).join(" ")
+
   const formatMode = (raw) => {
     const value = typeof raw === "string" ? raw.trim() : ""
     const normalized = value.length > 0 ? value : "agent"
-    return normalized
-      .split(/[-_\s]+/)
-      .filter(Boolean)
-      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-      .join(" ")
+    return titleCaseTokens(normalized.split(/[-_\s]+/).filter(Boolean))
   }
 
   const formatModelId = (raw) => {
@@ -170,7 +168,7 @@ export const createNotificationTriggerRuntime = (deps) => {
       result.push(current)
     }
 
-    return result.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ")
+    return titleCaseTokens(result)
   }
 
   const maybeDispatchNotificationForTrigger = async (payload) => {
