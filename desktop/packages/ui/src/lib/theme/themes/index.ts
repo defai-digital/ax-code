@@ -25,9 +25,7 @@ export const themes: Theme[] = [
   openchamberDarkTheme,
   flexokiLightTheme,
   flexokiDarkTheme,
-  ...presetThemes.filter(
-    (theme) => theme.metadata.id !== "openchamber-light" && theme.metadata.id !== "openchamber-dark",
-  ),
+  ...presetThemes,
 ]
 
 export function getThemeById(id: string): Theme | undefined {
