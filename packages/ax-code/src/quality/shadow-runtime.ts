@@ -8,6 +8,7 @@ import type { Risk } from "../risk/score"
 import type { Session } from "../session"
 import { Log } from "../util/log"
 import { parseJsonStrict } from "../util/json-value"
+import { uniqueStrings } from "../util/string-list"
 import { QualityCalibrationModel } from "./calibration-model"
 import { computeFindingId, FindingSchema, type Finding } from "./finding"
 import { QualityModelRegistry } from "./model-registry"
@@ -59,7 +60,7 @@ export namespace QualityShadow {
   }
 
   function touchedFiles(session: Session.Info) {
-    return [...new Set(session.summary?.diffs?.map((diff) => diff.file) ?? [])]
+    return uniqueStrings(session.summary?.diffs?.map((diff) => diff.file) ?? [])
   }
 
   function severityFromConfidence(confidence: number): Finding["severity"] {
