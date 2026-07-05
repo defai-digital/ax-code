@@ -53,6 +53,22 @@ export function createTerminalRuntime({
     return ptyProviderPromise
   }
 
+  const resolveExecutableCandidates = (candidates, hasPathSeparator) => {
+    const resolved = []
+    const seen = new Set()
+    for (const candidateRaw of candidates) {
+      const candidate = String(candidateRaw || "").trim()
+      if (!candidate) continue
+
+      const lookedUp = hasPathSeparator(candidate) ? candidate : searchPathFor(candidate)
+      const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : isExecutable(candidate) ? candidate : null
+      if (!executable || seen.has(executable)) continue
+      seen.add(executable)
+      resolved.push(executable)
+    }
+    return resolved
+  }
+
   const getTerminalShellCandidates = () => {
     if (process.platform === "win32") {
       const windowsCandidates = [
@@ -63,21 +79,9 @@ export function createTerminalRuntime({
         "pwsh.exe",
         "powershell.exe",
         "cmd.exe",
-      ].filter(Boolean)
+      ]
 
-      const resolved = []
-      const seen = new Set()
-      for (const candidateRaw of windowsCandidates) {
-        const candidate = String(candidateRaw).trim()
-        if (!candidate) continue
-
-        const lookedUp = candidate.includes("\\") || candidate.includes("/") ? candidate : searchPathFor(candidate)
-        const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : isExecutable(candidate) ? candidate : null
-        if (!executable || seen.has(executable)) continue
-        seen.add(executable)
-        resolved.push(executable)
-      }
-      return resolved
+      return resolveExecutableCandidates(windowsCandidates, (candidate) => candidate.includes("\\") || candidate.includes("/"))
     }
 
     const unixCandidates = [
@@ -89,22 +93,9 @@ export function createTerminalRuntime({
       "zsh",
       "bash",
       "sh",
-    ].filter(Boolean)
+    ]
 
-    const resolved = []
-    const seen = new Set()
-    for (const candidateRaw of unixCandidates) {
-      const candidate = String(candidateRaw).trim()
-      if (!candidate) continue
-
-      const lookedUp = candidate.includes("/") ? candidate : searchPathFor(candidate)
-      const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : isExecutable(candidate) ? candidate : null
-      if (!executable || seen.has(executable)) continue
-      seen.add(executable)
-      resolved.push(executable)
-    }
-
-    return resolved
+    return resolveExecutableCandidates(unixCandidates, (candidate) => candidate.includes("/"))
   }
 
   const utf8LocaleFallback = process.platform === "darwin" ? "en_US.UTF-8" : "C.UTF-8"
