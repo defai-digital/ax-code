@@ -61,12 +61,26 @@ export namespace McpTrust {
       .digest("hex")
   }
 
-  function sensitiveRecordShape(record: Record<string, string> | undefined) {
+  function isSensitiveRecordKey(key: string) {
+    const lower = key.toLowerCase()
+    return (
+      lower === "authorization" ||
+      lower === "cookie" ||
+      lower.includes("apikey") ||
+      lower.includes("api_key") ||
+      lower.includes("token") ||
+      lower.includes("secret") ||
+      lower.includes("password") ||
+      lower === "key"
+    )
+  }
+
+  function recordFingerprintShape(record: Record<string, string> | undefined) {
     if (!record) return undefined
     return Object.fromEntries(
       Object.entries(record)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, value]) => [key, value.length > 0]),
+        .map(([key, value]) => [key, isSensitiveRecordKey(key) ? value.length > 0 : value]),
     )
   }
 
@@ -85,7 +99,7 @@ export namespace McpTrust {
         name,
         type: config.type,
         command: config.command,
-        environment: sensitiveRecordShape(config.environment),
+        environment: recordFingerprintShape(config.environment),
       })
     }
 
@@ -94,7 +108,7 @@ export namespace McpTrust {
       name,
       type: config.type,
       url: normalizedRemoteUrl(config.url),
-      headers: sensitiveRecordShape(config.headers),
+      headers: recordFingerprintShape(config.headers),
       oauth:
         config.oauth === false
           ? false

@@ -199,9 +199,22 @@ test("MCP trust fingerprints do not derive from secret values", () => {
       clientSecret: "rotated-secret",
     },
   })
+  const withChangedNonSecretHeader = McpTrust.fingerprint("remote", {
+    type: "remote",
+    url: "https://mcp.example.com",
+    headers: {
+      Authorization: "Bearer rotated-token",
+      "X-Workspace": "workspace-b",
+    },
+    oauth: {
+      clientId: "client",
+      clientSecret: "rotated-secret",
+    },
+  })
 
   expect(rotated).toBe(first)
   expect(withExtraHeader).not.toBe(first)
+  expect(withChangedNonSecretHeader).not.toBe(withExtraHeader)
 })
 
 test("project MCP trust updates do not overwrite malformed trust JSON", async () => {
