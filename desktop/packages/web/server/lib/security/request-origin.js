@@ -1,4 +1,7 @@
-export const firstForwardedHeaderValue = (value) => (typeof value === "string" ? value.split(",")[0].trim() : "")
+const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
+export const firstForwardedHeaderValue = (value) =>
+  typeof value === "string" ? asTrimmedString(value.split(",")[0]) : ""
 
 export const getRequestProtocol = (req) => {
   const forwardedProto = firstForwardedHeaderValue(req?.headers?.["x-forwarded-proto"]).toLowerCase()
@@ -21,7 +24,7 @@ export const getRequestOrigin = (req) => {
 }
 
 export const getRequestRpId = (req) => {
-  const host = getRequestHost(req) || (typeof req?.hostname === "string" ? req.hostname.trim() : "")
+  const host = getRequestHost(req) || asTrimmedString(req?.hostname)
   if (!host) return ""
 
   if (host.startsWith("[")) {
