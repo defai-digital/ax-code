@@ -8,8 +8,8 @@ import { createMockResponse, createRouteRegistry } from "../../test-helpers/rout
 // Fake child process: emits the configured stdout then closes with the given code.
 const createSpawn = ({ stdoutByCommand = {}, exitCode = 0 } = {}) => {
   const calls = []
-  const spawn = vi.fn((_shell, args) => {
-    const command = args[args.length - 1]
+  const spawn = vi.fn((executable, args) => {
+    const command = [executable, ...args].join(" ")
     calls.push(command)
     const child = new EventEmitter()
     child.stdout = new EventEmitter()
@@ -28,8 +28,8 @@ const createSpawn = ({ stdoutByCommand = {}, exitCode = 0 } = {}) => {
 const createDeferredSpawn = ({ stdoutByCommand = {}, exitCode = 0 } = {}) => {
   const calls = []
   const pending = []
-  const spawn = vi.fn((_shell, args) => {
-    const command = args[args.length - 1]
+  const spawn = vi.fn((executable, args) => {
+    const command = [executable, ...args].join(" ")
     calls.push(command)
     const child = new EventEmitter()
     child.stdout = new EventEmitter()
@@ -383,6 +383,48 @@ describe("fs reveal authorization", () => {
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({ success: true, path: "/approved/folder" })
   })
+
+  it("reveals Windows files through explorer argv without powershell", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")
+    Object.defineProperty(process, "platform", { value: "win32" })
+    try {
+      const spawnMock = vi.fn(() => {
+        const child = new EventEmitter()
+        queueMicrotask(() => child.emit("exit", 0))
+        return child
+      })
+      const { app, getRoute } = createRouteRegistry()
+      registerFsRoutes(app, {
+        os: { homedir: () => "C:\\Users\\user" },
+        path: path.win32,
+        fsPromises: {
+          realpath: async (p) => p,
+          access: vi.fn(async () => undefined),
+          stat: vi.fn(async () => ({ isDirectory: () => false })),
+        },
+        spawn: spawnMock,
+        crypto: { randomUUID: () => "job-0" },
+        normalizeDirectoryPath: (p) => p,
+        resolveProjectDirectory: async () => ({ directory: "C:\\repo" }),
+        readSettingsFromDiskMigrated: async () => ({ approvedDirectories: [] }),
+        buildAugmentedPath: () => "C:\\Windows\\System32",
+        resolveGitBinaryForSpawn: () => "git",
+        openchamberUserConfigRoot: "C:\\Users\\user\\AppData\\Roaming\\ax-code",
+      })
+
+      const res = await callRoute(getRoute("POST", "/api/fs/reveal"), {
+        body: { path: "C:\\repo\\file.txt" },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(spawnMock).toHaveBeenCalledWith("explorer.exe", ["/select,C:\\repo\\file.txt"], {
+        windowsHide: true,
+        stdio: "ignore",
+      })
+    } finally {
+      if (originalPlatform) Object.defineProperty(process, "platform", originalPlatform)
+    }
+  })
 })
 
 describe("fs exec git-read cache", () => {
@@ -431,7 +473,7 @@ describe("fs exec git-read cache", () => {
   it("returns the current request command for normalized cache hits", async () => {
     const firstCommand = "git   rev-parse   --absolute-git-dir"
     const secondCommand = "git rev-parse --absolute-git-dir"
-    const { spawn, calls } = createSpawn({ stdoutByCommand: { [firstCommand]: "/repo/.git\n" } })
+    const { spawn, calls } = createSpawn({ stdoutByCommand: { [secondCommand]: "/repo/.git\n" } })
     const handler = registerExec({ spawn })
 
     const first = await callExec(handler, { commands: [firstCommand], cwd: "/repo" })
@@ -453,15 +495,20 @@ describe("fs exec git-read cache", () => {
     expect(calls.length).toBe(2)
   })
 
-  it("never caches non-allowlisted commands", async () => {
+  it("rejects non-allowlisted commands without spawning", async () => {
     const command = "git status"
     const { spawn, calls } = createSpawn({ stdoutByCommand: { [command]: "clean\n" } })
     const handler = registerExec({ spawn })
 
-    await callExec(handler, { commands: [command], cwd: "/repo" })
-    await callExec(handler, { commands: [command], cwd: "/repo" })
+    const res = await callExec(handler, { commands: [command], cwd: "/repo" })
 
-    expect(calls.length).toBe(2)
+    expect(res.body.success).toBe(false)
+    expect(res.body.results[0]).toMatchObject({
+      command,
+      success: false,
+      error: "Unsupported command",
+    })
+    expect(calls.length).toBe(0)
   })
 
   it("does not cache failed git-read results", async () => {

@@ -18,14 +18,34 @@ const createGitReadCacheTtlMs = () => {
   return 30 * 1000
 }
 
-// Only deterministic, side-effect-free git plumbing path queries are cacheable.
-// Anything outside this allowlist (including any non-git command) runs normally
-// — we never cache arbitrary exec.
+// Only deterministic, side-effect-free git plumbing path queries are accepted.
+// Keep this endpoint narrow: it is used by the desktop client for repository
+// path discovery and must not become a general shell execution surface.
 const normalizeCommand = (command) => (typeof command === "string" ? command.trim().replace(/\s+/g, " ") : "")
 
-const isCacheableGitReadCommand = (command) => {
+const parseGitReadCommand = (command) => {
   const normalized = normalizeCommand(command)
-  return /^git rev-parse(?: --(?:absolute-git-dir|git-common-dir|show-toplevel)){1,3}$/.test(normalized)
+  const tokens = normalized.split(" ")
+  if (tokens.length < 3 || tokens.length > 5) return null
+  if (tokens[0] !== "git" || tokens[1] !== "rev-parse") return null
+
+  const args = ["rev-parse"]
+  for (const token of tokens.slice(2)) {
+    switch (token) {
+      case "--absolute-git-dir":
+      case "--git-common-dir":
+      case "--show-toplevel":
+        args.push(token)
+        break
+      default:
+        return null
+    }
+  }
+
+  return {
+    normalized: ["git", ...args].join(" "),
+    args,
+  }
 }
 
 // Dual-constraint bound per the project's caching policy (count + bytes). Git
@@ -329,9 +349,9 @@ const resolveReadPathFromContext = async ({
 }
 
 const runCommandInDirectory = ({
-  shell,
-  shellFlag,
   command,
+  executable,
+  args,
   resolvedCwd,
   spawn,
   buildAugmentedPath,
@@ -345,7 +365,7 @@ const runCommandInDirectory = ({
     const envPath = buildAugmentedPath()
     const execEnv = { ...process.env, PATH: envPath }
 
-    const child = spawn(shell, [shellFlag, command], {
+    const child = spawn(executable, args, {
       cwd: resolvedCwd,
       env: execEnv,
       windowsHide: true,
@@ -543,11 +563,18 @@ export const registerFsRoutes = (app, dependencies) => {
     }
   }
 
-  // Runs a command, transparently serving/storing cacheable git-read results.
-  // Non-cacheable commands always execute and are never stored.
-  const runCommandWithGitReadCache = async ({ shell, shellFlag, command, resolvedCwd }) => {
-    const cacheable = gitReadCacheTtlMs > 0 && isCacheableGitReadCommand(command)
-    const cacheKey = cacheable ? `${resolvedCwd}::${normalizeCommand(command)}` : null
+  // Runs an allowlisted git-read command, transparently serving/storing cache results.
+  const runCommandWithGitReadCache = async ({ command, resolvedCwd }) => {
+    const commandSpec = parseGitReadCommand(command)
+    if (!commandSpec) {
+      return {
+        command,
+        success: false,
+        error: "Unsupported command",
+      }
+    }
+
+    const cacheKey = gitReadCacheTtlMs > 0 ? `${resolvedCwd}::${commandSpec.normalized}` : null
 
     if (cacheKey) {
       const cached = gitReadCache.get(cacheKey)
@@ -569,9 +596,9 @@ export const registerFsRoutes = (app, dependencies) => {
     }
 
     const runPromise = runCommandInDirectory({
-      shell,
-      shellFlag,
       command,
+      executable: resolveGitBinaryForSpawn(),
+      args: commandSpec.args,
       resolvedCwd,
       spawn,
       buildAugmentedPath,
@@ -610,8 +637,6 @@ export const registerFsRoutes = (app, dependencies) => {
 
       try {
         const result = await runCommandWithGitReadCache({
-          shell: job.shell,
-          shellFlag: job.shellFlag,
           command,
           resolvedCwd: job.resolvedCwd,
         })
@@ -1204,11 +1229,9 @@ export const registerFsRoutes = (app, dependencies) => {
         }
       } else if (platform === "win32") {
         const stat = await fsPromises.stat(resolvedPath)
-        const escapedPath = resolvedPath.replace(/'/g, "''")
-        const explorerArg = stat.isDirectory() ? escapedPath : `/select,${escapedPath}`
-        const command = `Start-Process -FilePath explorer.exe -ArgumentList '${explorerArg}'`
+        const explorerArgs = stat.isDirectory() ? [resolvedPath] : [`/select,${resolvedPath}`]
         await new Promise((resolve, reject) => {
-          const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", command], {
+          const child = spawn("explorer.exe", explorerArgs, {
             windowsHide: true,
             stdio: "ignore",
           })
@@ -1277,9 +1300,6 @@ export const registerFsRoutes = (app, dependencies) => {
         return res.status(400).json({ error: "Specified cwd is not a directory" })
       }
 
-      const shell = process.env.SHELL || (process.platform === "win32" ? "cmd.exe" : "/bin/sh")
-      const shellFlag = process.platform === "win32" ? "/c" : "-c"
-
       const jobId = crypto.randomUUID()
       const job = {
         jobId,
@@ -1287,8 +1307,6 @@ export const registerFsRoutes = (app, dependencies) => {
         success: null,
         commands,
         resolvedCwd,
-        shell,
-        shellFlag,
         results: [],
         startedAt: Date.now(),
         finishedAt: null,
