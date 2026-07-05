@@ -65,8 +65,13 @@ const cloneSessionFoldersMap = (foldersMap: SessionFoldersMap): SessionFoldersMa
     ]),
   )
 
-const toSessionIdSet = (sessionIds: readonly unknown[]): Set<string> =>
-  new Set(sessionIds.filter((id): id is string => typeof id === "string" && id.length > 0))
+const toStringSet = (values: readonly unknown[]): Set<string> =>
+  new Set(values.filter((value): value is string => typeof value === "string"))
+
+const toNonEmptyStringSet = (values: readonly unknown[]): Set<string> =>
+  new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0))
+
+const toSessionIdSet = (sessionIds: readonly unknown[]): Set<string> => toNonEmptyStringSet(sessionIds)
 
 const schedulePersistToDisk = (foldersMap: SessionFoldersMap, collapsedFolderIds: Set<string>): void => {
   if (typeof window === "undefined") {
@@ -147,7 +152,7 @@ const readPersistedCollapsed = (): Set<string> => {
     if (!Array.isArray(parsed)) {
       return new Set()
     }
-    return new Set(parsed.filter((v): v is string => typeof v === "string"))
+    return toStringSet(parsed)
   } catch {
     return new Set()
   }
@@ -507,7 +512,7 @@ const hydrateSessionFoldersFromDisk = async (): Promise<void> => {
 
     const diskFolders = parsed.foldersMap && typeof parsed.foldersMap === "object" ? parsed.foldersMap : {}
     const diskCollapsed = Array.isArray(parsed.collapsedFolderIds)
-      ? new Set(parsed.collapsedFolderIds.filter((value): value is string => typeof value === "string"))
+      ? toStringSet(parsed.collapsedFolderIds)
       : new Set<string>()
 
     const hasDiskData = Object.keys(diskFolders).length > 0 || diskCollapsed.size > 0
