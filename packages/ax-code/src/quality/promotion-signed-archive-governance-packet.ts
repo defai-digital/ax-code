@@ -6,6 +6,7 @@ import { QualityPromotionSignedArchiveAttestationPacket } from "./promotion-sign
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
 import { summarizeOverallStatus } from "./status"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionSignedArchiveGovernancePacket {
   export const PromotionReference = z.lazy(() => QualityPromotionSignedArchiveAttestationPacket.PromotionReference)
@@ -57,11 +58,7 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
   }
 
   function sortPackets(packets: PacketArtifact[]) {
-    return [...packets].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.packetID.localeCompare(b.packetID)
-    })
+    return [...packets].sort((a, b) => compareStringFields(a, b, ["createdAt", "packetID"]))
   }
 
   function matchesPromotion(promotion: PromotionReference, packet: PacketArtifact) {

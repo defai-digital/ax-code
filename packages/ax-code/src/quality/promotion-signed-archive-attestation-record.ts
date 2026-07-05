@@ -6,6 +6,7 @@ import { QualityPromotionSignedArchiveAttestationPolicy } from "./promotion-sign
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
 import { summarizeOverallStatus } from "./status"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionSignedArchiveAttestationRecord {
   export const RecordSummary = z.object({
@@ -53,11 +54,7 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   }
 
   function sortRecords(records: RecordArtifact[]) {
-    return [...records].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.recordID.localeCompare(b.recordID)
-    })
+    return [...records].sort((a, b) => compareStringFields(a, b, ["createdAt", "recordID"]))
   }
 
   function evaluateSummary(input: {
