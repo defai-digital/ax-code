@@ -1,6 +1,7 @@
 import path from "path"
 import fs from "fs"
 import { Filesystem } from "@/util/filesystem"
+import { uniqueStrings } from "@/util/string-list"
 import { Flag } from "@/flag/flag"
 import type { Isolation as IsolationConfig } from "@/config/schema"
 
@@ -69,12 +70,8 @@ export namespace Isolation {
     }
   }
 
-  function uniquePaths(paths: string[]) {
-    return Array.from(new Set(paths))
-  }
-
   function securityPaths(filepath: string) {
-    return uniquePaths([resolvePath(filepath), resolveClosestExistingPath(filepath)])
+    return uniqueStrings([resolvePath(filepath), resolveClosestExistingPath(filepath)])
   }
 
   function isInsideAnyRoot(roots: string[], targets: string[]) {
@@ -128,7 +125,7 @@ export namespace Isolation {
     return {
       mode,
       network: mode === "full-access" ? true : (network ?? false),
-      protected: uniquePaths(protectedPaths.map(resolvePath)),
+      protected: uniqueStrings(protectedPaths.map(resolvePath)),
     }
   }
 
@@ -177,7 +174,7 @@ export namespace Isolation {
     // cwd and would silently widen the write boundary (or throw on undefined).
     if (worktree && worktree !== "/") writeRoots.push(...securityPaths(worktree))
     if (isProtected(state, filepath)) return false
-    return isInsideAnyRoot(uniquePaths(writeRoots), targetPaths)
+    return isInsideAnyRoot(uniqueStrings(writeRoots), targetPaths)
   }
 
   export function assertWrite(state: State | undefined, filepath: string, directory: string, worktree: string) {
@@ -243,7 +240,7 @@ export namespace Isolation {
     const current = resolvePath(cwd)
     const currentPaths = securityPaths(cwd)
     // workspace-write: check cwd is within workspace
-    if (!isInsideAnyRoot(uniquePaths(roots), currentPaths)) {
+    if (!isInsideAnyRoot(uniqueStrings(roots), currentPaths)) {
       throw new DeniedError("bash", `Bash working directory is outside workspace boundary: ${cwd}`)
     }
     if (!isBypassed(state, current) && isProtected(state, current)) {
@@ -256,7 +253,7 @@ export namespace Isolation {
       if (isProtected(state, target)) {
         throw new DeniedError("bash", `Bash command targets protected path: ${p}`, target)
       }
-      if (!isInsideAnyRoot(uniquePaths(roots), securityPaths(p))) {
+      if (!isInsideAnyRoot(uniqueStrings(roots), securityPaths(p))) {
         throw new DeniedError("bash", `Bash command targets path outside workspace boundary: ${p}`, target)
       }
     }
