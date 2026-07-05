@@ -16,6 +16,8 @@ export const createNotificationTemplateRuntime = (deps) => {
   const sessionTitleCache = new Map()
   const sessionInfoCache = new Map()
 
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
   const createTimeoutSignal = (timeoutMs) => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -44,7 +46,7 @@ export const createNotificationTemplateRuntime = (deps) => {
     }
 
     if (template.includes("{last_message}")) {
-      return typeof variables?.last_message === "string" && variables.last_message.trim().length > 0
+      return asTrimmedString(variables?.last_message).length > 0
     }
 
     return true
@@ -53,16 +55,16 @@ export const createNotificationTemplateRuntime = (deps) => {
   const fetchFreeZenModels = async () => []
 
   const resolveZenModel = async (override) => {
-    const overrideModel = typeof override === "string" ? override.trim() : ""
+    const overrideModel = asTrimmedString(override)
     if (overrideModel) return overrideModel
     const settings = await readSettingsFromDisk().catch(() => ({}))
-    return typeof settings?.zenModel === "string" && settings.zenModel.trim().length > 0 ? settings.zenModel.trim() : ""
+    return asTrimmedString(settings?.zenModel)
   }
 
   const validateZenModelAtStartup = async () => {}
 
   const summarizeText = async (text, targetLength, zenModel) => {
-    if (!text || typeof text !== "string" || text.trim().length === 0) return text
+    if (!text || asTrimmedString(text).length === 0) return text
     const result = await summarizeSharedText({
       text,
       threshold: 0,
@@ -70,7 +72,7 @@ export const createNotificationTemplateRuntime = (deps) => {
       zenModel,
       mode: "notification",
     })
-    return typeof result?.summary === "string" && result.summary.trim().length > 0 ? result.summary : text
+    return asTrimmedString(result?.summary).length > 0 ? result.summary : text
   }
 
   const joinNotificationTextLines = (lines, maxLength = NOTIFICATION_BODY_MAX_CHARS) => {
@@ -239,13 +241,7 @@ export const createNotificationTemplateRuntime = (deps) => {
       }
     }
 
-    const agentName = formatNotificationModeLabel(
-      typeof info.agent === "string" && info.agent.trim().length > 0
-        ? info.agent
-        : typeof info.mode === "string"
-          ? info.mode
-          : "",
-    )
+    const agentName = formatNotificationModeLabel(asTrimmedString(info.agent) || asTrimmedString(info.mode))
 
     const modelName = (() => {
       const raw =
@@ -278,8 +274,9 @@ export const createNotificationTemplateRuntime = (deps) => {
           if (!project || typeof project.path !== "string") return false
           return project.path.replace(/\/+$/, "") === normalizedDir
         })
-        if (matchedProject && typeof matchedProject.label === "string" && matchedProject.label.trim().length > 0) {
-          projectName = matchedProject.label.trim()
+        const matchedProjectLabel = asTrimmedString(matchedProject?.label)
+        if (matchedProjectLabel) {
+          projectName = matchedProjectLabel
         } else {
           projectName = normalizedDir.split("/").filter(Boolean).pop() || ""
         }
@@ -287,12 +284,9 @@ export const createNotificationTemplateRuntime = (deps) => {
         const activeId = typeof settings.activeProjectId === "string" ? settings.activeProjectId : ""
         const activeProject = activeId ? projects.find((project) => project && project.id === activeId) : projects[0]
         if (activeProject) {
+          const activeProjectLabel = asTrimmedString(activeProject.label)
           projectName =
-            typeof activeProject.label === "string" && activeProject.label.trim().length > 0
-              ? activeProject.label.trim()
-              : typeof activeProject.path === "string"
-                ? activeProject.path.split("/").pop() || ""
-                : ""
+            activeProjectLabel || (typeof activeProject.path === "string" ? activeProject.path.split("/").pop() || "" : "")
           worktreeDir = typeof activeProject.path === "string" ? activeProject.path : ""
         }
       }
@@ -320,7 +314,7 @@ export const createNotificationTemplateRuntime = (deps) => {
     return {
       project_name: formatNotificationProjectLabel(projectName),
       worktree: worktreeDir,
-      branch: typeof branch === "string" ? branch.trim() : "",
+      branch: asTrimmedString(branch),
       session_name: sessionTitle,
       agent_name: agentName,
       model_name: modelName,

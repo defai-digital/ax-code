@@ -24,6 +24,13 @@ describe("notification template runtime zen models", () => {
 
     await expect(runtime.resolveZenModel()).resolves.toBe("trinity-large-preview-free")
   })
+
+  it("trims zen model overrides and settings values", async () => {
+    const runtime = createRuntime({ zenModel: " trinity-large-preview-free " })
+
+    await expect(runtime.resolveZenModel()).resolves.toBe("trinity-large-preview-free")
+    await expect(runtime.resolveZenModel(" gpt-5-mini ")).resolves.toBe("gpt-5-mini")
+  })
 })
 
 describe("notification template text extraction", () => {
@@ -62,6 +69,21 @@ describe("notification template text extraction", () => {
 })
 
 describe("notification template variables", () => {
+  it("requires non-empty last message text for last-message templates", () => {
+    const runtime = createRuntime()
+
+    expect(
+      runtime.shouldApplyResolvedTemplateMessage("{last_message}", "Resolved", {
+        last_message: "   ",
+      }),
+    ).toBe(false)
+    expect(
+      runtime.shouldApplyResolvedTemplateMessage("{last_message}", "Resolved", {
+        last_message: " Done ",
+      }),
+    ).toBe(true)
+  })
+
   it("formats agent and model labels from payload metadata", async () => {
     const runtime = createRuntime()
 
@@ -109,6 +131,17 @@ describe("notification template variables", () => {
     await expect(runtime.buildTemplateVariables({ properties: { info: {} } }, "")).resolves.toMatchObject({
       agent_name: "Agent",
       model_name: "Assistant",
+    })
+  })
+
+  it("trims active project labels from settings", async () => {
+    const runtime = createRuntime({
+      activeProjectId: "project-one",
+      projects: [{ id: "project-one", label: " Work App ", path: "" }],
+    })
+
+    await expect(runtime.buildTemplateVariables({ properties: { info: {} } }, "")).resolves.toMatchObject({
+      project_name: "Work App",
     })
   })
 })
