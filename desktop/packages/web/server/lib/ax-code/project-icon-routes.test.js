@@ -54,6 +54,54 @@ describe("project icon routes", () => {
     expect(res.body).toBe(jpgBytes)
   })
 
+  it("trims project id route params before project lookup", async () => {
+    const { app, getRoute } = createRouteRegistry()
+    const svgBytes = Buffer.from("<svg></svg>")
+    const enoent = Object.assign(new Error("missing"), { code: "ENOENT" })
+    const fsPromises = {
+      readFile: vi.fn(async (iconPath) => {
+        if (iconPath.endsWith(".svg")) {
+          return svgBytes
+        }
+        throw enoent
+      }),
+    }
+
+    registerProjectIconRoutes(app, {
+      fsPromises,
+      path,
+      crypto,
+      openchamberDataDir: "/tmp/openchamber-test",
+      sanitizeProjects: (projects) => projects,
+      readSettingsFromDiskMigrated: async () => ({
+        projects: [
+          {
+            id: "proj-1",
+            path: "/repo",
+            iconImage: { mime: "image/svg+xml", updatedAt: 1, source: "custom" },
+          },
+        ],
+      }),
+      persistSettings: async () => ({}),
+      createFsSearchRuntime: () => ({ searchFilesystemFiles: async () => [] }),
+      spawn: vi.fn(),
+      resolveGitBinaryForSpawn: vi.fn(),
+    })
+
+    const res = createMockResponse()
+    await getRoute("GET", "/api/projects/:projectId/icon")(
+      {
+        params: { projectId: " proj-1 " },
+        query: {},
+      },
+      res,
+    )
+
+    expect(res.statusCode).toBe(200)
+    expect(res.getHeader("Content-Type")).toBe("image/svg+xml; charset=utf-8")
+    expect(res.body).toBe(svgBytes)
+  })
+
   it("discovers project favicon from bounded candidate paths without deep scan", async () => {
     const { app, getRoute } = createRouteRegistry()
     const pngBytes = Buffer.from("png-bytes")

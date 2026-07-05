@@ -40,6 +40,8 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   ]
   const projectFaviconDirectories = ["", "public", "app", "src"]
 
+  const parseProjectIdParam = (req) => (typeof req.params?.projectId === "string" ? req.params.projectId.trim() : "")
+
   const normalizeProjectIconMime = (value) => {
     if (typeof value !== "string") {
       return null
@@ -234,7 +236,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   })
 
   app.get("/api/projects/:projectId/icon", async (req, res) => {
-    const projectId = typeof req.params.projectId === "string" ? req.params.projectId.trim() : ""
+    const projectId = parseProjectIdParam(req)
     if (!projectId) {
       return res.status(400).json({ error: "projectId is required" })
     }
@@ -302,7 +304,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   })
 
   app.put("/api/projects/:projectId/icon", async (req, res) => {
-    const projectId = typeof req.params.projectId === "string" ? req.params.projectId.trim() : ""
+    const projectId = parseProjectIdParam(req)
     if (!projectId) {
       return res.status(400).json({ error: "projectId is required" })
     }
@@ -343,7 +345,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   })
 
   app.delete("/api/projects/:projectId/icon", async (req, res) => {
-    const projectId = typeof req.params.projectId === "string" ? req.params.projectId.trim() : ""
+    const projectId = parseProjectIdParam(req)
     if (!projectId) {
       return res.status(400).json({ error: "projectId is required" })
     }
@@ -369,7 +371,7 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   })
 
   app.post("/api/projects/:projectId/icon/discover", async (req, res) => {
-    const projectId = typeof req.params.projectId === "string" ? req.params.projectId.trim() : ""
+    const projectId = parseProjectIdParam(req)
     if (!projectId) {
       return res.status(400).json({ error: "projectId is required" })
     }
