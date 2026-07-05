@@ -1,4 +1,5 @@
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
+import { isRecord } from "@/lib/record"
 import { axCodeClient } from "./client"
 import type { ProviderSources } from "@/components/sections/providers/types"
 
@@ -18,9 +19,7 @@ const CLI_PROVIDER_IDS = new Set([
 const LOCAL_PROVIDER_IDS = new Set(["ollama", "ax-studio", "ax-engine"])
 
 export { PROVIDER_REQUEST_RETRY_DELAYS_MS, PROVIDER_RESTART_POLL_MS }
-
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null
+export { isRecord }
 
 export const isCliProvider = (providerId: string): boolean => CLI_PROVIDER_IDS.has(providerId)
 
