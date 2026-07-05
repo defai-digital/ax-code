@@ -3,6 +3,7 @@ import { devtools } from "zustand/middleware"
 import { axCodeClient } from "@/lib/ax-code/client"
 import { getDesktopHomeDirectory } from "@/lib/desktop"
 import { updateDesktopSettings } from "@/lib/persistence"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 import { useFileSearchStore } from "@/stores/useFileSearchStore"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
 import { getSafeStorage } from "./utils/safeStorage"
@@ -38,22 +39,7 @@ const invalidateFileSearchCache = (scope?: string | null) => {
 }
 
 const normalizeDirectoryPath = (value: string): string => {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return trimmed
-  }
-  const normalized = trimmed.replace(/\\/g, "/").replace(/^([a-z]):/, (_, letter: string) => letter.toUpperCase() + ":")
-  const driveRoot = normalized.match(/^([A-Z]:)\/+$/)
-  if (driveRoot) {
-    return `${driveRoot[1]}/`
-  }
-  if (/^[A-Z]:$/.test(normalized)) {
-    return `${normalized}/`
-  }
-  if (normalized.length > 1) {
-    return normalized.replace(/\/+$/, "")
-  }
-  return normalized
+  return normalizeProjectPath(value) ?? ""
 }
 
 const resolveTildePath = (path: string, homeDir?: string | null): string => {

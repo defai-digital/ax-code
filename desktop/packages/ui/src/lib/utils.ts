@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { isTauriShell } from "@/lib/desktop"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 import { matchesFuzzyQuery } from "@/lib/search/fuzzySearch"
 import type { I18nKey } from "@/lib/i18n"
 
@@ -88,11 +89,7 @@ export const truncatePathMiddle = (value: string, options?: { maxLength?: number
   return prefix ? `${prefix}…/${fileName}` : `…/${fileName}`
 }
 
-const normalizePath = (value: string) => {
-  if (!value) return ""
-  if (value === "/") return "/"
-  return value.replace(/\/+$/, "")
-}
+const normalizePath = (value: string): string => normalizeProjectPath(value) ?? ""
 
 export function formatPathForDisplay(path: string | null | undefined, homeDirectory?: string | null): string {
   if (!path) {
