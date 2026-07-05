@@ -18,18 +18,22 @@ export type ClipboardContentView = {
 
 export const DOUBLE_ESCAPE_CLEAR_MS = 3_000
 const PROMPT_SUBMIT_KEY_NAMES = new Set(["return", "enter", "linefeed", "kpenter"])
+const PROMPT_SUBMIT_KEY_SEQUENCES = new Set(["\r", "\n", "\r\n"])
 
 export function isUnmodifiedPromptSubmitKey(input: {
   name?: string
+  raw?: string
+  sequence?: string
   ctrl?: boolean
   meta?: boolean
   shift?: boolean
   super?: boolean
   hyper?: boolean
 }) {
-  if (!input.name) return false
   if (input.ctrl || input.meta || input.shift || input.super || input.hyper) return false
-  return PROMPT_SUBMIT_KEY_NAMES.has(input.name)
+  if (input.name && PROMPT_SUBMIT_KEY_NAMES.has(input.name)) return true
+  if (input.name) return false
+  return PROMPT_SUBMIT_KEY_SEQUENCES.has(input.raw ?? "") || PROMPT_SUBMIT_KEY_SEQUENCES.has(input.sequence ?? "")
 }
 
 export function sanitizePromptInput(input: string) {

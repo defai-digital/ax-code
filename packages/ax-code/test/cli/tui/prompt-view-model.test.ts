@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   DOUBLE_ESCAPE_CLEAR_MS,
+  isUnmodifiedPromptSubmitKey,
   promptEscapeClearIntent,
   sanitizePromptInput,
   windowsClipboardTextPaste,
@@ -109,5 +110,17 @@ describe("prompt view model", () => {
 
   test("preserves ordinary semicolon-separated prompt text", () => {
     expect(sanitizePromptInput("versions 1;2;3 and keep 4;5;6x")).toBe("versions 1;2;3 and keep 4;5;6x")
+  })
+
+  test("treats raw CRLF as prompt submit when terminals send Enter as one chunk", () => {
+    expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n" })).toBe(true)
+  })
+
+  test("does not submit modified raw CRLF Enter", () => {
+    expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n", shift: true })).toBe(false)
+  })
+
+  test("does not let raw CRLF override a non-submit key name", () => {
+    expect(isUnmodifiedPromptSubmitKey({ name: "v", raw: "\r\n", sequence: "\r\n" })).toBe(false)
   })
 })

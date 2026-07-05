@@ -77,3 +77,11 @@ test("enter alias submits instead of inserting a blank line", async () => {
   expect(actionFor("enter")).toBe("submit")
   expect(result).toEqual({ draft: "hello", submits: 1 })
 })
+
+test("raw CRLF Enter submits after terminal paste chunks", async () => {
+  expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n" })).toBe(true)
+})
+
+test("modified raw CRLF Enter does not submit", async () => {
+  expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n", shift: true })).toBe(false)
+})
