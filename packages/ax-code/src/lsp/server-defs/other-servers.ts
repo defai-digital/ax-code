@@ -5,7 +5,6 @@ import { which } from "../../util/which"
 import {
   log,
   NearestRoot,
-  pathExists,
   resolveManagedToolBin,
   spawnInfo,
 } from "../server-helpers"

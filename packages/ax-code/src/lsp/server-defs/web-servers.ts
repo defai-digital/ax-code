@@ -18,9 +18,7 @@ import {
 } from "../server-helpers"
 import {
   PINNED_DIRECT_LSP_RELEASES,
-  PINNED_GITHUB_LSP_RELEASES,
   installReleaseBin,
-  installPinnedGitHubReleaseAsset,
   managedToolDir,
   managedToolPath,
 } from "../server-releases"
