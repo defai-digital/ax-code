@@ -91,9 +91,7 @@ export namespace QualityPromotionHandoffPackage {
     return ["quality_model_handoff_package", encode(source), packageID]
   }
 
-  function digest(input: unknown) {
-    return sha256JsonHex(input)
-  }
+  const digest = sha256JsonHex
 
   function sortPackages(packets: PackageArtifact[]) {
     return [...packets].sort((a, b) => {

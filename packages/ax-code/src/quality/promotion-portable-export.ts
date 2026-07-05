@@ -68,9 +68,7 @@ export namespace QualityPromotionPortableExport {
     return ["quality_model_portable_export", encode(source), exportID]
   }
 
-  function digest(input: string) {
-    return sha256Hex(input)
-  }
+  const digest = sha256Hex
 
   function sortExports(exports: ExportArtifact[]) {
     return [...exports].sort((a, b) => {

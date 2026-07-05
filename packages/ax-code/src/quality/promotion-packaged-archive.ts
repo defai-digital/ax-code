@@ -68,9 +68,7 @@ export namespace QualityPromotionPackagedArchive {
     return ["quality_model_packaged_archive", encode(source), archiveID]
   }
 
-  function digest(input: string) {
-    return sha256Hex(input)
-  }
+  const digest = sha256Hex
 
   function sortArchives(archives: ArchiveArtifact[]) {
     return [...archives].sort((a, b) => {

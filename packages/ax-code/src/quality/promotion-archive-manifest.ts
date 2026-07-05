@@ -76,9 +76,7 @@ export namespace QualityPromotionArchiveManifest {
     return ["quality_model_archive_manifest", encode(source), archiveID]
   }
 
-  function digest(input: unknown) {
-    return sha256JsonHex(input)
-  }
+  const digest = sha256JsonHex
 
   function sortArchives(archives: ArchiveArtifact[]) {
     return [...archives].sort((a, b) => {

@@ -94,9 +94,7 @@ export namespace QualityPromotionSignedArchive {
     return ["quality_model_signed_archive", encode(source), signedArchiveID]
   }
 
-  function digest(input: string) {
-    return sha256Hex(input)
-  }
+  const digest = sha256Hex
 
   function sign(payloadDigest: string, keyMaterial: string) {
     return createHmac("sha256", keyMaterial).update(payloadDigest).digest("hex")
