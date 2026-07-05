@@ -57,7 +57,10 @@ pub fn link_get_url(id: u32, out_ptr: f64, max_len: u32) -> u32 {
 
 #[napi(js_name = "clearGlobalLinkPool")]
 pub fn clear_global_link_pool_misc() {
-    link_pool().lock().unwrap_or_else(|e| e.into_inner()).clear();
+    link_pool()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
 }
 
 // --- encodeUnicode / freeUnicode (utf8.zig) ----------------------------------

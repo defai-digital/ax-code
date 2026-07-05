@@ -73,7 +73,10 @@ pub fn insert(kind: Kind, ptr: usize) -> u32 {
         free as usize
     } else {
         if reg.slots.len() > MAX_SLOTS {
-            eprintln!("ax-code-render: handle registry full ({} slots); returning invalid handle", reg.slots.len());
+            eprintln!(
+                "ax-code-render: handle registry full ({} slots); returning invalid handle",
+                reg.slots.len()
+            );
             return 0;
         }
         reg.slots.push(Slot::default());

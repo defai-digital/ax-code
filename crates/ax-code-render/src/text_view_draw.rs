@@ -597,10 +597,15 @@ mod tests {
         let mut tb = tb_with("0123456789");
         let line_width = tb.line_width_at(0);
         assert_eq!(line_width, 10);
-        tb.add_highlight(0, 3, 20, /*style_id=*/ 7, /*priority=*/ 1, 0, false);
+        tb.add_highlight(
+            0, 3, 20, /*style_id=*/ 7, /*priority=*/ 1, 0, false,
+        );
         let spans = build_line_spans(&tb, 0, line_width);
         // Expect: default span [0..3) + styled span [3..10) (clamped to line_width)
-        let cols: Vec<_> = spans.iter().map(|s| (s.col, s.style_id, s.next_col)).collect();
+        let cols: Vec<_> = spans
+            .iter()
+            .map(|s| (s.col, s.style_id, s.next_col))
+            .collect();
         assert_eq!(cols, vec![(0, 0, 3), (3, 7, 10)]);
     }
 
@@ -611,9 +616,14 @@ mod tests {
         let mut tb = tb_with("hello");
         let line_width = tb.line_width_at(0);
         assert_eq!(line_width, 5);
-        tb.add_highlight(0, 0, 100, /*style_id=*/ 3, /*priority=*/ 2, 0, false);
+        tb.add_highlight(
+            0, 0, 100, /*style_id=*/ 3, /*priority=*/ 2, 0, false,
+        );
         let spans = build_line_spans(&tb, 0, line_width);
-        let cols: Vec<_> = spans.iter().map(|s| (s.col, s.style_id, s.next_col)).collect();
+        let cols: Vec<_> = spans
+            .iter()
+            .map(|s| (s.col, s.style_id, s.next_col))
+            .collect();
         assert_eq!(cols, vec![(0, 3, 5)]);
     }
 
@@ -628,12 +638,12 @@ mod tests {
         tb.add_highlight(0, 2, 6, 1, 1, 0, false);
         tb.add_highlight(0, 5, 20, 2, 2, 0, false);
         let spans = build_line_spans(&tb, 0, line_width);
-        let cols: Vec<_> = spans.iter().map(|s| (s.col, s.style_id, s.next_col)).collect();
+        let cols: Vec<_> = spans
+            .iter()
+            .map(|s| (s.col, s.style_id, s.next_col))
+            .collect();
         // [0..2) default, [2..5) hl0 only, [5..6) hl1 wins (priority 2 > 1),
         // [6..10) hl1 only (hl0 ended at 6, hl1 still active past 20)
-        assert_eq!(
-            cols,
-            vec![(0, 0, 2), (2, 1, 5), (5, 2, 6), (6, 2, 10)]
-        );
+        assert_eq!(cols, vec![(0, 0, 2), (2, 1, 5), (5, 2, 6), (6, 2, 10)]);
     }
 }

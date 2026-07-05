@@ -144,7 +144,12 @@ impl HeadlessClient {
                     }
                     Err(e) => {
                         retries += 1;
-                        tracing::error!("SSE subscription failed (attempt {}/{}): {}", retries, MAX_SSE_RETRIES, e);
+                        tracing::error!(
+                            "SSE subscription failed (attempt {}/{}): {}",
+                            retries,
+                            MAX_SSE_RETRIES,
+                            e
+                        );
                         if retries >= MAX_SSE_RETRIES {
                             tracing::error!("SSE reconnect limit reached; giving up");
                             let _ = tx.send(RuntimeEvent::ServerDisconnected).await;

@@ -1705,10 +1705,13 @@ impl OptimizedBuffer {
             if !self.point_in_scissor(cell_x as i32, cell_y as i32) {
                 continue;
             }
-            let f = |o: usize| f32::from_le_bytes(data[off + o..off + o + 4].try_into().unwrap_or_default());
+            let f = |o: usize| {
+                f32::from_le_bytes(data[off + o..off + o + 4].try_into().unwrap_or_default())
+            };
             let bg = rgba_from_floats(f(0), f(4), f(8), f(12));
             let fg = rgba_from_floats(f(16), f(20), f(24), f(28));
-            let mut ch = u32::from_le_bytes(data[off + 32..off + 36].try_into().unwrap_or_default());
+            let mut ch =
+                u32::from_le_bytes(data[off + 32..off + 36].try_into().unwrap_or_default());
             if ch == 0 || ch > 0x10FFFF {
                 ch = DEFAULT_SPACE_CHAR;
             }
