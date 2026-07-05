@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils"
 import { typography } from "@/lib/typography"
-import { formatToolInput, detectToolOutputLanguage } from "@/lib/toolHelpers"
+import { formatToolInput } from "@/lib/toolHelpers"
 import { SimpleMarkdownRenderer } from "../MarkdownRenderer"
 import { Icon } from "@/components/icon/Icon"
 
@@ -845,10 +845,6 @@ export const parseDiffToLines = (diffText: string): SideBySideDiffHunk[] => {
   }
 
   return hunks
-}
-
-export const detectLanguageFromOutput = (output: string, toolName: string, input?: Record<string, unknown>) => {
-  return detectToolOutputLanguage(toolName, output, input)
 }
 
 export { formatInputForDisplay }

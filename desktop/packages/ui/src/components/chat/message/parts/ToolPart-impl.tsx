@@ -3,7 +3,7 @@ import type { AnimationPlaybackControls } from "motion"
 import { RuntimeAPIContext } from "@/contexts/runtimeAPIContext"
 import { cn } from "@/lib/utils"
 import { SimpleMarkdownRenderer } from "../../MarkdownRenderer"
-import { getToolMetadata } from "@/lib/toolHelpers"
+import { detectToolOutputLanguage, getToolMetadata } from "@/lib/toolHelpers"
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from "@ax-code/sdk/v2"
 import { toolDisplayStyles } from "@/lib/typography"
 import { LazySyntaxHighlighter as SyntaxHighlighter } from "@/components/ui/LazySyntaxHighlighter"
@@ -22,7 +22,7 @@ import type { ContentChangeReason } from "@/hooks/useChatAutoFollow"
 import type { ToolPopupContent } from "../types"
 import type { MessageRecord } from "@/lib/messageCompletion"
 
-import { formatEditOutput, detectLanguageFromOutput, formatInputForDisplay, tryParseJsonOutput } from "../toolRenderers"
+import { formatEditOutput, formatInputForDisplay, tryParseJsonOutput } from "../toolRenderers"
 import { JsonTreeViewer } from "@/components/ui/JsonTreeViewer"
 import { Icon } from "@/components/icon/Icon"
 import { DiffViewToggle } from "../DiffViewToggle"
@@ -666,7 +666,7 @@ const getToolOutputLanguage = (
     return "bash"
   }
 
-  return detectLanguageFromOutput(formatEditOutput(output, part.tool, metadata), part.tool, input)
+  return detectToolOutputLanguage(part.tool, formatEditOutput(output, part.tool, metadata), input)
 }
 
 const getToolOutputText = (
