@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { mkdir, writeFile, readFile } from "node:fs/promises"
+import { mkdir, writeFile } from "node:fs/promises"
 import path from "path"
 import z from "zod"
 import { Instance } from "../../src/project/instance"

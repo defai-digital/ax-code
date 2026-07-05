@@ -3,10 +3,8 @@ import type { Plugin } from "vitest/config"
 import { transform as esbuildTransform } from "esbuild"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { createRequire } from "node:module"
 
 const dir = path.dirname(fileURLToPath(import.meta.url))
-const require = createRequire(import.meta.url)
 const normalizeVitePath = (input: string) => input.replaceAll("\\", "/")
 
 // vitest 4 bundles vite 8, whose default Oxc transformer only partially supports

@@ -1,5 +1,4 @@
 import { describe, expect, test, beforeEach, afterEach, vi } from "vitest"
-import { z } from "zod"
 import { QuestionTool } from "../../src/tool/question"
 import * as QuestionModule from "../../src/question"
 import { SessionID, MessageID } from "../../src/session/schema"

@@ -55,7 +55,6 @@ description: Skill for tool tests.
         directory: tmp.path,
         fn: async () => {
           const tool = await SkillTool.init()
-          const skillPath = path.join(tmp.path, ".ax-code", "skill", "tool-skill", "SKILL.md")
           expect(tool.description).toContain(`**tool-skill**: Skill for tool tests.`)
         },
       })
@@ -74,7 +73,7 @@ description: Skill for tool tests.
           ["middle-skill", "Middle skill."],
         ]) {
           const skillDir = path.join(dir, ".ax-code", "skill", name)
-        await mkdir(skillDir, { recursive: true })
+          await mkdir(skillDir, { recursive: true })
           await writeFile(
             path.join(skillDir, "SKILL.md"),
             `---

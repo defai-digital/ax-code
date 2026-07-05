@@ -6,7 +6,7 @@ import { MessageID } from "../../src/session/schema"
 import { CreateGoalTool, GetGoalTool, UpdateGoalTool } from "../../src/tool/goal"
 import { tmpdir } from "../fixture/fixture"
 
-function toolContext(sessionID: string, directory: string) {
+function toolContext(sessionID: string, _directory: string) {
   return {
     sessionID: sessionID as any,
     messageID: MessageID.ascending(),
