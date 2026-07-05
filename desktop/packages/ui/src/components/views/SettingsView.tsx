@@ -40,6 +40,7 @@ import { AXCodePage } from "@/components/sections/ax-code/AXCodePage"
 import { useDeviceInfo } from "@/lib/device"
 import { isDesktopShell, isWebRuntime } from "@/lib/desktop"
 import { useI18n } from "@/lib/i18n"
+import { isPlainRecord } from "@/lib/record"
 import { Icon } from "@/components/icon/Icon"
 import { reloadAxCodeConfiguration } from "@/stores/useAgentsStore"
 import {
@@ -108,17 +109,13 @@ function isPageAvailable(page: SettingsPageMeta, ctx: SettingsRuntimeContext): b
   return page.isAvailable(ctx)
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
 function getSettingsDetailHistoryEntry(state: unknown): SettingsDetailHistoryEntry | null {
-  if (!isObjectRecord(state)) {
+  if (!isPlainRecord(state)) {
     return null
   }
 
   const detail = state[SETTINGS_DETAIL_HISTORY_KEY]
-  if (!isObjectRecord(detail)) {
+  if (!isPlainRecord(detail)) {
     return null
   }
 
@@ -133,7 +130,7 @@ function getSettingsDetailHistoryEntry(state: unknown): SettingsDetailHistoryEnt
 }
 
 function getCurrentHistoryState(): Record<string, unknown> {
-  if (typeof window === "undefined" || !isObjectRecord(window.history.state)) {
+  if (typeof window === "undefined" || !isPlainRecord(window.history.state)) {
     return {}
   }
   return window.history.state
