@@ -5,6 +5,7 @@ import { createRequire } from "module"
 import os from "os"
 import z from "zod"
 import { toErrorMessage } from "@/util/error-message"
+import { uniqueStrings } from "@/util/string-list"
 import { ModelsDev } from "../provider/models"
 import { mergeDeep, pipe, unique } from "remeda"
 import { Global } from "../global"
@@ -169,7 +170,7 @@ export namespace Config {
   }
 
   function mergeUniqueStrings(target: string[] | undefined, source: string[] | undefined) {
-    return target && source ? Array.from(new Set([...target, ...source])) : undefined
+    return target && source ? uniqueStrings([...target, ...source]) : undefined
   }
 
   // Custom merge function that concatenates array fields instead of replacing them
