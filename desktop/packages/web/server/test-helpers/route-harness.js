@@ -90,7 +90,7 @@ export const createMockResponse = () => {
   }
 }
 
-export const createMockRequest = ({ host, origin, protocol = "http" } = {}) => {
+export const createMockRequest = ({ host, origin, protocol = "http", forwardedHost, forwardedProto } = {}) => {
   const listeners = new Map()
 
   return {
@@ -98,6 +98,8 @@ export const createMockRequest = ({ host, origin, protocol = "http" } = {}) => {
       host,
       ...(origin ? { origin } : {}),
       ...(protocol ? { "x-forwarded-proto": protocol } : {}),
+      ...(forwardedHost ? { "x-forwarded-host": forwardedHost } : {}),
+      ...(forwardedProto ? { "x-forwarded-proto": forwardedProto } : {}),
     },
     hostname: host,
     socket: {

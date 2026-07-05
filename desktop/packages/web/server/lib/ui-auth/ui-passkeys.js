@@ -8,6 +8,7 @@ import {
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from "@simplewebauthn/server"
+import { getRequestOrigin, getRequestRpId } from "../security/request-origin.js"
 
 const DEFAULT_STORE_VERSION = 1
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60 * 1000
@@ -41,54 +42,7 @@ const normalizeLabel = (value, fallback) => {
   return normalized ? normalized.slice(0, 120) : fallback
 }
 
-const normalizeHost = (value) => {
-  if (typeof value !== "string") {
-    return ""
-  }
-
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return ""
-  }
-
-  if (trimmed.startsWith("[")) {
-    const end = trimmed.indexOf("]")
-    return end >= 0 ? trimmed.slice(1, end).toLowerCase() : trimmed.toLowerCase()
-  }
-
-  const colonIndex = trimmed.indexOf(":")
-  return (colonIndex >= 0 ? trimmed.slice(0, colonIndex) : trimmed).toLowerCase()
-}
-
 const isLocalRpId = (rpID) => rpID === "localhost" || rpID === "127.0.0.1" || rpID === "::1"
-
-const getCurrentRequestOrigin = (req) => {
-  const forwardedProto =
-    typeof req.headers["x-forwarded-proto"] === "string"
-      ? req.headers["x-forwarded-proto"].split(",")[0].trim().toLowerCase()
-      : ""
-  const protocol = forwardedProto || (req.socket?.encrypted ? "https" : "http")
-  const forwardedHost =
-    typeof req.headers["x-forwarded-host"] === "string" ? req.headers["x-forwarded-host"].split(",")[0].trim() : ""
-  const host = forwardedHost || (typeof req.headers.host === "string" ? req.headers.host.trim() : "")
-
-  if (!host) {
-    return ""
-  }
-
-  try {
-    return new URL(`${protocol}://${host}`).origin
-  } catch {
-    return ""
-  }
-}
-
-const getCurrentRpId = (req) => {
-  const forwardedHost =
-    typeof req.headers["x-forwarded-host"] === "string" ? req.headers["x-forwarded-host"].split(",")[0].trim() : ""
-  const host = forwardedHost || (typeof req.headers.host === "string" ? req.headers.host.trim() : "")
-  return normalizeHost(host || req.hostname || "")
-}
 
 const parseStoredPasskey = (record) => {
   if (!record || typeof record !== "object") {
@@ -194,7 +148,7 @@ export const createUiPasskeys = ({
 
   const buildOriginCandidates = async (req) => {
     const origins = new Set()
-    const currentOrigin = getCurrentRequestOrigin(req)
+    const currentOrigin = getRequestOrigin(req)
     if (currentOrigin) {
       origins.add(currentOrigin)
     }
@@ -221,7 +175,7 @@ export const createUiPasskeys = ({
 
   const getStatus = (req) => {
     const store = loadStore()
-    const rpID = getCurrentRpId(req)
+    const rpID = getRequestRpId(req)
     return {
       enabled: Boolean(passwordBinding),
       hasPasskeys: Boolean(rpID) && getPasskeysForRpId(store, rpID).length > 0,
@@ -234,7 +188,7 @@ export const createUiPasskeys = ({
     assertEnabled()
 
     const store = loadStore()
-    const rpID = getCurrentRpId(req)
+    const rpID = getRequestRpId(req)
     if (!rpID) {
       return []
     }
@@ -260,7 +214,7 @@ export const createUiPasskeys = ({
     }
 
     const store = loadStore()
-    const rpID = getCurrentRpId(req)
+    const rpID = getRequestRpId(req)
     const existingPasskey = store.passkeys.find(
       (passkey) => passkey.id === normalizedPasskeyId && passkey.rpID === rpID,
     )
@@ -308,14 +262,14 @@ export const createUiPasskeys = ({
     assertEnabled()
     cleanupChallengeMap(registrationChallenges)
 
-    const rpID = getCurrentRpId(req)
+    const rpID = getRequestRpId(req)
     if (!rpID) {
       const error = new Error("Unable to resolve a valid passkey host for this request")
       error.statusCode = 400
       throw error
     }
 
-    const currentOrigin = getCurrentRequestOrigin(req)
+    const currentOrigin = getRequestOrigin(req)
     if (!currentOrigin) {
       const error = new Error("Unable to resolve a valid passkey origin for this request")
       error.statusCode = 400
@@ -430,7 +384,7 @@ export const createUiPasskeys = ({
     cleanupChallengeMap(authenticationChallenges)
 
     const store = loadStore()
-    const rpID = getCurrentRpId(req)
+    const rpID = getRequestRpId(req)
     const passkeys = getPasskeysForRpId(store, rpID)
 
     if (!rpID || passkeys.length === 0) {

@@ -47,4 +47,20 @@ describe("request security origin checks", () => {
       ),
     ).resolves.toBe(false)
   })
+
+  it("uses forwarded host and protocol for proxied requests", async () => {
+    const runtime = createRuntime()
+
+    await expect(
+      runtime.isRequestOriginAllowed(
+        createMockRequest({
+          host: "internal.local:3902",
+          origin: "https://desktop.example.com",
+          protocol: "http",
+          forwardedHost: "desktop.example.com",
+          forwardedProto: "https",
+        }),
+      ),
+    ).resolves.toBe(true)
+  })
 })

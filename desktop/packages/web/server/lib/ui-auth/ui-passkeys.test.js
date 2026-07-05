@@ -63,4 +63,31 @@ describe("ui passkeys", () => {
       }),
     )
   })
+
+  it("uses forwarded host and protocol for WebAuthn expectations", async () => {
+    const passkeys = createUiPasskeys({
+      passwordBinding: "password-binding",
+      readSettingsFromDiskMigrated: async () => ({}),
+      storeFile,
+    })
+
+    const registration = await passkeys.beginRegistration(
+      createMockRequest({
+        host: "internal.local:3902",
+        forwardedHost: "desktop.example.com",
+        forwardedProto: "https",
+      }),
+    )
+    await passkeys.finishRegistration({
+      requestId: registration.requestId,
+      response: { id: "credential-id" },
+    })
+
+    expect(simpleWebAuthn.verifyRegistrationResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedOrigin: ["https://desktop.example.com"],
+        expectedRPID: ["desktop.example.com"],
+      }),
+    )
+  })
 })

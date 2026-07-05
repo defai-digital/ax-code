@@ -1,25 +1,7 @@
+import { addLocalhostOriginAliases, getRequestOrigin } from "./request-origin.js"
+
 export const createRequestSecurityRuntime = (deps) => {
   const { readSettingsFromDiskMigrated } = deps
-
-  const addHostOriginCandidates = (origins, protocol, host) => {
-    let parsed = null
-    try {
-      parsed = new URL(`${protocol}://${host}`)
-    } catch {
-      return
-    }
-
-    origins.add(parsed.origin)
-
-    const normalizedHost = parsed.hostname.toLowerCase()
-    const portSuffix = parsed.port ? `:${parsed.port}` : ""
-    if (normalizedHost === "localhost") {
-      origins.add(`${parsed.protocol}//127.0.0.1${portSuffix}`)
-      origins.add(`${parsed.protocol}//[::1]${portSuffix}`)
-    } else if (normalizedHost === "127.0.0.1" || normalizedHost === "[::1]") {
-      origins.add(`${parsed.protocol}//localhost${portSuffix}`)
-    }
-  }
 
   const getUiSessionTokenFromRequest = (req) => {
     const cookieHeader = req?.headers?.cookie
@@ -75,18 +57,10 @@ export const createRequestSecurityRuntime = (deps) => {
 
   const getRequestOriginCandidates = async (req) => {
     const origins = new Set()
-    const forwardedProto =
-      typeof req.headers["x-forwarded-proto"] === "string"
-        ? req.headers["x-forwarded-proto"].split(",")[0].trim().toLowerCase()
-        : ""
-    const protocol = forwardedProto || (req.socket?.encrypted ? "https" : "http")
-
-    const forwardedHost =
-      typeof req.headers["x-forwarded-host"] === "string" ? req.headers["x-forwarded-host"].split(",")[0].trim() : ""
-    const host = forwardedHost || (typeof req.headers.host === "string" ? req.headers.host.trim() : "")
-
-    if (host) {
-      addHostOriginCandidates(origins, protocol, host)
+    const origin = getRequestOrigin(req)
+    if (origin) {
+      origins.add(origin)
+      addLocalhostOriginAliases(origins, origin)
     }
 
     try {
