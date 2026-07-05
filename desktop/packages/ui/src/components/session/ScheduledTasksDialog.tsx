@@ -27,11 +27,11 @@ import {
 } from "@/lib/scheduledTasksApi"
 import { ScheduledTaskEditorDialog } from "./ScheduledTaskEditorDialog"
 import { loadCurrentScheduledTaskList } from "./scheduledTaskListLoad"
+import { normalizeScheduledTaskTimes } from "./scheduledTaskTime"
 
 const scheduleTimes = (task: ScheduledTask): string[] => {
   const raw = Array.isArray(task.schedule.times) ? task.schedule.times : task.schedule.time ? [task.schedule.time] : []
-  const valid = raw.filter((value) => typeof value === "string" && /^([01]\d|2[0-3]):([0-5]\d)$/.test(value))
-  return Array.from(new Set(valid)).sort((a, b) => a.localeCompare(b))
+  return normalizeScheduledTaskTimes(raw)
 }
 
 const formatSchedule = (task: ScheduledTask, t: ReturnType<typeof useI18n>["t"]): string => {

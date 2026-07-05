@@ -24,6 +24,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { useUIStore } from "@/stores/useUIStore"
 import type { ScheduledTask } from "@/lib/scheduledTasksApi"
 import { useI18n } from "@/lib/i18n"
+import { normalizeScheduledTaskTimes } from "./scheduledTaskTime"
 
 const WEEKDAY_INDEXES = [0, 1, 2, 3, 4, 5, 6] as const
 
@@ -492,11 +493,7 @@ const normalizeDraftTimes = (task: ScheduledTask | null): string[] => {
       ? [task.schedule.time]
       : []
 
-  const valid = candidates
-    .filter((value) => typeof value === "string" && /^([01]\d|2[0-3]):([0-5]\d)$/.test(value))
-    .map((value) => value.trim())
-
-  const unique = Array.from(new Set(valid)).sort((a, b) => a.localeCompare(b))
+  const unique = normalizeScheduledTaskTimes(candidates)
   return unique.length > 0 ? unique : ["09:00"]
 }
 
@@ -598,8 +595,7 @@ const validateDraft = (draft: ScheduledTaskDraft, t: ReturnType<typeof useI18n>[
 }
 
 const dedupeSortTimes = (times: string[]) => {
-  const filtered = times.filter((value) => /^([01]\d|2[0-3]):([0-5]\d)$/.test(value))
-  return Array.from(new Set(filtered)).sort((a, b) => a.localeCompare(b))
+  return normalizeScheduledTaskTimes(times)
 }
 
 export function ScheduledTaskEditorDialog(props: {
