@@ -121,6 +121,7 @@ describe("ipc transport client", () => {
     try {
       await transport.requestJson<unknown>({ path: "/session", method: "POST" })
       expect(lastRequest?.headers?.["x-ax-code-directory"]).toBe("/tmp/project")
+      expect(lastRequest?.headers?.["x-opencode-directory"]).toBe("/tmp/project")
       expect(lastRequest?.headers?.["x-ax-code-workspace-id"]).toBe("ws-1")
     } finally {
       await transport.close?.()

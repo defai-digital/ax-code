@@ -1,5 +1,5 @@
 import { createAxCodeClient } from "../v2/client.js"
-import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../protocol.js"
+import { withDirectoryHeaders, withWorkspaceHeaders } from "../protocol.js"
 import type { Event } from "../v2/index.js"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command.js"
 import type {
@@ -176,15 +176,10 @@ export function headlessHeaders(input: {
 }): Record<string, string> {
   const headers = headersToRecord(input.headers)
   if (input.directory) {
-    const encodedDirectory = /[^\x00-\x7F]/.test(input.directory)
-      ? encodeURIComponent(input.directory)
-      : input.directory
-    headers["x-ax-code-directory"] = encodedDirectory
-    headers["x-opencode-directory"] = encodedDirectory
+    Object.assign(headers, withDirectoryHeaders(undefined, input.directory))
   }
   if (input.experimental_workspaceID) {
-    headers[AX_CODE_WORKSPACE_HEADER] = input.experimental_workspaceID
-    headers[LEGACY_OPENCODE_WORKSPACE_HEADER] = input.experimental_workspaceID
+    Object.assign(headers, withWorkspaceHeaders(undefined, input.experimental_workspaceID))
   }
   return headers
 }
