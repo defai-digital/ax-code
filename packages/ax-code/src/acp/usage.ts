@@ -1,12 +1,12 @@
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
-import type { AssistantMessage, OpencodeClient, SessionMessageResponse } from "@ax-code/sdk/v2"
+import type { AssistantMessage, AxCodeClient, SessionMessageResponse } from "@ax-code/sdk/v2"
 import { ProviderID, ModelID } from "@/provider/schema"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "acp-usage" })
 
 async function getContextLimit(
-  sdk: OpencodeClient,
+  sdk: AxCodeClient,
   providerID: ProviderID,
   modelID: ModelID,
   directory: string,
@@ -26,7 +26,7 @@ async function getContextLimit(
 
 export async function sendUsageUpdate(
   connection: AgentSideConnection,
-  sdk: OpencodeClient,
+  sdk: AxCodeClient,
   sessionID: string,
   directory: string,
 ): Promise<void> {

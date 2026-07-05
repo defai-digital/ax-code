@@ -1,13 +1,13 @@
 import { RequestError, type McpServer } from "@agentclientprotocol/sdk"
 import type { ACPSessionState } from "./types"
 import { Log } from "@/util/log"
-import type { OpencodeClient } from "@ax-code/sdk/v2"
+import type { AxCodeClient } from "@ax-code/sdk/v2"
 
 const log = Log.create({ service: "acp-session-manager" })
 
 export class ACPSessionManager {
   private sessions = new Map<string, ACPSessionState>()
-  private sdk: OpencodeClient
+  private sdk: AxCodeClient
   // Backstop cap to bound long-running ACP servers. The ACP protocol has
   // no `session.close` notification today, so without this the map grows
   // monotonically as the client creates / loads / forks / resumes
@@ -18,7 +18,7 @@ export class ACPSessionManager {
   // connection while keeping memory bounded.
   private static readonly MAX_SESSIONS = 1024
 
-  constructor(sdk: OpencodeClient) {
+  constructor(sdk: AxCodeClient) {
     this.sdk = sdk
   }
 

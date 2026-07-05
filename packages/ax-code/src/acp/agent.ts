@@ -43,7 +43,7 @@ import { MessageV2 } from "@/session/message-v2"
 import { LoadAPIKeyError } from "ai"
 import type {
   Event,
-  OpencodeClient,
+  AxCodeClient,
   SessionMessageResponse,
   ToolPart,
   ToolStateCompleted,
@@ -91,7 +91,7 @@ export namespace ACP {
   export const decodeReplayDataUrl = _decodeReplayDataUrl
   export const parseListSessionsCursor = _parseListSessionsCursor
 
-  export async function init({ sdk: _sdk }: { sdk: OpencodeClient }) {
+  export async function init({ sdk: _sdk }: { sdk: AxCodeClient }) {
     return {
       create: (connection: AgentSideConnection, fullConfig: ACPConfig) => {
         return new Agent(connection, fullConfig)
@@ -102,7 +102,7 @@ export namespace ACP {
   export class Agent implements ACPAgent {
     private connection: AgentSideConnection
     private config: ACPConfig
-    private sdk: OpencodeClient
+    private sdk: AxCodeClient
     private sessionManager: ACPSessionManager
     private eventAbort = new AbortController()
     private eventStarted = false
