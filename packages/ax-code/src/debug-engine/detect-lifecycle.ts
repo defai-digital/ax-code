@@ -81,8 +81,6 @@ const RESOURCE_RULES: ResourceRule[] = [
 
 // Track Map growth without bounds
 const MAP_GROWTH_SET_RE = /(\w+)\.set\s*\(/g
-const MAP_GROWTH_DELETE_RE = /\.delete\s*\(/
-const MAP_SIZE_CHECK_RE = /\.size\s*[><=!]/
 
 type FunctionScope = {
   start: number

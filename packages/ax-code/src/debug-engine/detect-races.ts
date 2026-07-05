@@ -28,11 +28,6 @@ export type DetectRacesInput = ScannerInputControls & {
 // Suppression comment pattern: // @scan-suppress race_scan
 const SUPPRESS_RE = /\/\/\s*@scan-suppress\s+race_scan/
 
-// Detect shared mutable state identifiers: module-level `let`, Map, Set,
-// class fields with mutable containers.
-const SHARED_STATE_DECL_RE = /^\s*(?:export\s+)?(?:let|var)\s+(\w+)/
-const MAP_SET_DECL_RE = /(?:new\s+(?:Map|Set|WeakMap|WeakSet)\s*[<(])|(?:\.(?:set|add)\s*\()/
-
 // Extract identifier names from Map/Set get/set operations
 const MAP_GET_RE = /(\w+)\.get\s*\(/g
 const MAP_SET_RE = /(\w+)\.set\s*\(/g
@@ -243,7 +238,6 @@ function detectConflictingMutations(lines: LineInfo[], file: string, max: number
       i++
     }
     const block = content.slice(match.index, i)
-    const endLine = content.slice(0, i).split("\n").length
 
     // Look for repeated identifiers being mutated inside the block
     const mutatedIds = new Map<string, number[]>()

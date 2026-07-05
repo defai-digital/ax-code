@@ -55,7 +55,6 @@ export async function storePattern(input: {
   affectedFiles: string[]
 }): Promise<string> {
   const id = DebugPatternID.ascending()
-  const now = Date.now()
 
   // Extract keywords from problem and fix pattern
   const keywords = extractKeywords(input.problem, input.fixPattern)

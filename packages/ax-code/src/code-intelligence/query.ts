@@ -11,7 +11,7 @@ import {
   type LspCacheCompleteness,
 } from "./schema.sql"
 import { LspCacheID } from "./id"
-import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
+import type { CodeNodeID } from "./id"
 import type { ProjectID } from "../project/schema"
 import { Flag } from "../flag/flag"
 import { NativeStore } from "./native-store"

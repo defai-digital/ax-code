@@ -1,6 +1,6 @@
 import { Database, eq, and, desc } from "../storage/db"
 import { RefactorPlanTable, EmbeddingCacheTable, type RefactorPlanStatus } from "./schema.sql"
-import type { RefactorPlanID, EmbeddingCacheID } from "./id"
+import type { RefactorPlanID } from "./id"
 import type { ProjectID } from "../project/schema"
 
 // Low-level CRUD for DRE-owned tables. Mirrors the structure of
