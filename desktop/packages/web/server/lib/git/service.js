@@ -411,14 +411,6 @@ export const resolveRepositoryFilePath = (repoRoot, filePath) => {
   return absolutePath
 }
 
-const resolveChildPath = (root, childName) => {
-  const absolutePath = path.resolve(root, childName)
-  if (!isInsideOrSameDirectory(root, absolutePath)) {
-    throw new Error(`Path is outside directory: ${childName}`)
-  }
-  return absolutePath
-}
-
 const resolveGitRepositoryRoot = async (directoryPath, git) => {
   const topLevel = await git.raw(["rev-parse", "--show-toplevel"])
   const normalizedTopLevel = topLevel.trim()
@@ -1584,13 +1576,28 @@ export async function getStatus(directory, options = {}) {
         }
 
         try {
-          const stat = await fsp.stat(absolutePath)
-          if (!stat.isFile() || stat.size > MAX_NEW_FILE_STAT_SIZE) {
-            return null
-          }
-
-          const buffer = await fsp.readFile(absolutePath)
-          if (buffer.indexOf(0) !== -1) {
+          const repoPath = toGitPath(path.relative(repoRoot, absolutePath))
+          const emptyPath = process.platform === "win32" ? "NUL" : "/dev/null"
+          const diff = await execFileAsync(
+            getGitBinary(),
+            ["diff", "--numstat", "--no-index", "--", emptyPath, repoPath],
+            {
+              cwd: repoRoot,
+              encoding: "utf8",
+              windowsHide: true,
+              maxBuffer: MAX_NEW_FILE_STAT_SIZE,
+            },
+          ).catch((error) => {
+            const stdout = typeof error?.stdout === "string" ? error.stdout : ""
+            if (stdout.trim()) {
+              return { stdout }
+            }
+            throw error
+          })
+          const [insertionsRaw, deletionsRaw] = String(diff.stdout || "")
+            .trim()
+            .split(/\t/)
+          if (insertionsRaw === "-" || deletionsRaw === "-") {
             return {
               path: file.path,
               insertions: existing?.insertions ?? 0,
@@ -1598,17 +1605,7 @@ export async function getStatus(directory, options = {}) {
             }
           }
 
-          const normalized = buffer.toString("utf8").replace(/\r\n/g, "\n")
-          if (!normalized.length) {
-            return { path: file.path, insertions: 0, deletions: 0 }
-          }
-
-          const segments = normalized.split("\n")
-          if (normalized.endsWith("\n")) {
-            segments.pop()
-          }
-
-          return { path: file.path, insertions: segments.length, deletions: 0 }
+          return { path: file.path, insertions: parseInt(insertionsRaw, 10) || 0, deletions: 0 }
         } catch (error) {
           if (error?.code !== "ENOENT") {
             console.warn("Failed to estimate diff stats for new file", file.path, error)
@@ -1709,11 +1706,9 @@ export async function getStatus(directory, options = {}) {
         const headSha = mergeHead.trim().slice(0, 7)
         // Only set mergeInProgress if we actually have a valid head SHA
         if (headSha) {
-          const mergeMsgPath = await resolveGitInternalPath(repoRoot, git, "MERGE_MSG").catch(() => "")
-          const mergeMsg = mergeMsgPath ? await fsp.readFile(mergeMsgPath, "utf8").catch(() => "") : ""
           mergeInProgress = {
             head: headSha,
-            message: mergeMsg.split("\n")[0] || "",
+            message: "",
           }
         }
       }
@@ -1722,38 +1717,19 @@ export async function getStatus(directory, options = {}) {
     }
 
     try {
-      // Check for rebase in progress (.git/rebase-merge or .git/rebase-apply)
-      const rebaseMergePath = await resolveGitInternalPath(repoRoot, git, "rebase-merge").catch(() => "")
-      const rebaseApplyPath = await resolveGitInternalPath(repoRoot, git, "rebase-apply").catch(() => "")
-      const rebaseMergeExists = rebaseMergePath
-        ? await fsp
-            .stat(rebaseMergePath)
-            .then(() => true)
-            .catch(() => false)
-        : false
-      const rebaseApplyExists = rebaseApplyPath
-        ? await fsp
-            .stat(rebaseApplyPath)
-            .then(() => true)
-            .catch(() => false)
-        : false
+      const rebaseHead = await git
+        .raw(["rev-parse", "--verify", "--quiet", "REBASE_HEAD"])
+        .then((value) =>
+          String(value || "")
+            .trim()
+            .slice(0, 7),
+        )
+        .catch(() => "")
 
-      if (rebaseMergeExists || rebaseApplyExists) {
-        const rebasePath = rebaseMergeExists ? rebaseMergePath : rebaseApplyPath
-        const headNamePath = resolveChildPath(rebasePath, "head-name")
-        const ontoPath = resolveChildPath(rebasePath, "onto")
-        const headName = await fsp.readFile(headNamePath, "utf8").catch(() => "")
-        const onto = await fsp.readFile(ontoPath, "utf8").catch(() => "")
-
-        const headNameTrimmed = headName.trim().replace("refs/heads/", "")
-        const ontoTrimmed = onto.trim().slice(0, 7)
-
-        // Only set rebaseInProgress if we have valid data
-        if (headNameTrimmed || ontoTrimmed) {
-          rebaseInProgress = {
-            headName: headNameTrimmed,
-            onto: ontoTrimmed,
-          }
+      if (rebaseHead) {
+        rebaseInProgress = {
+          headName: "",
+          onto: rebaseHead,
         }
       }
     } catch {
