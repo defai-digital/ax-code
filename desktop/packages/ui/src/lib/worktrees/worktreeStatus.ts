@@ -1,21 +1,11 @@
 import { getGitStatus } from "@/lib/gitApi"
 import { execCommand } from "@/lib/execCommands"
+import { normalizeWorktreePath } from "@/lib/worktrees/path"
 import type { WorktreeMetadata } from "@/types/worktree"
 
-const normalizePath = (value: string): string => {
-  if (!value) {
-    return ""
-  }
-  const replaced = value.replace(/\\/g, "/")
-  if (replaced === "/") {
-    return "/"
-  }
-  return replaced.replace(/\/+$/, "")
-}
-
 const toAbsolutePath = (baseDir: string, maybeRelativePath: string): string => {
-  const normalizedBase = normalizePath(baseDir)
-  const normalizedInput = normalizePath(maybeRelativePath)
+  const normalizedBase = normalizeWorktreePath(baseDir)
+  const normalizedInput = normalizeWorktreePath(maybeRelativePath)
   if (!normalizedInput) return normalizedBase
   if (normalizedInput.startsWith("/")) return normalizedInput
 
@@ -33,7 +23,7 @@ const toAbsolutePath = (baseDir: string, maybeRelativePath: string): string => {
 }
 
 const derivePrimaryWorktreeRootFromGitDir = (gitDir: string): string | null => {
-  const normalized = normalizePath(gitDir)
+  const normalized = normalizeWorktreePath(gitDir)
   if (!normalized) return null
   if (normalized.endsWith("/.git")) {
     return normalized.slice(0, -"/.git".length) || null
@@ -47,7 +37,7 @@ const derivePrimaryWorktreeRootFromGitDir = (gitDir: string): string | null => {
 }
 
 export async function getWorktreeStatus(worktreePath: string): Promise<WorktreeMetadata["status"]> {
-  const normalizedPath = normalizePath(worktreePath)
+  const normalizedPath = normalizeWorktreePath(worktreePath)
   const status = await getGitStatus(normalizedPath)
   return {
     isDirty: !status.isClean,
@@ -106,7 +96,7 @@ export function invalidateResolvedProjectRootCache(directory?: string): void {
   // cache with its pre-invalidation result once it settles.
   resolveCacheEpoch += 1
   if (typeof directory === "string" && directory) {
-    const normalized = normalizePath(directory)
+    const normalized = normalizeWorktreePath(directory)
     resolvedRootCache.delete(normalized)
     // Drop the in-flight entry too, so callers arriving during the window
     // trigger a fresh resolution instead of receiving the stale in-flight one.
@@ -132,7 +122,7 @@ const computeProjectRoot = async (directory: string): Promise<string> => {
     .map((line) => line.trim())
     .filter(Boolean)
 
-  const absoluteGitDir = normalizePath(lines[0] || "")
+  const absoluteGitDir = normalizeWorktreePath(lines[0] || "")
   if (absoluteGitDir) {
     const rootFromAbsoluteGitDir = derivePrimaryWorktreeRootFromGitDir(absoluteGitDir)
     if (rootFromAbsoluteGitDir) {
@@ -140,7 +130,7 @@ const computeProjectRoot = async (directory: string): Promise<string> => {
     }
   }
 
-  const rawCommonDir = normalizePath(lines[1] || "")
+  const rawCommonDir = normalizeWorktreePath(lines[1] || "")
   if (rawCommonDir) {
     const commonDir = toAbsolutePath(directory, rawCommonDir)
     const rootFromCommonDir = derivePrimaryWorktreeRootFromGitDir(commonDir)
@@ -190,7 +180,7 @@ export const resolveProjectRoot = async (directory: string): Promise<string> => 
 }
 
 export async function getRootBranch(projectDirectory: string, options?: { knownBranch?: string }): Promise<string> {
-  const normalizedPath = normalizePath(projectDirectory)
+  const normalizedPath = normalizeWorktreePath(projectDirectory)
   if (!normalizedPath) {
     return "HEAD"
   }

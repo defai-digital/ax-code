@@ -3,6 +3,7 @@ import type { ProjectRef } from "@/lib/openchamberConfig"
 import type { WorktreeMetadata } from "@/types/worktree"
 import { deleteRemoteBranch, git } from "@/lib/gitApi"
 import { clearWorktreeBootstrapState, markWorktreeBootstrapPending } from "@/lib/worktrees/worktreeBootstrap"
+import { normalizeWorktreePath } from "@/lib/worktrees/path"
 import { invalidateResolvedProjectRootCache, resolveProjectRoot } from "@/lib/worktrees/worktreeStatus"
 import type { CreateGitWorktreePayload, GitWorktreeValidationResult } from "@/lib/api/types"
 import { useSessionUIStore } from "@/sync/session-ui-store"
@@ -38,14 +39,6 @@ const deriveCanonicalWorktreeFields = (
 
 export type { ProjectRef }
 
-const normalizePath = (value: string): string => {
-  const replaced = value.replace(/\\/g, "/")
-  if (replaced === "/") {
-    return "/"
-  }
-  return replaced.length > 1 ? replaced.replace(/\/+$/, "") : replaced
-}
-
 const slugifyWorktreeName = (value: string): string => {
   return value
     .trim()
@@ -71,7 +64,7 @@ const normalizeBranchName = (value: string): string => {
 }
 
 const deriveSdkWorktreeNameFromDirectory = (directory: string): string => {
-  const normalized = normalizePath(directory)
+  const normalized = normalizeWorktreePath(directory)
   const parts = normalized.split("/").filter(Boolean)
   return parts[parts.length - 1] ?? normalized
 }
@@ -147,7 +140,7 @@ const _worktreeListInflight = new Map<string, Promise<WorktreeMetadata[]>>()
 const WORKTREE_LIST_CACHE_TTL = 30_000 // 30 seconds
 
 export async function listProjectWorktrees(project: ProjectRef): Promise<WorktreeMetadata[]> {
-  const projectDirectory = normalizePath(project.path)
+  const projectDirectory = normalizeWorktreePath(project.path)
 
   // Return cached if fresh
   const cached = _worktreeListCache.get(projectDirectory)
@@ -161,13 +154,13 @@ export async function listProjectWorktrees(project: ProjectRef): Promise<Worktre
 
   const promise = (async (): Promise<WorktreeMetadata[]> => {
     const metadataProjectDirectory = await resolveProjectRoot(projectDirectory).catch(() => projectDirectory)
-    const normalizedProjectDirectory = normalizePath(projectDirectory)
+    const normalizedProjectDirectory = normalizeWorktreePath(projectDirectory)
 
     const worktrees = await git.worktree.list(projectDirectory).catch(() => [])
     const results: WorktreeMetadata[] = worktrees
       .filter((entry) => typeof entry.path === "string" && entry.path.trim().length > 0)
       .map((entry) => {
-        const worktreePath = normalizePath(entry.path)
+        const worktreePath = normalizeWorktreePath(entry.path)
         const branch = (entry.branch || "").replace(/^refs\/heads\//, "").trim()
         const name = (entry.name || "").trim()
 
@@ -187,7 +180,7 @@ export async function listProjectWorktrees(project: ProjectRef): Promise<Worktre
           worktreeSource: canonical.worktreeSource,
         }
       })
-      .filter((entry) => normalizePath(entry.path) !== normalizedProjectDirectory)
+      .filter((entry) => normalizeWorktreePath(entry.path) !== normalizedProjectDirectory)
 
     const sorted = results.sort((a, b) => {
       const aLabel = (a.label || a.branch || a.path).toLowerCase()
@@ -221,7 +214,7 @@ export type CreateWorktreeArgs = {
 }
 
 export async function createWorktree(project: ProjectRef, args: CreateWorktreeArgs): Promise<WorktreeMetadata> {
-  const projectDirectory = normalizePath(project.path)
+  const projectDirectory = normalizeWorktreePath(project.path)
   const metadataProjectDirectory = await resolveProjectRoot(projectDirectory).catch(() => projectDirectory)
   const payload = toCreatePayload(args, projectDirectory)
 
@@ -237,11 +230,11 @@ export async function createWorktree(project: ProjectRef, args: CreateWorktreeAr
   const metadata: WorktreeMetadata = {
     source: "sdk",
     name: returnedName,
-    path: normalizePath(returnedPath),
+    path: normalizeWorktreePath(returnedPath),
     projectDirectory: metadataProjectDirectory,
     branch: returnedBranch,
     label: returnedBranch || returnedName,
-    worktreeRoot: normalizePath(returnedPath),
+    worktreeRoot: normalizeWorktreePath(returnedPath),
     worktreeStatus: "ready",
     headState: returnedBranch ? "branch" : "unborn",
     worktreeSource: "created-for-session",
@@ -286,7 +279,7 @@ export async function removeProjectWorktree(
     remoteName?: string
   },
 ): Promise<void> {
-  const projectDirectory = normalizePath(project.path)
+  const projectDirectory = normalizeWorktreePath(project.path)
 
   const deleteRemote = Boolean(options?.deleteRemoteBranch)
   const deleteLocalBranch = options?.deleteLocalBranch === true
@@ -301,27 +294,27 @@ export async function removeProjectWorktree(
 
   clearWorktreeBootstrapState(worktree.path)
 
-  _worktreeListCache.delete(normalizePath(project.path))
+  _worktreeListCache.delete(normalizeWorktreePath(project.path))
   // Removing a worktree changes the repo's worktree topology; drop cached root
   // resolutions so root-branch lookups re-resolve against the new layout.
   invalidateResolvedProjectRootCache()
 
   // Update sidebar store so removed worktree disappears immediately
-  const normalizedWorktreePath = normalizePath(worktree.path)
+  const normalizedWorktreePath = normalizeWorktreePath(worktree.path)
   const sidebarProjectKey = projectDirectory
   const currentByProject = useSessionUIStore.getState().availableWorktreesByProject
   const updatedByProject = new Map(currentByProject)
   const projectWorktrees = updatedByProject.get(sidebarProjectKey) ?? []
   updatedByProject.set(
     sidebarProjectKey,
-    projectWorktrees.filter((w) => normalizePath(w.path) !== normalizedWorktreePath),
+    projectWorktrees.filter((w) => normalizeWorktreePath(w.path) !== normalizedWorktreePath),
   )
 
   // Clean up worktreeMetadata for sessions in the removed worktree
   const currentMetadata = useSessionUIStore.getState().worktreeMetadata
   const updatedMetadata = new Map(currentMetadata)
   for (const [sid, meta] of currentMetadata.entries()) {
-    if (meta && normalizePath(meta.path) === normalizedWorktreePath) {
+    if (meta && normalizeWorktreePath(meta.path) === normalizedWorktreePath) {
       updatedMetadata.delete(sid)
     }
   }
@@ -330,7 +323,7 @@ export async function removeProjectWorktree(
     availableWorktreesByProject: updatedByProject,
     availableWorktrees: useSessionUIStore
       .getState()
-      .availableWorktrees.filter((w) => normalizePath(w.path) !== normalizedWorktreePath),
+      .availableWorktrees.filter((w) => normalizeWorktreePath(w.path) !== normalizedWorktreePath),
     worktreeMetadata: updatedMetadata,
   })
 
