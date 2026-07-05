@@ -259,6 +259,9 @@ const normalizePassword = (candidate) => {
   return candidate.normalize().trim()
 }
 
+export const derivePasswordBinding = (normalizedPassword, jwtSecret) =>
+  crypto.scryptSync(normalizedPassword, `ax-code-ui-passkey-binding:${jwtSecret}`, 64).toString("hex")
+
 const isTrustedDeviceRequest = (value) => value === true
 
 const AX_CODE_DESKTOP_DATA_DIR = process.env.AX_CODE_DESKTOP_DATA_DIR
@@ -376,7 +379,7 @@ export const createUiAuth = ({
   const salt = crypto.randomBytes(16)
   const expectedHash = crypto.scryptSync(normalizedPassword, salt, 64)
   let jwtSecret = getOrCreateJwtSecret()
-  let passwordBinding = crypto.createHmac("sha256", jwtSecret).update(normalizedPassword).digest("hex")
+  let passwordBinding = derivePasswordBinding(normalizedPassword, jwtSecret)
   const resolveSessionTtlMs = (trustDevice) => (trustDevice ? TRUSTED_DEVICE_SESSION_TTL_MS : sessionTtlMs)
   let passkeyController = createUiPasskeys({
     passwordBinding,
@@ -385,7 +388,7 @@ export const createUiAuth = ({
 
   const rebuildPasskeyController = () => {
     passkeyController.dispose()
-    passwordBinding = crypto.createHmac("sha256", jwtSecret).update(normalizedPassword).digest("hex")
+    passwordBinding = derivePasswordBinding(normalizedPassword, jwtSecret)
     passkeyController = createUiPasskeys({
       passwordBinding,
       readSettingsFromDiskMigrated,
