@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
+import { realpathSync } from "node:fs"
 import { access } from "node:fs/promises"
 import { createServer } from "node:net"
 import { tmpdir } from "node:os"
@@ -412,7 +413,15 @@ async function waitForBackendIpcHealth(input: {
 
 function generateIpcSocketPath(): string {
   const random = randomBytes(8).toString("hex")
-  return join(tmpdir(), `ax-code-ipc-${random}.sock`)
+  return join(canonicalTmpdir(), `ax-code-ipc-${random}.sock`)
+}
+
+function canonicalTmpdir(): string {
+  try {
+    return realpathSync(tmpdir())
+  } catch {
+    return tmpdir()
+  }
 }
 
 async function killProc(proc: ReturnType<typeof spawn>): Promise<void> {

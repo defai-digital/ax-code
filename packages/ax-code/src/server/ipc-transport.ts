@@ -1,4 +1,6 @@
 import { createServer, type Socket } from "node:net"
+import { realpathSync } from "node:fs"
+import { basename, dirname, join } from "node:path"
 import { isRecord } from "@/util/record"
 import { Log } from "@/util/log"
 import type { IpcErrorMessage, IpcMessage, IpcRequestMessage } from "./ipc-protocol"
@@ -18,11 +20,20 @@ export type IpcServerOptions = {
    * Optional hook invoked when the server begins listening. Use this to print
    * the readiness line for lifecycle managers.
    */
-  onListening?: () => void
+  onListening?: (socketPath: string) => void
+}
+
+export function resolveIpcSocketPath(socketPath: string): string {
+  try {
+    return join(realpathSync(dirname(socketPath)), basename(socketPath))
+  } catch {
+    return socketPath
+  }
 }
 
 export async function listenIpc(opts: IpcServerOptions): Promise<IpcServerHandle> {
-  const { socketPath, fetch, onListening } = opts
+  const { fetch, onListening } = opts
+  const socketPath = resolveIpcSocketPath(opts.socketPath)
   const connections = new Set<Socket>()
 
   const server = createServer((socket) => {
@@ -37,7 +48,7 @@ export async function listenIpc(opts: IpcServerOptions): Promise<IpcServerHandle
   await new Promise<void>((resolve, reject) => {
     server.listen(socketPath, () => {
       server.off("error", onError)
-      onListening?.()
+      onListening?.(socketPath)
       resolve()
     })
     server.once("error", onError)
@@ -203,9 +214,7 @@ class IpcConnection {
   }
 }
 
-type ParsedIpcRequest =
-  | { ok: true; message?: IpcRequestMessage }
-  | { ok: false; id?: string; reason: string }
+type ParsedIpcRequest = { ok: true; message?: IpcRequestMessage } | { ok: false; id?: string; reason: string }
 
 function parseIpcRequestMessage(message: unknown): ParsedIpcRequest {
   if (!isRecord(message)) return { ok: false, reason: "IPC message must be an object" }

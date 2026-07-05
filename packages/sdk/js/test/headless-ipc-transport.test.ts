@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import { createServer, type Server, type Socket } from "node:net"
+import { realpathSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { rm } from "node:fs/promises"
@@ -14,7 +15,7 @@ describe("ipc transport client", () => {
   const sockets = new Set<Socket>()
 
   beforeEach(async () => {
-    socketPath = join(tmpdir(), `ax-code-ipc-client-test-${Date.now()}.sock`)
+    socketPath = join(canonicalTmpdir(), `ax-code-ipc-client-test-${Date.now()}.sock`)
     lastRequest = undefined
     sockets.clear()
     server = createServer((socket) => {
@@ -22,7 +23,7 @@ describe("ipc transport client", () => {
       socket.once("close", () => sockets.delete(socket))
       handleSocket(socket)
     })
-    await new Promise<void>((resolve) => server.listen(socketPath, resolve))
+    await listen(server, socketPath)
   })
 
   afterEach(async () => {
@@ -204,3 +205,26 @@ describe("ipc transport client", () => {
     }
   })
 })
+
+function listen(server: Server, socketPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off("listening", onListening)
+      reject(error)
+    }
+    const onListening = () => {
+      server.off("error", onError)
+      resolve()
+    }
+    server.once("error", onError)
+    server.listen(socketPath, onListening)
+  })
+}
+
+function canonicalTmpdir(): string {
+  try {
+    return realpathSync(tmpdir())
+  } catch {
+    return tmpdir()
+  }
+}

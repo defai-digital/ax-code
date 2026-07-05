@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import { Hono } from "hono"
+import { realpathSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { rm } from "node:fs/promises"
 import { connect, type Socket } from "node:net"
 import { createIpcTransport } from "@ax-code/sdk/headless-ipc"
-import { listenIpc } from "../../src/server/ipc-transport"
+import { listenIpc, resolveIpcSocketPath } from "../../src/server/ipc-transport"
 import { readIpcMessages, writeIpcMessage, type IpcMessage } from "../../src/server/ipc-protocol"
 
 describe("ipc server transport", () => {
@@ -13,7 +14,7 @@ describe("ipc server transport", () => {
   let server: Awaited<ReturnType<typeof listenIpc>> | undefined
 
   beforeEach(async () => {
-    socketPath = join(tmpdir(), `ax-code-ipc-server-test-${Date.now()}.sock`)
+    socketPath = join(canonicalTmpdir(), `ax-code-ipc-server-test-${Date.now()}.sock`)
   })
 
   afterEach(async () => {
@@ -123,6 +124,12 @@ describe("ipc server transport", () => {
     }
   })
 
+  test("resolves socket paths through the canonical parent directory", () => {
+    expect(resolveIpcSocketPath(join(tmpdir(), "ax-code-ipc-server-test.sock"))).toBe(
+      join(canonicalTmpdir(), "ax-code-ipc-server-test.sock"),
+    )
+  })
+
   test("streams SSE events over IPC", async () => {
     const app = createTestApp()
     server = await listenIpc({ socketPath, fetch: app.fetch })
@@ -166,7 +173,9 @@ describe("ipc server transport", () => {
       const subscription = transport.subscribe()[Symbol.asyncIterator]()
       const next = await Promise.race([
         subscription.next(),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timed out waiting for IPC event")), 1_000)),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timed out waiting for IPC event")), 1_000),
+        ),
       ])
       expect(next).toEqual({ value: event, done: false })
     } finally {
@@ -218,6 +227,14 @@ describe("ipc server transport", () => {
     }
   })
 })
+
+function canonicalTmpdir(): string {
+  try {
+    return realpathSync(tmpdir())
+  } catch {
+    return tmpdir()
+  }
+}
 
 function connectSocket(socketPath: string): Promise<Socket> {
   return new Promise((resolve, reject) => {

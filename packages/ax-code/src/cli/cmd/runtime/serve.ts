@@ -1,5 +1,5 @@
 import { Server } from "../../../server/server"
-import { listenIpc } from "../../../server/ipc-transport"
+import { listenIpc, resolveIpcSocketPath } from "../../../server/ipc-transport"
 import { cmd } from "../cmd"
 import { withNetworkOptions, resolveNetworkOptions, requireAuthForNetwork, isLocalhostOnly } from "../../network"
 import { registerShutdownSignals } from "../../../util/signals"
@@ -39,7 +39,7 @@ export const ServeCommand = cmd({
 
     let ipcServer: Awaited<ReturnType<typeof listenIpc>> | undefined
     if (args["ipc-socket"]) {
-      const socketPath = args["ipc-socket"]
+      const socketPath = resolveIpcSocketPath(args["ipc-socket"])
       try {
         unlinkSync(socketPath)
       } catch {
@@ -48,7 +48,7 @@ export const ServeCommand = cmd({
       ipcServer = await listenIpc({
         socketPath,
         fetch: app.fetch,
-        onListening: () => console.log(`ax-code server ipc listening on ${socketPath}`),
+        onListening: (listeningSocketPath) => console.log(`ax-code server ipc listening on ${listeningSocketPath}`),
       })
     }
 
