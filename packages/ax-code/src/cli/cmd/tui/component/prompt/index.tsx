@@ -7,14 +7,10 @@ import {
   MouseButton,
   decodePasteBytes,
   RGBA,
-  t,
-  dim,
-  fg,
 } from "@ax-code/opentui-core"
 import {
   createEffect,
   createMemo,
-  type JSX,
   onMount,
   createSignal,
   onCleanup,
