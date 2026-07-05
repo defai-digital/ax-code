@@ -3,6 +3,8 @@ const SESSION_STATE_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const SESSION_ATTENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const SESSION_STATE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 
+const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
 const extractSessionStatusUpdate = (payload) => {
   if (!payload || payload.type !== "session.status") {
     return null
@@ -11,10 +13,9 @@ const extractSessionStatusUpdate = (payload) => {
   const properties = payload.properties && typeof payload.properties === "object" ? payload.properties : {}
   const status = properties.status && typeof properties.status === "object" ? properties.status : {}
   const info = properties.info && typeof properties.info === "object" ? properties.info : {}
-  const sessionId = typeof properties.sessionID === "string" ? properties.sessionID.trim() : ""
+  const sessionId = asTrimmedString(properties.sessionID)
   // Canonical ax-code schema uses properties.status.type. Keep legacy info.type fallback for compatibility.
-  const type =
-    typeof status.type === "string" ? status.type.trim() : typeof info.type === "string" ? info.type.trim() : ""
+  const type = asTrimmedString(status.type) || asTrimmedString(info.type)
 
   if (!sessionId || !type) {
     return null

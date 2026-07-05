@@ -66,7 +66,7 @@ describe("session runtime", () => {
     })
   })
 
-  it("accepts legacy session.status info.type payloads", () => {
+  it("trims legacy session.status info.type payload fields", () => {
     const events = []
     const runtime = createSessionRuntime({
       writeSseEvent() {
@@ -82,9 +82,9 @@ describe("session runtime", () => {
     runtime.processAxCodeSsePayload({
       type: "session.status",
       properties: {
-        sessionID: "legacy-session-1",
+        sessionID: " legacy-session-1 ",
         info: {
-          type: "busy",
+          type: " busy ",
         },
       },
     })
