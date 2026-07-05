@@ -132,10 +132,6 @@ function resolvedLabelsSummary(summary: SyncedSessionQualityReadiness) {
   return ProbabilisticRollout.readinessResolvedLabelsSummary(summary)
 }
 
-function labelCoverageStatusSummary(summary: SyncedSessionQualityReadiness) {
-  return ProbabilisticRollout.readinessDetailLabel(summary)
-}
-
 function captureEvidenceStatusSummary(summary: SyncedSessionQualityReadiness) {
   return ProbabilisticRollout.readinessDetailLabel(summary)
 }
