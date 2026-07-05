@@ -44,91 +44,15 @@ const PACKAGE_NAME =
   "ax-code-desktop"
 const PACKAGE_PATH_SEGMENTS = PACKAGE_NAME.split("/")
 
-// Remote update sources are hard-disabled: the app must never contact
-// registry.npmjs.org or any external update API. Desktop builds update
-// themselves through their native updater (electron-updater / Tauri against
-// GitHub Releases), which does not go through this module. Returning empty
-// strings makes every downstream remote check (update-API POST, npm registry
-// lookup, changelog fetch) short-circuit cleanly to "no update". The
+// Remote update checks are hard-disabled: this module must never contact
+// registry.npmjs.org or any external update API. Desktop builds update through
+// their native updater, not this server-side package manager helper. The
 // AX_CODE_UPDATE_* / AX_CODE_DESKTOP_UPDATE_* env vars are intentionally ignored.
-const resolveUpdateSources = () => ({
-  apiUrl: "",
-  changelogUrl: "",
-  registryUrl: "",
-})
 
 let cachedDetectedPm = null
 
 function getSpawnSyncBaseOptions() {
   return process.platform === "win32" ? { windowsHide: true } : {}
-}
-
-function mapPlatform(value) {
-  if (value === "darwin") return "macos"
-  if (value === "win32") return "windows"
-  if (value === "linux") return "linux"
-  return "web"
-}
-
-function mapArch(value) {
-  if (value === "arm64" || value === "aarch64") return "arm64"
-  if (value === "x64" || value === "amd64") return "x64"
-  return "unknown"
-}
-
-function normalizeAppType(value) {
-  if (value === "web" || value === "desktop-electron" || value === "desktop-tauri") return value
-  return "web"
-}
-
-async function checkForUpdatesFromApi(currentVersion, options = {}) {
-  const { apiUrl } = resolveUpdateSources()
-  if (!apiUrl) return null
-  try {
-    const appType = normalizeAppType(options.appType)
-    const hostPlatform = mapPlatform(process.platform)
-    const hostArch = mapArch(process.arch)
-    const payload = {
-      appType,
-      platform: hostPlatform,
-      arch: hostArch,
-      channel: "stable",
-      currentVersion,
-    }
-
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (!response.ok) {
-      response.body?.cancel()
-      return null
-    }
-    const data = await response.json()
-    if (typeof data?.latestVersion !== "string") return null
-
-    const versionComparison = compareVersions(data.latestVersion, currentVersion)
-    if (versionComparison < 0) return null
-
-    return {
-      available: Boolean(data.updateAvailable) && versionComparison > 0,
-      version: data.latestVersion,
-      currentVersion,
-      body: typeof data.releaseNotes === "string" ? data.releaseNotes : undefined,
-      nextSuggestedCheckInSec:
-        typeof data.nextSuggestedCheckInSec === "number" && Number.isFinite(data.nextSuggestedCheckInSec)
-          ? data.nextSuggestedCheckInSec
-          : undefined,
-    }
-  } catch {
-    return null
-  }
 }
 
 function normalizePathForComparison(filePath) {
@@ -628,154 +552,16 @@ export function getCurrentVersion() {
   return readOwnPackageJsonField("version") || "unknown"
 }
 
-/**
- * Fetch latest version from npm registry
- */
-export async function getLatestVersion() {
-  const { registryUrl } = resolveUpdateSources()
-  if (!registryUrl) return null
-  try {
-    const response = await fetch(registryUrl, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (!response.ok) {
-      throw new Error(`Registry responded with ${response.status}`)
-    }
-
-    const data = await response.json()
-    return data["dist-tags"]?.latest || null
-  } catch (error) {
-    return null
-  }
-}
-
-/**
- * Compare semver-like version strings.
- */
-function parseVersionForComparison(value) {
-  const normalized = String(value || "")
-    .replace(/^v/, "")
-    .split("+")[0]
-  const prereleaseIndex = normalized.indexOf("-")
-  const core = prereleaseIndex >= 0 ? normalized.slice(0, prereleaseIndex) : normalized
-  const parts = core.split(".").map((part) => {
-    const parsed = Number.parseInt(part || "0", 10)
-    return Number.isFinite(parsed) ? parsed : 0
-  })
-
-  return {
-    parts,
-    prerelease: prereleaseIndex >= 0,
-  }
-}
-
-function compareVersions(left, right) {
-  const a = parseVersionForComparison(left)
-  const b = parseVersionForComparison(right)
-  const length = Math.max(a.parts.length, b.parts.length)
-
-  for (let index = 0; index < length; index += 1) {
-    const diff = (a.parts[index] || 0) - (b.parts[index] || 0)
-    if (diff !== 0) return diff
-  }
-
-  if (a.prerelease !== b.prerelease) {
-    return a.prerelease ? -1 : 1
-  }
-
-  return 0
-}
-
-/**
- * Fetch changelog notes between versions
- */
-export async function fetchChangelogNotes(fromVersion, toVersion) {
-  const { changelogUrl } = resolveUpdateSources()
-  if (!changelogUrl) return undefined
-  try {
-    const response = await fetch(changelogUrl, {
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (!response.ok) return undefined
-
-    const changelog = await response.text()
-    const sections = changelog.split(/^## /m).slice(1)
-
-    const relevantSections = sections.filter((section) => {
-      const match = section.match(/^\[(\d+\.\d+\.\d+)\]/)
-      if (!match) return false
-      return compareVersions(match[1], fromVersion) > 0 && compareVersions(match[1], toVersion) <= 0
-    })
-
-    if (relevantSections.length === 0) return undefined
-
-    return relevantSections.map((s) => "## " + s.trim()).join("\n\n")
-  } catch {
-    return undefined
-  }
-}
-
 export async function checkForUpdates(options = {}) {
   const currentVersion = options.currentVersion || getCurrentVersion()
   const pm = detectPackageManager()
-  const appType = normalizeAppType(options.appType)
-  const { registryUrl } = resolveUpdateSources()
 
-  if (currentVersion !== "unknown") {
-    const remote = await checkForUpdatesFromApi(currentVersion, options)
-    if (remote) {
-      if (remote.available && appType === "web" && registryUrl) {
-        const npmLatest = await getLatestVersion()
-        if (!npmLatest || compareVersions(npmLatest, remote.version) < 0) {
-          remote.available = false
-        }
-      }
-      return {
-        ...remote,
-        packageManager: pm,
-        updateCommand: "ax-code-desktop update",
-      }
-    }
-  }
-
-  // No update API result. Without a configured npm package to compare against
-  // there's nothing more to check — report "no update" cleanly rather than an
-  // error: remote update checks are simply not configured for this build.
-  if (!registryUrl) {
-    return {
-      available: false,
-      currentVersion,
-      packageManager: pm,
-    }
-  }
-
-  const latestVersion = await getLatestVersion()
-
-  if (!latestVersion || currentVersion === "unknown") {
-    return {
-      available: false,
-      currentVersion,
-      error: "Unable to determine versions",
-    }
-  }
-
-  const available = compareVersions(latestVersion, currentVersion) > 0
-  let changelog
-  if (available) {
-    changelog = await fetchChangelogNotes(currentVersion, latestVersion)
-  }
-
+  // Remote update checks are intentionally disabled for this server-side helper.
+  // Keep the response shape stable for the UI while guaranteeing no network I/O.
   return {
-    available,
-    version: latestVersion,
+    available: false,
     currentVersion,
-    body: changelog,
     packageManager: pm,
-    // Show our CLI command, not raw package manager command
-    updateCommand: "ax-code-desktop update",
   }
 }
 
