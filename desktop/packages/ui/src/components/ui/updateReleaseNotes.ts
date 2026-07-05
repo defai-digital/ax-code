@@ -27,6 +27,7 @@ export function normalizeReleaseNotesForMarkdown(body: string): string {
   }
 
   return decodeHtmlEntities(body)
+    .replace(/<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
     .replace(/<\s*h([1-6])\b[^>]*>/gi, (_match, level: string) => `${"#".repeat(Math.max(2, Number(level)))} `)
     .replace(/<\s*\/h[1-6]\s*>/gi, "\n\n")
     .replace(/<\s*li\b[^>]*>/gi, "- ")

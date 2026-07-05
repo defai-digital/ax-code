@@ -117,9 +117,9 @@ export namespace ProviderError {
   // short-window allocatable-token reservation. Same error class, same
   // mitigation — recognize either backend so retry/backoff applies uniformly.
   function isAlibabaShortWindowQuota(providerID: ProviderID, message: string, responseBody?: string, url?: string) {
-    const lowerUrl = url?.toLowerCase() ?? ""
+    const hostname = parseHostname(url)
     const urlIsAlibaba =
-      lowerUrl.includes("aliyuncs.com") && (lowerUrl.includes("token-plan.") || lowerUrl.includes("dashscope."))
+      isAlibabaCloudHost(hostname) && (hostname.startsWith("token-plan.") || hostname.startsWith("dashscope."))
     const isAlibaba = providerID.startsWith("alibaba-") || urlIsAlibaba
     if (!isAlibaba) return false
     const text = `${message}\n${responseBody ?? ""}`.toLowerCase()
@@ -128,6 +128,19 @@ export namespace ProviderError {
       text.includes("increase your quota limit") ||
       text.includes("model-studio/error-code#token-limit")
     )
+  }
+
+  function parseHostname(url: string | undefined): string {
+    if (!url) return ""
+    try {
+      return new URL(url).hostname.toLowerCase()
+    } catch {
+      return ""
+    }
+  }
+
+  function isAlibabaCloudHost(hostname: string): boolean {
+    return hostname === "aliyuncs.com" || hostname.endsWith(".aliyuncs.com")
   }
 
   function alibabaShortWindowQuotaMessage() {

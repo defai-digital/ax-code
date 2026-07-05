@@ -10,7 +10,7 @@ const loadedFaces = new Set<string>()
 const pendingFaces = new Map<string, Promise<void>>()
 
 const buildFontUrl = (source: FontFaceSource, weight: number) => {
-  const packageName = encodeURIComponent(source.packageName).replace("%40", "@").replace("%2F", "/")
+  const packageName = encodeURIComponent(source.packageName).replaceAll("%40", "@").replaceAll("%2F", "/")
   return `https://cdn.jsdelivr.net/npm/${packageName}/files/${source.filePrefix}-latin-${weight}-normal.woff2`
 }
 

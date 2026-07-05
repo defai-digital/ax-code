@@ -172,10 +172,17 @@ export namespace Skill {
     return z.array(BuiltinSkillEntry).parse(raw)
   }
 
-  async function loadBuiltinSkills(): Promise<Array<{ location: string; content: string }>> {
-    if (typeof AX_CODE_BUILTIN_SKILLS !== "undefined") {
-      return parseBuiltinSkillEntries(AX_CODE_BUILTIN_SKILLS)
+  function readBuildTimeBuiltinSkills(): unknown | undefined {
+    try {
+      return AX_CODE_BUILTIN_SKILLS
+    } catch {
+      return undefined
     }
+  }
+
+  async function loadBuiltinSkills(): Promise<Array<{ location: string; content: string }>> {
+    const buildTimeSkills = readBuildTimeBuiltinSkills()
+    if (buildTimeSkills !== undefined) return parseBuiltinSkillEntries(buildTimeSkills)
     const builtinDir = path.resolve(import.meta.dirname, "../../skills")
     const entries = await Filesystem.isDir(builtinDir).then((exists) => {
       if (!exists) return [] as string[]

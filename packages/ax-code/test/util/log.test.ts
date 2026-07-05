@@ -18,6 +18,14 @@ describe("Log.stampedName", () => {
 
     expect(Log.stampedName("main", now, "run1")).not.toBe(Log.stampedName("main", now, "run2"))
   })
+
+  test("recognizes stamped log filenames without a backtracking regex", () => {
+    expect(Log.isStampedLogName("2026-04-22T015403-649-main-run1.log")).toBe(true)
+    expect(Log.isStampedLogName("2026-04-22T015403-main-run1.log")).toBe(true)
+    expect(Log.isStampedLogName("2026-04-22T015403-649-main-run1.json.log")).toBe(false)
+    expect(Log.isStampedLogName("dev.log")).toBe(false)
+    expect(Log.isStampedLogName("2026-04-22T015403-649-main-run1.txt")).toBe(false)
+  })
 })
 
 describe("Log.init", () => {

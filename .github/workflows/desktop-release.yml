@@ -112,7 +112,7 @@ jobs:
 
       - name: Create draft GitHub release
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@7c4723f7a335432393329f8f1c564994ce50185d # v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           draft: true
@@ -154,7 +154,7 @@ jobs:
 
       - name: Upload web tarball
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@7c4723f7a335432393329f8f1c564994ce50185d # v3
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           files: desktop/packages/web/*.tgz
@@ -260,7 +260,7 @@ jobs:
 
       - name: Upload macOS assets
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@7c4723f7a335432393329f8f1c564994ce50185d # v3
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           files: |
@@ -341,7 +341,7 @@ jobs:
 
       - name: Upload Windows x64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@7c4723f7a335432393329f8f1c564994ce50185d # v3
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           files: |
@@ -430,7 +430,7 @@ jobs:
 
       - name: Upload Windows arm64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@7c4723f7a335432393329f8f1c564994ce50185d # v3
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           files: |
@@ -571,7 +571,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@7c4723f7a335432393329f8f1c564994ce50185d # v3
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           draft: false

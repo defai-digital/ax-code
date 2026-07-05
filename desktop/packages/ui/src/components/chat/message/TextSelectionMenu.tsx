@@ -89,6 +89,8 @@ const trimSelectionValue = (value: string): string => normalizeLineBreaks(value)
 
 const textToMarkdownInline = (value: string): string => value.replace(/\s+/g, " ").trim()
 
+const escapeMarkdownInlineCode = (value: string): string => value.replace(/\\/g, "\\\\").replace(/`/g, "\\`")
+
 const renderInlineMarkdownNode = (node: Node): string => {
   if (node.nodeType === Node.TEXT_NODE) {
     return textToMarkdownInline(node.textContent || "")
@@ -113,7 +115,7 @@ const renderInlineMarkdownNode = (node: Node): string => {
   if (tag === "br") return "\n"
   if (tag === "strong" || tag === "b") return `**${childText}**`
   if (tag === "em" || tag === "i") return `*${childText}*`
-  if (tag === "code") return `\`${childText.replace(/`/g, "\\`")}\``
+  if (tag === "code") return `\`${escapeMarkdownInlineCode(childText)}\``
   if (tag === "a") {
     const href = element.getAttribute("href")
     return href ? `[${childText}](${href})` : childText
@@ -163,7 +165,7 @@ const renderBlockMarkdownNode = (node: Node): string => {
 
   if (tag === "code") {
     const code = normalizeLineBreaks(element.textContent || "").trim()
-    return code ? `\`${code.replace(/`/g, "\\`")}\`` : ""
+    return code ? `\`${escapeMarkdownInlineCode(code)}\`` : ""
   }
 
   if (tag === "ul") return renderListMarkdown(element, false)

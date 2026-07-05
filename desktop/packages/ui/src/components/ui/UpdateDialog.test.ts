@@ -21,6 +21,12 @@ describe("normalizeReleaseNotesForMarkdown", () => {
   test("decodes common HTML entities", () => {
     expect(normalizeReleaseNotesForMarkdown("<p>Fix A &amp; B &#35;42</p>")).toBe("Fix A & B #42")
   })
+
+  test("drops script and style blocks before converting HTML", () => {
+    expect(
+      normalizeReleaseNotesForMarkdown("<h2>Safe</h2><script>alert(1)</script><style>body{}</style><p>Done</p>"),
+    ).toBe("## Safe\n\nDone")
+  })
 })
 
 describe("buildUpdateReleaseUrl", () => {
@@ -32,9 +38,7 @@ describe("buildUpdateReleaseUrl", () => {
     expect(buildUpdateReleaseUrl("desktop-v6.7.19")).toBe(
       "https://github.com/defai-digital/ax-code/releases/tag/desktop-v6.7.19",
     )
-    expect(buildUpdateReleaseUrl("v6.7.19")).toBe(
-      "https://github.com/defai-digital/ax-code/releases/tag/v6.7.19",
-    )
+    expect(buildUpdateReleaseUrl("v6.7.19")).toBe("https://github.com/defai-digital/ax-code/releases/tag/v6.7.19")
   })
 
   test("falls back to the release list when no version is available", () => {

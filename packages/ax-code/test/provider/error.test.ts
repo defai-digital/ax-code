@@ -40,6 +40,43 @@ describe("provider error decoding", () => {
     })
   })
 
+  test("only treats Alibaba quota URLs as Alibaba hosts", () => {
+    const body = JSON.stringify({ error: { message: "allocated quota exceeded" } })
+    const safe = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Bad Request",
+        url: "https://dashscope.aliyuncs.com/api",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: {},
+        responseBody: body,
+        isRetryable: false,
+      }),
+    })
+    const spoofed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("openai"),
+      error: new APICallError({
+        message: "Bad Request",
+        url: "https://dashscope.aliyuncs.com.evil.example/api",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: {},
+        responseBody: body,
+        isRetryable: false,
+      }),
+    })
+
+    expect(safe).toMatchObject({
+      isRetryable: true,
+      metadata: { errorCode: "alibaba_token_plan_short_window_quota" },
+    })
+    expect(spoofed).toMatchObject({
+      isRetryable: false,
+      metadata: { url: "https://dashscope.aliyuncs.com.evil.example/api" },
+    })
+  })
+
   test("parses stream errors with non-JSON-native response body values", () => {
     const body: Record<string, unknown> = {
       type: "error",

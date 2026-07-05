@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/codeql.yml"
       - ".github/actions/**"
+      - ".github/codeql/**"
       - ".github/workflows/**"
       - "crates/**"
       - "desktop/**"
@@ -21,6 +22,7 @@ on:
     paths:
       - ".github/workflows/codeql.yml"
       - ".github/actions/**"
+      - ".github/codeql/**"
       - ".github/workflows/**"
       - "crates/**"
       - "desktop/**"
@@ -56,6 +58,7 @@ jobs:
         with:
           languages: javascript-typescript,actions
           queries: +security-extended,security-and-quality
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Analyze
         uses: github/codeql-action/analyze@v4

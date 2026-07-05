@@ -20,8 +20,6 @@ export namespace Log {
   export const Level = z.enum(["DEBUG", "INFO", "WARN", "ERROR"]).meta({ ref: "LogLevel", description: "Log level" })
   export type Level = z.infer<typeof Level>
 
-  const STAMPED_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{6}(?:-\d{3})?(?:-[A-Za-z0-9_-]+)*\.log$/
-
   const levelPriority: Record<Level, number> = {
     DEBUG: 0,
     INFO: 1,
@@ -92,6 +90,44 @@ export namespace Log {
 
   export function stampedName(component: string, now = new Date(), unique = randomSuffix()) {
     return `${stamp(now)}-${component}-${unique}`
+  }
+
+  export function isStampedLogName(name: string): boolean {
+    if (!name.endsWith(".log") || name.endsWith(".json.log")) return false
+    const value = name.slice(0, -".log".length)
+    if (value.length < "2026-04-22T015403".length) return false
+    if (value[4] !== "-" || value[7] !== "-" || value[10] !== "T") return false
+    const digitIndexes = [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16]
+    if (!digitIndexes.every((index) => isAsciiDigit(value[index]))) return false
+
+    let index = 17
+    if (
+      value[index] === "-" &&
+      isAsciiDigit(value[index + 1]) &&
+      isAsciiDigit(value[index + 2]) &&
+      isAsciiDigit(value[index + 3])
+    ) {
+      index += 4
+    }
+    if (index === value.length) return true
+    if (value[index] !== "-") return false
+
+    const suffix = value.slice(index + 1)
+    return suffix.length > 0 && [...suffix].every(isLogSuffixChar)
+  }
+
+  function isAsciiDigit(value: string | undefined): boolean {
+    return value !== undefined && value >= "0" && value <= "9"
+  }
+
+  function isLogSuffixChar(value: string): boolean {
+    return (
+      (value >= "a" && value <= "z") ||
+      (value >= "A" && value <= "Z") ||
+      (value >= "0" && value <= "9") ||
+      value === "_" ||
+      value === "-"
+    )
   }
 
   let logpath = ""
@@ -273,8 +309,7 @@ export namespace Log {
       })
     ).filter((file) => {
       const name = path.basename(file)
-      if (name.endsWith(".json.log")) return false
-      return STAMPED_LOG_PATTERN.test(name)
+      return isStampedLogName(name)
     })
     if (files.length <= 5) return
 

@@ -84,7 +84,8 @@ export const fetchProviderJsonWithRetry = async (
   const sleepFor = options.sleep ?? sleep
   let lastError: unknown = null
   let lastRestarting = false
-  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
+  const maxAttempts = retryDelaysMs.length + 1
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       const response = await fetch(url, init)
       const payload = await response.json().catch(() => null)
@@ -94,9 +95,10 @@ export const fetchProviderJsonWithRetry = async (
 
       const restarting = response.status === 503 && isRecord(payload) && payload.restarting === true
       lastRestarting = restarting
-      if (restarting && attempt < retryDelaysMs.length) {
+      const retryDelayMs = retryDelaysMs[attempt]
+      if (restarting && retryDelayMs !== undefined) {
         lastError = new Error("AX Code is restarting")
-        await sleepFor(retryDelaysMs[attempt] ?? 0)
+        await sleepFor(retryDelayMs)
         continue
       }
 
@@ -113,10 +115,11 @@ export const fetchProviderJsonWithRetry = async (
       if (isRecord(error) && error.noRetry === true) {
         break
       }
-      if (attempt >= retryDelaysMs.length) {
+      const retryDelayMs = retryDelaysMs[attempt]
+      if (retryDelayMs === undefined) {
         break
       }
-      await sleepFor(retryDelaysMs[attempt] ?? 0)
+      await sleepFor(retryDelayMs)
       continue
     }
   }

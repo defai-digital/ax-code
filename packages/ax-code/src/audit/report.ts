@@ -142,7 +142,7 @@ export function extractTarget(tool: string, input: Record<string, unknown>): str
 }
 
 function escapeCell(s: string): string {
-  return s.replace(/\|/g, "\\|").replace(/\n/g, " ")
+  return s.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ")
 }
 
 function formatResult(event: Extract<ReplayEvent, { type: "tool.result" }>): string {

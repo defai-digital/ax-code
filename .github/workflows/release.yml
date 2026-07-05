@@ -9,6 +9,9 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 # Channel policy: stable semver tags (for example `v3.1.4`) create the
 # GitHub release on the `latest` channel. Prerelease tags (for example
 # `v3.2.0-beta.1`) stay on the `beta` channel. The release workflow publishes

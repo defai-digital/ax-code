@@ -83,7 +83,7 @@ const FieldLabel: React.FC<{
       {children}
       {required && <span className="text-destructive ml-0.5">*</span>}
     </label>
-    {info && info}
+    {info}
   </div>
 )
 

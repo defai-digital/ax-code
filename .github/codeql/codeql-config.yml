@@ -1,0 +1,9 @@
+name: ax-code-codeql
+
+paths-ignore:
+  - "packages/opentui-core/**"
+  - "packages/opentui-solid/scripts/**"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/test/**"
+  - "**/tests/**"

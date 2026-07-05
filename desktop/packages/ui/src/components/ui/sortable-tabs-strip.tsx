@@ -271,7 +271,9 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
 
     const frame = window.requestAnimationFrame(() => {
       const escapedID =
-        typeof window.CSS?.escape === "function" ? window.CSS.escape(activeId) : activeId.replace(/"/g, '\\"')
+        typeof window.CSS?.escape === "function"
+          ? window.CSS.escape(activeId)
+          : activeId.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
       const target = element.querySelector<HTMLElement>(`[data-sortable-tab-id="${escapedID}"]`)
       if (!target) {
         return

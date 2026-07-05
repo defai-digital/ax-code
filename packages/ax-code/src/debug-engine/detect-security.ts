@@ -68,8 +68,7 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
         j++
       }
     }
-    const allLiterals = /path\.(?:join|resolve)\s*\(\s*(?:["'`][^"'`]*["'`]\s*,?\s*)*\)/.test(argsStr)
-    if (allLiterals) continue
+    if (isPathCallWithOnlyStringLiterals(argsStr)) continue
 
     findings.push({
       file,
@@ -81,6 +80,58 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
     })
   }
   return findings
+}
+
+function isPathCallWithOnlyStringLiterals(source: string): boolean {
+  const open = source.indexOf("(")
+  if (open < 0) return false
+  let index = open + 1
+  let sawArgument = false
+
+  while (index < source.length) {
+    index = skipWhitespace(source, index)
+    if (source[index] === ")") return sawArgument
+
+    const quote = source[index]
+    if (quote !== '"' && quote !== "'" && quote !== "`") return false
+    const parsed = readStringLiteral(source, index, quote)
+    if (!parsed.ok) return false
+    if (quote === "`" && parsed.containsInterpolation) return false
+    sawArgument = true
+    index = skipWhitespace(source, parsed.next)
+
+    if (source[index] === ",") {
+      index += 1
+      continue
+    }
+    if (source[index] === ")") return true
+    return false
+  }
+
+  return false
+}
+
+function skipWhitespace(source: string, index: number): number {
+  while (index < source.length && /\s/.test(source[index]!)) index += 1
+  return index
+}
+
+function readStringLiteral(
+  source: string,
+  start: number,
+  quote: '"' | "'" | "`",
+): { ok: true; next: number; containsInterpolation: boolean } | { ok: false } {
+  let containsInterpolation = false
+  for (let index = start + 1; index < source.length; index += 1) {
+    const char = source[index]
+    if (char === "\\") {
+      index += 1
+      continue
+    }
+    if (quote === "`" && char === "$" && source[index + 1] === "{") containsInterpolation = true
+    if (char === quote) return { ok: true, next: index + 1, containsInterpolation }
+  }
+  return { ok: false }
 }
 
 // Detect command injection: spawn/exec with string concatenation or
