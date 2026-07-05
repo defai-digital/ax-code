@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
+import { readFileSync } from "node:fs"
 import {
   buildChannelForVersion,
   bundledBinaryPath,
@@ -12,6 +13,14 @@ import {
 } from "./setup-cli"
 
 describe("setup-cli helpers", () => {
+  test("uses the shared PATH lookup helper", () => {
+    const source = readFileSync("script/setup-cli.ts", "utf8")
+
+    expect(source).toContain('import { whichSync } from "./which"')
+    expect(source).not.toContain("process.env.PATHEXT")
+    expect(source).not.toContain("fs.existsSync(candidate)")
+  })
+
   test("selects supported local release binary targets", () => {
     expect(preferredBundledTarget({ platform: "darwin", arch: "arm64" })).toEqual({
       binary: "ax-code",

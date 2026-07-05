@@ -12,25 +12,13 @@ import childProcess from "child_process"
 import fs from "fs"
 import os from "os"
 import path from "path"
-
-// Locate an executable on PATH (replaces Bun.which so this runs under Node/tsx).
-type WhichFn = (command: string) => string | null | undefined
-const whichSync: WhichFn = (command) => {
-  const exts = process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""]
-  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!dir) continue
-    for (const ext of exts) {
-      const candidate = path.join(dir, command + ext)
-      if (fs.existsSync(candidate)) return candidate
-    }
-  }
-  return null
-}
-
 import { candidateBinaryTargets } from "../packages/ax-code/script/binary-targets"
 import { sourceLauncherScript as generateSourceLauncherScript } from "../packages/ax-code/script/source-launcher"
+import { whichSync } from "./which"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
+
+type WhichFn = (command: string) => string | null | undefined
 
 type SetupCliOptions = {
   args?: string[]
