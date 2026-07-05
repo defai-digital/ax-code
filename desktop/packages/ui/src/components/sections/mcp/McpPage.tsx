@@ -110,6 +110,14 @@ function extractAuthorizationResponse(raw: string): {
   }
 }
 
+function stringListKey(values: string[]): string {
+  return JSON.stringify(values)
+}
+
+function entryListKey(entries: Array<{ key: string; value: string }>): string {
+  return JSON.stringify(entries)
+}
+
 const CommandTextarea: React.FC<CommandTextareaProps> = ({
   value,
   onChange,
@@ -125,7 +133,7 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({
   // Sync when external value changes (e.g. switching servers)
   const prevValueRef = React.useRef(value)
   React.useEffect(() => {
-    if (JSON.stringify(prevValueRef.current) !== JSON.stringify(value)) {
+    if (stringListKey(prevValueRef.current) !== stringListKey(value)) {
       prevValueRef.current = value
       setText(value.join("\n"))
     }
@@ -866,10 +874,10 @@ export const McpPage: React.FC = () => {
     return (
       mcpType !== init.mcpType ||
       enabled !== init.enabled ||
-      JSON.stringify(command) !== JSON.stringify(init.command) ||
+      stringListKey(command) !== stringListKey(init.command) ||
       url !== init.url ||
-      JSON.stringify(envEntries) !== JSON.stringify(init.envEntries) ||
-      JSON.stringify(headerEntries) !== JSON.stringify(init.headerEntries) ||
+      entryListKey(envEntries) !== entryListKey(init.envEntries) ||
+      entryListKey(headerEntries) !== entryListKey(init.headerEntries) ||
       oauthEnabled !== init.oauthEnabled ||
       oauthClientId !== init.oauthClientId ||
       oauthClientSecret !== init.oauthClientSecret ||
