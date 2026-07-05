@@ -1,23 +1,58 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it } from "vitest"
+import type { EventPipelineInput } from "../event-pipeline"
 import { createEventPipeline } from "../event-pipeline"
 
 const originalDocument = globalThis.document
 const originalWindow = globalThis.window
 const originalWebSocket = globalThis.WebSocket
 
+// These fixtures intentionally include partial and legacy-compatible event
+// shapes so the pipeline normalization paths are exercised.
+type TestEventPayload = {
+  type: string
+  properties: Record<string, any>
+}
+
+type SdkStreamEvent = {
+  directory?: string
+  payload: TestEventPayload
+}
+
+type ReceivedEvent = {
+  directory: string
+  payload: TestEventPayload
+}
+
+type SdkEventOptions = {
+  signal?: AbortSignal
+  headers?: Record<string, string>
+}
+
+type TestSdk = {
+  global: {
+    event(options?: SdkEventOptions): Promise<{ stream: AsyncIterable<SdkStreamEvent> } | never>
+  }
+}
+
+const asPipelineSdk = (sdk: TestSdk): EventPipelineInput["sdk"] => sdk as unknown as EventPipelineInput["sdk"]
+
 function installDomStubs() {
   // jsdom provides a WebSocket constructor that silently hangs when there is
   // no server — the pipeline would try WS first and never fall back to SSE
   // within the test timeout.  Force the SSE path by removing WebSocket.
-  globalThis.WebSocket = undefined
+  Object.defineProperty(globalThis, "WebSocket", {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  })
 
   globalThis.document = {
     visibilityState: "visible",
     addEventListener() {},
     removeEventListener() {},
-  }
+  } as unknown as Document
 
   globalThis.window = {
     location: {
@@ -26,37 +61,43 @@ function installDomStubs() {
     },
     addEventListener() {},
     removeEventListener() {},
-  }
+  } as unknown as Window & typeof globalThis
 }
 
 class FakeWebSocket {
-  static instances = []
+  static readonly CONNECTING = 0
+  static readonly OPEN = 1
+  static readonly CLOSING = 2
+  static readonly CLOSED = 3
+  static instances: FakeWebSocket[] = []
 
-  constructor(url) {
+  url: string | URL
+  readyState = FakeWebSocket.CONNECTING
+  onopen: (() => void) | null = null
+  onmessage: ((event: { data: string }) => void) | null = null
+  onerror: (() => void) | null = null
+  onclose: (() => void) | null = null
+
+  constructor(url: string | URL) {
     this.url = url
-    this.readyState = 0
-    this.onopen = null
-    this.onmessage = null
-    this.onerror = null
-    this.onclose = null
     FakeWebSocket.instances.push(this)
   }
 
-  close() {
-    this.readyState = 3
+  close(): void {
+    this.readyState = FakeWebSocket.CLOSED
   }
 
-  emitOpen() {
-    this.readyState = 1
+  emitOpen(): void {
+    this.readyState = FakeWebSocket.OPEN
     this.onopen?.()
   }
 
-  emitMessage(payload) {
+  emitMessage(payload: unknown): void {
     this.onmessage?.({ data: JSON.stringify(payload) })
   }
 
-  emitClose() {
-    this.readyState = 3
+  emitClose(): void {
+    this.readyState = FakeWebSocket.CLOSED
     this.onclose?.()
   }
 }
@@ -64,12 +105,16 @@ class FakeWebSocket {
 afterEach(() => {
   globalThis.document = originalDocument
   globalThis.window = originalWindow
-  globalThis.WebSocket = originalWebSocket
+  Object.defineProperty(globalThis, "WebSocket", {
+    configurable: true,
+    writable: true,
+    value: originalWebSocket,
+  })
   FakeWebSocket.instances = []
 })
 
-function createSdkWithSingleEvent(event, hold) {
-  return {
+function createSdkWithSingleEvent(event: SdkStreamEvent, hold: Promise<void>): EventPipelineInput["sdk"] {
+  return asPipelineSdk({
     global: {
       event: async () => ({
         stream: (async function* () {
@@ -78,20 +123,20 @@ function createSdkWithSingleEvent(event, hold) {
         })(),
       }),
     },
-  }
+  })
 }
 
-function withTimeout(promise, ms, message) {
-  let timeoutId
-  const timeout = new Promise((_, reject) => {
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(message)), ms)
   })
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId))
 }
 
 // Helper to create an SDK that yields multiple events in sequence, then holds.
-function createSdkWithEvents(events, hold) {
-  return {
+function createSdkWithEvents(events: SdkStreamEvent[], hold: Promise<void>): EventPipelineInput["sdk"] {
+  return asPipelineSdk({
     global: {
       event: async () => ({
         stream: (async function* () {
@@ -102,21 +147,21 @@ function createSdkWithEvents(events, hold) {
         })(),
       }),
     },
-  }
+  })
 }
 
 // Run a pipeline against a pre-seeded event stream, collect every dispatched
 // event, wait long enough for the 16ms flush window to elapse, then tear it
 // down. Returns the list of { directory, payload } that onEvent saw.
-async function runPipelineWithEvents(events, waitMs = 80) {
+async function runPipelineWithEvents(events: SdkStreamEvent[], waitMs = 80): Promise<ReceivedEvent[]> {
   installDomStubs()
 
-  let releaseStream
-  const hold = new Promise((resolve) => {
+  let releaseStream: VoidFunction = () => undefined
+  const hold = new Promise<void>((resolve) => {
     releaseStream = resolve
   })
 
-  const received = []
+  const received: ReceivedEvent[] = []
   const sdk = createSdkWithEvents(events, hold)
   const { cleanup } = createEventPipeline({
     sdk,
@@ -136,12 +181,12 @@ describe("createEventPipeline", () => {
   it("falls back to payload.properties.directory when the SDK event omits top-level directory", async () => {
     installDomStubs()
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
     const sdk = createSdkWithSingleEvent(
       {
         payload: {
@@ -156,7 +201,7 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (directory, payload) => {
@@ -178,12 +223,12 @@ describe("createEventPipeline", () => {
   it("prefers the explicit top-level event directory when present", async () => {
     installDomStubs()
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
     const sdk = createSdkWithSingleEvent(
       {
         directory: "C:/top-level",
@@ -199,7 +244,7 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (directory, payload) => {
@@ -221,12 +266,12 @@ describe("createEventPipeline", () => {
   it("uses payload.properties.directory when the top-level directory is an empty string", async () => {
     installDomStubs()
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
     const sdk = createSdkWithSingleEvent(
       {
         directory: "",
@@ -245,7 +290,7 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (directory, payload) => {
@@ -267,12 +312,12 @@ describe("createEventPipeline", () => {
   it("keeps truly global events on the global channel when no directory is present anywhere", async () => {
     installDomStubs()
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
     const sdk = createSdkWithSingleEvent(
       {
         payload: {
@@ -283,7 +328,7 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (directory, payload) => {
@@ -305,12 +350,12 @@ describe("createEventPipeline", () => {
   it("keeps message.part.delta events when a newer message.part.updated is queued for the same field", async () => {
     installDomStubs()
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
 
     // The pipeline only routes/coalesces events. Whether this delta is already
     // represented by the newer snapshot is reducer state, not queue state.
@@ -356,7 +401,7 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (dir, payload) => {
@@ -444,12 +489,12 @@ describe("createEventPipeline", () => {
   it("coalesces message.part.updated events for the same part", async () => {
     installDomStubs()
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
     const directory = "/test/dir"
 
     const sdk = createSdkWithEvents(
@@ -476,7 +521,7 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         onEvent: (dir, payload) => {
@@ -589,12 +634,12 @@ describe("createEventPipeline", () => {
   it("routes events before queueing so coalescing happens on the resolved directory", async () => {
     installDomStubs()
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
     const sdk = createSdkWithEvents(
       [
         {
@@ -619,7 +664,7 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         routeDirectory: (directory, payload) => {
@@ -647,18 +692,18 @@ describe("createEventPipeline", () => {
 
   it("consumes websocket message stream frames when transport is ws", async () => {
     installDomStubs()
-    globalThis.WebSocket = FakeWebSocket
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
 
-    const received = []
-    const sdk = {
+    const received: ReceivedEvent[] = []
+    const sdk = asPipelineSdk({
       global: {
         event: async () => {
           throw new Error("SSE should not be used in ws mode")
         },
       },
-    }
+    })
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         transport: "ws",
@@ -706,14 +751,14 @@ describe("createEventPipeline", () => {
 
   it("falls back to SSE when websocket closes before ready in auto mode", async () => {
     installDomStubs()
-    globalThis.WebSocket = FakeWebSocket
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
     const sdk = createSdkWithSingleEvent(
       {
         payload: {
@@ -724,7 +769,7 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         transport: "auto",
@@ -756,14 +801,14 @@ describe("createEventPipeline", () => {
 
   it("falls back to SSE when websocket does not become ready in auto mode", async () => {
     installDomStubs()
-    globalThis.WebSocket = FakeWebSocket
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const received = []
+    const received: ReceivedEvent[] = []
     const sdk = createSdkWithSingleEvent(
       {
         payload: {
@@ -774,8 +819,8 @@ describe("createEventPipeline", () => {
       hold,
     )
 
-    let cleanup
-    const delivered = new Promise((resolve) => {
+    let cleanup: VoidFunction = () => undefined
+    const delivered = new Promise<void>((resolve) => {
       const pipeline = createEventPipeline({
         sdk,
         transport: "auto",
@@ -795,7 +840,7 @@ describe("createEventPipeline", () => {
     try {
       await withTimeout(delivered, 500, "timed out waiting for websocket-ready SSE fallback")
     } finally {
-      cleanup?.()
+      cleanup()
       releaseStream()
     }
 
@@ -812,20 +857,21 @@ describe("createEventPipeline", () => {
 
   it("passes the last websocket event id when falling back to SSE", async () => {
     installDomStubs()
-    globalThis.WebSocket = FakeWebSocket
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
     const originalConsoleError = console.error
     console.error = () => {}
 
-    let releaseStream
-    const hold = new Promise((resolve) => {
+    let releaseStream: () => void = () => {}
+    const hold = new Promise<void>((resolve) => {
       releaseStream = resolve
     })
 
-    const eventOptions = []
-    const received = []
-    const sdk = {
+    const eventOptions: SdkEventOptions[] = []
+    const received: ReceivedEvent[] = []
+    const sdk = asPipelineSdk({
       global: {
-        event: async (options) => {
+        event: async (options?: SdkEventOptions) => {
+          if (!options) throw new Error("expected event options")
           eventOptions.push(options)
           return {
             stream: (async function* () {
@@ -840,9 +886,9 @@ describe("createEventPipeline", () => {
           }
         },
       },
-    }
+    })
 
-    const delivered = new Promise((resolve) => {
+    const delivered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         transport: "auto",
@@ -891,20 +937,20 @@ describe("createEventPipeline", () => {
 
   it("marks the pipeline disconnected on heartbeat timeout and recovers on the next websocket connect", async () => {
     installDomStubs()
-    globalThis.WebSocket = FakeWebSocket
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
 
-    const disconnectReasons = []
+    const disconnectReasons: string[] = []
     let reconnectCount = 0
 
-    const sdk = {
+    const sdk = asPipelineSdk({
       global: {
         event: async () => {
           throw new Error("SSE should not be used in ws mode")
         },
       },
-    }
+    })
 
-    const recovered = new Promise((resolve) => {
+    const recovered = new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         transport: "ws",
