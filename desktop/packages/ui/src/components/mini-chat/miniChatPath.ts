@@ -5,8 +5,10 @@ export type MiniChatProjectPath = {
   path: string
 }
 
+export const normalizeMiniChatPath = (value: string | null | undefined): string => normalizeProjectPath(value) ?? ""
+
 export const compactMiniChatPath = (value: string | null | undefined, homeDirectory?: string | null): string => {
-  const normalizedPath = normalizeProjectPath(value)
+  const normalizedPath = normalizeMiniChatPath(value)
   if (!normalizedPath) return ""
 
   const displayPath = formatPathForDisplay(normalizedPath, homeDirectory)
@@ -24,7 +26,7 @@ export const findMiniChatProjectForDirectory = <T extends MiniChatProjectPath>(
   directory: string | null | undefined,
   projectDirectory?: string | null,
 ): T | null => {
-  const candidateDirectory = normalizeProjectPath(projectDirectory) ?? normalizeProjectPath(directory)
+  const candidateDirectory = normalizeMiniChatPath(projectDirectory) || normalizeMiniChatPath(directory)
   if (!candidateDirectory) return null
 
   let best: T | null = null

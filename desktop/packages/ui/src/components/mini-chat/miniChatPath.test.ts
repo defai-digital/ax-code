@@ -1,6 +1,16 @@
 import { describe, expect, test } from "vitest"
 
-import { compactMiniChatPath, findMiniChatProjectForDirectory } from "./miniChatPath"
+import { compactMiniChatPath, findMiniChatProjectForDirectory, normalizeMiniChatPath } from "./miniChatPath"
+
+describe("normalizeMiniChatPath", () => {
+  test("normalizes Windows separators and drive casing", () => {
+    expect(normalizeMiniChatPath("c:\\Users\\Alice\\Project\\")).toBe("C:/Users/Alice/Project")
+  })
+
+  test("returns an empty string for blank input", () => {
+    expect(normalizeMiniChatPath("  ")).toBe("")
+  })
+})
 
 describe("compactMiniChatPath", () => {
   test("uses a home-relative label for Windows paths case-insensitively", () => {
