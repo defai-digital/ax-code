@@ -85,7 +85,7 @@ export function extractLineRange(input: string) {
 
 export type AutocompleteRef = {
   onInput: (value: string) => void
-  onKeyDown: (e: KeyEvent) => void
+  onKeyDown: (e: KeyEvent) => boolean
   hide: () => void
   visible: false | "@" | "/"
 }
@@ -600,9 +600,13 @@ export function Autocomplete(props: {
 
   function select() {
     const selected = options()[store.selected]
-    if (!selected) return
+    if (!selected) {
+      hide()
+      return false
+    }
     hide()
     selected.onSelect?.()
+    return true
   }
 
   function expandDirectory() {
@@ -711,23 +715,23 @@ export function Autocomplete(props: {
             setStore("input", "keyboard")
             move(-1)
             e.preventDefault()
-            return
+            return true
           }
           if (isNavDown) {
             setStore("input", "keyboard")
             move(1)
             e.preventDefault()
-            return
+            return true
           }
           if (name === "escape") {
             hide()
             e.preventDefault()
-            return
+            return true
           }
           if (name === "return" || name === "enter" || name === "linefeed" || name === "kpenter") {
-            select()
+            if (!select()) return false
             e.preventDefault()
-            return
+            return true
           }
           if (name === "tab") {
             const selected = options()[store.selected]
@@ -737,7 +741,7 @@ export function Autocomplete(props: {
               select()
             }
             e.preventDefault()
-            return
+            return true
           }
           refreshCursorAfterKey()
         }
@@ -750,6 +754,7 @@ export function Autocomplete(props: {
             if (canTrigger) {
               show("@")
               refreshCursorAfterKey()
+              return false
             }
           }
 
@@ -757,9 +762,11 @@ export function Autocomplete(props: {
             if (props.input().cursorOffset === 0) {
               show("/")
               refreshCursorAfterKey()
+              return false
             }
           }
         }
+        return false
       },
     })
   })

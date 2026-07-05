@@ -37,7 +37,8 @@
         {
           "type": "webview",
           "id": "ax-code.chatView",
-          "name": "Chat"
+          "name": "Chat",
+          "icon": "images/logo/activity-icon.png"
         }
       ]
     },

@@ -900,11 +900,15 @@ describe("tui OpenTUI stability guardrails", () => {
     const keyboardHandlerStart = prompt.indexOf("useKeyboard((evt) => {")
     const keyboardHandlerEnd = prompt.indexOf("const fileStyleId", keyboardHandlerStart)
     const keyboardHandler = prompt.slice(keyboardHandlerStart, keyboardHandlerEnd)
-    expect(keyboardHandler).toContain("autocomplete.onKeyDown(evt)")
-    expect(keyboardHandler).toContain("if (evt.defaultPrevented) return")
+    expect(keyboardHandler).toContain("if (autocomplete.onKeyDown(evt)) return")
     expect(autocomplete).toContain(
       'if (name === "return" || name === "enter" || name === "linefeed" || name === "kpenter")',
     )
+    expect(autocomplete).toContain("if (!selected) {")
+    expect(autocomplete).toContain("return false")
+    expect(autocomplete).toContain("return true")
+    expect(autocomplete).toContain("if (!select()) return false")
+    expect(autocomplete).toContain("onKeyDown: (e: KeyEvent) => boolean")
 
     const submitStart = prompt.indexOf("async function submit()")
     const submitEnd = prompt.indexOf("const selectedModel", submitStart)
@@ -918,6 +922,16 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(autocompleteReturn).toBeGreaterThan(-1)
     expect(slashDispatch).toBeLessThan(autocompleteReturn)
     expect(submitBody).toContain("const slashHasArguments = slashToken ? inputText.trim() !== slashToken : false")
+
+    const textareaSubmitStart = prompt.indexOf("if (isPromptSubmitKey(e)) {")
+    const textareaSubmitEnd = prompt.indexOf("// Handle clipboard paste", textareaSubmitStart)
+    const textareaSubmitBody = prompt.slice(textareaSubmitStart, textareaSubmitEnd)
+    const autocompleteConsume = textareaSubmitBody.indexOf("if (autocomplete.onKeyDown(e)) return")
+    const preventDefault = textareaSubmitBody.indexOf("e.preventDefault()")
+    const submitCall = textareaSubmitBody.indexOf("void submit()")
+    expect(autocompleteConsume).toBeGreaterThan(-1)
+    expect(preventDefault).toBeGreaterThan(autocompleteConsume)
+    expect(submitCall).toBeGreaterThan(preventDefault)
   })
 
   test("exposes the durable goal backend command in slash autocomplete", async () => {

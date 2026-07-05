@@ -366,8 +366,7 @@ export function Prompt(props: PromptProps) {
     if (!isRenderableAlive(input) || !input.focused) return
     if (!isPromptSubmitKey(evt)) return
     if (autocomplete?.visible) {
-      autocomplete.onKeyDown(evt)
-      if (evt.defaultPrevented) return
+      if (autocomplete.onKeyDown(evt)) return
     }
     evt.preventDefault()
     evt.stopPropagation()
@@ -1546,11 +1545,10 @@ export function Prompt(props: PromptProps) {
                   return
                 }
                 if (isPromptSubmitKey(e)) {
-                  e.preventDefault()
                   if (autocomplete?.visible) {
-                    autocomplete.onKeyDown(e)
-                    return
+                    if (autocomplete.onKeyDown(e)) return
                   }
+                  e.preventDefault()
                   void submit()
                   return
                 }
@@ -1611,8 +1609,7 @@ export function Prompt(props: PromptProps) {
                 // mode-gate still applies for the *initial* triggers
                 // (`/`, `@`) which only make sense in normal mode.
                 if (autocomplete?.visible) {
-                  autocomplete.onKeyDown(e)
-                  if (e.defaultPrevented) return
+                  if (autocomplete.onKeyDown(e)) return
                 } else if (store.mode === "normal") {
                   autocomplete?.onKeyDown(e)
                 }
