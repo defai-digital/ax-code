@@ -11,9 +11,10 @@ describe("repo-structure workflow policy", () => {
   })
 
   test("lints GitHub workflow files before expensive checks", () => {
-    const actionlintIndex = workflow.indexOf("raven-actions/actionlint@v2.2.0")
+    const actionlintIndex = workflow.indexOf("raven-actions/actionlint@")
     const installIndex = workflow.indexOf("pnpm install --frozen-lockfile")
     expect(actionlintIndex).toBeGreaterThan(-1)
+    expect(workflow.slice(actionlintIndex, workflow.indexOf("\n", actionlintIndex))).toContain("# v2.2.0")
     expect(installIndex).toBeGreaterThan(actionlintIndex)
   })
 
