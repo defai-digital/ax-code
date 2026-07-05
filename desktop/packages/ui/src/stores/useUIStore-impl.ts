@@ -6,6 +6,7 @@ import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey 
 import type { ShortcutCombo } from "@/lib/shortcuts"
 import type { DraftStarterRef } from "@/lib/draftStarters"
 import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, type MonoFontOption, type UiFontOption } from "@/lib/fontOptions"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 import type { TimeFormatPreference } from "@/lib/timeFormat"
 
 export type MainTab = "chat" | "plan" | "git" | "diff" | "terminal" | "files" | "context"
@@ -101,22 +102,7 @@ const LEFT_SIDEBAR_MIN_WIDTH = 280
 const RIGHT_SIDEBAR_MIN_WIDTH = 360
 
 const normalizeDirectoryPath = (value: string): string => {
-  if (!value) return ""
-
-  const raw = value.replace(/\\/g, "/")
-  const hadUncPrefix = raw.startsWith("//")
-  let normalized = raw.replace(/\/+$/g, "")
-  normalized = normalized.replace(/\/+/g, "/")
-
-  if (hadUncPrefix && !normalized.startsWith("//")) {
-    normalized = `/${normalized}`
-  }
-
-  if (normalized === "") {
-    return raw.startsWith("/") ? "/" : ""
-  }
-
-  return normalized
+  return normalizeProjectPath(value) ?? ""
 }
 
 const clampContextPanelWidth = (width: number): number => {

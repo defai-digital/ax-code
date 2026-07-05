@@ -24,4 +24,12 @@ describe("useUIStore canvas context panel", () => {
       label: "Canvas",
     })
   })
+
+  test("normalizes Windows directory variants before storing context panel state", () => {
+    useUIStore.getState().openContextCanvas("c:\\Repo\\")
+    useUIStore.getState().openContextCanvas("C:/Repo")
+
+    expect(Object.keys(useUIStore.getState().contextPanelByDirectory)).toEqual(["C:/Repo"])
+    expect(useUIStore.getState().contextPanelByDirectory["C:/Repo"]?.tabs).toHaveLength(1)
+  })
 })
