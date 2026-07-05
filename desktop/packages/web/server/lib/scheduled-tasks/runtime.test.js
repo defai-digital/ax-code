@@ -19,6 +19,20 @@ describe("scheduled-tasks runtime helpers", () => {
     expect(next).toBe(Date.UTC(2025, 0, 1, 9, 30, 0))
   })
 
+  it("trims schedule timezone before computing and formatting", () => {
+    const nowUtc = Date.UTC(2025, 0, 1, 8, 0, 0)
+    const schedule = {
+      kind: "daily",
+      times: ["09:30"],
+      timezone: " UTC ",
+    }
+
+    expect(computeNextRunAt({ enabled: true, schedule }, nowUtc)).toBe(Date.UTC(2025, 0, 1, 9, 30, 0))
+    expect(formatScheduledSessionTitle({ name: " Morning Sync ", schedule }, nowUtc)).toBe(
+      "Morning Sync 2025-01-01 08:00",
+    )
+  })
+
   it("computes weekly next run using weekdays", () => {
     // Monday 2025-01-06 10:00:00 UTC
     const nowUtc = Date.UTC(2025, 0, 6, 10, 0, 0)

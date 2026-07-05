@@ -34,6 +34,11 @@ const weekdayAsZeroBased = (dateTime) => {
   return dateTime.weekday % 7
 }
 
+const normalizeScheduleTimezone = (schedule) =>
+  typeof schedule?.timezone === "string" && schedule.timezone.trim().length > 0
+    ? schedule.timezone.trim()
+    : DateTime.local().zoneName
+
 const safeErrorMessage = (error, maxLength = 2_000) => {
   const raw = error instanceof Error ? error.message || String(error) : String(error ?? "Unknown error")
   const trimmed = raw.trim()
@@ -76,11 +81,7 @@ export const computeNextRunAt = (task, nowMs = Date.now()) => {
     return null
   }
 
-  const zone =
-    typeof schedule.timezone === "string" && schedule.timezone.trim().length > 0
-      ? schedule.timezone.trim()
-      : DateTime.local().zoneName
-
+  const zone = normalizeScheduleTimezone(schedule)
   const now = DateTime.fromMillis(nowMs, { zone })
   if (!now.isValid) {
     return null
@@ -172,10 +173,7 @@ export const computeNextRunAt = (task, nowMs = Date.now()) => {
 }
 
 export const formatScheduledSessionTitle = (task, nowMs = Date.now()) => {
-  const timezone =
-    typeof task?.schedule?.timezone === "string" && task.schedule.timezone.trim().length > 0
-      ? task.schedule.timezone.trim()
-      : DateTime.local().zoneName
+  const timezone = normalizeScheduleTimezone(task?.schedule)
   const stamp = DateTime.fromMillis(nowMs, { zone: timezone }).toFormat("yyyy-LL-dd HH:mm")
   const taskName = typeof task?.name === "string" && task.name.trim().length > 0 ? task.name.trim() : "Scheduled task"
   const suffix = ` ${stamp}`
