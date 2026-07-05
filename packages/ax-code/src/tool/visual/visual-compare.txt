@@ -1,0 +1,15 @@
+Compare two visual runs to identify what changed.
+
+Use this tool after a repair iteration to verify fixes and detect regressions.
+It compares the before and after runs, matching artifacts by viewport,
+and reports which findings were resolved, which persist, and which are new.
+
+Input:
+- beforeRunID: The baseline visual run ID (before the fix)
+- afterRunID: The verification visual run ID (after the fix)
+
+Output:
+- Resolved findings count and list
+- Persistent (unresolved) findings count and list
+- Introduced (new regression) findings count and list
+- Viewport match details

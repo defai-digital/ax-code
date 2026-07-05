@@ -1,9 +1,10 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import type { Permission } from "../../src/permission"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { WebFetchTool } from "../../src/tool/webfetch"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { Ssrf } from "../../src/util/ssrf"
 
 const projectRoot = path.join(import.meta.dirname, "../..")
 
@@ -22,12 +23,11 @@ async function withFetch(
   mockFetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>,
   fn: () => Promise<void>,
 ) {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = mockFetch as unknown as typeof fetch
+  const pinnedFetch = vi.spyOn(Ssrf, "pinnedFetch").mockImplementation((input, init) => mockFetch(input, init))
   try {
     await fn()
   } finally {
-    globalThis.fetch = originalFetch
+    pinnedFetch.mockRestore()
   }
 }
 

@@ -1,0 +1,16 @@
+Analyze screenshots from a visual run to identify UI issues.
+
+Use this tool to critique the visual state of a web page or app screen.
+It sends screenshots to a vision-capable model and returns structured
+findings about layout, accessibility, interaction, and performance issues.
+
+The tool requires a vision-capable model. If the current model does not
+support vision input, it will return a diagnostic suggesting a capable model.
+
+Input:
+- runID: The visual run ID to critique (from browser_open or browser_capture)
+- focus: Optional focus area to guide the critique (layout, accessibility, interaction, performance)
+
+Output:
+- Structured findings with severity, category, and suggested fixes
+- Each finding references the screenshot artifact it was derived from

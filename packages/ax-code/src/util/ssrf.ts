@@ -191,6 +191,7 @@ export namespace Ssrf {
     const requestHeaders = Object.fromEntries(input.headers.entries())
 
     return new Promise<Response>((resolve, reject) => {
+      const servername = net.isIP(input.hostname) ? undefined : input.hostname
       const req = https.request(
         {
           protocol: input.originalUrl.protocol,
@@ -200,7 +201,7 @@ export namespace Ssrf {
           method,
           path: `${input.originalUrl.pathname}${input.originalUrl.search}`,
           headers: requestHeaders,
-          servername: input.hostname,
+          ...(servername ? { servername } : {}),
         },
         (res) => {
           const webBody = Readable.toWeb(res) as ReadableStream<Uint8Array>

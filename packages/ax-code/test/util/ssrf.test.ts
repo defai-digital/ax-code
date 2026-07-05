@@ -1,4 +1,7 @@
 import { expect, test, vi } from "vitest"
+import https from "node:https"
+import { EventEmitter } from "node:events"
+import { Readable } from "node:stream"
 
 const ssrfModule = "../../src/util/ssrf.ts" + "?ssrf-unit"
 const { Ssrf } = (await import(ssrfModule)) as typeof import("../../src/util/ssrf")
@@ -85,4 +88,39 @@ test("pinnedFetch no longer passes Bun-only tls RequestInit extension", async ()
 
   expect((seenInit as RequestInit & { tls?: unknown })?.tls).toBeUndefined()
   expect(new Headers(seenInit?.headers).get("host")).toBe("example.invalid")
+})
+
+test("pinnedFetch omits TLS servername for HTTPS IP literals", async () => {
+  let seenOptions: https.RequestOptions | undefined
+  const request = vi.spyOn(https, "request").mockImplementation((options: any, callback?: any) => {
+    seenOptions = options
+    const req = new EventEmitter() as EventEmitter & {
+      end: () => void
+      destroy: (error?: unknown) => void
+    }
+    req.end = () => {
+      const res = Readable.from([new TextEncoder().encode("ok")]) as Readable & {
+        statusCode?: number
+        statusMessage?: string
+        headers?: Record<string, string>
+      }
+      res.statusCode = 200
+      res.statusMessage = "OK"
+      res.headers = { "content-type": "text/plain" }
+      callback?.(res)
+    }
+    req.destroy = () => {}
+    return req as unknown as ReturnType<typeof https.request>
+  })
+
+  try {
+    const response = await Ssrf.pinnedFetch("https://93.184.216.34/file.txt", { label: "t" })
+
+    expect(await response.text()).toBe("ok")
+    expect(seenOptions?.hostname).toBe("93.184.216.34")
+    expect(seenOptions?.servername).toBeUndefined()
+    expect(new Headers(seenOptions?.headers as HeadersInit).get("host")).toBe("93.184.216.34")
+  } finally {
+    request.mockRestore()
+  }
 })
