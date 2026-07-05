@@ -5,7 +5,7 @@ import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionSubmissionBundle {
   export const SubmissionSummary = z.object({
@@ -158,13 +158,11 @@ export namespace QualityPromotionSubmissionBundle {
     const persisted = (await list(decisionBundle.source)).filter((submission) =>
       matchesDecisionBundle(decisionBundle, submission),
     )
-    const deduped = new Map<string, BundleArtifact>()
-    for (const submission of [...persisted, ...submissions]) {
-      if (!matchesDecisionBundle(decisionBundle, submission)) continue
-      if (verify(decisionBundle, submission).length > 0) continue
-      deduped.set(submission.submissionID, submission)
-    }
-    return sortBundles([...deduped.values()])
+    const validSubmissions = [...persisted, ...submissions].filter(
+      (submission) =>
+        matchesDecisionBundle(decisionBundle, submission) && verify(decisionBundle, submission).length === 0,
+    )
+    return sortBundles(uniqueBy(validSubmissions, (submission) => submission.submissionID))
   }
 
   export async function get(input: { source: string; submissionID: string }) {

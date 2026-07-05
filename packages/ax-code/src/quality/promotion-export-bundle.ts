@@ -5,7 +5,7 @@ import { QualityPromotionAuditManifest } from "./promotion-audit-manifest"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionExportBundle {
   export const ExportSummary = z.object({
@@ -160,13 +160,10 @@ export namespace QualityPromotionExportBundle {
     bundles: ExportArtifact[] = [],
   ) {
     const persisted = (await list(promotion.source)).filter((bundle) => matchesPromotion(promotion, bundle))
-    const deduped = new Map<string, ExportArtifact>()
-    for (const bundle of [...persisted, ...bundles]) {
-      if (!matchesPromotion(promotion, bundle)) continue
-      if (verify(bundle).length > 0) continue
-      deduped.set(bundle.bundleID, bundle)
-    }
-    return sortBundles([...deduped.values()])
+    const validBundles = [...persisted, ...bundles].filter(
+      (bundle) => matchesPromotion(promotion, bundle) && verify(bundle).length === 0,
+    )
+    return sortBundles(uniqueBy(validBundles, (bundle) => bundle.bundleID))
   }
 
   export async function get(input: { source: string; bundleID: string }) {

@@ -9,3 +9,11 @@ export function compareStringFields<T extends Record<K, string>, K extends strin
   }
   return 0
 }
+
+export function uniqueBy<T>(items: Iterable<T>, key: (item: T) => string): T[] {
+  const deduped = new Map<string, T>()
+  for (const item of items) {
+    deduped.set(key(item), item)
+  }
+  return [...deduped.values()]
+}
