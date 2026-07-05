@@ -3,7 +3,7 @@ export const AX_CODE_WORKSPACE_HEADER = "x-ax-code-workspace"
 export const LEGACY_OPENCODE_DIRECTORY_HEADER = "x-opencode-directory"
 export const LEGACY_OPENCODE_WORKSPACE_HEADER = "x-opencode-workspace"
 
-function encodeDirectoryHeader(directory: string) {
+export function encodeDirectoryHeader(directory: string) {
   return /[^\x00-\x7F]/.test(directory) ? encodeURIComponent(directory) : directory
 }
 
