@@ -3,6 +3,7 @@ import type { PermissionRequest } from "@/types/permission"
 import { suggestAllowPattern } from "@/lib/permissions/patternGeneralizer"
 import { useI18n } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 interface AllowPatternBuilderProps {
   permission: PermissionRequest
@@ -86,7 +87,3 @@ export const AllowPatternBuilder: React.FC<AllowPatternBuilderProps> = memo(({ p
 })
 
 AllowPatternBuilder.displayName = "AllowPatternBuilder"
-
-function cn(...inputs: (string | false | null | undefined | Record<string, boolean>)[]): string {
-  return inputs.flat().filter(Boolean).join(" ")
-}
