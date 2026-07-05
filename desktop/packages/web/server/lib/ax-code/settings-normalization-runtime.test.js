@@ -99,6 +99,75 @@ describe("settings normalization runtime - symlink resolution", () => {
       expect(result).toHaveLength(1)
       expect(result[0].id).toBe("proj1")
     })
+
+    it("trims project identity and display fields", () => {
+      const runtime = createTestRuntime()
+
+      const result = runtime.sanitizeProjects([
+        {
+          id: " project-1 ",
+          path: " /workspace/project ",
+          label: " Project ",
+          icon: " folder ",
+          color: " blue ",
+          iconImage: { mime: " image/png ", updatedAt: 12, source: "custom" },
+        },
+      ])
+
+      expect(result).toEqual([
+        {
+          id: "project-1",
+          path: "/workspace/project",
+          label: "Project",
+          icon: "folder",
+          color: "blue",
+          iconImage: { mime: "image/png", updatedAt: 12, source: "custom" },
+        },
+      ])
+    })
+  })
+
+  describe("sanitizeModelRefs", () => {
+    it("trims model refs and skips duplicate pairs", () => {
+      const runtime = createTestRuntime()
+
+      expect(
+        runtime.sanitizeModelRefs(
+          [
+            { providerID: " openai ", modelID: " gpt-5-mini " },
+            { providerID: "openai", modelID: "gpt-5-mini" },
+            { providerID: " ", modelID: "ignored" },
+          ],
+          5,
+        ),
+      ).toEqual([{ providerID: "openai", modelID: "gpt-5-mini" }])
+    })
+  })
+
+  describe("sanitizeSkillCatalogs", () => {
+    it("trims catalog fields and preserves optional metadata", () => {
+      const runtime = createTestRuntime()
+
+      expect(
+        runtime.sanitizeSkillCatalogs([
+          {
+            id: " catalog-1 ",
+            label: " Team Skills ",
+            source: " github:owner/repo ",
+            subpath: " skills ",
+            gitIdentityId: " team ",
+          },
+        ]),
+      ).toEqual([
+        {
+          id: "catalog-1",
+          label: "Team Skills",
+          source: "github:owner/repo",
+          subpath: "skills",
+          gitIdentityId: "team",
+        },
+      ])
+    })
   })
 
   describe("normalizeSettingsPaths", () => {

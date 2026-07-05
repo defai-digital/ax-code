@@ -1,6 +1,8 @@
 export const createSettingsNormalizationRuntime = (dependencies) => {
   const { os, path, processLike, realpathSync } = dependencies
 
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
   const normalizeDirectoryPath = (value) => {
     if (typeof value !== "string") {
       return value
@@ -105,15 +107,15 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       if (!entry || typeof entry !== "object") continue
 
       const candidate = entry
-      const id = typeof candidate.id === "string" ? candidate.id.trim() : ""
-      const rawPath = typeof candidate.path === "string" ? candidate.path.trim() : ""
+      const id = asTrimmedString(candidate.id)
+      const rawPath = asTrimmedString(candidate.path)
       const resolvedPath = rawPath ? safeRealpathSync(path.resolve(normalizeDirectoryPath(rawPath))) : ""
       const normalizedPath = resolvedPath ? normalizePathForPersistence(resolvedPath, { resolveRealpath: false }) : ""
-      const label = typeof candidate.label === "string" ? candidate.label.trim() : ""
-      const icon = typeof candidate.icon === "string" ? candidate.icon.trim() : ""
+      const label = asTrimmedString(candidate.label)
+      const icon = asTrimmedString(candidate.icon)
       const iconImage = candidate.iconImage && typeof candidate.iconImage === "object" ? candidate.iconImage : null
       const iconBackground = normalizeIconBackground(candidate.iconBackground)
-      const color = typeof candidate.color === "string" ? candidate.color.trim() : ""
+      const color = asTrimmedString(candidate.color)
       const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null
       const lastOpenedAt = Number.isFinite(candidate.lastOpenedAt) ? Number(candidate.lastOpenedAt) : null
 
@@ -138,7 +140,7 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       if (candidate.iconImage === null) {
         project.iconImage = null
       } else if (iconImage) {
-        const mime = typeof iconImage.mime === "string" ? iconImage.mime.trim() : ""
+        const mime = asTrimmedString(iconImage.mime)
         const updatedAt =
           typeof iconImage.updatedAt === "number" && Number.isFinite(iconImage.updatedAt)
             ? Math.max(0, Math.round(iconImage.updatedAt))
@@ -269,8 +271,8 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
 
     for (const entry of input) {
       if (!entry || typeof entry !== "object") continue
-      const providerID = typeof entry.providerID === "string" ? entry.providerID.trim() : ""
-      const modelID = typeof entry.modelID === "string" ? entry.modelID.trim() : ""
+      const providerID = asTrimmedString(entry.providerID)
+      const modelID = asTrimmedString(entry.modelID)
       if (!providerID || !modelID) continue
       const key = `${providerID}/${modelID}`
       if (seen.has(key)) continue
@@ -293,11 +295,11 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     for (const entry of input) {
       if (!entry || typeof entry !== "object") continue
 
-      const id = typeof entry.id === "string" ? entry.id.trim() : ""
-      const label = typeof entry.label === "string" ? entry.label.trim() : ""
-      const source = typeof entry.source === "string" ? entry.source.trim() : ""
-      const subpath = typeof entry.subpath === "string" ? entry.subpath.trim() : ""
-      const gitIdentityId = typeof entry.gitIdentityId === "string" ? entry.gitIdentityId.trim() : ""
+      const id = asTrimmedString(entry.id)
+      const label = asTrimmedString(entry.label)
+      const source = asTrimmedString(entry.source)
+      const subpath = asTrimmedString(entry.subpath)
+      const gitIdentityId = asTrimmedString(entry.gitIdentityId)
 
       if (!id || !label || !source) continue
       if (seen.has(id)) continue
