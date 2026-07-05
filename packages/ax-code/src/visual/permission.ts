@@ -1,3 +1,5 @@
+import { originPermissionPatterns } from "@/util/url-permission"
+
 /**
  * Browser permission model (ADR-047).
  *
@@ -80,7 +82,6 @@ export namespace BrowserPermission {
    * The exact origin covers origin-only URLs, while origin/* covers paths.
    */
   export function permissionPatterns(url: string): string[] {
-    const parsed = new URL(url)
-    return [parsed.origin, `${parsed.origin}/*`]
+    return originPermissionPatterns(url)
   }
 }

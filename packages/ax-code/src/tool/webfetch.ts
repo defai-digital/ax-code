@@ -12,6 +12,7 @@ import {
 import { Isolation } from "@/isolation"
 import { parseContentLengthHeader } from "@/util/http-header"
 import { ToolNumber } from "./schema"
+import { originPermissionPatterns } from "@/util/url-permission"
 
 // Block SSRF to private/reserved IP ranges. Uses pinnedFetch to
 // resolve DNS once and connect to the validated IP directly —
@@ -50,7 +51,7 @@ export const WebFetchTool = Tool.define("webfetch", {
     await ctx.ask({
       permission: "webfetch",
       patterns: [params.url],
-      always: ["*"],
+      always: originPermissionPatterns(parsedUrl),
       metadata: {
         url: params.url,
         format: params.format,

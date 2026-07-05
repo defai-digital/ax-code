@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import type { Permission } from "../../src/permission"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { WebFetchTool } from "../../src/tool/webfetch"
@@ -103,6 +104,40 @@ describe("tool.webfetch", () => {
             expect(result.output).toBe("hello from webfetch")
             expect(result.attachments).toBeUndefined()
             expect(timeoutMetadata).toBe(2)
+          },
+        })
+      },
+    )
+  })
+
+  test("scopes persistent permission to the URL origin", async () => {
+    await withFetch(
+      async () =>
+        new Response("permission ok", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
+            const webfetch = await WebFetchTool.init()
+            await webfetch.execute(
+              { url: "https://93.184.216.34:8443/docs/page.html?x=1", format: "text" },
+              {
+                ...ctx,
+                ask: async (request: Omit<Permission.Request, "id" | "sessionID" | "tool">) => {
+                  requests.push(request)
+                },
+              },
+            )
+            expect(requests).toHaveLength(1)
+            expect(requests[0]).toMatchObject({
+              permission: "webfetch",
+              patterns: ["https://93.184.216.34:8443/docs/page.html?x=1"],
+              always: ["https://93.184.216.34:8443", "https://93.184.216.34:8443/*"],
+            })
           },
         })
       },
