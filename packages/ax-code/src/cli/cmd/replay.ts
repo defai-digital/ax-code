@@ -42,7 +42,7 @@ export const ReplayCommand = cmd({
       if (mode === "execute") {
         const fromStep = args["from-step"] ?? args.fromStep
         process.stderr.write(`Preparing replay execution for session ${args.sessionID}${EOL}`)
-        const { steps, stream } = Replay.prepareExecution(sid, { fromStep })
+        const { steps } = Replay.prepareExecution(sid, { fromStep })
         process.stderr.write(`Reconstructed ${steps.length} steps — ready for processor execution${EOL}`)
         process.stderr.write(`Stream prepared (use programmatically with LLM.stream mock)${EOL}`)
         // Output the steps summary
