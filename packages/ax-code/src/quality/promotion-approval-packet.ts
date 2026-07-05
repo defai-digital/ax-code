@@ -7,6 +7,7 @@ import { QualityPromotionApproval } from "./promotion-approval"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionApprovalPacket {
   export const ReadinessSummary = z.object({
@@ -401,9 +402,7 @@ export namespace QualityPromotionApprovalPacket {
     })
     try {
       const existing = await get({ source: packet.source, packetID: packet.packetID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Approval packet ${packet.packetID} already exists for source ${packet.source} with different content`,
       )

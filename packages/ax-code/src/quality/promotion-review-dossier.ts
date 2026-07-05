@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionReviewDossier {
   export const Recommendation = z.enum(["approve_promotion", "requires_override_review", "hold"])
@@ -221,9 +222,7 @@ export namespace QualityPromotionReviewDossier {
     })
     try {
       const existing = await get({ source: dossier.source, dossierID: dossier.dossierID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion review dossier ${dossier.dossierID} already exists for source ${dossier.source} with different content`,
       )

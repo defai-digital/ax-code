@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionBoardDecision } from "./promotion-board-decision"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionReleaseDecisionRecord {
   export const PromotionMode = z.enum(["pass", "warn_override", "force"])
@@ -210,9 +211,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
     })
     try {
       const existing = await get({ source: record.source, recordID: record.recordID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion release decision record ${record.recordID} already exists for source ${record.source} with different content`,
       )

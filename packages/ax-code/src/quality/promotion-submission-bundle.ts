@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionSubmissionBundle {
   export const SubmissionSummary = z.object({
@@ -183,9 +184,7 @@ export namespace QualityPromotionSubmissionBundle {
     })
     try {
       const existing = await get({ source: submission.source, submissionID: submission.submissionID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion submission bundle ${submission.submissionID} already exists for source ${submission.source} with different content`,
       )

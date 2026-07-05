@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionReleasePacket {
   export const PacketSummary = z.object({
@@ -216,9 +217,7 @@ export namespace QualityPromotionReleasePacket {
     })
     try {
       const existing = await get({ source: packet.source, packetID: packet.packetID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion release packet ${packet.packetID} already exists for source ${packet.source} with different content`,
       )

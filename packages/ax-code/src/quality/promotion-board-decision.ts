@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionBoardDecision {
   export const Disposition = z.enum(["approved", "held", "rejected"])
@@ -238,9 +239,7 @@ export namespace QualityPromotionBoardDecision {
     })
     try {
       const existing = await get({ source: decision.source, decisionID: decision.decisionID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion board decision ${decision.decisionID} already exists for source ${decision.source} with different content`,
       )
