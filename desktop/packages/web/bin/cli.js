@@ -818,6 +818,10 @@ function powershellQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`
 }
 
+function windowsCommandQuote(value) {
+  return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+}
+
 function startupEnvFileQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`
 }
@@ -1107,7 +1111,7 @@ function enableStartupService(options = {}) {
     `if (Test-Path $envFile) { Get-Content $envFile | ForEach-Object { if ($_ -match '^([^=]+)=(.*)$') { $v=$matches[2]; if ($v.StartsWith("'") -and $v.EndsWith("'")) { $v=$v.Substring(1,$v.Length-2).Replace("'\\''","'") }; [Environment]::SetEnvironmentVariable($matches[1], $v, 'Process') } } }`,
     `& ${powershellQuote(process.execPath)} ${startupArgs}`,
   ].join("; ")
-  const taskArgs = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "${powerShellCommand.replace(/"/g, '\\"')}"`
+  const taskArgs = `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ${windowsCommandQuote(powerShellCommand)}`
   runStartupCommand("schtasks.exe", [
     "/Create",
     "/TN",
@@ -2987,6 +2991,7 @@ export {
   findClosestMatch,
   buildTunnelServeOptions,
   resolveTunnelProviderAndMode,
+  windowsCommandQuote,
   CliError,
   EXIT_CODE,
 }

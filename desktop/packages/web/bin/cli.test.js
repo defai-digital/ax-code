@@ -9,6 +9,7 @@ import {
   parseArgs,
   resolveAvailablePort,
   resolveTunnelProviderAndMode,
+  windowsCommandQuote,
   CliError,
   EXIT_CODE,
 } from "./cli.js"
@@ -87,6 +88,14 @@ describe("update command", () => {
 
     expect(write).toHaveBeenCalledTimes(1)
     expect(String(write.mock.calls[0]?.[0])).toMatch(/^up-to-date /)
+  })
+})
+
+describe("startup quoting", () => {
+  it("escapes Windows task command arguments", () => {
+    expect(windowsCommandQuote(String.raw`C:\Program Files\AX "Code"\run.ps1`)).toBe(
+      String.raw`"C:\\Program Files\\AX \"Code\"\\run.ps1"`,
+    )
   })
 })
 

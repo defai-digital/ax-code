@@ -2,7 +2,7 @@ import { EventEmitter } from "events"
 import path from "path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { registerFsRoutes } from "./routes.js"
+import { deriveCloneDirectoryName, isPlansDirectoryPath, registerFsRoutes } from "./routes.js"
 import { createMockResponse, createRouteRegistry } from "../../test-helpers/route-harness.js"
 
 // Fake child process: emits the configured stdout then closes with the given code.
@@ -73,6 +73,21 @@ const registerExec = ({ spawn }) => {
   })
   return getRoute("POST", "/api/fs/exec")
 }
+
+describe("fs route helpers", () => {
+  it("derives clone directory names without input-driven regular expressions", () => {
+    expect(deriveCloneDirectoryName("https://github.com/acme/demo.git")).toBe("demo")
+    expect(deriveCloneDirectoryName("git@github.com:acme/demo.git/")).toBe("demo")
+    expect(deriveCloneDirectoryName("ssh://git@example.com:2222/acme/demo#main")).toBe("demo")
+    expect(deriveCloneDirectoryName("")).toBe("")
+  })
+
+  it("detects plans directories with slash normalization", () => {
+    expect(isPlansDirectoryPath(String.raw`C:\repo\.opencode\plans\\`)).toBe(true)
+    expect(isPlansDirectoryPath("/repo/.opencode/plans///")).toBe(true)
+    expect(isPlansDirectoryPath("/repo/.opencode/plans-old")).toBe(false)
+  })
+})
 
 const registerWrite = (fsPromises, settings = { approvedDirectories: [] }) => {
   const { app, getRoute } = createRouteRegistry()

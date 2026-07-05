@@ -229,12 +229,35 @@ export const resolveWorkspaceOrApprovedPathFromContext = async ({
   })
 }
 
-const deriveCloneDirectoryName = (remoteUrl) => {
+export const deriveCloneDirectoryName = (remoteUrl) => {
   const remote = typeof remoteUrl === "string" ? remoteUrl.trim() : ""
   if (!remote) return ""
-  const withoutQuery = remote.split(/[?#]/, 1)[0] || remote
-  const match = withoutQuery.match(/([^/:]+?)(?:\.git)?\/?$/)
-  return match?.[1]?.trim() || ""
+  const queryIndex = remote.indexOf("?")
+  const hashIndex = remote.indexOf("#")
+  const endIndexes = [queryIndex, hashIndex].filter((index) => index >= 0)
+  const withoutQuery = endIndexes.length > 0 ? remote.slice(0, Math.min(...endIndexes)) : remote
+  let end = withoutQuery.length
+  while (end > 0 && withoutQuery.charCodeAt(end - 1) === 47) end -= 1
+
+  let name = withoutQuery.slice(0, end)
+  const slashIndex = name.lastIndexOf("/")
+  const colonIndex = name.lastIndexOf(":")
+  const delimiterIndex = Math.max(slashIndex, colonIndex)
+  if (delimiterIndex >= 0) name = name.slice(delimiterIndex + 1)
+  if (name.endsWith(".git")) name = name.slice(0, -4)
+  return name.trim()
+}
+
+export const isPlansDirectoryPath = (value) => {
+  if (!value || typeof value !== "string") return false
+  let end = value.length
+  while (end > 0) {
+    const code = value.charCodeAt(end - 1)
+    if (code !== 47 && code !== 92) break
+    end -= 1
+  }
+  const normalized = value.slice(0, end).replaceAll("\\", "/")
+  return normalized.endsWith("/.opencode/plans") || normalized.endsWith(".opencode/plans")
 }
 
 const resolveCloneGitIdentity = async (gitIdentityId) => {
@@ -1336,12 +1359,6 @@ export const registerFsRoutes = (app, dependencies) => {
     const respectGitignore = req.query.respectGitignore === "true"
     let resolvedPath = ""
 
-    const isPlansDirectory = (value) => {
-      if (!value || typeof value !== "string") return false
-      const normalized = value.replace(/\\/g, "/").replace(/\/+$/, "")
-      return normalized.endsWith("/.opencode/plans") || normalized.endsWith(".opencode/plans")
-    }
-
     try {
       const authorized = await resolveWorkspaceOrApprovedPathFromContext({
         req,
@@ -1440,7 +1457,7 @@ export const registerFsRoutes = (app, dependencies) => {
     } catch (error) {
       const err = error
       const code = err && typeof err === "object" && "code" in err ? err.code : undefined
-      const isPlansPath = code === "ENOENT" && (isPlansDirectory(resolvedPath) || isPlansDirectory(rawPath))
+      const isPlansPath = code === "ENOENT" && (isPlansDirectoryPath(resolvedPath) || isPlansDirectoryPath(rawPath))
       if (code !== "ENOENT") {
         console.error("Failed to list directory:", error)
       }
