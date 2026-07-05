@@ -32,6 +32,7 @@ import { useI18n } from "@/lib/i18n"
 import { languageByExtension } from "@/lib/codemirror/languageByExtension"
 import { createFlexokiCodeMirrorTheme } from "@/lib/codemirror/flexokiTheme"
 import { useThemeSystem } from "@/contexts/useThemeSystem"
+import { isPlainRecord } from "@/lib/record"
 import { cn } from "@/lib/utils"
 import { EditorView } from "@codemirror/view"
 import type { Extension } from "@codemirror/state"
@@ -60,9 +61,6 @@ const buildSkillMarkdown = (description: string, instructions: string): string =
   return `---\n${frontmatter}\n---${body ? `\n\n${body}` : "\n"}`
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-
 const parseSkillMarkdown = (value: string): SkillDocumentParseResult => {
   const match = value.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/)
   if (!match) {
@@ -72,7 +70,7 @@ const parseSkillMarkdown = (value: string): SkillDocumentParseResult => {
   let description: string | null = null
   try {
     const frontmatter: unknown = parseYaml(match[1])
-    if (isRecord(frontmatter)) {
+    if (isPlainRecord(frontmatter)) {
       const candidate = frontmatter.description
       if (typeof candidate === "string") {
         description = candidate
