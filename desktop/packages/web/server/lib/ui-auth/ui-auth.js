@@ -137,7 +137,6 @@ const recordFailedAttempt = async (req) => {
   await acquireRateLimitLock(key)
 
   const now = Date.now()
-  const { maxAttempts } = getRateLimitConfig(key)
   const record = loginRateLimiter.get(key)
 
   if (!record || now - record.lastAttempt > RATE_LIMIT_WINDOW_MS) {
@@ -624,10 +623,7 @@ export const createUiAuth = ({
 
   const dispose = () => {
     loginRateLimiter.clear()
-    if (rateLimitCleanupTimer) {
-      clearInterval(rateLimitCleanupTimer)
-      rateLimitCleanupTimer = null
-    }
+    stopRateLimitCleanup()
     passkeyController.dispose()
   }
 
