@@ -63,6 +63,7 @@ describe("ax-code plugin routes", () => {
   })
 
   beforeEach(() => {
+    process.env.AX_CODE_CONFIG = userConfigPath
     projectDir = fs.mkdtempSync(path.join(rootDir, "project-"))
     fs.rmSync(userConfigPath, { force: true })
     fs.rmSync(path.join(rootDir, "plugins"), { recursive: true, force: true })
