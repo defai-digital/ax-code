@@ -1,4 +1,5 @@
 import { parsePatchFiles } from "@pierre/diffs"
+import { isRecord } from "@/lib/record"
 
 export type DiffPatchEntry = {
   id: string
@@ -14,9 +15,7 @@ const GIT_DIFF_FILE_BREAK_TEST = /^diff --git\s+/m
 const UNIFIED_DIFF_FILE_BREAK_PATTERN = /(?=^---\s+\S)/gm
 const UNIFIED_DIFF_FILE_BREAK_TEST = /^---\s+\S/m
 
-export const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null
-}
+export { isRecord }
 
 export const normalizePatchText = (patch: string): string => {
   return patch.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim()
