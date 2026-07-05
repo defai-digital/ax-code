@@ -6,10 +6,12 @@ import { fileURLToPath } from "url"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
 const firstConfiguredEnv = (...names) => {
   for (const name of names) {
-    const value = process.env[name]
-    if (typeof value === "string" && value.trim().length > 0) return value.trim()
+    const value = asTrimmedString(process.env[name])
+    if (value.length > 0) return value
   }
   return ""
 }
@@ -26,8 +28,8 @@ const readOwnPackageJsonField = (field) => {
   for (const pkgPath of candidatePaths) {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"))
-      const value = pkg?.[field]
-      if (typeof value === "string" && value.trim().length > 0) return value.trim()
+      const value = asTrimmedString(pkg?.[field])
+      if (value.length > 0) return value
     } catch {}
   }
   return ""
@@ -357,7 +359,7 @@ export function detectPackageManagerDetails() {
     }
   }
 
-  const forcedPm = process.env.AX_CODE_DESKTOP_PACKAGE_MANAGER?.trim()
+  const forcedPm = asTrimmedString(process.env.AX_CODE_DESKTOP_PACKAGE_MANAGER)
   if (forcedPm && ["npm", "pnpm", "yarn", "bun"].includes(forcedPm)) {
     const forcedPmCommand = resolvePackageManagerCommand(forcedPm)
     if (isCommandAvailable(forcedPmCommand)) {

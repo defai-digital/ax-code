@@ -59,3 +59,36 @@ describe("checkForUpdates (remote sources hard-disabled)", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe("detectPackageManagerDetails", () => {
+  const ENV_KEYS = ["AX_CODE_DESKTOP_PACKAGE_MANAGER", "AX_CODE_DESKTOP_RUNTIME"]
+  let savedEnv
+
+  beforeEach(() => {
+    savedEnv = {}
+    for (const key of ENV_KEYS) {
+      savedEnv[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  })
+
+  it("trims forced package manager env before detection", async () => {
+    vi.resetModules()
+    process.env.AX_CODE_DESKTOP_PACKAGE_MANAGER = " pnpm "
+
+    const { detectPackageManagerDetails } = await import("./package-manager.js")
+    const details = detectPackageManagerDetails()
+
+    expect(details).toMatchObject({
+      packageManager: "pnpm",
+      reason: "forced-env",
+    })
+  })
+})
