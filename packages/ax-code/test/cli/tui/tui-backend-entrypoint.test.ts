@@ -13,6 +13,12 @@ describe("tui backend entrypoint guardrails", () => {
     expect(WORKER_SRC).not.toContain("import.meta.main || isWorkerEntrypoint()")
   })
 
+  test("worker uses AX Code SDK naming instead of OpenCode aliases", () => {
+    expect(WORKER_SRC).toContain("createAxCodeClient")
+    expect(WORKER_SRC).not.toContain("createOpencodeClient")
+    expect(WORKER_SRC).not.toContain("OpencodeEvent")
+  })
+
   test("uses worker transport only on Bun source runtime", () => {
     expect(tuiBackendTransport({}, { hasBun: false, mode: "node-bundled" })).toBe("process")
     expect(

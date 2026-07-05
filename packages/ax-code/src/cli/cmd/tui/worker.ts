@@ -9,7 +9,7 @@ import { Rpc } from "@/util/rpc"
 import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
-import { createOpencodeClient, type Event as OpencodeEvent } from "@ax-code/sdk/v2"
+import { createAxCodeClient, type Event as AxCodeEvent } from "@ax-code/sdk/v2"
 import { Flag } from "@/flag/flag"
 import { writeHeapSnapshot } from "node:v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -120,7 +120,7 @@ const startEventStream = async (input: { directory?: string }) => {
     return Server.Default().fetch(request)
   }) as typeof globalThis.fetch
 
-  const sdk = createOpencodeClient({
+  const sdk = createAxCodeClient({
     baseUrl: internalBaseUrl(),
     directory: input.directory ?? process.cwd(),
     fetch: fetchFn,
@@ -133,7 +133,7 @@ const startEventStream = async (input: { directory?: string }) => {
     Rpc.emit("event.status", status)
   }
 
-  const done = runResilientStream<OpencodeEvent>({
+  const done = runResilientStream<AxCodeEvent>({
     signal,
     subscribe: (connectionSignal) =>
       sdk.event.subscribe(
