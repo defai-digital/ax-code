@@ -34,6 +34,7 @@ import type {
   ResetToCommitResponse,
 } from "./api/types"
 import { HTTP_DEFAULTS } from "./http"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 
 const resolveBaseOrigin = (): string => {
   if (typeof window === "undefined") {
@@ -55,7 +56,7 @@ const gitStatusInFlight = new Map<string, Promise<GitStatus>>()
 const gitRepoCache = new Map<string, { value: boolean; expiresAt: number }>()
 const gitRepoInFlight = new Map<string, Promise<boolean>>()
 
-const normalizeDirectoryKey = (directory: string): string => directory.trim()
+const normalizeDirectoryKey = (directory: string): string => normalizeProjectPath(directory) ?? ""
 const normalizeGitFilePaths = (filePaths: string[]): string[] => filePaths.map((path) => path.trim()).filter(Boolean)
 
 function buildUrl(

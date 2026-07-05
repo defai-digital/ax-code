@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { stageGitFile, stageGitFiles, unstageGitFile, unstageGitFiles } from "./gitApiHttp"
+import { checkIsGitRepository, stageGitFile, stageGitFiles, unstageGitFile, unstageGitFiles } from "./gitApiHttp"
 
 type GitApiHttpFetchCall = {
   input: RequestInfo | URL
@@ -13,7 +13,7 @@ const installFetchMock = () => {
   const calls: GitApiHttpFetchCall[] = []
   globalThis.fetch = (async (input, init) => {
     calls.push({ input, init })
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, isGitRepository: true }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     })
@@ -49,6 +49,20 @@ const captureError = async (callback: () => Promise<void>): Promise<unknown> => 
 }
 
 describe("gitApiHttp index mutations", () => {
+  test("dedupes git repository checks across Windows directory variants", async () => {
+    installWindowMock()
+    const calls = installFetchMock()
+    try {
+      expect(await checkIsGitRepository("c:\\Repo\\")).toBe(true)
+      expect(await checkIsGitRepository("C:/Repo")).toBe(true)
+
+      expect(calls).toHaveLength(1)
+      expect(String(calls[0].input)).toBe("http://localhost:3000/api/git/check?directory=c%3A%5CRepo%5C")
+    } finally {
+      restoreMocks()
+    }
+  })
+
   test("sends bulk stage payloads as paths", async () => {
     installWindowMock()
     const calls = installFetchMock()
