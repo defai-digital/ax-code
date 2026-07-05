@@ -1,5 +1,7 @@
+import { normalizeProjectPath } from "@/lib/projectResolution"
+
 export const createProjectIdFromPath = (projectPath: string): string => {
-  const normalized = projectPath.replace(/\\/g, "/").replace(/\/+$/g, "").trim()
+  const normalized = normalizeProjectPath(projectPath) ?? ""
   if (!normalized) {
     return ""
   }
