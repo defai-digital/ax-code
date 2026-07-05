@@ -266,7 +266,7 @@ export const Agent = z
     permission: Permission.optional(),
   })
   .catchall(z.any())
-  .transform((agent, ctx) => {
+  .transform((agent, _ctx) => {
     const knownKeys = new Set([
       "name",
       "model",
