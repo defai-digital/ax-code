@@ -131,7 +131,15 @@ function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[
   const keys = [`session:${item.projectID}:${execution.sessionID}`]
   const workflow = workflowPayload(item)
   if (workflow) keys.push(`workflow-phase:${item.projectID}:${workflow.runID}:${workflow.phaseID}`)
-  return Array.from(new Set(keys)).sort()
+  return uniqueSortedStrings(keys)
+}
+
+function uniqueValues<T>(values: T[]): T[] {
+  return Array.from(new Set(values))
+}
+
+function uniqueSortedStrings(values: string[]): string[] {
+  return uniqueValues(values).sort()
 }
 
 async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecution) {
@@ -567,7 +575,7 @@ async function attachWorkflowChildArtifacts(
 }
 
 function uniqueWorkflowArtifactIDs(ids: WorkflowArtifactID[]): WorkflowArtifactID[] {
-  return Array.from(new Set(ids))
+  return uniqueValues(ids)
 }
 
 function uniqueWorkflowEvidenceRefs(refs: WorkflowEvidenceRef[]): WorkflowEvidenceRef[] {
