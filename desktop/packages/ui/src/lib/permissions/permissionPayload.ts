@@ -1,5 +1,4 @@
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
+import { isPlainRecord } from "@/lib/record"
 
 export const normalizePermissionName = (permission: unknown): string =>
   typeof permission === "string" && permission.trim() ? permission : "unknown"
@@ -20,7 +19,7 @@ export const normalizePermissionPatterns = (value: unknown): string[] => {
     return [String(value)]
   }
 
-  if (isRecord(value)) {
+  if (isPlainRecord(value)) {
     const candidates = [value.pattern, value.path, value.glob, value.value, value.id]
     for (const candidate of candidates) {
       const normalized = normalizePermissionPatterns(candidate)
