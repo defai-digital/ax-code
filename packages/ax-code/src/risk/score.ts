@@ -7,6 +7,7 @@ import { Snapshot } from "../snapshot"
 import { SessionSemanticCore } from "../session/semantic-core"
 import { toErrorMessage } from "../util/error-message"
 import { parseJsonResult } from "../util/json-value"
+import { uniqueStrings } from "../util/string-list"
 import type { SessionID } from "../session/schema"
 
 const log = Log.create({ service: "risk" })
@@ -170,7 +171,7 @@ export namespace Risk {
       validationState: state,
       validationCount: count,
       validationFailures: failures,
-      validationCommands: [...new Set(input.validationCommands ?? [])],
+      validationCommands: uniqueStrings(input.validationCommands ?? []),
       diffState,
       recoveredSubagentResults: input.recoveredSubagentResults ?? 0,
       sessionEndReason: input.sessionEndReason ?? null,
