@@ -4,6 +4,7 @@ import path from "path"
 import matter from "gray-matter"
 import z from "zod"
 import { Filesystem } from "@/util/filesystem"
+import { uniqueStrings } from "@/util/string-list"
 import { Instance } from "@/project/instance"
 import { Skill } from "./index"
 
@@ -211,7 +212,7 @@ function skillDoctorIssues(skill: Skill.Info, nameCounts: Map<string, number>) {
     if (!existsSync(path.resolve(base, ref))) issues.push(`referenced file is missing: ${ref}`)
   }
 
-  return Array.from(new Set(issues))
+  return uniqueStrings(issues)
 }
 
 function relativeContentReferences(content: string) {
