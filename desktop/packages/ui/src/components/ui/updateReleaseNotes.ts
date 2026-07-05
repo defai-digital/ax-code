@@ -21,13 +21,53 @@ function decodeHtmlEntities(value: string): string {
   })
 }
 
+function removeRawTextElementBlocks(value: string, tagName: string): string {
+  const needle = `<${tagName}`
+  const closeNeedle = `</${tagName}`
+  let remaining = value
+  let output = ""
+
+  while (remaining.length > 0) {
+    const lower = remaining.toLowerCase()
+    const start = lower.indexOf(needle)
+    if (start === -1) {
+      output += remaining
+      break
+    }
+
+    const startTagEnd = lower.indexOf(">", start + needle.length)
+    if (startTagEnd === -1) {
+      output += remaining.slice(0, start)
+      break
+    }
+
+    const closeStart = lower.indexOf(closeNeedle, startTagEnd + 1)
+    if (closeStart === -1) {
+      output += remaining.slice(0, start)
+      break
+    }
+
+    const closeEnd = lower.indexOf(">", closeStart + closeNeedle.length)
+    if (closeEnd === -1) {
+      output += remaining.slice(0, start)
+      break
+    }
+
+    output += remaining.slice(0, start)
+    remaining = remaining.slice(closeEnd + 1)
+  }
+
+  return output
+}
+
 export function normalizeReleaseNotesForMarkdown(body: string): string {
   if (!/<\/?[a-z][\s\S]*>/i.test(body)) {
     return body
   }
 
-  return decodeHtmlEntities(body)
-    .replace(/<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+  const safeBody = removeRawTextElementBlocks(removeRawTextElementBlocks(decodeHtmlEntities(body), "script"), "style")
+
+  return safeBody
     .replace(/<\s*h([1-6])\b[^>]*>/gi, (_match, level: string) => `${"#".repeat(Math.max(2, Number(level)))} `)
     .replace(/<\s*\/h[1-6]\s*>/gi, "\n\n")
     .replace(/<\s*li\b[^>]*>/gi, "- ")

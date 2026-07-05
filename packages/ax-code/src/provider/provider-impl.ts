@@ -136,6 +136,27 @@ export namespace Provider {
     return next
   }
 
+  function isSecretOptionKey(key: string) {
+    const lower = key.toLowerCase()
+    return (
+      lower.includes("apikey") ||
+      lower.includes("api_key") ||
+      lower.includes("token") ||
+      lower.includes("secret") ||
+      lower.includes("password") ||
+      lower === "key"
+    )
+  }
+
+  function redactCacheKeyValue(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(redactCacheKeyValue)
+    if (!value || typeof value !== "object") return value
+    const entries = Object.entries(value)
+      .filter(([key]) => !isSecretOptionKey(key))
+      .map(([key, item]) => [key, redactCacheKeyValue(item)] as const)
+    return Object.fromEntries(entries)
+  }
+
   function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
     if (providerID !== ProviderID.xai) return
 
@@ -781,7 +802,9 @@ export namespace Provider {
           ...model.headers,
         }
 
-      const key = Hash.fast(JSON.stringify({ providerID: model.providerID, npm: model.api.npm, options }))
+      const key = Hash.fast(
+        JSON.stringify({ providerID: model.providerID, npm: model.api.npm, options: redactCacheKeyValue(options) }),
+      )
       const existing = s.sdk.get(key)
       if (existing) return existing
 
@@ -941,8 +964,8 @@ export namespace Provider {
     const base = providerModelKey({ providerID: model.providerID, modelID: model.id })
     try {
       const options = JSON.stringify({
-        providerOptions: provider.options,
-        modelOptions: model.options,
+        providerOptions: redactCacheKeyValue(provider.options),
+        modelOptions: redactCacheKeyValue(model.options),
         modelAPI: {
           npm: model.api.npm,
           id: model.api.id,

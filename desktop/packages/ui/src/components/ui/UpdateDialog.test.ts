@@ -24,7 +24,9 @@ describe("normalizeReleaseNotesForMarkdown", () => {
 
   test("drops script and style blocks before converting HTML", () => {
     expect(
-      normalizeReleaseNotesForMarkdown("<h2>Safe</h2><script>alert(1)</script><style>body{}</style><p>Done</p>"),
+      normalizeReleaseNotesForMarkdown(
+        "<h2>Safe</h2><script>alert(1)</script><style>body{}</style>&lt;script&gt;alert(2)&lt;/script&gt;<p>Done</p>",
+      ),
     ).toBe("## Safe\n\nDone")
   })
 })
