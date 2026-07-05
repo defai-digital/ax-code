@@ -523,7 +523,7 @@ function decodeProtoObject(codec: ProtoCodec, bytes: Uint8Array): Record<string,
     const read = readWireValue(bytes, offset, wireType)
     offset = read.offset
     if (!field) continue
-    const decoded = decodeFieldValue(field, read.value, wireType)
+    const decoded = decodeFieldValue(field, read.value)
     if (field.kind === "stringList") {
       const values = (out[field.name] as string[] | undefined) ?? []
       values.push(String(decoded))
@@ -675,7 +675,7 @@ function decodeListValue(bytes: Uint8Array): unknown[] {
   return out
 }
 
-function decodeFieldValue(field: ProtoField, value: Uint8Array | number | boolean, wireType: number): unknown {
+function decodeFieldValue(field: ProtoField, value: Uint8Array | number | boolean): unknown {
   switch (field.kind) {
     case "string":
     case "stringList":
