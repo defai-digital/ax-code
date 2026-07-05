@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui"
 import { cn } from "@/lib/utils"
-import { PROJECT_ICONS, PROJECT_COLORS, PROJECT_COLOR_MAP, getProjectIconImageUrl } from "@/lib/projectMeta"
+import {
+  PROJECT_ICONS,
+  PROJECT_COLORS,
+  PROJECT_COLOR_MAP,
+  getProjectIconImageUrl,
+  normalizeProjectIconBackground,
+} from "@/lib/projectMeta"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { useI18n } from "@/lib/i18n"
@@ -20,19 +26,6 @@ interface ProjectEditDialogProps {
   initialColor?: string | null
   initialIconBackground?: string | null
   onSave: (data: { label: string; icon: string | null; color: string | null; iconBackground: string | null }) => void
-}
-
-const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/
-
-const normalizeIconBackground = (value: string | null): string | null => {
-  if (!value) {
-    return null
-  }
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return null
-  }
-  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null
 }
 
 export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
@@ -58,7 +51,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
   const [icon, setIcon] = React.useState<string | null>(initialIcon)
   const [color, setColor] = React.useState<string | null>(initialColor)
   const [iconBackground, setIconBackground] = React.useState<string | null>(
-    normalizeIconBackground(initialIconBackground),
+    normalizeProjectIconBackground(initialIconBackground),
   )
   const [isUploadingIcon, setIsUploadingIcon] = React.useState(false)
   const [isRemovingCustomIcon, setIsRemovingCustomIcon] = React.useState(false)
@@ -84,7 +77,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
       setName(projectName)
       setIcon(initialIcon)
       setColor(initialColor)
-      setIconBackground(normalizeIconBackground(initialIconBackground))
+      setIconBackground(normalizeProjectIconBackground(initialIconBackground))
       setPendingRemoveImageIcon(false)
       clearPendingUploadIcon()
       setPreviewImageFailed(false)
@@ -133,7 +126,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
       label: trimmed,
       icon,
       color,
-      iconBackground: normalizeIconBackground(willRemoveImageIcon ? null : iconBackground),
+      iconBackground: normalizeProjectIconBackground(willRemoveImageIcon ? null : iconBackground),
     })
     onOpenChange(false)
   }
