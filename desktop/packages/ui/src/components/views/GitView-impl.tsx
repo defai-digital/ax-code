@@ -71,6 +71,8 @@ const GIT_RECONCILE_DELAY_MS = 15000
 
 const isActionTab = (value: unknown): value is ActionTab => value === "commit" || value === "branch" || value === "pr"
 
+const uniquePaths = (paths: readonly string[]): string[] => Array.from(new Set(paths))
+
 type GitViewSnapshot = {
   directory?: string
   commitMessage: string
@@ -1597,18 +1599,18 @@ export const GitView: React.FC = () => {
   const moveChangePaths = React.useCallback(
     (paths: string[], direction: GitIndexMutationDirection) => {
       if (!currentDirectory || paths.length === 0) return
-      const uniquePaths = Array.from(new Set(paths))
+      const dedupedPaths = uniquePaths(paths)
       setMovingChangePaths((previous) => {
         const next = new Set(previous)
-        uniquePaths.forEach((path) => next.add(path))
+        dedupedPaths.forEach((path) => next.add(path))
         return next
       })
-      const previousStatus = moveStatusPathsOptimistically(currentDirectory, uniquePaths, direction)
+      const previousStatus = moveStatusPathsOptimistically(currentDirectory, dedupedPaths, direction)
 
       gitIndexMutationQueue.enqueue({
         directory: currentDirectory,
         direction,
-        paths: new Set(uniquePaths),
+        paths: new Set(dedupedPaths),
         rollback: () => restoreStatus(currentDirectory, previousStatus),
       })
 
@@ -1651,13 +1653,13 @@ export const GitView: React.FC = () => {
         return
       }
 
-      const uniquePaths = Array.from(new Set(paths))
+      const dedupedPaths = uniquePaths(paths)
       const stagedPaths = new Set(stagedChangeEntries.map((entry) => entry.path))
-      const touchesStagedIndex = uniquePaths.some((path) => stagedPaths.has(path))
+      const touchesStagedIndex = dedupedPaths.some((path) => stagedPaths.has(path))
       setIsRevertingAll(true)
       setRevertingPaths((previous) => {
         const next = new Set(previous)
-        uniquePaths.forEach((path) => next.add(path))
+        dedupedPaths.forEach((path) => next.add(path))
         return next
       })
 
@@ -1665,7 +1667,7 @@ export const GitView: React.FC = () => {
 
       try {
         await Promise.all(
-          uniquePaths.map(async (filePath) => {
+          dedupedPaths.map(async (filePath) => {
             try {
               await git.revertGitFile(currentDirectory, filePath)
             } catch (err) {
@@ -1677,7 +1679,7 @@ export const GitView: React.FC = () => {
           }),
         )
 
-        if (touchesStagedIndex && failed.length < uniquePaths.length) {
+        if (touchesStagedIndex && failed.length < dedupedPaths.length) {
           bumpIndexRevision(currentDirectory)
         }
 
@@ -1685,14 +1687,14 @@ export const GitView: React.FC = () => {
 
         if (failed.length === 0) {
           toast.success(
-            uniquePaths.length === 1
-              ? t("gitView.toast.revertedFilesSingle", { count: uniquePaths.length })
-              : t("gitView.toast.revertedFilesPlural", { count: uniquePaths.length }),
+            dedupedPaths.length === 1
+              ? t("gitView.toast.revertedFilesSingle", { count: dedupedPaths.length })
+              : t("gitView.toast.revertedFilesPlural", { count: dedupedPaths.length }),
           )
-        } else if (failed.length === uniquePaths.length) {
+        } else if (failed.length === dedupedPaths.length) {
           toast.error(failed[0]?.message || t("gitView.toast.revertFailed"))
         } else {
-          const successCount = uniquePaths.length - failed.length
+          const successCount = dedupedPaths.length - failed.length
           toast.warning(
             successCount === 1
               ? t("gitView.toast.revertedSomeSingle", { success: successCount, failed: failed.length })
@@ -1702,7 +1704,7 @@ export const GitView: React.FC = () => {
       } finally {
         setRevertingPaths((previous) => {
           const next = new Set(previous)
-          uniquePaths.forEach((path) => next.delete(path))
+          dedupedPaths.forEach((path) => next.delete(path))
           return next
         })
         setIsRevertingAll(false)
