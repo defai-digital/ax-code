@@ -2,6 +2,10 @@ export const DEFAULT_BACKGROUND_RELOAD_MIN_DELAY_MS = 1500
 export const DEFAULT_BACKGROUND_RELOAD_TIMEOUT_MS = 6 * 60 * 1000
 
 const normalizePositiveNumber = (value, fallback) => (Number.isFinite(value) && value > 0 ? value : fallback)
+const normalizeReloadReason = (reason) => {
+  const trimmed = typeof reason === "string" ? reason.trim() : ""
+  return trimmed || "configuration reload"
+}
 
 export const createBackgroundAxCodeReloader = ({
   refreshAxCodeAfterConfigChange,
@@ -39,7 +43,7 @@ export const createBackgroundAxCodeReloader = ({
   }
 
   const start = (reason) => {
-    const reloadReason = typeof reason === "string" && reason.trim() ? reason.trim() : "configuration reload"
+    const reloadReason = normalizeReloadReason(reason)
 
     if (currentReloadPromise) {
       queuedReloadReason = reloadReason

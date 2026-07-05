@@ -36,6 +36,34 @@ describe("background AX Code reload helper", () => {
     await reloadPromise
   })
 
+  it("normalizes reload reasons before invoking the restart", async () => {
+    const refreshAxCodeAfterConfigChange = vi.fn(async () => undefined)
+    const reloader = createBackgroundAxCodeReloader({
+      refreshAxCodeAfterConfigChange,
+      clientReloadDelayMs: 25,
+    })
+
+    reloader.start("  settings saved  ")
+
+    expect(refreshAxCodeAfterConfigChange).toHaveBeenCalledWith("settings saved", {
+      readyTimeoutMs: 360000,
+    })
+  })
+
+  it("uses a default reload reason for blank input", async () => {
+    const refreshAxCodeAfterConfigChange = vi.fn(async () => undefined)
+    const reloader = createBackgroundAxCodeReloader({
+      refreshAxCodeAfterConfigChange,
+      clientReloadDelayMs: 25,
+    })
+
+    reloader.start("   ")
+
+    expect(refreshAxCodeAfterConfigChange).toHaveBeenCalledWith("configuration reload", {
+      readyTimeoutMs: 360000,
+    })
+  })
+
   it("runs one follow-up reload when a new request arrives during a restart", async () => {
     let resolveFirstReload
     const firstReload = new Promise((resolve) => {
