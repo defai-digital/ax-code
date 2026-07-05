@@ -90,7 +90,7 @@ export namespace WorkflowTemplate {
   }
 
   const builtins = Object.fromEntries(
-    Object.entries(WorkflowFixtureSpecs).map(([key, value]) => {
+    Object.entries(WorkflowFixtureSpecs).map(([, value]) => {
       const spec = parseWorkflowSpecV1(value)
       return [
         `builtin:${spec.id}`,

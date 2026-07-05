@@ -18,7 +18,6 @@ import { ToolRegistry } from "../tool/registry.js"
 import { Tool } from "../tool/tool.js"
 import { createAxCodeClient } from "@ax-code/sdk/v2/client"
 import type {
-  ApiError,
   Message as ApiMessage,
   AxCodeClient,
   Part as ApiPart,

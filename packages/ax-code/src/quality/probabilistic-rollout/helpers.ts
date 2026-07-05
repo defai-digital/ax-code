@@ -383,7 +383,10 @@ export function decisionFromItem(item: ReplayItem): DecisionView {
   }
 }
 
-export function decisionFromPrediction(item: ReplayItem, prediction: Prediction | undefined): DecisionView | undefined {
+export function decisionFromPrediction(
+  _item: ReplayItem,
+  prediction: Prediction | undefined,
+): DecisionView | undefined {
   if (!prediction) return
   return {
     source: prediction.source,

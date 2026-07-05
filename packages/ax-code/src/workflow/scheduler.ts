@@ -200,7 +200,6 @@ export namespace WorkflowScheduler {
 
   export async function cancel(runID: WorkflowRunID) {
     assertEnabled()
-    const TaskQueue = await loadTaskQueue()
     const detail = await WorkflowRun.getDetail(runID)
     for (const child of detail.children) {
       if (child.taskQueueID) {

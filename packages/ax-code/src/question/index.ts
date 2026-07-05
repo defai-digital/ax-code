@@ -154,10 +154,6 @@ export namespace Question {
     deferred: PromiseDeferred<Answer[]>
   }
 
-  interface State {
-    pending: Map<QuestionID, PendingEntry>
-  }
-
   interface AskInput {
     sessionID: SessionID
     questions: Info[]

@@ -59,11 +59,6 @@ export namespace Pty {
     dispose: Array<{ dispose: () => void }>
   }
 
-  type State = {
-    dir: string
-    sessions: Map<PtyID, Active>
-  }
-
   type ReplayMeta = {
     cursor: number
     from?: number
