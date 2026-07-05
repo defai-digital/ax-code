@@ -1,6 +1,7 @@
 import path from "path"
 import { Instance } from "../project/instance"
 import { Glob } from "../util/glob"
+import { uniqueStrings } from "../util/string-list"
 import { nativeReadFilesBatch } from "./native-scan"
 
 // Defaults shared by all detect-* scanners. The pattern set covers
@@ -76,17 +77,15 @@ export async function collectScannerFiles(
   if (scannerUsesIncrementalFiles(input)) {
     return {
       incremental: true,
-      files: [
-        ...new Set(
-          input.files
-            .map((file) => resolveScannerFile(file, options.cwd))
-            .filter((file) => {
-              if (isExcludedDir(file, options.cwd)) return false
-              if (options.excludeTests && isTestFile(file)) return false
-              return Instance.containsPath(file)
-            }),
-        ),
-      ],
+      files: uniqueStrings(
+        input.files
+          .map((file) => resolveScannerFile(file, options.cwd))
+          .filter((file) => {
+            if (isExcludedDir(file, options.cwd)) return false
+            if (options.excludeTests && isTestFile(file)) return false
+            return Instance.containsPath(file)
+          }),
+      ),
     }
   }
 
@@ -103,7 +102,7 @@ export async function collectScannerFiles(
 
   return {
     incremental: false,
-    files: [...new Set(files)],
+    files: uniqueStrings(files),
   }
 }
 
