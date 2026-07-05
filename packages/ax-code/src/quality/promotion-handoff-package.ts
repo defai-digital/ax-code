@@ -249,7 +249,7 @@ export namespace QualityPromotionHandoffPackage {
   function evaluateSummary(archiveManifest: QualityPromotionArchiveManifest.ArchiveArtifact, documents: Document[]) {
     const archiveReasons = QualityPromotionArchiveManifest.verify(archiveManifest)
     const expectedDocuments = buildDocuments(archiveManifest)
-    const documentsMatch = JSON.stringify(documents) === JSON.stringify(expectedDocuments)
+    const documentsMatch = jsonEqual(documents, expectedDocuments)
     const digestCoverage = documents.every(
       (document) =>
         document.contentDigest.length > 0 && (document.kind === "index" || (document.artifactDigest?.length ?? 0) > 0),
@@ -331,11 +331,11 @@ export namespace QualityPromotionHandoffPackage {
       reasons.push(`handoff package archive manifest mismatch for ${packet.source} (${archiveReasons[0]})`)
     }
     const expectedDocuments = buildDocuments(packet.archiveManifest)
-    if (JSON.stringify(packet.documents) !== JSON.stringify(expectedDocuments)) {
+    if (!jsonEqual(packet.documents, expectedDocuments)) {
       reasons.push(`handoff package documents mismatch for ${packet.source}`)
     }
     const expectedSummary = evaluateSummary(packet.archiveManifest, packet.documents)
-    if (JSON.stringify(packet.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(packet.summary, expectedSummary)) {
       reasons.push(`handoff package summary mismatch for ${packet.source}`)
     }
     return reasons

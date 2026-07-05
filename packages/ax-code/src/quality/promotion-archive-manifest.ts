@@ -170,7 +170,7 @@ export namespace QualityPromotionArchiveManifest {
   function evaluateSummary(exportBundle: QualityPromotionExportBundle.ExportArtifact, inventory: InventoryItem[]) {
     const exportReasons = QualityPromotionExportBundle.verify(exportBundle)
     const expectedInventory = buildInventory(exportBundle)
-    const inventoryMatches = JSON.stringify(inventory) === JSON.stringify(expectedInventory)
+    const inventoryMatches = jsonEqual(inventory, expectedInventory)
     const digestsPresent = inventory.every((item) => item.digest.length > 0)
     const gates = [
       {
@@ -251,11 +251,11 @@ export namespace QualityPromotionArchiveManifest {
       reasons.push(`archive manifest export bundle mismatch for ${archive.source} (${exportReasons[0]})`)
     }
     const expectedInventory = buildInventory(archive.exportBundle)
-    if (JSON.stringify(archive.inventory) !== JSON.stringify(expectedInventory)) {
+    if (!jsonEqual(archive.inventory, expectedInventory)) {
       reasons.push(`archive manifest inventory mismatch for ${archive.source}`)
     }
     const expectedSummary = evaluateSummary(archive.exportBundle, archive.inventory)
-    if (JSON.stringify(archive.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(archive.summary, expectedSummary)) {
       reasons.push(`archive manifest summary mismatch for ${archive.source}`)
     }
     return reasons

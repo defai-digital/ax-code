@@ -273,7 +273,7 @@ export namespace QualityPromotionAuditManifest {
     if (manifest.source !== releasePacket.source) {
       reasons.push(`audit manifest source mismatch: ${manifest.source} vs ${releasePacket.source}`)
     }
-    if (JSON.stringify(manifest.releasePacket) !== JSON.stringify(releasePacket)) {
+    if (!jsonEqual(manifest.releasePacket, releasePacket)) {
       reasons.push(`audit manifest release packet mismatch for ${releasePacket.source}`)
     }
     const packetReasons = QualityPromotionReleasePacket.verify(
@@ -287,7 +287,7 @@ export namespace QualityPromotionAuditManifest {
       releasePacket,
       promotion: manifest.promotion,
     })
-    if (JSON.stringify(manifest.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(manifest.summary, expectedSummary)) {
       reasons.push(`audit manifest summary mismatch for ${releasePacket.source}`)
     }
     return reasons

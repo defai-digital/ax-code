@@ -156,7 +156,7 @@ export namespace QualityPromotionPortableExport {
   function evaluateSummary(handoffPackage: QualityPromotionHandoffPackage.PackageArtifact, files: File[]) {
     const packageReasons = QualityPromotionHandoffPackage.verify(handoffPackage)
     const expectedFiles = buildFiles(handoffPackage)
-    const filesMatch = JSON.stringify(files) === JSON.stringify(expectedFiles)
+    const filesMatch = jsonEqual(files, expectedFiles)
     const digestCoverage = files.every((file) => file.contentDigest.length > 0)
     const gates = [
       {
@@ -239,11 +239,11 @@ export namespace QualityPromotionPortableExport {
       reasons.push(`portable export handoff package mismatch for ${exportArtifact.source} (${packageReasons[0]})`)
     }
     const expectedFiles = buildFiles(exportArtifact.handoffPackage)
-    if (JSON.stringify(exportArtifact.files) !== JSON.stringify(expectedFiles)) {
+    if (!jsonEqual(exportArtifact.files, expectedFiles)) {
       reasons.push(`portable export files mismatch for ${exportArtifact.source}`)
     }
     const expectedSummary = evaluateSummary(exportArtifact.handoffPackage, exportArtifact.files)
-    if (JSON.stringify(exportArtifact.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(exportArtifact.summary, expectedSummary)) {
       reasons.push(`portable export summary mismatch for ${exportArtifact.source}`)
     }
     return reasons

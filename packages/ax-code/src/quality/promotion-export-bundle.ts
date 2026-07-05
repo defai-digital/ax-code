@@ -149,7 +149,7 @@ export namespace QualityPromotionExportBundle {
       reasons.push(`export bundle audit manifest mismatch for ${bundle.source} (${manifestReasons[0]})`)
     }
     const expectedSummary = evaluateSummary(bundle.auditManifest)
-    if (JSON.stringify(bundle.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(bundle.summary, expectedSummary)) {
       reasons.push(`export bundle summary mismatch for ${bundle.source}`)
     }
     return reasons

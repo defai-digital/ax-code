@@ -112,7 +112,7 @@ export namespace QualityPromotionPackagedArchive {
   function evaluateSummary(portableExport: QualityPromotionPortableExport.ExportArtifact, entries: Entry[]) {
     const exportReasons = QualityPromotionPortableExport.verify(portableExport)
     const expectedEntries = buildEntries(portableExport)
-    const entriesMatch = JSON.stringify(entries) === JSON.stringify(expectedEntries)
+    const entriesMatch = jsonEqual(entries, expectedEntries)
     const digestCoverage = entries.every((entry) => entry.contentDigest.length > 0)
     const gates = [
       {
@@ -191,7 +191,7 @@ export namespace QualityPromotionPackagedArchive {
       reasons.push(`packaged archive portable export mismatch for ${archive.source} (${exportReasons[0]})`)
     }
     const expectedEntries = buildEntries(archive.portableExport)
-    if (JSON.stringify(archive.entries) !== JSON.stringify(expectedEntries)) {
+    if (!jsonEqual(archive.entries, expectedEntries)) {
       reasons.push(`packaged archive entries mismatch for ${archive.source}`)
     }
     const expectedDigest = computePackageDigest(archive.entries)
@@ -199,7 +199,7 @@ export namespace QualityPromotionPackagedArchive {
       reasons.push(`packaged archive digest mismatch for ${archive.source}`)
     }
     const expectedSummary = evaluateSummary(archive.portableExport, archive.entries)
-    if (JSON.stringify(archive.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(archive.summary, expectedSummary)) {
       reasons.push(`packaged archive summary mismatch for ${archive.source}`)
     }
     return reasons
