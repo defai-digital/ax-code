@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest"
-import { getStaticGroupToolName, isExpandableTool, isStandaloneTool, isStaticTool, normalizeToolName } from "./toolRenderUtils"
+import {
+  getStaticGroupToolName,
+  isBashTool,
+  isEditTool,
+  isExpandableTool,
+  isStandaloneTool,
+  isStaticTool,
+  normalizeToolName,
+} from "./toolRenderUtils"
 
 describe("normalizeToolName", () => {
   test("normalizes casing, provider prefixes, and streaming suffixes", () => {
@@ -16,5 +24,13 @@ describe("tool render classification", () => {
     expect(isStandaloneTool("task")).toBe(true)
     expect(isStaticTool("grep")).toBe(true)
     expect(getStaticGroupToolName("ripgrep")).toBe("grep")
+  })
+
+  test("classifies default-open bash and edit tool groups", () => {
+    expect(isBashTool("server.shell:2")).toBe(true)
+    expect(isBashTool("edit")).toBe(false)
+    expect(isEditTool("server.apply_patch:1")).toBe(true)
+    expect(isEditTool("file_write")).toBe(true)
+    expect(isEditTool("bash")).toBe(false)
   })
 })

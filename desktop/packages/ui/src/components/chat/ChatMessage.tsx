@@ -35,7 +35,7 @@ import {
 } from "./message/renderCompare"
 import { LazyToolOutputDialog } from "./message/LazyToolOutputDialog"
 import { clearCopyResetTimer, replaceCopyResetTimer } from "./copyResetTimer"
-import { normalizeToolName } from "./message/parts/toolRenderUtils"
+import { isBashTool, isEditTool } from "./message/parts/toolRenderUtils"
 
 const USER_BUBBLE_STYLE: React.CSSProperties = {
   backgroundColor: "var(--chat-user-message-bg)",
@@ -46,18 +46,6 @@ const USER_BUBBLE_STYLE: React.CSSProperties = {
 const EXPANDED_TOOLS_CACHE_MAX = 4000
 const expandedToolsStateCache = new Map<string, Set<string>>()
 const collapsedToolsStateCache = new Map<string, Set<string>>()
-
-const BASH_TOOL_NAMES = new Set(["bash", "shell", "cmd", "terminal"])
-const EDIT_TOOL_NAMES = new Set([
-  "apply_patch",
-  "edit",
-  "write",
-  "multiedit",
-  "str_replace",
-  "str_replace_based_edit_tool",
-  "create",
-  "file_write",
-])
 
 const readExpandedToolsCache = (messageId: string): Set<string> => {
   const cached = expandedToolsStateCache.get(messageId)
@@ -477,14 +465,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     for (const part of [...toolParts, ...turnActivityToolParts]) {
       const toolId = typeof part?.id === "string" ? part.id : ""
       if (!toolId) continue
-      const toolName = normalizeToolName((part as { tool?: string }).tool)
-      if (!toolName) continue
-
-      if (showExpandedBashTools && BASH_TOOL_NAMES.has(toolName)) {
+      const toolName = (part as { tool?: string }).tool
+      if (showExpandedBashTools && isBashTool(toolName)) {
         next.add(toolId)
         continue
       }
-      if (showExpandedEditTools && EDIT_TOOL_NAMES.has(toolName)) {
+      if (showExpandedEditTools && isEditTool(toolName)) {
         next.add(toolId)
       }
     }

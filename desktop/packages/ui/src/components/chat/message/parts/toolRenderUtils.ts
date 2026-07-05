@@ -19,6 +19,19 @@ const STANDALONE_TOOL_NAMES = new Set<string>(["task"])
 
 const SEARCH_TOOL_NAMES = new Set<string>(["grep", "search", "find", "ripgrep", "glob"])
 
+const BASH_TOOL_NAMES = new Set<string>(["bash", "shell", "cmd", "terminal"])
+
+const EDIT_TOOL_NAMES = new Set<string>([
+  "apply_patch",
+  "edit",
+  "write",
+  "multiedit",
+  "str_replace",
+  "str_replace_based_edit_tool",
+  "create",
+  "file_write",
+])
+
 export const normalizeToolName = (toolName: unknown): string => {
   if (typeof toolName !== "string") return ""
   const trimmed = toolName.trim().toLowerCase()
@@ -38,6 +51,14 @@ export const isExpandableTool = (toolName: unknown): boolean => {
 
 export const isStandaloneTool = (toolName: unknown): boolean => {
   return STANDALONE_TOOL_NAMES.has(normalizeToolName(toolName))
+}
+
+export const isBashTool = (toolName: unknown): boolean => {
+  return BASH_TOOL_NAMES.has(normalizeToolName(toolName))
+}
+
+export const isEditTool = (toolName: unknown): boolean => {
+  return EDIT_TOOL_NAMES.has(normalizeToolName(toolName))
 }
 
 export const isStaticTool = (toolName: unknown): boolean => {
