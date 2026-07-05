@@ -27,7 +27,10 @@ const jsonResponse = (body: unknown): Response =>
 
 describe("useProjectsStore path identity", () => {
   beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ skipped: true })))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ skipped: true })),
+    )
     useProjectsStore.setState({ projects: [], activeProjectId: null })
   })
 
@@ -48,5 +51,29 @@ describe("useProjectsStore path identity", () => {
     expect(second).not.toBeNull()
     expect(second?.id).not.toBe(first?.id)
     expect(useProjectsStore.getState().projects).toHaveLength(2)
+  })
+
+  test("keeps state unchanged when settings projects are unchanged", () => {
+    const projects = [
+      {
+        id: "project-1",
+        path: "/Users/Alice/Repo",
+        label: "Repo",
+        color: "blue",
+      },
+    ]
+
+    useProjectsStore.getState().synchronizeFromSettings({
+      projects,
+      activeProjectId: "project-1",
+    })
+    const firstState = useProjectsStore.getState()
+
+    useProjectsStore.getState().synchronizeFromSettings({
+      projects: [...projects],
+      activeProjectId: "project-1",
+    })
+
+    expect(useProjectsStore.getState()).toBe(firstState)
   })
 })

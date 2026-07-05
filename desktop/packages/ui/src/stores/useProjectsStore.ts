@@ -293,6 +293,8 @@ const cacheProjects = (projects: ProjectEntry[], activeProjectId: string | null)
   }
 }
 
+const projectListKey = (projects: ProjectEntry[]): string => JSON.stringify(projects)
+
 const persistProjects = (projects: ProjectEntry[], activeProjectId: string | null) => {
   cacheProjects(projects, activeProjectId)
   void updateDesktopSettings({ projects, activeProjectId: activeProjectId ?? undefined })
@@ -642,7 +644,7 @@ export const useProjectsStore = create<ProjectsStore>()(
           return
         }
 
-        const projectsChanged = JSON.stringify(current.projects) !== JSON.stringify(incomingProjects)
+        const projectsChanged = projectListKey(current.projects) !== projectListKey(incomingProjects)
         const activeChanged = current.activeProjectId !== incomingActive
 
         if (!projectsChanged && !activeChanged) {
