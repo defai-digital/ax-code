@@ -371,9 +371,7 @@ export namespace QualityPromotionAdoptionDissentHandling {
 
   export async function assertPersisted(handling: HandlingArtifact) {
     const persisted = await get({ source: handling.source, handlingID: handling.handlingID })
-    const prev = JSON.stringify(persisted.handling)
-    const curr = JSON.stringify(handling)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.handling, handling)) {
       throw new Error(`Persisted adoption dissent handling ${handling.handlingID} does not match the provided artifact`)
     }
     return persisted

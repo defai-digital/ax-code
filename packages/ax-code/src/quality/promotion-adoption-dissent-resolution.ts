@@ -370,9 +370,7 @@ export namespace QualityPromotionAdoptionDissentResolution {
 
   export async function assertPersisted(resolution: ResolutionArtifact) {
     const persisted = await get({ source: resolution.source, resolutionID: resolution.resolutionID })
-    const prev = JSON.stringify(persisted.resolution)
-    const curr = JSON.stringify(resolution)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.resolution, resolution)) {
       throw new Error(
         `Persisted adoption dissent resolution ${resolution.resolutionID} does not match the provided artifact`,
       )

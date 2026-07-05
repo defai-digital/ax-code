@@ -242,9 +242,7 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   export async function assertPersisted(record: RecordArtifact) {
     await QualityPromotionSignedArchive.assertPersisted(record.signedArchive)
     const persisted = await get({ source: record.source, recordID: record.recordID })
-    const prev = JSON.stringify(persisted.record)
-    const curr = JSON.stringify(record)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.record, record)) {
       throw new Error(
         `Persisted signed archive attestation record ${record.recordID} does not match the provided artifact`,
       )

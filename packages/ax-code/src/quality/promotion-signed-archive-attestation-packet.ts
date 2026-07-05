@@ -246,9 +246,7 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
   export async function assertPersisted(packet: PacketArtifact) {
     await QualityPromotionSignedArchiveAttestationRecord.assertPersisted(packet.attestationRecord)
     const persisted = await get({ source: packet.source, packetID: packet.packetID })
-    const prev = JSON.stringify(persisted.packet)
-    const curr = JSON.stringify(packet)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.packet, packet)) {
       throw new Error(
         `Persisted signed archive attestation packet ${packet.packetID} does not match the provided artifact`,
       )

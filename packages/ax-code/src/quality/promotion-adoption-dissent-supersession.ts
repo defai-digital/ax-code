@@ -399,9 +399,7 @@ export namespace QualityPromotionAdoptionDissentSupersession {
 
   export async function assertPersisted(supersession: SupersessionArtifact) {
     const persisted = await get({ source: supersession.source, supersessionID: supersession.supersessionID })
-    const prev = JSON.stringify(persisted.supersession)
-    const curr = JSON.stringify(supersession)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.supersession, supersession)) {
       throw new Error(
         `Persisted adoption dissent supersession ${supersession.supersessionID} does not match the provided artifact`,
       )

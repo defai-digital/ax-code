@@ -343,9 +343,7 @@ export namespace QualityPromotionSignedArchive {
   export async function assertPersisted(archive: ArchiveArtifact) {
     await QualityPromotionPackagedArchive.assertPersisted(archive.packagedArchive)
     const persisted = await get({ source: archive.source, signedArchiveID: archive.signedArchiveID })
-    const prev = JSON.stringify(persisted.archive)
-    const curr = JSON.stringify(archive)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.archive, archive)) {
       throw new Error(
         `Persisted promotion signed archive ${archive.signedArchiveID} does not match the provided artifact`,
       )

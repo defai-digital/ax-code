@@ -293,9 +293,7 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     await QualityPromotionSignedArchiveGovernancePacket.assertPersisted(dossier.governancePacket)
     await QualityPromotionHandoffPackage.assertPersisted(dossier.handoffPackage)
     const persisted = await get({ source: dossier.source, dossierID: dossier.dossierID })
-    const prev = JSON.stringify(persisted.dossier)
-    const curr = JSON.stringify(dossier)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.dossier, dossier)) {
       throw new Error(
         `Persisted signed archive review dossier ${dossier.dossierID} does not match the provided artifact`,
       )
