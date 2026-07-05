@@ -28,13 +28,8 @@ export namespace QualityPromotionSignedArchiveAttestationPolicyStore {
   })
   export type Resolution = z.output<typeof Resolution>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function requireProjectID(projectID: string | null | undefined) {
     const normalized = projectID?.trim()

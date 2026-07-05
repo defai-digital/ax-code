@@ -83,13 +83,8 @@ export namespace QualityPromotionSignedArchiveTrust {
   })
   export type TrustSummary = z.output<typeof TrustSummary>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function scopeKey(scope: Scope, projectID: string | null) {
     return scope === "global" ? "__global__" : encode(projectID!)
