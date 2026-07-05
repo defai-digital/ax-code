@@ -18,6 +18,7 @@ import fs from "fs/promises"
 import { printNoSessionFound, resolveSession } from "./session-latest"
 import { isRecord } from "@/util/record"
 import { parseJsonPayload } from "@/util/json-value"
+import { uniqueStrings } from "@/util/string-list"
 
 export interface LogEntry {
   level?: string | number
@@ -90,6 +91,14 @@ export function normalizeTraceLimit(value: unknown): number {
     throw new Error("--limit must be a positive integer")
   }
   return value
+}
+
+export function formatTraceLogMessage(entry: Pick<LogEntry, "msg" | "errorMessage">): string {
+  return uniqueStrings([entry.msg, entry.errorMessage].filter((value): value is string => Boolean(value))).join(" - ")
+}
+
+export function collectTraceErrorCodes(entries: Array<Pick<LogEntry, "errorCode">>): string[] {
+  return uniqueStrings(entries.map((entry) => entry.errorCode).filter((value): value is string => Boolean(value)))
 }
 
 export const TraceCommand: CommandModule = {
@@ -362,9 +371,7 @@ export const TraceCommand: CommandModule = {
             : entry.status
               ? `\x1b[90m${entry.status}\x1b[0m`
               : ""
-      const message = [entry.msg, entry.errorMessage]
-        .filter((value, index, all) => value && all.indexOf(value) === index)
-        .join(" - ")
+      const message = formatTraceLogMessage(entry)
 
       const parts = [time, icon, service, command, message, duration, status].filter(Boolean)
       console.log(`  ${parts.join("  ")}`)
@@ -383,7 +390,7 @@ export const TraceCommand: CommandModule = {
     console.log("")
     console.log(`  \x1b[90m${filtered.length} entries | ${errors.length} errors | avg ${avgDuration}ms\x1b[0m`)
     if (errors.length > 0) {
-      const codes = [...new Set(errors.map((e) => e.errorCode).filter(Boolean))]
+      const codes = collectTraceErrorCodes(errors)
       if (codes.length > 0) {
         console.log(`  \x1b[31mError codes: ${codes.join(", ")}\x1b[0m`)
       }

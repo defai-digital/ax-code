@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest"
 import {
+  collectTraceErrorCodes,
   decodeTraceLogEntryValue,
+  formatTraceLogMessage,
   formatTraceLogTime,
   normalizeTraceLimit,
   parseTraceLogEntryJsonLine,
@@ -68,6 +70,24 @@ describe("trace log entry decoding", () => {
     expect(formatTraceLogTime({ time: "2026-04-23T00:03:30.132Z" })).toBe("00:03:30")
     expect(() => formatTraceLogTime({ time: Number.MAX_VALUE })).not.toThrow()
     expect(formatTraceLogTime({ time: Number.MAX_VALUE })).toBe("")
+  })
+
+  test("formatTraceLogMessage omits duplicate error text", () => {
+    expect(formatTraceLogMessage({ msg: "failed", errorMessage: "failed" })).toBe("failed")
+    expect(formatTraceLogMessage({ msg: "failed", errorMessage: "permission denied" })).toBe(
+      "failed - permission denied",
+    )
+  })
+
+  test("collectTraceErrorCodes preserves first-seen unique codes", () => {
+    expect(
+      collectTraceErrorCodes([
+        { errorCode: "EACCES" },
+        { errorCode: undefined },
+        { errorCode: "ENOENT" },
+        { errorCode: "EACCES" },
+      ]),
+    ).toEqual(["EACCES", "ENOENT"])
   })
 
   test("normalizeTraceLimit rejects values that would bypass or invert limiting", () => {
