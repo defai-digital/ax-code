@@ -38,7 +38,7 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
     const entries = stash.list()
     // Show most recent first
     return entries
-      .map((entry, index) => {
+      .map((entry) => {
         const isDeleting = toDelete() === entry.id
         const lineCount = (entry.input.match(/\n/g)?.length ?? 0) + 1
         return {

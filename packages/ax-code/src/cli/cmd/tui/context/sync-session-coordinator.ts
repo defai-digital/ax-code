@@ -17,7 +17,7 @@ export interface SessionSyncOptions {
   missing?: "ignore" | "throw"
 }
 
-export interface SessionSyncController<TSnapshot> {
+export interface SessionSyncController {
   clear: (sessionID: string) => void
   reset: () => void
   sync: (sessionID: string, input?: SessionSyncOptions) => Promise<void>
@@ -27,7 +27,7 @@ export function createSessionSyncController<TSnapshot>(input: {
   fetchSnapshot: (sessionID: string) => Promise<TSnapshot | undefined>
   applySnapshot: (sessionID: string, snapshot: TSnapshot) => void
   onMissingSnapshot?: (sessionID: string) => void
-}): SessionSyncController<TSnapshot> {
+}): SessionSyncController {
   const fullSyncedSessions = new Set<string>()
   const inFlightSessions = new Set<string>()
 

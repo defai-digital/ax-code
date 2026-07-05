@@ -2,14 +2,13 @@ import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { createMemo, createSignal, createResource, onMount, Show } from "solid-js"
+import { createMemo, createSignal, createResource, onMount } from "solid-js"
 import { Locale } from "@/util/locale"
 import { useKeybind } from "../context/keybind"
 import { useTheme } from "../context/theme"
 import { useSDK } from "../context/sdk"
 import { useLocal } from "../context/local"
 import { DialogSessionRename } from "./dialog-session-rename"
-import { useKV } from "../context/kv"
 import { createDebouncedSignal } from "../util/signal"
 import { Spinner } from "./spinner"
 import { useToast } from "../ui/toast"
@@ -27,7 +26,6 @@ export function DialogSessionList() {
   const keybind = useKeybind()
   const { theme } = useTheme()
   const sdk = useSDK()
-  const kv = useKV()
   const toast = useToast()
   const local = useLocal()
 

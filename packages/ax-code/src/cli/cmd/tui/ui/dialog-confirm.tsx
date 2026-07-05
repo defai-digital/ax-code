@@ -1,4 +1,4 @@
-import { TextAttributes, type MouseEvent } from "@ax-code/opentui-core"
+import { TextAttributes } from "@ax-code/opentui-core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
@@ -77,7 +77,7 @@ export function DialogConfirm(props: DialogConfirmProps) {
               backgroundColor={key === store.active ? theme.primary : theme.backgroundElement}
               onMouseOver={() => setStore("active", key)}
               onMouseDown={() => setStore("active", key)}
-              onMouseUp={(evt: MouseEvent) => {
+              onMouseUp={() => {
                 if (key === "confirm") {
                   runDialogConfirmAction(() => props.onConfirm?.(), `Failed to confirm ${props.title.toLowerCase()}`)
                 }
