@@ -1,21 +1,28 @@
 import { describe, it, expect } from "vitest"
+import type { Session, SessionStatus } from "@ax-code/sdk/v2/client"
 import { resolveFallbackTaskSessionId } from "../resolveFallbackTaskSessionId"
 
-const busyStatus = { type: "busy" }
-const retryStatus = { type: "retry", attempt: 1, message: "", next: Date.now() + 5000 }
+const busyStatus = { type: "busy" } satisfies SessionStatus
+const retryStatus = { type: "retry", attempt: 1, message: "", next: Date.now() + 5000 } satisfies SessionStatus
 
-const makeSession = (overrides) => ({
-  slug: overrides.id,
-  projectID: "proj",
-  directory: "/test",
-  title: overrides.title ?? `Session ${overrides.id}`,
-  version: "1",
-  time: {
-    created: overrides.time?.created ?? Date.now(),
-    updated: overrides.time?.updated ?? Date.now(),
-  },
-  ...overrides,
-})
+type SessionOverride = Partial<Omit<Session, "id" | "time">> & {
+  id: string
+  time?: Partial<Session["time"]>
+}
+
+const makeSession = (overrides: SessionOverride): Session =>
+  ({
+    slug: overrides.id,
+    projectID: "proj",
+    directory: "/test",
+    title: overrides.title ?? `Session ${overrides.id}`,
+    version: "1",
+    time: {
+      created: overrides.time?.created ?? Date.now(),
+      updated: overrides.time?.updated ?? Date.now(),
+    },
+    ...overrides,
+  }) as Session
 
 describe("resolveFallbackTaskSessionId", () => {
   const parentSessionId = "parent-session-1"
