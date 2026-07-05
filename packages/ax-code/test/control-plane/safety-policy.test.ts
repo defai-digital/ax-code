@@ -116,19 +116,21 @@ describe("SafetyPolicy", () => {
     })
   })
 
-  test("keeps web search aligned with runtime safe permissions", () => {
-    expect(
-      SafetyPolicy.decide({
-        mode: "autonomous",
-        permission: "websearch",
-      }),
-    ).toEqual({
-      action: "allow",
-      risk: "safe",
-      reason: "safe_permission",
-      checkpointRequired: false,
-      matchedRule: "websearch",
-    })
+  test("keeps network search aligned with runtime risky permissions", () => {
+    for (const permission of ["websearch", "codesearch"]) {
+      expect(
+        SafetyPolicy.decide({
+          mode: "autonomous",
+          permission,
+        }),
+      ).toEqual({
+        action: "ask",
+        risk: "high",
+        reason: "autonomous_risky_permission",
+        checkpointRequired: true,
+        matchedRule: permission,
+      })
+    }
   })
 
   test("allows risky normal-mode permissions only with checkpoint", () => {

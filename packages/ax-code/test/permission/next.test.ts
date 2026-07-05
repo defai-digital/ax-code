@@ -785,6 +785,47 @@ test("ask - autonomous unknown permission can use explicit legacy allow compatib
   }
 })
 
+test("ask - autonomous network search permissions require ruleset approval", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+  process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        for (const permission of ["websearch", "codesearch"]) {
+          const id = PermissionID.make(`per_autonomous_${permission}`)
+          const ask = Permission.ask({
+            id,
+            sessionID: SessionID.make("session_autonomous_network_search"),
+            permission,
+            patterns: [`private ${permission} query`],
+            metadata: {},
+            always: ["*"],
+            ruleset: [],
+          })
+
+          const pending = await waitForPending(1)
+          expect(pending[0]).toMatchObject({
+            id,
+            permission,
+          })
+
+          await Permission.reply({
+            requestID: id,
+            reply: "reject",
+          })
+          await expect(ask).rejects.toBeInstanceOf(Permission.RejectedError)
+        }
+      },
+    })
+  } finally {
+    if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+    else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+  }
+})
+
 // reply tests
 
 test("reply - once resolves the pending ask", async () => {

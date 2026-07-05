@@ -27,12 +27,10 @@ const SAFE_PERMISSIONS: ReadonlySet<string> = new Set([
   "glob",
   "grep",
   "list",
-  "codesearch",
   "lsp",
   "code_intelligence",
   "skill",
   "todoread",
-  "websearch",
 ])
 
 /**
@@ -55,6 +53,9 @@ const SAFE_PERMISSIONS: ReadonlySet<string> = new Set([
  *                            current conversation.
  *   - `webfetch`          — arbitrary URL fetch; potential exfiltration
  *                            channel.
+ *   - `websearch`         — external search network egress; queries can
+ *                            contain private repository context.
+ *   - `codesearch`        — external code/doc search network egress.
  */
 const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "edit",
@@ -64,6 +65,8 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "todowrite",
   "memorywrite",
   "webfetch",
+  "websearch",
+  "codesearch",
 ])
 
 export function classify(permission: string): RiskClass {

@@ -1,20 +1,19 @@
 import { describe, expect, test } from "vitest"
 import { classify } from "../../src/permission/risk-classes"
 
-const safePermissions = [
-  "read",
-  "glob",
-  "grep",
-  "list",
-  "codesearch",
-  "lsp",
-  "code_intelligence",
-  "skill",
-  "todoread",
-  "websearch",
-]
+const safePermissions = ["read", "glob", "grep", "list", "lsp", "code_intelligence", "skill", "todoread"]
 
-const riskPermissions = ["edit", "bash", "external_directory", "task", "todowrite", "memorywrite", "webfetch"]
+const riskPermissions = [
+  "edit",
+  "bash",
+  "external_directory",
+  "task",
+  "todowrite",
+  "memorywrite",
+  "webfetch",
+  "websearch",
+  "codesearch",
+]
 
 describe("permission risk classification", () => {
   test("safe permissions classify as safe", () => {
@@ -82,12 +81,13 @@ describe("permission risk classification", () => {
     // edit-class is risk, network-egress and subagent-spawn are risk.
     expect(classify("read")).toBe("safe")
     expect(classify("grep")).toBe("safe")
-    expect(classify("codesearch")).toBe("safe")
     expect(classify("edit")).toBe("risk")
     expect(classify("bash")).toBe("risk")
     expect(classify("external_directory")).toBe("risk")
     expect(classify("task")).toBe("risk")
     expect(classify("memorywrite")).toBe("risk")
     expect(classify("webfetch")).toBe("risk")
+    expect(classify("websearch")).toBe("risk")
+    expect(classify("codesearch")).toBe("risk")
   })
 })
