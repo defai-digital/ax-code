@@ -43,13 +43,8 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
   })
   export type StoredRecord = z.output<typeof StoredRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, recordID: string) {
     return ["quality_model_signed_archive_attestation_record", encode(source), recordID]
