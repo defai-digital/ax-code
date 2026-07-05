@@ -13,6 +13,10 @@ const TASK_DUE_SLACK_MS = 5_000
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 
 const buildTaskKey = (projectID, taskID) => `${projectID}:${taskID}`
+const asNonEmptyString = (value) => {
+  const normalized = typeof value === "string" ? value.trim() : ""
+  return normalized.length > 0 ? normalized : null
+}
 
 const applyTimeToDate = (baseDateTime, time) => {
   const parsed = parseScheduledTaskTimeParts(time)
@@ -35,9 +39,7 @@ const weekdayAsZeroBased = (dateTime) => {
 }
 
 const normalizeScheduleTimezone = (schedule) =>
-  typeof schedule?.timezone === "string" && schedule.timezone.trim().length > 0
-    ? schedule.timezone.trim()
-    : DateTime.local().zoneName
+  asNonEmptyString(schedule?.timezone) || DateTime.local().zoneName
 
 const safeErrorMessage = (error, maxLength = 2_000) => {
   const raw = error instanceof Error ? error.message || String(error) : String(error ?? "Unknown error")
@@ -175,7 +177,7 @@ export const computeNextRunAt = (task, nowMs = Date.now()) => {
 export const formatScheduledSessionTitle = (task, nowMs = Date.now()) => {
   const timezone = normalizeScheduleTimezone(task?.schedule)
   const stamp = DateTime.fromMillis(nowMs, { zone: timezone }).toFormat("yyyy-LL-dd HH:mm")
-  const taskName = typeof task?.name === "string" && task.name.trim().length > 0 ? task.name.trim() : "Scheduled task"
+  const taskName = asNonEmptyString(task?.name) || "Scheduled task"
   const suffix = ` ${stamp}`
   const maxTaskNameLength = Math.max(1, TASK_TITLE_MAX_LENGTH - suffix.length)
   const trimmedName = taskName.length > maxTaskNameLength ? taskName.slice(0, maxTaskNameLength) : taskName
