@@ -1,4 +1,5 @@
 import type * as Http2 from "node:http2"
+import { errorMessage } from "./internal/error.js"
 import {
   type AxCodeGrpcBidirectionalStreamingMethod,
   type AxCodeGrpcMetadata,
@@ -757,10 +758,6 @@ function getCodec(messageType: string) {
   const codec = PROTO_CODECS[messageType]
   if (!codec) throw new Error(`Unsupported AX Code gRPC proto message type: ${messageType}`)
   return codec
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
 }
 
 class GrpcFrameDecoder {

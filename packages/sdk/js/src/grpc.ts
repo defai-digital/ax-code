@@ -15,6 +15,7 @@ import type {
   HeadlessRuntimeCommandResult,
   HeadlessShellBody,
 } from "./headless/command.js"
+import { errorMessage } from "./internal/error.js"
 import { headersToRecord } from "./protocol.js"
 
 export const AX_CODE_GRPC_SERVICE = "axcode.v1.AxCodeHeadless"
@@ -2609,10 +2610,6 @@ function wrap<T>(value: T): AxCodeGrpcJsonResponse<T> {
 function unwrapHttpSdkResponse(value: unknown): unknown {
   if (value && typeof value === "object" && "data" in value) return (value as { data: unknown }).data
   return value
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function mergeHeaders(headers: RequestInit["headers"] | undefined, metadata: AxCodeGrpcMetadata | undefined) {
