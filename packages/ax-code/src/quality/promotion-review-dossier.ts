@@ -253,9 +253,7 @@ export namespace QualityPromotionReviewDossier {
   export async function assertPersisted(dossier: DossierArtifact) {
     await QualityPromotionSubmissionBundle.assertPersisted(dossier.submissionBundle)
     const persisted = await get({ source: dossier.source, dossierID: dossier.dossierID })
-    const prev = JSON.stringify(persisted.dossier)
-    const curr = JSON.stringify(dossier)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.dossier, dossier)) {
       throw new Error(`Persisted promotion review dossier ${dossier.dossierID} does not match the provided artifact`)
     }
     return persisted

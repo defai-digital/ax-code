@@ -203,9 +203,7 @@ export namespace QualityPromotionApproval {
 
   export async function assertPersisted(approval: ApprovalArtifact) {
     const persisted = await get({ source: approval.source, approvalID: approval.approvalID })
-    const prev = JSON.stringify(persisted.approval)
-    const curr = JSON.stringify(approval)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.approval, approval)) {
       throw new Error(`Persisted approval ${approval.approvalID} does not match the provided artifact`)
     }
     return persisted

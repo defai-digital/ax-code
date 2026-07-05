@@ -217,9 +217,7 @@ export namespace QualityPromotionSubmissionBundle {
   export async function assertPersisted(submission: BundleArtifact) {
     await QualityPromotionApprovalPacket.assertPersisted(submission.approvalPacket)
     const persisted = await get({ source: submission.source, submissionID: submission.submissionID })
-    const prev = JSON.stringify(persisted.submission)
-    const curr = JSON.stringify(submission)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.submission, submission)) {
       throw new Error(
         `Persisted promotion submission bundle ${submission.submissionID} does not match the provided artifact`,
       )

@@ -240,9 +240,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
   export async function assertPersisted(record: RecordArtifact) {
     await QualityPromotionBoardDecision.assertPersisted(record.boardDecision)
     const persisted = await get({ source: record.source, recordID: record.recordID })
-    const prev = JSON.stringify(persisted.record)
-    const curr = JSON.stringify(record)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.record, record)) {
       throw new Error(
         `Persisted promotion release decision record ${record.recordID} does not match the provided artifact`,
       )

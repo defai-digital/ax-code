@@ -270,9 +270,7 @@ export namespace QualityPromotionBoardDecision {
   export async function assertPersisted(decision: DecisionArtifact) {
     await QualityPromotionReviewDossier.assertPersisted(decision.reviewDossier)
     const persisted = await get({ source: decision.source, decisionID: decision.decisionID })
-    const prev = JSON.stringify(persisted.decision)
-    const curr = JSON.stringify(decision)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.decision, decision)) {
       throw new Error(`Persisted promotion board decision ${decision.decisionID} does not match the provided artifact`)
     }
     return persisted
