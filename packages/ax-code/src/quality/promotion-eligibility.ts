@@ -3,6 +3,7 @@ import { QualityCalibrationModel } from "./calibration-model"
 import { QualityReentryContext } from "./reentry-context"
 import { QualityReentryRemediation } from "./reentry-remediation"
 import { QualityStabilityGuard } from "./stability-guard"
+import { uniqueSortedStrings } from "../util/string-list"
 
 export namespace QualityPromotionEligibility {
   export const ReviewerCarryoverEntry = z.object({
@@ -207,13 +208,13 @@ export namespace QualityPromotionEligibility {
             watchReleasePolicyDigest: input.reentryContext.watch.releasePolicyDigest,
             sameReleasePolicyAsCurrent,
             rollbackTargetSource: input.reentryContext.rollbackTargetSource,
-            priorPromotionApprovers: [...new Set(input.priorPromotionApprovers ?? [])].sort(),
+            priorPromotionApprovers: uniqueSortedStrings(input.priorPromotionApprovers ?? []),
             teamCarryoverHistory: [...(input.teamCarryoverHistory ?? [])].sort((a, b) => {
               const byScore = b.weightedReuseScore - a.weightedReuseScore
               if (byScore !== 0) return byScore
               return a.team.localeCompare(b.team)
             }),
-            priorPromotionReportingChains: [...new Set(input.priorPromotionReportingChains ?? [])].sort(),
+            priorPromotionReportingChains: uniqueSortedStrings(input.priorPromotionReportingChains ?? []),
             reviewerCarryoverHistory: [...(input.reviewerCarryoverHistory ?? [])].sort((a, b) => {
               const byScore = b.weightedReuseScore - a.weightedReuseScore
               if (byScore !== 0) return byScore
