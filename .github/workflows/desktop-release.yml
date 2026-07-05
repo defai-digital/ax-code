@@ -118,7 +118,7 @@ jobs:
           draft: true
           generate_release_notes: false
           body_path: artifacts/desktop-release-notes.md
-          name: AX Code Desktop ${{ steps.version.outputs.tag }}
+          name: v${{ steps.version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
