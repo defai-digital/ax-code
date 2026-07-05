@@ -54,5 +54,5 @@ export function buildUpdateReleaseUrl(version: string | undefined): string {
     return `${GITHUB_RELEASES_URL}/tag/${trimmedVersion}`
   }
 
-  return `${GITHUB_RELEASES_URL}/tag/desktop-v${trimmedVersion}`
+  return `${GITHUB_RELEASES_URL}/tag/v${trimmedVersion}`
 }

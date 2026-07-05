@@ -24,10 +24,8 @@ describe("normalizeReleaseNotesForMarkdown", () => {
 })
 
 describe("buildUpdateReleaseUrl", () => {
-  test("links bare versions to desktop release tags", () => {
-    expect(buildUpdateReleaseUrl("6.7.19")).toBe(
-      "https://github.com/defai-digital/ax-code/releases/tag/desktop-v6.7.19",
-    )
+  test("links bare versions to package release tags", () => {
+    expect(buildUpdateReleaseUrl("6.7.19")).toBe("https://github.com/defai-digital/ax-code/releases/tag/v6.7.19")
   })
 
   test("preserves versions that already include a release tag prefix", () => {
