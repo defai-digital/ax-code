@@ -1,6 +1,7 @@
 import path from "path"
 import { Instance } from "../project/instance"
 import { Process } from "../util/process"
+import { uniqueStrings } from "../util/string-list"
 
 // incremental — Git-diff-aware file selection for scanner incremental mode.
 //
@@ -107,7 +108,7 @@ export namespace Incremental {
     // Use git grep for speed — it respects .gitignore automatically
     const pattern = patterns.join("|")
     const result = await Process.text(
-      ["git", "grep", "-l", "-E", `from\\s+['"].*(?:${pattern})['"]`, "--", ...includeGlobs],
+      ["git", "grep", "-l", "-E", `from[[:space:]]+['"].*(${pattern})['"]`, "--", ...includeGlobs],
       {
         cwd,
         nothrow: true,
@@ -136,7 +137,7 @@ export namespace Incremental {
     if (!opts?.transitive || changed.files.length === 0) return changed
 
     const importers = await findImporters(changed.files, opts)
-    const all = [...new Set([...changed.files, ...importers])]
+    const all = uniqueStrings([...changed.files, ...importers])
     const maxFiles = opts?.maxFiles ?? 500
 
     return {

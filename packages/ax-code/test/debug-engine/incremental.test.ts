@@ -39,4 +39,34 @@ describe("debug-engine incremental file selection", () => {
       },
     })
   })
+
+  test("deduplicates changed files with transitive importers", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await mkdir(path.join(dir, "src"), { recursive: true })
+        await writeFile(path.join(dir, "src", "app.ts"), "import { value } from './util'\nexport const app = value\n")
+        await writeFile(path.join(dir, "src", "util.ts"), "export const value = 1\n")
+      },
+    })
+    execFileSync("git", ["add", "."], { cwd: tmp.path, stdio: "ignore" })
+    execFileSync("git", ["commit", "-m", "seed files"], { cwd: tmp.path, stdio: "ignore" })
+
+    await writeFile(path.join(tmp.path, "src", "util.ts"), "export const value = 2\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await Incremental.filesToScan("HEAD", {
+          include: ["src/*.ts"],
+          transitive: true,
+        })
+
+        expect(result.files.sort()).toEqual([
+          path.join(tmp.path, "src", "app.ts"),
+          path.join(tmp.path, "src", "util.ts"),
+        ])
+      },
+    })
+  })
 })
