@@ -1,24 +1,5 @@
-import type {
-  Message,
-  Agent,
-  Provider,
-  Session,
-  Part,
-  Config,
-  Todo,
-  Command,
-  PermissionRequest,
-  QuestionRequest,
-  LspStatus,
-  McpStatus,
-  McpResource,
-  FormatterStatus,
-  SessionStatus,
-  ProviderListResponse,
-  ProviderAuthMethod,
-  VcsInfo,
-} from "@ax-code/sdk/v2"
-import { createStore, produce, reconcile } from "solid-js/store"
+import type { Message, Provider, Session, Part, Todo, SessionStatus } from "@ax-code/sdk/v2"
+import { createStore, produce } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
 import { createSimpleContext } from "./helper"
 import type { Snapshot } from "@/snapshot"
@@ -26,7 +7,6 @@ import { useExit } from "./exit"
 import { useArgs } from "./args"
 import { createEffect, on, onMount, onCleanup } from "solid-js"
 import { Log } from "@/util/log"
-import type { Path } from "@ax-code/sdk"
 import type { SessionGoal } from "@/session/goal"
 import { withTimeout } from "@/util/timeout"
 import { Flag } from "@/flag/flag"
