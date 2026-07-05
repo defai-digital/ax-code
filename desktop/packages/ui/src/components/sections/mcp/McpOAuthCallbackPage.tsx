@@ -1,7 +1,7 @@
 import React from "react"
 import { Button } from "@/components/ui/button"
 import { useMcpStore } from "@/stores/useMcpStore"
-import { parseMcpOAuthCallbackContext, parseMcpOAuthCallbackStateKey } from "@/components/sections/mcp/mcpOAuth"
+import { parseMcpOAuthCallbackStateKey } from "@/components/sections/mcp/mcpOAuth"
 import { API_ENDPOINTS } from "@/lib/http"
 
 const parseQueryParam = (params: URLSearchParams, key: string): string | null => {
@@ -25,6 +25,31 @@ const normalizeMcpAuthErrorMessage = (error: unknown, fallback: string): string 
 const buildPendingAuthContextUrl = (stateKey: string): string =>
   `${API_ENDPOINTS.mcp.authPending}?state=${encodeURIComponent(stateKey)}`
 
+const fetchPendingAuthContext = async (
+  stateKey: string,
+): Promise<{
+  name: string
+  directory: string | null
+} | null> => {
+  const response = await fetch(buildPendingAuthContextUrl(stateKey))
+  if (!response.ok) {
+    return null
+  }
+
+  const payload = (await response.json().catch(() => null)) as {
+    name?: string
+    directory?: string | null
+  } | null
+  if (!payload?.name?.trim()) {
+    return null
+  }
+
+  return {
+    name: payload.name.trim(),
+    directory: typeof payload.directory === "string" && payload.directory.trim() ? payload.directory.trim() : null,
+  }
+}
+
 export const McpOAuthCallbackPage: React.FC = () => {
   const completeAuth = useMcpStore((state) => state.completeAuth)
   const [status, setStatus] = React.useState<"working" | "success" | "error">("working")
@@ -39,7 +64,6 @@ export const McpOAuthCallbackPage: React.FC = () => {
 
     const params = new URLSearchParams(window.location.search)
     const code = parseQueryParam(params, "code")
-    const callbackContext = parseMcpOAuthCallbackContext(params)
     const callbackStateKey = parseMcpOAuthCallbackStateKey(params)
     const error = parseQueryParam(params, "error")
     const errorDescription = parseQueryParam(params, "error_description")
@@ -62,23 +86,7 @@ export const McpOAuthCallbackPage: React.FC = () => {
           )
         }
 
-        let pendingContext = callbackContext
-        if (!pendingContext && callbackStateKey) {
-          const response = await fetch(pendingAuthContextUrl!)
-          if (response.ok) {
-            const payload = (await response.json().catch(() => null)) as {
-              name?: string
-              directory?: string | null
-            } | null
-            if (payload?.name?.trim()) {
-              pendingContext = {
-                name: payload.name.trim(),
-                directory:
-                  typeof payload.directory === "string" && payload.directory.trim() ? payload.directory.trim() : null,
-              }
-            }
-          }
-        }
+        const pendingContext = callbackStateKey ? await fetchPendingAuthContext(callbackStateKey) : null
 
         if (!pendingContext?.name) {
           throw new Error(
