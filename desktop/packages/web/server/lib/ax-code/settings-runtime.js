@@ -77,7 +77,14 @@ export const createSettingsRuntime = (deps) => {
   }
 
   const uniqueStrings = (values) =>
-    Array.from(new Set(values.filter((value) => typeof value === "string" && value.trim().length > 0)))
+    Array.from(
+      new Set(
+        values
+          .filter((value) => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    )
 
   const mergeByKey = (oldItems, newItems, getKey) => {
     const result = []

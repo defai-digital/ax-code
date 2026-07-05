@@ -64,7 +64,7 @@ describe("settings runtime", () => {
         path.join(projectsRoot, `${oldProjectId}.json`),
         JSON.stringify(
           {
-            "setup-worktree": ["pnpm install", "", null, "pnpm install"],
+            "setup-worktree": [" pnpm install ", "", null, "pnpm install"],
             projectTodos: [
               { id: "shared", title: "old shared" },
               { id: "old", title: "old only" },
