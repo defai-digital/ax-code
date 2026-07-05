@@ -1,5 +1,5 @@
 import { createAxCodeClient } from "../v2/client.js"
-import { withDirectoryHeaders, withWorkspaceHeaders } from "../protocol.js"
+import { headersToRecord, withDirectoryHeaders, withWorkspaceHeaders } from "../protocol.js"
 import type { Event } from "../v2/index.js"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command.js"
 import type {
@@ -160,13 +160,6 @@ async function postJson(
 function commandResult(response: HttpTransportResponse): HeadlessRuntimeCommandResult {
   if (response.status === 202) return { accepted: true, status: 202 }
   return { accepted: true, status: 200, body: response.body }
-}
-
-function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
-  if (!headers) return {}
-  if (headers instanceof Headers) return Object.fromEntries(headers.entries())
-  if (Array.isArray(headers)) return Object.fromEntries(headers)
-  return { ...headers }
 }
 
 export function headlessHeaders(input: {

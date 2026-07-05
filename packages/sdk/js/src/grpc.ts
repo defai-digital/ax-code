@@ -15,6 +15,7 @@ import type {
   HeadlessRuntimeCommandResult,
   HeadlessShellBody,
 } from "./headless/command.js"
+import { headersToRecord } from "./protocol.js"
 
 export const AX_CODE_GRPC_SERVICE = "axcode.v1.AxCodeHeadless"
 export const AX_CODE_GRPC_PROTO_PATH = "ax_code/v1/headless.proto"
@@ -2619,13 +2620,6 @@ function mergeHeaders(headers: RequestInit["headers"] | undefined, metadata: AxC
     ...headersToRecord(headers),
     ...metadata,
   }
-}
-
-function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
-  if (!headers) return {}
-  if (headers instanceof Headers) return Object.fromEntries(headers.entries())
-  if (Array.isArray(headers)) return Object.fromEntries(headers)
-  return headers
 }
 
 function withCallOptions<T>(promise: Promise<T>, options: AxCodeGrpcCallOptions | undefined): Promise<T> {

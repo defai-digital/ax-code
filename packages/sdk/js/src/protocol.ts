@@ -3,6 +3,13 @@ export const AX_CODE_WORKSPACE_HEADER = "x-ax-code-workspace"
 export const LEGACY_OPENCODE_DIRECTORY_HEADER = "x-opencode-directory"
 export const LEGACY_OPENCODE_WORKSPACE_HEADER = "x-opencode-workspace"
 
+export function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
+  if (!headers) return {}
+  if (headers instanceof Headers) return Object.fromEntries(headers.entries())
+  if (Array.isArray(headers)) return Object.fromEntries(headers)
+  return { ...headers }
+}
+
 export function encodeDirectoryHeader(directory: string) {
   return /[^\x00-\x7F]/.test(directory) ? encodeURIComponent(directory) : directory
 }
