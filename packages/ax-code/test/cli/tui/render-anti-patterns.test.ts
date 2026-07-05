@@ -900,8 +900,11 @@ describe("tui OpenTUI stability guardrails", () => {
     const keyboardHandlerStart = prompt.indexOf("useKeyboard((evt) => {")
     const keyboardHandlerEnd = prompt.indexOf("const fileStyleId", keyboardHandlerStart)
     const keyboardHandler = prompt.slice(keyboardHandlerStart, keyboardHandlerEnd)
-    expect(keyboardHandler).toContain("if (autocomplete?.visible) return")
-    expect(autocomplete).toContain('if (name === "return" || name === "linefeed" || name === "kpenter")')
+    expect(keyboardHandler).toContain("autocomplete.onKeyDown(evt)")
+    expect(keyboardHandler).toContain("if (evt.defaultPrevented) return")
+    expect(autocomplete).toContain(
+      'if (name === "return" || name === "enter" || name === "linefeed" || name === "kpenter")',
+    )
 
     const submitStart = prompt.indexOf("async function submit()")
     const submitEnd = prompt.indexOf("const selectedModel", submitStart)
@@ -1046,7 +1049,14 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(syncBody).toContain("autocomplete?.onInput(value)")
     expect(autocomplete).toContain("hide: () => void")
     expect(autocomplete).toContain("hide,")
+    expect(prompt).toContain("let suppressAutocompleteOnNextContentChange = false")
+    expect(prompt).toContain("function suppressAutocompleteForNextContentChange()")
+    expect(prompt).toContain("const suppressAutocomplete = suppressAutocompleteOnNextContentChange")
+    expect(prompt).toContain(
+      "syncPromptInputFromRenderable({ autocomplete: suppressAutocomplete ? false : undefined })",
+    )
     expect(pasteBody).toContain("event.preventDefault()")
+    expect(pasteBody).toContain("suppressAutocompleteForNextContentChange()")
     expect(pasteBody).toContain("input.insertText(normalizedText)")
     expect(pasteBody).toContain("requestInputLayoutRefresh({ autocomplete: false })")
   })

@@ -724,7 +724,7 @@ export function Autocomplete(props: {
             e.preventDefault()
             return
           }
-          if (name === "return" || name === "linefeed" || name === "kpenter") {
+          if (name === "return" || name === "enter" || name === "linefeed" || name === "kpenter") {
             select()
             e.preventDefault()
             return

@@ -365,7 +365,10 @@ export function Prompt(props: PromptProps) {
   useKeyboard((evt) => {
     if (!isRenderableAlive(input) || !input.focused) return
     if (!isPromptSubmitKey(evt)) return
-    if (autocomplete?.visible) return
+    if (autocomplete?.visible) {
+      autocomplete.onKeyDown(evt)
+      if (evt.defaultPrevented) return
+    }
     evt.preventDefault()
     evt.stopPropagation()
     void submit()
@@ -375,6 +378,11 @@ export function Prompt(props: PromptProps) {
   const agentStyleId = syntax().getStyleId("extmark.agent")!
   const pasteStyleId = syntax().getStyleId("extmark.paste")!
   let promptPartTypeId = 0
+  let suppressAutocompleteOnNextContentChange = false
+
+  function suppressAutocompleteForNextContentChange() {
+    suppressAutocompleteOnNextContentChange = true
+  }
 
   const unsubPromptAppend = sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
     if (!isRenderableAlive(input)) return
@@ -1299,6 +1307,7 @@ export function Prompt(props: PromptProps) {
     const extmarkStart = currentOffset
     const extmarkEnd = extmarkStart + virtualText.length
 
+    suppressAutocompleteForNextContentChange()
     input.insertText(virtualText + " ")
 
     const extmarkId = input.extmarks.create({
@@ -1337,6 +1346,7 @@ export function Prompt(props: PromptProps) {
     const extmarkEnd = extmarkStart + virtualText.length
     const textToInsert = virtualText + " "
 
+    suppressAutocompleteForNextContentChange()
     input.insertText(textToInsert)
 
     const extmarkId = input.extmarks.create({
@@ -1515,7 +1525,9 @@ export function Prompt(props: PromptProps) {
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
-                syncPromptInputFromRenderable()
+                const suppressAutocomplete = suppressAutocompleteOnNextContentChange
+                suppressAutocompleteOnNextContentChange = false
+                syncPromptInputFromRenderable({ autocomplete: suppressAutocomplete ? false : undefined })
               }}
               keyBindings={textareaKeybindings()}
               onKeyDown={async (e: KeyEvent) => {
@@ -1560,6 +1572,7 @@ export function Prompt(props: PromptProps) {
                   const text = windowsClipboardTextPaste({ content, platform: process.platform })
                   if (text) {
                     e.preventDefault()
+                    suppressAutocompleteForNextContentChange()
                     input.insertText(text)
                     requestInputLayoutRefresh({ autocomplete: false })
                     return
@@ -1717,11 +1730,13 @@ export function Prompt(props: PromptProps) {
                   !sync.data.config.experimental?.disable_paste_summary
                 ) {
                   event.preventDefault()
+                  suppressAutocompleteForNextContentChange()
                   pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
                   return
                 }
 
                 event.preventDefault()
+                suppressAutocompleteForNextContentChange()
                 input.insertText(normalizedText)
                 requestInputLayoutRefresh({ autocomplete: false })
                 return
