@@ -14,6 +14,22 @@ export const ApprovalRole = z.enum([
 ])
 export type ApprovalRole = z.output<typeof ApprovalRole>
 
+export const APPROVAL_ROLE_RANK: Record<ApprovalRole, number> = {
+  engineer: 1,
+  "senior-engineer": 2,
+  "staff-engineer": 3,
+  "principal-engineer": 4,
+  manager: 5,
+  director: 6,
+  vp: 7,
+}
+
+export function normalizeApprovalRole(role: string | null | undefined): ApprovalRole | null {
+  if (!role) return null
+  const parsed = ApprovalRole.safeParse(role.trim().toLowerCase())
+  return parsed.success ? parsed.data : null
+}
+
 export const ApprovalRoleCohort = z.enum(["individual-contributor", "management"])
 export type ApprovalRoleCohort = z.output<typeof ApprovalRoleCohort>
 

@@ -133,32 +133,8 @@ export namespace QualityPromotionApprovalPolicy {
   export const EvaluationSummary = QualityPromotionApprovalPolicyContract.EvaluationSummary
   export type EvaluationSummary = QualityPromotionApprovalPolicyContract.EvaluationSummary
 
-  const ROLE_RANK: Record<ApprovalRole, number> = {
-    engineer: 1,
-    "senior-engineer": 2,
-    "staff-engineer": 3,
-    "principal-engineer": 4,
-    manager: 5,
-    director: 6,
-    vp: 7,
-  }
-
-  function normalizeRole(role: string | null | undefined): ApprovalRole | null {
-    if (!role) return null
-    const normalized = role.trim().toLowerCase()
-    switch (normalized) {
-      case "engineer":
-      case "senior-engineer":
-      case "staff-engineer":
-      case "principal-engineer":
-      case "manager":
-      case "director":
-      case "vp":
-        return normalized
-      default:
-        return null
-    }
-  }
+  const ROLE_RANK = QualityPromotionApprovalPolicyContract.APPROVAL_ROLE_RANK
+  const normalizeRole = QualityPromotionApprovalPolicyContract.normalizeApprovalRole
 
   function qualifiesRole(role: string | null | undefined, minimumRole: ApprovalRole | null) {
     if (!minimumRole) return true

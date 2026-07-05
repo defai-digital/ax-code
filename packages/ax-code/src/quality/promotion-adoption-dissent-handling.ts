@@ -5,6 +5,7 @@ import { QualityPromotionAdoptionDissentResolution } from "./promotion-adoption-
 import { QualityPromotionAdoptionDissentSupersession } from "./promotion-adoption-dissent-supersession"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
+import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 
@@ -73,16 +74,6 @@ export namespace QualityPromotionAdoptionDissentHandling {
   })
   export type HandlingRecord = z.output<typeof HandlingRecord>
 
-  const ROLE_RANK: Record<QualityPromotionApprovalPolicy.ApprovalRole, number> = {
-    engineer: 1,
-    "senior-engineer": 2,
-    "staff-engineer": 3,
-    "principal-engineer": 4,
-    manager: 5,
-    director: 6,
-    vp: 7,
-  }
-
   function encode(input: string) {
     return QualityStorageKey.encode(input)
   }
@@ -103,22 +94,14 @@ export namespace QualityPromotionAdoptionDissentHandling {
     })
   }
 
-  function normalizeRole(role: string | null | undefined): QualityPromotionApprovalPolicy.ApprovalRole | null {
-    if (!role) return null
-    const normalized = role.trim().toLowerCase()
-    return QualityPromotionApprovalPolicy.ApprovalRole.safeParse(normalized).success
-      ? QualityPromotionApprovalPolicy.ApprovalRole.parse(normalized)
-      : null
-  }
-
   function qualifiesRole(
     role: string | null | undefined,
     minimumRole: QualityPromotionApprovalPolicy.ApprovalRole | null,
   ) {
     if (!minimumRole) return true
-    const normalized = normalizeRole(role)
+    const normalized = normalizeApprovalRole(role)
     if (!normalized) return false
-    return ROLE_RANK[normalized] >= ROLE_RANK[minimumRole]
+    return APPROVAL_ROLE_RANK[normalized] >= APPROVAL_ROLE_RANK[minimumRole]
   }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, handling: HandlingArtifact) {
