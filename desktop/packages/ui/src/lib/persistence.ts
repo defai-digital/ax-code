@@ -549,6 +549,23 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
 }
 
+const toStringList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []
+
+const parseStringListRecord = (value: unknown): Record<string, string[]> => {
+  if (!value || typeof value !== "object") {
+    return {}
+  }
+
+  const parsed: Record<string, string[]> = {}
+  for (const [key, entries] of Object.entries(value)) {
+    if (Array.isArray(entries)) {
+      parsed[key] = toStringList(entries)
+    }
+  }
+  return parsed
+}
+
 const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (!payload || typeof payload !== "object") {
     return null
@@ -729,42 +746,21 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
 
   // Parse usageSelectedModels (Record<string, string[]>)
-  if (candidate.usageSelectedModels && typeof candidate.usageSelectedModels === "object") {
-    const selectedModels: Record<string, string[]> = {}
-    for (const [providerId, models] of Object.entries(candidate.usageSelectedModels)) {
-      if (Array.isArray(models)) {
-        selectedModels[providerId] = models.filter((m): m is string => typeof m === "string")
-      }
-    }
-    if (Object.keys(selectedModels).length > 0) {
-      result.usageSelectedModels = selectedModels
-    }
+  const selectedModels = parseStringListRecord(candidate.usageSelectedModels)
+  if (Object.keys(selectedModels).length > 0) {
+    result.usageSelectedModels = selectedModels
   }
 
   // Parse usageCollapsedFamilies (Record<string, string[]>)
-  if (candidate.usageCollapsedFamilies && typeof candidate.usageCollapsedFamilies === "object") {
-    const collapsedFamilies: Record<string, string[]> = {}
-    for (const [providerId, families] of Object.entries(candidate.usageCollapsedFamilies)) {
-      if (Array.isArray(families)) {
-        collapsedFamilies[providerId] = families.filter((f): f is string => typeof f === "string")
-      }
-    }
-    if (Object.keys(collapsedFamilies).length > 0) {
-      result.usageCollapsedFamilies = collapsedFamilies
-    }
+  const collapsedFamilies = parseStringListRecord(candidate.usageCollapsedFamilies)
+  if (Object.keys(collapsedFamilies).length > 0) {
+    result.usageCollapsedFamilies = collapsedFamilies
   }
 
   // Parse usageExpandedFamilies (Record<string, string[]>) - inverted collapsed logic for header dropdown
-  if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === "object") {
-    const expandedFamilies: Record<string, string[]> = {}
-    for (const [providerId, families] of Object.entries(candidate.usageExpandedFamilies)) {
-      if (Array.isArray(families)) {
-        expandedFamilies[providerId] = families.filter((f): f is string => typeof f === "string")
-      }
-    }
-    if (Object.keys(expandedFamilies).length > 0) {
-      result.usageExpandedFamilies = expandedFamilies
-    }
+  const expandedFamilies = parseStringListRecord(candidate.usageExpandedFamilies)
+  if (Object.keys(expandedFamilies).length > 0) {
+    result.usageExpandedFamilies = expandedFamilies
   }
 
   // Parse usageModelGroups - custom model groups configuration per provider
@@ -793,7 +789,7 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
             .map((g) => ({
               id: String(g.id ?? ""),
               label: String(g.label ?? ""),
-              models: Array.isArray(g.models) ? g.models.filter((m): m is string => typeof m === "string") : [],
+              models: toStringList(g.models),
               order: typeof g.order === "number" ? g.order : 0,
             }))
         }
