@@ -8,9 +8,6 @@ import { cn } from "@/lib/utils"
 import { SimpleMarkdownRenderer } from "../MarkdownRenderer"
 import { toolDisplayStyles } from "@/lib/typography"
 import { getLanguageFromExtension } from "@/lib/toolHelpers"
-import { useOptionalThemeSystem } from "@/contexts/useThemeSystem"
-import { ensurePierreThemeRegistered } from "@/lib/shiki/appThemeRegistry"
-import { getDefaultTheme } from "@/lib/theme/themes"
 import {
   renderTodoOutput,
   renderListOutput,
@@ -29,6 +26,7 @@ import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
 import { API_ENDPOINTS } from "@/lib/http"
 import { loadMermaidDataUrlSource } from "./toolOutputDialogMermaidSource"
+import { usePierreThemeConfig, type PierreThemeConfig } from "./usePierreThemeConfig"
 
 export interface ToolOutputDialogProps {
   popup: ToolPopupContent
@@ -116,11 +114,6 @@ const DIALOG_CODE_TAG_PROPS = {
 
 const MERMAID_CONTROLS = { download: false, copy: false, fullscreen: false, panZoom: true }
 
-type PierreThemeConfig = {
-  theme: { light: string; dark: string }
-  themeType: "light" | "dark"
-}
-
 const TOOL_DIFF_UNSAFE_CSS = `
   [data-diff-header],
   [data-diff] {
@@ -136,40 +129,6 @@ const TOOL_DIFF_METRICS = {
   diffHeaderHeight: 44,
   hunkSeparatorHeight: 24,
   spacing: 0,
-}
-
-const usePierreThemeConfig = (): PierreThemeConfig => {
-  const themeSystem = useOptionalThemeSystem()
-  const fallbackLightTheme = React.useMemo(() => getDefaultTheme(false), [])
-  const fallbackDarkTheme = React.useMemo(() => getDefaultTheme(true), [])
-
-  const availableThemes = React.useMemo(
-    () => themeSystem?.availableThemes ?? [fallbackLightTheme, fallbackDarkTheme],
-    [fallbackDarkTheme, fallbackLightTheme, themeSystem?.availableThemes],
-  )
-  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLightTheme.metadata.id
-  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDarkTheme.metadata.id
-
-  const lightTheme = React.useMemo(
-    () => availableThemes.find((theme) => theme.metadata.id === lightThemeId) ?? fallbackLightTheme,
-    [availableThemes, fallbackLightTheme, lightThemeId],
-  )
-  const darkTheme = React.useMemo(
-    () => availableThemes.find((theme) => theme.metadata.id === darkThemeId) ?? fallbackDarkTheme,
-    [availableThemes, darkThemeId, fallbackDarkTheme],
-  )
-
-  React.useEffect(() => {
-    ensurePierreThemeRegistered(lightTheme)
-    ensurePierreThemeRegistered(darkTheme)
-  }, [darkTheme, lightTheme])
-
-  const currentVariant = themeSystem?.currentTheme.metadata.variant ?? "light"
-
-  return {
-    theme: { light: lightTheme.metadata.id, dark: darkTheme.metadata.id },
-    themeType: currentVariant === "dark" ? "dark" : "light",
-  }
 }
 
 type ViewportSize = { width: number; height: number }
