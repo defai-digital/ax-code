@@ -7,6 +7,8 @@ import { mergePathValues } from "./path-utils.js"
 export const createAxCodeEnvRuntime = (deps) => {
   const { state, normalizeDirectoryPath, readSettingsFromDiskMigrated, ENV_CONFIGURED_AX_CODE_WSL_DISTRO } = deps
 
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
   const parseNullSeparatedEnvSnapshot = (raw) => {
     if (typeof raw !== "string" || raw.length === 0) {
       return null
@@ -71,7 +73,7 @@ export const createAxCodeEnvRuntime = (deps) => {
   }
 
   const searchPathFor = (binaryName) => {
-    const trimmed = typeof binaryName === "string" ? binaryName.trim() : ""
+    const trimmed = asTrimmedString(binaryName)
     if (!trimmed) {
       return null
     }
@@ -106,7 +108,7 @@ export const createAxCodeEnvRuntime = (deps) => {
   }
 
   const prependToPath = (dir) => {
-    const trimmed = typeof dir === "string" ? dir.trim() : ""
+    const trimmed = asTrimmedString(dir)
     if (!trimmed) return
     const current = process.env.PATH || ""
     const parts = current.split(path.delimiter).filter(Boolean)
@@ -309,7 +311,7 @@ export const createAxCodeEnvRuntime = (deps) => {
     }
 
     const explicit = [process.env.WSL_BINARY, process.env.AX_CODE_DESKTOP_WSL_BINARY]
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .map(asTrimmedString)
       .filter(Boolean)
 
     for (const candidate of explicit) {
@@ -347,9 +349,7 @@ export const createAxCodeEnvRuntime = (deps) => {
 
   const buildWslExecArgs = (execArgs, distroOverride = null) => {
     const distro =
-      typeof distroOverride === "string" && distroOverride.trim().length > 0
-        ? distroOverride.trim()
-        : ENV_CONFIGURED_AX_CODE_WSL_DISTRO
+      asTrimmedString(distroOverride) || ENV_CONFIGURED_AX_CODE_WSL_DISTRO
 
     const prefix = distro ? ["-d", distro] : []
     return [...prefix, "--exec", ...execArgs]
@@ -404,10 +404,8 @@ export const createAxCodeEnvRuntime = (deps) => {
 
     state.useWslForAxCode = true
     state.resolvedWslBinary = resolvedWsl
-    state.resolvedWslAxCodePath =
-      typeof axCodePath === "string" && axCodePath.trim().length > 0 ? axCodePath.trim() : "ax-code"
-    state.resolvedWslDistro =
-      typeof distro === "string" && distro.trim().length > 0 ? distro.trim() : ENV_CONFIGURED_AX_CODE_WSL_DISTRO
+    state.resolvedWslAxCodePath = asTrimmedString(axCodePath) || "ax-code"
+    state.resolvedWslDistro = asTrimmedString(distro) || ENV_CONFIGURED_AX_CODE_WSL_DISTRO
     state.resolvedAxCodeBinary = `wsl:${state.resolvedWslAxCodePath}`
     state.resolvedAxCodeBinarySource = source
 
@@ -422,7 +420,7 @@ export const createAxCodeEnvRuntime = (deps) => {
       process.env.AX_CODE_DESKTOP_AX_CODE_PATH,
       process.env.AX_CODE_DESKTOP_AX_CODE_BIN,
     ]
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .map(asTrimmedString)
       .filter(Boolean)
 
     for (const candidate of explicit) {
@@ -537,7 +535,7 @@ export const createAxCodeEnvRuntime = (deps) => {
 
   const resolveNodeCliPath = () => {
     const explicit = [process.env.NODE_BINARY, process.env.AX_CODE_DESKTOP_NODE_BINARY]
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .map(asTrimmedString)
       .filter(Boolean)
 
     for (const candidate of explicit) {
@@ -600,7 +598,7 @@ export const createAxCodeEnvRuntime = (deps) => {
 
   const resolveBunCliPath = () => {
     const explicit = [process.env.BUN_BINARY, process.env.AX_CODE_DESKTOP_BUN_BINARY]
-      .map((v) => (typeof v === "string" ? v.trim() : ""))
+      .map(asTrimmedString)
       .filter(Boolean)
 
     for (const candidate of explicit) {
@@ -1131,7 +1129,7 @@ export const createAxCodeEnvRuntime = (deps) => {
       return state.resolvedAxCodeBinary
     }
 
-    const existing = typeof process.env.AX_CODE_BINARY === "string" ? process.env.AX_CODE_BINARY.trim() : ""
+    const existing = asTrimmedString(process.env.AX_CODE_BINARY)
     if (existing && isExecutable(existing)) {
       clearWslAxCodeResolution()
       state.resolvedAxCodeBinary = existing
@@ -1173,7 +1171,7 @@ export const createAxCodeEnvRuntime = (deps) => {
     }
 
     const explicit = [process.env.GIT_BINARY, process.env.AX_CODE_DESKTOP_GIT_BINARY]
-      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .map(asTrimmedString)
       .filter(Boolean)
     for (const candidate of explicit) {
       if (isExecutable(candidate)) {
@@ -1212,7 +1210,7 @@ export const createAxCodeEnvRuntime = (deps) => {
     }
 
     const programRoots = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LocalAppData]
-      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .map(asTrimmedString)
       .filter(Boolean)
     for (const root of programRoots) {
       const installCandidates = [

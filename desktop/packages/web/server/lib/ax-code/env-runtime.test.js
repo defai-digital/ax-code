@@ -129,6 +129,19 @@ describe("AX Code env runtime", () => {
     expect(state.resolvedAxCodeBinarySource).toBe("settings")
   })
 
+  it("trims configured executable AX Code binary settings", async () => {
+    const dir = createTempDir("openchamber-ax-code-trimmed-bin-")
+    const binary = path.join(dir, "ax-code")
+    fs.writeFileSync(binary, "#!/bin/sh\nexit 0\n")
+    fs.chmodSync(binary, 0o755)
+    const { runtime, state } = createRuntime({ axCodeBinary: ` ${binary} ` })
+
+    await expect(runtime.applyAxCodeBinaryFromSettings({ strict: true })).resolves.toBe(binary)
+    expect(process.env.AX_CODE_BINARY).toBe(binary)
+    expect(state.resolvedAxCodeBinary).toBe(binary)
+    expect(state.resolvedAxCodeBinarySource).toBe("settings")
+  })
+
   itIf(process.platform === "darwin")("rejects known macOS AX Code app bundle executable paths", async () => {
     const { runtime } = createRuntime({ axCodeBinary: "/Applications/AX Code.app/Contents/MacOS/AX Code" })
 
