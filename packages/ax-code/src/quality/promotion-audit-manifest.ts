@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionAuditManifest {
   export const PromotionSnapshot = z.object({
@@ -320,9 +321,7 @@ export namespace QualityPromotionAuditManifest {
     })
     try {
       const existing = await get({ source: manifest.source, manifestID: manifest.manifestID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion audit manifest ${manifest.manifestID} already exists for source ${manifest.source} with different content`,
       )

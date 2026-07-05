@@ -5,6 +5,7 @@ import { sha256JsonHex } from "./digest"
 import { QualityPromotionExportBundle } from "./promotion-export-bundle"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionArchiveManifest {
   export const InventoryKind = z.enum([
@@ -299,9 +300,7 @@ export namespace QualityPromotionArchiveManifest {
     })
     try {
       const existing = await get({ source: archive.source, archiveID: archive.archiveID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion archive manifest ${archive.archiveID} already exists for source ${archive.source} with different content`,
       )

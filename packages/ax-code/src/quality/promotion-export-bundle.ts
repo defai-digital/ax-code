@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionAuditManifest } from "./promotion-audit-manifest"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionExportBundle {
   export const ExportSummary = z.object({
@@ -185,9 +186,7 @@ export namespace QualityPromotionExportBundle {
     })
     try {
       const existing = await get({ source: bundle.source, bundleID: bundle.bundleID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion export bundle ${bundle.bundleID} already exists for source ${bundle.source} with different content`,
       )

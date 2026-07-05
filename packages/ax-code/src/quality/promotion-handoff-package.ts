@@ -13,6 +13,7 @@ import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionHandoffPackage {
   export const DocumentKind = z.enum([
@@ -373,9 +374,7 @@ export namespace QualityPromotionHandoffPackage {
     })
     try {
       const existing = await get({ source: packet.source, packageID: packet.packageID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion handoff package ${packet.packageID} already exists for source ${packet.source} with different content`,
       )

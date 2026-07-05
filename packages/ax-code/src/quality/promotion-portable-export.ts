@@ -7,6 +7,7 @@ import { sha256Hex } from "./digest"
 import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionPortableExport {
   export const File = z.object({
@@ -283,9 +284,7 @@ export namespace QualityPromotionPortableExport {
     })
     try {
       const existing = await get({ source: exportArtifact.source, exportID: exportArtifact.exportID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Promotion portable export ${exportArtifact.exportID} already exists for source ${exportArtifact.source} with different content`,
       )
