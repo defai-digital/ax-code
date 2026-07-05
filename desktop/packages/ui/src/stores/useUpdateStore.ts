@@ -68,12 +68,6 @@ async function checkForWebUpdates(runtime: ClientRuntime, currentVersion?: strin
       version: data.version,
       currentVersion: data.currentVersion ?? "unknown",
       body: data.body,
-      nextSuggestedCheckInSec:
-        typeof data.nextSuggestedCheckInSec === "number" && Number.isFinite(data.nextSuggestedCheckInSec)
-          ? data.nextSuggestedCheckInSec
-          : undefined,
-      packageManager: data.packageManager,
-      updateCommand: data.updateCommand,
     }
   } catch (error) {
     console.warn("Failed to check for updates:", error)
@@ -117,7 +111,6 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
 
     try {
       let info: UpdateInfo | null = null
-      let suggestedSec: number | null = null
 
       if (runtime === "desktop") {
         // The desktop shell updates itself via its native updater
@@ -150,7 +143,6 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
       } else if (runtime === "web") {
         info = await checkForWebUpdates("web")
         if (!isCurrentRequest()) return null
-        suggestedSec = info?.nextSuggestedCheckInSec ?? null
       }
 
       set({
@@ -158,9 +150,9 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
         available: info?.available ?? false,
         info,
         lastChecked: Date.now(),
-        nextCheckInSec: suggestedSec,
+        nextCheckInSec: null,
       })
-      return suggestedSec
+      return null
     } catch {
       if (!isCurrentRequest()) return null
       set({

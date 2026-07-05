@@ -9,13 +9,9 @@ export type UpdateInfo = {
   currentVersion: string
   body?: string
   date?: string
-  nextSuggestedCheckInSec?: number
   // Set when the update check itself failed, so callers can distinguish a
   // failed check from "you're up to date" (both have available: false).
   error?: string
-  // Web-specific fields
-  packageManager?: string
-  updateCommand?: string
 }
 
 export type UpdateProgress = {

@@ -1,11 +1,9 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from "react"
+import React, { useState, useCallback, useEffect, useMemo } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { SimpleMarkdownRenderer } from "@/components/chat/MarkdownRenderer"
 import { Icon } from "@/components/icon/Icon"
-import { cn } from "@/lib/utils"
 import type { UpdateInfo, UpdateProgress } from "@/lib/desktop"
-import { copyTextToClipboard } from "@/lib/clipboard"
 import { openExternalUrl } from "@/lib/url"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
 import { useI18n } from "@/lib/i18n"
@@ -196,48 +194,21 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   runtimeType = "desktop",
 }) => {
   const { t } = useI18n()
-  const [copied, setCopied] = useState(false)
   const [webUpdateState, setWebUpdateState] = useState<WebUpdateState>("idle")
   const [webError, setWebError] = useState<string | null>(null)
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const releaseUrl = buildUpdateReleaseUrl(info?.version, runtimeType)
 
   const progressPercent = progress?.total ? Math.round((progress.downloaded / progress.total) * 100) : 0
 
   const isWebRuntime = runtimeType === "web"
-  const updateCommand = info?.updateCommand
 
-  // Reset state when dialog closes; clear any pending copied timer on unmount.
   useEffect(() => {
     if (!open) {
       setWebUpdateState("idle")
       setWebError(null)
     }
-    return () => {
-      if (copiedTimerRef.current) {
-        clearTimeout(copiedTimerRef.current)
-        copiedTimerRef.current = null
-      }
-    }
   }, [open])
-
-  const handleCopyCommand = async () => {
-    if (!updateCommand) {
-      return
-    }
-    if (copiedTimerRef.current) {
-      clearTimeout(copiedTimerRef.current)
-    }
-    const result = await copyTextToClipboard(updateCommand)
-    if (result.ok) {
-      setCopied(true)
-      copiedTimerRef.current = setTimeout(() => {
-        copiedTimerRef.current = null
-        setCopied(false)
-      }, 2000)
-    }
-  }
 
   const handleOpenExternal = useCallback(async (url: string) => {
     await openExternalUrl(url)
@@ -395,33 +366,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                   </div>
                 )}
               </ScrollableOverlay>
-            </div>
-          )}
-
-          {/* Web runtime fallback command */}
-          {isWebRuntime && webUpdateState === "error" && updateCommand && (
-            <div className="space-y-2 mt-4">
-              <div className="flex items-center gap-2 typography-meta text-muted-foreground">
-                <Icon name="terminal" className="h-4 w-4" />
-                <span>{t("updateDialog.fallback.updateViaTerminal")}</span>
-              </div>
-              <div className="flex items-center gap-2 p-1 pl-3 bg-[var(--surface-elevated)]/50 rounded-md border border-[var(--surface-subtle)]">
-                <code className="flex-1 font-mono text-sm text-foreground overflow-x-auto whitespace-nowrap">
-                  {updateCommand}
-                </code>
-                <button
-                  onClick={handleCopyCommand}
-                  className={cn(
-                    "flex items-center justify-center p-2 rounded",
-                    "text-muted-foreground hover:text-foreground hover:bg-[var(--interactive-hover)]",
-                    "transition-colors",
-                    copied && "text-[var(--status-success)]",
-                  )}
-                  title={copied ? t("updateDialog.actions.copied") : t("updateDialog.actions.copyCommand")}
-                >
-                  {copied ? <Icon name="check" className="h-4 w-4" /> : <Icon name="clipboard" className="h-4 w-4" />}
-                </button>
-              </div>
             </div>
           )}
 
