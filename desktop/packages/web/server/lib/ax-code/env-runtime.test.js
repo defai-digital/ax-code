@@ -186,6 +186,21 @@ describe("AX Code env runtime", () => {
     })
   })
 
+  it("trims managed AX Code launch spec paths", () => {
+    setPlatform("win32")
+    process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe"
+    const dir = createTempDir("openchamber-ax-code-trimmed-cmd-")
+    const shim = path.join(dir, "ax-code.cmd")
+    fs.writeFileSync(shim, "@echo off\r\nexit /b 0\r\n")
+    const { runtime } = createRuntime({})
+
+    expect(runtime.resolveManagedAxCodeLaunchSpec(` ${shim} `)).toEqual({
+      binary: "C:\\Windows\\System32\\cmd.exe",
+      args: ["/d", "/s", "/c", "call", shim],
+      wrapperType: "cmd-wrapper",
+    })
+  })
+
   it("resolves npm AX Code cmd shims to the packaged Windows executable", () => {
     setPlatform("win32")
     const npmDir = createTempDir("openchamber-ax-code-npm-")

@@ -852,8 +852,7 @@ export const createAxCodeEnvRuntime = (deps) => {
   }
 
   const resolveManagedAxCodeLaunchSpec = (axCodePath) => {
-    const fallbackBinary =
-      typeof axCodePath === "string" && axCodePath.trim().length > 0 ? axCodePath.trim() : "ax-code"
+    const fallbackBinary = asTrimmedString(axCodePath) || "ax-code"
 
     if (process.platform !== "win32") {
       return { binary: fallbackBinary, args: [], wrapperType: null }
@@ -974,8 +973,8 @@ export const createAxCodeEnvRuntime = (deps) => {
   }
 
   const createConfiguredAxCodeBinaryError = (raw, normalized) => {
-    const configured = typeof raw === "string" ? raw.trim() : ""
-    const candidate = typeof normalized === "string" && normalized.trim().length > 0 ? normalized.trim() : configured
+    const configured = asTrimmedString(raw)
+    const candidate = asTrimmedString(normalized) || configured
     const messageSuffix =
       "AX Code Desktop needs the standalone ax-code CLI. Install it and set settings.axCodeBinary to the CLI path, for example ~/.ax-code/bin/ax-code, or leave the setting empty to use PATH lookup."
     const error = (() => {
@@ -1059,7 +1058,7 @@ export const createAxCodeEnvRuntime = (deps) => {
         return null
       }
 
-      const raw = typeof settings.axCodeBinary === "string" ? settings.axCodeBinary.trim() : ""
+      const raw = asTrimmedString(settings.axCodeBinary)
       const explicitWslPath =
         process.platform === "win32" && typeof raw === "string" ? raw.match(/^wsl:\s*(.+)$/i) : null
 
