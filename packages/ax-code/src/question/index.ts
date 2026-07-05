@@ -75,6 +75,10 @@ export namespace Question {
     return Clarify.build(input) as Info
   }
 
+  function cleanAnswerLabels(answer: Answer): string[] {
+    return answer.map((label) => label.replace(/\s*\(Recommended\)\s*$/i, "").trim()).filter(Boolean)
+  }
+
   /**
    * Convert clarification Q&A pairs into constraint strings suitable for
    * `Planner.create({ constraints })`. Strips the `(Recommended)` suffix
@@ -89,7 +93,7 @@ export namespace Question {
       const q = questions[i]
       const a = answers[i]
       if (!q || !a || a.length === 0) continue
-      const cleaned = a.map((label) => label.replace(/\s*\(Recommended\)\s*$/i, "").trim()).filter(Boolean)
+      const cleaned = cleanAnswerLabels(a)
       if (cleaned.length === 0) continue
       // `??` only catches null/undefined, not empty/whitespace strings — fall
       // through to question text whenever the header has no usable label.

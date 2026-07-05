@@ -23,6 +23,29 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
+test("toConstraints cleans recommended answer labels", () => {
+  expect(
+    Question.toConstraints(
+      [
+        {
+          question: "Which path?",
+          header: " Approach ",
+          options: [
+            { label: "Fast (Recommended)", description: "Use the fast path" },
+            { label: "Safe", description: "Use the safe path" },
+          ],
+        },
+        {
+          question: "Which environment?",
+          header: "   ",
+          options: [{ label: "Production", description: "Prod" }],
+        },
+      ],
+      [[" Fast (Recommended) ", "", "Safe"], [" Production (recommended) "]],
+    ),
+  ).toEqual(["Approach: Fast, Safe", "Which environment?: Production"])
+})
+
 /** Reject all pending questions so dangling Deferred fibers don't hang the test. */
 async function rejectAll() {
   const pending = await Question.list()
