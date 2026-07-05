@@ -1,3 +1,15 @@
+import { rateLimit } from "express-rate-limit"
+
+const createDesktopRouteRateLimiter = () =>
+  rateLimit({
+    windowMs: 60_000,
+    limit: 1_200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    message: { error: "Too many requests" },
+  })
+
 export const createBootstrapRuntime = (dependencies) => {
   const {
     createUiAuth,
@@ -54,6 +66,9 @@ export const createBootstrapRuntime = (dependencies) => {
     })
 
     registerCommonRequestMiddleware(app, { express, verboseRequestLogs })
+
+    app.use("/api", createDesktopRouteRateLimiter())
+    app.use("/auth", createDesktopRouteRateLimiter())
 
     registerAuthAndAccessRoutes(app, {
       express,

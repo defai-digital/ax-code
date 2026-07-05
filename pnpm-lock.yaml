@@ -527,6 +527,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.2.1
+      express-rate-limit:
+        specifier: 8.3.2
+        version: 8.3.2(express@5.2.1)
       http-proxy-middleware:
         specifier: ^3.0.5
         version: 3.0.7
