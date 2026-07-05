@@ -21,18 +21,14 @@ import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { parseConfigPathGroup } from "@/lib/configPathGroup"
 import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
 import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
+import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
 
 const AGENTS_LOAD_CACHE_TTL_MS = 5000
-const DEFAULT_AGENTS_CACHE_KEY = "__default__"
 const agentsLastLoadedAt = new Map<string, number>()
 const agentsLoadInFlight = new Map<string, Promise<boolean>>()
 const agentsLoadRequestIds = new Map<string, number>()
 let agentsLoadSequence = 0
-
-const getAgentsCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_AGENTS_CACHE_KEY
-}
 
 const buildAgentsSignature = (agents: Agent[]): string => {
   return agents
@@ -143,7 +139,7 @@ export const useAgentsStore = create<AgentsStore>()(
 
         loadAgents: async () => {
           const configDirectory = getActiveConfigDirectory("AgentsStore")
-          const cacheKey = getAgentsCacheKey(configDirectory)
+          const cacheKey = getDirectoryCacheKey(configDirectory)
           const now = Date.now()
           const loadedAt = agentsLastLoadedAt.get(cacheKey) ?? 0
           const hasCachedAgents = get().agents.length > 0

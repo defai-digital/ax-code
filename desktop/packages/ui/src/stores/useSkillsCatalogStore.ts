@@ -17,6 +17,7 @@ import { API_ENDPOINTS } from "@/lib/http"
 import { refreshSkillsAfterAxCodeRestart, useSkillsStore } from "@/stores/useSkillsStore"
 import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
 import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from "@/lib/configUpdate"
+import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
 
 export const FALLBACK_SOURCES: SkillsCatalogSource[] = [
   {
@@ -72,13 +73,8 @@ export const FALLBACK_SOURCES: SkillsCatalogSource[] = [
 ]
 
 const SKILLS_CATALOG_LOAD_CACHE_TTL_MS = 5000
-const DEFAULT_SKILLS_CATALOG_CACHE_KEY = "__default__"
 const skillsCatalogLastLoadedAt = new Map<string, number>()
 const skillsCatalogLoadInFlight = new Map<string, Promise<boolean>>()
-
-const getSkillsCatalogCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_SKILLS_CATALOG_CACHE_KEY
-}
 
 export interface SkillsCatalogState {
   sources: SkillsCatalogSource[]
@@ -138,7 +134,7 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
 
       loadCatalog: async (options) => {
         const currentDirectory = getAxCodeCurrentDirectory()
-        const cacheKey = getSkillsCatalogCacheKey(currentDirectory)
+        const cacheKey = getDirectoryCacheKey(currentDirectory)
         const now = Date.now()
         const loadedAt = skillsCatalogLastLoadedAt.get(cacheKey) ?? 0
         const hasCachedCatalog = get().sources.length > 0

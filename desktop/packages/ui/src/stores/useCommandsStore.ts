@@ -8,6 +8,7 @@ import { sleep, waitForAxCodeConnection } from "./utils/axCodeConnection"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
 import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
+import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
 
 export type CommandScope = "user" | "project"
 
@@ -34,15 +35,10 @@ export const isCommandBuiltIn = (command: Command): boolean => {
 
 const CONFIG_EVENT_SOURCE = "useCommandsStore"
 const COMMANDS_LOAD_CACHE_TTL_MS = 5000
-const DEFAULT_COMMANDS_CACHE_KEY = "__default__"
 const commandsLastLoadedAt = new Map<string, number>()
 const commandsLoadInFlight = new Map<string, Promise<boolean>>()
 const commandsLoadRequestIds = new Map<string, number>()
 let commandsLoadSequence = 0
-
-const getCommandsCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_COMMANDS_CACHE_KEY
-}
 
 const buildCommandsSignature = (commands: Command[]): string => {
   return commands
@@ -102,7 +98,7 @@ export const useCommandsStore = create<CommandsStore>()(
 
         loadCommands: async () => {
           const directory = getActiveConfigDirectory("CommandsStore")
-          const cacheKey = getCommandsCacheKey(directory)
+          const cacheKey = getDirectoryCacheKey(directory)
           const now = Date.now()
           const loadedAt = commandsLastLoadedAt.get(cacheKey) ?? 0
           const hasCachedCommands = get().commands.length > 0

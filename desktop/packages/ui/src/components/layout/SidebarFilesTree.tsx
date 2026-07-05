@@ -40,6 +40,10 @@ import { FileStatusDot } from "@/components/files/FileStatusDot"
 import { getFileStatusForPath, getFolderBadgeForPath } from "@/components/files/fileStatus"
 import { LatestDirectoryLoadTracker } from "@/components/files/latestDirectoryLoadTracker"
 import type { FileNode, FileStatus } from "@/components/files/types"
+import {
+  getFilesViewDisplayPath as getDisplayPath,
+  normalizeFilesViewPath as normalizePath,
+} from "@/components/views/filesViewPathUtils"
 
 const sortNodes = (items: FileNode[]) =>
   items.slice().sort((a, b) => {
@@ -48,37 +52,6 @@ const sortNodes = (items: FileNode[]) =>
     }
     return a.name.localeCompare(b.name)
   })
-
-const normalizePath = (value: string): string => {
-  if (!value) return ""
-
-  const raw = value.replace(/\\/g, "/")
-  const hadUncPrefix = raw.startsWith("//")
-
-  let normalized = raw.replace(/\/+$/g, "")
-  normalized = normalized.replace(/\/+/g, "/")
-  if (hadUncPrefix && !normalized.startsWith("//")) {
-    normalized = `/${normalized}`
-  }
-
-  if (normalized === "") {
-    return raw.startsWith("/") ? "/" : ""
-  }
-
-  return normalized
-}
-
-const getRelativePath = (root: string, path: string): string => {
-  const normalizedPath = normalizePath(path)
-  const normalizedRoot = normalizePath(root).replace(/\/+$/, "")
-  if (normalizedPath === normalizedRoot) {
-    return "."
-  }
-  if (!normalizedRoot || !normalizedPath.startsWith(`${normalizedRoot}/`)) {
-    return normalizedPath
-  }
-  return normalizedPath.slice(normalizedRoot.length + 1)
-}
 
 const isAbsolutePath = (value: string): boolean => {
   return value.startsWith("/") || value.startsWith("//") || /^[A-Za-z]:\//.test(value)
@@ -172,7 +145,7 @@ const FileRow: React.FC<SidebarFileRowProps> = ({
 
   const handleDragStart = React.useCallback(
     (e: React.DragEvent) => {
-      const path = getRelativePath(root, node.path)
+      const path = getDisplayPath(root, node.path)
       if (!path || path === ".") return
       e.dataTransfer.setData("application/x-openchamber-file-path", path)
       e.dataTransfer.effectAllowed = "copy"
@@ -1010,7 +983,7 @@ export const SidebarFilesTree: React.FC = () => {
                     onClick={() => handleOpenFile(node)}
                     draggable
                     onDragStart={(e) => {
-                      const path = node.relativePath || getRelativePath(root ?? "", node.path)
+                      const path = node.relativePath || getDisplayPath(root ?? "", node.path)
                       if (!path || path === ".") return
                       e.dataTransfer.setData("application/x-openchamber-file-path", path)
                       e.dataTransfer.effectAllowed = "copy"

@@ -29,6 +29,12 @@ describe("filesViewPathUtils", () => {
     expect(getFilesViewDisplayPath("c:/users/alice/project", "C:/Users/Alice/Project/src/app.ts")).toBe("src/app.ts")
   })
 
+  test("returns relative display paths under a Windows drive root", () => {
+    expect(getFilesViewDisplayPath("C:/", "c:/Users/Alice/Project/src/app.ts")).toBe(
+      "Users/Alice/Project/src/app.ts",
+    )
+  })
+
   test("returns dot for the root path itself", () => {
     expect(getFilesViewDisplayPath("C:/Users/Alice/Project", "c:/users/alice/project")).toBe(".")
   })

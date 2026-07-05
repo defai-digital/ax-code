@@ -5,6 +5,7 @@ import { startConfigUpdate, finishConfigUpdate } from "@/lib/configUpdate"
 import { refreshAfterAxCodeRestart } from "@/stores/useAgentsStore"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
+import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
 
 export type PluginScope = "user" | "project"
 export type PluginParsedKind = "npm" | "path"
@@ -126,7 +127,6 @@ const getConfigDirectory = (): string | null => getActiveConfigDirectory("Plugin
 
 const CLIENT_RELOAD_DELAY_MS = 800
 export const PLUGINS_LOAD_CACHE_TTL_MS = 5000
-const DEFAULT_PLUGINS_CACHE_KEY = "__default__"
 const pluginsLastLoadedAt = new Map<string, number>()
 const pluginsLoadInFlight = new Map<string, Promise<boolean>>()
 const pluginsLoadRequestIds = new Map<string, number>()
@@ -136,12 +136,8 @@ let pluginRegistryRequestSequence = 0
 let pluginRegistryActiveLoads = 0
 const REGISTRY_SPECS_CHUNK_LIMIT = 1500
 
-const getPluginCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_PLUGINS_CACHE_KEY
-}
-
 const invalidatePluginCache = (directory: string | null) => {
-  pluginsLastLoadedAt.delete(getPluginCacheKey(directory))
+  pluginsLastLoadedAt.delete(getDirectoryCacheKey(directory))
 }
 
 export const usePluginsStore = create<PluginsStore>()(
@@ -162,7 +158,7 @@ export const usePluginsStore = create<PluginsStore>()(
 
         loadPlugins: async (options) => {
           const configDirectory = getConfigDirectory()
-          const cacheKey = getPluginCacheKey(configDirectory)
+          const cacheKey = getDirectoryCacheKey(configDirectory)
           const now = Date.now()
           const loadedAt = pluginsLastLoadedAt.get(cacheKey) ?? 0
           const hasCachedPlugins = get().entries.length > 0 || get().files.length > 0

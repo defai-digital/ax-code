@@ -7,6 +7,7 @@ import { sleep, waitForAxCodeConnection } from "./utils/axCodeConnection"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { parseConfigPathGroup } from "@/lib/configPathGroup"
 import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
+import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
 
 export type SkillScope = "user" | "project"
 export type SkillSource = "ax-code" | "claude" | "agents"
@@ -116,15 +117,10 @@ interface SkillsStore {
 
 const CONFIG_EVENT_SOURCE = "useSkillsStore"
 const SKILLS_LOAD_CACHE_TTL_MS = 5000
-const DEFAULT_SKILLS_CACHE_KEY = "__default__"
 const skillsLastLoadedAt = new Map<string, number>()
 const skillsLoadInFlight = new Map<string, Promise<boolean>>()
 const skillsLoadRequestIds = new Map<string, number>()
 let skillsLoadSequence = 0
-
-const getSkillsCacheKey = (directory: string | null): string => {
-  return directory?.trim() || DEFAULT_SKILLS_CACHE_KEY
-}
 
 export const useSkillsStore = create<SkillsStore>()(
   devtools(
@@ -145,7 +141,7 @@ export const useSkillsStore = create<SkillsStore>()(
 
         loadSkills: async () => {
           const currentDirectory = getAxCodeCurrentDirectory()
-          const cacheKey = getSkillsCacheKey(currentDirectory)
+          const cacheKey = getDirectoryCacheKey(currentDirectory)
           const now = Date.now()
           const loadedAt = skillsLastLoadedAt.get(cacheKey) ?? 0
           const hasCachedSkills = get().skills.length > 0

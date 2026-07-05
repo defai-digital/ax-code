@@ -3,6 +3,7 @@ import { devtools } from "zustand/middleware"
 import type { Snippet } from "@/types/snippet"
 import { API_ENDPOINTS } from "@/lib/http"
 import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
+import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
 
 export type SnippetScope = "global" | "project"
 
@@ -38,19 +39,16 @@ interface SnippetsStore {
 }
 
 const SNIPPETS_LOAD_CACHE_TTL_MS = 5000
-const DEFAULT_SNIPPETS_CACHE_KEY = "__default__"
 const snippetsByCacheKey = new Map<string, Snippet[]>()
 const snippetsLastLoadedAt = new Map<string, number>()
 const snippetsLoadInFlight = new Map<string, Promise<boolean>>()
 const snippetsCacheVersions = new Map<string, number>()
-let activeSnippetsCacheKey = DEFAULT_SNIPPETS_CACHE_KEY
-
-const getSnippetsCacheKey = (directory: string | null): string => directory?.trim() || DEFAULT_SNIPPETS_CACHE_KEY
+let activeSnippetsCacheKey = getDirectoryCacheKey(null)
 
 const getSnippetsCacheVersion = (cacheKey: string): number => snippetsCacheVersions.get(cacheKey) ?? 0
 
 const invalidateSnippetsCache = (directory: string | null): void => {
-  const cacheKey = getSnippetsCacheKey(directory)
+  const cacheKey = getDirectoryCacheKey(directory)
   snippetsByCacheKey.delete(cacheKey)
   snippetsLastLoadedAt.delete(cacheKey)
   snippetsLoadInFlight.delete(cacheKey)
@@ -72,7 +70,7 @@ export const useSnippetsStore = create<SnippetsStore>()(
 
       loadSnippets: async () => {
         const directory = getRequestDirectory()
-        const cacheKey = getSnippetsCacheKey(directory)
+        const cacheKey = getDirectoryCacheKey(directory)
         const cachedSnippets = snippetsByCacheKey.get(cacheKey)
         activeSnippetsCacheKey = cacheKey
 
