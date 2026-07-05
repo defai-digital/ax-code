@@ -1,12 +1,10 @@
+import { isRecord } from "./record"
+
 export const PROJECT_PLAN_SAVED_EVENT = "openchamber:project-plan-saved"
 export const PROJECT_NOTES_UPDATED_EVENT = "openchamber:project-notes-updated"
 
 export type ProjectScopedEventDetail = {
   readonly projectId: string | null
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null
 }
 
 const hasDetail = (event: Event): event is Event & { readonly detail: unknown } => {

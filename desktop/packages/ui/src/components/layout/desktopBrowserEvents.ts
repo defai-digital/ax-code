@@ -1,3 +1,5 @@
+import { isRecord } from "@/lib/record"
+
 const DESKTOP_BROWSER_NEW_WINDOW_DISPOSITIONS = new Set(["new-window", "foreground-tab", "background-tab"])
 
 type DesktopBrowserNewWindowFields = {
@@ -11,10 +13,6 @@ export type DesktopBrowserNewWindowNavigation = {
 }
 
 export type DesktopBrowserLoadUrl = (url: string) => void
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null
-}
 
 export const readDesktopBrowserNewWindowNavigation = (event: Event): DesktopBrowserNewWindowNavigation | null => {
   const fields = event as Event & DesktopBrowserNewWindowFields
