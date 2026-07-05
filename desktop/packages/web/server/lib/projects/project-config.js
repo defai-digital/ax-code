@@ -1,5 +1,6 @@
 import { DateTime, IANAZone } from "luxon"
 import parser from "cron-parser"
+import { normalizeScheduledTaskTime, uniqueSortedScheduledTaskTimes } from "../scheduled-tasks/time.js"
 
 const PROJECT_CONFIG_VERSION = 1
 const MAX_TASK_NAME_LENGTH = 80
@@ -28,19 +29,6 @@ const normalizeStatus = (value) => {
   }
   return "idle"
 }
-
-const normalizeTimeValue = (value) => {
-  const time = asNonEmptyString(value)
-  if (!time) {
-    return null
-  }
-  if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(time)) {
-    return null
-  }
-  return time
-}
-
-const uniqueSortedTimes = (times) => Array.from(new Set(times)).sort((a, b) => a.localeCompare(b))
 
 const normalizeDateValue = (value) => {
   const date = asNonEmptyString(value)
@@ -85,7 +73,7 @@ const resolveScheduleTimes = (value, existingSchedule) => {
 
   if (Array.isArray(value?.times)) {
     for (const item of value.times) {
-      const normalized = normalizeTimeValue(item)
+      const normalized = normalizeScheduledTaskTime(item)
       if (!normalized) {
         throw new Error("schedule.times must contain HH:mm values")
       }
@@ -93,21 +81,21 @@ const resolveScheduleTimes = (value, existingSchedule) => {
     }
   }
 
-  const legacySingleTime = normalizeTimeValue(value?.time)
+  const legacySingleTime = normalizeScheduledTaskTime(value?.time)
   if (legacySingleTime) {
     times.push(legacySingleTime)
   }
 
   if (times.length === 0 && Array.isArray(existingSchedule?.times)) {
     for (const item of existingSchedule.times) {
-      const normalized = normalizeTimeValue(item)
+      const normalized = normalizeScheduledTaskTime(item)
       if (normalized) {
         times.push(normalized)
       }
     }
   }
 
-  const uniqueSorted = uniqueSortedTimes(times)
+  const uniqueSorted = uniqueSortedScheduledTaskTimes(times)
   if (uniqueSorted.length === 0) {
     return null
   }
@@ -185,7 +173,7 @@ const normalizeSchedule = (value, existingSchedule) => {
       throw new Error("schedule.date must be YYYY-MM-DD for once schedule")
     }
 
-    const time = normalizeTimeValue(value.time)
+    const time = normalizeScheduledTaskTime(value.time)
     if (!time) {
       throw new Error("schedule.time must be HH:mm for once schedule")
     }

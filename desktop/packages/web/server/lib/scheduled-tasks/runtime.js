@@ -2,6 +2,7 @@ import { createAxCodeClient } from "@ax-code/sdk/v2"
 import { DateTime } from "luxon"
 import parser from "cron-parser"
 import { expandSnippets } from "../ax-code/snippets.js"
+import { normalizeScheduledTaskTimes, parseScheduledTaskTimeParts } from "./time.js"
 
 const DEFAULT_GLOBAL_CONCURRENCY = 4
 const DEFAULT_PROJECT_CONCURRENCY = 2
@@ -13,19 +14,8 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647
 
 const buildTaskKey = (projectID, taskID) => `${projectID}:${taskID}`
 
-const parseTimeParts = (time) => {
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(typeof time === "string" ? time : "")
-  if (!match) {
-    return null
-  }
-  return {
-    hour: Number(match[1]),
-    minute: Number(match[2]),
-  }
-}
-
 const applyTimeToDate = (baseDateTime, time) => {
-  const parsed = parseTimeParts(time)
+  const parsed = parseScheduledTaskTimeParts(time)
   if (!parsed) {
     return null
   }
@@ -38,18 +28,11 @@ const applyTimeToDate = (baseDateTime, time) => {
 }
 
 const resolveScheduleTimes = (schedule) => {
-  const times = []
-  if (Array.isArray(schedule?.times)) {
-    for (const candidate of schedule.times) {
-      if (typeof candidate === "string" && /^([01]\d|2[0-3]):([0-5]\d)$/.test(candidate)) {
-        times.push(candidate)
-      }
-    }
+  const times = normalizeScheduledTaskTimes(schedule?.times)
+  if (times.length > 0) {
+    return times
   }
-  if (times.length === 0 && typeof schedule?.time === "string" && /^([01]\d|2[0-3]):([0-5]\d)$/.test(schedule.time)) {
-    times.push(schedule.time)
-  }
-  return Array.from(new Set(times)).sort((a, b) => a.localeCompare(b))
+  return normalizeScheduledTaskTimes([schedule?.time])
 }
 
 const weekdayAsZeroBased = (dateTime) => {
