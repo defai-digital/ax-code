@@ -95,6 +95,8 @@ const dispatchSettingsSynced = (settings: DesktopSettings): void => {
   window.dispatchEvent(new CustomEvent<DesktopSettings>("openchamber:settings-synced", { detail: settings }))
 }
 
+const starterRefsKey = (refs: ReturnType<typeof sanitizeStarterRefs> | null): string => JSON.stringify(refs)
+
 type PersistApi = {
   hasHydrated?: () => boolean
   onFinishHydration?: (callback: () => void) => (() => void) | undefined
@@ -458,7 +460,7 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
   if (Array.isArray(settings.draftStarters)) {
     const nextStarters = sanitizeStarterRefs(settings.draftStarters)
-    if (JSON.stringify(store.globalDraftStarters) !== JSON.stringify(nextStarters)) {
+    if (starterRefsKey(store.globalDraftStarters) !== starterRefsKey(nextStarters)) {
       store.setGlobalDraftStarters(nextStarters)
     }
   }
