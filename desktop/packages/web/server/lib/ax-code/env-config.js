@@ -1,3 +1,5 @@
+const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
 export const resolveAxCodeEnvConfig = (options = {}) => {
   const env = options.env && typeof options.env === "object" ? options.env : {}
   const logger = options.logger ?? console
@@ -12,7 +14,7 @@ export const resolveAxCodeEnvConfig = (options = {}) => {
   })()
 
   const configuredAxCodeHost = (() => {
-    const raw = typeof env.AX_CODE_HOST === "string" ? env.AX_CODE_HOST.trim() : ""
+    const raw = asTrimmedString(env.AX_CODE_HOST)
     if (!raw) return null
 
     const warnInvalidHost = (reason) => {
@@ -50,7 +52,7 @@ export const resolveAxCodeEnvConfig = (options = {}) => {
     if (typeof raw !== "string") {
       return "127.0.0.1"
     }
-    const trimmed = raw.trim()
+    const trimmed = asTrimmedString(raw)
     if (!trimmed) {
       logger.warn(`[config] Ignoring AX_CODE_HOSTNAME=${JSON.stringify(raw)}: empty after trimming`)
       return "127.0.0.1"
