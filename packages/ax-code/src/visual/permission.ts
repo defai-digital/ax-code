@@ -74,4 +74,13 @@ export namespace BrowserPermission {
     }
     return { valid: true }
   }
+
+  /**
+   * Return durable permission patterns for a browser URL.
+   * The exact origin covers origin-only URLs, while origin/* covers paths.
+   */
+  export function permissionPatterns(url: string): string[] {
+    const parsed = new URL(url)
+    return [parsed.origin, `${parsed.origin}/*`]
+  }
 }

@@ -25,7 +25,7 @@ export const BrowserOpenTool = Tool.define("browser_open", {
     await ctx.ask({
       permission: "browser_open",
       patterns: [params.url],
-      always: ["*"],
+      always: BrowserPermission.permissionPatterns(params.url),
       metadata: {
         url: params.url,
         viewport: params.viewport,

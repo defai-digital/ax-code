@@ -82,4 +82,13 @@ describe("visual.permission", () => {
       expect(result).toBe(true)
     })
   })
+
+  describe("permissionPatterns", () => {
+    test("scopes durable permission to the URL origin", () => {
+      expect(BrowserPermission.permissionPatterns("https://example.com:8443/path?q=1")).toEqual([
+        "https://example.com:8443",
+        "https://example.com:8443/*",
+      ])
+    })
+  })
 })
