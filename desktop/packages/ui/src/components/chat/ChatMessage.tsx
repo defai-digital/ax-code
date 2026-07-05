@@ -35,6 +35,7 @@ import {
 } from "./message/renderCompare"
 import { LazyToolOutputDialog } from "./message/LazyToolOutputDialog"
 import { clearCopyResetTimer, replaceCopyResetTimer } from "./copyResetTimer"
+import { normalizeToolName } from "./message/parts/toolRenderUtils"
 
 const USER_BUBBLE_STYLE: React.CSSProperties = {
   backgroundColor: "var(--chat-user-message-bg)",
@@ -57,18 +58,6 @@ const EDIT_TOOL_NAMES = new Set([
   "create",
   "file_write",
 ])
-
-const normalizeToolName = (toolName: unknown): string => {
-  if (typeof toolName !== "string") return ""
-  const trimmed = toolName.trim().toLowerCase()
-  if (!trimmed) return ""
-  const withoutIndex = trimmed.replace(/:\d+$/, "")
-  if (!withoutIndex.includes(".")) {
-    return withoutIndex
-  }
-  const parts = withoutIndex.split(".").filter(Boolean)
-  return parts[parts.length - 1] ?? withoutIndex
-}
 
 const readExpandedToolsCache = (messageId: string): Set<string> => {
   const cached = expandedToolsStateCache.get(messageId)

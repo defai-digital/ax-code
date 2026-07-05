@@ -19,7 +19,7 @@ const STANDALONE_TOOL_NAMES = new Set<string>(["task"])
 
 const SEARCH_TOOL_NAMES = new Set<string>(["grep", "search", "find", "ripgrep", "glob"])
 
-const normalizeToolName = (toolName: unknown): string => {
+export const normalizeToolName = (toolName: unknown): string => {
   if (typeof toolName !== "string") return ""
   const trimmed = toolName.trim().toLowerCase()
   if (!trimmed) return ""
