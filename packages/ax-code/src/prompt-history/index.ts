@@ -22,6 +22,10 @@ export namespace PromptHistory {
     return Math.min(Math.max(Math.floor(limit), 1), MAX_ENTRIES)
   }
 
+  function entryKey(entry: Pick<PromptHistoryEntry, "input" | "mode" | "parts">) {
+    return JSON.stringify([entry.input, entry.mode ?? null, entry.parts])
+  }
+
   export function list(input: { limit?: number } = {}): PromptHistoryEntry[] {
     const limit = normalizeListLimit(input.limit)
     if (limit === 0) return []
@@ -67,7 +71,7 @@ export namespace PromptHistory {
       if (last) {
         const lastEntry = { input: last.input, mode: last.mode ?? undefined, parts: last.parts }
         const newEntry = { input: parsed.input, mode: parsed.mode, parts: parsed.parts }
-        if (JSON.stringify(lastEntry) === JSON.stringify(newEntry)) return
+        if (entryKey(lastEntry) === entryKey(newEntry)) return
       }
       db.insert(PromptHistoryTable)
         .values({

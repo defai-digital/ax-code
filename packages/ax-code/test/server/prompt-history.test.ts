@@ -102,4 +102,25 @@ describe("prompt history route", () => {
       },
     })
   })
+
+  test("does not append duplicate consecutive entries", async () => {
+    const [, { tmpdir }, , { Instance }, { PromptHistory }] = await runtime
+    await using project = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        const entry = {
+          input: "repeat this prompt",
+          mode: "normal" as const,
+          parts: [{ type: "text", text: "repeat this prompt" }],
+        }
+
+        PromptHistory.append(entry)
+        PromptHistory.append(entry)
+
+        expect(PromptHistory.list()).toEqual([entry])
+      },
+    })
+  })
 })
