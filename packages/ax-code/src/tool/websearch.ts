@@ -45,7 +45,7 @@ export const WebSearchTool = Tool.define("websearch", async () => {
       await ctx.ask({
         permission: "websearch",
         patterns: [params.query],
-        always: ["*"],
+        always: [params.query],
         metadata: {
           query: params.query,
           numResults: params.numResults,

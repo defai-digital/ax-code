@@ -27,7 +27,7 @@ export const CodeSearchTool = Tool.define("codesearch", {
     await ctx.ask({
       permission: "codesearch",
       patterns: [params.query],
-      always: ["*"],
+      always: [params.query],
       metadata: {
         query: params.query,
         tokensNum: params.tokensNum,
