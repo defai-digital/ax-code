@@ -9,6 +9,7 @@ import { QualityPromotionPackagedArchive } from "./promotion-packaged-archive"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionSignedArchive {
   export const SignatureAlgorithm = z.literal("hmac-sha256")
@@ -101,11 +102,7 @@ export namespace QualityPromotionSignedArchive {
   }
 
   function sortArchives(archives: ArchiveArtifact[]) {
-    return [...archives].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.signedArchiveID.localeCompare(b.signedArchiveID)
-    })
+    return [...archives].sort((a, b) => compareStringFields(a, b, ["createdAt", "signedArchiveID"]))
   }
 
   function canonicalPayload(archive: QualityPromotionPackagedArchive.ArchiveArtifact) {

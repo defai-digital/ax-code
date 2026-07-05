@@ -14,6 +14,7 @@ import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionHandoffPackage {
   export const DocumentKind = z.enum([
@@ -94,11 +95,7 @@ export namespace QualityPromotionHandoffPackage {
   const digest = sha256JsonHex
 
   function sortPackages(packets: PackageArtifact[]) {
-    return [...packets].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.packageID.localeCompare(b.packageID)
-    })
+    return [...packets].sort((a, b) => compareStringFields(a, b, ["createdAt", "packageID"]))
   }
 
   function sortDocuments(documents: Document[]) {

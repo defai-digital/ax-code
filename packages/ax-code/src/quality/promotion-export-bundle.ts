@@ -5,6 +5,7 @@ import { QualityPromotionAuditManifest } from "./promotion-audit-manifest"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionExportBundle {
   export const ExportSummary = z.object({
@@ -52,11 +53,7 @@ export namespace QualityPromotionExportBundle {
   }
 
   function sortBundles(bundles: ExportArtifact[]) {
-    return [...bundles].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.bundleID.localeCompare(b.bundleID)
-    })
+    return [...bundles].sort((a, b) => compareStringFields(a, b, ["createdAt", "bundleID"]))
   }
 
   function matchesPromotion(promotion: QualityPromotionAuditManifest.PromotionSnapshot, bundle: ExportArtifact) {

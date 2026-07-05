@@ -8,6 +8,7 @@ import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionPortableExport {
   export const File = z.object({
@@ -71,11 +72,7 @@ export namespace QualityPromotionPortableExport {
   const digest = sha256Hex
 
   function sortExports(exports: ExportArtifact[]) {
-    return [...exports].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.exportID.localeCompare(b.exportID)
-    })
+    return [...exports].sort((a, b) => compareStringFields(a, b, ["createdAt", "exportID"]))
   }
 
   function sortFiles(files: File[]) {

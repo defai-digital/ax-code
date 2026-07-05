@@ -5,6 +5,7 @@ import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decis
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionAuditManifest {
   export const PromotionSnapshot = z.object({
@@ -186,11 +187,7 @@ export namespace QualityPromotionAuditManifest {
   }
 
   function sortManifests(manifests: ManifestArtifact[]) {
-    return [...manifests].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.manifestID.localeCompare(b.manifestID)
-    })
+    return [...manifests].sort((a, b) => compareStringFields(a, b, ["createdAt", "manifestID"]))
   }
 
   function matchesPromotion(promotion: PromotionSnapshot, manifest: ManifestArtifact) {
