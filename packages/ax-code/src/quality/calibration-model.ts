@@ -1,5 +1,6 @@
 import z from "zod"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
+import { uniqueSortedStrings } from "@/util/string-list"
 
 export namespace QualityCalibrationModel {
   type TrainingRecord = ProbabilisticRollout.CalibrationRecord & {
@@ -294,7 +295,7 @@ export namespace QualityCalibrationModel {
       requestedBinCount,
       minBinCount,
       training: {
-        sessionIDs: [...new Set(records.map((record) => record.sessionID))].sort(),
+        sessionIDs: uniqueSortedStrings(records.map((record) => record.sessionID)),
         labeledItems: records.length,
         positives: records.filter((record) => record.actualPositive).length,
         negatives: records.filter((record) => !record.actualPositive).length,
