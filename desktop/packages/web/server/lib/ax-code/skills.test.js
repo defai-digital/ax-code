@@ -36,6 +36,16 @@ describe("skills", () => {
     ])
   })
 
+  it("uses trimmed skill names for discovery merge keys", () => {
+    const primary = { name: " example-skill ", path: "/primary/SKILL.md", source: "ax-code" }
+    const merged = mergeDiscoveredSkills(
+      [primary, { name: "   ", path: "/blank/SKILL.md", source: "ax-code" }, { path: "/missing-name/SKILL.md" }],
+      [{ name: "example-skill", path: "/fallback/SKILL.md", source: "agents" }],
+    )
+
+    expect(merged).toEqual([primary])
+  })
+
   it("resolves built-in AX Code skill content without parsing virtual locations as files", () => {
     const sources = getSkillSources("customize-ax-code", "/tmp/openchamber-skills-test-missing-project", {
       name: "customize-ax-code",

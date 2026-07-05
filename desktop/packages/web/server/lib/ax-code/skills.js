@@ -31,6 +31,8 @@ const EXTERNAL_SKILL_SOURCES = [
 ]
 const [CLAUDE_SKILL_SOURCE, AGENTS_SKILL_SOURCE] = EXTERNAL_SKILL_SOURCES
 
+const normalizedSkillName = (skill) => (typeof skill?.name === "string" ? skill.name.trim() : "")
+
 function ensureProjectSkillDir(workingDirectory) {
   return ensureProjectAxCodeResourceDirs(workingDirectory, "skills", "skill")
 }
@@ -246,7 +248,7 @@ function mergeDiscoveredSkills(primarySkills = [], fallbackSkills = []) {
   const seenNames = new Set()
 
   const appendSkill = (skill) => {
-    const name = typeof skill?.name === "string" ? skill.name.trim() : ""
+    const name = normalizedSkillName(skill)
     if (!name || seenNames.has(name)) {
       return
     }
