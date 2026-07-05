@@ -37,6 +37,7 @@ import { useI18n } from "@/lib/i18n"
 import type { I18nKey } from "@/lib/i18n/store"
 import { describeGitChange } from "./git/changeDescriptors"
 import { fetchGitFileDiffWithTimeout } from "./gitFileDiffLoader"
+import { toViewAbsolutePath, viewPathsEqual } from "./viewPathUtils"
 
 // Minimum width for side-by-side diff view (px)
 const SIDE_BY_SIDE_MIN_WIDTH = 1100
@@ -102,22 +103,6 @@ const isWorkingStatusFile = (file: GitStatus["files"][number]): boolean => {
   const workingCode = file.working_dir?.trim()
   return Boolean(workingCode) || file.index === "?"
 }
-
-const isAbsolutePath = (value: string): boolean => {
-  return value.startsWith("/") || value.startsWith("//") || /^[A-Za-z]:\//.test(value)
-}
-
-const toAbsolutePath = (directory: string, filePath: string): string => {
-  const normalizedDirectory = directory.replace(/\\/g, "/").replace(/\/+$/g, "")
-  const normalizedFilePath = filePath.replace(/\\/g, "/")
-  if (isAbsolutePath(normalizedFilePath)) {
-    return normalizedFilePath
-  }
-  const trimmedFilePath = normalizedFilePath.replace(/^\/+/, "")
-  return normalizedDirectory ? `${normalizedDirectory}/${trimmedFilePath}` : trimmedFilePath
-}
-
-const normalizePath = (value?: string | null): string => (value || "").replace(/\\/g, "/").replace(/\/+$/, "")
 
 const getFirstChangedModifiedLine = (original: string, modified: string): number => {
   const originalLines = original.split("\n")
@@ -1155,7 +1140,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     }
 
     return sessionEvents.onGitRefreshHint((hint) => {
-      if (normalizePath(hint.directory) !== normalizePath(effectiveDirectory)) {
+      if (!viewPathsEqual(hint.directory, effectiveDirectory)) {
         return
       }
       void fetchStatus(effectiveDirectory, git)
@@ -1537,7 +1522,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             ? 1
             : getFirstChangedModifiedLine(diffForNavigation.original, diffForNavigation.modified))
 
-        const absolutePath = toAbsolutePath(effectiveDirectory, filePath)
+        const absolutePath = toViewAbsolutePath(effectiveDirectory, filePath)
         const openValidation = await validateContextFileOpen(files, absolutePath)
         if (!openValidation.ok) {
           toast.error(getContextFileOpenFailureMessage(openValidation.reason))
