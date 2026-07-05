@@ -24,6 +24,7 @@ import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
 import path from "path"
 import { Plugin } from "@/plugin"
+import { uniqueStrings } from "@/util/string-list"
 import { Skill } from "../skill"
 import { normalizeToWorkspacePath } from "../tool/file-path"
 
@@ -144,7 +145,7 @@ export namespace Agent {
       ...Object.keys(cfg.agent ?? {}),
     ]
     await Promise.all(
-      Array.from(new Set(names)).map(async (name) => {
+      uniqueStrings(names).map(async (name) => {
         policyMap.set(name, await Permission.loadPolicy(directory, name))
       }),
     )
