@@ -9,6 +9,7 @@ import { Flag } from "@/flag/flag"
 import { DiagnosticCorrelation, prewarmAffectedFiles } from "@/debug-engine"
 import { DebugEngine } from "@/debug-engine"
 import { Instance } from "@/project/instance"
+import { uniqueStrings } from "@/util/string-list"
 
 const log = Log.create({ service: "tool.diagnostics" })
 
@@ -31,7 +32,7 @@ export async function notifyFileEdited(file: string, event: "change" | "add") {
  * and impact-driven LSP prewarming to enrich the agent feedback.
  */
 export async function collectDiagnostics(files: string[], options?: { includeProjectDiagnostics?: boolean }) {
-  const uniqueFiles = [...new Set(files)]
+  const uniqueFiles = uniqueStrings(files)
   const touched = await Promise.allSettled(uniqueFiles.map((file) => LSP.touchFile(file, false)))
   for (let index = 0; index < touched.length; index++) {
     const result = touched[index]

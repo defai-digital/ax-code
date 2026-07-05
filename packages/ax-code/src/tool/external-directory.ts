@@ -3,6 +3,7 @@ import { promises as fs } from "fs"
 import type { Tool } from "./tool"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
+import { uniqueStrings } from "../util/string-list"
 import { resolveToolFilePath } from "./file-path"
 
 type Kind = "file" | "directory"
@@ -50,9 +51,8 @@ export async function assertSymlinkInsideProject(target: string): Promise<void> 
   const targetPath = path.resolve(target)
   const roots = [Instance.directory]
   if (Instance.worktree !== "/") roots.push(Instance.worktree)
-  const projectRoot = roots
-    .map((root) => path.resolve(root))
-    .filter((root, index, all) => all.indexOf(root) === index)
+  const projectRoots = uniqueStrings(roots.map((root) => path.resolve(root)))
+  const projectRoot = projectRoots
     .filter((root) => Filesystem.contains(root, targetPath))
     .sort((a, b) => b.length - a.length)[0]
   if (!projectRoot) return
@@ -100,11 +100,7 @@ export async function assertSymlinkInsideProject(target: string): Promise<void> 
  * Eliminates the repeated `resolveToolFilePath` + `assertExternalDirectory` +
  * `assertSymlinkInsideProject` boilerplate across tool execute handlers.
  */
-export async function fileToolGuard(
-  ctx: Tool.Context,
-  rawPath: string,
-  options?: Options,
-): Promise<string> {
+export async function fileToolGuard(ctx: Tool.Context, rawPath: string, options?: Options): Promise<string> {
   const resolved = resolveToolFilePath(rawPath, Instance.directory)
   await assertExternalDirectory(ctx, resolved, options)
   await assertSymlinkInsideProject(resolved)
