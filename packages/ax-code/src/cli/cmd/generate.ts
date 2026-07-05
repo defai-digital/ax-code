@@ -1,6 +1,17 @@
 import { Server } from "../../server/server"
 import type { CommandModule } from "yargs"
 
+export function buildOperationCodeSample(operationID: string): string {
+  return [
+    `import { createAxCodeClient } from "@ax-code/sdk/v2"`,
+    ``,
+    `const client = createAxCodeClient()`,
+    `await client.${operationID}({`,
+    `  ...`,
+    `})`,
+  ].join("\n")
+}
+
 export const GenerateCommand = {
   command: "generate",
   handler: async () => {
@@ -13,14 +24,7 @@ export const GenerateCommand = {
         operation["x-codeSamples"] = [
           {
             lang: "js",
-            source: [
-              `import { createOpencodeClient } from "@ax-code/sdk"`,
-              ``,
-              `const client = createOpencodeClient()`,
-              `await client.${operation.operationId}({`,
-              `  ...`,
-              `})`,
-            ].join("\n"),
+            source: buildOperationCodeSample(operation.operationId),
           },
         ]
       }
