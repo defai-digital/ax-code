@@ -566,6 +566,17 @@ const parseStringListRecord = (value: unknown): Record<string, string[]> => {
   return parsed
 }
 
+const parseStringRecord = (value: unknown): Record<string, string> | undefined => {
+  if (!value || typeof value !== "object") {
+    return undefined
+  }
+
+  const parsed = Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(([, entry]) => typeof entry === "string"),
+  ) as Record<string, string>
+  return Object.keys(parsed).length > 0 ? parsed : undefined
+}
+
 const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (!payload || typeof payload !== "object") {
     return null
@@ -794,22 +805,14 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
             }))
         }
 
-        // Parse modelAssignments
-        if (typedConfig.modelAssignments && typeof typedConfig.modelAssignments === "object") {
-          providerConfig.modelAssignments = Object.fromEntries(
-            Object.entries(typedConfig.modelAssignments as Record<string, unknown>)
-              .filter(([, v]) => typeof v === "string")
-              .map(([k, v]) => [k, String(v)]),
-          )
+        const modelAssignments = parseStringRecord(typedConfig.modelAssignments)
+        if (modelAssignments) {
+          providerConfig.modelAssignments = modelAssignments
         }
 
-        // Parse renamedGroups
-        if (typedConfig.renamedGroups && typeof typedConfig.renamedGroups === "object") {
-          providerConfig.renamedGroups = Object.fromEntries(
-            Object.entries(typedConfig.renamedGroups as Record<string, unknown>)
-              .filter(([, v]) => typeof v === "string")
-              .map(([k, v]) => [k, String(v)]),
-          )
+        const renamedGroups = parseStringRecord(typedConfig.renamedGroups)
+        if (renamedGroups) {
+          providerConfig.renamedGroups = renamedGroups
         }
 
         if (Object.keys(providerConfig).length > 0) {
