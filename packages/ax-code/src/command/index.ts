@@ -7,7 +7,6 @@ import { MCP } from "../mcp"
 import { Skill } from "../skill"
 import { Truncate } from "../tool/truncate"
 import { Policy } from "../quality/policy"
-import { Log } from "../util/log"
 import { uniqueStrings } from "../util/string-list"
 import { FileCommand } from "./file-command"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
@@ -17,12 +16,6 @@ import PROMPT_IMPACT from "./template/impact.txt"
 import PROMPT_PRD from "./template/prd.txt"
 
 export namespace Command {
-  const log = Log.create({ service: "command" })
-
-  type State = {
-    commands: Record<string, Info>
-  }
-
   export const Event = {
     Executed: BusEvent.define(
       "command.executed",
