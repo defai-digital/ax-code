@@ -160,11 +160,7 @@ export namespace QualityPromotionApprovalPacket {
       if (reasons.length > 0) continue
       deduped.set(approval.approvalID, approval)
     }
-    return [...deduped.values()].sort((a, b) => {
-      const byApprovedAt = a.approvedAt.localeCompare(b.approvedAt)
-      if (byApprovedAt !== 0) return byApprovedAt
-      return a.approvalID.localeCompare(b.approvalID)
-    })
+    return [...deduped.values()].sort((a, b) => compareStringFields(a, b, ["approvedAt", "approvalID"]))
   }
 
   export function create(input: {

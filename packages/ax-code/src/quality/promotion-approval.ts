@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { sha256JsonHex } from "./digest"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionApproval {
   export const ApprovalArtifact = z.object({
@@ -52,11 +53,7 @@ export namespace QualityPromotionApproval {
   }
 
   function sort(artifacts: ApprovalArtifact[]) {
-    return [...artifacts].sort((a, b) => {
-      const byApprovedAt = a.approvedAt.localeCompare(b.approvedAt)
-      if (byApprovedAt !== 0) return byApprovedAt
-      return a.approvalID.localeCompare(b.approvalID)
-    })
+    return [...artifacts].sort((a, b) => compareStringFields(a, b, ["approvedAt", "approvalID"]))
   }
 
   export function digest(bundle: QualityPromotionDecisionBundle.DecisionBundle) {

@@ -2,6 +2,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityLabelStore {
   export const LabelRecord = z.object({
@@ -23,11 +24,7 @@ export namespace QualityLabelStore {
   }
 
   function sortLabels(labels: ProbabilisticRollout.Label[]) {
-    return [...labels].sort((a, b) => {
-      const byTime = a.labeledAt.localeCompare(b.labeledAt)
-      if (byTime !== 0) return byTime
-      return a.labelID.localeCompare(b.labelID)
-    })
+    return [...labels].sort((a, b) => compareStringFields(a, b, ["labeledAt", "labelID"]))
   }
 
   export async function get(label: { sessionID: string; labelID: string }) {

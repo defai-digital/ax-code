@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
 import { QualityStorageKey } from "./storage-key"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityShadowStore {
   export const ShadowRecordEnvelope = z.object({
@@ -23,9 +24,7 @@ export namespace QualityShadowStore {
     return [...records].sort((a, b) => {
       const bySession = a.sessionID.localeCompare(b.sessionID)
       if (bySession !== 0) return bySession
-      const byCreated = a.createdAt.localeCompare(b.createdAt)
-      if (byCreated !== 0) return byCreated
-      return a.artifactID.localeCompare(b.artifactID)
+      return compareStringFields(a, b, ["createdAt", "artifactID"])
     })
   }
 
