@@ -1,5 +1,6 @@
 import type { OpenChamberProjectAction, OpenChamberProjectActionPlatform } from "@/lib/openchamberConfig"
 import type { DesktopSshInstance, DesktopSshPortForward } from "@/lib/desktopSsh"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 import type { IconName } from "@/components/icon/icons"
 
 export type ProjectActionIconKey =
@@ -54,14 +55,7 @@ export const PROJECT_ACTION_ICON_MAP = Object.fromEntries(
 export const PROJECT_ACTIONS_UPDATED_EVENT = "openchamber:project-actions-updated"
 
 export const normalizeProjectActionDirectory = (value: string): string => {
-  const trimmed = (value || "").trim().replace(/\\/g, "/")
-  if (!trimmed) {
-    return ""
-  }
-  if (trimmed === "/") {
-    return "/"
-  }
-  return trimmed.length > 1 ? trimmed.replace(/\/+$/, "") : trimmed
+  return normalizeProjectPath(value) ?? ""
 }
 
 export const getCurrentProjectActionPlatform = (): OpenChamberProjectActionPlatform => {

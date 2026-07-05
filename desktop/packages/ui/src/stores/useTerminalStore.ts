@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { devtools, persist, createJSONStorage } from "zustand/middleware"
 
 import { closeTerminal } from "@/lib/terminalApi"
+import { normalizeProjectPath } from "@/lib/projectResolution"
 import { isRecord } from "@/lib/record"
 import { getSafeSessionStorage } from "@/stores/utils/safeStorage"
 
@@ -105,11 +106,7 @@ const tabIdNumber = (tabId: string): number | null => {
 }
 
 function normalizeDirectory(dir: string): string {
-  let normalized = dir.trim()
-  while (normalized.length > 1 && normalized.endsWith("/")) {
-    normalized = normalized.slice(0, -1)
-  }
-  return normalized
+  return normalizeProjectPath(dir) ?? ""
 }
 
 const createEmptyTab = (id: string, label: string): TerminalTab => ({
