@@ -1,3 +1,8 @@
+const asNonEmptyString = (value) => {
+  const normalized = typeof value === "string" ? value.trim() : ""
+  return normalized.length > 0 ? normalized : undefined
+}
+
 export const parseServeCliOptions = ({ argv = [], env = {}, defaultPort }) => {
   const args = Array.isArray(argv) ? [...argv] : []
   const envPassword = env.AX_CODE_DESKTOP_UI_PASSWORD || env.AX_CODE_UI_PASSWORD || null
@@ -39,7 +44,7 @@ export const parseServeCliOptions = ({ argv = [], env = {}, defaultPort }) => {
     if (optionName === "host") {
       const { value, nextIndex } = consumeValue(i, inlineValue)
       i = nextIndex
-      options.host = typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined
+      options.host = asNonEmptyString(value)
       continue
     }
 
