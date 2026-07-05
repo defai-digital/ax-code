@@ -5,17 +5,9 @@ import { commandModel } from "./prompt-command-selection"
 import { parseGoalArguments } from "./prompt-goal-arguments"
 import type { CommandInput, PromptInput } from "./prompt-input"
 import { createUserMessage } from "./prompt-user-message"
+import { toErrorMessage } from "../util/error-message"
 
 type PromptRunner = (input: PromptInput) => Promise<MessageV2.WithParts>
-
-function goalErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message
-  try {
-    return String(error)
-  } catch {
-    return "Goal command failed."
-  }
-}
 
 // Run a goal status transition that may reject (pause/resume throw when no goal
 // is set, and resume throws when the token budget is exhausted) and render the
@@ -24,7 +16,7 @@ async function goalControlText(action: () => Promise<SessionGoal.Info>): Promise
   try {
     return SessionGoal.format(await action())
   } catch (error) {
-    return goalErrorMessage(error)
+    return toErrorMessage(error, "Goal command failed.")
   }
 }
 
@@ -71,7 +63,7 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     try {
       goal = await SessionGoal.resume(input.sessionID)
     } catch (error) {
-      return goalControlMessage(input, goalErrorMessage(error))
+      return goalControlMessage(input, toErrorMessage(error, "Goal command failed."))
     }
     return prompt({
       sessionID: input.sessionID,
@@ -112,7 +104,7 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       replace: false,
     })
   } catch (error) {
-    return goalControlMessage(input, goalErrorMessage(error))
+    return goalControlMessage(input, toErrorMessage(error, "Goal command failed."))
   }
   return prompt({
     sessionID: input.sessionID,
