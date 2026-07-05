@@ -217,9 +217,7 @@ export namespace QualityPromotionExportBundle {
   export async function assertPersisted(bundle: ExportArtifact) {
     await QualityPromotionAuditManifest.assertPersisted(bundle.auditManifest)
     const persisted = await get({ source: bundle.source, bundleID: bundle.bundleID })
-    const prev = JSON.stringify(persisted.bundle)
-    const curr = JSON.stringify(bundle)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.bundle, bundle)) {
       throw new Error(`Persisted promotion export bundle ${bundle.bundleID} does not match the provided artifact`)
     }
     return persisted

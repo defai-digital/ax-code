@@ -313,9 +313,7 @@ export namespace QualityPromotionPortableExport {
   export async function assertPersisted(exportArtifact: ExportArtifact) {
     await QualityPromotionHandoffPackage.assertPersisted(exportArtifact.handoffPackage)
     const persisted = await get({ source: exportArtifact.source, exportID: exportArtifact.exportID })
-    const prev = JSON.stringify(persisted.export)
-    const curr = JSON.stringify(exportArtifact)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.export, exportArtifact)) {
       throw new Error(
         `Persisted promotion portable export ${exportArtifact.exportID} does not match the provided artifact`,
       )

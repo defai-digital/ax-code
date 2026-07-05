@@ -352,9 +352,7 @@ export namespace QualityPromotionAuditManifest {
   export async function assertPersisted(manifest: ManifestArtifact) {
     await QualityPromotionReleasePacket.assertPersisted(manifest.releasePacket)
     const persisted = await get({ source: manifest.source, manifestID: manifest.manifestID })
-    const prev = JSON.stringify(persisted.manifest)
-    const curr = JSON.stringify(manifest)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.manifest, manifest)) {
       throw new Error(`Persisted promotion audit manifest ${manifest.manifestID} does not match the provided artifact`)
     }
     return persisted

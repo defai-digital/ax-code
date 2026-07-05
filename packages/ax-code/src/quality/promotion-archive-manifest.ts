@@ -325,9 +325,7 @@ export namespace QualityPromotionArchiveManifest {
   export async function assertPersisted(archive: ArchiveArtifact) {
     await QualityPromotionExportBundle.assertPersisted(archive.exportBundle)
     const persisted = await get({ source: archive.source, archiveID: archive.archiveID })
-    const prev = JSON.stringify(persisted.archive)
-    const curr = JSON.stringify(archive)
-    if (prev !== curr) {
+    if (!jsonEqual(persisted.archive, archive)) {
       throw new Error(`Persisted promotion archive manifest ${archive.archiveID} does not match the provided artifact`)
     }
     return persisted
