@@ -22,6 +22,22 @@ describe("parseSkillRepoSource", () => {
     })
   })
 
+  it("trims repository input and string subpaths", () => {
+    expect(parseSkillRepoSource(" owner/repo/ignored ", { subpath: " selected " })).toMatchObject({
+      ok: true,
+      owner: "owner",
+      repo: "repo",
+      effectiveSubpath: "selected",
+    })
+  })
+
+  it("ignores non-string explicit subpaths", () => {
+    expect(parseSkillRepoSource("owner/repo/fallback", { subpath: 123 })).toMatchObject({
+      ok: true,
+      effectiveSubpath: "fallback",
+    })
+  })
+
   it("parses HTTPS sources with nested owners", () => {
     expect(parseSkillRepoSource("https://gitlab.example.com/group/subgroup/repo.git")).toEqual({
       ok: true,

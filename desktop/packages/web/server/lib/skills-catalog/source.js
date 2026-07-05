@@ -1,10 +1,20 @@
 const GITHUB_HOST = "github.com"
 
+function trimString(value) {
+  return typeof value === "string" ? value.trim() : String(value || "").trim()
+}
+
+function normalizeOptionalSubpath(value) {
+  if (typeof value !== "string") {
+    return null
+  }
+  const trimmed = trimString(value)
+  return trimmed ? trimmed : null
+}
+
 function normalizeGitOwnerRepo(owner, repo) {
-  const normalizedOwner = String(owner || "").trim()
-  const normalizedRepo = String(repo || "")
-    .trim()
-    .replace(/\.git$/i, "")
+  const normalizedOwner = trimString(owner)
+  const normalizedRepo = trimString(repo).replace(/\.git$/i, "")
   if (!normalizedOwner || !normalizedRepo) {
     return null
   }
@@ -82,11 +92,11 @@ function buildParsedRepoSource({ host, owner, repo, effectiveSubpath }) {
 }
 
 export function parseSkillRepoSource(input, options = {}) {
-  const raw = typeof input === "string" ? input.trim() : ""
+  const raw = typeof input === "string" ? trimString(input) : ""
   if (!raw) {
     return { ok: false, error: { kind: "invalidSource", message: "Repository source is required" } }
   }
-  const explicitSubpath = typeof options.subpath === "string" && options.subpath.trim() ? options.subpath.trim() : null
+  const explicitSubpath = normalizeOptionalSubpath(options.subpath)
 
   const urlFormat = raw.startsWith("https://") ? "https" : raw.startsWith("git@") ? "ssh" : "shorthand"
   const remote = parseRemoteSource(raw, urlFormat)
@@ -120,8 +130,7 @@ export function parseSkillRepoSource(input, options = {}) {
       return { ok: false, error: { kind: "invalidSource", message: "Invalid repository source" } }
     }
 
-    const shorthandSubpath =
-      typeof shorthandMatch[3] === "string" && shorthandMatch[3].trim() ? shorthandMatch[3].trim() : null
+    const shorthandSubpath = normalizeOptionalSubpath(shorthandMatch[3])
     const effectiveSubpath = explicitSubpath || shorthandSubpath
 
     return buildParsedRepoSource({
