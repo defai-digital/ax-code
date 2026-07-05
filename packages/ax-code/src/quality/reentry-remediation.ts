@@ -2,6 +2,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { QualityReentryContext } from "./reentry-context"
+import { jsonEqual } from "./json"
 
 export namespace QualityReentryRemediation {
   export const EvidenceKind = z.enum(["change", "validation", "finding", "note"])
@@ -93,9 +94,7 @@ export namespace QualityReentryRemediation {
         contextID: remediation.contextID,
         remediationID: remediation.remediationID,
       })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Reentry remediation ${remediation.remediationID} already exists for source ${remediation.source} with different content`,
       )

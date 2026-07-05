@@ -2,6 +2,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
+import { jsonEqual } from "./json"
 
 export namespace QualityReentryContext {
   export const ContextArtifact = z.object({
@@ -138,9 +139,7 @@ export namespace QualityReentryContext {
     })
     try {
       const existing = await get({ source: context.source, contextID: context.contextID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Reentry context ${context.contextID} already exists for source ${context.source} with different content`,
       )
