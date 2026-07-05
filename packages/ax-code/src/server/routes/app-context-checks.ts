@@ -1,5 +1,6 @@
 import { Filesystem } from "@/util/filesystem"
 import { isRecord } from "@/util/record"
+import { uniqueStrings } from "@/util/string-list"
 import path from "path"
 import type { AppContextCheckData } from "./app-context-schema"
 
@@ -114,7 +115,7 @@ function isEnoent(error: unknown): error is { code: "ENOENT" } {
 }
 
 function uniqueFiles(files: Array<string | undefined>) {
-  return Array.from(new Set(files.filter((item): item is string => !!item)))
+  return uniqueStrings(files.filter((item): item is string => !!item))
 }
 
 async function readOptionalJson(file: string) {
