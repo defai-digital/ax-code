@@ -13,6 +13,7 @@
 import path from "path"
 import { fileURLToPath } from "url"
 import { readJson, writeText } from "./fs-compat"
+import { formatModelsSnapshot, modelsSnapshotChanged } from "./models-snapshot"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
@@ -1188,12 +1189,9 @@ if (anthropic?.models) {
   }
 }
 
-const prev = JSON.stringify(existing)
-const next = JSON.stringify(fetched, null, 2) + "\n"
-
-if (prev === JSON.stringify(fetched)) {
+if (!modelsSnapshotChanged(existing, fetched)) {
   console.log("models-snapshot.json is already up to date")
 } else {
-  await writeText(snapshotPath, next)
+  await writeText(snapshotPath, formatModelsSnapshot(fetched))
   console.log("Updated models-snapshot.json")
 }

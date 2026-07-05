@@ -61,6 +61,10 @@ export function formatModelsSnapshot(snapshot: ModelsSnapshot) {
   return JSON.stringify(snapshot, null, 2) + "\n"
 }
 
+function modelsSnapshotKey(snapshot: ModelsSnapshot) {
+  return JSON.stringify(snapshot)
+}
+
 export function modelsSnapshotChanged(existing: ModelsSnapshot, next: ModelsSnapshot) {
-  return JSON.stringify(existing) !== JSON.stringify(next)
+  return modelsSnapshotKey(existing) !== modelsSnapshotKey(next)
 }
