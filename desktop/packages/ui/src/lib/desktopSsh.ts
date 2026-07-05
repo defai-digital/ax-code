@@ -410,8 +410,7 @@ export const desktopSshLogs = async (id: string, limit?: number): Promise<string
     id,
     ...(typeof limit === "number" ? { limit } : {}),
   })
-  if (!Array.isArray(raw)) return []
-  return raw.filter((line): line is string => typeof line === "string")
+  return asStringArray(raw)
 }
 
 export const desktopSshLogsClear = async (id: string): Promise<void> => {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { createDesktopSshInstance, desktopSshInstancesGet, normalizeDesktopSshBindHost } from "./desktopSsh"
+import { createDesktopSshInstance, desktopSshInstancesGet, desktopSshLogs, normalizeDesktopSshBindHost } from "./desktopSsh"
 
 describe("desktopSsh", () => {
   afterEach(() => {
@@ -107,5 +107,15 @@ describe("desktopSsh", () => {
         }),
       ],
     })
+  })
+
+  test("filters non-string desktop ssh log entries", async () => {
+    const invoke = vi.fn().mockResolvedValue(["connected", null, "ready", 42])
+    ;(window as unknown as { __TAURI__?: unknown }).__TAURI__ = {
+      core: { invoke },
+    }
+
+    await expect(desktopSshLogs("remote-1", 25)).resolves.toEqual(["connected", "ready"])
+    expect(invoke).toHaveBeenCalledWith("desktop_ssh_logs", { id: "remote-1", limit: 25 })
   })
 })
