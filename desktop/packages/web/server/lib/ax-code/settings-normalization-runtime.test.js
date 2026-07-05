@@ -124,5 +124,24 @@ describe("settings normalization runtime - symlink resolution", () => {
 
       expect(result.changed).toBe(false)
     })
+
+    it("does not flag canonical projects as changed", () => {
+      const runtime = createTestRuntime()
+
+      const projects = [
+        {
+          id: "project-1",
+          path: "/workspace/project",
+          label: "Project",
+          color: "blue",
+          addedAt: 1000,
+          lastOpenedAt: 2000,
+        },
+      ]
+
+      const result = runtime.normalizeSettingsPaths({ projects })
+
+      expect(result.changed).toBe(false)
+    })
   })
 })

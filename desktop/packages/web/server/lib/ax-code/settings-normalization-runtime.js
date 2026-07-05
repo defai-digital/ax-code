@@ -163,6 +163,8 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
     return result
   }
 
+  const projectListKey = (projects) => JSON.stringify(projects)
+
   const normalizeSettingsPaths = (input) => {
     const settings = input && typeof input === "object" ? input : {}
     let next = settings
@@ -211,7 +213,7 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
 
     if (Array.isArray(settings.projects)) {
       const normalizedProjects = sanitizeProjects(settings.projects) || []
-      if (JSON.stringify(normalizedProjects) !== JSON.stringify(settings.projects)) {
+      if (projectListKey(normalizedProjects) !== projectListKey(settings.projects)) {
         ensureNext()
         next.projects = normalizedProjects
         changed = true
