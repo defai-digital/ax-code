@@ -1,4 +1,5 @@
 import type { McpDraft } from "@/stores/useMcpConfigStore"
+import { isPlainRecord } from "@/lib/record"
 
 export interface ImportedMcpResult {
   readonly ok: true
@@ -22,10 +23,6 @@ export type ImportedMcpError =
   | { readonly ok: false; readonly error: string; readonly parsed: unknown }
 
 export type ImportedMcpOutcome = ImportedMcpResult | ImportedMcpError
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function stringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === "string")
@@ -113,9 +110,9 @@ function buildCommand(raw: Record<string, unknown>): string[] {
 function buildEnv(raw: Record<string, unknown>, ...keys: string[]): Array<{ key: string; value: string }> {
   for (const key of keys) {
     const val = raw[key]
-    if (!isObject(val)) continue
+    if (!isPlainRecord(val)) continue
 
-    const entries = Object.entries(val as Record<string, unknown>).filter(([k, v]) => k && typeof v === "string")
+    const entries = Object.entries(val).filter(([k, v]) => k && typeof v === "string")
     if (entries.length > 0) {
       return entries.map(([k, v]) => ({ key: k, value: String(v) }))
     }
@@ -127,10 +124,10 @@ function buildOAuthEnabled(raw: Record<string, unknown>): boolean {
   if (raw.oauth === false || raw.oauth === null || raw.oauth === undefined) {
     return false
   }
-  if (!isObject(raw.oauth)) {
+  if (!isPlainRecord(raw.oauth)) {
     return false
   }
-  const oauth = raw.oauth as Record<string, unknown>
+  const oauth = raw.oauth
   return !!(
     (typeof oauth.clientId === "string" && oauth.clientId.trim()) ||
     (typeof oauth.clientSecret === "string" && oauth.clientSecret.trim()) ||
@@ -169,12 +166,12 @@ function buildEnabled(raw: Record<string, unknown>): boolean {
  */
 function extractSingleServer(obj: Record<string, unknown>): { name: string; entry: Record<string, unknown> } | null {
   const mcpServers = obj.mcpServers
-  if (isObject(mcpServers)) {
+  if (isPlainRecord(mcpServers)) {
     const keys = Object.keys(mcpServers)
     if (keys.length === 1) {
       const name = keys[0]!
       const entry = mcpServers[name]
-      if (isObject(entry)) {
+      if (isPlainRecord(entry)) {
         return { name, entry }
       }
     }
@@ -185,7 +182,7 @@ function extractSingleServer(obj: Record<string, unknown>): { name: string; entr
 
   const serverKeys = Object.keys(obj).filter((k) => {
     const v = obj[k]
-    return k !== "mcpServers" && isObject(v)
+    return k !== "mcpServers" && isPlainRecord(v)
   })
 
   if (serverKeys.length === 1) {
@@ -231,7 +228,7 @@ export function parseImportedMcpSnippet(raw: string, options?: { fallbackName?: 
     return buildError(err instanceof Error ? `Invalid JSON: ${err.message}` : "Invalid JSON")
   }
 
-  if (!isObject(parsed)) {
+  if (!isPlainRecord(parsed)) {
     return buildError("Expected a JSON object, not an array or primitive")
   }
 
@@ -239,7 +236,7 @@ export function parseImportedMcpSnippet(raw: string, options?: { fallbackName?: 
 
   // Detect single named entry inside { "mcpServers": { "name": { ... } } }
   const mcpServers = obj.mcpServers
-  if (isObject(mcpServers)) {
+  if (isPlainRecord(mcpServers)) {
     const keys = Object.keys(mcpServers)
     if (keys.length === 0) {
       return buildError("mcpServers object is empty", parsed)
@@ -249,10 +246,10 @@ export function parseImportedMcpSnippet(raw: string, options?: { fallbackName?: 
     }
     const serverName = keys[0]!
     const entry = mcpServers[serverName]
-    if (!isObject(entry)) {
+    if (!isPlainRecord(entry)) {
       return buildError("Server entry is not a valid object", parsed)
     }
-    return buildResult(serverName, inferType(entry as Record<string, unknown>), entry as Record<string, unknown>)
+    return buildResult(serverName, inferType(entry), entry)
   }
 
   // Detect single named entry { "serverName": { ... } }
