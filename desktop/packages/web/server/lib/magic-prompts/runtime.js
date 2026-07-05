@@ -4,21 +4,32 @@ const PROMPT_ID_PATTERN = /^[a-z0-9._-]{1,160}$/
 const isVisiblePromptID = (id) => typeof id === "string" && id.endsWith(".visible")
 const normalizePromptID = (id) => (typeof id === "string" ? id.trim() : "")
 
-const hasOwn = (input, key) => Object.prototype.hasOwnProperty.call(input, key)
-
-const sanitizeOverrides = (value) => {
+const overridesToMap = (value) => {
+  const overrides = new Map()
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {}
+    return overrides
   }
 
-  const next = {}
   for (const [key, entry] of Object.entries(value)) {
     if (!PROMPT_ID_PATTERN.test(key) || typeof entry !== "string") {
       continue
     }
-    next[key] = entry
+    overrides.set(key, entry)
   }
-  return next
+  return overrides
+}
+
+const sanitizeOverrides = (value) => {
+  return Object.fromEntries(overridesToMap(value))
+}
+
+const serializeState = (state) => {
+  const overrides =
+    state.overrides instanceof Map ? Object.fromEntries(state.overrides) : sanitizeOverrides(state.overrides)
+  return {
+    version: FILE_VERSION,
+    overrides,
+  }
 }
 
 export const createMagicPromptRuntime = (dependencies) => {
@@ -26,35 +37,37 @@ export const createMagicPromptRuntime = (dependencies) => {
 
   let writeLock = Promise.resolve()
 
-  const readPromptState = async () => {
+  const readMutablePromptState = async () => {
     try {
       const raw = await fsPromises.readFile(filePath, "utf8")
       const parsed = JSON.parse(raw)
-      const overrides = sanitizeOverrides(parsed?.overrides)
+      const overrides = overridesToMap(parsed?.overrides)
       return {
         version: FILE_VERSION,
         overrides,
       }
     } catch (error) {
       if (error && typeof error === "object" && error.code === "ENOENT") {
-        return { version: FILE_VERSION, overrides: {} }
+        return { version: FILE_VERSION, overrides: new Map() }
       }
       console.warn("Failed to read magic prompts file:", error)
-      return { version: FILE_VERSION, overrides: {} }
+      return { version: FILE_VERSION, overrides: new Map() }
     }
   }
 
+  const readPromptState = async () => serializeState(await readMutablePromptState())
+
   const writePromptState = async (state) => {
     await fsPromises.mkdir(path.dirname(filePath), { recursive: true })
-    await fsPromises.writeFile(filePath, JSON.stringify(state, null, 2), "utf8")
+    await fsPromises.writeFile(filePath, JSON.stringify(serializeState(state), null, 2), "utf8")
   }
 
   const persist = async (mutator) => {
     const run = async () => {
-      const current = await readPromptState()
+      const current = await readMutablePromptState()
       const next = await mutator(current)
       await writePromptState(next)
-      return next
+      return serializeState(next)
     }
     writeLock = writeLock.then(run, run)
     return writeLock
@@ -76,7 +89,8 @@ export const createMagicPromptRuntime = (dependencies) => {
     }
 
     return persist(async (state) => {
-      const nextOverrides = { ...state.overrides, [normalizedId]: text }
+      const nextOverrides = new Map(state.overrides)
+      nextOverrides.set(normalizedId, text)
       return {
         version: FILE_VERSION,
         overrides: nextOverrides,
@@ -91,11 +105,11 @@ export const createMagicPromptRuntime = (dependencies) => {
     }
 
     return persist(async (state) => {
-      if (!hasOwn(state.overrides, normalizedId)) {
+      if (!state.overrides.has(normalizedId)) {
         return state
       }
-      const nextOverrides = { ...state.overrides }
-      delete nextOverrides[normalizedId]
+      const nextOverrides = new Map(state.overrides)
+      nextOverrides.delete(normalizedId)
       return {
         version: FILE_VERSION,
         overrides: nextOverrides,
@@ -104,7 +118,7 @@ export const createMagicPromptRuntime = (dependencies) => {
   }
 
   const resetAllOverrides = async () => {
-    return persist(async () => ({ version: FILE_VERSION, overrides: {} }))
+    return persist(async () => ({ version: FILE_VERSION, overrides: new Map() }))
   }
 
   return {
