@@ -40,6 +40,9 @@ type AppearanceSlice = {
 
 let initialized = false
 
+const notificationTemplatesKey = (templates: AppearanceSlice["notificationTemplates"]): string =>
+  JSON.stringify(templates)
+
 export const startAppearanceAutoSave = (): void => {
   if (initialized || typeof window === "undefined") {
     return
@@ -157,7 +160,10 @@ export const startAppearanceAutoSave = (): void => {
     if (current.notifyOnQuestion !== previous.notifyOnQuestion) {
       diff.notifyOnQuestion = current.notifyOnQuestion
     }
-    if (JSON.stringify(current.notificationTemplates) !== JSON.stringify(previous.notificationTemplates)) {
+    if (
+      notificationTemplatesKey(current.notificationTemplates) !==
+      notificationTemplatesKey(previous.notificationTemplates)
+    ) {
       diff.notificationTemplates = current.notificationTemplates
     }
     if (current.summarizeLastMessage !== previous.summarizeLastMessage) {
