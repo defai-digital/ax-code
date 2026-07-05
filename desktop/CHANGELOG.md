@@ -30,6 +30,10 @@ All notable changes to this project will be documented in this file.
 
 - CLI: aligns the AX Engine managed-install trust model with the ad-hoc minisign release artifacts used by the engine release.
 
+### Fixed
+
+- Desktop: reverting the latest user message no longer hides the assistant responses of earlier, non-reverted turns. Client-generated user-message ids now match the server id ordering used by assistant messages.
+
 ## [6.8.4] - 2026-07-01
 
 ### Added

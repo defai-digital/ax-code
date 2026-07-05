@@ -133,7 +133,7 @@ const randomBase62 = (length: number): string => {
   return result
 }
 
-const ascendingId = (prefix: "msg"): string => {
+export const ascendingId = (prefix: "msg" | "prt"): string => {
   const timestamp = Date.now()
   if (timestamp !== lastIdTimestamp) {
     lastIdTimestamp = timestamp
@@ -141,7 +141,11 @@ const ascendingId = (prefix: "msg"): string => {
   }
   idCounter += 1
 
-  const sortable = BigInt(timestamp) * BigInt(0x10000) + BigInt(idCounter)
+  // Must match the server encoding (packages/ax-code/src/id/id.ts Identifier.create):
+  // timestamp * 0x1000 + counter. A different multiplier packs the timestamp into different
+  // bytes, so client (user) and server (assistant) ids sort inconsistently and the id-sorted
+  // sync store reorders the transcript (issue #325).
+  const sortable = BigInt(timestamp) * BigInt(0x1000) + BigInt(idCounter)
   const timeBytes = new Uint8Array(6)
   for (let index = 0; index < 6; index += 1) {
     timeBytes[index] = Number((sortable >> BigInt(40 - 8 * index)) & BigInt(0xff))
