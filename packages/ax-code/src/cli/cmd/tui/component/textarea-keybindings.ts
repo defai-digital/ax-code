@@ -75,6 +75,7 @@ export function textareaKeybindingsForConfig(
     ...(submit || interceptEnter
       ? ([
           { name: "return", action: "submit" },
+          { name: "enter", action: "submit" },
           { name: "linefeed", action: "submit" },
           // Keypad Enter: intercept it as "submit" too, otherwise OpenTUI's
           // default `kpenter` -> "newline" binding inserts a blank line.

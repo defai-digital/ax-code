@@ -74,6 +74,7 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 import {
   promptEscapeClearIntent,
   isPromptExitCommand,
+  isUnmodifiedPromptSubmitKey,
   promptSubmissionView,
   sanitizePromptInput,
   windowsClipboardTextPaste,
@@ -235,13 +236,14 @@ export function Prompt(props: PromptProps) {
   }
 
   function syncPromptInputFromRenderable() {
-    if (!isRenderableAlive(input)) return
+    if (!isRenderableAlive(input)) return store.prompt.input
     const raw = input.plainText
     const value = sanitizePromptInput(raw)
     if (value !== raw) input.setText(value)
     setStore("prompt", "input", value)
     autocomplete?.onInput(value)
     syncExtmarksWithPromptParts()
+    return value
   }
 
   function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean; syncPromptInput?: boolean } = {}) {
@@ -354,12 +356,7 @@ export function Prompt(props: PromptProps) {
 
   function isPromptSubmitKey(event: KeyEvent) {
     if (keybind.match("input_submit", event)) return true
-    if (event.ctrl || event.meta || event.shift || event.super || event.hyper) return false
-    // `kpenter` is the numeric-keypad Enter (kitty keyboard protocol reports it
-    // as a distinct key from the main `return`). Without it here, pressing the
-    // keypad Enter falls through to the textarea's default `kpenter` -> newline
-    // binding, so it inserts a blank line instead of submitting.
-    return event.name === "return" || event.name === "linefeed" || event.name === "kpenter"
+    return isUnmodifiedPromptSubmitKey(event)
   }
 
   useKeyboard((evt) => {
@@ -1018,13 +1015,14 @@ export function Prompt(props: PromptProps) {
 
   async function submit() {
     if (inputBlocked() || submitInFlight) return
-    if (!store.prompt.input) return
-    if (isPromptExitCommand(store.prompt.input)) {
+    const promptInput = syncPromptInputFromRenderable()
+    if (!promptInput) return
+    if (isPromptExitCommand(promptInput)) {
       exit()
       return
     }
     const submission = promptSubmissionView({
-      text: store.prompt.input,
+      text: promptInput,
       parts: store.prompt.parts,
       extmarks: input.extmarks.getAllForTypeId(promptPartTypeId),
       extmarkToPartIndex: store.extmarkToPartIndex,

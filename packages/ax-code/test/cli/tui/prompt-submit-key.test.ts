@@ -1,5 +1,6 @@
 import { test, expect } from "vitest"
 import { textareaKeybindingsForConfig } from "../../../src/cli/cmd/tui/component/textarea-keybindings"
+import { isUnmodifiedPromptSubmitKey } from "../../../src/cli/cmd/tui/component/prompt/view-model"
 import type { Keybind } from "../../../src/util/keybind"
 
 // Regression coverage for the prompt's Enter handling.
@@ -11,11 +12,6 @@ import type { Keybind } from "../../../src/util/keybind"
 // so the numeric-keypad Enter (`kpenter`, reported as a distinct key under the
 // kitty keyboard protocol) fell through to OpenTUI's default `kpenter -> newline`
 // binding: pressing it inserted a blank line and never submitted.
-
-// Mirrors isPromptSubmitKey() for an unmodified key.
-function isPromptSubmitKey(name: string) {
-  return name === "return" || name === "linefeed" || name === "kpenter"
-}
 
 function key(name: string, modifiers: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {}): Keybind.Info {
   return {
@@ -49,7 +45,7 @@ function applyPromptKey(
   modifiers: { ctrl?: boolean; meta?: boolean; shift?: boolean } = {},
 ) {
   const action = actionFor(name, modifiers)
-  if (!modifiers.ctrl && !modifiers.meta && !modifiers.shift && isPromptSubmitKey(name) && action === "submit") {
+  if (isUnmodifiedPromptSubmitKey({ name, ...modifiers }) && action === "submit") {
     return { draft, submits: 1 }
   }
   if (action === "newline") return { draft: `${draft}\n`, submits: 0 }
@@ -74,4 +70,10 @@ test("main Enter (return) keeps submitting without inserting a newline", async (
   const newline = applyPromptKey("hello", "return", { shift: true })
   expect(submit).toEqual({ draft: "hello", submits: 1 })
   expect(newline).toEqual({ draft: "hello\n", submits: 0 })
+})
+
+test("enter alias submits instead of inserting a blank line", async () => {
+  const result = applyPromptKey("hello", "enter")
+  expect(actionFor("enter")).toBe("submit")
+  expect(result).toEqual({ draft: "hello", submits: 1 })
 })

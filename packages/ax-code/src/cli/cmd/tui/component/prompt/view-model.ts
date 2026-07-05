@@ -17,6 +17,20 @@ export type ClipboardContentView = {
 }
 
 export const DOUBLE_ESCAPE_CLEAR_MS = 3_000
+const PROMPT_SUBMIT_KEY_NAMES = new Set(["return", "enter", "linefeed", "kpenter"])
+
+export function isUnmodifiedPromptSubmitKey(input: {
+  name?: string
+  ctrl?: boolean
+  meta?: boolean
+  shift?: boolean
+  super?: boolean
+  hyper?: boolean
+}) {
+  if (!input.name) return false
+  if (input.ctrl || input.meta || input.shift || input.super || input.hyper) return false
+  return PROMPT_SUBMIT_KEY_NAMES.has(input.name)
+}
 
 export function sanitizePromptInput(input: string) {
   // SGR mouse residue: \x1b[<Cb;Cx;CyM/m can arrive as <digits;digits;digitsM

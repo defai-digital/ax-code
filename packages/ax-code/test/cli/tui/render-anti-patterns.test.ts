@@ -884,7 +884,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("pending: submitPending() || submitInFlight")
     expect(prompt).toContain("useTextareaKeybindings({ submit: false, interceptEnter: true })")
     expect(prompt).toContain("function isPromptSubmitKey(event: KeyEvent)")
-    expect(prompt).toContain('event.name === "return" || event.name === "linefeed"')
+    expect(prompt).toContain("isUnmodifiedPromptSubmitKey(event)")
     expect(prompt).toContain("useKeyboard((evt) => {")
     expect(prompt).toContain("evt.stopPropagation()")
     expect(prompt).toContain("isPromptSubmitKey(e)")
