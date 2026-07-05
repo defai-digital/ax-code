@@ -10,6 +10,7 @@ import { Log } from "@/util/log"
 import { assertAuthenticatedNetworkBind } from "@/runtime/listen-security"
 import { pushSseFrame } from "@/util/sse-queue"
 import { serve, type ServerHandle } from "@/server/runtime-adapter"
+import { LEGACY_OPENCODE_WORKSPACE_HEADER } from "@/util/workspace-headers"
 
 const log = Log.create({ service: "workspace-server" })
 
@@ -23,10 +24,10 @@ export namespace WorkspaceServer {
         return basicAuth({ username, password })(c, next)
       })
       .get("/event", async (c) => {
-        const rawWorkspaceID = c.req.header("x-opencode-workspace")
+        const rawWorkspaceID = c.req.header(LEGACY_OPENCODE_WORKSPACE_HEADER)
         const parsedWorkspaceID = WorkspaceID.zod.safeParse(rawWorkspaceID)
         if (!parsedWorkspaceID.success) {
-          return c.json({ error: "Missing or invalid x-opencode-workspace header" }, 400)
+          return c.json({ error: `Missing or invalid ${LEGACY_OPENCODE_WORKSPACE_HEADER} header` }, 400)
         }
         const workspaceID = parsedWorkspaceID.data
         c.header("X-Accel-Buffering", "no")

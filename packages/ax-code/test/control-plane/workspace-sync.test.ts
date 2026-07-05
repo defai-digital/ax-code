@@ -9,6 +9,7 @@ import { GlobalBus } from "../../src/bus/global"
 import { resetDatabase } from "../fixture/db"
 import * as adaptors from "../../src/control-plane/adaptors"
 import type { Adaptor } from "../../src/control-plane/types"
+import { LEGACY_OPENCODE_WORKSPACE_HEADER } from "../../src/util/workspace-headers"
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -38,7 +39,7 @@ const TestAdaptor: Adaptor = {
         ? _input.toString()
         : new URL(_input, "http://workspace.test").toString()
     const request = new Request(url, _init)
-    const workspaceHeader = request.headers.get("x-opencode-workspace")
+    const workspaceHeader = request.headers.get(LEGACY_OPENCODE_WORKSPACE_HEADER)
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         const encoder = new TextEncoder()
@@ -95,7 +96,7 @@ describe("control-plane/workspace.startSyncing", () => {
           ? input.toString()
           : new URL(input, "http://workspace.test").toString()
       const request = new Request(url, init)
-      seenHeaders.push(request.headers.get("x-opencode-workspace") ?? "")
+      seenHeaders.push(request.headers.get(LEGACY_OPENCODE_WORKSPACE_HEADER) ?? "")
       return originalFetch(config, input, init)
     }
 

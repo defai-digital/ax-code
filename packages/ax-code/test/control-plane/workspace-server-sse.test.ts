@@ -7,6 +7,7 @@ import { parseSSE } from "../../src/control-plane/sse"
 import { GlobalBus } from "../../src/bus/global"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
+import { LEGACY_OPENCODE_WORKSPACE_HEADER } from "../../src/util/workspace-headers"
 
 afterEach(async () => {
   await resetDatabase()
@@ -27,7 +28,7 @@ describe("control-plane/workspace-server SSE", () => {
 
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({
-      error: "Missing or invalid x-opencode-workspace header",
+      error: `Missing or invalid ${LEGACY_OPENCODE_WORKSPACE_HEADER} header`,
     })
   })
 
@@ -40,7 +41,7 @@ describe("control-plane/workspace-server SSE", () => {
       const response = await app.request("/event", {
         signal: stop.signal,
         headers: {
-          "x-opencode-workspace": "wrk_test_workspace",
+          [LEGACY_OPENCODE_WORKSPACE_HEADER]: "wrk_test_workspace",
           "x-opencode-directory": tmp.path,
         },
       })
@@ -96,7 +97,7 @@ describe("control-plane/workspace-server SSE", () => {
       const response = await app.request("/event", {
         signal: stop.signal,
         headers: {
-          "x-opencode-workspace": "wrk_test_workspace",
+          [LEGACY_OPENCODE_WORKSPACE_HEADER]: "wrk_test_workspace",
           "x-opencode-directory": tmp.path,
         },
       })
