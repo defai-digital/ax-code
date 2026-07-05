@@ -65,6 +65,21 @@ const isPathWithinRoot = (path: string, root: string): boolean => {
 const mergeUniquePaths = (existing: readonly string[], incoming: readonly string[]): string[] =>
   Array.from(new Set([...existing, ...incoming]))
 
+const sanitizeRootPaths = (input: unknown, root: string): string[] => {
+  if (!Array.isArray(input)) {
+    return []
+  }
+
+  return Array.from(
+    new Set(
+      input
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => normalizePath(value))
+        .filter((value) => isPathWithinRoot(value, root)),
+    ),
+  )
+}
+
 const sanitizeByRoot = (input: unknown): Record<string, RootTabsState> => {
   if (!input || typeof input !== "object") {
     return {}
@@ -86,27 +101,8 @@ const sanitizeByRoot = (input: unknown): Record<string, RootTabsState> => {
       touchedAt?: unknown
     }
 
-    const openPaths = Array.isArray(state.openPaths)
-      ? Array.from(
-          new Set(
-            state.openPaths
-              .filter((value): value is string => typeof value === "string")
-              .map((value) => normalizePath(value))
-              .filter((value) => isPathWithinRoot(value, root)),
-          ),
-        )
-      : []
-
-    const expandedPaths = Array.isArray(state.expandedPaths)
-      ? Array.from(
-          new Set(
-            state.expandedPaths
-              .filter((value): value is string => typeof value === "string")
-              .map((value) => normalizePath(value))
-              .filter((value) => isPathWithinRoot(value, root)),
-          ),
-        )
-      : []
+    const openPaths = sanitizeRootPaths(state.openPaths, root)
+    const expandedPaths = sanitizeRootPaths(state.expandedPaths, root)
 
     const selectedPathCandidate = typeof state.selectedPath === "string" ? normalizePath(state.selectedPath) : null
 
