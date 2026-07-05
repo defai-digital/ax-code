@@ -3,6 +3,7 @@ import { STATUS_CODES } from "http"
 import { iife } from "@/util/iife"
 import { isRecord } from "@/util/record"
 import { parseJsonRecord as parseJsonRecordUtil } from "@/util/json-record"
+import { toErrorMessage } from "@/util/error-message"
 import type { ProviderID } from "./schema"
 
 export namespace ProviderError {
@@ -106,18 +107,9 @@ export namespace ProviderError {
       return JSON.stringify({
         type: "error",
         error: {
-          message: stringifyUnknownError(error),
+          message: toErrorMessage(error, "Unknown serialization error"),
         },
       })
-    }
-  }
-
-  function stringifyUnknownError(error: unknown): string {
-    if (error instanceof Error) return error.message
-    try {
-      return String(error)
-    } catch {
-      return "Unknown serialization error"
     }
   }
 

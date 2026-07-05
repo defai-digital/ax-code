@@ -28,7 +28,7 @@ import type {
 } from "@ax-code/sdk/v2/client"
 import { internalBaseUrl } from "../util/internal-url.js"
 import { ServerRuntimeAuth } from "../server/runtime-auth.js"
-import { toError } from "../util/error-message.js"
+import { toError, toErrorMessage } from "../util/error-message.js"
 import type {
   Agent,
   AgentOptions,
@@ -108,16 +108,7 @@ export function formatToolArgumentsForPrompt(input: Record<string, unknown>): st
       }) ?? "{}"
     )
   } catch (error) {
-    return JSON.stringify({ serialization_error: formatSerializationError(error) })
-  }
-}
-
-function formatSerializationError(error: unknown) {
-  if (error instanceof Error) return error.message
-  try {
-    return String(error)
-  } catch {
-    return "Unknown serialization error"
+    return JSON.stringify({ serialization_error: toErrorMessage(error, "Unknown serialization error") })
   }
 }
 

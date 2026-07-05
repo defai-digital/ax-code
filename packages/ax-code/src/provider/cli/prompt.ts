@@ -1,4 +1,5 @@
 import type { LanguageModelV3Prompt } from "@ai-sdk/provider"
+import { toErrorMessage } from "@/util/error-message"
 import type { CliAttachmentRef } from "./attachments"
 
 export interface CliPromptOptions {
@@ -55,17 +56,8 @@ function stringifyPromptValue(value: unknown): string {
     )
   } catch (error) {
     return JSON.stringify({
-      serialization_error: stringifyUnknownError(error),
+      serialization_error: toErrorMessage(error, "Unknown serialization error"),
     })
-  }
-}
-
-function stringifyUnknownError(error: unknown): string {
-  if (error instanceof Error) return error.message
-  try {
-    return String(error)
-  } catch {
-    return "Unknown serialization error"
   }
 }
 

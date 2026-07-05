@@ -23,6 +23,7 @@ describe("toErrorMessage", () => {
     })
 
     expect(toErrorMessage(broken)).toBe("Unknown error")
+    expect(toErrorMessage(broken, "Custom fallback")).toBe("Custom fallback")
     expect(toError(broken)).toMatchObject({ message: "Unknown error" })
   })
 
