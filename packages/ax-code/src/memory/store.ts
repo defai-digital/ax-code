@@ -120,7 +120,10 @@ export function _resetReadCache(): void {
   inFlightReads.clear()
 }
 
-async function readFresh(filePath: string): Promise<string | null> {
+async function readFresh(
+  filePath: string,
+  initialStat: Pick<Awaited<ReturnType<typeof fs.stat>>, "mtimeMs" | "size">,
+): Promise<string | null> {
   // Stat → read → verify-stat: cache only when the mtime/size before and
   // after the read agree, otherwise the file changed under us between the
   // two syscalls and the cached `text` would not match the cached
@@ -129,14 +132,6 @@ async function readFresh(filePath: string): Promise<string | null> {
   // mismatched key). This is the TOCTOU window that BUG-memstore-toctou
   // documented. We still return `text` to the current caller — they got a
   // legitimate snapshot — but we skip caching it.
-  const initialStat = await fs.stat(filePath).catch((err: NodeJS.ErrnoException) => {
-    if (err?.code === "ENOENT") return null
-    throw err
-  })
-  if (!initialStat) {
-    readCache.delete(filePath)
-    return null
-  }
   let text: string
   try {
     text = await fs.readFile(filePath, "utf-8")
@@ -176,7 +171,7 @@ async function readWithCache(filePath: string): Promise<string | null> {
   }
   const pending = inFlightReads.get(filePath)
   if (pending && pending.mtimeMs === stat.mtimeMs && pending.size === stat.size) return pending.promise
-  const promise = readFresh(filePath).finally(() => {
+  const promise = readFresh(filePath, stat).finally(() => {
     const current = inFlightReads.get(filePath)
     if (current?.promise === promise) inFlightReads.delete(filePath)
   })
