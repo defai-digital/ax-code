@@ -7,6 +7,7 @@ import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionAdoptionReview {
   export const Disposition = z.enum(["accepted", "accepted_override", "rejected"])
@@ -79,11 +80,7 @@ export namespace QualityPromotionAdoptionReview {
   }
 
   function sort(artifacts: ReviewArtifact[]) {
-    return [...artifacts].sort((a, b) => {
-      const byReviewedAt = a.reviewedAt.localeCompare(b.reviewedAt)
-      if (byReviewedAt !== 0) return byReviewedAt
-      return a.reviewID.localeCompare(b.reviewID)
-    })
+    return [...artifacts].sort((a, b) => compareStringFields(a, b, ["reviewedAt", "reviewID"]))
   }
 
   export function decisionBundleDigest(bundle: QualityPromotionDecisionBundle.DecisionBundle) {

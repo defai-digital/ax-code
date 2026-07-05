@@ -7,6 +7,7 @@ import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionAdoptionDissentSupersession {
   export const Disposition = z.enum(["withdrawn", "re_reviewed_accept", "superseded_by_new_evidence"])
@@ -86,11 +87,7 @@ export namespace QualityPromotionAdoptionDissentSupersession {
   }
 
   function sort(artifacts: SupersessionArtifact[]) {
-    return [...artifacts].sort((a, b) => {
-      const bySupersededAt = a.supersededAt.localeCompare(b.supersededAt)
-      if (bySupersededAt !== 0) return bySupersededAt
-      return a.supersessionID.localeCompare(b.supersessionID)
-    })
+    return [...artifacts].sort((a, b) => compareStringFields(a, b, ["supersededAt", "supersessionID"]))
   }
 
   function qualifiesRole(

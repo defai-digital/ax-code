@@ -9,6 +9,7 @@ import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionAdoptionDissentHandling {
   export const QualifiedRejectingReview = z.object({
@@ -83,11 +84,7 @@ export namespace QualityPromotionAdoptionDissentHandling {
   }
 
   function sortArtifacts(artifacts: HandlingArtifact[]) {
-    return [...artifacts].sort((a, b) => {
-      const byHandledAt = a.handledAt.localeCompare(b.handledAt)
-      if (byHandledAt !== 0) return byHandledAt
-      return a.handlingID.localeCompare(b.handlingID)
-    })
+    return [...artifacts].sort((a, b) => compareStringFields(a, b, ["handledAt", "handlingID"]))
   }
 
   function qualifiesRole(
