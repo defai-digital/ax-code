@@ -11,6 +11,13 @@ export const createSettingsHelpers = (dependencies) => {
 
   const nonEmptyStrings = (values) => values.filter((value) => typeof value === "string" && value.length > 0)
 
+  const normalizePathStringArray = (values) =>
+    normalizeStringArray(
+      nonEmptyStrings(
+        values.map((entry) => (typeof entry === "string" ? normalizePathForPersistence(entry) : entry)),
+      ),
+    )
+
   const sanitizeProviderStringMap = (value) => {
     if (!value || typeof value !== "object") {
       return undefined
@@ -105,21 +112,13 @@ export const createSettingsHelpers = (dependencies) => {
     }
 
     if (Array.isArray(candidate.approvedDirectories)) {
-      result.approvedDirectories = normalizeStringArray(
-        candidate.approvedDirectories
-          .map((entry) => (typeof entry === "string" ? normalizePathForPersistence(entry) : entry))
-          .filter((entry) => typeof entry === "string" && entry.length > 0),
-      )
+      result.approvedDirectories = normalizePathStringArray(candidate.approvedDirectories)
     }
     if (Array.isArray(candidate.securityScopedBookmarks)) {
       result.securityScopedBookmarks = normalizeStringArray(candidate.securityScopedBookmarks)
     }
     if (Array.isArray(candidate.pinnedDirectories)) {
-      result.pinnedDirectories = normalizeStringArray(
-        candidate.pinnedDirectories
-          .map((entry) => (typeof entry === "string" ? normalizePathForPersistence(entry) : entry))
-          .filter((entry) => typeof entry === "string" && entry.length > 0),
-      )
+      result.pinnedDirectories = normalizePathStringArray(candidate.pinnedDirectories)
     }
     if (Array.isArray(candidate.draftStarters)) {
       const seenStarters = new Set()

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { createSettingsHelpers } from "./settings-helpers.js"
 
-const createTestHelpers = () =>
+const createTestHelpers = (overrides = {}) =>
   createSettingsHelpers({
     normalizePathForPersistence: (value) => value,
     normalizeDirectoryPath: (value) => value,
@@ -11,6 +11,7 @@ const createTestHelpers = () =>
     sanitizeModelRefs: () => undefined,
     sanitizeSkillCatalogs: () => undefined,
     sanitizeProjects: () => undefined,
+    ...overrides,
   })
 
 describe("settings helpers", () => {
@@ -111,6 +112,23 @@ describe("settings helpers", () => {
       usageSelectedModels: { openai: ["gpt-4.1"] },
       usageCollapsedFamilies: { openai: ["legacy"] },
       usageExpandedFamilies: { anthropic: ["claude"] },
+    })
+  })
+
+  it("normalizes persisted path arrays with the shared path-array filter", () => {
+    const helpers = createTestHelpers({
+      normalizePathForPersistence: (value) => value.trim().replace("/link/", "/real/"),
+      normalizeStringArray: (input) => Array.from(new Set(input)),
+    })
+
+    expect(
+      helpers.sanitizeSettingsUpdate({
+        approvedDirectories: [" /link/project ", "", null, "/real/project"],
+        pinnedDirectories: [" /link/pinned ", "", undefined, "/real/pinned"],
+      }),
+    ).toEqual({
+      approvedDirectories: ["/real/project"],
+      pinnedDirectories: ["/real/pinned"],
     })
   })
 })
