@@ -54,6 +54,17 @@ let persistCollapsedTimer: ReturnType<typeof setTimeout> | undefined
 let pendingFoldersMap: SessionFoldersMap | null = null
 let pendingCollapsedIds: Set<string> | null = null
 
+const cloneSessionFoldersMap = (foldersMap: SessionFoldersMap): SessionFoldersMap =>
+  Object.fromEntries(
+    Object.entries(foldersMap).map(([scopeKey, folders]) => [
+      scopeKey,
+      folders.map((folder) => ({
+        ...folder,
+        sessionIds: [...folder.sessionIds],
+      })),
+    ]),
+  )
+
 const schedulePersistToDisk = (foldersMap: SessionFoldersMap, collapsedFolderIds: Set<string>): void => {
   if (typeof window === "undefined") {
     return
@@ -63,7 +74,7 @@ const schedulePersistToDisk = (foldersMap: SessionFoldersMap, collapsedFolderIds
     clearTimeout(diskWriteTimer)
   }
 
-  const foldersSnapshot = JSON.parse(JSON.stringify(foldersMap)) as SessionFoldersMap
+  const foldersSnapshot = cloneSessionFoldersMap(foldersMap)
   const collapsedSnapshot = Array.from(collapsedFolderIds)
 
   diskWriteTimer = setTimeout(() => {
