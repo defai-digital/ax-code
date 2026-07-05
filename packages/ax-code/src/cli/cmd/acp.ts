@@ -20,7 +20,7 @@ export const AcpCommand = cmd({
     const { AgentSideConnection, ndJsonStream } = await import("@agentclientprotocol/sdk")
     const { ACP } = await import("@/acp/agent")
     const { Server } = await import("@/server/server")
-    const { createOpencodeClient } = await import("@ax-code/sdk/v2")
+    const { createAxCodeClient } = await import("@ax-code/sdk/v2")
     FeatureFlag.set("AX_CODE_CLIENT", "acp")
     await bootstrap(process.cwd(), async () => {
       const opts = await resolveNetworkOptions(args)
@@ -46,7 +46,7 @@ export const AcpCommand = cmd({
       process.on("SIGINT", onSigint)
       process.on("SIGTERM", onSigterm)
 
-      const sdk = createOpencodeClient({
+      const sdk = createAxCodeClient({
         baseUrl: `http://${server.hostname}:${server.port}`,
       })
 
