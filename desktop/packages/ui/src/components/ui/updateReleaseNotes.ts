@@ -44,7 +44,7 @@ export function normalizeReleaseNotesForMarkdown(body: string): string {
 
 const GITHUB_RELEASES_URL = "https://github.com/defai-digital/ax-code/releases"
 
-export function buildUpdateReleaseUrl(version: string | undefined, runtimeType: "desktop" | "web" | null): string {
+export function buildUpdateReleaseUrl(version: string | undefined): string {
   const trimmedVersion = version?.trim()
   if (!trimmedVersion) {
     return GITHUB_RELEASES_URL
@@ -54,6 +54,5 @@ export function buildUpdateReleaseUrl(version: string | undefined, runtimeType: 
     return `${GITHUB_RELEASES_URL}/tag/${trimmedVersion}`
   }
 
-  const tag = runtimeType === "desktop" ? `desktop-v${trimmedVersion}` : `v${trimmedVersion}`
-  return `${GITHUB_RELEASES_URL}/tag/${tag}`
+  return `${GITHUB_RELEASES_URL}/tag/desktop-v${trimmedVersion}`
 }

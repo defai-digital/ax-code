@@ -27,7 +27,6 @@ export const AboutSettings: React.FC = () => {
       downloading: s.downloading,
       downloaded: s.downloaded,
       progress: s.progress,
-      runtimeType: s.runtimeType,
       checkForUpdates: s.checkForUpdates,
       downloadUpdate: s.downloadUpdate,
       restartToUpdate: s.restartToUpdate,
@@ -140,7 +139,6 @@ export const AboutSettings: React.FC = () => {
           error={updateStore.error}
           onDownload={updateStore.downloadUpdate}
           onRestart={updateStore.restartToUpdate}
-          runtimeType={updateStore.runtimeType}
         />
       </div>
     )
@@ -233,7 +231,6 @@ export const AboutSettings: React.FC = () => {
         error={updateStore.error}
         onDownload={updateStore.downloadUpdate}
         onRestart={updateStore.restartToUpdate}
-        runtimeType={updateStore.runtimeType}
       />
     </div>
   )

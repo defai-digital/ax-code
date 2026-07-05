@@ -1604,7 +1604,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         error={updateStore.error}
         onDownload={updateStore.downloadUpdate}
         onRestart={updateStore.restartToUpdate}
-        runtimeType={updateStore.runtimeType}
       />
 
       {editingProject ? (

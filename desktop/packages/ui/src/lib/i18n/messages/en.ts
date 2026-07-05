@@ -2357,7 +2357,6 @@ export const dict = {
   "updateDialog.actions.downloadUpdate": "Download Update",
   "updateDialog.status.downloading": "Downloading...",
   "updateDialog.actions.restartToUpdate": "Restart to Update",
-  "updateDialog.actions.openRelease": "Open Release",
   "axCodeUpdate.toast.available.title": "AX Code update",
   "axCodeUpdate.toast.available.description": "Version {version} available.",
   "axCodeUpdate.toast.actions.update": "Update",
