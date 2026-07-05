@@ -72,7 +72,7 @@ export namespace QualityPromotionReviewDossier {
     return (
       dossier.submissionBundle.decisionBundle.createdAt === decisionBundle.createdAt &&
       dossier.submissionBundle.decisionBundle.source === decisionBundle.source &&
-      JSON.stringify(dossier.submissionBundle.decisionBundle) === JSON.stringify(decisionBundle)
+      jsonEqual(dossier.submissionBundle.decisionBundle, decisionBundle)
     )
   }
 
@@ -175,7 +175,7 @@ export namespace QualityPromotionReviewDossier {
     if (dossier.source !== decisionBundle.source) {
       reasons.push(`review dossier source mismatch: ${dossier.source} vs ${decisionBundle.source}`)
     }
-    if (JSON.stringify(dossier.submissionBundle.decisionBundle) !== JSON.stringify(decisionBundle)) {
+    if (!jsonEqual(dossier.submissionBundle.decisionBundle, decisionBundle)) {
       reasons.push(`review dossier decision bundle mismatch for ${decisionBundle.source}`)
     }
     const submissionReasons = QualityPromotionSubmissionBundle.verify(decisionBundle, dossier.submissionBundle)
@@ -183,7 +183,7 @@ export namespace QualityPromotionReviewDossier {
       reasons.push(`review dossier submission bundle mismatch for ${decisionBundle.source} (${submissionReasons[0]})`)
     }
     const expectedSummary = evaluateSummary(dossier.submissionBundle)
-    if (JSON.stringify(dossier.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(dossier.summary, expectedSummary)) {
       reasons.push(`review dossier summary mismatch for ${decisionBundle.source}`)
     }
     return reasons

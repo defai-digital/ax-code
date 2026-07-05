@@ -65,8 +65,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
     return (
       record.boardDecision.reviewDossier.submissionBundle.decisionBundle.createdAt === decisionBundle.createdAt &&
       record.boardDecision.reviewDossier.submissionBundle.decisionBundle.source === decisionBundle.source &&
-      JSON.stringify(record.boardDecision.reviewDossier.submissionBundle.decisionBundle) ===
-        JSON.stringify(decisionBundle)
+      jsonEqual(record.boardDecision.reviewDossier.submissionBundle.decisionBundle, decisionBundle)
     )
   }
 
@@ -159,10 +158,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
     if (record.source !== decisionBundle.source) {
       reasons.push(`release decision record source mismatch: ${record.source} vs ${decisionBundle.source}`)
     }
-    if (
-      JSON.stringify(record.boardDecision.reviewDossier.submissionBundle.decisionBundle) !==
-      JSON.stringify(decisionBundle)
-    ) {
+    if (!jsonEqual(record.boardDecision.reviewDossier.submissionBundle.decisionBundle, decisionBundle)) {
       reasons.push(`release decision record decision bundle mismatch for ${decisionBundle.source}`)
     }
     const decisionReasons = QualityPromotionBoardDecision.verify(decisionBundle, record.boardDecision)
@@ -172,7 +168,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
       )
     }
     const expectedSummary = evaluateSummary(record.boardDecision)
-    if (JSON.stringify(record.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(record.summary, expectedSummary)) {
       reasons.push(`release decision record summary mismatch for ${decisionBundle.source}`)
     }
     return reasons

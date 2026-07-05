@@ -70,7 +70,7 @@ export namespace QualityPromotionBoardDecision {
     return (
       decision.reviewDossier.submissionBundle.decisionBundle.createdAt === decisionBundle.createdAt &&
       decision.reviewDossier.submissionBundle.decisionBundle.source === decisionBundle.source &&
-      JSON.stringify(decision.reviewDossier.submissionBundle.decisionBundle) === JSON.stringify(decisionBundle)
+      jsonEqual(decision.reviewDossier.submissionBundle.decisionBundle, decisionBundle)
     )
   }
 
@@ -188,7 +188,7 @@ export namespace QualityPromotionBoardDecision {
     if (decision.source !== decisionBundle.source) {
       reasons.push(`board decision source mismatch: ${decision.source} vs ${decisionBundle.source}`)
     }
-    if (JSON.stringify(decision.reviewDossier.submissionBundle.decisionBundle) !== JSON.stringify(decisionBundle)) {
+    if (!jsonEqual(decision.reviewDossier.submissionBundle.decisionBundle, decisionBundle)) {
       reasons.push(`board decision decision bundle mismatch for ${decisionBundle.source}`)
     }
     const dossierReasons = QualityPromotionReviewDossier.verify(decisionBundle, decision.reviewDossier)
@@ -200,7 +200,7 @@ export namespace QualityPromotionBoardDecision {
       disposition: decision.disposition,
       overrideAccepted: decision.overrideAccepted,
     })
-    if (JSON.stringify(decision.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(decision.summary, expectedSummary)) {
       reasons.push(`board decision summary mismatch for ${decisionBundle.source}`)
     }
     return reasons

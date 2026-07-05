@@ -70,8 +70,10 @@ export namespace QualityPromotionReleasePacket {
         decisionBundle.createdAt &&
       packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle.source ===
         decisionBundle.source &&
-      JSON.stringify(packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle) ===
-        JSON.stringify(decisionBundle)
+      jsonEqual(
+        packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle,
+        decisionBundle,
+      )
     )
   }
 
@@ -168,8 +170,10 @@ export namespace QualityPromotionReleasePacket {
       reasons.push(`release packet source mismatch: ${packet.source} vs ${decisionBundle.source}`)
     }
     if (
-      JSON.stringify(packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle) !==
-      JSON.stringify(decisionBundle)
+      !jsonEqual(
+        packet.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle,
+        decisionBundle,
+      )
     ) {
       reasons.push(`release packet decision bundle mismatch for ${decisionBundle.source}`)
     }
@@ -178,7 +182,7 @@ export namespace QualityPromotionReleasePacket {
       reasons.push(`release packet release decision record mismatch for ${decisionBundle.source} (${recordReasons[0]})`)
     }
     const expectedSummary = evaluateSummary(packet.releaseDecisionRecord)
-    if (JSON.stringify(packet.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(packet.summary, expectedSummary)) {
       reasons.push(`release packet summary mismatch for ${decisionBundle.source}`)
     }
     return reasons

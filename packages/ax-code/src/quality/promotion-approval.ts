@@ -151,10 +151,7 @@ export namespace QualityPromotionApproval {
     if (bundle.approvalPolicySuggestion && !approval.approvalPolicySuggestion) {
       reasons.push(`approval policy suggestion snapshot missing for ${bundle.source}`)
     }
-    if (
-      approval.approvalPolicySuggestion &&
-      JSON.stringify(approval.approvalPolicySuggestion) !== JSON.stringify(expectedSuggestion)
-    ) {
+    if (approval.approvalPolicySuggestion && !jsonEqual(approval.approvalPolicySuggestion, expectedSuggestion)) {
       reasons.push(`approval policy suggestion mismatch for ${bundle.source}`)
     }
     return reasons

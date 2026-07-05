@@ -65,7 +65,7 @@ export namespace QualityPromotionSubmissionBundle {
     return (
       submission.decisionBundle.createdAt === decisionBundle.createdAt &&
       submission.decisionBundle.source === decisionBundle.source &&
-      JSON.stringify(submission.decisionBundle) === JSON.stringify(decisionBundle)
+      jsonEqual(submission.decisionBundle, decisionBundle)
     )
   }
 
@@ -134,7 +134,7 @@ export namespace QualityPromotionSubmissionBundle {
     if (submission.source !== decisionBundle.source) {
       reasons.push(`submission bundle source mismatch: ${submission.source} vs ${decisionBundle.source}`)
     }
-    if (JSON.stringify(submission.decisionBundle) !== JSON.stringify(decisionBundle)) {
+    if (!jsonEqual(submission.decisionBundle, decisionBundle)) {
       reasons.push(`submission bundle decision bundle mismatch for ${decisionBundle.source}`)
     }
     const packetReasons = QualityPromotionApprovalPacket.verify(decisionBundle, submission.approvalPacket)
@@ -145,7 +145,7 @@ export namespace QualityPromotionSubmissionBundle {
       decisionBundle,
       approvalPacket: submission.approvalPacket,
     })
-    if (JSON.stringify(submission.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(submission.summary, expectedSummary)) {
       reasons.push(`submission bundle summary mismatch for ${decisionBundle.source}`)
     }
     return reasons

@@ -342,12 +342,12 @@ export namespace QualityPromotionApprovalPacket {
       policySource: policyResolution.policySource,
       policyProjectID: policyResolution.policyProjectID,
     })
-    if (JSON.stringify(packet.approvalEvaluation) !== JSON.stringify(expectedApprovalEvaluation)) {
+    if (!jsonEqual(packet.approvalEvaluation, expectedApprovalEvaluation)) {
       reasons.push(`approval packet approval evaluation mismatch for ${bundle.source}`)
     }
 
     const expectedConsensus = QualityPromotionAdoptionReview.evaluate(bundle, packet.adoptionReviews)
-    if (JSON.stringify(packet.adoptionReviewConsensus) !== JSON.stringify(expectedConsensus)) {
+    if (!jsonEqual(packet.adoptionReviewConsensus, expectedConsensus)) {
       reasons.push(`approval packet adoption review consensus mismatch for ${bundle.source}`)
     }
 
@@ -362,7 +362,7 @@ export namespace QualityPromotionApprovalPacket {
       adoptionReviewConsensus: expectedConsensus,
       dissentHandling: expectedDissentHandling,
     })
-    if (JSON.stringify(packet.readiness) !== JSON.stringify(expectedReadiness)) {
+    if (!jsonEqual(packet.readiness, expectedReadiness)) {
       reasons.push(`approval packet readiness summary mismatch for ${bundle.source}`)
     }
     return reasons
