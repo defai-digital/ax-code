@@ -88,19 +88,20 @@ export interface RecordInput {
   scope?: "project" | "global"
 }
 
-function normalizeList(values: string[] | undefined): string[] | undefined {
-  const normalized = values?.map((value) => value.trim()).filter(Boolean)
+function normalizeList(
+  values: string[] | undefined,
+  transform: (value: string) => string = (value) => value.trim(),
+): string[] | undefined {
+  const normalized = values?.map(transform).filter(Boolean)
   return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
 }
 
 function normalizeTags(values: string[] | undefined): string[] | undefined {
-  const normalized = values?.map((value) => value.trim().toLowerCase()).filter(Boolean)
-  return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
+  return normalizeList(values, (value) => value.trim().toLowerCase())
 }
 
 function normalizePathGlobs(values: string[] | undefined): string[] | undefined {
-  const normalized = normalizeList(values)?.map((value) => value.replace(/\\/g, "/"))
-  return normalized && normalized.length > 0 ? Array.from(new Set(normalized)) : undefined
+  return normalizeList(values, (value) => value.trim().replace(/\\/g, "/"))
 }
 
 function normalizeConfidence(value: number | undefined): number | undefined {

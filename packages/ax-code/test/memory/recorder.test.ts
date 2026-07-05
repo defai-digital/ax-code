@@ -56,8 +56,9 @@ describe("memory.recorder", () => {
     await recordEntry(tmp.path, "feedback", {
       name: "scoped-rule",
       body: "Use focused recall",
-      tags: ["Memory", "memory", "ranking"],
-      pathGlobs: ["src\\**\\*.ts"],
+      tags: ["Memory", "memory", "ranking", " "],
+      pathGlobs: ["src\\**\\*.ts", "src/**/*.ts", " "],
+      agents: [" debug ", "debug", "", "test"],
       confidence: 0.75,
       expiresAt: "2030-01-02T03:04:05Z",
       sourceSessionId: "ses_123",
@@ -66,6 +67,7 @@ describe("memory.recorder", () => {
     const entries = await listEntries(tmp.path, "feedback")
     expect(entries[0]?.tags).toEqual(["memory", "ranking"])
     expect(entries[0]?.pathGlobs).toEqual(["src/**/*.ts"])
+    expect(entries[0]?.agents).toEqual(["debug", "test"])
     expect(entries[0]?.confidence).toBe(0.75)
     expect(entries[0]?.expiresAt).toBe("2030-01-02T03:04:05.000Z")
     expect(entries[0]?.sourceSessionId).toBe("ses_123")
