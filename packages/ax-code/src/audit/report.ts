@@ -6,6 +6,7 @@ import { SessionVerifications } from "../session/verifications"
 import type { VerificationEnvelope } from "../quality/verification-envelope"
 import { Risk } from "../risk/score"
 import { truncate } from "../util/format"
+import { stringList } from "../util/string-list"
 import path from "path"
 
 const MS_PER_SECOND = 1000
@@ -46,11 +47,6 @@ function eventTokens(value: unknown): { input: number; output: number; reasoning
     output: finiteNumber(tokens.output),
     reasoning: finiteNumber(tokens.reasoning),
   }
-}
-
-function stringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === "string")
 }
 
 function summarize(s: string | undefined, max: number): string {

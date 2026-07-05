@@ -3,6 +3,7 @@ import { EventQuery } from "./query"
 import type { ReplayEvent } from "./event"
 import type { SessionID } from "@/session/schema"
 import { ToolCallReplayQuery } from "./tool-call-query"
+import { stringList } from "@/util/string-list"
 
 const log = Log.create({ service: "replay" })
 
@@ -17,11 +18,6 @@ function eventTokens(value: unknown) {
     input: finiteNumber(tokens.input),
     output: finiteNumber(tokens.output),
   }
-}
-
-function stringList(value: unknown) {
-  if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === "string")
 }
 
 function skillNames(value: unknown) {
