@@ -39,15 +39,14 @@ function writeProfilesFile(data) {
 export function loadProfiles() {
   ensureStorageDir()
 
-  if (!fs.existsSync(STORAGE_FILE)) {
-    return { profiles: [] }
-  }
-
   try {
     const content = fs.readFileSync(STORAGE_FILE, "utf8")
     const data = JSON.parse(content)
     return data
   } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return { profiles: [] }
+    }
     console.error("Failed to load git identity profiles:", error)
     return { profiles: [] }
   }

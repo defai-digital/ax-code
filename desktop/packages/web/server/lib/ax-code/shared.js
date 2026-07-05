@@ -43,18 +43,10 @@ const SKILL_SCOPE = {
 // ============== DIRECTORY OPERATIONS ==============
 
 function ensureDirs() {
-  if (!fs.existsSync(AX_CODE_CONFIG_DIR)) {
-    fs.mkdirSync(AX_CODE_CONFIG_DIR, { recursive: true })
-  }
-  if (!fs.existsSync(AGENT_DIR)) {
-    fs.mkdirSync(AGENT_DIR, { recursive: true })
-  }
-  if (!fs.existsSync(COMMAND_DIR)) {
-    fs.mkdirSync(COMMAND_DIR, { recursive: true })
-  }
-  if (!fs.existsSync(SKILL_DIR)) {
-    fs.mkdirSync(SKILL_DIR, { recursive: true })
-  }
+  fs.mkdirSync(AX_CODE_CONFIG_DIR, { recursive: true })
+  fs.mkdirSync(AGENT_DIR, { recursive: true })
+  fs.mkdirSync(COMMAND_DIR, { recursive: true })
+  fs.mkdirSync(SKILL_DIR, { recursive: true })
 }
 
 function ensureProjectAxCodeResourceDirs(workingDirectory, primarySegment, legacySegment) {
@@ -193,7 +185,7 @@ function getPrimaryUserConfigPath(userPaths, fallbackPath = CONFIG_FILE) {
 }
 
 function readConfigFile(filePath, options = {}) {
-  if (!filePath || !fs.existsSync(filePath)) {
+  if (!filePath) {
     return {}
   }
   try {
@@ -204,6 +196,9 @@ function readConfigFile(filePath, options = {}) {
     }
     return parseJsonc(normalized, [], { allowTrailingComma: true })
   } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return {}
+    }
     console.error(`Failed to read config file: ${filePath}`, error)
     if (options.tolerateParseErrors === true) {
       return {}

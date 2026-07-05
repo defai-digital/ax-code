@@ -53,4 +53,28 @@ describe("git identity storage", () => {
     expect(() => saveProfiles({ profiles: [] })).toThrow()
     expect(fs.readdirSync(storageDir()).filter((name) => name.startsWith(".git-identities."))).toEqual([])
   })
+
+  it("loads profiles without a preflight existence check", async () => {
+    fs.mkdirSync(storageDir(), { recursive: true })
+    fs.writeFileSync(storageFile(), JSON.stringify({ profiles: [{ id: "work" }] }), "utf8")
+    const { loadProfiles } = await importStorage()
+    const existsSync = vi.spyOn(fs, "existsSync").mockImplementation((candidate) => {
+      if (candidate === storageFile()) {
+        throw new Error("loadProfiles should not call existsSync before reading")
+      }
+      return false
+    })
+
+    try {
+      expect(loadProfiles()).toEqual({ profiles: [{ id: "work" }] })
+    } finally {
+      existsSync.mockRestore()
+    }
+  })
+
+  it("treats a missing profiles file as empty storage", async () => {
+    const { loadProfiles } = await importStorage()
+
+    expect(loadProfiles()).toEqual({ profiles: [] })
+  })
 })

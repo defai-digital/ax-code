@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest"
+import fs from "fs"
 import fsPromises from "fs/promises"
 import os from "os"
 import path from "path"
+import { describe, expect, it, vi } from "vitest"
 import {
   ensureProjectAxCodeResourceDirs,
   ensureProjectConfigPath,
@@ -10,6 +11,7 @@ import {
   getPrimaryUserConfigPath,
   getProjectConfigCandidates,
   getUserConfigPaths,
+  readConfigFile,
   resolveAxCodeConfigDir,
   resolveProjectAxCodeResourcePath,
 } from "./shared.js"
@@ -94,6 +96,39 @@ describe("shared ax-code resource paths", () => {
       expect(primaryDir).toBe(path.join(tempRoot, ".ax-code", "skills"))
       expect((await fsPromises.stat(primaryDir)).isDirectory()).toBe(true)
       expect((await fsPromises.stat(path.join(tempRoot, ".ax-code", "skill"))).isDirectory()).toBe(true)
+    } finally {
+      await fsPromises.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it("reads config files without a preflight existence check", async () => {
+    const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "oc-config-read-"))
+    const configPath = path.join(tempRoot, "ax-code.json")
+
+    try {
+      await fsPromises.writeFile(configPath, JSON.stringify({ model: "test-model" }), "utf8")
+      const existsSync = vi.spyOn(fs, "existsSync").mockImplementation((candidate) => {
+        if (candidate === configPath) {
+          throw new Error("readConfigFile should not call existsSync before reading")
+        }
+        return false
+      })
+
+      try {
+        expect(readConfigFile(configPath)).toEqual({ model: "test-model" })
+      } finally {
+        existsSync.mockRestore()
+      }
+    } finally {
+      await fsPromises.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it("treats missing config files as empty config", async () => {
+    const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "oc-config-missing-"))
+
+    try {
+      expect(readConfigFile(path.join(tempRoot, "missing.json"))).toEqual({})
     } finally {
       await fsPromises.rm(tempRoot, { recursive: true, force: true })
     }
