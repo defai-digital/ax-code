@@ -5,6 +5,7 @@ import { sha256Hex } from "./digest"
 import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
 import { summarizeOverallStatus } from "./status"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionSignedArchiveTrust {
   export const Scope = z.enum(["global", "project"])
@@ -99,9 +100,7 @@ export namespace QualityPromotionSignedArchiveTrust {
   function sortTrusts(trusts: TrustArtifact[]) {
     return [...trusts].sort((a, b) => {
       if (a.scope !== b.scope) return a.scope === "project" ? -1 : 1
-      const byRegisteredAt = a.registeredAt.localeCompare(b.registeredAt)
-      if (byRegisteredAt !== 0) return byRegisteredAt
-      return a.trustID.localeCompare(b.trustID)
+      return compareStringFields(a, b, ["registeredAt", "trustID"])
     })
   }
 

@@ -118,15 +118,11 @@ export namespace QualityPromotionAdoptionDissentHandling {
         QualifiedRejectingReview.parse({
           reviewID: review.reviewID,
           reviewer: review.reviewer,
-          role: review.role,
-          reviewedAt: review.reviewedAt,
-        }),
-      )
-      .sort((a, b) => {
-        const byReviewedAt = a.reviewedAt.localeCompare(b.reviewedAt)
-        if (byReviewedAt !== 0) return byReviewedAt
-        return a.reviewID.localeCompare(b.reviewID)
-      })
+        role: review.role,
+        reviewedAt: review.reviewedAt,
+      }),
+    )
+      .sort((a, b) => compareStringFields(a, b, ["reviewedAt", "reviewID"]))
   }
 
   export function evaluate(

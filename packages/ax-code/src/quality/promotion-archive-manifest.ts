@@ -84,13 +84,7 @@ export namespace QualityPromotionArchiveManifest {
   }
 
   function sortInventory(items: InventoryItem[]) {
-    return [...items].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      const byKind = a.kind.localeCompare(b.kind)
-      if (byKind !== 0) return byKind
-      return a.artifactID.localeCompare(b.artifactID)
-    })
+    return [...items].sort((a, b) => compareStringFields(a, b, ["createdAt", "kind", "artifactID"]))
   }
 
   function matchesPromotion(
