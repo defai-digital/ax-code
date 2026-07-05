@@ -37,39 +37,49 @@ export const classifyQwen37MaxRoute = classifyQwen37Route
 // ── Qwen 3.7 Max readiness ──────────────────────────────────────────────────
 // Max supports DashScope enable_search on Alibaba routes (web/built-in tools).
 
+const ALIBABA_BASE_READINESS: Omit<Qwen37ReadinessMatrix, "webOrBuiltInTools"> = {
+  thinking: "supported",
+  preserveThinking: "supported",
+  toolCalling: "supported",
+  structuredOutput: "supported",
+  promptCache: "supported",
+}
+
+const TOGETHER_READINESS: Qwen37ReadinessMatrix = {
+  thinking: "supported",
+  preserveThinking: "experimental",
+  toolCalling: "supported",
+  structuredOutput: "supported",
+  promptCache: "experimental",
+  webOrBuiltInTools: "blocked",
+}
+
+const GATEWAY_READINESS: Qwen37ReadinessMatrix = {
+  thinking: "experimental",
+  preserveThinking: "experimental",
+  toolCalling: "experimental",
+  structuredOutput: "experimental",
+  promptCache: "blocked",
+  webOrBuiltInTools: "blocked",
+}
+
+const UNKNOWN_READINESS: Qwen37ReadinessMatrix = {
+  thinking: "blocked",
+  preserveThinking: "blocked",
+  toolCalling: "blocked",
+  structuredOutput: "blocked",
+  promptCache: "blocked",
+  webOrBuiltInTools: "blocked",
+}
+
 const MAX_READINESS_BY_ROUTE: Record<Qwen37RouteClassification, Qwen37ReadinessMatrix> = {
   alibaba: {
-    thinking: "supported",
-    preserveThinking: "supported",
-    toolCalling: "supported",
-    structuredOutput: "supported",
-    promptCache: "supported",
+    ...ALIBABA_BASE_READINESS,
     webOrBuiltInTools: "supported",
   },
-  together: {
-    thinking: "supported",
-    preserveThinking: "experimental",
-    toolCalling: "supported",
-    structuredOutput: "supported",
-    promptCache: "experimental",
-    webOrBuiltInTools: "blocked",
-  },
-  gateway: {
-    thinking: "experimental",
-    preserveThinking: "experimental",
-    toolCalling: "experimental",
-    structuredOutput: "experimental",
-    promptCache: "blocked",
-    webOrBuiltInTools: "blocked",
-  },
-  unknown: {
-    thinking: "blocked",
-    preserveThinking: "blocked",
-    toolCalling: "blocked",
-    structuredOutput: "blocked",
-    promptCache: "blocked",
-    webOrBuiltInTools: "blocked",
-  },
+  together: { ...TOGETHER_READINESS },
+  gateway: { ...GATEWAY_READINESS },
+  unknown: { ...UNKNOWN_READINESS },
 }
 
 export function qwen37MaxReadiness(providerId: string): Qwen37ReadinessMatrix {
@@ -82,37 +92,12 @@ export function qwen37MaxReadiness(providerId: string): Qwen37ReadinessMatrix {
 
 const PLUS_READINESS_BY_ROUTE: Record<Qwen37RouteClassification, Qwen37ReadinessMatrix> = {
   alibaba: {
-    thinking: "supported",
-    preserveThinking: "supported",
-    toolCalling: "supported",
-    structuredOutput: "supported",
-    promptCache: "supported",
+    ...ALIBABA_BASE_READINESS,
     webOrBuiltInTools: "blocked",
   },
-  together: {
-    thinking: "supported",
-    preserveThinking: "experimental",
-    toolCalling: "supported",
-    structuredOutput: "supported",
-    promptCache: "experimental",
-    webOrBuiltInTools: "blocked",
-  },
-  gateway: {
-    thinking: "experimental",
-    preserveThinking: "experimental",
-    toolCalling: "experimental",
-    structuredOutput: "experimental",
-    promptCache: "blocked",
-    webOrBuiltInTools: "blocked",
-  },
-  unknown: {
-    thinking: "blocked",
-    preserveThinking: "blocked",
-    toolCalling: "blocked",
-    structuredOutput: "blocked",
-    promptCache: "blocked",
-    webOrBuiltInTools: "blocked",
-  },
+  together: { ...TOGETHER_READINESS },
+  gateway: { ...GATEWAY_READINESS },
+  unknown: { ...UNKNOWN_READINESS },
 }
 
 export function qwen37PlusReadiness(providerId: string): Qwen37ReadinessMatrix {
