@@ -119,6 +119,13 @@ const normalizePort = (value: unknown): number | null => {
   return null
 }
 
+const normalizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter((item): item is string => typeof item === "string")
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value)
 
@@ -285,10 +292,7 @@ export const buildAxCodeStatusReport = async (): Promise<string> => {
     const launchDiagnostics = isRecord(openChamberHealth?.lastAxCodeLaunchDiagnostics)
       ? openChamberHealth.lastAxCodeLaunchDiagnostics
       : null
-    const actualLaunchArgs =
-      launchDiagnostics && Array.isArray(launchDiagnostics.args)
-        ? launchDiagnostics.args.filter((value): value is string => typeof value === "string")
-        : []
+    const actualLaunchArgs = normalizeStringArray(launchDiagnostics?.args)
     const openChamberAxCodeResolution = openChamberAxCodeResolutionResult.data
     const configured =
       openChamberAxCodeResolution && typeof openChamberAxCodeResolution.configured === "string"
@@ -324,10 +328,8 @@ export const buildAxCodeStatusReport = async (): Promise<string> => {
           : ""
     const configuredLaunchArgs =
       openChamberAxCodeResolution && Array.isArray(openChamberAxCodeResolution.launchArgs)
-        ? openChamberAxCodeResolution.launchArgs.filter((value): value is string => typeof value === "string")
-        : openChamberHealth && Array.isArray(openChamberHealth.axCodeLaunchArgs)
-          ? openChamberHealth.axCodeLaunchArgs.filter((value): value is string => typeof value === "string")
-          : []
+        ? normalizeStringArray(openChamberAxCodeResolution.launchArgs)
+        : normalizeStringArray(openChamberHealth?.axCodeLaunchArgs)
     const node =
       openChamberAxCodeResolution && typeof openChamberAxCodeResolution.node === "string"
         ? openChamberAxCodeResolution.node
