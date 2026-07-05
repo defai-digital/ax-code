@@ -24,7 +24,6 @@ import {
   type SetSessionModeRequest,
   type SetSessionModeResponse,
   type ToolCallContent,
-  type Usage,
 } from "@agentclientprotocol/sdk"
 
 import { Log } from "../util/log"
@@ -63,7 +62,6 @@ import {
 import {
   decodeReplayDataUrl as _decodeReplayDataUrl,
   decodeTodoPlanEntries as _decodeTodoPlanEntries,
-  isHttpUri,
   parseListSessionsCursor as _parseListSessionsCursor,
   parseTodoPlanEntries as _parseTodoPlanEntries,
   sessionUpdatedMs,
