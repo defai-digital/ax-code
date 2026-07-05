@@ -9,7 +9,7 @@ import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionAdoptionDissentHandling {
   export const QualifiedRejectingReview = z.object({
@@ -314,13 +314,10 @@ export namespace QualityPromotionAdoptionDissentHandling {
     handlings: HandlingArtifact[] = [],
   ) {
     const persisted = (await list(bundle.source)).filter((handling) => matchesBundle(bundle, handling))
-    const deduped = new Map<string, HandlingArtifact>()
-    for (const handling of [...persisted, ...handlings]) {
-      if (!matchesBundle(bundle, handling)) continue
-      if (verify(bundle, reviews, handling).length > 0) continue
-      deduped.set(handling.handlingID, handling)
-    }
-    return sortArtifacts([...deduped.values()])
+    const validHandlings = [...persisted, ...handlings].filter(
+      (handling) => matchesBundle(bundle, handling) && verify(bundle, reviews, handling).length === 0,
+    )
+    return sortArtifacts(uniqueBy(validHandlings, (handling) => handling.handlingID))
   }
 
   export async function get(input: { source: string; handlingID: string }) {

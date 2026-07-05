@@ -7,7 +7,7 @@ import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionAdoptionDissentSupersession {
   export const Disposition = z.enum(["withdrawn", "re_reviewed_accept", "superseded_by_new_evidence"])
@@ -343,12 +343,10 @@ export namespace QualityPromotionAdoptionDissentSupersession {
     supersessions: SupersessionArtifact[] = [],
   ) {
     const persisted = (await list(bundle.source)).filter((supersession) => matchesBundle(bundle, supersession))
-    const deduped = new Map<string, SupersessionArtifact>()
-    for (const supersession of [...persisted, ...supersessions]) {
-      if (!matchesBundle(bundle, supersession)) continue
-      deduped.set(supersession.supersessionID, supersession)
-    }
-    return sort([...deduped.values()])
+    const matchingSupersessions = [...persisted, ...supersessions].filter((supersession) =>
+      matchesBundle(bundle, supersession),
+    )
+    return sort(uniqueBy(matchingSupersessions, (supersession) => supersession.supersessionID))
   }
 
   export async function get(input: { source: string; supersessionID: string }) {

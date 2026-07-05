@@ -4,7 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionBoardDecision {
   export const Disposition = z.enum(["approved", "held", "rejected"])
@@ -213,13 +213,10 @@ export namespace QualityPromotionBoardDecision {
     const persisted = (await list(decisionBundle.source)).filter((decision) =>
       matchesDecisionBundle(decisionBundle, decision),
     )
-    const deduped = new Map<string, DecisionArtifact>()
-    for (const decision of [...persisted, ...decisions]) {
-      if (!matchesDecisionBundle(decisionBundle, decision)) continue
-      if (verify(decisionBundle, decision).length > 0) continue
-      deduped.set(decision.decisionID, decision)
-    }
-    return sortDecisions([...deduped.values()])
+    const validDecisions = [...persisted, ...decisions].filter(
+      (decision) => matchesDecisionBundle(decisionBundle, decision) && verify(decisionBundle, decision).length === 0,
+    )
+    return sortDecisions(uniqueBy(validDecisions, (decision) => decision.decisionID))
   }
 
   export async function get(input: { source: string; decisionID: string }) {

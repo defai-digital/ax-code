@@ -7,7 +7,7 @@ import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionAdoptionDissentResolution {
   export const TargetReview = z.object({
@@ -314,12 +314,8 @@ export namespace QualityPromotionAdoptionDissentResolution {
     resolutions: ResolutionArtifact[] = [],
   ) {
     const persisted = (await list(bundle.source)).filter((resolution) => matchesBundle(bundle, resolution))
-    const deduped = new Map<string, ResolutionArtifact>()
-    for (const resolution of [...persisted, ...resolutions]) {
-      if (!matchesBundle(bundle, resolution)) continue
-      deduped.set(resolution.resolutionID, resolution)
-    }
-    return sort([...deduped.values()])
+    const matchingResolutions = [...persisted, ...resolutions].filter((resolution) => matchesBundle(bundle, resolution))
+    return sort(uniqueBy(matchingResolutions, (resolution) => resolution.resolutionID))
   }
 
   export async function get(input: { source: string; resolutionID: string }) {

@@ -8,7 +8,7 @@ import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionApprovalPacket {
   export const ReadinessSummary = z.object({
@@ -154,13 +154,12 @@ export namespace QualityPromotionApprovalPacket {
         approval.decisionBundle.digest === QualityPromotionApproval.digest(bundle) &&
         approval.decisionBundle.source === bundle.source,
     )
-    const deduped = new Map<string, QualityPromotionApproval.ApprovalArtifact>()
-    for (const approval of [...persisted, ...approvals]) {
-      const reasons = QualityPromotionApproval.verify(bundle, approval)
-      if (reasons.length > 0) continue
-      deduped.set(approval.approvalID, approval)
-    }
-    return [...deduped.values()].sort((a, b) => compareStringFields(a, b, ["approvedAt", "approvalID"]))
+    const validApprovals = [...persisted, ...approvals].filter(
+      (approval) => QualityPromotionApproval.verify(bundle, approval).length === 0,
+    )
+    return uniqueBy(validApprovals, (approval) => approval.approvalID).sort((a, b) =>
+      compareStringFields(a, b, ["approvedAt", "approvalID"]),
+    )
   }
 
   export function create(input: {
@@ -373,13 +372,10 @@ export namespace QualityPromotionApprovalPacket {
     packets: PacketArtifact[] = [],
   ) {
     const persisted = (await list(bundle.source)).filter((packet) => matchesBundle(bundle, packet))
-    const deduped = new Map<string, PacketArtifact>()
-    for (const packet of [...persisted, ...packets]) {
-      if (!matchesBundle(bundle, packet)) continue
-      if (verify(bundle, packet).length > 0) continue
-      deduped.set(packet.packetID, packet)
-    }
-    return sortPackets([...deduped.values()])
+    const validPackets = [...persisted, ...packets].filter(
+      (packet) => matchesBundle(bundle, packet) && verify(bundle, packet).length === 0,
+    )
+    return sortPackets(uniqueBy(validPackets, (packet) => packet.packetID))
   }
 
   export async function get(input: { source: string; packetID: string }) {

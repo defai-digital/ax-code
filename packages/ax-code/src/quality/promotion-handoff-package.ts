@@ -14,7 +14,7 @@ import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionHandoffPackage {
   export const DocumentKind = z.enum([
@@ -346,13 +346,10 @@ export namespace QualityPromotionHandoffPackage {
     packets: PackageArtifact[] = [],
   ) {
     const persisted = (await list(promotion.source)).filter((packet) => matchesPromotion(promotion, packet))
-    const deduped = new Map<string, PackageArtifact>()
-    for (const packet of [...persisted, ...packets]) {
-      if (!matchesPromotion(promotion, packet)) continue
-      if (verify(packet).length > 0) continue
-      deduped.set(packet.packageID, packet)
-    }
-    return sortPackages([...deduped.values()])
+    const validPackets = [...persisted, ...packets].filter(
+      (packet) => matchesPromotion(promotion, packet) && verify(packet).length === 0,
+    )
+    return sortPackages(uniqueBy(validPackets, (packet) => packet.packageID))
   }
 
   export async function get(input: { source: string; packageID: string }) {
