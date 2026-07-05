@@ -1,5 +1,5 @@
-import { createHash } from "crypto"
 import z from "zod"
+import { sha256JsonHex } from "./digest"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
 
 export namespace QualityPromotionSignedArchiveAttestationPolicy {
@@ -71,7 +71,7 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
   }
 
   export function digest(policy: Policy) {
-    return createHash("sha256").update(JSON.stringify(policy)).digest("hex")
+    return sha256JsonHex(policy)
   }
 
   export function evaluate(input: {

@@ -1,7 +1,7 @@
-import { createHash } from "crypto"
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
+import { sha256JsonHex } from "./digest"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 
 export namespace QualityPromotionApproval {
@@ -64,7 +64,7 @@ export namespace QualityPromotionApproval {
   }
 
   export function digest(bundle: QualityPromotionDecisionBundle.DecisionBundle) {
-    return createHash("sha256").update(JSON.stringify(bundle)).digest("hex")
+    return sha256JsonHex(bundle)
   }
 
   export function create(input: {

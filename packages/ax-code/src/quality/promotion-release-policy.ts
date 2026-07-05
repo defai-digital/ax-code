@@ -1,5 +1,5 @@
-import { createHash } from "crypto"
 import z from "zod"
+import { sha256JsonHex } from "./digest"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityStabilityGuard } from "./stability-guard"
 
@@ -102,7 +102,7 @@ export namespace QualityPromotionReleasePolicy {
   }
 
   export function digest(policy: Policy) {
-    return createHash("sha256").update(JSON.stringify(policy)).digest("hex")
+    return sha256JsonHex(policy)
   }
 
   export function renderReport(policy: Policy) {

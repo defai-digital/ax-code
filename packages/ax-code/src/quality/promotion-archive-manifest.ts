@@ -1,7 +1,7 @@
-import { createHash } from "crypto"
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
+import { sha256JsonHex } from "./digest"
 import { QualityPromotionExportBundle } from "./promotion-export-bundle"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
@@ -81,7 +81,7 @@ export namespace QualityPromotionArchiveManifest {
   }
 
   function digest(input: unknown) {
-    return createHash("sha256").update(JSON.stringify(input)).digest("hex")
+    return sha256JsonHex(input)
   }
 
   function sortArchives(archives: ArchiveArtifact[]) {

@@ -1,7 +1,7 @@
-import { createHash } from "crypto"
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
+import { sha256JsonHex } from "./digest"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { APPROVAL_ROLE_RANK, normalizeApprovalRole } from "./promotion-approval-policy-contract"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
@@ -91,13 +91,13 @@ export namespace QualityPromotionAdoptionReview {
   }
 
   export function decisionBundleDigest(bundle: QualityPromotionDecisionBundle.DecisionBundle) {
-    return createHash("sha256").update(JSON.stringify(bundle)).digest("hex")
+    return sha256JsonHex(bundle)
   }
 
   export function suggestionDigest(bundle: QualityPromotionDecisionBundle.DecisionBundle) {
     const suggestion =
       bundle.approvalPolicySuggestion ?? QualityPromotionDecisionBundle.deriveApprovalPolicySuggestion(bundle)
-    return createHash("sha256").update(JSON.stringify(suggestion)).digest("hex")
+    return sha256JsonHex(suggestion)
   }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, review: ReviewArtifact) {

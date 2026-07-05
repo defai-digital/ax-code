@@ -1,7 +1,7 @@
-import { createHash } from "crypto"
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
+import { sha256JsonHex } from "./digest"
 import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
 import { QualityPromotionArchiveManifest } from "./promotion-archive-manifest"
 import { QualityPromotionAuditManifest } from "./promotion-audit-manifest"
@@ -96,7 +96,7 @@ export namespace QualityPromotionHandoffPackage {
   }
 
   function digest(input: unknown) {
-    return createHash("sha256").update(JSON.stringify(input)).digest("hex")
+    return sha256JsonHex(input)
   }
 
   function sortPackages(packets: PackageArtifact[]) {
