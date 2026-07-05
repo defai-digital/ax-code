@@ -34,6 +34,10 @@ export type SessionMaterializationStatus = {
   missingPartMessageIDs: string[]
 }
 
+function partSnapshotKey(part: Part): string {
+  return JSON.stringify(part)
+}
+
 function haveEquivalentPartSnapshots(left: Part[] | undefined, right: Part[]): boolean {
   if (!left) return right.length === 0
   if (left.length !== right.length) return false
@@ -43,7 +47,7 @@ function haveEquivalentPartSnapshots(left: Part[] | undefined, right: Part[]): b
     const rightPart = right[index]
     if (!leftPart || !rightPart) return false
     if (leftPart.id !== rightPart.id) return false
-    if (JSON.stringify(leftPart) !== JSON.stringify(rightPart)) return false
+    if (partSnapshotKey(leftPart) !== partSnapshotKey(rightPart)) return false
   }
 
   return true
