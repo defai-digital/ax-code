@@ -30,7 +30,7 @@ This module provides ax-code server integration utilities for the web server run
 - `packages/web/server/lib/ax-code/ax-code-resolution-runtime.js`: ax-code binary resolution snapshot runtime for settings routes and diagnostics.
 - `packages/web/server/lib/ax-code/startup-pipeline-runtime.js`: server startup tail orchestration runtime for terminal/proxy/static/start-listen flow.
 - `packages/web/server/lib/ax-code/server-utils-runtime.js`: shared server runtime utilities for ax-code proxy wiring, AX Code port/readiness helpers, and snapshot fetchers.
-- `packages/web/server/lib/ax-code/openchamber-routes.js`: legacy compatibility update and models metadata route registration.
+- `packages/web/server/lib/ax-code/openchamber-routes.js`: update status and models metadata route registration.
 - `packages/web/server/lib/ax-code/project-icon-routes.js`: project icon upload/read/discovery route registration and icon storage orchestration.
 - `packages/web/server/lib/ax-code/skill-routes.js`: route registration for skill config CRUD, supporting files, and skills catalog scan/install flows.
 - `packages/web/server/lib/ax-code/settings-runtime.js`: Settings persistence runtime (disk IO, migrations, normalization, project validation, and persisted update serialization).
@@ -329,7 +329,6 @@ This module provides ax-code server integration utilities for the web server run
 
 - Legacy compatibility route registration:
   - `GET /api/openchamber/update-check`
-  - `POST /api/openchamber/update-install`
   - `GET /api/openchamber/models-metadata`
   - `GET /api/zen/models`
 

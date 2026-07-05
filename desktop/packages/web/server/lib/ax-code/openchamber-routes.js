@@ -27,10 +27,6 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     }
   })
 
-  app.post("/api/openchamber/update-install", async (_req, res) => {
-    res.status(400).json({ error: "No update available" })
-  })
-
   app.get("/api/openchamber/models-metadata", async (_req, res) => {
     const now = Date.now()
 

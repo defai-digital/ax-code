@@ -18,11 +18,9 @@ const createApp = () => {
 }
 
 describe("openchamber routes", () => {
-  it("keeps server-side update installation disabled", async () => {
+  it("does not register the removed server-side update installation route", async () => {
     const { app } = createApp()
 
-    const response = await request(app).post("/api/openchamber/update-install").expect(400)
-
-    expect(response.body).toEqual({ error: "No update available" })
+    await request(app).post("/api/openchamber/update-install").expect(404)
   })
 })
