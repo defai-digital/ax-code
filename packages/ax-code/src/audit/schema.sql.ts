@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, index } from "drizzle-orm/sqlite-core"
 import { SessionTable } from "../session/session.sql"
 import type { SessionID, MessageID } from "../session/schema"
 import type { AuditCallID } from "./id"

@@ -4,7 +4,6 @@ import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
 import { AccountRepo, type AccountRow } from "./repo"
 import {
-  type AccountError,
   AccountRepoError,
   AccessToken,
   type AccessToken as AccessTokenType,
