@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { sha256Hex } from "./digest"
 import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
 import { summarizeOverallStatus } from "./status"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionSignedArchiveTrust {
   export const Scope = z.enum(["global", "project"])
@@ -195,9 +196,7 @@ export namespace QualityPromotionSignedArchiveTrust {
     })
     try {
       const existing = await get({ scope: trust.scope, projectID: trust.projectID, trustID: trust.trustID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(`Signed archive trust entry ${trust.trustID} already exists with different content`)
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err

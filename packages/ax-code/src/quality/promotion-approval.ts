@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { sha256JsonHex } from "./digest"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
+import { jsonEqual } from "./json"
 
 export namespace QualityPromotionApproval {
   export const ApprovalArtifact = z.object({
@@ -175,9 +176,7 @@ export namespace QualityPromotionApproval {
     })
     try {
       const existing = await get({ source: approval.source, approvalID: approval.approvalID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(
         `Approval ${approval.approvalID} already exists for source ${approval.source} with different content`,
       )

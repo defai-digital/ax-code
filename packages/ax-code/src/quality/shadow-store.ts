@@ -2,6 +2,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
 import { QualityStorageKey } from "./storage-key"
+import { jsonEqual } from "./json"
 
 export namespace QualityShadowStore {
   export const ShadowRecordEnvelope = z.object({
@@ -47,9 +48,7 @@ export namespace QualityShadowStore {
         candidateSource: record.candidate.source,
         artifactID: record.artifactID,
       })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
     }

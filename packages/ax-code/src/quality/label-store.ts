@@ -1,6 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { ProbabilisticRollout } from "./probabilistic-rollout"
+import { jsonEqual } from "./json"
 
 export namespace QualityLabelStore {
   export const LabelRecord = z.object({
@@ -44,9 +45,7 @@ export namespace QualityLabelStore {
 
     try {
       const existing = await get({ sessionID, labelID: label.labelID })
-      const prev = JSON.stringify(existing)
-      const curr = JSON.stringify(next)
-      if (prev === curr) return existing
+      if (jsonEqual(existing, next)) return existing
       throw new Error(`Label ${label.labelID} already exists for session ${sessionID} with different content`)
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
