@@ -50,6 +50,9 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
+const PREFLIGHT_OVER_BUDGET_CONTEXT_TOKENS = 50_000
+const PREFLIGHT_OVER_BUDGET_TEXT_CHARS = 240_000
+
 let streamSpy: MockInstance | undefined
 let modelSpy: MockInstance | undefined
 let summarySpy: MockInstance | undefined
@@ -194,7 +197,7 @@ describe("session.prompt flow", () => {
     const tinyModel: Provider.Model = {
       ...model,
       limit: {
-        context: 5_000,
+        context: PREFLIGHT_OVER_BUDGET_CONTEXT_TOKENS,
         output: 20,
       },
     }
@@ -229,7 +232,7 @@ describe("session.prompt flow", () => {
         await SessionPrompt.prompt({
           sessionID: session.id,
           agent: "build",
-          parts: [{ type: "text", text: "x".repeat(30_000) }],
+          parts: [{ type: "text", text: "x".repeat(PREFLIGHT_OVER_BUDGET_TEXT_CHARS) }],
         })
 
         expect(agents[0]).toBe("compaction")
