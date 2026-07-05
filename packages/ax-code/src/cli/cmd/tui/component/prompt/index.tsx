@@ -235,19 +235,22 @@ export function Prompt(props: PromptProps) {
     )
   }
 
-  function syncPromptInputFromRenderable() {
+  function syncPromptInputFromRenderable(options: { autocomplete?: boolean } = {}) {
     if (!isRenderableAlive(input)) return store.prompt.input
     const raw = input.plainText
     const value = sanitizePromptInput(raw)
     if (value !== raw) input.setText(value)
     setStore("prompt", "input", value)
-    autocomplete?.onInput(value)
+    if (options.autocomplete === false) autocomplete?.hide()
+    else autocomplete?.onInput(value)
     syncExtmarksWithPromptParts()
     return value
   }
 
-  function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean; syncPromptInput?: boolean } = {}) {
-    if (options.syncPromptInput !== false) syncPromptInputFromRenderable()
+  function requestInputLayoutRefresh(
+    options: { gotoBufferEnd?: boolean; syncPromptInput?: boolean; autocomplete?: boolean } = {},
+  ) {
+    if (options.syncPromptInput !== false) syncPromptInputFromRenderable({ autocomplete: options.autocomplete })
     scheduleMicrotaskTask(
       () => {
         if (!isRenderableAlive(input)) return
@@ -1323,7 +1326,7 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
-    requestInputLayoutRefresh()
+    requestInputLayoutRefresh({ autocomplete: false })
   }
 
   async function pasteImage(file: { filename?: string; content: string; mime: string }) {
@@ -1366,7 +1369,7 @@ export function Prompt(props: PromptProps) {
         draft.extmarkToPartIndex.set(extmarkId, partIndex)
       }),
     )
-    requestInputLayoutRefresh()
+    requestInputLayoutRefresh({ autocomplete: false })
     return
   }
 
@@ -1378,7 +1381,7 @@ export function Prompt(props: PromptProps) {
     if (!text) return false
 
     input.insertText(text)
-    requestInputLayoutRefresh()
+    requestInputLayoutRefresh({ autocomplete: false })
     return true
   }
 
@@ -1558,7 +1561,7 @@ export function Prompt(props: PromptProps) {
                   if (text) {
                     e.preventDefault()
                     input.insertText(text)
-                    requestInputLayoutRefresh()
+                    requestInputLayoutRefresh({ autocomplete: false })
                     return
                   }
                   // If no supported clipboard fallback applies, let the default paste behavior continue.
@@ -1720,7 +1723,7 @@ export function Prompt(props: PromptProps) {
 
                 event.preventDefault()
                 input.insertText(normalizedText)
-                requestInputLayoutRefresh()
+                requestInputLayoutRefresh({ autocomplete: false })
                 return
               }}
               ref={(r: TextareaRenderable) => {

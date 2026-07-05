@@ -1028,6 +1028,7 @@ describe("tui OpenTUI stability guardrails", () => {
 
   test("syncs prompt store immediately after terminal paste inserts", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
     const refreshStart = prompt.indexOf("function requestInputLayoutRefresh")
     const refreshEnd = prompt.indexOf("function clearPromptDraft", refreshStart)
     const refreshBody = prompt.slice(refreshStart, refreshEnd)
@@ -1038,13 +1039,16 @@ describe("tui OpenTUI stability guardrails", () => {
     const pasteEnd = prompt.indexOf("ref={(r: TextareaRenderable)", pasteStart)
     const pasteBody = prompt.slice(pasteStart, pasteEnd)
 
-    expect(refreshBody).toContain("syncPromptInputFromRenderable()")
+    expect(refreshBody).toContain("syncPromptInputFromRenderable({ autocomplete: options.autocomplete })")
     expect(syncBody).toContain("sanitizePromptInput(raw)")
     expect(syncBody).toContain('setStore("prompt", "input", value)')
+    expect(syncBody).toContain("if (options.autocomplete === false) autocomplete?.hide()")
     expect(syncBody).toContain("autocomplete?.onInput(value)")
+    expect(autocomplete).toContain("hide: () => void")
+    expect(autocomplete).toContain("hide,")
     expect(pasteBody).toContain("event.preventDefault()")
     expect(pasteBody).toContain("input.insertText(normalizedText)")
-    expect(pasteBody).toContain("requestInputLayoutRefresh()")
+    expect(pasteBody).toContain("requestInputLayoutRefresh({ autocomplete: false })")
   })
 
   test("keeps dialog selection post-update work on cancellable microtasks", async () => {

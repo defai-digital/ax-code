@@ -86,6 +86,7 @@ export function extractLineRange(input: string) {
 export type AutocompleteRef = {
   onInput: (value: string) => void
   onKeyDown: (e: KeyEvent) => void
+  hide: () => void
   visible: false | "@" | "/"
 }
 
@@ -660,6 +661,7 @@ export function Autocomplete(props: {
       get visible() {
         return store.visible
       },
+      hide,
       onInput(value) {
         if (store.visible) {
           if (
