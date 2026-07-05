@@ -2536,12 +2536,8 @@ export async function commit(directory, message, options = {}) {
     let temporarilyUnstagedFiles = []
 
     try {
-      const requestedFiles = Array.isArray(options.files)
-        ? options.files.map((value) => String(value || "").trim()).filter(Boolean)
-        : []
-      const requestedStageFiles = Array.isArray(options.stageFiles)
-        ? options.stageFiles.map((value) => String(value || "").trim()).filter(Boolean)
-        : null
+      const requestedFiles = Array.isArray(options.files) ? normalizeFilePathList(options.files) : []
+      const requestedStageFiles = Array.isArray(options.stageFiles) ? normalizeFilePathList(options.stageFiles) : null
       let filesToCommit = []
       let commitFromIndexOnly = false
 
