@@ -1,5 +1,5 @@
 import React from "react"
-import { cn, fuzzyMatch } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSessionMessages } from "@/sync/sync-context"
 import { useCommandsStore } from "@/stores/useCommandsStore"
@@ -7,7 +7,7 @@ import { useSkillsStore } from "@/stores/useSkillsStore"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
-import { buildBuiltInCommands } from "./CommandAutocompleteCommands"
+import { buildBuiltInCommands, filterCommandList } from "./CommandAutocompleteCommands"
 
 type CommandSource = "openchamber" | "ax-code" | "skill"
 
@@ -136,15 +136,10 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
           })
           const allCommands = [...builtInCommands, ...customCommands, ...skillCommands]
 
-          const allowInitCommand = !hasMessagesInCurrentSession
-          const filtered = (
-            searchQuery
-              ? allCommands.filter(
-                  (cmd) =>
-                    fuzzyMatch(cmd.name, searchQuery) || (cmd.description && fuzzyMatch(cmd.description, searchQuery)),
-                )
-              : allCommands
-          ).filter((cmd) => allowInitCommand || cmd.name !== "init")
+          const filtered = filterCommandList(allCommands, {
+            searchQuery,
+            allowInitCommand: !hasMessagesInCurrentSession,
+          })
 
           filtered.sort((a, b) => {
             const aStartsWith = a.name.toLowerCase().startsWith(searchQuery.toLowerCase())
@@ -164,16 +159,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             t,
           })
 
-          const filtered = (
-            searchQuery
-              ? builtInCommands.filter(
-                  (cmd) =>
-                    fuzzyMatch(cmd.name, searchQuery) || (cmd.description && fuzzyMatch(cmd.description, searchQuery)),
-                )
-              : builtInCommands
-          ).filter((cmd) => allowInitCommand || cmd.name !== "init")
-
-          setCommands(filtered)
+          setCommands(filterCommandList(builtInCommands, { searchQuery, allowInitCommand }))
         } finally {
           setLoading(false)
         }

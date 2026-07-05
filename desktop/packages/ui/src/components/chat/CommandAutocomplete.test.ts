@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { buildBuiltInCommands } from "./CommandAutocompleteCommands"
+import { buildBuiltInCommands, filterCommandList } from "./CommandAutocompleteCommands"
+import type { CommandInfo } from "./CommandAutocomplete"
 
 const t = ((key: string) => key) as Parameters<typeof buildBuiltInCommands>[0]["t"]
 
@@ -62,5 +63,25 @@ describe("buildBuiltInCommands", () => {
         t,
       }),
     ).toEqual(["compact"])
+  })
+})
+
+describe("filterCommandList", () => {
+  const commands: CommandInfo[] = [
+    { id: "openchamber:init", name: "init", source: "openchamber", description: "Initialize project" },
+    { id: "openchamber:debug", name: "debug", source: "openchamber", description: "Investigate a failure" },
+    { id: "skill:docs", name: "docs", source: "skill", description: "Write documentation" },
+  ]
+
+  test("filters by command name or description", () => {
+    expect(filterCommandList(commands, { searchQuery: "fail", allowInitCommand: true }).map((command) => command.name))
+      .toEqual(["debug"])
+    expect(filterCommandList(commands, { searchQuery: "doc", allowInitCommand: true }).map((command) => command.name))
+      .toEqual(["docs"])
+  })
+
+  test("hides init when the current session already has messages", () => {
+    expect(filterCommandList(commands, { searchQuery: "", allowInitCommand: false }).map((command) => command.name))
+      .toEqual(["debug", "docs"])
   })
 })

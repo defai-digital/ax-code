@@ -1,4 +1,5 @@
 import type { useI18n } from "@/lib/i18n"
+import { fuzzyMatch } from "@/lib/utils"
 import type { CommandInfo } from "./CommandAutocomplete"
 
 type Translate = ReturnType<typeof useI18n>["t"]
@@ -120,4 +121,25 @@ export const buildBuiltInCommands = ({
   }
 
   return commands
+}
+
+export const filterCommandList = (
+  commands: CommandInfo[],
+  {
+    searchQuery,
+    allowInitCommand,
+  }: {
+    searchQuery: string
+    allowInitCommand: boolean
+  },
+): CommandInfo[] => {
+  const matched = searchQuery
+    ? commands.filter(
+        (command) =>
+          fuzzyMatch(command.name, searchQuery) ||
+          (command.description !== undefined && fuzzyMatch(command.description, searchQuery)),
+      )
+    : commands
+
+  return matched.filter((command) => allowInitCommand || command.name !== "init")
 }
