@@ -30,7 +30,7 @@ export type InitDep = {
   env?: Record<string, string | undefined>
   log?: (opts: Log.Options) => void | Promise<void>
   info?: (msg: string, data: Record<string, unknown>) => void
-  mkdtemp?: typeof fs.mkdtemp
+  mkdtemp?: (prefix: string) => Promise<string>
 }
 
 export type RestoreOriginalCwdDep = {
@@ -72,11 +72,7 @@ export function level(log?: string, _local = Installation.isLocal(), debug = fal
 
 export function debugOptions(opts: Pick<Opts, "debug" | "debugDir" | "debugIncludeContent">, cwd = process.cwd()) {
   const enabled = opts.debug === true
-  const baseDir = enabled
-    ? opts.debugDir
-      ? path.resolve(cwd, opts.debugDir)
-      : path.join(os.tmpdir(), "ax-code-log")
-    : undefined
+  const baseDir = enabled && opts.debugDir ? path.resolve(cwd, opts.debugDir) : undefined
   return {
     enabled,
     baseDir,
@@ -143,7 +139,7 @@ export async function init(opts: Opts, dep: InitDep = {}) {
 
   const debug = debugOptions(opts, cwd)
   const debugBaseDir =
-    debug.enabled && debug.baseDir && !opts.debugDir ? await mkdtemp(`${debug.baseDir}-`) : debug.baseDir
+    debug.enabled && !opts.debugDir ? await mkdtemp(path.join(os.tmpdir(), "ax-code-log-")) : debug.baseDir
   const debugDir = debug.enabled && debugBaseDir ? debugRunDir(debugBaseDir, pid, now) : undefined
   await DiagnosticLog.configure({
     enabled: debug.enabled,

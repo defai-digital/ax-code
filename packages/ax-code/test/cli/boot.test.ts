@@ -2,7 +2,7 @@ import { NamedError } from "@ax-code/util/error"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import os from "os"
 import path from "path"
-import { readFile } from "node:fs/promises"
+import { mkdtemp, readFile, rm } from "node:fs/promises"
 import z from "zod"
 import { cliBooleanFlagValue } from "../../src/cli/boolean-flag"
 import { clearForcedExitTimer, scheduleForcedExit } from "../../src/cli/boot"
@@ -84,8 +84,13 @@ describe("cli.boot.debugOptions", () => {
     })
   })
 
-  test("uses OS temp by default to avoid repo-local data leakage", () => {
-    expect(debugOptions({ debug: true }, "/repo").baseDir).toBe(path.join(os.tmpdir(), "ax-code-log"))
+  test("does not assign a shared temp base before init creates one", () => {
+    expect(debugOptions({ debug: true }, "/repo")).toEqual({
+      enabled: true,
+      baseDir: undefined,
+      dir: undefined,
+      includeContent: false,
+    })
   })
 
   test("formats a stable per-run directory", () => {
@@ -205,6 +210,37 @@ describe("cli.boot.init", () => {
     )
 
     expect(log[0]).toMatchObject({ print: true })
+  })
+
+  test("creates a private default debug directory", async () => {
+    const env: Record<string, string | undefined> = {}
+    const log: unknown[] = []
+    const created: string[] = []
+    const now = new Date("2026-04-22T02:15:00.123Z")
+    const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-boot-test-"))
+
+    try {
+      await init(
+        { debug: true },
+        {
+          argv: ["node", "ax-code", "run"],
+          pid: 77,
+          now,
+          env,
+          log: async (opts) => void log.push(opts),
+          mkdtemp: async (prefix) => {
+            created.push(prefix)
+            return path.join(root, "ax-code-log-private")
+          },
+        },
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+
+    expect(created).toEqual([path.join(os.tmpdir(), "ax-code-log-")])
+    expect(env.AX_CODE_DEBUG_DIR).toBe(path.join(root, "ax-code-log-private", "20260422-021500Z-77"))
+    expect(log[0]).toMatchObject({ level: "DEBUG", dir: env.AX_CODE_DEBUG_DIR })
   })
 })
 
