@@ -89,7 +89,7 @@ export function routeMessage(params: {
         .shell({
           sessionID: params.sessionId,
           directory: dir,
-          agent: params.agent,
+          agent: params.agent ?? "build",
           model: { providerID: params.providerID, modelID: params.modelID },
           command: params.content,
         })

@@ -1900,34 +1900,7 @@ export type AgentConfig = {
    */
   maxSteps?: number
   permission?: PermissionConfig
-  [key: string]:
-    | unknown
-    | string
-    | number
-    | {
-        [key: string]: boolean
-      }
-    | boolean
-    | "subagent"
-    | "primary"
-    | "all"
-    | "core"
-    | "specialist"
-    | "internal"
-    | {
-        [key: string]: unknown
-      }
-    | string
-    | "primary"
-    | "secondary"
-    | "accent"
-    | "success"
-    | "warning"
-    | "error"
-    | "info"
-    | number
-    | PermissionConfig
-    | undefined
+  [key: string]: unknown
 }
 
 export type ProviderConfig = {
@@ -1952,7 +1925,7 @@ export type ProviderConfig = {
      * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.
      */
     chunkTimeout?: number
-    [key: string]: unknown | string | boolean | number | false | number | undefined
+    [key: string]: unknown
   }
   models?: {
     [key: string]: {
@@ -2003,7 +1976,7 @@ export type ProviderConfig = {
            * Disable this variant for the model
            */
           disabled?: boolean
-          [key: string]: unknown | boolean | undefined
+          [key: string]: unknown
         }
       }
     }
@@ -4467,19 +4440,7 @@ export type PromptHistoryListResponses = {
         type: string
       }
     >
-    [key: string]:
-      | unknown
-      | string
-      | "normal"
-      | "shell"
-      | Array<
-          {
-            [key: string]: unknown
-          } & {
-            type: string
-          }
-        >
-      | undefined
+    [key: string]: unknown
   }>
 }
 
@@ -4496,19 +4457,7 @@ export type PromptHistoryAppendData = {
         type: string
       }
     >
-    [key: string]:
-      | unknown
-      | string
-      | "normal"
-      | "shell"
-      | Array<
-          {
-            [key: string]: unknown
-          } & {
-            type: string
-          }
-        >
-      | undefined
+    [key: string]: unknown
   }
   path?: never
   query?: {
@@ -4540,19 +4489,7 @@ export type PromptHistoryAppendResponses = {
         type: string
       }
     >
-    [key: string]:
-      | unknown
-      | string
-      | "normal"
-      | "shell"
-      | Array<
-          {
-            [key: string]: unknown
-          } & {
-            type: string
-          }
-        >
-      | undefined
+    [key: string]: unknown
   }
 }
 
@@ -6068,18 +6005,7 @@ export type ScheduledTaskRunNowResponses = {
       status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
       sourceTemplateID?: string
       error?: string
-      [key: string]:
-        | unknown
-        | string
-        | "queued"
-        | "running"
-        | "blocked"
-        | "paused"
-        | "failed"
-        | "completed"
-        | "cancelled"
-        | string
-        | undefined
+      [key: string]: unknown
     }
   }
 }
@@ -6201,18 +6127,7 @@ export type ScheduledTaskRunDueResponses = {
       status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
       sourceTemplateID?: string
       error?: string
-      [key: string]:
-        | unknown
-        | string
-        | "queued"
-        | "running"
-        | "blocked"
-        | "paused"
-        | "failed"
-        | "completed"
-        | "cancelled"
-        | string
-        | undefined
+      [key: string]: unknown
     }
   }>
 }
