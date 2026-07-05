@@ -151,4 +151,31 @@ describe("settings runtime", () => {
       await fsPromises.rm(tempRoot, { recursive: true, force: true })
     }
   })
+
+  it("trims legacy theme preferences while migrating light and dark theme ids", async () => {
+    const { runtime, settingsFilePath, cleanup } = await createRuntime()
+    try {
+      await fsPromises.writeFile(
+        settingsFilePath,
+        JSON.stringify(
+          {
+            themeId: " automatosx-light ",
+            themeVariant: " light ",
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      )
+
+      const settings = await runtime.readSettingsFromDiskMigrated()
+
+      expect(settings).toMatchObject({
+        lightThemeId: "automatosx-light",
+        darkThemeId: "automatosx-dark",
+      })
+    } finally {
+      await cleanup()
+    }
+  })
 })

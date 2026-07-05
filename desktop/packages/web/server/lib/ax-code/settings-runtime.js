@@ -85,6 +85,7 @@ export const createSettingsRuntime = (deps) => {
           .filter(Boolean),
       ),
     )
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
   const mergeByKey = (oldItems, newItems, getKey) => {
     const result = []
@@ -571,7 +572,7 @@ export const createSettingsRuntime = (deps) => {
     let changed = false
 
     if (nextProjects.length === 0) {
-      const legacy = typeof settings.lastDirectory === "string" ? settings.lastDirectory.trim() : ""
+      const legacy = asTrimmedString(settings.lastDirectory)
       const candidate = legacy ? resolveDirectoryCandidate(legacy) : null
 
       if (candidate) {
@@ -623,11 +624,11 @@ export const createSettingsRuntime = (deps) => {
   const migrateSettingsFromLegacyThemePreferences = async (current) => {
     const settings = current && typeof current === "object" ? current : {}
 
-    const themeId = typeof settings.themeId === "string" ? settings.themeId.trim() : ""
-    const themeVariant = typeof settings.themeVariant === "string" ? settings.themeVariant.trim() : ""
+    const themeId = asTrimmedString(settings.themeId)
+    const themeVariant = asTrimmedString(settings.themeVariant)
 
-    const hasLight = typeof settings.lightThemeId === "string" && settings.lightThemeId.trim().length > 0
-    const hasDark = typeof settings.darkThemeId === "string" && settings.darkThemeId.trim().length > 0
+    const hasLight = asTrimmedString(settings.lightThemeId).length > 0
+    const hasDark = asTrimmedString(settings.darkThemeId).length > 0
 
     if (hasLight && hasDark) {
       return { settings, changed: false }
