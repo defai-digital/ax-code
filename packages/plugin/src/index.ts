@@ -10,7 +10,7 @@ import type {
   Auth,
   Config,
 } from "@ax-code/sdk"
-import type { createOpencodeClient } from "@ax-code/sdk/v2"
+import type { AxCodeClient } from "@ax-code/sdk/v2"
 
 import type { BunShell } from "./shell.js"
 import { type ToolDefinition } from "./tool.js"
@@ -24,7 +24,7 @@ export type ProviderContext = {
 }
 
 export type PluginInput = {
-  client: ReturnType<typeof createOpencodeClient>
+  client: AxCodeClient
   project: Project
   directory: string
   worktree: string
