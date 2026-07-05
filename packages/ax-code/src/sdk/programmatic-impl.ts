@@ -16,11 +16,11 @@ import { Auth } from "../auth/index.js"
 import { seedRuntimeFlags } from "../cli/bootstrap/env.js"
 import { ToolRegistry } from "../tool/registry.js"
 import { Tool } from "../tool/tool.js"
-import { createOpencodeClient } from "@ax-code/sdk/v2/client"
+import { createAxCodeClient } from "@ax-code/sdk/v2/client"
 import type {
   ApiError,
   Message as ApiMessage,
-  OpencodeClient,
+  AxCodeClient,
   Part as ApiPart,
   Provider as ApiProvider,
   Session as ApiSession,
@@ -557,14 +557,14 @@ function fromSdkTool(sdkTool: SdkTool): Tool.Info {
 // IN-PROCESS CLIENT
 // ============================================================
 
-function createInProcessClient(directory: string): OpencodeClient {
+function createInProcessClient(directory: string): AxCodeClient {
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init)
     ServerRuntimeAuth.apply(request.headers)
     return Server.Default().fetch(request)
   }) as typeof globalThis.fetch
 
-  return createOpencodeClient({
+  return createAxCodeClient({
     baseUrl: internalBaseUrl(),
     fetch: fetchFn,
     directory,
@@ -575,14 +575,14 @@ function createInProcessClient(directory: string): OpencodeClient {
 // EVENT COLLECTION
 // ============================================================
 
-type EventStream = Awaited<ReturnType<OpencodeClient["event"]["subscribe"]>>
+type EventStream = Awaited<ReturnType<AxCodeClient["event"]["subscribe"]>>
 
 async function closeEvents(events: EventStream) {
   await events.stream.return?.(undefined)
 }
 
 async function collectResult(
-  sdk: OpencodeClient,
+  sdk: AxCodeClient,
   events: EventStream,
   sessionID: string,
   hooks?: AgentOptions["hooks"],
@@ -664,7 +664,7 @@ async function collectResult(
 }
 
 async function* streamEvents(
-  sdk: OpencodeClient,
+  sdk: AxCodeClient,
   events: EventStream,
   sessionID: string,
   hooks?: AgentOptions["hooks"],
@@ -782,7 +782,7 @@ async function* streamEvents(
 // ============================================================
 
 function createSessionHandle(
-  sdk: OpencodeClient,
+  sdk: AxCodeClient,
   sessionID: string,
   opts: AgentOptions,
   isDisposed?: () => boolean,
@@ -933,7 +933,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
   const opts = { directory: process.cwd(), ...options }
   await ensureLog()
 
-  let sdk: OpencodeClient
+  let sdk: AxCodeClient
   let disposed = false
   const activeSessions = new Set<string>()
   const lifecycle: SessionLifecycle = {

@@ -28,6 +28,15 @@ test("programmatic tool argument formatting falls back when serialization throws
   expect(formatToolArgumentsForPrompt(input)).toBe('{"serialization_error":"Unknown serialization error"}')
 })
 
+test("programmatic SDK internals use AX Code client naming", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
+
+  expect(src).toContain("createAxCodeClient")
+  expect(src).toContain("AxCodeClient")
+  expect(src).not.toContain("createOpencodeClient")
+  expect(src).not.toContain("OpencodeClient")
+})
+
 test("programmatic stream removes abort listeners when prompt fails", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/sdk/programmatic-impl.ts"), "utf-8")
   const start = src.indexOf("stream(message: string, options?: RunOptions): StreamHandle")
