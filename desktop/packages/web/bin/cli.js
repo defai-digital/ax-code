@@ -472,7 +472,7 @@ COMMANDS:
   tunnel         Manage a Cloudflare quick tunnel for browser access
   startup        Manage launch at system startup
   logs           Tail AX Code Desktop logs
-  update         Check for and install updates
+  update         Check desktop runtime update status
 
 OPTIONS:
   -p, --port              Web server port (default: ${DEFAULT_PORT})
@@ -2788,10 +2788,8 @@ const commands = {
     const updateSpin = createSpinner(options)
 
     const packageManagerPath = path.join(__dirname, "..", "server", "lib", "package-manager.js")
-    const { checkForUpdates, executeUpdate, detectPackageManager, getCurrentVersion } =
-      await importFromFilePath(packageManagerPath)
+    const { checkForUpdates, getCurrentVersion } = await importFromFilePath(packageManagerPath)
 
-    const runningInstances = await discoverRunningInstances()
     const currentVersion = getCurrentVersion()
 
     if (showOutput) {
@@ -2833,70 +2831,11 @@ const commands = {
       return
     }
 
-    if (showOutput && !updateSpin) {
-      logStatus("info", `updating ${updateInfo.currentVersion || currentVersion} -> ${updateInfo.version || "latest"}`)
-    }
-    updateSpin?.message(`Updating to ${updateInfo.version || "latest"}...`)
-
-    if (runningInstances.length > 0) {
-      updateSpin?.message(`Stopping ${runningInstances.length} running instance(s)...`)
-      for (const instance of runningInstances) {
-        try {
-          const requested = await requestServerShutdown(instance.port)
-          await stopInstanceProcess(instance.pid, {
-            shutdownWaitMs: requested ? 5000 : 0,
-            gracefulTimeoutMs: 2500,
-            forceTimeoutMs: 3000,
-          })
-          removePidFile(instance.pidFilePath)
-        } catch {}
-      }
-    }
-
-    const pm = detectPackageManager()
-    const result = executeUpdate(pm, { silent: isJsonMode(options) || isQuietMode(options) })
-    if (!result.success) {
-      updateSpin?.error("Update failed")
-      if (showOutput) {
-        clackOutro("update failed")
-      }
-      throw new Error(`Update failed with exit code ${result.exitCode}`)
-    }
-
-    if (runningInstances.length > 0) {
-      updateSpin?.message(`Restarting ${runningInstances.length} instance(s)...`)
-      for (const instance of runningInstances) {
-        const storedOptions = readInstanceOptions(instance.instanceFilePath) || { port: instance.port }
-        await this.serve({
-          port: storedOptions.port || instance.port,
-          host: storedOptions.host,
-          explicitPort: true,
-          uiPassword: storedOptions.uiPassword,
-          suppressStartupSummary: true,
-          suppressUiPasswordWarning: true,
-          quiet: true,
-        })
-      }
-    }
-
-    if (showOutput && !updateSpin) {
-      logStatus("success", `updated to ${updateInfo.version || "latest"}`)
-    }
-    updateSpin?.stop(`Updated to ${updateInfo.version || "latest"}`)
-    if (isJsonMode(options)) {
-      printJson({
-        currentVersion,
-        latestVersion: updateInfo.version || "latest",
-        updated: true,
-        restartedCount: runningInstances.length,
-      })
-      return
-    }
+    updateSpin?.error("Update install path disabled")
     if (showOutput) {
-      clackOutro("update complete")
-    } else if (isQuietMode(options)) {
-      process.stdout.write(`updated ${updateInfo.version || "latest"}\n`)
+      clackOutro("update unavailable")
     }
+    throw new Error("AX Code Desktop runtime updates are handled by desktop release channels, not this CLI.")
   },
 }
 

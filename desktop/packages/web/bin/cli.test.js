@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import path from "path"
 import { pathToFileURL } from "url"
 
 import { isModuleCliExecution, normalizeCliEntryPath } from "./cli-entry.js"
 import {
   buildTunnelServeOptions,
+  commands,
   parseArgs,
   resolveAvailablePort,
   resolveTunnelProviderAndMode,
@@ -18,6 +19,10 @@ import {
   normalizeTunnelProvider,
   parseCloudflareQuickTunnelUrl,
 } from "./tunnel-manager.js"
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe("cli args", () => {
   it("defaults the browser UI to the less crowded product port", () => {
@@ -71,6 +76,17 @@ describe("cli args", () => {
       uiPassword: "secret",
       port: 3100,
     })
+  })
+})
+
+describe("update command", () => {
+  it("reports the disabled package-manager updater as up to date in quiet mode", async () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true)
+
+    await commands.update({ quiet: true })
+
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(String(write.mock.calls[0]?.[0])).toMatch(/^up-to-date /)
   })
 })
 
