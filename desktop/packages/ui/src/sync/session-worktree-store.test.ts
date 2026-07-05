@@ -1,7 +1,15 @@
-import { describe, expect, test } from "vitest"
+import { beforeEach, describe, expect, test } from "vitest"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 
+const clearSessionWorktreeStore = () => {
+  useSessionWorktreeStore.setState({ attachments: new Map() })
+}
+
 describe("session-worktree-store", () => {
+  beforeEach(() => {
+    clearSessionWorktreeStore()
+  })
+
   test("stores and retrieves attachment by session id", () => {
     const store = useSessionWorktreeStore.getState()
     store.setAttachment("session-1", {
