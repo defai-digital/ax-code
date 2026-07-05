@@ -36,13 +36,8 @@ export namespace QualityReentryRemediation {
   })
   export type RemediationRecord = z.output<typeof RemediationRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, contextID: string, remediationID: string) {
     return ["quality_model_reentry_remediation", encode(source), contextID, remediationID]

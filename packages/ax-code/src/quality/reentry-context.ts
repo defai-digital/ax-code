@@ -79,13 +79,8 @@ export namespace QualityReentryContext {
     }>
   }
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, contextID: string) {
     return ["quality_model_reentry_context", encode(source), contextID]
