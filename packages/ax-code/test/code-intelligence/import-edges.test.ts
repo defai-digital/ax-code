@@ -1,12 +1,6 @@
-import { describe, test, expect, beforeAll, afterAll } from "vitest"
-import path from "path"
-import fs from "fs/promises"
-import { CodeIntelligence } from "../../src/code-intelligence"
+import { describe, test, expect } from "vitest"
 import { parseImportSpecifiers } from "../../src/code-intelligence/builder"
-import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
-import { tmpdir } from "../fixture/fixture"
-import { Flag } from "../../src/flag/flag"
 
 Log.init({ print: false })
 

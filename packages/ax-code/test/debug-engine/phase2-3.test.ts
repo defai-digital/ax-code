@@ -13,12 +13,7 @@ import { CodeNodeTable, CodeEdgeTable, CodeFileTable } from "../../src/code-inte
 import { eq } from "drizzle-orm"
 import type { ProjectID } from "../../src/project/schema"
 import { DebugEngine } from "../../src/debug-engine"
-import {
-  parseTypeScriptStack,
-  parsePythonStack,
-  parseStackTrace,
-  detectStackFormat,
-} from "../../src/debug-engine/analyze-bug"
+import { parsePythonStack, parseStackTrace, detectStackFormat } from "../../src/debug-engine/analyze-bug"
 import { extractFilesFromDiff } from "../../src/debug-engine/analyze-impact"
 import { ShadowWorktree } from "../../src/debug-engine/shadow-worktree"
 import { RefactorPlanID } from "../../src/debug-engine/id"

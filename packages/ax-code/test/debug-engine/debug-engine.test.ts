@@ -11,7 +11,7 @@ import { CodeNodeTable, CodeEdgeTable, CodeFileTable } from "../../src/code-inte
 import { eq } from "drizzle-orm"
 import type { ProjectID } from "../../src/project/schema"
 import { DebugEngine } from "../../src/debug-engine"
-import { parseTypeScriptStack, resolveFrame, validateHypothesisCitations } from "../../src/debug-engine/analyze-bug"
+import { parseTypeScriptStack, validateHypothesisCitations } from "../../src/debug-engine/analyze-bug"
 import { normalizeSignature } from "../../src/debug-engine/detect-duplicates"
 import { classifyIntent } from "../../src/debug-engine/plan-refactor"
 import { ToolRegistry } from "../../src/tool/registry"
