@@ -18,6 +18,7 @@ import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
+import { parseConfigPathGroup } from "@/lib/configPathGroup"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
 
 const getCurrentDirectory = (): string | null => {
@@ -101,21 +102,6 @@ export type AgentWithExtras = Agent & {
   scope?: AgentScope
   /** Subfolder name parsed from file path, e.g. "business", "development" */
   group?: string
-}
-
-/** Parse the subfolder group name from an agent file path.
- *  e.g. "~/.config/ax-code/agents/business/ceo.md" → "business"
- *  e.g. "~/.config/ax-code/agents/ceo.md"          → undefined
- */
-function parseAgentGroup(path: string | null | undefined): string | undefined {
-  if (!path) return undefined
-  const normalizedPath = path.replace(/\\/g, "/")
-  const idx = normalizedPath.lastIndexOf("/agents/")
-  if (idx === -1) return undefined
-  const relative = normalizedPath.substring(idx + "/agents/".length)
-  const parts = relative.split("/")
-  // parts[0] = group, parts[1] = filename; need at least 2 parts
-  return parts.length > 1 ? parts[0] : undefined
 }
 
 // Helper to check if agent is built-in (handles both SDK 'builtIn' and API 'native')
@@ -249,7 +235,7 @@ export const useAgentsStore = create<AgentsStore>()(
 
                         // Parse subfolder group from file path
                         const mdPath: string | null | undefined = data.sources?.md?.path
-                        const group = parseAgentGroup(mdPath)
+                        const group = parseConfigPathGroup(mdPath, { segment: "agents", minimumPartsForGroup: 2 })
 
                         if (scope === "project" || scope === "user") {
                           return { ...agent, scope: scope as AgentScope, group }

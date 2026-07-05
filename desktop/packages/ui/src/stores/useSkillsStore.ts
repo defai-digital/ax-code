@@ -5,6 +5,7 @@ import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from
 import { getSafeStorage } from "./utils/safeStorage"
 import { sleep, waitForAxCodeConnection } from "./utils/axCodeConnection"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
+import { parseConfigPathGroup } from "@/lib/configPathGroup"
 
 import { axCodeClient } from "@/lib/ax-code/client"
 
@@ -55,21 +56,6 @@ export interface DiscoveredSkill {
   description?: string
   /** Domain folder parsed from file path, e.g. "automation-ai", "lark-ecosystem" */
   group?: string
-}
-
-/** Parse the domain group folder from a skill file path.
- *  e.g. "~/.config/ax-code/skills/automation-ai/ai-production/SKILL.md" → "automation-ai"
- *  e.g. "~/.config/ax-code/skills/theme-system/SKILL.md"                → undefined (flat)
- */
-function parseSkillGroup(path: string): string | undefined {
-  const normalizedPath = path.replace(/\\/g, "/")
-  const idx = normalizedPath.lastIndexOf("/skills/")
-  if (idx === -1) return undefined
-  const relative = normalizedPath.substring(idx + "/skills/".length)
-  const parts = relative.split("/")
-  // Grouped layout: <group>/<name>/SKILL.md → parts.length >= 3
-  // Flat layout:    <name>/SKILL.md         → parts.length == 2
-  return parts.length >= 3 ? parts[0] : undefined
 }
 
 // Raw skill response from API before transformation
@@ -208,7 +194,7 @@ export const useSkillsStore = create<SkillsStore>()(
                   scope: s.scope ?? "user",
                   source: s.source ?? "ax-code",
                   description: s.sources?.md?.description || "",
-                  group: parseSkillGroup(s.path),
+                  group: parseConfigPathGroup(s.path, { segment: "skills", minimumPartsForGroup: 3 }),
                 }))
 
                 if (!isCurrentLoad()) return true
