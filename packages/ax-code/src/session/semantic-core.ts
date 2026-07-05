@@ -1,5 +1,6 @@
 import path from "path"
 import type { Snapshot } from "../snapshot"
+import { uniqueStrings } from "../util/string-list"
 
 export namespace SessionSemanticCore {
   export const kindList = [
@@ -215,7 +216,7 @@ export namespace SessionSemanticCore {
     if (kind === "optimization") out.push("performance-oriented change")
     if (kind === "rewrite") out.push("large structural churn")
     if (file.includes("/server/") || file.includes("/routes/")) out.push("runtime path affected")
-    return [...new Set(out)].slice(0, 3)
+    return uniqueStrings(out).slice(0, 3)
   }
 
   export function change(diff: Snapshot.FileDiff): Change {
@@ -274,7 +275,7 @@ export namespace SessionSemanticCore {
       additions,
       deletions,
       counts,
-      signals: [...new Set(changes.flatMap((item) => item.signals))].slice(0, 4),
+      signals: uniqueStrings(changes.flatMap((item) => item.signals)).slice(0, 4),
       changes,
     } satisfies Summary
   }
