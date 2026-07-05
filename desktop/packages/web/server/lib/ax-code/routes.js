@@ -156,7 +156,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
     // also recovers the messageID used for the idempotency dedup key.
     const bodyText = await readForwardBodyText(req)
     const parsedBody = parseJsonBodyText(bodyText)
-    const messageId = typeof parsedBody?.messageID === "string" ? parsedBody.messageID.trim() : ""
+    const messageId = normalizePendingString(parsedBody?.messageID) || ""
     const key = sessionId && messageId ? `${sessionId}:${messageId}` : null
     const upstreamPath = buildUpstreamPathWithQuery(`/session/${encodeURIComponent(sessionId)}/prompt_async`, req)
 
@@ -206,7 +206,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
     const sessionId = typeof req.params?.sessionId === "string" ? req.params.sessionId : ""
     const bodyText = await readForwardBodyText(req)
     const parsedBody = parseJsonBodyText(bodyText)
-    const command = typeof parsedBody?.command === "string" ? parsedBody.command.trim() : ""
+    const command = normalizePendingString(parsedBody?.command) || ""
     const upstreamPath = buildUpstreamPathWithQuery(`/session/${encodeURIComponent(sessionId)}/command`, req)
 
     try {
@@ -258,8 +258,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
 
   app.post("/api/ax-code/upgrade", async (req, res) => {
     try {
-      const target =
-        typeof req.body?.target === "string" && req.body.target.trim().length > 0 ? req.body.target.trim() : undefined
+      const target = normalizePendingString(req.body?.target) || undefined
       const response = await fetch(buildAxCodeUrl("/global/upgrade", ""), {
         method: "POST",
         headers: {
@@ -576,7 +575,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
 
   app.post("/api/ax-code/directory", async (req, res) => {
     try {
-      const requestedPath = typeof req.body?.path === "string" ? req.body.path.trim() : ""
+      const requestedPath = normalizePendingString(req.body?.path) || ""
       if (!requestedPath) {
         return res.status(400).json({ error: "Path is required" })
       }

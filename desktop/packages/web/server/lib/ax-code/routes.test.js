@@ -197,7 +197,7 @@ describe("ax-code routes", () => {
       const response = await request(app)
         .post("/api/session/ses-1/command?directory=/tmp/project")
         .send({
-          command: "abc123",
+          command: " abc123 ",
           arguments: "manual API unknown command test",
           model: "provider/model",
           messageID: "msg-1",
@@ -233,7 +233,7 @@ describe("ax-code routes", () => {
     try {
       const payload = {
         model: { providerID: "provider", modelID: "model" },
-        messageID: "msg-1",
+        messageID: " msg-1 ",
         parts: [{ type: "text", text: "hello" }],
       }
       const first = request(app)
@@ -243,7 +243,7 @@ describe("ax-code routes", () => {
       await fetchStarted
       const second = request(app)
         .post("/api/session/ses-1/prompt_async")
-        .send(payload)
+        .send({ ...payload, messageID: "msg-1" })
         .then((response) => response)
       releaseFetch()
 
