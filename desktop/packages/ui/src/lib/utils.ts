@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { isTauriShell } from "@/lib/desktop"
-import { normalizeProjectPath } from "@/lib/projectResolution"
+import { normalizeProjectPath, projectPathMatchesRoot } from "@/lib/projectResolution"
 import { matchesFuzzyQuery } from "@/lib/search/fuzzySearch"
 import type { I18nKey } from "@/lib/i18n"
 
@@ -91,6 +91,9 @@ export const truncatePathMiddle = (value: string, options?: { maxLength?: number
 
 const normalizePath = (value: string): string => normalizeProjectPath(value) ?? ""
 
+const pathEqualsRoot = (path: string, root: string): boolean =>
+  projectPathMatchesRoot(path, root) && projectPathMatchesRoot(root, path)
+
 export function formatPathForDisplay(path: string | null | undefined, homeDirectory?: string | null): string {
   if (!path) {
     return ""
@@ -104,10 +107,10 @@ export function formatPathForDisplay(path: string | null | undefined, homeDirect
   const normalizedHome = homeDirectory ? normalizePath(homeDirectory) : undefined
 
   if (normalizedHome && normalizedHome !== "/") {
-    if (normalizedPath === normalizedHome) {
+    if (pathEqualsRoot(normalizedPath, normalizedHome)) {
       return "~"
     }
-    if (normalizedPath.startsWith(`${normalizedHome}/`)) {
+    if (projectPathMatchesRoot(normalizedPath, normalizedHome)) {
       const relative = normalizedPath.slice(normalizedHome.length + 1)
       return relative ? `~/${relative}` : "~"
     }
@@ -127,7 +130,7 @@ export function formatDirectoryName(path: string | null | undefined, homeDirecto
   }
 
   const normalizedHome = homeDirectory ? normalizePath(homeDirectory) : undefined
-  if (normalizedHome && normalizedHome !== "/" && normalizedPath === normalizedHome) {
+  if (normalizedHome && normalizedHome !== "/" && pathEqualsRoot(normalizedPath, normalizedHome)) {
     return "~"
   }
 

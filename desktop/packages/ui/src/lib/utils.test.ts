@@ -11,6 +11,14 @@ describe("formatPathForDisplay", () => {
     expect(formatPathForDisplay("c:\\Users\\Alice\\Project\\", "C:/Users/Alice")).toBe("~/Project")
   })
 
+  test("matches Windows home paths case-insensitively", () => {
+    expect(formatPathForDisplay("C:/Users/Alice/Project/src", "c:/users/alice")).toBe("~/Project/src")
+  })
+
+  test("keeps POSIX home replacement case-sensitive", () => {
+    expect(formatPathForDisplay("/Users/Alice/Project", "/users/alice")).toBe("/Users/Alice/Project")
+  })
+
   test("keeps the filesystem root stable", () => {
     expect(formatPathForDisplay("/", "/Users/alice")).toBe("/")
   })
@@ -23,5 +31,13 @@ describe("formatDirectoryName", () => {
 
   test("uses tilde when the path equals the home directory", () => {
     expect(formatDirectoryName("/Users/alice/", "/Users/alice")).toBe("~")
+  })
+
+  test("matches Windows home directory names case-insensitively", () => {
+    expect(formatDirectoryName("C:/Users/Alice", "c:/users/alice")).toBe("~")
+  })
+
+  test("keeps POSIX home directory names case-sensitive", () => {
+    expect(formatDirectoryName("/Users/Alice", "/users/alice")).toBe("Alice")
   })
 })

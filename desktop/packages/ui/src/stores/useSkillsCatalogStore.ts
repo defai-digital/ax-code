@@ -15,7 +15,7 @@ import type {
 import { API_ENDPOINTS } from "@/lib/http"
 
 import { refreshSkillsAfterAxCodeRestart, useSkillsStore } from "@/stores/useSkillsStore"
-import { axCodeClient } from "@/lib/ax-code/client"
+import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
 import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from "@/lib/configUpdate"
 
 export const FALLBACK_SOURCES: SkillsCatalogSource[] = [
@@ -80,14 +80,6 @@ const getSkillsCatalogCacheKey = (directory: string | null): string => {
   return directory?.trim() || DEFAULT_SKILLS_CATALOG_CACHE_KEY
 }
 
-const getCurrentDirectory = (): string | null => {
-  const axCodeDirectory = axCodeClient.getDirectory()
-  if (typeof axCodeDirectory === "string" && axCodeDirectory.trim().length > 0) {
-    return axCodeDirectory
-  }
-  return null
-}
-
 export interface SkillsCatalogState {
   sources: SkillsCatalogSource[]
   itemsBySource: Record<string, SkillsCatalogItem[]>
@@ -145,7 +137,7 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
       setSelectedSource: (id) => set({ selectedSourceId: id }),
 
       loadCatalog: async (options) => {
-        const currentDirectory = getCurrentDirectory()
+        const currentDirectory = getAxCodeCurrentDirectory()
         const cacheKey = getSkillsCatalogCacheKey(currentDirectory)
         const now = Date.now()
         const loadedAt = skillsCatalogLastLoadedAt.get(cacheKey) ?? 0
@@ -255,7 +247,7 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
         set({ isLoadingSource: true, lastCatalogError: null })
 
         try {
-          const currentDirectory = getCurrentDirectory()
+          const currentDirectory = getAxCodeCurrentDirectory()
           const refresh = options?.refresh ? "&refresh=true" : ""
           const queryParams = currentDirectory
             ? `?directory=${encodeURIComponent(currentDirectory)}&sourceId=${encodeURIComponent(sourceId)}${refresh}`
@@ -329,7 +321,7 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
 
         set({ isLoadingMore: true })
         try {
-          const currentDirectory = getCurrentDirectory()
+          const currentDirectory = getAxCodeCurrentDirectory()
           const parts = [`sourceId=${encodeURIComponent(selectedSourceId)}`]
           if (currentDirectory) {
             parts.push(`directory=${encodeURIComponent(currentDirectory)}`)
@@ -387,7 +379,7 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
       scanRepo: async (request) => {
         set({ isScanning: true, lastScanError: null, scanResults: null })
         try {
-          const currentDirectory = getCurrentDirectory()
+          const currentDirectory = getAxCodeCurrentDirectory()
           const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : ""
 
           const response = await fetch(`${API_ENDPOINTS.config.skillsCatalogScan}${queryParams}`, {
@@ -424,7 +416,7 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
             typeof options?.directory === "string" && options.directory.trim().length > 0
               ? options.directory.trim()
               : null
-          const currentDirectory = directoryOverride ?? getCurrentDirectory()
+          const currentDirectory = directoryOverride ?? getAxCodeCurrentDirectory()
           const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : ""
 
           const response = await fetch(`${API_ENDPOINTS.config.skillsCatalogInstall}${queryParams}`, {

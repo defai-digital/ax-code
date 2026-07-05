@@ -19,15 +19,8 @@ import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { parseConfigPathGroup } from "@/lib/configPathGroup"
+import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
-
-const getCurrentDirectory = (): string | null => {
-  const axCodeDirectory = axCodeClient.getDirectory()
-  if (typeof axCodeDirectory === "string" && axCodeDirectory.trim().length > 0) {
-    return axCodeDirectory
-  }
-  return null
-}
 
 const getConfigDirectory = (): string | null => {
   try {
@@ -544,7 +537,7 @@ async function performConfigRefresh(
     const refreshCommands = scopes.includes("all") || scopes.includes("commands")
     const refreshSkills = scopes.includes("all") || scopes.includes("skills")
 
-    const currentDirectory = getCurrentDirectory()
+    const currentDirectory = getAxCodeCurrentDirectory()
     const projects = mode === "projects" ? useProjectsStore.getState().projects : []
     const directoriesToRefresh = Array.from(
       new Set([

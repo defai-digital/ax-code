@@ -6,16 +6,7 @@ import { getSafeStorage } from "./utils/safeStorage"
 import { sleep, waitForAxCodeConnection } from "./utils/axCodeConnection"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { parseConfigPathGroup } from "@/lib/configPathGroup"
-
-import { axCodeClient } from "@/lib/ax-code/client"
-
-const getCurrentDirectory = (): string | null => {
-  const axCodeDirectory = axCodeClient.getDirectory()
-  if (typeof axCodeDirectory === "string" && axCodeDirectory.trim().length > 0) {
-    return axCodeDirectory
-  }
-  return null
-}
+import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
 
 export type SkillScope = "user" | "project"
 export type SkillSource = "ax-code" | "claude" | "agents"
@@ -153,7 +144,7 @@ export const useSkillsStore = create<SkillsStore>()(
         },
 
         loadSkills: async () => {
-          const currentDirectory = getCurrentDirectory()
+          const currentDirectory = getAxCodeCurrentDirectory()
           const cacheKey = getSkillsCacheKey(currentDirectory)
           const now = Date.now()
           const loadedAt = skillsLastLoadedAt.get(cacheKey) ?? 0
@@ -227,7 +218,7 @@ export const useSkillsStore = create<SkillsStore>()(
 
         getSkillDetail: async (name: string) => {
           try {
-            const currentDirectory = getCurrentDirectory()
+            const currentDirectory = getAxCodeCurrentDirectory()
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : ""
 
             const response = await fetch(`${replacePathParams(API_ENDPOINTS.config.skill, { name })}${queryParams}`)
@@ -255,7 +246,7 @@ export const useSkillsStore = create<SkillsStore>()(
             if (config.source) skillConfig.source = config.source
             if (config.supportingFiles) skillConfig.supportingFiles = config.supportingFiles
 
-            const currentDirectory = getCurrentDirectory()
+            const currentDirectory = getAxCodeCurrentDirectory()
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : ""
 
             const response = await fetch(
@@ -308,7 +299,7 @@ export const useSkillsStore = create<SkillsStore>()(
             if (config.supportingFiles !== undefined) skillConfig.supportingFiles = config.supportingFiles
             if (config.targetPath !== undefined) skillConfig.targetPath = config.targetPath
 
-            const currentDirectory = getCurrentDirectory()
+            const currentDirectory = getAxCodeCurrentDirectory()
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : ""
 
             const response = await fetch(`${replacePathParams(API_ENDPOINTS.config.skill, { name })}${queryParams}`, {
@@ -351,7 +342,7 @@ export const useSkillsStore = create<SkillsStore>()(
           startConfigUpdate("Deleting skill...")
           let requiresReload = false
           try {
-            const currentDirectory = getCurrentDirectory()
+            const currentDirectory = getAxCodeCurrentDirectory()
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : ""
 
             const response = await fetch(`${replacePathParams(API_ENDPOINTS.config.skill, { name })}${queryParams}`, {
@@ -400,7 +391,7 @@ export const useSkillsStore = create<SkillsStore>()(
 
         readSupportingFile: async (skillName: string, filePath: string) => {
           try {
-            const currentDirectory = getCurrentDirectory()
+            const currentDirectory = getAxCodeCurrentDirectory()
             const queryParams = currentDirectory ? `&directory=${encodeURIComponent(currentDirectory)}` : ""
 
             const response = await fetch(
@@ -419,7 +410,7 @@ export const useSkillsStore = create<SkillsStore>()(
 
         writeSupportingFile: async (skillName: string, filePath: string, content: string) => {
           try {
-            const currentDirectory = getCurrentDirectory()
+            const currentDirectory = getAxCodeCurrentDirectory()
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : ""
 
             const response = await fetch(
@@ -439,7 +430,7 @@ export const useSkillsStore = create<SkillsStore>()(
 
         deleteSupportingFile: async (skillName: string, filePath: string) => {
           try {
-            const currentDirectory = getCurrentDirectory()
+            const currentDirectory = getAxCodeCurrentDirectory()
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : ""
 
             const response = await fetch(
