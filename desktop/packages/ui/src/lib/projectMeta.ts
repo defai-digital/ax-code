@@ -43,6 +43,19 @@ export const PROJECT_COLOR_MAP: Record<string, string> = Object.fromEntries(
   PROJECT_COLORS.map((c) => [c.key, c.cssVar]),
 )
 
+const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/
+
+export const normalizeProjectIconBackground = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null
+  }
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null
+}
+
 export const getProjectIconImageUrl = (
   project: Pick<ProjectEntry, "id" | "iconImage">,
   options?: { themeVariant?: ThemeVariant; iconColor?: string },

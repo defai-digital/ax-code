@@ -8,6 +8,7 @@ import { setFilesViewShowGitignored } from "@/lib/filesViewShowGitignored"
 import { loadAppearancePreferences, applyAppearancePreferences } from "@/lib/appearancePersistence"
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { sanitizeStarterRefs } from "@/lib/draftStarters"
+import { normalizeProjectIconBackground } from "@/lib/projectMeta"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "./http"
 
 const persistToLocalStorage = (settings: DesktopSettings) => {
@@ -136,19 +137,6 @@ const sanitizeSkillCatalogs = (value: unknown): DesktopSettings["skillCatalogs"]
   return result
 }
 
-const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/
-
-const normalizeIconBackground = (value: unknown): string | null => {
-  if (typeof value !== "string") {
-    return null
-  }
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return null
-  }
-  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null
-}
-
 const sanitizeProjects = (value: unknown): DesktopSettings["projects"] | undefined => {
   if (!Array.isArray(value)) {
     return undefined
@@ -206,7 +194,7 @@ const sanitizeProjects = (value: unknown): DesktopSettings["projects"] | undefin
     if (candidate.iconBackground === null) {
       ;(project as unknown as Record<string, unknown>).iconBackground = null
     } else {
-      const iconBackground = normalizeIconBackground(candidate.iconBackground)
+      const iconBackground = normalizeProjectIconBackground(candidate.iconBackground)
       if (iconBackground) {
         ;(project as unknown as Record<string, unknown>).iconBackground = iconBackground
       }

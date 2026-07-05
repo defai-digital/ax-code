@@ -9,7 +9,7 @@ import { createProjectIdFromPath } from "@/lib/projectId"
 import { getSafeStorage } from "./utils/safeStorage"
 import { useDirectoryStore } from "./useDirectoryStore"
 import { streamDebugEnabled } from "@/stores/utils/streamDebug"
-import { PROJECT_COLORS } from "@/lib/projectMeta"
+import { normalizeProjectIconBackground, PROJECT_COLORS } from "@/lib/projectMeta"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 
@@ -81,19 +81,6 @@ const resolveTildePath = (value: string, homeDir?: string | null): string => {
     return `${homeDir}${trimmed.slice(1)}`
   }
   return trimmed
-}
-
-const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/
-
-const normalizeIconBackground = (value: unknown): string | null => {
-  if (typeof value !== "string") {
-    return null
-  }
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return null
-  }
-  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null
 }
 
 const normalizeProjectPath = (value: string): string => {
@@ -227,7 +214,7 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
     if (candidate.iconBackground === null) {
       project.iconBackground = null
     } else {
-      const iconBackground = normalizeIconBackground(candidate.iconBackground)
+      const iconBackground = normalizeProjectIconBackground(candidate.iconBackground)
       if (iconBackground) {
         project.iconBackground = iconBackground
       }
@@ -471,7 +458,7 @@ export const useProjectsStore = create<ProjectsStore>()(
           if (meta.icon !== undefined) updated.icon = meta.icon
           if (meta.color !== undefined) updated.color = meta.color
           if (meta.iconBackground !== undefined) {
-            updated.iconBackground = normalizeIconBackground(meta.iconBackground)
+            updated.iconBackground = normalizeProjectIconBackground(meta.iconBackground)
           }
           return updated
         })

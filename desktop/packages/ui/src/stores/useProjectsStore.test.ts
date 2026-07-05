@@ -76,4 +76,29 @@ describe("useProjectsStore path identity", () => {
 
     expect(useProjectsStore.getState()).toBe(firstState)
   })
+
+  test("normalizes project icon backgrounds from settings", () => {
+    useProjectsStore.getState().synchronizeFromSettings({
+      projects: [
+        {
+          id: "project-1",
+          path: "/Users/Alice/Repo",
+          label: "Repo",
+          iconBackground: " #AABBCC ",
+        },
+        {
+          id: "project-2",
+          path: "/Users/Alice/Other",
+          label: "Other",
+          iconBackground: "blue",
+        },
+      ],
+      activeProjectId: "project-1",
+    })
+
+    expect(useProjectsStore.getState().projects).toEqual([
+      expect.objectContaining({ path: "/Users/Alice/Repo", iconBackground: "#aabbcc" }),
+      expect.not.objectContaining({ iconBackground: expect.anything() }),
+    ])
+  })
 })
