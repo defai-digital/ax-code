@@ -1,13 +1,38 @@
 import fs from "fs"
 import path from "path"
 import os from "os"
+import crypto from "crypto"
 
 const STORAGE_DIR = path.join(os.homedir(), ".config", "openchamber")
 const STORAGE_FILE = path.join(STORAGE_DIR, "git-identities.json")
 
 function ensureStorageDir() {
-  if (!fs.existsSync(STORAGE_DIR)) {
-    fs.mkdirSync(STORAGE_DIR, { recursive: true })
+  fs.mkdirSync(STORAGE_DIR, { recursive: true, mode: 0o700 })
+  try {
+    fs.chmodSync(STORAGE_DIR, 0o700)
+  } catch {}
+}
+
+function writeProfilesFile(data) {
+  const tmpFile = path.join(
+    STORAGE_DIR,
+    `.git-identities.${process.pid}.${Date.now()}.${crypto.randomBytes(6).toString("hex")}.tmp`,
+  )
+
+  try {
+    fs.writeFileSync(tmpFile, `${JSON.stringify(data, null, 2)}\n`, { encoding: "utf8", mode: 0o600 })
+    try {
+      fs.chmodSync(tmpFile, 0o600)
+    } catch {}
+    fs.renameSync(tmpFile, STORAGE_FILE)
+    try {
+      fs.chmodSync(STORAGE_FILE, 0o600)
+    } catch {}
+  } catch (error) {
+    try {
+      fs.rmSync(tmpFile, { force: true })
+    } catch {}
+    throw error
   }
 }
 
@@ -32,7 +57,7 @@ export function saveProfiles(data) {
   ensureStorageDir()
 
   try {
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(data, null, 2), "utf8")
+    writeProfilesFile(data)
     return true
   } catch (error) {
     console.error("Failed to save git identity profiles:", error)
