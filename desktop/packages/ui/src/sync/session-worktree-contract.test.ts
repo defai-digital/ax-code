@@ -30,15 +30,18 @@ describe("isWithinWorktreeRoot", () => {
   })
 
   test("matches Windows cwd paths inside worktree roots case-insensitively", () => {
-    expect(isWithinWorktreeRoot("c:/Users/Alice/Project/.worktrees/Feature/src", "C:/Users/Alice/Project/.worktrees/Feature")).toBe(
-      true,
-    )
+    expect(
+      isWithinWorktreeRoot(
+        "c:/Users/Alice/Project/.worktrees/Feature/src",
+        "C:/Users/Alice/Project/.worktrees/Feature",
+      ),
+    ).toBe(true)
   })
 
   test("keeps POSIX cwd paths case-sensitive", () => {
-    expect(isWithinWorktreeRoot("/users/Alice/Project/.worktrees/Feature/src", "/Users/Alice/Project/.worktrees/Feature")).toBe(
-      false,
-    )
+    expect(
+      isWithinWorktreeRoot("/users/Alice/Project/.worktrees/Feature/src", "/Users/Alice/Project/.worktrees/Feature"),
+    ).toBe(false)
   })
 })
 
