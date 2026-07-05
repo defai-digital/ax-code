@@ -1,5 +1,4 @@
 import z from "zod"
-import os from "os"
 import fuzzysort from "fuzzysort"
 import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
@@ -29,7 +28,6 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
 import { ProviderTransform } from "./transform"
-import { Installation } from "../installation"
 import { providerModelKey, providerModelList } from "./model-key"
 import {
   ProviderInfo as ProviderInfoSchema,
@@ -42,13 +40,7 @@ import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
 import { modelSelectableForProvider } from "./model-selectability"
-import {
-  CUSTOM_LOADERS,
-  type CustomModelLoader,
-  type CustomVarsLoader,
-  type CustomDiscoverModels,
-  type CustomLoader,
-} from "./loaders"
+import { CUSTOM_LOADERS, type CustomModelLoader, type CustomVarsLoader, type CustomDiscoverModels } from "./loaders"
 import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
@@ -261,10 +253,6 @@ export namespace Provider {
     "@ai-sdk/google": createGoogleGenerativeAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
-  }
-
-  function useLanguageModel(sdk: Record<string, unknown>) {
-    return sdk.responses === undefined && sdk.chat === undefined
   }
 
   export const Model = ProviderModelSchema

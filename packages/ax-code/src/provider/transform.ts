@@ -78,7 +78,7 @@ export namespace ProviderTransform {
   function normalizeMessages(
     msgs: ModelMessage[],
     model: Provider.Model,
-    options: Record<string, unknown>,
+    _options: Record<string, unknown>,
   ): ModelMessage[] {
     const interleavedField =
       typeof model.capabilities.interleaved === "object" ? model.capabilities.interleaved.field : undefined

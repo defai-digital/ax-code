@@ -78,7 +78,6 @@ function page(input: {
   rollback: SessionRollback.Point[]
   search: string
 }) {
-  const sid = esc(input.session.id)
   const title = esc(input.session.title)
   const dir = esc(input.session.directory)
   const base = new URLSearchParams(input.search.startsWith("?") ? input.search.slice(1) : input.search)

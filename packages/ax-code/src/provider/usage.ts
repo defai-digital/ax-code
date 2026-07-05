@@ -35,7 +35,6 @@ export function usageSource(usage: unknown): UsageSource {
   const record = usage as Record<string, unknown>
   const input = tokenCount(record.inputTokens)
   const output = tokenCount(record.outputTokens)
-  const total = tokenCount(record.totalTokens)
   if (record.inputTokens == null && record.outputTokens == null && record.totalTokens == null) return "missing"
   const reasoning = tokenCount(record.reasoningTokens)
   const inputDetails = record.inputTokens as Record<string, unknown> | undefined

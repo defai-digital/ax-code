@@ -161,7 +161,7 @@ async function scanConfig(root: string): Promise<MemorySection> {
 
   // tsconfig.json
   try {
-    const text = await fs.readFile(path.join(root, "tsconfig.json"), "utf-8")
+    await fs.readFile(path.join(root, "tsconfig.json"), "utf-8")
     parts.push(`TypeScript: configured`)
   } catch (e) {
     if (!isFileNotFound(e)) throw e

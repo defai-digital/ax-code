@@ -38,7 +38,7 @@ export namespace ProviderError {
     return /^4(00|13)\s*(status code)?\s*\(no body\)/i.test(message)
   }
 
-  function message(providerID: ProviderID, e: APICallError) {
+  function message(e: APICallError) {
     return iife(() => {
       const msg = e.message
       if (msg === "") {
@@ -203,7 +203,7 @@ export namespace ProviderError {
       }
 
   export function parseAPICallError(input: { providerID: ProviderID; error: APICallError }): ParsedAPICallError {
-    const m = message(input.providerID, input.error)
+    const m = message(input.error)
     const body = parseJsonRecord(input.error.responseBody)
     const bodyError = isRecord(body?.error) ? body.error : undefined
     if (isOverflow(m) || input.error.statusCode === 413 || bodyError?.code === "context_length_exceeded") {

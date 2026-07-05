@@ -77,10 +77,6 @@ function superLongConfigState(config: Config.Info | undefined, explicitModel?: s
   })
 }
 
-function superLongDesired(config: Config.Info | undefined, explicitModel?: string) {
-  return superLongRuntimeState(config, explicitModel).enabled
-}
-
 export const SuperLongRoutes = lazy(() =>
   new Hono()
     .get(
