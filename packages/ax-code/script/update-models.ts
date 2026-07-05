@@ -347,9 +347,7 @@ function isUnsupportedModel(m: RawModel): boolean {
   if (probes.some((p) => p.includes("gpt-5.5") || p.includes("gpt-5-5") || p.includes("gpt55"))) return true
   return false
 }
-for (const [providerID, provider] of Object.entries(fetched) as Array<
-  [string, { models?: Record<string, RawModel> }]
->) {
+for (const [, provider] of Object.entries(fetched) as Array<[string, { models?: Record<string, RawModel> }]>) {
   if (!provider.models) continue
   for (const [mid, model] of Object.entries(provider.models)) {
     if (mid.toLowerCase().startsWith("openrouter/") || model.id?.toLowerCase().startsWith("openrouter/")) {

@@ -43,7 +43,7 @@ try {
   const client = createAxCodeClient({ baseUrl: url })
 
   const s2 = Date.now()
-  const session = await client.session.create()
+  await client.session.create()
   console.log("Create session:", Date.now() - s2, "ms")
   console.log("TOTAL:", Date.now() - s, "ms")
 } finally {

@@ -170,7 +170,7 @@ const TASK_MATRIX: EvalTaskSpec[] = [
 
 // ── Fixture runner ────────────────────────────────────────────────────────────
 
-function runFixtureTask(spec: EvalTaskSpec, providerID: string, modelID: string, tokenBudget: number): EvalTaskResult {
+function runFixtureTask(spec: EvalTaskSpec, providerID: string, _modelID: string, tokenBudget: number): EvalTaskResult {
   const start = Date.now()
 
   const touchedCount = spec.fixture?.touchedFiles?.length ?? 0
