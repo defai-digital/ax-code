@@ -3,7 +3,6 @@
 import path from "path"
 import { pathToFileURL } from "url"
 import { existsSync } from "fs"
-import { createAxCode } from "@ax-code/sdk"
 import { parseArgs } from "util"
 
 async function main() {
@@ -18,14 +17,14 @@ async function main() {
 
   if (values.help) {
     console.log(`
-Usage: bun script/duplicate-pr.ts [options] <message>
+Usage: pnpm exec tsx script/duplicate-pr.ts [options] <message>
 
 Options:
   -f, --file <path>   File to attach to the prompt
   -h, --help          Show this help message
 
 Examples:
-  bun script/duplicate-pr.ts -f pr_info.txt "Check the attached file for PR details"
+  pnpm exec tsx script/duplicate-pr.ts -f pr_info.txt "Check the attached file for PR details"
 `)
     process.exit(0)
   }
@@ -36,6 +35,7 @@ Examples:
     process.exit(1)
   }
 
+  const { createAxCode } = await import("@ax-code/sdk/v2")
   const ax = await createAxCode({ port: 0 })
 
   try {

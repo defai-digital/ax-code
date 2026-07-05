@@ -17,8 +17,8 @@
  *   - PRD roadmap and maturity snapshots — directional/advisory, not mandates.
  *
  * Usage:
- *   bun script/ax-internal-context.ts              # print context block to stdout
- *   bun script/ax-internal-context.ts --json        # emit machine-readable JSON
+ *   pnpm exec tsx script/ax-internal-context.ts       # print context block to stdout
+ *   pnpm exec tsx script/ax-internal-context.ts --json # emit machine-readable JSON
  *
  * This is the safety guardrail that lets a cleanup skill consume ax-internal/ safely.
  */

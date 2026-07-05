@@ -6,7 +6,7 @@
  * that aren't in the upstream API.
  *
  * Usage:
- *   bun run script/update-models.ts
+ *   pnpm --dir packages/ax-code exec tsx script/update-models.ts
  *   # or via pre-commit hook (auto-runs before each commit)
  */
 

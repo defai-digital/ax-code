@@ -4,8 +4,8 @@
 // time). When you add a new Bun.* call, either add a shim in node-compat.ts and
 // list it here, or replace the call with a Node-portable alternative.
 //
-// Run: bun run script/check-bun-compat.ts  (wired into CI alongside the other
-// check:* guards).
+// Run: pnpm --dir packages/ax-code run check:bun-compat (wired into CI alongside
+// the other check:* guards).
 import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"

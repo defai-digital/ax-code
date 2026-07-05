@@ -2,7 +2,7 @@
 // Local evaluation harness for Qwen3.7-Max (and other premium cloud backends).
 //
 // Usage:
-//   bun run script/eval-qwen37.ts [--fixture] [--dry-run] [--strict-gate] [--out ax-internal/reports/eval-YYYY-MM-DD.json]
+//   pnpm --dir packages/ax-code exec tsx script/eval-qwen37.ts [--fixture] [--dry-run] [--strict-gate] [--out ax-internal/reports/eval-YYYY-MM-DD.json]
 //
 // --fixture   Run against bundled fixture inputs instead of live provider calls.
 //             Always safe: no API keys required, no tokens spent.
