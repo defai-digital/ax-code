@@ -1,6 +1,7 @@
 import { createAxCodeClient, type Event } from "@ax-code/sdk/v2"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command"
 import { parseJsonResult } from "../../util/json-value"
+import { withDirectoryHeaders } from "../../util/directory-headers"
 
 export type HeadlessAgentRuntimeInput = {
   baseUrl: string
@@ -148,11 +149,7 @@ function headersToRecord(headers: RequestInit["headers"] | undefined): Record<st
 function headlessHeaders(input: { headers?: RequestInit["headers"]; directory?: string }): Record<string, string> {
   const headers = headersToRecord(input.headers)
   if (input.directory) {
-    const encodedDirectory = /[^\x00-\x7F]/.test(input.directory)
-      ? encodeURIComponent(input.directory)
-      : input.directory
-    headers["x-ax-code-directory"] = encodedDirectory
-    headers["x-opencode-directory"] = encodedDirectory
+    withDirectoryHeaders(headers, input.directory)
   }
   return headers
 }

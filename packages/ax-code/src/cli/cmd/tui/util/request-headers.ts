@@ -1,3 +1,5 @@
+import { withDirectoryHeaders } from "@/util/directory-headers"
+
 export function directoryRequestHeaders(
   input: {
     directory?: string
@@ -11,8 +13,5 @@ export function directoryRequestHeaders(
   if (input.contentType) headers["content-type"] = input.contentType
   if (!input.directory) return headers
 
-  const encoded = /[^\x00-\x7F]/.test(input.directory) ? encodeURIComponent(input.directory) : input.directory
-  headers["x-ax-code-directory"] = encoded
-  headers["x-opencode-directory"] = encoded
-  return headers
+  return withDirectoryHeaders(headers, input.directory)
 }
