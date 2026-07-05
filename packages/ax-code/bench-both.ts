@@ -1,23 +1,23 @@
 /**
- * Head-to-head benchmark: OpenCode SDK approach vs ax-code Programmatic SDK
+ * Head-to-head benchmark: AX Code SDK server approach vs AX Code Programmatic SDK
  * Both do the same thing: create session + send prompt + get response
  * Same machine, same provider, same prompt, same directory
  */
 
 console.log("=".repeat(60))
-console.log("  BENCHMARK: OpenCode SDK vs ax-code Programmatic SDK")
+console.log("  BENCHMARK: AX Code SDK server vs AX Code Programmatic SDK")
 console.log("=".repeat(60))
 
 const { Env } = await import("./src/util/env.ts")
 
 // ============================================
-// TEST 1: OpenCode SDK approach (spawn server)
-// This is how an external developer uses OpenCode
+// TEST 1: AX Code SDK server approach (spawn server)
+// This is how an external developer uses AX Code over HTTP
 // ============================================
-console.log("\n--- TEST 1: OpenCode SDK (spawn server process) ---")
+console.log("\n--- TEST 1: AX Code SDK server (spawn server process) ---")
 console.log("What external developer does:")
-console.log("  1. createOpencodeServer() — spawns ax-code serve")
-console.log("  2. createOpencodeClient() — HTTP client")
+console.log("  1. ax-code serve — start HTTP server")
+console.log("  2. createAxCodeClient() — HTTP client")
 console.log("  3. client.session.create() — create session via HTTP")
 console.log("  4. client.event.subscribe() — subscribe SSE")
 console.log("  5. client.session.prompt() — send prompt via HTTP")
@@ -25,7 +25,7 @@ console.log("  6. for await events — wait for response via SSE")
 console.log("  7. server.close() — kill server process")
 console.log("")
 
-const opencode_start = Date.now()
+const axCodeServerStart = Date.now()
 try {
   const { spawn } = await import("node:child_process")
 
@@ -63,8 +63,8 @@ try {
     console.log("  Step 1 - Spawn server:", spawn_time, "ms")
 
     // Step 2: Create client
-    const { createOpencodeClient } = await import("@ax-code/sdk/v2/client")
-    const client = createOpencodeClient({ baseUrl: url })
+    const { createAxCodeClient } = await import("@ax-code/sdk/v2/client")
+    const client = createAxCodeClient({ baseUrl: url })
     console.log("  Step 2 - Create client: 0 ms")
 
     // Step 3: Create session
@@ -114,22 +114,22 @@ try {
       console.log("  Step 5+6 - FAILED:", e.message)
     }
 
-    const opencode_total = Date.now() - opencode_start
-    console.log("\n  OPENCODE TOTAL:", opencode_total, "ms")
+    const axCodeServerTotal = Date.now() - axCodeServerStart
+    console.log("\n  AX CODE SERVER TOTAL:", axCodeServerTotal, "ms")
     console.log("  Got response:", got_response)
   } finally {
     proc.kill()
   }
 } catch (e: any) {
-  console.log("  OPENCODE FAILED:", e.message)
-  console.log("  Time before failure:", Date.now() - opencode_start, "ms")
+  console.log("  AX CODE SERVER FAILED:", e.message)
+  console.log("  Time before failure:", Date.now() - axCodeServerStart, "ms")
 }
 
 // ============================================
-// TEST 2: ax-code Programmatic SDK
+// TEST 2: AX Code Programmatic SDK
 // This is how an external developer uses our SDK
 // ============================================
-console.log("\n--- TEST 2: ax-code Programmatic SDK ---")
+console.log("\n--- TEST 2: AX Code Programmatic SDK ---")
 console.log("What external developer does:")
 console.log("  1. createAgent() — in-process, no server")
 console.log("  2. agent.run() — send prompt, get result")

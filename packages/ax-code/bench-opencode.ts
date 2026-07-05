@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process"
 import { Env } from "./src/util/env"
 
-console.log("=== OPENCODE EXTERNAL SERVER SPAWN ===")
+console.log("=== AX CODE EXTERNAL SERVER SPAWN ===")
 const s = Date.now()
 
-// This is how OpenCode SDK works — spawns a server process
+// This is how the AX Code HTTP SDK works — spawns a server process
 const proc = spawn("ax-code", ["serve", "--hostname=127.0.0.1", "--port=4098"], {
   env: Env.sanitize(),
 })
@@ -39,8 +39,8 @@ try {
   console.log("Server URL:", url)
 
   // Now create client and session
-  const { createOpencodeClient } = await import("@ax-code/sdk/v2/client")
-  const client = createOpencodeClient({ baseUrl: url })
+  const { createAxCodeClient } = await import("@ax-code/sdk/v2/client")
+  const client = createAxCodeClient({ baseUrl: url })
 
   const s2 = Date.now()
   const session = await client.session.create()

@@ -26,3 +26,12 @@ test("bench server processes are killed from finally blocks", async () => {
     expect(killIndex).toBeGreaterThan(finallyIndex)
   }
 })
+
+test("bench scripts use AX Code SDK naming", async () => {
+  for (const file of ["bench-both.ts", "bench-opencode.ts"]) {
+    const src = await readBenchScript(file)
+    expect(src).toContain("createAxCodeClient")
+    expect(src).not.toContain("createOpencodeClient")
+    expect(src).not.toContain("OpencodeClient")
+  }
+})
