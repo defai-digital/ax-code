@@ -594,10 +594,6 @@ const validateDraft = (draft: ScheduledTaskDraft, t: ReturnType<typeof useI18n>[
   return null
 }
 
-const dedupeSortTimes = (times: string[]) => {
-  return normalizeScheduledTaskTimes(times)
-}
-
 export function ScheduledTaskEditorDialog(props: {
   open: boolean
   task: ScheduledTask | null
@@ -1053,7 +1049,7 @@ export function ScheduledTaskEditorDialog(props: {
       return
     }
 
-    const normalizedTimes = dedupeSortTimes(draft.schedule.times)
+    const normalizedTimes = normalizeScheduledTaskTimes(draft.schedule.times)
     const payload: Partial<ScheduledTask> = {
       ...(draft.id ? { id: draft.id } : {}),
       name: draft.name.trim(),
