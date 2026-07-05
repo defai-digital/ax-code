@@ -3,12 +3,23 @@ import {
   classifyProcessIssues,
   classifyErrors,
   classifyReplayIssues,
+  collectStandardLogDirs,
   parseProcessEventLines,
   parseReplayEventLines,
   scanStandardLogLines,
 } from "../../src/cli/cmd/debug/explain"
 
 describe("debug explain replay hang analysis", () => {
+  test("collectStandardLogDirs preserves first unique log directory order", () => {
+    expect(
+      collectStandardLogDirs({
+        debugDir: "/tmp/debug",
+        logDir: "/tmp/log",
+        debugDirs: ["/tmp/debug", "/tmp/other", "/tmp/log"],
+      }),
+    ).toEqual(["/tmp/debug", "/tmp/log", "/tmp/other"])
+  })
+
   test("classifies bash timeouts from replay metadata", () => {
     const lines = [
       JSON.stringify({

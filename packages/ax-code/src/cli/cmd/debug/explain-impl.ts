@@ -21,6 +21,7 @@ import { asRecordOrUndefined } from "../../../util/record"
 import { parseJsonRecord } from "../../../util/json-record"
 import { Flag } from "../../../flag/flag"
 import { toErrorMessage } from "../../../util/error-message"
+import { uniqueStrings } from "../../../util/string-list"
 
 interface DiagnosticEntry {
   service: string
@@ -1036,9 +1037,17 @@ async function latestDebugDirs(): Promise<string[]> {
   return [...out.entries()].sort((a, b) => b[1] - a[1]).map(([dir]) => dir)
 }
 
+export function collectStandardLogDirs(input: { debugDir?: string; logDir?: string; debugDirs: string[] }): string[] {
+  return uniqueStrings([input.debugDir, input.logDir, ...input.debugDirs].filter((dir): dir is string => Boolean(dir)))
+}
+
 async function loadStandardLogs(session?: string): Promise<StandardLogScan> {
   const debugDirs = await latestDebugDirs()
-  const logDirs = [...new Set([Flag.AX_CODE_DEBUG_DIR, Global.Path.log, ...debugDirs].filter(Boolean) as string[])]
+  const logDirs = collectStandardLogDirs({
+    debugDir: Flag.AX_CODE_DEBUG_DIR,
+    logDir: Global.Path.log,
+    debugDirs,
+  })
   const logFile =
     (await latestFileInDirs(logDirs, (name) => name.endsWith(".json.log"))) ??
     (await latestFileInDirs(logDirs, (name) => name.endsWith(".log") && !name.endsWith(".json.log")))
