@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
+import { toErrorMessage } from "@/util/error-message"
 
 type JsonSchema = boolean | Record<string, unknown>
 type RunOutputPartRecord = {
@@ -57,8 +58,7 @@ export function parseFinalJson(text: string): unknown {
   try {
     return JSON.parse(text)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`Final assistant message is not valid JSON: ${message}`)
+    throw new Error(`Final assistant message is not valid JSON: ${toErrorMessage(error)}`)
   }
 }
 
@@ -68,15 +68,13 @@ export async function loadJsonSchemaFile(callerCwd: string, file: string): Promi
   try {
     text = await readFile(resolved, "utf8")
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`Failed to read output schema ${resolved}: ${message}`)
+    throw new Error(`Failed to read output schema ${resolved}: ${toErrorMessage(error)}`)
   }
 
   try {
     return JSON.parse(text) as JsonSchema
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new Error(`Failed to parse output schema ${resolved}: ${message}`)
+    throw new Error(`Failed to parse output schema ${resolved}: ${toErrorMessage(error)}`)
   }
 }
 
