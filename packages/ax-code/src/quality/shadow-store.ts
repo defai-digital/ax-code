@@ -4,6 +4,7 @@ import { ProbabilisticRollout } from "./probabilistic-rollout"
 import { QualityStorageKey } from "./storage-key"
 import { jsonEqual } from "./json"
 import { compareStringFields } from "./sort"
+import { uniqueStrings } from "@/util/string-list"
 
 export namespace QualityShadowStore {
   export const ShadowRecordEnvelope = z.object({
@@ -85,7 +86,7 @@ export namespace QualityShadowStore {
 
   export async function listAll(candidateSource?: string) {
     const rootKeys = await Storage.list(["quality_shadow"])
-    const sessionIDs = [...new Set(rootKeys.map((parts) => parts[1]).filter((value): value is string => !!value))]
+    const sessionIDs = uniqueStrings(rootKeys.map((parts) => parts[1]).filter((value): value is string => !!value))
     const records = (await Promise.all(sessionIDs.map((sessionID) => list(sessionID, candidateSource)))).flat()
     return sortRecords(records)
   }
@@ -95,8 +96,8 @@ export namespace QualityShadowStore {
       await Promise.all(input.sessionIDs.map((sessionID) => list(sessionID, input.candidateSource)))
     ).flat()
     const sorted = sortRecords(records)
-    const baselineSources = [...new Set(sorted.map((record) => record.baseline.source))]
-    const candidateSources = [...new Set(sorted.map((record) => record.candidate.source))]
+    const baselineSources = uniqueStrings(sorted.map((record) => record.baseline.source))
+    const candidateSources = uniqueStrings(sorted.map((record) => record.candidate.source))
 
     if (baselineSources.length > 1) {
       throw new Error(`Cannot export shadow file with multiple baseline sources: ${baselineSources.join(", ")}`)
