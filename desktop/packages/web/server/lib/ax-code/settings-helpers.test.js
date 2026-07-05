@@ -57,6 +57,22 @@ describe("settings helpers", () => {
     })
   })
 
+  it("trims splash color settings and ignores blank values", () => {
+    const helpers = createTestHelpers()
+
+    expect(
+      helpers.sanitizeSettingsUpdate({
+        splashBgLight: " #ffffff ",
+        splashFgLight: "   ",
+        splashBgDark: "\n#111111\t",
+        splashFgDark: null,
+      }),
+    ).toEqual({
+      splashBgLight: "#ffffff",
+      splashBgDark: "#111111",
+    })
+  })
+
   it("accepts collapsibleThinkingBlocks as a persisted shared setting", () => {
     const helpers = createTestHelpers()
 

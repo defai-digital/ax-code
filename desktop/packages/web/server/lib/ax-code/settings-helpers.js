@@ -11,6 +11,14 @@ export const createSettingsHelpers = (dependencies) => {
 
   const nonEmptyStrings = (values) => values.filter((value) => typeof value === "string" && value.length > 0)
   const uniqueNonEmptyStrings = (values) => Array.from(new Set(nonEmptyStrings(values)))
+  const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
+
+  const setTrimmedNonEmptyString = (target, key, value) => {
+    const trimmed = asTrimmedString(value)
+    if (trimmed.length > 0) {
+      target[key] = trimmed
+    }
+  }
 
   const normalizePathStringArray = (values) =>
     normalizeStringArray(
@@ -64,18 +72,10 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.darkThemeId === "string" && candidate.darkThemeId.length > 0) {
       result.darkThemeId = candidate.darkThemeId
     }
-    if (typeof candidate.splashBgLight === "string" && candidate.splashBgLight.trim().length > 0) {
-      result.splashBgLight = candidate.splashBgLight.trim()
-    }
-    if (typeof candidate.splashFgLight === "string" && candidate.splashFgLight.trim().length > 0) {
-      result.splashFgLight = candidate.splashFgLight.trim()
-    }
-    if (typeof candidate.splashBgDark === "string" && candidate.splashBgDark.trim().length > 0) {
-      result.splashBgDark = candidate.splashBgDark.trim()
-    }
-    if (typeof candidate.splashFgDark === "string" && candidate.splashFgDark.trim().length > 0) {
-      result.splashFgDark = candidate.splashFgDark.trim()
-    }
+    setTrimmedNonEmptyString(result, "splashBgLight", candidate.splashBgLight)
+    setTrimmedNonEmptyString(result, "splashFgLight", candidate.splashFgLight)
+    setTrimmedNonEmptyString(result, "splashBgDark", candidate.splashBgDark)
+    setTrimmedNonEmptyString(result, "splashFgDark", candidate.splashFgDark)
     if (typeof candidate.lastDirectory === "string" && candidate.lastDirectory.length > 0) {
       const normalized = normalizePathForPersistence(candidate.lastDirectory)
       if (typeof normalized === "string" && normalized.length > 0) {
