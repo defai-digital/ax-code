@@ -83,13 +83,8 @@ export namespace QualityPromotionHandoffPackage {
   })
   export type PackageRecord = z.output<typeof PackageRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, packageID: string) {
     return ["quality_model_handoff_package", encode(source), packageID]

@@ -177,13 +177,8 @@ export namespace QualityPromotionAuditManifest {
   })
   export type ManifestRecord = z.output<typeof ManifestRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, manifestID: string) {
     return ["quality_model_audit_manifest", encode(source), manifestID]
