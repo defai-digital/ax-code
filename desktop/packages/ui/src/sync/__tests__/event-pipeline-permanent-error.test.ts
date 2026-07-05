@@ -1,24 +1,25 @@
 import { afterEach, describe, expect, it } from "vitest"
+import type { EventPipelineInput } from "../event-pipeline"
 import { createEventPipeline } from "../event-pipeline"
-import { createEventTarget } from "./event-pipeline-test-helpers"
+import {
+  installEventPipelineBrowserGlobals,
+  restoreBrowserGlobals,
+  saveBrowserGlobals,
+} from "./event-pipeline-test-helpers"
 
-const savedDocument = globalThis.document
-const savedWindow = globalThis.window
-const savedNavigator = globalThis.navigator
+const savedGlobals = saveBrowserGlobals()
 
 afterEach(() => {
-  globalThis.document = savedDocument
-  globalThis.window = savedWindow
-  globalThis.navigator = savedNavigator
+  restoreBrowserGlobals(savedGlobals)
 })
+
+const createHttpError = (message: string, status: number): Error & { status: number } => {
+  return Object.assign(new Error(message), { status })
+}
 
 describe("createEventPipeline — permanent server errors", () => {
   it("uses the long backoff cap for 4xx so we do not hammer at 5s intervals", async () => {
-    globalThis.document = createEventTarget({ visibilityState: "visible" })
-    globalThis.window = createEventTarget({
-      location: { href: "http://127.0.0.1:3000/", origin: "http://127.0.0.1:3000" },
-    })
-    globalThis.navigator = { onLine: true }
+    const { windowTarget } = installEventPipelineBrowserGlobals({ visibilityState: "visible", onLine: true })
 
     let sdkCallIndex = 0
     const sdk = {
@@ -32,9 +33,7 @@ describe("createEventPipeline — permanent server errors", () => {
             // both go to the long (60s) cap, so the test should observe
             // exactly one retry (after `online` interrupts) within its
             // observation window.
-            const error = new Error("Not Found")
-            error.status = 404
-            throw error
+            throw createHttpError("Not Found", 404)
           }
           return {
             stream: (async function* () {
@@ -49,7 +48,7 @@ describe("createEventPipeline — permanent server errors", () => {
           }
         },
       },
-    }
+    } as EventPipelineInput["sdk"]
 
     const startedAt = Date.now()
     let cleanupFn = () => {}
@@ -57,7 +56,7 @@ describe("createEventPipeline — permanent server errors", () => {
     // Phase 1: let the first 404 fire and verify the loop is NOT spinning.
     // If the permanent-error override is broken, the loop would retry every
     // 250-500ms and sdkCallIndex would climb past 1.
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       const { cleanup } = createEventPipeline({
         sdk,
         transport: "sse",
@@ -79,12 +78,12 @@ describe("createEventPipeline — permanent server errors", () => {
     // Phase 2: fire `online` to interrupt the long wait. Loop should fire
     // the second attempt (still 404) immediately, then the third attempt
     // which succeeds.
-    const recovered = new Promise((resolve) => {
+    const recovered = new Promise<void>((resolve) => {
       // Trigger an `online` event; waitForRetry's interrupter resolves and
       // the next attempt fires. That attempt is also a 404 (idx=1), then
       // another `online` advances us to the success path (idx=2).
       const advance = () => {
-        globalThis.window.dispatch("online")
+        windowTarget.dispatch("online")
       }
       advance()
       const t = setInterval(() => {
@@ -107,11 +106,7 @@ describe("createEventPipeline — permanent server errors", () => {
   })
 
   it("retries 408 and 429 on the normal exponential path (not the permanent cap)", async () => {
-    globalThis.document = createEventTarget({ visibilityState: "visible" })
-    globalThis.window = createEventTarget({
-      location: { href: "http://127.0.0.1:3000/", origin: "http://127.0.0.1:3000" },
-    })
-    globalThis.navigator = { onLine: true }
+    installEventPipelineBrowserGlobals({ visibilityState: "visible", onLine: true })
 
     let sdkCallIndex = 0
     const sdk = {
@@ -119,9 +114,7 @@ describe("createEventPipeline — permanent server errors", () => {
         event: async () => {
           const idx = sdkCallIndex++
           if (idx === 0) {
-            const error = new Error("Rate limited")
-            error.status = 429
-            throw error
+            throw createHttpError("Rate limited", 429)
           }
           return {
             stream: (async function* () {
@@ -136,10 +129,10 @@ describe("createEventPipeline — permanent server errors", () => {
           }
         },
       },
-    }
+    } as EventPipelineInput["sdk"]
 
     const startedAt = Date.now()
-    const elapsed = await new Promise((resolve) => {
+    const elapsed = await new Promise<number>((resolve) => {
       let connects = 0
       const { cleanup } = createEventPipeline({
         sdk,
