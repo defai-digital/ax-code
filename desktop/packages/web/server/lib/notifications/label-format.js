@@ -1,7 +1,8 @@
 const titleCaseTokens = (tokens) => tokens.map((token) => token.charAt(0).toUpperCase() + token.slice(1)).join(" ")
+const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
 const formatNotificationTokenLabel = (value, separatorPattern, fallback) => {
-  const normalized = typeof value === "string" ? value.trim() : ""
+  const normalized = asTrimmedString(value)
   if (!normalized) return fallback
   return titleCaseTokens(normalized.split(separatorPattern).filter(Boolean))
 }
@@ -12,12 +13,12 @@ export const formatNotificationProjectLabel = (label) => {
 }
 
 export const formatNotificationModeLabel = (raw) => {
-  const value = typeof raw === "string" ? raw.trim() : ""
+  const value = asTrimmedString(raw)
   return formatNotificationTokenLabel(value.length > 0 ? value : "agent", /[-_\s]+/, "Agent")
 }
 
 export const formatNotificationModelLabel = (raw) => {
-  const value = typeof raw === "string" ? raw.trim() : ""
+  const value = asTrimmedString(raw)
   if (!value) return "Assistant"
 
   const tokens = value.split(/[-_]+/).filter(Boolean)
