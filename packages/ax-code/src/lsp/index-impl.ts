@@ -26,6 +26,7 @@ import * as LSPDocumentSymbol from "./document-symbol"
 import * as LSPReferences from "./references"
 import { LSPServerConfig } from "./server-config"
 import { FileWatcher } from "../file/watcher"
+import { uniqueStrings } from "../util/string-list"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -516,7 +517,7 @@ export namespace LSP {
 
   export async function prewarmFiles(files: string[], opts: ClientOptions = {}): Promise<PrewarmResult> {
     const request = resolveClientRequest(opts)
-    const uniqueFiles = [...new Set(files)]
+    const uniqueFiles = uniqueStrings(files)
 
     return LSPPerf.metered(
       "prewarm",
