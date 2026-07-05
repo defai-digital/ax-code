@@ -233,13 +233,6 @@ export namespace MCP {
       }),
     )
   }
-  const pendingOAuthTransportCleanup = Instance.state(
-    () => true,
-    async () => {
-      await closeAllPendingOAuthTransports()
-    },
-  )
-
   // Prompt cache types
   type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
 
