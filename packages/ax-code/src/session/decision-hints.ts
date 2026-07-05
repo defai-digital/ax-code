@@ -1,5 +1,6 @@
 import type { MessageV2 } from "./message-v2"
 import type { ReplayEvent } from "@/replay/event"
+import { uniqueStrings } from "@/util/string-list"
 import z from "zod"
 import { isRecord } from "./record"
 
@@ -494,10 +495,6 @@ export namespace DecisionHints {
 
   function nonEmptyStrings(values: unknown[]): string[] {
     return values.filter((item): item is string => typeof item === "string" && item.length > 0)
-  }
-
-  function uniqueStrings(values: string[]): string[] {
-    return Array.from(new Set(values))
   }
 
   function safeText(text: string): string {
