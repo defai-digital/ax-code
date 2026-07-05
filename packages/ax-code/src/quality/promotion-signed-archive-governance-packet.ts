@@ -78,7 +78,7 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     const releasePacketLinkagePass =
       input.promotion.releasePacketID === input.releasePacket.packetID &&
       input.attestationPacket.promotion.releasePacketID === input.releasePacket.packetID
-    const promotionReferencePass = JSON.stringify(input.promotion) === JSON.stringify(input.attestationPacket.promotion)
+    const promotionReferencePass = jsonEqual(input.promotion, input.attestationPacket.promotion)
     const sourceLinkagePass =
       input.releasePacket.source === input.attestationPacket.source &&
       input.attestationPacket.source === input.promotion.source
@@ -230,7 +230,7 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
       releasePacket: packet.releasePacket,
       attestationPacket: packet.attestationPacket,
     })
-    if (JSON.stringify(packet.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(packet.summary, expectedSummary)) {
       reasons.push(`signed archive governance packet summary mismatch for ${packet.source}`)
     }
     return reasons

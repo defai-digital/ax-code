@@ -264,7 +264,7 @@ export namespace QualityPromotionSignedArchive {
       reasons.push(`signed archive signature is missing for ${archive.source}`)
     }
     const expectedSummary = evaluateSummary(archive.packagedArchive, archive.attestation)
-    if (JSON.stringify(archive.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(archive.summary, expectedSummary)) {
       reasons.push(`signed archive summary mismatch for ${archive.source}`)
     }
     return reasons

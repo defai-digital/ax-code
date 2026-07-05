@@ -188,7 +188,7 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
       trust: record.trust,
       attestation: record.attestation,
     })
-    if (JSON.stringify(record.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(record.summary, expectedSummary)) {
       reasons.push(`signed archive attestation record summary mismatch for ${record.source}`)
     }
     return reasons

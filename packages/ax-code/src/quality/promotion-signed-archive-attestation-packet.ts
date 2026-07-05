@@ -192,7 +192,7 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
       promotion: packet.promotion,
       attestationRecord: packet.attestationRecord,
     })
-    if (JSON.stringify(packet.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(packet.summary, expectedSummary)) {
       reasons.push(`signed archive attestation packet summary mismatch for ${packet.source}`)
     }
     return reasons

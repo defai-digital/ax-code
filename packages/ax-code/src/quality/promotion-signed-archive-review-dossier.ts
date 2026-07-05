@@ -223,7 +223,7 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
       governancePacket: dossier.governancePacket,
       handoffPackage: dossier.handoffPackage,
     })
-    if (JSON.stringify(dossier.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(dossier.summary, expectedSummary)) {
       reasons.push(`signed archive review dossier summary mismatch for ${dossier.source}`)
     }
     return reasons

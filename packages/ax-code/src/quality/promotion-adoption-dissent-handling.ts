@@ -118,10 +118,10 @@ export namespace QualityPromotionAdoptionDissentHandling {
         QualifiedRejectingReview.parse({
           reviewID: review.reviewID,
           reviewer: review.reviewer,
-        role: review.role,
-        reviewedAt: review.reviewedAt,
-      }),
-    )
+          role: review.role,
+          reviewedAt: review.reviewedAt,
+        }),
+      )
       .sort((a, b) => compareStringFields(a, b, ["reviewedAt", "reviewID"]))
   }
 
@@ -298,11 +298,11 @@ export namespace QualityPromotionAdoptionDissentHandling {
       }
     }
     const expectedQualifiedRejectingReviews = qualifiedRejectingReviews(bundle, reviews)
-    if (JSON.stringify(handling.qualifiedRejectingReviews) !== JSON.stringify(expectedQualifiedRejectingReviews)) {
+    if (!jsonEqual(handling.qualifiedRejectingReviews, expectedQualifiedRejectingReviews)) {
       reasons.push(`dissent handling qualified rejecting review snapshot mismatch for ${bundle.source}`)
     }
     const expectedSummary = evaluate(bundle, reviews, handling.resolutions, handling.supersessions)
-    if (JSON.stringify(handling.summary) !== JSON.stringify(expectedSummary)) {
+    if (!jsonEqual(handling.summary, expectedSummary)) {
       reasons.push(`dissent handling summary mismatch for ${bundle.source}`)
     }
     return reasons
