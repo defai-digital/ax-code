@@ -2,30 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { registerNotificationRoutes } from "./lib/notifications/routes.js"
 import { registerScheduledTaskRoutes } from "./lib/scheduled-tasks/routes.js"
-
-const createRouteRegistry = () => {
-  const routes = new Map()
-
-  return {
-    app: {
-      get(path, handler) {
-        routes.set(`GET ${path}`, handler)
-      },
-      post(path, handler) {
-        routes.set(`POST ${path}`, handler)
-      },
-      put(path, handler) {
-        routes.set(`PUT ${path}`, handler)
-      },
-      delete(path, handler) {
-        routes.set(`DELETE ${path}`, handler)
-      },
-    },
-    getRoute(method, path) {
-      return routes.get(`${method} ${path}`)
-    },
-  }
-}
+import { createMockResponse, createRouteRegistry } from "./test-helpers/route-harness.js"
 
 const createMockRequest = () => {
   const listeners = new Map()
@@ -41,46 +18,6 @@ const createMockRequest = () => {
       if (typeof handler === "function") {
         handler()
       }
-    },
-  }
-}
-
-const createMockResponse = () => {
-  const headers = new Map()
-  let statusCode = 200
-  let body = ""
-  let flushed = false
-
-  return {
-    setHeader(name, value) {
-      headers.set(name.toLowerCase(), value)
-    },
-    getHeader(name) {
-      return headers.get(name.toLowerCase())
-    },
-    flushHeaders() {
-      flushed = true
-    },
-    write(chunk) {
-      body += String(chunk)
-      return true
-    },
-    status(code) {
-      statusCode = code
-      return this
-    },
-    json(payload) {
-      body += JSON.stringify(payload)
-      return this
-    },
-    get statusCode() {
-      return statusCode
-    },
-    get body() {
-      return body
-    },
-    get flushed() {
-      return flushed
     },
   }
 }

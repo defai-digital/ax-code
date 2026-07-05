@@ -3,63 +3,7 @@ import crypto from "crypto"
 import path from "path"
 
 import { registerProjectIconRoutes } from "./project-icon-routes.js"
-
-const createRouteRegistry = () => {
-  const routes = new Map()
-
-  return {
-    app: {
-      get(routePath, handler) {
-        routes.set(`GET ${routePath}`, handler)
-      },
-      post(routePath, handler) {
-        routes.set(`POST ${routePath}`, handler)
-      },
-      put(routePath, handler) {
-        routes.set(`PUT ${routePath}`, handler)
-      },
-      delete(routePath, handler) {
-        routes.set(`DELETE ${routePath}`, handler)
-      },
-    },
-    getRoute(method, routePath) {
-      return routes.get(`${method} ${routePath}`)
-    },
-  }
-}
-
-const createMockResponse = () => {
-  const headers = new Map()
-  let statusCode = 200
-  let body = null
-
-  return {
-    setHeader(name, value) {
-      headers.set(name.toLowerCase(), value)
-    },
-    getHeader(name) {
-      return headers.get(name.toLowerCase())
-    },
-    status(code) {
-      statusCode = code
-      return this
-    },
-    json(payload) {
-      body = payload
-      return this
-    },
-    send(payload) {
-      body = payload
-      return this
-    },
-    get statusCode() {
-      return statusCode
-    },
-    get body() {
-      return body
-    },
-  }
-}
+import { createMockResponse, createRouteRegistry } from "../../test-helpers/route-harness.js"
 
 describe("project icon routes", () => {
   it("uses fallback file extension MIME when metadata points to a missing icon", async () => {

@@ -11,7 +11,7 @@ import type { ChatMessageEntry } from "@/components/chat/lib/turns/types"
 // (Identifier.create). Assistant-message ids are minted server-side with this scheme.
 const SERVER_RANDOM = "serverabcdefgh" // 14 chars, stand-in for the random suffix
 function serverAscendingId(ts: number, counter = 1): string {
-  let now = BigInt(ts) * BigInt(0x1000) + BigInt(counter)
+  const now = BigInt(ts) * BigInt(0x1000) + BigInt(counter)
   const bytes = new Uint8Array(6)
   for (let i = 0; i < 6; i += 1) bytes[i] = Number((now >> BigInt(40 - 8 * i)) & BigInt(0xff))
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")

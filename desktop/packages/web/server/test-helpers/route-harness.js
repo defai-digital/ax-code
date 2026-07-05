@@ -27,6 +27,7 @@ export const createMockResponse = () => {
   let body = null
   let sent = null
   let contentType = null
+  let flushed = false
   const headers = new Map()
 
   return {
@@ -39,7 +40,14 @@ export const createMockResponse = () => {
       return this
     },
     setHeader(name, value) {
-      headers.set(name, value)
+      headers.set(name.toLowerCase(), value)
+      return this
+    },
+    getHeader(name) {
+      return headers.get(name.toLowerCase())
+    },
+    flushHeaders() {
+      flushed = true
       return this
     },
     json(payload) {
@@ -50,6 +58,10 @@ export const createMockResponse = () => {
       sent = payload
       body = payload
       return this
+    },
+    write(chunk) {
+      body = `${body ?? ""}${String(chunk)}`
+      return true
     },
     end() {
       return this
@@ -68,6 +80,9 @@ export const createMockResponse = () => {
     },
     get headers() {
       return headers
+    },
+    get flushed() {
+      return flushed
     },
   }
 }

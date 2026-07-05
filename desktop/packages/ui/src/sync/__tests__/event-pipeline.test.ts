@@ -12,7 +12,7 @@ const originalWebSocket = globalThis.WebSocket
 // shapes so the pipeline normalization paths are exercised.
 type TestEventPayload = {
   type: string
-  properties: Record<string, any>
+  properties: Record<string, unknown>
 }
 
 type SdkStreamEvent = {
