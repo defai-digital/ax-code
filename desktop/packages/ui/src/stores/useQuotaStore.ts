@@ -24,6 +24,20 @@ const isCurrentQuotaProviderFetch = (providerId: QuotaProviderId, requestId: num
   return latestQuotaProviderFetchRequestIds.get(providerId) === requestId
 }
 
+const parseStringListRecord = (value: unknown): Record<string, string[]> => {
+  if (!value || typeof value !== "object") {
+    return {}
+  }
+
+  const parsed: Record<string, string[]> = {}
+  for (const [key, entries] of Object.entries(value)) {
+    if (Array.isArray(entries)) {
+      parsed[key] = entries.filter((entry): entry is string => typeof entry === "string")
+    }
+  }
+  return parsed
+}
+
 interface QuotaSettingsState {
   autoRefresh: boolean
   refreshIntervalMs: number
@@ -76,27 +90,8 @@ const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState
       )
     : allProviderIds
 
-  // Parse selected models (providerId -> array of model names)
-  const selectedModels: Record<string, string[]> = {}
-  const rawSelectedModels = data?.usageSelectedModels
-  if (rawSelectedModels && typeof rawSelectedModels === "object") {
-    for (const [providerId, models] of Object.entries(rawSelectedModels)) {
-      if (Array.isArray(models)) {
-        selectedModels[providerId] = models.filter((m): m is string => typeof m === "string")
-      }
-    }
-  }
-
-  // Parse expanded families (inverted collapsed logic for header dropdown)
-  const expandedFamilies: Record<string, string[]> = {}
-  const rawExpandedFamilies = data?.usageExpandedFamilies
-  if (rawExpandedFamilies && typeof rawExpandedFamilies === "object") {
-    for (const [providerId, families] of Object.entries(rawExpandedFamilies)) {
-      if (Array.isArray(families)) {
-        expandedFamilies[providerId] = families.filter((f): f is string => typeof f === "string")
-      }
-    }
-  }
+  const selectedModels = parseStringListRecord(data?.usageSelectedModels)
+  const expandedFamilies = parseStringListRecord(data?.usageExpandedFamilies)
 
   return {
     autoRefresh,

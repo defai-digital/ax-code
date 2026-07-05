@@ -59,6 +59,37 @@ describe("useQuotaStore", () => {
     vi.resetModules()
   })
 
+  test("sanitizes string list settings loaded from the config endpoint", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          usageSelectedModels: {
+            claude: ["sonnet", null, "opus", 42],
+            openai: "not-an-array",
+          },
+          usageExpandedFamilies: {
+            claude: ["anthropic", false, "legacy"],
+            openai: ["gpt"],
+          },
+        }),
+      })),
+    )
+
+    const { useQuotaStore } = await importStore()
+
+    await useQuotaStore.getState().loadSettings()
+
+    expect(useQuotaStore.getState().selectedModels).toEqual({
+      claude: ["sonnet", "opus"],
+    })
+    expect(useQuotaStore.getState().expandedFamilies).toEqual({
+      claude: ["anthropic", "legacy"],
+      openai: ["gpt"],
+    })
+  })
+
   test("keeps the newest quota response when provider refreshes overlap", async () => {
     const first = createDeferred<ProviderResult>()
     const second = createDeferred<ProviderResult>()
