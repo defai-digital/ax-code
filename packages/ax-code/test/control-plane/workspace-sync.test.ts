@@ -9,7 +9,7 @@ import { GlobalBus } from "../../src/bus/global"
 import { resetDatabase } from "../fixture/db"
 import * as adaptors from "../../src/control-plane/adaptors"
 import type { Adaptor } from "../../src/control-plane/types"
-import { LEGACY_OPENCODE_WORKSPACE_HEADER } from "../../src/util/workspace-headers"
+import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../../src/util/workspace-headers"
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -33,13 +33,7 @@ const TestAdaptor: Adaptor = {
     throw new Error("not used")
   },
   async remove() {},
-  async fetch(_config: unknown, _input: RequestInfo | URL, _init?: RequestInit) {
-    const url =
-      _input instanceof Request || _input instanceof URL
-        ? _input.toString()
-        : new URL(_input, "http://workspace.test").toString()
-    const request = new Request(url, _init)
-    const workspaceHeader = request.headers.get(LEGACY_OPENCODE_WORKSPACE_HEADER)
+  async fetch() {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         const encoder = new TextEncoder()
@@ -88,7 +82,8 @@ describe("control-plane/workspace.startSyncing", () => {
         .run(),
     )
 
-    const seenHeaders: string[] = []
+    const seenCurrentHeaders: string[] = []
+    const seenLegacyHeaders: string[] = []
     const originalFetch = TestAdaptor.fetch
     TestAdaptor.fetch = async (config, input, init) => {
       const url =
@@ -96,7 +91,8 @@ describe("control-plane/workspace.startSyncing", () => {
           ? input.toString()
           : new URL(input, "http://workspace.test").toString()
       const request = new Request(url, init)
-      seenHeaders.push(request.headers.get(LEGACY_OPENCODE_WORKSPACE_HEADER) ?? "")
+      seenCurrentHeaders.push(request.headers.get(AX_CODE_WORKSPACE_HEADER) ?? "")
+      seenLegacyHeaders.push(request.headers.get(LEGACY_OPENCODE_WORKSPACE_HEADER) ?? "")
       return originalFetch(config, input, init)
     }
 
@@ -117,7 +113,8 @@ describe("control-plane/workspace.startSyncing", () => {
     ])
 
     await sync.stop()
-    expect(seenHeaders).toContain(id1)
+    expect(seenCurrentHeaders).toContain(id1)
+    expect(seenLegacyHeaders).toContain(id1)
     TestAdaptor.fetch = originalFetch
   })
 

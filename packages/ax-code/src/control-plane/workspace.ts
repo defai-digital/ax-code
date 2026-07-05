@@ -11,7 +11,7 @@ import { getAdaptor } from "./adaptors"
 import { parseSSE } from "./sse"
 import { Log } from "@/util/log"
 import { waitForAbortOrTimeout } from "./abort"
-import { LEGACY_OPENCODE_WORKSPACE_HEADER } from "@/util/workspace-headers"
+import { withWorkspaceHeaders } from "@/util/workspace-headers"
 
 export namespace Workspace {
   const log = Log.create({ service: "workspace" })
@@ -143,9 +143,7 @@ export namespace Workspace {
           try {
             const response = await adaptor.fetch(item.extra, normalizeSyncRequestUrl(WORKSPACE_SYNC_ENDPOINT), {
               signal: stop.signal,
-              headers: {
-                [LEGACY_OPENCODE_WORKSPACE_HEADER]: item.id,
-              },
+              headers: withWorkspaceHeaders({}, item.id),
             })
             if (!response.ok) {
               throw new Error(`workspace sync endpoint returned ${response.status}`)

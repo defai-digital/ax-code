@@ -7,7 +7,7 @@ import { parseSSE } from "../../src/control-plane/sse"
 import { GlobalBus } from "../../src/bus/global"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
-import { LEGACY_OPENCODE_WORKSPACE_HEADER } from "../../src/util/workspace-headers"
+import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../../src/util/workspace-headers"
 
 afterEach(async () => {
   await resetDatabase()
@@ -28,8 +28,26 @@ describe("control-plane/workspace-server SSE", () => {
 
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({
-      error: `Missing or invalid ${LEGACY_OPENCODE_WORKSPACE_HEADER} header`,
+      error: `Missing or invalid ${AX_CODE_WORKSPACE_HEADER} or ${LEGACY_OPENCODE_WORKSPACE_HEADER} header`,
     })
+  })
+
+  test("accepts the current workspace header", async () => {
+    const app = WorkspaceServer.App()
+    const stop = new AbortController()
+    try {
+      const response = await app.request("/event", {
+        signal: stop.signal,
+        headers: {
+          [AX_CODE_WORKSPACE_HEADER]: "wrk_test_workspace",
+        },
+      })
+
+      expect(response.status).toBe(200)
+      expect(response.body).toBeDefined()
+    } finally {
+      stop.abort()
+    }
   })
 
   test("streams GlobalBus events and parseSSE reads them", async () => {
