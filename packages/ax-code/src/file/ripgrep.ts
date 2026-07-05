@@ -376,7 +376,6 @@ export namespace Ripgrep {
     if (!proc.stdout) {
       throw new Error("Process output not available")
     }
-    const hasExited = () => proc.exitCode !== null || proc.signalCode !== null
     const stop = () => {
       if (proc.exitCode !== null || proc.signalCode !== null) return
       return Process.killProcessTree(proc).catch(() => {})
