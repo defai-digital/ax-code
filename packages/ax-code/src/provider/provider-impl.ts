@@ -6,7 +6,6 @@ import { NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
 import { toErrorMessage } from "@/util/error-message"
 import { BunProc } from "../bun"
-import { Hash } from "../util/hash"
 import { Plugin } from "../plugin"
 import { NamedError } from "@ax-code/util/error"
 import { ModelsDev } from "./models"
@@ -155,6 +154,10 @@ export namespace Provider {
       .filter(([key]) => !isSecretOptionKey(key))
       .map(([key, item]) => [key, redactCacheKeyValue(item)] as const)
     return Object.fromEntries(entries)
+  }
+
+  function cacheKeyPart(value: unknown): string {
+    return Buffer.from(JSON.stringify(redactCacheKeyValue(value))).toString("base64url")
   }
 
   function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
@@ -802,9 +805,7 @@ export namespace Provider {
           ...model.headers,
         }
 
-      const key = Hash.fast(
-        JSON.stringify({ providerID: model.providerID, npm: model.api.npm, options: redactCacheKeyValue(options) }),
-      )
+      const key = cacheKeyPart({ providerID: model.providerID, npm: model.api.npm, options })
       const existing = s.sdk.get(key)
       if (existing) return existing
 
@@ -963,16 +964,16 @@ export namespace Provider {
   function languageCacheKey(model: Model, provider: Info) {
     const base = providerModelKey({ providerID: model.providerID, modelID: model.id })
     try {
-      const options = JSON.stringify({
-        providerOptions: redactCacheKeyValue(provider.options),
-        modelOptions: redactCacheKeyValue(model.options),
+      const options = cacheKeyPart({
+        providerOptions: provider.options,
+        modelOptions: model.options,
         modelAPI: {
           npm: model.api.npm,
           id: model.api.id,
         },
       })
       if (!options) return base
-      return `${base}#${Hash.fast(options)}`
+      return `${base}#${options}`
     } catch {
       return base
     }

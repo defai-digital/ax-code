@@ -60,24 +60,67 @@ function removeRawTextElementBlocks(value: string, tagName: string): string {
   return output
 }
 
+function hasHtmlTag(value: string): boolean {
+  for (let i = 0; i < value.length - 2; i++) {
+    if (value[i] !== "<") continue
+    const next = value[i + 1] === "/" ? value[i + 2] : value[i + 1]
+    if (next && /[a-z]/i.test(next)) return true
+  }
+  return false
+}
+
+function readTagName(tag: string): { closing: boolean; name: string } {
+  const trimmed = tag.trimStart()
+  const closing = trimmed.startsWith("/")
+  const start = closing ? 1 : 0
+  let end = start
+  while (end < trimmed.length && /[a-z0-9]/i.test(trimmed[end] ?? "")) end++
+  return { closing, name: trimmed.slice(start, end).toLowerCase() }
+}
+
+function markdownForTag(tag: string): string {
+  const { closing, name } = readTagName(tag)
+  if (/^h[1-6]$/.test(name)) {
+    return closing ? "\n\n" : `${"#".repeat(Math.max(2, Number(name.slice(1))))} `
+  }
+  if (name === "li") return closing ? "\n" : "- "
+  if (name === "br") return "\n"
+  if (name === "p") return closing ? "\n\n" : ""
+  if (name === "ul" || name === "ol" || name === "div" || name === "section" || name === "article") {
+    return closing ? "\n" : ""
+  }
+  return ""
+}
+
+function htmlToMarkdownText(value: string): string {
+  let remaining = value
+  let output = ""
+
+  while (remaining.length > 0) {
+    const start = remaining.indexOf("<")
+    if (start === -1) {
+      output += remaining
+      break
+    }
+
+    output += remaining.slice(0, start)
+    const end = remaining.indexOf(">", start + 1)
+    if (end === -1) break
+    output += markdownForTag(remaining.slice(start + 1, end))
+    remaining = remaining.slice(end + 1)
+  }
+
+  return output
+}
+
 export function normalizeReleaseNotesForMarkdown(body: string): string {
-  if (!/<\/?[a-z][\s\S]*>/i.test(body)) {
+  if (!hasHtmlTag(body)) {
     return body
   }
 
   const safeBody = removeRawTextElementBlocks(removeRawTextElementBlocks(decodeHtmlEntities(body), "script"), "style")
 
-  return safeBody
-    .replace(/<\s*h([1-6])\b[^>]*>/gi, (_match, level: string) => `${"#".repeat(Math.max(2, Number(level)))} `)
-    .replace(/<\s*\/h[1-6]\s*>/gi, "\n\n")
-    .replace(/<\s*li\b[^>]*>/gi, "- ")
-    .replace(/<\s*\/li\s*>/gi, "\n")
-    .replace(/<\s*br\s*\/?>/gi, "\n")
-    .replace(/<\s*\/p\s*>/gi, "\n\n")
-    .replace(/<\s*p\b[^>]*>/gi, "")
-    .replace(/<\s*\/(?:ul|ol|div|section|article)\s*>/gi, "\n")
-    .replace(/<\s*(?:ul|ol|div|section|article)\b[^>]*>/gi, "")
-    .replace(/<[^>]+>/g, "")
+  return htmlToMarkdownText(safeBody)
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
