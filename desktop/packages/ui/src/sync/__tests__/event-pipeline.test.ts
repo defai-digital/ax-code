@@ -25,6 +25,20 @@ type ReceivedEvent = {
   payload: TestEventPayload
 }
 
+type ToolPartProperties = {
+  part: {
+    text?: string
+    state: {
+      status?: string
+      time: { end?: number }
+    }
+  }
+}
+
+type SessionStatusProperties = {
+  status: { type: string }
+}
+
 type SdkEventOptions = {
   signal?: AbortSignal
   headers?: Record<string, string>
@@ -37,6 +51,7 @@ type TestSdk = {
 }
 
 const asPipelineSdk = (sdk: TestSdk): EventPipelineInput["sdk"] => sdk as unknown as EventPipelineInput["sdk"]
+const asProperties = <T extends object>(payload: TestEventPayload): T => payload.properties as T
 
 function installDomStubs() {
   // jsdom provides a WebSocket constructor that silently hangs when there is
@@ -582,8 +597,9 @@ describe("createEventPipeline", () => {
 
     expect(received).toHaveLength(1)
     expect(received[0].payload.type).toBe("message.part.updated")
-    expect(received[0].payload.properties.part.state.status).toBe("completed")
-    expect(received[0].payload.properties.part.state.time.end).toBe(20)
+    const properties = asProperties<ToolPartProperties>(received[0].payload)
+    expect(properties.part.state.status).toBe("completed")
+    expect(properties.part.state.time.end).toBe(20)
   })
 
   it("does not treat invalid tool end times as final during coalescing", async () => {
@@ -627,8 +643,9 @@ describe("createEventPipeline", () => {
 
     expect(received).toHaveLength(1)
     expect(received[0].payload.type).toBe("message.part.updated")
-    expect(received[0].payload.properties.part.state.status).toBe("running")
-    expect(received[0].payload.properties.part.state.time.end).toBeUndefined()
+    const properties = asProperties<ToolPartProperties>(received[0].payload)
+    expect(properties.part.state.status).toBe("running")
+    expect(properties.part.state.time.end).toBeUndefined()
   })
 
   it("routes events before queueing so coalescing happens on the resolved directory", async () => {
@@ -687,7 +704,8 @@ describe("createEventPipeline", () => {
     expect(received).toHaveLength(1)
     expect(received[0].directory).toBe("/resolved-dir")
     expect(received[0].payload.type).toBe("message.part.updated")
-    expect(received[0].payload.properties.part.text).toBe("next")
+    const properties = asProperties<ToolPartProperties>(received[0].payload)
+    expect(properties.part.text).toBe("next")
   })
 
   it("consumes websocket message stream frames when transport is ws", async () => {
@@ -1061,7 +1079,7 @@ describe("createEventPipeline — per-directory isolation (P1)", () => {
     ])
 
     expect(received).toHaveLength(1)
-    expect(received[0].payload.properties.status.type).toBe("idle")
+    expect(asProperties<SessionStatusProperties>(received[0].payload).status.type).toBe("idle")
   })
 })
 
@@ -1217,6 +1235,6 @@ describe("createEventPipeline — delta coalescing (Option C)", () => {
     ])
 
     expect(received).toHaveLength(1)
-    expect(received[0].payload.properties.status.type).toBe("idle")
+    expect(asProperties<SessionStatusProperties>(received[0].payload).status.type).toBe("idle")
   })
 })

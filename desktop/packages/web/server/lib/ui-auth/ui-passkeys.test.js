@@ -27,17 +27,7 @@ vi.mock("@simplewebauthn/server", () => ({
 
 const simpleWebAuthn = await import("@simplewebauthn/server")
 const { createUiPasskeys } = await import("./ui-passkeys.js")
-
-const createRequest = ({ host, protocol = "http" }) => ({
-  headers: {
-    host,
-    ...(protocol ? { "x-forwarded-proto": protocol } : {}),
-  },
-  hostname: host,
-  socket: {
-    encrypted: protocol === "https",
-  },
-})
+const { createMockRequest } = await import("../../test-helpers/route-harness.js")
 
 describe("ui passkeys", () => {
   let tempRoot
@@ -60,7 +50,7 @@ describe("ui passkeys", () => {
       storeFile,
     })
 
-    const registration = await passkeys.beginRegistration(createRequest({ host: "LOCALHOST:3000" }))
+    const registration = await passkeys.beginRegistration(createMockRequest({ host: "LOCALHOST:3000" }))
     await passkeys.finishRegistration({
       requestId: registration.requestId,
       response: { id: "credential-id" },
