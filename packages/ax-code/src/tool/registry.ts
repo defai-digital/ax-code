@@ -73,10 +73,6 @@ export namespace ToolRegistry {
     return DEBUG_ENGINE_TOOLS.length
   }
 
-  type State = {
-    custom: Tool.Info[]
-  }
-
   type InitializedTool = Awaited<ReturnType<Tool.Info["init"]>> & { id: string }
 
   const state = Instance.state(async () => {

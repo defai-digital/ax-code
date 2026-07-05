@@ -1,5 +1,4 @@
 import z from "zod"
-import path from "path"
 import { Tool } from "./tool"
 import DESCRIPTION from "./code-intelligence.txt"
 import { Instance } from "../project/instance"

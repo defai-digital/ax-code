@@ -315,7 +315,6 @@ export namespace Log {
     }
   }
 
-  let last = Date.now()
   export function create(tags?: Record<string, any>) {
     tags = tags || {}
 

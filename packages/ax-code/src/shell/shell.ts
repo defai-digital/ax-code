@@ -3,7 +3,7 @@ import { lazy } from "@/util/lazy"
 import { Filesystem } from "@/util/filesystem"
 import { which } from "@/util/which"
 import path from "path"
-import { spawn, type ChildProcess } from "child_process"
+import { spawn } from "child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
 const SIGKILL_TIMEOUT_MS = 200
