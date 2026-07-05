@@ -17,10 +17,6 @@
     "typescript": "^5.8.3",
     "vitest": "4.1.9"
   },
-  "activationEvents": [
-    "onStartupFinished",
-    "onView:ax-code.chatView"
-  ],
   "categories": [
     "AI",
     "Chat",
