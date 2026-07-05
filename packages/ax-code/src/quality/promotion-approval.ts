@@ -43,13 +43,8 @@ export namespace QualityPromotionApproval {
   })
   export type ApprovalRecord = z.output<typeof ApprovalRecord>
 
-  function encode(input: string) {
-    return QualityStorageKey.encode(input)
-  }
-
-  function decode(input: string) {
-    return QualityStorageKey.decode(input)
-  }
+  const encode = QualityStorageKey.encode
+  const decode = QualityStorageKey.decode
 
   function key(source: string, approvalID: string) {
     return ["quality_model_approval", encode(source), approvalID]
