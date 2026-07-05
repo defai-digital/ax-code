@@ -130,10 +130,6 @@ export namespace QualityPromotionSignedArchiveTrust {
     )
   }
 
-  function summarizeOverall(gates: Gate[]) {
-    return summarizeOverallStatus(gates)
-  }
-
   export function create(input: {
     scope: Scope
     projectID?: string | null
@@ -356,7 +352,7 @@ export namespace QualityPromotionSignedArchiveTrust {
       detail: lifecycleDetail,
     })
 
-    const overallStatus = summarizeOverall(gates)
+    const overallStatus = summarizeOverallStatus(gates)
     return TrustSummary.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-signed-archive-trust-summary",

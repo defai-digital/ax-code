@@ -60,10 +60,6 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     })
   }
 
-  function summarizeOverall(gates: QualityPromotionSignedArchiveTrust.Gate[]) {
-    return summarizeOverallStatus(gates)
-  }
-
   function evaluateSummary(input: {
     signedArchive: QualityPromotionSignedArchive.ArchiveArtifact
     trust: QualityPromotionSignedArchiveTrust.TrustSummary
@@ -129,7 +125,7 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     ]
 
     return RecordSummary.parse({
-      overallStatus: summarizeOverall(gates),
+      overallStatus: summarizeOverallStatus(gates),
       signedArchiveStatus: input.signedArchive.summary.overallStatus,
       trustStatus: input.trust.overallStatus,
       attestationStatus: input.attestation.overallStatus,

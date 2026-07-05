@@ -64,10 +64,6 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     })
   }
 
-  function summarizeOverall(gates: QualityPromotionSignedArchiveTrust.Gate[]) {
-    return summarizeOverallStatus(gates)
-  }
-
   function matchesPromotion(promotion: PromotionReference, packet: PacketArtifact) {
     return packet.promotion.source === promotion.source && packet.promotion.promotionID === promotion.promotionID
   }
@@ -149,7 +145,7 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     ]
 
     return PacketSummary.parse({
-      overallStatus: summarizeOverall(gates),
+      overallStatus: summarizeOverallStatus(gates),
       releasePacketStatus: input.releasePacket.summary.overallStatus,
       attestationPacketStatus: input.attestationPacket.summary.overallStatus,
       trustStatus: input.attestationPacket.summary.trustStatus,

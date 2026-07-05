@@ -65,10 +65,6 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     })
   }
 
-  function summarizeOverall(gates: QualityPromotionSignedArchiveTrust.Gate[]) {
-    return summarizeOverallStatus(gates)
-  }
-
   function matchesPromotion(
     promotion: QualityPromotionSignedArchiveGovernancePacket.PacketArtifact["promotion"],
     dossier: DossierArtifact,
@@ -149,7 +145,7 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     ]
 
     return DossierSummary.parse({
-      overallStatus: summarizeOverall(gates),
+      overallStatus: summarizeOverallStatus(gates),
       governancePacketStatus: input.governancePacket.summary.overallStatus,
       handoffPackageStatus: input.handoffPackage.summary.overallStatus,
       archiveManifestStatus: input.handoffPackage.summary.archiveManifestStatus,
