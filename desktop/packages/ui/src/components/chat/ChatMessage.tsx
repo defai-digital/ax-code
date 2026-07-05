@@ -47,34 +47,35 @@ const EXPANDED_TOOLS_CACHE_MAX = 4000
 const expandedToolsStateCache = new Map<string, Set<string>>()
 const collapsedToolsStateCache = new Map<string, Set<string>>()
 
-const readExpandedToolsCache = (messageId: string): Set<string> => {
-  const cached = expandedToolsStateCache.get(messageId)
+const readToolsCache = (cache: Map<string, Set<string>>, messageId: string): Set<string> => {
+  const cached = cache.get(messageId)
   return cached ? new Set(cached) : new Set()
+}
+
+const writeToolsCache = (cache: Map<string, Set<string>>, messageId: string, value: Set<string>): void => {
+  if (cache.size >= EXPANDED_TOOLS_CACHE_MAX && !cache.has(messageId)) {
+    const oldest = cache.keys().next().value
+    if (typeof oldest === "string") {
+      cache.delete(oldest)
+    }
+  }
+  cache.set(messageId, new Set(value))
+}
+
+const readExpandedToolsCache = (messageId: string): Set<string> => {
+  return readToolsCache(expandedToolsStateCache, messageId)
 }
 
 const writeExpandedToolsCache = (messageId: string, value: Set<string>): void => {
-  if (expandedToolsStateCache.size >= EXPANDED_TOOLS_CACHE_MAX && !expandedToolsStateCache.has(messageId)) {
-    const oldest = expandedToolsStateCache.keys().next().value
-    if (typeof oldest === "string") {
-      expandedToolsStateCache.delete(oldest)
-    }
-  }
-  expandedToolsStateCache.set(messageId, new Set(value))
+  writeToolsCache(expandedToolsStateCache, messageId, value)
 }
 
 const readCollapsedToolsCache = (messageId: string): Set<string> => {
-  const cached = collapsedToolsStateCache.get(messageId)
-  return cached ? new Set(cached) : new Set()
+  return readToolsCache(collapsedToolsStateCache, messageId)
 }
 
 const writeCollapsedToolsCache = (messageId: string, value: Set<string>): void => {
-  if (collapsedToolsStateCache.size >= EXPANDED_TOOLS_CACHE_MAX && !collapsedToolsStateCache.has(messageId)) {
-    const oldest = collapsedToolsStateCache.keys().next().value
-    if (typeof oldest === "string") {
-      collapsedToolsStateCache.delete(oldest)
-    }
-  }
-  collapsedToolsStateCache.set(messageId, new Set(value))
+  writeToolsCache(collapsedToolsStateCache, messageId, value)
 }
 
 function useStickyDisplayValue<T>(value: T | null | undefined): T | null | undefined {
