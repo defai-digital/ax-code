@@ -34,7 +34,7 @@ import { useDurationTickerNow } from "./useDurationTicker"
 import { resolveFallbackTaskSessionId } from "./resolveFallbackTaskSessionId"
 import { areRenderRelevantPartsEqual } from "../renderCompare"
 import { useI18n } from "@/lib/i18n"
-import { getDiffPatchEntries, getPatchText } from "./toolDiffUtils"
+import { getDiffPatchEntries, getPatchText, isRecord } from "./toolDiffUtils"
 import { LazyToolDiffPreview as DiffPreview } from "./LazyToolDiffPreview"
 
 const TOOL_ROW_TEXT_CLASS = "!text-[length:var(--text-meta)] !leading-4 sm:!leading-6 tracking-normal"
@@ -396,10 +396,6 @@ type ToolDiagnosticSection = {
 }
 
 const TOOL_DIAGNOSTICS_MAX_PER_FILE = 5
-
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null
-}
 
 const normalizeToolDiagnostic = (value: unknown): ToolDiagnostic | null => {
   if (!isRecord(value)) {

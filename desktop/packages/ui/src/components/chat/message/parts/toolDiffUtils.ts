@@ -14,7 +14,7 @@ const GIT_DIFF_FILE_BREAK_TEST = /^diff --git\s+/m
 const UNIFIED_DIFF_FILE_BREAK_PATTERN = /(?=^---\s+\S)/gm
 const UNIFIED_DIFF_FILE_BREAK_TEST = /^---\s+\S/m
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
+export const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null
 }
 
