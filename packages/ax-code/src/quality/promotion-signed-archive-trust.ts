@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
 import { sha256Hex } from "./digest"
 import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
+import { summarizeOverallStatus } from "./status"
 
 export namespace QualityPromotionSignedArchiveTrust {
   export const Scope = z.enum(["global", "project"])
@@ -128,13 +129,8 @@ export namespace QualityPromotionSignedArchiveTrust {
     )
   }
 
-  function severity(status: Gate["status"]) {
-    return status === "fail" ? 2 : status === "warn" ? 1 : 0
-  }
-
   function summarizeOverall(gates: Gate[]) {
-    const highest = gates.reduce((max, gate) => Math.max(max, severity(gate.status)), 0)
-    return highest === 2 ? "fail" : highest === 1 ? "warn" : "pass"
+    return summarizeOverallStatus(gates)
   }
 
   export function create(input: {

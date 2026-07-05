@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionHandoffPackage } from "./promotion-handoff-package"
 import { QualityPromotionSignedArchiveGovernancePacket } from "./promotion-signed-archive-governance-packet"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
+import { summarizeOverallStatus } from "./status"
 
 export namespace QualityPromotionSignedArchiveReviewDossier {
   export const DossierSummary = z.object({
@@ -63,13 +64,8 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     })
   }
 
-  function severity(status: QualityPromotionSignedArchiveTrust.Gate["status"]) {
-    return status === "fail" ? 2 : status === "warn" ? 1 : 0
-  }
-
   function summarizeOverall(gates: QualityPromotionSignedArchiveTrust.Gate[]) {
-    const highest = gates.reduce((max, gate) => Math.max(max, severity(gate.status)), 0)
-    return highest === 2 ? "fail" : highest === 1 ? "warn" : "pass"
+    return summarizeOverallStatus(gates)
   }
 
   function matchesPromotion(

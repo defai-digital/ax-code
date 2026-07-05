@@ -1,6 +1,7 @@
 import z from "zod"
 import { sha256JsonHex } from "./digest"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
+import { summarizeOverallStatus } from "./status"
 
 export namespace QualityPromotionSignedArchiveAttestationPolicy {
   export const MinimumTrustScope = z.enum(["global", "project"])
@@ -42,10 +43,6 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
     gates: z.array(z.lazy(() => QualityPromotionSignedArchiveTrust.Gate)),
   })
   export type Summary = z.output<typeof Summary>
-
-  function severity(status: QualityPromotionSignedArchiveTrust.Gate["status"]) {
-    return status === "fail" ? 2 : status === "warn" ? 1 : 0
-  }
 
   export function merge(base: Policy, overrides?: PolicyOverrides): Policy {
     return Policy.parse({
@@ -126,8 +123,7 @@ export namespace QualityPromotionSignedArchiveAttestationPolicy {
       detail: lifecyclePolicyDetail,
     })
 
-    const highest = gates.reduce((max, gate) => Math.max(max, severity(gate.status)), 0)
-    const overallStatus = highest === 2 ? "fail" : highest === 1 ? "warn" : "pass"
+    const overallStatus = summarizeOverallStatus(gates)
 
     return Summary.parse({
       schemaVersion: 1,

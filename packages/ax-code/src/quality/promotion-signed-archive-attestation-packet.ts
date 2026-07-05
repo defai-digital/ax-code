@@ -5,6 +5,7 @@ import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decis
 import { QualityPromotionSignedArchiveAttestationPolicy } from "./promotion-signed-archive-attestation-policy"
 import { QualityPromotionSignedArchiveAttestationRecord } from "./promotion-signed-archive-attestation-record"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
+import { summarizeOverallStatus } from "./status"
 
 export namespace QualityPromotionSignedArchiveAttestationPacket {
   export const PromotionReference = z.object({
@@ -68,13 +69,8 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
     })
   }
 
-  function severity(status: QualityPromotionSignedArchiveTrust.Gate["status"]) {
-    return status === "fail" ? 2 : status === "warn" ? 1 : 0
-  }
-
   function summarizeOverall(gates: QualityPromotionSignedArchiveTrust.Gate[]) {
-    const highest = gates.reduce((max, gate) => Math.max(max, severity(gate.status)), 0)
-    return highest === 2 ? "fail" : highest === 1 ? "warn" : "pass"
+    return summarizeOverallStatus(gates)
   }
 
   function evaluateSummary(input: {

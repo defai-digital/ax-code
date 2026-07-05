@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { QualityPromotionSignedArchiveAttestationPacket } from "./promotion-signed-archive-attestation-packet"
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
+import { summarizeOverallStatus } from "./status"
 
 export namespace QualityPromotionSignedArchiveGovernancePacket {
   export const PromotionReference = z.lazy(() => QualityPromotionSignedArchiveAttestationPacket.PromotionReference)
@@ -62,13 +63,8 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     })
   }
 
-  function severity(status: QualityPromotionSignedArchiveTrust.Gate["status"]) {
-    return status === "fail" ? 2 : status === "warn" ? 1 : 0
-  }
-
   function summarizeOverall(gates: QualityPromotionSignedArchiveTrust.Gate[]) {
-    const highest = gates.reduce((max, gate) => Math.max(max, severity(gate.status)), 0)
-    return highest === 2 ? "fail" : highest === 1 ? "warn" : "pass"
+    return summarizeOverallStatus(gates)
   }
 
   function matchesPromotion(promotion: PromotionReference, packet: PacketArtifact) {
