@@ -18,6 +18,7 @@ import { useI18n } from "@/lib/i18n"
 import { parseModelIdentifier } from "@/lib/modelIdentifier"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Icon } from "@/components/icon/Icon"
+import { normalizePermissionToolIds } from "./permissionToolIds"
 import {
   buildPermissionRuleKey,
   isPermissionAction,
@@ -216,18 +217,7 @@ export const AgentsPage: React.FC = () => {
         return
       }
 
-      // AX Code permissions are keyed by tool name, but some tools are grouped
-      // under a single permission key. E.g. `edit` covers `write`, `patch`, and `multiedit`.
-      const editCoveredToolIds = new Set(["write", "patch", "multiedit"])
-
-      const normalized = ids
-        .map((id) => (typeof id === "string" ? id.trim() : ""))
-        .filter(Boolean)
-        .filter((id) => id !== "*")
-        .filter((id) => id !== "invalid")
-        .filter((id) => !editCoveredToolIds.has(id))
-
-      setToolIds(Array.from(new Set(normalized)).sort((a, b) => a.localeCompare(b)))
+      setToolIds(normalizePermissionToolIds(ids))
     }
 
     void fetchToolIds()
