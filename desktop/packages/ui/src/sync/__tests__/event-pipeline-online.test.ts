@@ -1,29 +1,27 @@
 import { afterEach, describe, expect, it } from "vitest"
+import type { EventPipelineInput } from "../event-pipeline"
 import { createEventPipeline } from "../event-pipeline"
-import { createEventTarget } from "./event-pipeline-test-helpers"
+import {
+  installEventPipelineBrowserGlobals,
+  restoreBrowserGlobals,
+  saveBrowserGlobals,
+  setNavigatorOnline,
+} from "./event-pipeline-test-helpers"
 
-const savedDocument = globalThis.document
-const savedWindow = globalThis.window
-const savedNavigator = globalThis.navigator
+const savedGlobals = saveBrowserGlobals()
 
 afterEach(() => {
-  globalThis.document = savedDocument
-  globalThis.window = savedWindow
-  globalThis.navigator = savedNavigator
+  restoreBrowserGlobals(savedGlobals)
 })
 
 describe("createEventPipeline — online event", () => {
   it("does not spin reconnect attempts after the browser reports offline", async () => {
-    globalThis.document = createEventTarget({ visibilityState: "visible" })
-    globalThis.window = createEventTarget({
-      location: { href: "http://127.0.0.1:3000/", origin: "http://127.0.0.1:3000" },
-    })
-    globalThis.navigator = { onLine: true }
+    const { windowTarget } = installEventPipelineBrowserGlobals({ visibilityState: "visible", onLine: true })
 
     let sdkCallCount = 0
     const sdk = {
       global: {
-        event: async (options) => {
+        event: async (options?: { signal?: AbortSignal }) => {
           sdkCallCount += 1
           const signal = options?.signal
           return {
@@ -34,7 +32,7 @@ describe("createEventPipeline — online event", () => {
                   properties: { sessionID: "s1", status: { type: "idle" } },
                 },
               }
-              await new Promise((_, reject) => {
+              await new Promise<never>((_, reject) => {
                 if (signal?.aborted) {
                   reject(new DOMException("Aborted", "AbortError"))
                   return
@@ -47,11 +45,11 @@ describe("createEventPipeline — online event", () => {
           }
         },
       },
-    }
+    } as EventPipelineInput["sdk"]
 
     let cleanup = () => {}
     try {
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         ;({ cleanup } = createEventPipeline({
           sdk,
           transport: "sse",
@@ -62,17 +60,17 @@ describe("createEventPipeline — online event", () => {
         }))
       })
 
-      globalThis.navigator = { onLine: false }
-      globalThis.window.dispatch("offline")
+      setNavigatorOnline(false)
+      windowTarget.dispatch("offline")
 
       await new Promise((resolve) => setTimeout(resolve, 180))
 
       expect(sdkCallCount).toBe(1)
 
-      globalThis.navigator = { onLine: true }
-      globalThis.window.dispatch("online")
+      setNavigatorOnline(true)
+      windowTarget.dispatch("online")
 
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const started = Date.now()
         const tick = () => {
           if (sdkCallCount >= 2) {
@@ -93,11 +91,7 @@ describe("createEventPipeline — online event", () => {
   })
 
   it("cuts the inter-attempt wait short when `online` fires after disconnect", async () => {
-    globalThis.document = createEventTarget({ visibilityState: "visible" })
-    globalThis.window = createEventTarget({
-      location: { href: "http://127.0.0.1:3000/", origin: "http://127.0.0.1:3000" },
-    })
-    globalThis.navigator = { onLine: false }
+    const { windowTarget } = installEventPipelineBrowserGlobals({ visibilityState: "visible", onLine: false })
 
     let sdkCallIndex = 0
     const sdk = {
@@ -124,10 +118,10 @@ describe("createEventPipeline — online event", () => {
           }
         },
       },
-    }
+    } as EventPipelineInput["sdk"]
 
     const startedAt = Date.now()
-    const elapsed = await new Promise((resolve) => {
+    const elapsed = await new Promise<number>((resolve) => {
       let connects = 0
       const { cleanup } = createEventPipeline({
         sdk,
@@ -140,8 +134,8 @@ describe("createEventPipeline — online event", () => {
           // Flip the browser back online and fire the event; waitForRetry
           // should resolve early and the next attempt should fire.
           setTimeout(() => {
-            globalThis.navigator = { onLine: true }
-            globalThis.window.dispatch("online")
+            setNavigatorOnline(true)
+            windowTarget.dispatch("online")
           }, 30)
         },
         onReconnect: () => {
