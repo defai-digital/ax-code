@@ -53,7 +53,7 @@ describe("gitApiHttp index mutations", () => {
     installWindowMock()
     const calls = installFetchMock()
     try {
-      await stageGitFiles("/repo", ["a.ts", "b.ts"])
+      await stageGitFiles("/repo", [" a.ts ", "", "b.ts"])
 
       expect(calls).toHaveLength(1)
       expect(String(calls[0].input)).toBe("http://localhost:3000/api/git/stage?directory=%2Frepo")
@@ -68,7 +68,7 @@ describe("gitApiHttp index mutations", () => {
     installWindowMock()
     const calls = installFetchMock()
     try {
-      await unstageGitFiles("/repo", ["a.ts", "b.ts"])
+      await unstageGitFiles("/repo", [" a.ts ", "  ", "b.ts"])
 
       expect(calls).toHaveLength(1)
       expect(String(calls[0].input)).toBe("http://localhost:3000/api/git/unstage?directory=%2Frepo")

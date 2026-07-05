@@ -56,6 +56,7 @@ const gitRepoCache = new Map<string, { value: boolean; expiresAt: number }>()
 const gitRepoInFlight = new Map<string, Promise<boolean>>()
 
 const normalizeDirectoryKey = (directory: string): string => directory.trim()
+const normalizeGitFilePaths = (filePaths: string[]): string[] => filePaths.map((path) => path.trim()).filter(Boolean)
 
 function buildUrl(
   path: string,
@@ -218,7 +219,7 @@ export async function stageGitFile(directory: string, filePath: string): Promise
 }
 
 export async function stageGitFiles(directory: string, filePaths: string[]): Promise<void> {
-  const paths = filePaths.map((path) => path.trim()).filter(Boolean)
+  const paths = normalizeGitFilePaths(filePaths)
 
   if (paths.length === 0) {
     throw new Error("path is required to stage git changes")
@@ -241,7 +242,7 @@ export async function unstageGitFile(directory: string, filePath: string): Promi
 }
 
 export async function unstageGitFiles(directory: string, filePaths: string[]): Promise<void> {
-  const paths = filePaths.map((path) => path.trim()).filter(Boolean)
+  const paths = normalizeGitFilePaths(filePaths)
 
   if (paths.length === 0) {
     throw new Error("path is required to unstage git changes")
