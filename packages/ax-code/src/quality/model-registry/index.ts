@@ -10,6 +10,7 @@ import { QualityPromotionDecisionBundle } from "../promotion-decision-bundle"
 import { QualityPromotionReleasePolicyStore } from "../promotion-release-policy-store"
 import { QualityReentryContext } from "../reentry-context"
 import { QualityReentryRemediation } from "../reentry-remediation"
+import { jsonEqual } from "../json"
 import {
   promotionApprovers,
   promotionReportingChains,
@@ -88,9 +89,7 @@ export namespace QualityModelRegistry {
 
     try {
       const existing = await get(model.source)
-      const prev = JSON.stringify(existing.model)
-      const curr = JSON.stringify(model)
-      if (prev === curr) return existing
+      if (jsonEqual(existing.model, model)) return existing
       throw new Error(`Model source ${model.source} already exists with different content`)
     } catch (err) {
       if (!Storage.NotFoundError.isInstance(err)) throw err
