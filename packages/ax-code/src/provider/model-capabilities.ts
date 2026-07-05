@@ -13,6 +13,10 @@
  */
 
 import { normalizeProviderModelId } from "./model-id"
+import {
+  isQwen37MaxModel as isQwen37MaxReadinessModel,
+  isQwen37PlusModel as isQwen37PlusReadinessModel,
+} from "./qwen37-readiness"
 
 /**
  * Rate limit tier for pacing policy selection.
@@ -530,8 +534,7 @@ export function getContextPackBudget(modelId: string, providerId?: string): numb
  * @returns true if the model is Qwen 3.7 Max
  */
 export function isQwen37MaxModel(modelId: string): boolean {
-  const normalized = normalizeProviderModelId(modelId)
-  return normalized.includes("qwen37max")
+  return isQwen37MaxReadinessModel(modelId)
 }
 
 /**
@@ -544,8 +547,7 @@ export function isQwen37MaxModel(modelId: string): boolean {
  * @returns true if the model is Qwen 3.7 Plus
  */
 export function isQwen37PlusModel(modelId: string): boolean {
-  const normalized = normalizeProviderModelId(modelId)
-  return normalized.includes("qwen37plus")
+  return isQwen37PlusReadinessModel(modelId)
 }
 
 /**
