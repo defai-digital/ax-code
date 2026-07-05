@@ -8,6 +8,7 @@ import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionApprovalPacket {
   export const ReadinessSummary = z.object({
@@ -73,11 +74,7 @@ export namespace QualityPromotionApprovalPacket {
   }
 
   function sortPackets(artifacts: PacketArtifact[]) {
-    return [...artifacts].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.packetID.localeCompare(b.packetID)
-    })
+    return [...artifacts].sort((a, b) => compareStringFields(a, b, ["createdAt", "packetID"]))
   }
 
   function matchesBundle(bundle: QualityPromotionDecisionBundle.DecisionBundle, packet: PacketArtifact) {

@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionReleasePacket {
   export const PacketSummary = z.object({
@@ -57,11 +58,7 @@ export namespace QualityPromotionReleasePacket {
   }
 
   function sortPackets(packets: PacketArtifact[]) {
-    return [...packets].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.packetID.localeCompare(b.packetID)
-    })
+    return [...packets].sort((a, b) => compareStringFields(a, b, ["createdAt", "packetID"]))
   }
 
   function matchesDecisionBundle(

@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionBoardDecision } from "./promotion-board-decision"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionReleaseDecisionRecord {
   export const PromotionMode = z.enum(["pass", "warn_override", "force"])
@@ -54,11 +55,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
   }
 
   function sortRecords(records: RecordArtifact[]) {
-    return [...records].sort((a, b) => {
-      const byRecordedAt = a.recordedAt.localeCompare(b.recordedAt)
-      if (byRecordedAt !== 0) return byRecordedAt
-      return a.recordID.localeCompare(b.recordID)
-    })
+    return [...records].sort((a, b) => compareStringFields(a, b, ["recordedAt", "recordID"]))
   }
 
   function matchesDecisionBundle(

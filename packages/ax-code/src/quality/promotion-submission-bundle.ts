@@ -5,6 +5,7 @@ import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionSubmissionBundle {
   export const SubmissionSummary = z.object({
@@ -54,11 +55,7 @@ export namespace QualityPromotionSubmissionBundle {
   }
 
   function sortBundles(bundles: BundleArtifact[]) {
-    return [...bundles].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.submissionID.localeCompare(b.submissionID)
-    })
+    return [...bundles].sort((a, b) => compareStringFields(a, b, ["createdAt", "submissionID"]))
   }
 
   function matchesDecisionBundle(

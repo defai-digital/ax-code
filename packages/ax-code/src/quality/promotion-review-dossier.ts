@@ -4,6 +4,7 @@ import { QualityStorageKey } from "./storage-key"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
 import { overallStatusFromGates } from "./promotion-summary"
 import { jsonEqual } from "./json"
+import { compareStringFields } from "./sort"
 
 export namespace QualityPromotionReviewDossier {
   export const Recommendation = z.enum(["approve_promotion", "requires_override_review", "hold"])
@@ -61,11 +62,7 @@ export namespace QualityPromotionReviewDossier {
   }
 
   function sortDossiers(dossiers: DossierArtifact[]) {
-    return [...dossiers].sort((a, b) => {
-      const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
-      if (byCreatedAt !== 0) return byCreatedAt
-      return a.dossierID.localeCompare(b.dossierID)
-    })
+    return [...dossiers].sort((a, b) => compareStringFields(a, b, ["createdAt", "dossierID"]))
   }
 
   function matchesDecisionBundle(
