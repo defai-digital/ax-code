@@ -63,4 +63,16 @@ describe("useSandboxStore", () => {
     expect(useSandboxStore.getState().isSandbox("/repo")).toBe(false)
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
+
+  test("normalizes directory keys across Windows path variants", async () => {
+    const { useSandboxStore } = await importStore()
+
+    useSandboxStore.setState({
+      sandboxByDirectory: { "C:/Repo": true },
+      pendingByDirectory: {},
+      loadedByDirectory: { "C:/Repo": true },
+    })
+
+    expect(useSandboxStore.getState().isSandbox("c:\\Repo\\")).toBe(true)
+  })
 })

@@ -69,4 +69,16 @@ describe("useExecutionModeStore", () => {
     expect(useExecutionModeStore.getState().getMode("/repo")).toBe("manual")
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
+
+  test("normalizes directory keys across Windows path variants", async () => {
+    const { useExecutionModeStore } = await importStore()
+
+    useExecutionModeStore.setState({
+      modeByDirectory: { "C:/Repo": "autonomous" },
+      pendingByDirectory: {},
+      loadedByDirectory: { "C:/Repo": true },
+    })
+
+    expect(useExecutionModeStore.getState().getMode("c:\\Repo\\")).toBe("autonomous")
+  })
 })

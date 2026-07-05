@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { axCodeClient } from "@/lib/ax-code/client"
 import { toast } from "@/components/ui"
 import { useI18nStore, formatMessage } from "@/lib/i18n/store"
+import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
 
 /**
  * Sandbox (isolation) mode toggle for the desktop UI. The AX Code server
@@ -10,9 +11,6 @@ import { useI18nStore, formatMessage } from "@/lib/i18n/store"
  * "workspace-write"). Toggling sandbox on sets mode to "workspace-write";
  * toggling off sets mode to "full-access".
  */
-
-const normalizeKey = (directory: string | null | undefined): string =>
-  typeof directory === "string" ? directory.trim() : ""
 
 type SandboxState = {
   sandboxByDirectory: Record<string, boolean>
@@ -34,11 +32,11 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
   pendingByDirectory: {},
   loadedByDirectory: {},
 
-  isSandbox: (directory) => get().sandboxByDirectory[normalizeKey(directory)],
-  isPending: (directory) => get().pendingByDirectory[normalizeKey(directory)] === true,
+  isSandbox: (directory) => get().sandboxByDirectory[normalizeDirectoryKey(directory)],
+  isPending: (directory) => get().pendingByDirectory[normalizeDirectoryKey(directory)] === true,
 
   loadSandbox: async (directory) => {
-    const key = normalizeKey(directory)
+    const key = normalizeDirectoryKey(directory)
     const { pendingByDirectory, loadedByDirectory } = get()
     if (pendingByDirectory[key] || loadedByDirectory[key]) return
 
@@ -69,7 +67,7 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
   },
 
   setSandbox: async (directory, enabled) => {
-    const key = normalizeKey(directory)
+    const key = normalizeDirectoryKey(directory)
     const previous = get().sandboxByDirectory[key]
     if (previous === enabled || get().pendingByDirectory[key]) return
 

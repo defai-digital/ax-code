@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { axCodeClient } from "@/lib/ax-code/client"
 import { toast } from "@/components/ui"
 import { useI18nStore, formatMessage } from "@/lib/i18n/store"
+import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
 
 /**
  * The AX Code server exposes two layered execution settings, persisted to
@@ -21,9 +22,6 @@ const deriveMode = (autonomous: boolean, superLong: boolean): ExecutionMode => {
   if (!autonomous) return "manual"
   return superLong ? "long-run" : "autonomous"
 }
-
-const normalizeKey = (directory: string | null | undefined): string =>
-  typeof directory === "string" ? directory.trim() : ""
 
 type ExecutionModeState = {
   modeByDirectory: Record<string, ExecutionMode>
@@ -72,11 +70,11 @@ export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => 
   pendingByDirectory: {},
   loadedByDirectory: {},
 
-  getMode: (directory) => get().modeByDirectory[normalizeKey(directory)],
-  isPending: (directory) => get().pendingByDirectory[normalizeKey(directory)] === true,
+  getMode: (directory) => get().modeByDirectory[normalizeDirectoryKey(directory)],
+  isPending: (directory) => get().pendingByDirectory[normalizeDirectoryKey(directory)] === true,
 
   loadMode: async (directory) => {
-    const key = normalizeKey(directory)
+    const key = normalizeDirectoryKey(directory)
     const { pendingByDirectory, loadedByDirectory } = get()
     if (pendingByDirectory[key] || loadedByDirectory[key]) return
 
@@ -113,7 +111,7 @@ export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => 
   },
 
   setMode: async (directory, mode) => {
-    const key = normalizeKey(directory)
+    const key = normalizeDirectoryKey(directory)
     const previous = get().modeByDirectory[key]
     if (previous === mode || get().pendingByDirectory[key]) return
 
