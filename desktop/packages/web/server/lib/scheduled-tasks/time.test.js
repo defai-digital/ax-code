@@ -3,6 +3,7 @@ import {
   normalizeScheduledTaskTime,
   normalizeScheduledTaskTimes,
   parseScheduledTaskTimeParts,
+  resolveScheduledTaskTimes,
 } from "./time.js"
 
 describe("scheduled task time helpers", () => {
@@ -24,5 +25,18 @@ describe("scheduled task time helpers", () => {
   it("parses normalized time parts", () => {
     expect(parseScheduledTaskTimeParts(" 07:05 ")).toEqual({ hour: 7, minute: 5 })
     expect(parseScheduledTaskTimeParts("07:99")).toBeNull()
+  })
+
+  it("resolves schedule times from list, legacy single time, and existing fallback", () => {
+    expect(resolveScheduledTaskTimes({ times: ["18:00", "09:30", "18:00"], time: "09:30" })).toEqual(["09:30", "18:00"])
+    expect(resolveScheduledTaskTimes({ time: "07:45" })).toEqual(["07:45"])
+    expect(resolveScheduledTaskTimes({}, { existingSchedule: { times: ["22:00"] } })).toEqual(["22:00"])
+  })
+
+  it("can reject invalid schedule.times entries", () => {
+    expect(resolveScheduledTaskTimes({ times: ["09:00", "bad"] })).toEqual(["09:00"])
+    expect(() => resolveScheduledTaskTimes({ times: ["09:00", "bad"] }, { rejectInvalidTimes: true })).toThrow(
+      "schedule.times must contain HH:mm values",
+    )
   })
 })

@@ -2,7 +2,7 @@ import { createAxCodeClient } from "@ax-code/sdk/v2"
 import { DateTime } from "luxon"
 import parser from "cron-parser"
 import { expandSnippets } from "../ax-code/snippets.js"
-import { normalizeScheduledTaskTimes, parseScheduledTaskTimeParts } from "./time.js"
+import { parseScheduledTaskTimeParts, resolveScheduledTaskTimes } from "./time.js"
 
 const DEFAULT_GLOBAL_CONCURRENCY = 4
 const DEFAULT_PROJECT_CONCURRENCY = 2
@@ -25,14 +25,6 @@ const applyTimeToDate = (baseDateTime, time) => {
     second: 0,
     millisecond: 0,
   })
-}
-
-const resolveScheduleTimes = (schedule) => {
-  const times = normalizeScheduledTaskTimes(schedule?.times)
-  if (times.length > 0) {
-    return times
-  }
-  return normalizeScheduledTaskTimes([schedule?.time])
 }
 
 const weekdayAsZeroBased = (dateTime) => {
@@ -95,7 +87,7 @@ export const computeNextRunAt = (task, nowMs = Date.now()) => {
   }
 
   if (schedule.kind === "daily") {
-    const times = resolveScheduleTimes(schedule)
+    const times = resolveScheduledTaskTimes(schedule)
     if (times.length === 0) {
       return null
     }
@@ -120,7 +112,7 @@ export const computeNextRunAt = (task, nowMs = Date.now()) => {
     if (!Array.isArray(schedule.weekdays) || schedule.weekdays.length === 0) {
       return null
     }
-    const times = resolveScheduleTimes(schedule)
+    const times = resolveScheduledTaskTimes(schedule)
     if (times.length === 0) {
       return null
     }

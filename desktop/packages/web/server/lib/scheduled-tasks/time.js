@@ -23,6 +23,35 @@ export const normalizeScheduledTaskTimes = (values) => {
   return uniqueSortedScheduledTaskTimes(times)
 }
 
+export const resolveScheduledTaskTimes = (schedule, options = {}) => {
+  const { existingSchedule, rejectInvalidTimes = false } = options
+  const times = []
+
+  if (Array.isArray(schedule?.times)) {
+    for (const value of schedule.times) {
+      const time = normalizeScheduledTaskTime(value)
+      if (!time) {
+        if (rejectInvalidTimes) {
+          throw new Error("schedule.times must contain HH:mm values")
+        }
+        continue
+      }
+      times.push(time)
+    }
+  }
+
+  const legacySingleTime = normalizeScheduledTaskTime(schedule?.time)
+  if (legacySingleTime) {
+    times.push(legacySingleTime)
+  }
+
+  if (times.length === 0 && Array.isArray(existingSchedule?.times)) {
+    times.push(...normalizeScheduledTaskTimes(existingSchedule.times))
+  }
+
+  return uniqueSortedScheduledTaskTimes(times)
+}
+
 export const parseScheduledTaskTimeParts = (value) => {
   const time = normalizeScheduledTaskTime(value)
   if (!time) {

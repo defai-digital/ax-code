@@ -1,6 +1,6 @@
 import { DateTime, IANAZone } from "luxon"
 import parser from "cron-parser"
-import { normalizeScheduledTaskTime, uniqueSortedScheduledTaskTimes } from "../scheduled-tasks/time.js"
+import { normalizeScheduledTaskTime, resolveScheduledTaskTimes } from "../scheduled-tasks/time.js"
 
 const PROJECT_CONFIG_VERSION = 1
 const MAX_TASK_NAME_LENGTH = 80
@@ -68,40 +68,6 @@ const normalizeWeekdays = (value) => {
   return Array.from(unique).sort((a, b) => a - b)
 }
 
-const resolveScheduleTimes = (value, existingSchedule) => {
-  const times = []
-
-  if (Array.isArray(value?.times)) {
-    for (const item of value.times) {
-      const normalized = normalizeScheduledTaskTime(item)
-      if (!normalized) {
-        throw new Error("schedule.times must contain HH:mm values")
-      }
-      times.push(normalized)
-    }
-  }
-
-  const legacySingleTime = normalizeScheduledTaskTime(value?.time)
-  if (legacySingleTime) {
-    times.push(legacySingleTime)
-  }
-
-  if (times.length === 0 && Array.isArray(existingSchedule?.times)) {
-    for (const item of existingSchedule.times) {
-      const normalized = normalizeScheduledTaskTime(item)
-      if (normalized) {
-        times.push(normalized)
-      }
-    }
-  }
-
-  const uniqueSorted = uniqueSortedScheduledTaskTimes(times)
-  if (uniqueSorted.length === 0) {
-    return null
-  }
-  return uniqueSorted
-}
-
 const resolveDefaultTimezone = () => {
   const resolved = DateTime.local().zoneName
   if (resolved && IANAZone.isValidZone(resolved)) {
@@ -148,16 +114,16 @@ const normalizeSchedule = (value, existingSchedule) => {
   }
 
   if (kind === "daily") {
-    const times = resolveScheduleTimes(value, existingSchedule)
-    if (!times) {
+    const times = resolveScheduledTaskTimes(value, { existingSchedule, rejectInvalidTimes: true })
+    if (times.length === 0) {
       throw new Error("schedule.times must include at least one HH:mm value for daily schedule")
     }
     return { kind, times, timezone }
   }
 
   if (kind === "weekly") {
-    const times = resolveScheduleTimes(value, existingSchedule)
-    if (!times) {
+    const times = resolveScheduledTaskTimes(value, { existingSchedule, rejectInvalidTimes: true })
+    if (times.length === 0) {
       throw new Error("schedule.times must include at least one HH:mm value for weekly schedule")
     }
     const weekdays = normalizeWeekdays(value.weekdays)
