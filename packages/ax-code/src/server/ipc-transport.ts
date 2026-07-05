@@ -1,4 +1,4 @@
-import { createServer, type Server, type Socket } from "node:net"
+import { createServer, type Socket } from "node:net"
 import { isRecord } from "@/util/record"
 import { Log } from "@/util/log"
 import type { IpcErrorMessage, IpcMessage, IpcRequestMessage } from "./ipc-protocol"
@@ -61,7 +61,6 @@ export async function listenIpc(opts: IpcServerOptions): Promise<IpcServerHandle
 }
 
 class IpcConnection {
-  private eventReader: Promise<void> | undefined
   private abortController = new AbortController()
   private static readonly EVENT_RETRY_BASE_MS = 250
   private static readonly EVENT_RETRY_MAX_MS = 5_000
@@ -156,7 +155,7 @@ class IpcConnection {
   }
 
   private startEventSubscription() {
-    this.eventReader = (async () => {
+    void (async () => {
       let delay = IpcConnection.EVENT_RETRY_BASE_MS
       while (!this.abortController.signal.aborted) {
         try {
