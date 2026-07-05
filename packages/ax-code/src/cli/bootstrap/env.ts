@@ -4,6 +4,7 @@ import { NativePerf } from "../../perf/native"
 import { Log } from "../../util/log"
 import path from "path"
 import os from "os"
+import fs from "fs/promises"
 import { DiagnosticLog } from "../../debug/diagnostic-log"
 import { startShellEnvLoad } from "../../runtime/shell-env"
 import { cliBooleanFlagValue } from "../boolean-flag"
@@ -29,6 +30,7 @@ export type InitDep = {
   env?: Record<string, string | undefined>
   log?: (opts: Log.Options) => void | Promise<void>
   info?: (msg: string, data: Record<string, unknown>) => void
+  mkdtemp?: typeof fs.mkdtemp
 }
 
 export type RestoreOriginalCwdDep = {
@@ -137,9 +139,12 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   const now = dep.now ?? new Date()
   const log = dep.log ?? Log.init
   const info = dep.info ?? ((msg: string, data: Record<string, unknown>) => Log.Default.info(msg, data))
+  const mkdtemp = dep.mkdtemp ?? fs.mkdtemp
 
   const debug = debugOptions(opts, cwd)
-  const debugDir = debug.enabled && debug.baseDir ? debugRunDir(debug.baseDir, pid, now) : undefined
+  const debugBaseDir =
+    debug.enabled && debug.baseDir && !opts.debugDir ? await mkdtemp(`${debug.baseDir}-`) : debug.baseDir
+  const debugDir = debug.enabled && debugBaseDir ? debugRunDir(debugBaseDir, pid, now) : undefined
   await DiagnosticLog.configure({
     enabled: debug.enabled,
     dir: debugDir,

@@ -21,7 +21,6 @@
  */
 import fs from "fs"
 import path from "path"
-import os from "os"
 import { pathToFileURL } from "url"
 
 // download-artifact@v4 without merge-multiple creates a subdir named after the
@@ -121,7 +120,8 @@ function main() {
   const merged = mergeLatestYmls(texts, version)
   if (merged.files.length === 0) throw new Error("Windows latest.yml files contained no file entries")
 
-  const outPath = path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), "latest.yml")
+  if (!process.env.RUNNER_TEMP) throw new Error("RUNNER_TEMP is not set")
+  const outPath = path.join(process.env.RUNNER_TEMP, "latest.yml")
   fs.writeFileSync(outPath, emitYml(merged))
   console.log(
     `[finalize-windows-latest-yml] wrote ${outPath} (${merged.files.length} file entries from ${found} arch manifest(s))`,

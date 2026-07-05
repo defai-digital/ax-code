@@ -17,6 +17,7 @@ import { internalBaseUrl } from "@/util/internal-url"
 import { ServerRuntimeAuth } from "@/server/runtime-auth"
 import path from "node:path"
 import { tmpdir } from "node:os"
+import fs from "node:fs/promises"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
 import { registerShutdownSignals } from "@/util/signals"
 import { toErrorMessage } from "@/util/error-message"
@@ -29,7 +30,9 @@ type GlobalEvent = {
 }
 
 const debugEnabled = Flag.AX_CODE_DEBUG
-const debugDir = debugEnabled ? (Flag.AX_CODE_DEBUG_DIR ?? path.join(tmpdir(), "ax-code-debug")) : undefined
+const debugDir = debugEnabled
+  ? (Flag.AX_CODE_DEBUG_DIR ?? (await fs.mkdtemp(path.join(tmpdir(), "ax-code-debug-"))))
+  : undefined
 await DiagnosticLog.configure({
   enabled: debugEnabled,
   dir: debugDir,

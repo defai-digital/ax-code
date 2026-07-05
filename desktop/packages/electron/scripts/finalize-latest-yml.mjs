@@ -11,7 +11,6 @@
  */
 import fs from "fs"
 import path from "path"
-import os from "os"
 
 const latestYmlDir = process.env.LATEST_YML_DIR
 const version = process.env.AX_CODE_DESKTOP_VERSION
@@ -100,6 +99,7 @@ const merged = {
   releaseDate: new Date().toISOString(),
 }
 
-const outPath = path.join(process.env.RUNNER_TEMP ?? os.tmpdir(), "latest-mac.yml")
+if (!process.env.RUNNER_TEMP) throw new Error("RUNNER_TEMP is not set")
+const outPath = path.join(process.env.RUNNER_TEMP, "latest-mac.yml")
 fs.writeFileSync(outPath, emitYml(merged))
 console.log(`[finalize-latest-yml] wrote ${outPath} (${mergedFiles.length} file entries)`)
