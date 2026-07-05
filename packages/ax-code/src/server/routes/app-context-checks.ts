@@ -113,6 +113,10 @@ function isEnoent(error: unknown): error is { code: "ENOENT" } {
   return isRecord(error) && error.code === "ENOENT"
 }
 
+function uniqueFiles(files: Array<string | undefined>) {
+  return Array.from(new Set(files.filter((item): item is string => !!item)))
+}
+
 async function readOptionalJson(file: string) {
   return Filesystem.readJson<unknown>(file).catch((error) => {
     if (isEnoent(error)) return null
@@ -131,7 +135,7 @@ export async function contextChecks(input: { root: string; dir: string }) {
   const order = ["typecheck", "test", "lint", "build"] as const
   const rootPkg = path.join(input.root, "package.json")
   const nearest = (await Filesystem.findUp("package.json", input.dir, input.root))[0]
-  const pkgs = Array.from(new Set([rootPkg, nearest].filter((item): item is string => !!item)))
+  const pkgs = uniqueFiles([rootPkg, nearest])
   const seen = new Set<string>()
   const out: AppContextCheckData[] = []
 
@@ -152,9 +156,10 @@ export async function contextChecks(input: { root: string; dir: string }) {
   }
 
   const makeOrder = ["verify", "check", "test", "lint", "build", "typecheck"] as const
-  const makeFiles = Array.from(
-    new Set([path.join(input.root, "Makefile"), ...(await Filesystem.findUp("Makefile", input.dir, input.root))]),
-  )
+  const makeFiles = uniqueFiles([
+    path.join(input.root, "Makefile"),
+    ...(await Filesystem.findUp("Makefile", input.dir, input.root)),
+  ])
   for (const file of makeFiles) {
     if (!(await Filesystem.exists(file))) continue
     const text = await readOptionalText(file)
@@ -167,14 +172,12 @@ export async function contextChecks(input: { root: string; dir: string }) {
     }
   }
 
-  const denoFiles = Array.from(
-    new Set([
-      path.join(input.root, "deno.json"),
-      path.join(input.root, "deno.jsonc"),
-      ...(await Filesystem.findUp("deno.json", input.dir, input.root)),
-      ...(await Filesystem.findUp("deno.jsonc", input.dir, input.root)),
-    ]),
-  )
+  const denoFiles = uniqueFiles([
+    path.join(input.root, "deno.json"),
+    path.join(input.root, "deno.jsonc"),
+    ...(await Filesystem.findUp("deno.json", input.dir, input.root)),
+    ...(await Filesystem.findUp("deno.jsonc", input.dir, input.root)),
+  ])
   for (const file of denoFiles) {
     if (!(await Filesystem.exists(file))) continue
     const cwd = path.dirname(file)
@@ -193,9 +196,10 @@ export async function contextChecks(input: { root: string; dir: string }) {
       return out
   }
 
-  const cargoFiles = Array.from(
-    new Set([path.join(input.root, "Cargo.toml"), ...(await Filesystem.findUp("Cargo.toml", input.dir, input.root))]),
-  )
+  const cargoFiles = uniqueFiles([
+    path.join(input.root, "Cargo.toml"),
+    ...(await Filesystem.findUp("Cargo.toml", input.dir, input.root)),
+  ])
   for (const file of cargoFiles) {
     if (!(await Filesystem.exists(file))) continue
     const cwd = path.dirname(file)
@@ -207,9 +211,10 @@ export async function contextChecks(input: { root: string; dir: string }) {
       return out
   }
 
-  const goFiles = Array.from(
-    new Set([path.join(input.root, "go.mod"), ...(await Filesystem.findUp("go.mod", input.dir, input.root))]),
-  )
+  const goFiles = uniqueFiles([
+    path.join(input.root, "go.mod"),
+    ...(await Filesystem.findUp("go.mod", input.dir, input.root)),
+  ])
   for (const file of goFiles) {
     if (!(await Filesystem.exists(file))) continue
     const cwd = path.dirname(file)
