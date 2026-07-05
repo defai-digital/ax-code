@@ -40,6 +40,8 @@ const normalizeTimeValue = (value) => {
   return time
 }
 
+const uniqueSortedTimes = (times) => Array.from(new Set(times)).sort((a, b) => a.localeCompare(b))
+
 const normalizeDateValue = (value) => {
   const date = asNonEmptyString(value)
   if (!date) {
@@ -105,7 +107,7 @@ const resolveScheduleTimes = (value, existingSchedule) => {
     }
   }
 
-  const uniqueSorted = Array.from(new Set(times)).sort((a, b) => a.localeCompare(b))
+  const uniqueSorted = uniqueSortedTimes(times)
   if (uniqueSorted.length === 0) {
     return null
   }

@@ -51,6 +51,31 @@ describe("project-config runtime", () => {
     }
   })
 
+  it("deduplicates and sorts scheduled task times", async () => {
+    const { runtime, cleanup } = await createRuntime()
+    try {
+      const result = await runtime.upsertScheduledTask("project-test", {
+        name: "Multi-run digest",
+        enabled: true,
+        schedule: {
+          kind: "daily",
+          times: ["16:00", "09:30", "16:00"],
+          time: "09:30",
+          timezone: "UTC",
+        },
+        execution: {
+          prompt: "Summarize repository changes",
+          providerID: "openai",
+          modelID: "gpt-4.1",
+        },
+      })
+
+      expect(result.task.schedule.times).toEqual(["09:30", "16:00"])
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("rejects invalid cron expressions", async () => {
     const { runtime, cleanup } = await createRuntime()
     try {
