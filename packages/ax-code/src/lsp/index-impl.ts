@@ -430,10 +430,6 @@ export namespace LSP {
     }
   }
 
-  async function getClients(file: string, opts: ClientOptions = {}) {
-    return (await getClientsDetailed(file, opts)).clients
-  }
-
   const semanticRuntime = { timeoutMs: RPC_TIMEOUT_MS, selectClients: getClientsDetailed }
 
   async function getWorkspaceClientsDetailed(opts: ClientOptions = {}): Promise<ClientSelection> {

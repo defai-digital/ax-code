@@ -9,28 +9,6 @@ const HEX_PATTERN = /#(?:[0-9a-fA-F]{3,4}){1,2}\b/g
 const RGB_PATTERN = /rgba?\s*\([^)]+\)/g
 const HSL_PATTERN = /hsla?\s*\([^)]+\)/g
 
-// Common CSS named colors to flag
-const NAMED_COLORS = new Set([
-  "red",
-  "blue",
-  "green",
-  "yellow",
-  "orange",
-  "purple",
-  "pink",
-  "black",
-  "white",
-  "gray",
-  "grey",
-  "cyan",
-  "magenta",
-  "lime",
-  "navy",
-  "teal",
-  "maroon",
-  "olive",
-])
-
 export const noHardcodedColors: Rule = {
   name: "no-hardcoded-colors",
   description: "Use design tokens instead of hardcoded color values",

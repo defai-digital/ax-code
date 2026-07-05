@@ -1,5 +1,4 @@
 import { BusEvent } from "@/bus/bus-event"
-import { Bus } from "@/bus"
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { Log } from "../util/log"

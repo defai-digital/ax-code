@@ -396,11 +396,6 @@ export namespace File {
     return false
   }
 
-  interface State {
-    cache: Entry
-    scan: Promise<void> | undefined
-  }
-
   const state = Instance.state(() => {
     log.info("init")
     return {

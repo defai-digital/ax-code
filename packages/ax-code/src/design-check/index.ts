@@ -11,7 +11,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { ALL_RULES } from "./rules"
-import type { DesignCheckConfig, CheckResult, FileResult, Violation, Severity } from "./types"
+import type { DesignCheckConfig, CheckResult, FileResult, Violation } from "./types"
 
 const DEFAULT_CONFIG: DesignCheckConfig = {
   rules: {

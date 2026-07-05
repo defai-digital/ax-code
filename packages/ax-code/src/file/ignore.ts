@@ -1,4 +1,3 @@
-import { sep } from "node:path"
 import { Glob } from "../util/glob"
 import { NativePerf } from "../perf/native"
 import { Log } from "../util/log"
