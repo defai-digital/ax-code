@@ -177,15 +177,8 @@ export namespace QualityPromotionApprovalPolicy {
     }
   }
 
-  function normalizeTeam(team: string | null | undefined) {
-    const normalized = team?.trim().toLowerCase()
-    return normalized ? normalized : null
-  }
-
-  function normalizeReportingChain(reportingChain: string | null | undefined) {
-    const normalized = reportingChain?.trim().toLowerCase()
-    return normalized ? normalized : null
-  }
+  const normalizeTeam = QualityPromotionApprovalPolicyContract.normalizeApprovalTeam
+  const normalizeReportingChain = QualityPromotionApprovalPolicyContract.normalizeApprovalReportingChain
 
   function mergeRequirement(
     baseRequirement: ApprovalRequirement,

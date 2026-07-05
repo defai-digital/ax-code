@@ -1,4 +1,5 @@
 import type { QualityPromotionEligibility } from "./promotion-eligibility"
+import { normalizeApprovalReportingChain, normalizeApprovalTeam } from "./promotion-approval-policy-contract"
 
 export type RegistryModelRecord = {
   registeredAt: string
@@ -30,13 +31,11 @@ export type RegistryRollbackRecord = {
 }
 
 export function normalizeRegistryReportingChain(reportingChain: string | null | undefined) {
-  const normalized = reportingChain?.trim().toLowerCase()
-  return normalized ? normalized : null
+  return normalizeApprovalReportingChain(reportingChain)
 }
 
 export function normalizeRegistryTeam(team: string | null | undefined) {
-  const normalized = team?.trim().toLowerCase()
-  return normalized ? normalized : null
+  return normalizeApprovalTeam(team)
 }
 
 export function sortModelRecords<T extends RegistryModelRecord>(records: readonly T[]) {

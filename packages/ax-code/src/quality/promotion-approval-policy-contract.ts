@@ -30,6 +30,16 @@ export function normalizeApprovalRole(role: string | null | undefined): Approval
   return parsed.success ? parsed.data : null
 }
 
+export function normalizeApprovalTeam(team: string | null | undefined) {
+  const normalized = team?.trim().toLowerCase()
+  return normalized ? normalized : null
+}
+
+export function normalizeApprovalReportingChain(reportingChain: string | null | undefined) {
+  const normalized = reportingChain?.trim().toLowerCase()
+  return normalized ? normalized : null
+}
+
 export const ApprovalRoleCohort = z.enum(["individual-contributor", "management"])
 export type ApprovalRoleCohort = z.output<typeof ApprovalRoleCohort>
 
