@@ -1,32 +1,23 @@
 import { describe, expect, it } from "vitest"
 
 import { applySecurityHeaders, isPreviewProxyRequest } from "./response-headers.js"
-
-const createResponse = () => {
-  const headers = new Map()
-  return {
-    headers,
-    setHeader(name, value) {
-      headers.set(name, value)
-    },
-  }
-}
+import { createMockResponse } from "../../test-helpers/route-harness.js"
 
 describe("response security headers", () => {
   it("sets X-Frame-Options for ordinary routes", () => {
-    const res = createResponse()
+    const res = createMockResponse()
     applySecurityHeaders({ path: "/" }, res)
 
-    expect(res.headers.get("X-Frame-Options")).toBe("DENY")
-    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff")
+    expect(res.getHeader("X-Frame-Options")).toBe("DENY")
+    expect(res.getHeader("X-Content-Type-Options")).toBe("nosniff")
   })
 
   it("does not set X-Frame-Options on preview proxy responses", () => {
-    const res = createResponse()
+    const res = createMockResponse()
     applySecurityHeaders({ path: "/api/preview/proxy/abc123/" }, res)
 
-    expect(res.headers.has("X-Frame-Options")).toBe(false)
-    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff")
+    expect(res.getHeader("X-Frame-Options")).toBeUndefined()
+    expect(res.getHeader("X-Content-Type-Options")).toBe("nosniff")
   })
 
   it("recognizes preview proxy requests from originalUrl when path is unavailable", () => {

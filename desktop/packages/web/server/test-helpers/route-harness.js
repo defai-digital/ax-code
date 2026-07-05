@@ -87,14 +87,28 @@ export const createMockResponse = () => {
   }
 }
 
-export const createMockRequest = ({ host, origin, protocol = "http" } = {}) => ({
-  headers: {
-    host,
-    ...(origin ? { origin } : {}),
-    ...(protocol ? { "x-forwarded-proto": protocol } : {}),
-  },
-  hostname: host,
-  socket: {
-    encrypted: protocol === "https",
-  },
-})
+export const createMockRequest = ({ host, origin, protocol = "http" } = {}) => {
+  const listeners = new Map()
+
+  return {
+    headers: {
+      host,
+      ...(origin ? { origin } : {}),
+      ...(protocol ? { "x-forwarded-proto": protocol } : {}),
+    },
+    hostname: host,
+    socket: {
+      encrypted: protocol === "https",
+    },
+    on(event, handler) {
+      listeners.set(event, handler)
+      return this
+    },
+    emit(event) {
+      const handler = listeners.get(event)
+      if (typeof handler === "function") {
+        handler()
+      }
+    },
+  }
+}

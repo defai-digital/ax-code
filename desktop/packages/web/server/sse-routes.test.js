@@ -2,25 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { registerNotificationRoutes } from "./lib/notifications/routes.js"
 import { registerScheduledTaskRoutes } from "./lib/scheduled-tasks/routes.js"
-import { createMockResponse, createRouteRegistry } from "./test-helpers/route-harness.js"
-
-const createMockRequest = () => {
-  const listeners = new Map()
-
-  return {
-    headers: {},
-    on(event, handler) {
-      listeners.set(event, handler)
-      return this
-    },
-    emit(event) {
-      const handler = listeners.get(event)
-      if (typeof handler === "function") {
-        handler()
-      }
-    },
-  }
-}
+import { createMockRequest, createMockResponse, createRouteRegistry } from "./test-helpers/route-harness.js"
 
 describe("local SSE routes", () => {
   it("serves notification SSE with nginx-safe headers", async () => {

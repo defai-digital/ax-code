@@ -4,21 +4,7 @@ import path from "node:path"
 import { describe, expect, it } from "vitest"
 
 import { createTerminalRuntime } from "./runtime.js"
-
-function createResponse() {
-  return {
-    statusCode: 200,
-    body: null,
-    status(code) {
-      this.statusCode = code
-      return this
-    },
-    json(payload) {
-      this.body = payload
-      return this
-    },
-  }
-}
+import { createMockResponse } from "../../test-helpers/route-harness.js"
 
 function createRuntime(server, overrides = {}) {
   const app = overrides.app ?? {
@@ -75,7 +61,7 @@ describe("terminal runtime", () => {
 
     try {
       const createRoute = postRoutes.get("/api/terminal/create")
-      const res = createResponse()
+      const res = createMockResponse()
 
       await createRoute({ body: { cwd: "/tmp/not-approved" } }, res)
 
@@ -111,7 +97,7 @@ describe("terminal runtime", () => {
 
     try {
       const createRoute = postRoutes.get("/api/terminal/create")
-      const res = createResponse()
+      const res = createMockResponse()
 
       await createRoute({ body: { cwd: "/tmp/not-a-directory" } }, res)
 
