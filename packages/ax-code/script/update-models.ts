@@ -13,7 +13,7 @@
 import path from "path"
 import { fileURLToPath } from "url"
 import { readJson, writeText } from "./fs-compat"
-import { formatModelsSnapshot, modelsSnapshotChanged } from "./models-snapshot"
+import { cloneJsonValue, formatModelsSnapshot, modelsSnapshotChanged } from "./models-snapshot"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
@@ -53,10 +53,10 @@ const cliImageProviderIDs = [
 ] as const
 const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
-  if (existing[id] && !fetched[id]) fetched[id] = JSON.parse(JSON.stringify(existing[id]))
+  if (existing[id] && !fetched[id]) fetched[id] = cloneJsonValue(existing[id])
 }
 if (fetched["ax-serving"] && !fetched["ax-studio"]) {
-  fetched["ax-studio"] = JSON.parse(JSON.stringify(fetched["ax-serving"]))
+  fetched["ax-studio"] = cloneJsonValue(fetched["ax-serving"])
 }
 if (!fetched["ax-studio"]) {
   fetched["ax-studio"] = {
@@ -243,7 +243,7 @@ if (!fetched["antigravity-cli"].models?.["antigravity-cli"]) {
 // Remove providers we don't support
 const removedProviderSources = Object.fromEntries(
   ["moonshotai", "moonshotai-cn", "kimi-for-coding"].flatMap((id) =>
-    fetched[id] ? [[id, JSON.parse(JSON.stringify(fetched[id]))]] : [],
+    fetched[id] ? [[id, cloneJsonValue(fetched[id])]] : [],
   ),
 )
 for (const id of [
@@ -730,7 +730,7 @@ function cloneProvider(sourceID: string, targetID: string, overrides: { name: st
   const source = fetched[sourceID]
   if (!source) return
   fetched[targetID] = {
-    ...JSON.parse(JSON.stringify(source)),
+    ...cloneJsonValue(source),
     id: targetID,
     ...overrides,
   }
@@ -836,10 +836,11 @@ function alibabaImageModel(id: string, name: string, family: string): RawModel {
 }
 function withAlibabaModelFallbackDefault(mid: string, model: unknown) {
   const fallback = alibabaModelFallbackDefaults[mid]
-  if (!fallback) return JSON.parse(JSON.stringify(model))
+  if (!fallback) return cloneJsonValue(model)
+  const clonedModel = cloneJsonValue(model) as Record<string, unknown>
   return {
-    ...JSON.parse(JSON.stringify(fallback)),
-    ...JSON.parse(JSON.stringify(model)),
+    ...cloneJsonValue(fallback),
+    ...clonedModel,
   }
 }
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
@@ -863,7 +864,7 @@ for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-toke
       break
     }
     if (!kept[mid] && alibabaModelFallbackDefaults[mid]) {
-      kept[mid] = JSON.parse(JSON.stringify(alibabaModelFallbackDefaults[mid]))
+      kept[mid] = cloneJsonValue(alibabaModelFallbackDefaults[mid])
     }
   }
   fetched[id].models = kept
@@ -895,8 +896,8 @@ for (const mid of kimiCloudPlanModels) {
       removedProviderSources[fallbackID]?.models?.[mid]
     if (!fallback) continue
     kimiCloudPlanKept[mid] = {
-      ...JSON.parse(JSON.stringify(kimiCodingModel(mid, "Kimi K2.7 Code"))),
-      ...JSON.parse(JSON.stringify(fallback)),
+      ...cloneJsonValue(kimiCodingModel(mid, "Kimi K2.7 Code")),
+      ...cloneJsonValue(fallback),
       id: mid,
       name: "Kimi K2.7 Code",
       family: "kimi-k2.7-code",
@@ -905,7 +906,7 @@ for (const mid of kimiCloudPlanModels) {
   }
   if (!kimiCloudPlanKept[mid] && alibabaModelFallbackDefaults[mid]) {
     kimiCloudPlanKept[mid] = {
-      ...JSON.parse(JSON.stringify(alibabaModelFallbackDefaults[mid])),
+      ...cloneJsonValue(alibabaModelFallbackDefaults[mid]),
       id: mid,
       name: "Kimi K2.7 Code",
       family: "kimi-k2.7-code",
@@ -938,13 +939,13 @@ if (fetched["xai"]?.models) {
     if (xaiModels[mid]) continue
     const fromExisting = existing["xai"]?.models?.[mid]
     if (fromExisting) {
-      xaiModels[mid] = JSON.parse(JSON.stringify(fromExisting))
+      xaiModels[mid] = cloneJsonValue(fromExisting)
       continue
     }
     for (const fbID of xaiInjectFallbackProviders) {
       const fb = fetched[fbID]?.models?.[mid] ?? existing[fbID]?.models?.[mid]
       if (!fb) continue
-      xaiModels[mid] = JSON.parse(JSON.stringify(fb))
+      xaiModels[mid] = cloneJsonValue(fb)
       break
     }
   }
@@ -955,7 +956,7 @@ if (fetched["xai"]?.models) {
       existing["xai"]?.models?.[XAI_LEGACY_CODING_MODEL_ID]
     if (source) {
       xaiModels[XAI_GROK_BUILD_MODEL_ID] = {
-        ...JSON.parse(JSON.stringify(source)),
+        ...cloneJsonValue(source),
         id: XAI_GROK_BUILD_MODEL_ID,
         name: "xAI Grok Build 0.1",
       }

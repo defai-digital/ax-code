@@ -9,6 +9,10 @@ export const LOCAL_PROVIDER_IDS = [
 
 export type ModelsSnapshot = Record<string, unknown>
 
+export function cloneJsonValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
   "grok-build-cli": {
     id: "grok-build-cli",
@@ -43,7 +47,7 @@ const LOCAL_PROVIDER_DEFAULTS: ModelsSnapshot = {
 export function preserveLocalProviders(fetched: ModelsSnapshot, existing: ModelsSnapshot) {
   const next = { ...fetched }
   for (const id of LOCAL_PROVIDER_IDS) {
-    if (existing[id] && !next[id]) next[id] = JSON.parse(JSON.stringify(existing[id]))
+    if (existing[id] && !next[id]) next[id] = cloneJsonValue(existing[id])
     if (!next[id] && LOCAL_PROVIDER_DEFAULTS[id]) next[id] = LOCAL_PROVIDER_DEFAULTS[id]
   }
   const grokBuildCli = next["grok-build-cli"] as { models?: Record<string, unknown> } | undefined
