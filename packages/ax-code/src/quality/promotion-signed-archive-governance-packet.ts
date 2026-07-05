@@ -6,7 +6,7 @@ import { QualityPromotionSignedArchiveAttestationPacket } from "./promotion-sign
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
 import { summarizeOverallStatus } from "./status"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionSignedArchiveGovernancePacket {
   export const PromotionReference = z.lazy(() => QualityPromotionSignedArchiveAttestationPacket.PromotionReference)
@@ -238,13 +238,10 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
 
   export async function resolveForPromotion(promotion: PromotionReference, packets: PacketArtifact[] = []) {
     const persisted = (await list(promotion.source)).filter((packet) => matchesPromotion(promotion, packet))
-    const deduped = new Map<string, PacketArtifact>()
-    for (const packet of [...persisted, ...packets]) {
-      if (!matchesPromotion(promotion, packet)) continue
-      if (verify(packet).length > 0) continue
-      deduped.set(packet.packetID, packet)
-    }
-    return sortPackets([...deduped.values()])
+    const validPackets = [...persisted, ...packets].filter(
+      (packet) => matchesPromotion(promotion, packet) && verify(packet).length === 0,
+    )
+    return sortPackets(uniqueBy(validPackets, (packet) => packet.packetID))
   }
 
   export async function get(input: { source: string; packetID: string }) {

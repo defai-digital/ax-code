@@ -6,7 +6,7 @@ import { QualityPromotionSignedArchiveGovernancePacket } from "./promotion-signe
 import { QualityPromotionSignedArchiveTrust } from "./promotion-signed-archive-trust"
 import { summarizeOverallStatus } from "./status"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionSignedArchiveReviewDossier {
   export const DossierSummary = z.object({
@@ -234,13 +234,10 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     dossiers: DossierArtifact[] = [],
   ) {
     const persisted = (await list(promotion.source)).filter((dossier) => matchesPromotion(promotion, dossier))
-    const deduped = new Map<string, DossierArtifact>()
-    for (const dossier of [...persisted, ...dossiers]) {
-      if (!matchesPromotion(promotion, dossier)) continue
-      if (verify(dossier).length > 0) continue
-      deduped.set(dossier.dossierID, dossier)
-    }
-    return sortDossiers([...deduped.values()])
+    const validDossiers = [...persisted, ...dossiers].filter(
+      (dossier) => matchesPromotion(promotion, dossier) && verify(dossier).length === 0,
+    )
+    return sortDossiers(uniqueBy(validDossiers, (dossier) => dossier.dossierID))
   }
 
   export async function get(input: { source: string; dossierID: string }) {

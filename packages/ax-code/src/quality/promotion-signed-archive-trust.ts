@@ -5,7 +5,7 @@ import { sha256Hex } from "./digest"
 import { QualityPromotionSignedArchive } from "./promotion-signed-archive"
 import { summarizeOverallStatus } from "./status"
 import { jsonEqual } from "./json"
-import { compareStringFields } from "./sort"
+import { compareStringFields, uniqueBy } from "./sort"
 
 export namespace QualityPromotionSignedArchiveTrust {
   export const Scope = z.enum(["global", "project"])
@@ -252,12 +252,8 @@ export namespace QualityPromotionSignedArchiveTrust {
       ...(options?.projectID ? await list({ scope: "project", projectID: options.projectID }) : []),
       ...(await list({ scope: "global" })),
     ]
-    const deduped = new Map<string, TrustArtifact>()
-    for (const trust of [...persisted, ...(options?.trusts ?? [])]) {
-      if (!matchesArchive(archive, trust)) continue
-      deduped.set(trust.trustID, trust)
-    }
-    const matches = sortTrusts([...deduped.values()])
+    const matchingTrusts = [...persisted, ...(options?.trusts ?? [])].filter((trust) => matchesArchive(archive, trust))
+    const matches = sortTrusts(uniqueBy(matchingTrusts, (trust) => trust.trustID))
     const selected = pickBestMatch(matches)
     return {
       selected,
