@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest"
+import type { SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { useSessionUIStore } from "./session-ui-store"
 
@@ -14,15 +15,23 @@ import { useSessionUIStore } from "./session-ui-store"
  * correctly and that the contract helpers produce correct results.
  */
 
+const resetSessionStores = () => {
+  useSessionWorktreeStore.setState({ attachments: new Map() })
+  useSessionUIStore.setState({ currentSessionId: null, worktreeMetadata: new Map() })
+}
+
+const expectAttachment = (sessionId: string): SessionWorktreeAttachment => {
+  const attachment = useSessionWorktreeStore.getState().getAttachment(sessionId)
+  expect(attachment).toBeDefined()
+  if (!attachment) {
+    throw new Error(`Expected attachment for session ${sessionId}`)
+  }
+  return attachment
+}
+
 describe("session-worktree-store worktree routing", () => {
   beforeEach(() => {
-    // Clear all attachments before each test
-    const store = useSessionWorktreeStore.getState()
-    const attachments = store.attachments
-    for (const sessionId of attachments.keys()) {
-      store.clearAttachment(sessionId)
-    }
-    useSessionUIStore.setState({ currentSessionId: null, worktreeMetadata: new Map() })
+    resetSessionStores()
   })
 
   test("getDirectoryForSession prefers authoritative attachment cwd over sync fallback", () => {
@@ -70,8 +79,7 @@ describe("session-worktree-store worktree routing", () => {
       degraded: false,
     })
 
-    const attachment = store.getAttachment("session-1")
-    expect(attachment).toBeDefined()
+    const attachment = expectAttachment("session-1")
     expect(attachment.cwd).toBe("/repo/worktrees/feat-a/src")
     expect(attachment.worktreeRoot).toBe("/repo/worktrees/feat-a")
     expect(attachment.degraded).toBe(false)
@@ -93,8 +101,7 @@ describe("session-worktree-store worktree routing", () => {
       degraded: true, // marked degraded because cwd was resolved from invalid state
     })
 
-    const attachment = store.getAttachment("session-2")
-    expect(attachment).toBeDefined()
+    const attachment = expectAttachment("session-2")
     expect(attachment.degraded).toBe(true)
     // cwd should equal worktreeRoot when degraded (fallback)
     expect(attachment.cwd).toBe(attachment.worktreeRoot)
@@ -115,8 +122,7 @@ describe("session-worktree-store worktree routing", () => {
       degraded: false,
     })
 
-    const attachment = store.getAttachment("session-isolated")
-    expect(attachment).toBeDefined()
+    const attachment = expectAttachment("session-isolated")
     expect(attachment.worktreeSource).toBe("created-for-session")
     expect(attachment.worktreeStatus).toBe("ready")
     expect(attachment.legacy).toBe(false)
@@ -142,8 +148,7 @@ describe("session-worktree-store worktree routing", () => {
       degraded: false,
     })
 
-    attachment = store.getAttachment("session-legacy")
-    expect(attachment).toBeDefined()
+    attachment = expectAttachment("session-legacy")
     expect(attachment.legacy).toBe(false)
     expect(attachment.worktreeRoot).toBe("/repo/worktrees/recovered")
   })
@@ -163,8 +168,7 @@ describe("session-worktree-store worktree routing", () => {
       degraded: true,
     })
 
-    const attachment = store.getAttachment("session-missing")
-    expect(attachment).toBeDefined()
+    const attachment = expectAttachment("session-missing")
     expect(attachment.worktreeStatus).toBe("missing")
     expect(attachment.degraded).toBe(true)
   })
@@ -184,8 +188,7 @@ describe("session-worktree-store worktree routing", () => {
       degraded: true,
     })
 
-    const attachment = store.getAttachment("session-not-repo")
-    expect(attachment).toBeDefined()
+    const attachment = expectAttachment("session-not-repo")
     expect(attachment.worktreeStatus).toBe("not-a-repo")
   })
 })
