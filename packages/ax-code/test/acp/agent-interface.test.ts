@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, expectTypeOf, test } from "vitest"
 import { ACP } from "../../src/acp/agent"
 import type { Agent as ACPAgent } from "@agentclientprotocol/sdk"
 
@@ -12,8 +12,7 @@ import type { Agent as ACPAgent } from "@agentclientprotocol/sdk"
  *
  * @see https://github.com/agentclientprotocol/typescript-sdk/commit/7072d3f
  */
-type _AssertAgentImplementsACPAgent = ACP.Agent extends ACPAgent ? true : never
-const _typeCheck: _AssertAgentImplementsACPAgent = true
+expectTypeOf<ACP.Agent>().toExtend<ACPAgent>()
 
 /**
  * Runtime verification that optional methods the SDK expects are actually implemented.

@@ -32,7 +32,7 @@ function withWatcher(directory: string, body: () => Promise<void>) {
   })
 }
 
-function listen(directory: string, check: (evt: WatcherEvent) => boolean, hit: (evt: WatcherEvent) => void) {
+function listen(check: (evt: WatcherEvent) => boolean, hit: (evt: WatcherEvent) => void) {
   let done = false
 
   const unsub = Bus.subscribe(FileWatcher.Event.Updated, (evt) => {
@@ -49,12 +49,12 @@ function listen(directory: string, check: (evt: WatcherEvent) => boolean, hit: (
 }
 
 function nextUpdate(
-  directory: string,
+  _directory: string,
   check: (evt: WatcherEvent) => boolean,
   trigger: () => Promise<void>,
 ): Promise<WatcherEvent> {
   return new Promise((resolve, reject) => {
-    const cleanup = listen(directory, check, (evt) => {
+    const cleanup = listen(check, (evt) => {
       cleanup()
       clearTimeout(timer)
       resolve(evt)
@@ -74,9 +74,9 @@ function nextUpdate(
 }
 
 /** Assert that no matching event arrives within `ms`. */
-function noUpdate(directory: string, check: (evt: WatcherEvent) => boolean, trigger: () => Promise<void>, ms = 500) {
+function noUpdate(_directory: string, check: (evt: WatcherEvent) => boolean, trigger: () => Promise<void>, ms = 500) {
   return new Promise<void>((resolve, reject) => {
-    const cleanup = listen(directory, check, (evt) => {
+    const cleanup = listen(check, (evt) => {
       cleanup()
       clearTimeout(timer)
       reject(new Error(`Unexpected watcher event: ${JSON.stringify(evt)}`))

@@ -80,7 +80,7 @@ describe("ipc server transport", () => {
       return c.json({ id: "sess-1", title: body.title })
     })
     app.post("/session/:id/prompt_async", async (c: any) => c.json(true))
-    app.get("/global/event", (c: any) => {
+    app.get("/global/event", () => {
       const encoder = new TextEncoder()
       const events = [
         { type: "server.connected", properties: {} },

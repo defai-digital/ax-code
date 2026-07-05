@@ -224,7 +224,7 @@ describe("file.ripgrep", () => {
       },
     })
 
-    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
     const proc = {
       exitCode: null,
       signalCode: null,

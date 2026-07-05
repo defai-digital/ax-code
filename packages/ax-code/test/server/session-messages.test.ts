@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
-import { writeFile, readFile } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"

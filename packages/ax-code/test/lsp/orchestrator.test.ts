@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest"
-import { LSP } from "../../src/lsp"
 import type { LSPClient } from "../../src/lsp/client"
 import type { LSPServer } from "../../src/lsp/server"
 import { computeBackoff, isBroken, markBroken, type BrokenEntry } from "../../src/lsp/broken-server"

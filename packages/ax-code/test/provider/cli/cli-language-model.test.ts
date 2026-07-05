@@ -4,7 +4,6 @@ import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import {
   antigravityCliParser,
   claudeCodeParser,
-  codexCliParser,
   geminiCliParser,
   grokBuildCliParser,
 } from "../../../src/provider/cli/parser"

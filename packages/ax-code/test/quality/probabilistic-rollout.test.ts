@@ -526,7 +526,6 @@ describe("ProbabilisticRollout.exportReplay", () => {
       fn: async () => {
         const session = await Session.create({})
         const sid = session.id
-        const projectID = Instance.project.id
 
         Recorder.begin(sid)
         Recorder.emit({

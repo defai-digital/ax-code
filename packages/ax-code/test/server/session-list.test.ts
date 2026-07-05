@@ -52,7 +52,7 @@ describe("Session.list", () => {
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
-        const session = await Session.create({ title: "new-session" })
+        await Session.create({ title: "new-session" })
         const futureStart = Date.now() + 86400000
 
         const sessions = [...Session.list({ start: futureStart })]

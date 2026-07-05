@@ -134,7 +134,7 @@ describe("scheduled task routes", () => {
     await using tmp = await tmpdir({ git: true })
     const setIntervalSpy = vi.spyOn(globalThis, "setInterval")
     try {
-      setIntervalSpy.mockImplementation((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+      setIntervalSpy.mockImplementation((handler: TimerHandler, _timeout?: number, ...args: unknown[]) => {
         if (typeof handler === "function") handler(...args)
         return { unref() {} } as ReturnType<typeof setInterval>
       })
