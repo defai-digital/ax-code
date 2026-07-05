@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { devtools, persist, createJSONStorage } from "zustand/middleware"
 
 import { closeTerminal } from "@/lib/terminalApi"
+import { isRecord } from "@/lib/record"
 import { getSafeSessionStorage } from "@/stores/utils/safeStorage"
 
 export interface TerminalChunk {
@@ -95,8 +96,6 @@ type PersistedTerminalStoreState = {
   sessions: Array<[string, PersistedDirectoryTerminalState]>
   nextTabId: number
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
 
 const tabIdNumber = (tabId: string): number | null => {
   const match = /^tab-(\d+)$/.exec(tabId)

@@ -8,6 +8,7 @@ import { copyTextToClipboard as copyPlainTextToClipboard } from "@/lib/clipboard
 import { getSyncSessions, getSyncMessages, getSyncParts } from "@/sync/sync-refs"
 import { useStreamingStore } from "@/sync/streaming"
 import { API_ENDPOINTS, HTTP_DEFAULTS } from "@/lib/http"
+import { isRecord } from "@/lib/record"
 
 type SyncPart = ReturnType<typeof getSyncParts>[number]
 
@@ -30,8 +31,6 @@ type DebugGlobals = {
   __TAURI__?: unknown
   __axCodeDebug?: unknown
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null
 
 const getField = (value: unknown, key: string): unknown => (isRecord(value) ? value[key] : undefined)
 

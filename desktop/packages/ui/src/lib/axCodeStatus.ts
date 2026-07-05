@@ -2,6 +2,7 @@ import { useSessionUIStore } from "@/sync/session-ui-store"
 import { getSyncSessions } from "@/sync/sync-refs"
 import { useUIStore } from "@/stores/useUIStore"
 import { API_ENDPOINTS, HTTP_DEFAULTS, API_PATHS } from "./http"
+import { isPlainRecord } from "./record"
 
 declare const __APP_VERSION__: string | undefined
 
@@ -125,9 +126,6 @@ const normalizeStringArray = (value: unknown): string[] => {
   }
   return value.filter((item): item is string => typeof item === "string")
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === "object" && !Array.isArray(value)
 
 const formatUnknown = (value: unknown, fallback = "(n/a)"): string => {
   if (typeof value === "string") return value.trim() || fallback
@@ -289,7 +287,7 @@ export const buildAxCodeStatusReport = async (): Promise<string> => {
     lines.push("")
     lines.push("ax-code CLI resolution:")
 
-    const launchDiagnostics = isRecord(openChamberHealth?.lastAxCodeLaunchDiagnostics)
+    const launchDiagnostics = isPlainRecord(openChamberHealth?.lastAxCodeLaunchDiagnostics)
       ? openChamberHealth.lastAxCodeLaunchDiagnostics
       : null
     const actualLaunchArgs = normalizeStringArray(launchDiagnostics?.args)
