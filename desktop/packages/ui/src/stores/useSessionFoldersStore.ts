@@ -65,6 +65,9 @@ const cloneSessionFoldersMap = (foldersMap: SessionFoldersMap): SessionFoldersMa
     ]),
   )
 
+const toSessionIdSet = (sessionIds: readonly unknown[]): Set<string> =>
+  new Set(sessionIds.filter((id): id is string => typeof id === "string" && id.length > 0))
+
 const schedulePersistToDisk = (foldersMap: SessionFoldersMap, collapsedFolderIds: Set<string>): void => {
   if (typeof window === "undefined") {
     return
@@ -351,7 +354,7 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         const scopeFolders = current[scopeKey]
         if (!scopeFolders) return
 
-        const idSet = new Set(sessionIds.filter((id) => typeof id === "string" && id.length > 0))
+        const idSet = toSessionIdSet(sessionIds)
         if (idSet.size === 0) return
 
         const nextFolders = scopeFolders.map((folder) => {
@@ -378,7 +381,7 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         const scopeFolders = current[scopeKey]
         if (!scopeFolders) return
 
-        const idSet = new Set(sessionIds.filter((id) => typeof id === "string" && id.length > 0))
+        const idSet = toSessionIdSet(sessionIds)
         if (idSet.size === 0) return
 
         let changed = false
