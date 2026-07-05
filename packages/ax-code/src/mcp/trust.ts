@@ -109,15 +109,6 @@ export namespace McpTrust {
       type: config.type,
       url: normalizedRemoteUrl(config.url),
       headers: recordFingerprintShape(config.headers),
-      oauth:
-        config.oauth === false
-          ? false
-          : {
-              enabled: true,
-              clientId: typeof config.oauth === "object" ? config.oauth.clientId : undefined,
-              hasClientSecret: typeof config.oauth === "object" ? !!config.oauth.clientSecret : false,
-              scope: typeof config.oauth === "object" ? config.oauth.scope : undefined,
-            },
     })
   }
 
