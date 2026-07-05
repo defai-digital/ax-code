@@ -17,6 +17,7 @@ import { DiffWorkerProvider } from "@/contexts/DiffWorkerProvider"
 import { useUIStore } from "@/stores/useUIStore"
 import { useUpdateStore } from "@/stores/useUpdateStore"
 import { useDeviceInfo } from "@/lib/device"
+import { isDesktopLocalOriginActive } from "@/lib/desktop"
 import { cn } from "@/lib/utils"
 import { lazyWithChunkRecovery } from "@/lib/chunkLoadRecovery"
 
@@ -76,9 +77,13 @@ export const MainLayout: React.FC = () => {
   const rightSidebarAutoClosedRef = React.useRef(false)
   const bottomTerminalAutoClosedRef = React.useRef(false)
 
-  // Trigger initial update check shortly after mount, then repeat using server-suggested cadence.
+  // Trigger native desktop update checks shortly after mount, then repeat periodically.
   const checkForUpdates = useUpdateStore((state) => state.checkForUpdates)
   React.useEffect(() => {
+    if (!isDesktopLocalOriginActive()) {
+      return
+    }
+
     const initialDelayMs = 3000
     const defaultIntervalMs = 60 * 60 * 1000
     const minIntervalMs = 5 * 60 * 1000

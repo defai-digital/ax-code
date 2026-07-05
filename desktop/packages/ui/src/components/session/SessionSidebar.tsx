@@ -547,8 +547,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     setSettingsDialogOpen(true)
   }, [setSettingsDialogOpen])
 
-  const showSidebarUpdateButton =
-    updateStore.available && (updateStore.runtimeType === "desktop" || updateStore.runtimeType === "web")
+  const showSidebarUpdateButton = updateStore.available && updateStore.runtimeType === "desktop"
 
   const deleteSession = useSessionUIStore((state) => state.deleteSession)
   const deleteSessions = useSessionUIStore((state) => state.deleteSessions)

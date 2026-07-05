@@ -10,6 +10,7 @@ import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { sessionEvents } from "@/lib/sessionEvents"
 import { createWorktreeSession } from "@/lib/worktreeSessionCreator"
 import { showAxCodeStatus } from "@/lib/axCodeStatus"
+import { isDesktopLocalOriginActive } from "@/lib/desktop"
 import { getTauriGlobal } from "@/lib/tauriGlobal"
 import { listenToTauriEvent } from "@/lib/tauriEventListener"
 
@@ -106,6 +107,11 @@ export const useMenuActions = (onToggleMemoryDebug?: () => void) => {
   const checkUpdatesInFlightRef = React.useRef(false)
 
   const handleCheckForUpdates = React.useCallback(() => {
+    if (!isDesktopLocalOriginActive()) {
+      setAboutDialogOpen(true)
+      return
+    }
+
     if (checkUpdatesInFlightRef.current) {
       return
     }
@@ -128,7 +134,7 @@ export const useMenuActions = (onToggleMemoryDebug?: () => void) => {
       .finally(() => {
         checkUpdatesInFlightRef.current = false
       })
-  }, [checkForUpdates])
+  }, [checkForUpdates, setAboutDialogOpen])
 
   const handleChangeWorkspace = React.useCallback(() => {
     sessionEvents.requestDirectoryDialog()

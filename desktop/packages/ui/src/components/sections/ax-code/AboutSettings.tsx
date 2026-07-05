@@ -2,6 +2,7 @@ import React from "react"
 import { useUpdateStore } from "@/stores/useUpdateStore"
 import { useShallow } from "zustand/react/shallow"
 import { UpdateDialog } from "@/components/ui/UpdateDialog"
+import { isDesktopLocalOriginActive } from "@/lib/desktop"
 import { useDeviceInfo } from "@/lib/device"
 import { toast } from "@/components/ui"
 import { cn } from "@/lib/utils"
@@ -33,6 +34,7 @@ export const AboutSettings: React.FC = () => {
     })),
   )
   const { isMobile } = useDeviceInfo()
+  const canCheckNativeUpdates = React.useMemo(() => isDesktopLocalOriginActive(), [])
 
   const currentVersion = updateStore.info?.currentVersion || "unknown"
 
@@ -67,7 +69,7 @@ export const AboutSettings: React.FC = () => {
         <div className="flex items-center justify-between">
           <span className="typography-meta text-muted-foreground">v{currentVersion}</span>
 
-          {!updateStore.available && !updateStore.error && (
+          {canCheckNativeUpdates && !updateStore.available && !updateStore.error && (
             <button
               onClick={() => updateStore.checkForUpdates()}
               disabled={isChecking}
@@ -173,20 +175,22 @@ export const AboutSettings: React.FC = () => {
               </Button>
             )}
 
-            {!updateStore.checking && !updateStore.available && !updateStore.error && (
+            {canCheckNativeUpdates && !updateStore.checking && !updateStore.available && !updateStore.error && (
               <span className="typography-meta text-muted-foreground">
                 {t("settings.openchamber.about.state.upToDate")}
               </span>
             )}
 
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => updateStore.checkForUpdates()}
-              disabled={updateStore.checking}
-            >
-              {t("settings.openchamber.about.actions.checkForUpdates")}
-            </Button>
+            {canCheckNativeUpdates && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => updateStore.checkForUpdates()}
+                disabled={updateStore.checking}
+              >
+                {t("settings.openchamber.about.actions.checkForUpdates")}
+              </Button>
+            )}
           </div>
         </div>
 
