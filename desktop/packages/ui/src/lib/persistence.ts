@@ -1172,7 +1172,7 @@ const _flushSettingsUpdate = async (): Promise<void> => {
     resolveSettingsWaiters(waiters)
   } catch (error) {
     console.warn("Failed to update shared settings via API:", error)
-    rejectSettingsWaiters(waiters, error)
+    resolveSettingsWaiters(waiters)
   }
 }
 

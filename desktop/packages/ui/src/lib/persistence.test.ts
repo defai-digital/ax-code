@@ -8,6 +8,7 @@ describe("updateDesktopSettings", () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
     vi.doUnmock("@/contexts/runtimeAPIRegistry")
   })
 
@@ -65,5 +66,21 @@ describe("updateDesktopSettings", () => {
 
     expect(firstResolved).toBe(true)
     expect(secondResolved).toBe(true)
+  })
+
+  test("resolves when the server settings fallback is unavailable", async () => {
+    vi.doMock("@/contexts/runtimeAPIRegistry", () => ({
+      getRegisteredRuntimeAPIs: () => null,
+    }))
+
+    const fetch = vi.fn().mockRejectedValue(new TypeError("Failed to parse URL from /api/config/settings"))
+    vi.stubGlobal("fetch", fetch)
+
+    const { updateDesktopSettings } = await import("./persistence")
+    const update = updateDesktopSettings({ themeId: "dark" })
+
+    await vi.advanceTimersByTimeAsync(200)
+    await expect(update).resolves.toBeUndefined()
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })
