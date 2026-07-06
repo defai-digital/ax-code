@@ -24,13 +24,14 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 ```bash
 brew tap defai-digital/ax-code
 brew tap defai-digital/ax-code-desktop
-brew install ax-code          # CLI/runtime
-brew install --cask ax-code   # Desktop app
+brew trust defai-digital/ax-code
+brew trust defai-digital/ax-code-desktop
+brew install defai-digital/ax-code/ax-code
+brew install --cask defai-digital/ax-code-desktop/ax-code
 ```
 
-The CLI formula and Desktop cask live in separate Homebrew taps and are installed separately. If you prefer
-one-line commands that auto-tap, the equivalent forms are `brew install defai-digital/ax-code/ax-code` for
-the CLI and `brew install --cask defai-digital/ax-code-desktop/ax-code` for Desktop.
+The CLI formula and Desktop cask live in separate Homebrew taps and are installed separately. The `brew trust`
+commands allow Homebrew installations with tap trust enforcement enabled to load the DEFAI taps.
 
 **Windows**
 
@@ -47,7 +48,7 @@ AX Code Desktop is the primary graphical workspace. It shares the AX Code runtim
 **Run**
 
 ```bash
-ax-code # terminal UI
+ax-code
 ```
 
 Or open **AX Code** from Applications / Start Menu to use the Desktop app. The terminal UI can also start or open the browser web UI with `/webui`, and shell users can run `ax-code webui`. The web UI prefers `http://127.0.0.1:3100` and scans upward if that port is busy. No project setup or config file is required. On first launch, connect a provider from the Desktop onboarding flow or use `/connect` inside the terminal UI.
@@ -60,7 +61,8 @@ Use this path for terminals, headless tasks, CI jobs, bots, servers, and SDK/int
 
 ```bash
 brew tap defai-digital/ax-code
-brew install ax-code
+brew trust defai-digital/ax-code
+brew install defai-digital/ax-code/ax-code
 ```
 
 **Windows**
@@ -84,8 +86,8 @@ ax-code upgrade
 **macOS**
 
 ```bash
-brew upgrade ax-code
-brew upgrade --cask ax-code
+brew upgrade defai-digital/ax-code/ax-code
+brew upgrade --cask defai-digital/ax-code-desktop/ax-code
 ```
 
 **Windows**
