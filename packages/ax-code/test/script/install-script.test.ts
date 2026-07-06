@@ -15,6 +15,8 @@ describe("install script", () => {
     expect(text).toContain("AX_CODE_SOURCE_ENTRY=")
     expect(text).toContain("/packages/ax-code/src/index-node-tui.ts")
     expect(text).toContain("node --experimental-ffi")
+    expect(text).toContain("AX_CODE_SOURCE_NODE_FFI_RUNNER=")
+    expect(text).toContain("node-ffi-runner.mjs")
     // Legacy source launcher detection is retained so the Node installer can
     // quarantine stale Bun-era checkout launchers that still shadow releases.
     expect(text).toContain("bun run --cwd ")

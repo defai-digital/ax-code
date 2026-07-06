@@ -246,9 +246,12 @@ source_launcher_cwd() {
     fi
 
     if grep -Fq 'AX_CODE_SOURCE_ENTRY=' "$path" 2>/dev/null && \
-       grep -Fq '/packages/ax-code/src/index-node-tui.ts' "$path" 2>/dev/null && \
-       grep -Fq 'node --experimental-ffi' "$path" 2>/dev/null; then
-        is_node_source=true
+       grep -Fq '/packages/ax-code/src/index-node-tui.ts' "$path" 2>/dev/null; then
+        if grep -Fq 'node --experimental-ffi' "$path" 2>/dev/null || \
+           grep -Fq 'AX_CODE_SOURCE_NODE_FFI_RUNNER=' "$path" 2>/dev/null || \
+           grep -Fq 'node-ffi-runner.mjs' "$path" 2>/dev/null; then
+            is_node_source=true
+        fi
     fi
 
     if grep -Fq 'bun run --cwd ' "$path" 2>/dev/null && \
