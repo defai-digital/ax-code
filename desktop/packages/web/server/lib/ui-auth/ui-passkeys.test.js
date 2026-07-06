@@ -61,6 +61,56 @@ describe("ui passkeys", () => {
     expect(fs.statSync(storeFile).mode & 0o777).toBe(0o600)
   })
 
+  it("loads an existing passkey store without a preflight existence check", () => {
+    const stored = {
+      version: 1,
+      userID: Buffer.from("user").toString("base64url"),
+      passwordBinding: "password-binding",
+      passkeys: [
+        {
+          id: "credential-id",
+          publicKey: Buffer.from([1, 2, 3]).toString("base64url"),
+          counter: 1,
+          transports: ["internal"],
+          deviceType: "singleDevice",
+          backedUp: false,
+          createdAt: 1,
+          lastUsedAt: null,
+          label: "Laptop",
+          rpID: "localhost",
+        },
+      ],
+    }
+    fs.writeFileSync(storeFile, `${JSON.stringify(stored, null, 2)}\n`, "utf8")
+    const existsSync = vi.spyOn(fs, "existsSync").mockImplementation((candidate) => {
+      if (candidate === storeFile) {
+        return false
+      }
+      return false
+    })
+    const passkeys = createUiPasskeys({
+      passwordBinding: "password-binding",
+      readSettingsFromDiskMigrated: async () => ({}),
+      storeFile,
+    })
+
+    try {
+      expect(passkeys.listPasskeys(createMockRequest({ host: "localhost:3000" }))).toEqual([
+        {
+          id: "credential-id",
+          label: "Laptop",
+          createdAt: 1,
+          lastUsedAt: null,
+          deviceType: "singleDevice",
+          backedUp: false,
+        },
+      ])
+      expect(JSON.parse(fs.readFileSync(storeFile, "utf8"))).toEqual(stored)
+    } finally {
+      existsSync.mockRestore()
+    }
+  })
+
   it("normalizes request origins before WebAuthn verification", async () => {
     const passkeys = createUiPasskeys({
       passwordBinding: "password-binding",

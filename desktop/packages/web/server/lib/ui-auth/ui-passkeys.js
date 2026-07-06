@@ -120,20 +120,23 @@ export const createUiPasskeys = ({
 
   const loadStore = () => {
     let store = createEmptyStore()
+    let shouldPersistInitialStore = false
 
     try {
-      if (fs.existsSync(storeFile)) {
-        const raw = fs.readFileSync(storeFile, "utf8")
-        const parsed = JSON.parse(raw)
-        store = {
-          version: DEFAULT_STORE_VERSION,
-          userID: decodeUserId(parsed?.userID) ? parsed.userID : store.userID,
-          passwordBinding: typeof parsed?.passwordBinding === "string" ? parsed.passwordBinding : "",
-          passkeys: Array.isArray(parsed?.passkeys) ? parsed.passkeys.map(parseStoredPasskey).filter(Boolean) : [],
-        }
+      const raw = fs.readFileSync(storeFile, "utf8")
+      const parsed = JSON.parse(raw)
+      store = {
+        version: DEFAULT_STORE_VERSION,
+        userID: decodeUserId(parsed?.userID) ? parsed.userID : store.userID,
+        passwordBinding: typeof parsed?.passwordBinding === "string" ? parsed.passwordBinding : "",
+        passkeys: Array.isArray(parsed?.passkeys) ? parsed.passkeys.map(parseStoredPasskey).filter(Boolean) : [],
       }
     } catch (error) {
-      console.warn("[UI Passkeys] Failed to read passkey store:", error?.message || error)
+      if (error?.code === "ENOENT") {
+        shouldPersistInitialStore = true
+      } else {
+        console.warn("[UI Passkeys] Failed to read passkey store:", error?.message || error)
+      }
     }
 
     if (!passwordBinding) {
@@ -155,7 +158,7 @@ export const createUiPasskeys = ({
       return store
     }
 
-    if (!fs.existsSync(storeFile)) {
+    if (shouldPersistInitialStore) {
       persistStore(store)
     }
 
