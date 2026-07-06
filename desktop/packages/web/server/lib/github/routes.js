@@ -2,6 +2,26 @@ const PR_STATUS_CACHE_TTL_MS = 90_000
 const PR_STATUS_CACHE_MAX_ENTRIES = 200
 const prStatusCache = new Map()
 
+class GitHubAuthRouteError extends Error {
+  constructor(statusCode, message) {
+    super(message)
+    this.statusCode = statusCode
+  }
+}
+
+function resolveGitHubActivationAccountId(accountId, accounts) {
+  const requested = typeof accountId === "string" ? accountId.trim() : ""
+  if (!requested) {
+    throw new GitHubAuthRouteError(400, "accountId is required")
+  }
+
+  const account = Array.isArray(accounts) ? accounts.find((entry) => entry?.id === requested) : null
+  if (!account) {
+    throw new GitHubAuthRouteError(404, "GitHub account not found")
+  }
+  return account.id
+}
+
 function getRequestedRepo(req) {
   const owner = typeof req.query?.owner === "string" ? req.query.owner.trim() : ""
   const repo = typeof req.query?.repo === "string" ? req.query.repo.trim() : ""
@@ -208,10 +228,7 @@ export function registerGitHubRoutes(app) {
     try {
       const { activateGitHubAuth, getGitHubAuth, getOctokitOrNull, clearGitHubAuth, getGitHubAuthAccounts } =
         await getGitHubLibraries()
-      const accountId = typeof req.body?.accountId === "string" ? req.body.accountId : ""
-      if (!accountId) {
-        return res.status(400).json({ error: "accountId is required" })
-      }
+      const accountId = resolveGitHubActivationAccountId(req.body?.accountId, getGitHubAuthAccounts())
       const activated = activateGitHubAuth(accountId)
       if (!activated) {
         return res.status(404).json({ error: "GitHub account not found" })
@@ -245,6 +262,9 @@ export function registerGitHubRoutes(app) {
         accounts,
       })
     } catch (error) {
+      if (error instanceof GitHubAuthRouteError) {
+        return res.status(error.statusCode).json({ error: error.message })
+      }
       console.error("Failed to activate GitHub account:", error)
       return res.status(500).json({ error: error.message || "Failed to activate GitHub account" })
     }

@@ -81,6 +81,15 @@ describe("ax-code routes", () => {
     })
   })
 
+  it("rejects invalid provider auth scopes before removing provider state", async () => {
+    const { app, dependencies } = createApp()
+
+    const response = await request(app).delete("/api/provider/test-provider/auth?scope=workspace").expect(400)
+
+    expect(dependencies.removeProviderConfig).not.toHaveBeenCalled()
+    expect(response.body).toEqual({ error: "Invalid scope" })
+  })
+
   it("calls ax-code API for scope=auth removal and triggers reload", async () => {
     const { app, dependencies } = createApp()
     const originalFetch = globalThis.fetch

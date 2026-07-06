@@ -8,9 +8,17 @@ import path from "path"
 const PROMPT_ASYNC_IDEMPOTENCY_TTL_MS = 2 * 60 * 1000
 const PROVIDER_AUTH_SCOPES = new Set(["auth", "user", "project", "custom", "all"])
 
-const normalizeProviderAuthScope = (scope) => {
+class ProviderAuthScopeError extends Error {
+  constructor(message) {
+    super(message)
+    this.statusCode = 400
+  }
+}
+
+const resolveProviderAuthScope = (scope) => {
   if (typeof scope !== "string") return "auth"
-  return PROVIDER_AUTH_SCOPES.has(scope) ? scope : null
+  if (PROVIDER_AUTH_SCOPES.has(scope)) return scope
+  throw new ProviderAuthScopeError("Invalid scope")
 }
 
 export const registerAxCodeRoutes = (app, dependencies) => {
@@ -516,10 +524,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
         return res.status(400).json({ error: "Provider ID is required" })
       }
 
-      const scope = normalizeProviderAuthScope(req.query?.scope)
-      if (!scope) {
-        return res.status(400).json({ error: "Invalid scope" })
-      }
+      const scope = resolveProviderAuthScope(req.query?.scope)
       const headerDirectory = typeof req.get === "function" ? req.get("x-ax-code-directory") : null
       const queryDirectory = Array.isArray(req.query?.directory) ? req.query.directory[0] : req.query?.directory
       const requestedDirectory = headerDirectory || queryDirectory || null
@@ -568,6 +573,9 @@ export const registerAxCodeRoutes = (app, dependencies) => {
         reloadTimeoutMs: reload?.reloadTimeoutMs,
       })
     } catch (error) {
+      if (error instanceof ProviderAuthScopeError) {
+        return res.status(error.statusCode).json({ error: error.message })
+      }
       console.error("Failed to disconnect provider:", error)
       return res.status(500).json({ error: error.message || "Failed to disconnect provider" })
     }

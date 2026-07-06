@@ -25,15 +25,35 @@ const normalizeMcpAuthErrorMessage = (error: unknown, fallback: string): string 
 const buildPendingAuthContextUrl = (stateKey: string): string =>
   `${API_ENDPOINTS.mcp.authPending}?state=${encodeURIComponent(stateKey)}`
 
+type PendingAuthContextRef = {
+  url: string
+}
+
+const resolvePendingAuthContextRef = (params: URLSearchParams): PendingAuthContextRef => {
+  const stateKey = parseMcpOAuthCallbackStateKey(params)
+  if (!stateKey) {
+    throw new Error(
+      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+    )
+  }
+  return { url: buildPendingAuthContextUrl(stateKey) }
+}
+
+const clearPendingAuthContext = async (ref: PendingAuthContextRef): Promise<void> => {
+  await fetch(ref.url, { method: "DELETE" }).catch(() => undefined)
+}
+
 const fetchPendingAuthContext = async (
-  stateKey: string,
+  ref: PendingAuthContextRef,
 ): Promise<{
   name: string
   directory: string | null
-} | null> => {
-  const response = await fetch(buildPendingAuthContextUrl(stateKey))
+}> => {
+  const response = await fetch(ref.url)
   if (!response.ok) {
-    return null
+    throw new Error(
+      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+    )
   }
 
   const payload = (await response.json().catch(() => null)) as {
@@ -41,7 +61,9 @@ const fetchPendingAuthContext = async (
     directory?: string | null
   } | null
   if (!payload?.name?.trim()) {
-    return null
+    throw new Error(
+      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+    )
   }
 
   return {
@@ -64,15 +86,20 @@ export const McpOAuthCallbackPage: React.FC = () => {
 
     const params = new URLSearchParams(window.location.search)
     const code = parseQueryParam(params, "code")
-    const callbackStateKey = parseMcpOAuthCallbackStateKey(params)
     const error = parseQueryParam(params, "error")
     const errorDescription = parseQueryParam(params, "error_description")
-    const pendingAuthContextUrl = callbackStateKey ? buildPendingAuthContextUrl(callbackStateKey) : null
+    let pendingAuthContextRef: PendingAuthContextRef
+
+    try {
+      pendingAuthContextRef = resolvePendingAuthContextRef(params)
+    } catch (stateError) {
+      setStatus("error")
+      setMessage(normalizeMcpAuthErrorMessage(stateError, "Failed to complete MCP authorization."))
+      return
+    }
 
     if (error) {
-      if (callbackStateKey) {
-        void fetch(pendingAuthContextUrl!, { method: "DELETE" }).catch(() => undefined)
-      }
+      void clearPendingAuthContext(pendingAuthContextRef)
       setStatus("error")
       setMessage(errorDescription ?? error)
       return
@@ -86,24 +113,14 @@ export const McpOAuthCallbackPage: React.FC = () => {
           )
         }
 
-        const pendingContext = callbackStateKey ? await fetchPendingAuthContext(callbackStateKey) : null
-
-        if (!pendingContext?.name) {
-          throw new Error(
-            "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
-          )
-        }
+        const pendingContext = await fetchPendingAuthContext(pendingAuthContextRef)
 
         await completeAuth(pendingContext.name, code, pendingContext.directory)
-        if (callbackStateKey) {
-          await fetch(pendingAuthContextUrl!, { method: "DELETE" }).catch(() => undefined)
-        }
+        await clearPendingAuthContext(pendingAuthContextRef)
         setStatus("success")
         setMessage("Authorization completed. You can close this tab and return to AX Code Desktop.")
       } catch (authError) {
-        if (callbackStateKey) {
-          await fetch(pendingAuthContextUrl!, { method: "DELETE" }).catch(() => undefined)
-        }
+        await clearPendingAuthContext(pendingAuthContextRef)
         setStatus("error")
         setMessage(normalizeMcpAuthErrorMessage(authError, "Failed to complete MCP authorization."))
       }
