@@ -281,12 +281,11 @@ pub fn parse_ansi(input: &str) -> Vec<TextRun> {
 
     while idx < input.len() {
         let rest = &input[idx..];
-        if rest.starts_with("\x1b[") {
+        if let Some(body) = rest.strip_prefix("\x1b[") {
             // Find the first CSI final byte (0x40–0x7E, i.e. '@' to '~')
             // instead of blindly searching for 'm'. This prevents non-SGR
             // sequences (cursor movement, erase, etc.) from consuming text
             // that belongs to a later SGR sequence.
-            let body = &rest[2..];
             let final_pos = body
                 .bytes()
                 .position(|b| (0x40..=0x7E).contains(&b));

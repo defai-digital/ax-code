@@ -18,6 +18,7 @@ $InstallRoot = Split-Path -Parent $InstallDir
 $InstallPath = Join-Path $InstallDir "ax-code.exe"
 $InstallCmdPath = Join-Path $InstallDir "ax-code.cmd"
 $InstallLibDir = Join-Path $InstallRoot "lib"
+$InstallNodeDir = Join-Path $InstallRoot "node"
 $InstallNodeModulesDir = Join-Path $InstallRoot "node_modules"
 $InstallPackageJson = Join-Path $InstallRoot "package.json"
 
@@ -123,6 +124,8 @@ function Install-NodeBundleTree([string]$Root) {
   $lib = Join-Path $Root "lib"
   $entry = Join-Path $lib "index-node-tui.js"
   $nodeModules = Join-Path $Root "node_modules"
+  $nodeDir = Join-Path $Root "node"
+  $nodeExe = Join-Path $nodeDir "bin\node.exe"
   $packageJson = Join-Path $Root "package.json"
 
   if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
@@ -134,15 +137,20 @@ function Install-NodeBundleTree([string]$Root) {
   if (-not (Test-Path -LiteralPath $nodeModules -PathType Container)) {
     throw "Node-bundled distribution did not contain node_modules"
   }
+  if (-not (Test-Path -LiteralPath $nodeExe -PathType Leaf)) {
+    throw "Node-bundled distribution did not contain node\bin\node.exe"
+  }
 
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
   Remove-Item -LiteralPath $InstallPath -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $InstallCmdPath -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $InstallLibDir -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $InstallNodeDir -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $InstallNodeModulesDir -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $InstallPackageJson -Force -ErrorAction SilentlyContinue
   Copy-Item -LiteralPath $launcher -Destination $InstallCmdPath -Force
   Copy-Item -LiteralPath $lib -Destination $InstallLibDir -Recurse -Force
+  Copy-Item -LiteralPath $nodeDir -Destination $InstallNodeDir -Recurse -Force
   Copy-Item -LiteralPath $nodeModules -Destination $InstallNodeModulesDir -Recurse -Force
   if (Test-Path -LiteralPath $packageJson -PathType Leaf) {
     Copy-Item -LiteralPath $packageJson -Destination $InstallPackageJson -Force
@@ -193,6 +201,10 @@ function Install-FromRelease {
     if (-not (Test-Path -LiteralPath $nodeModules -PathType Container)) {
       throw "Downloaded archive did not contain the Node runtime node_modules directory"
     }
+    $nodeExe = Join-Path $root "node\bin\node.exe"
+    if (-not (Test-Path -LiteralPath $nodeExe -PathType Leaf)) {
+      throw "Downloaded archive did not contain the bundled Node runtime"
+    }
 
     Install-NodeBundleTree $root
     return $release.Version
@@ -238,19 +250,18 @@ function Verify-InstalledRuntime([string]$ExpectedVersion) {
   }
 }
 
-function Assert-NodeFfiRuntime {
-  $node = Get-Command node -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not $node -or -not $node.Source) {
-    throw "AX Code requires Node.js with --experimental-ffi support. Install Node.js 26 or newer, then rerun this installer."
+function Assert-NodeFfiRuntime([string]$NodePath) {
+  if (-not (Test-Path -LiteralPath $NodePath -PathType Leaf)) {
+    throw "Installed AX Code bundled Node runtime was not found at $NodePath"
   }
 
   $originalNodeOptions = $env:NODE_OPTIONS
   try {
     $env:NODE_OPTIONS = ""
-    $output = (& $node.Source --experimental-ffi --version 2>&1)
+    $output = (& $NodePath --experimental-ffi --version 2>&1)
     if ($LASTEXITCODE -ne 0) {
       $details = ($output | Out-String).Trim()
-      throw "AX Code requires a Node.js runtime that supports --experimental-ffi. Run: winget upgrade -e --id OpenJS.NodeJS. Then restart PowerShell and rerun this installer. $details"
+      throw "Installed AX Code bundled Node runtime does not support --experimental-ffi. Reinstall AX Code from a current release. $details"
     }
   } finally {
     $env:NODE_OPTIONS = $originalNodeOptions
@@ -309,12 +320,15 @@ if ($Help) {
   exit 0
 }
 
-Assert-NodeFfiRuntime
-
 if ($Binary) {
   $installedVersion = Install-FromBinary $Binary
 } else {
   $installedVersion = Install-FromRelease
+}
+
+$installedNodePath = Join-Path $InstallNodeDir "bin\node.exe"
+if (Test-Path -LiteralPath $InstallCmdPath -PathType Leaf) {
+  Assert-NodeFfiRuntime $installedNodePath
 }
 
 Verify-InstalledRuntime $installedVersion
