@@ -116,7 +116,12 @@ const setParamValue = (target: Record<string, unknown>, key: string, value: unkn
   if (isUnsafeParamKey(key)) {
     return
   }
-  target[key] = value
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  })
 }
 
 `

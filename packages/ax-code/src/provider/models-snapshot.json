@@ -3773,58 +3773,6 @@
     "name": "STACKIT",
     "doc": "https://docs.stackit.cloud/products/data-and-ai/ai-model-serving/basics/available-shared-models",
     "models": {
-      "neuralmagic/Meta-Llama-3.1-8B-Instruct-FP8": {
-        "id": "neuralmagic/Meta-Llama-3.1-8B-Instruct-FP8",
-        "name": "Llama 3.1 8B",
-        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2024-07-23",
-        "last_updated": "2024-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 8192
-        }
-      },
-      "neuralmagic/Mistral-Nemo-Instruct-2407-FP8": {
-        "id": "neuralmagic/Mistral-Nemo-Instruct-2407-FP8",
-        "name": "Mistral Nemo",
-        "description": "Mistral model for multilingual chat, reasoning, and tool-assisted workflows",
-        "family": "mistral",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2024-07-01",
-        "last_updated": "2024-07-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 8192
-        }
-      },
       "cortecs/Llama-3.3-70B-Instruct-FP8-Dynamic": {
         "id": "cortecs/Llama-3.3-70B-Instruct-FP8-Dynamic",
         "name": "Llama 3.3 70B",
@@ -3848,7 +3796,7 @@
         "open_weights": true,
         "limit": {
           "context": 128000,
-          "output": 8192
+          "output": 4096
         }
       },
       "google/gemma-3-27b-it": {
@@ -3875,7 +3823,33 @@
         "open_weights": true,
         "limit": {
           "context": 37000,
-          "output": 8192
+          "output": 4096
+        }
+      },
+      "Qwen/Qwen3.6-27B": {
+        "id": "Qwen/Qwen3.6-27B",
+        "name": "Qwen3.6 27B",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 16384
         }
       },
       "Qwen/Qwen3-VL-Embedding-8B": {
@@ -3929,14 +3903,14 @@
         "open_weights": true,
         "limit": {
           "context": 218000,
-          "output": 8192
+          "output": 16384
         }
       },
       "openai/gpt-oss-120b": {
         "id": "openai/gpt-oss-120b",
-        "name": "GPT-OSS 120B",
-        "description": "Open-weight GPT model for self-hosted reasoning and instruction-following workloads",
-        "family": "gpt",
+        "name": "GPT OSS 120B",
+        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
+        "family": "gpt-oss",
         "attachment": false,
         "reasoning": true,
         "reasoning_options": [
@@ -3965,6 +3939,33 @@
         "open_weights": true,
         "limit": {
           "context": 131000,
+          "output": 8192
+        }
+      },
+      "openai/gpt-oss-20b": {
+        "id": "openai/gpt-oss-20b",
+        "name": "GPT OSS 20B",
+        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
+        "family": "gpt-oss",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2025-08-05",
+        "last_updated": "2025-08-05",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
           "output": 8192
         }
       },

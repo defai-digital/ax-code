@@ -1,5 +1,5 @@
 import { homedir } from "os"
-import { readFileSync, existsSync } from "fs"
+import { readFileSync } from "fs"
 import { join } from "path"
 import { buildResult, toUsageWindow, toNumber } from "../utils/index.js"
 
@@ -11,7 +11,6 @@ export const aliases = ["ollama-cloud", "ollamacloud"]
 
 const readCookieFile = () => {
   try {
-    if (!existsSync(COOKIE_PATH)) return null
     const content = readFileSync(COOKIE_PATH, "utf-8")
     const trimmed = content.trim()
     return trimmed || null
