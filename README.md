@@ -10,12 +10,25 @@ AX Code runs coding agents against your actual repositories through AX Code Desk
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
+[![Release](https://img.shields.io/github/v/release/defai-digital/ax-code?display_name=tag)](https://github.com/defai-digital/ax-code/releases)
+[![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
+[![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
+[![Windows ARM64 CLI](https://img.shields.io/badge/Windows%20ARM64-CLI-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 
 ---
 
 ## Get Started
+
+### Supported Install Targets
+
+| Platform | Status | Install path |
+| --- | --- | --- |
+| macOS Apple Silicon | Active support | Homebrew CLI formula and Desktop cask |
+| Windows x64 | Active support | PowerShell CLI installer and Desktop release installer |
+| Windows ARM64 | CLI release target | PowerShell CLI installer; Desktop support depends on the latest release assets |
+| Linux | Contributor/source only | Source builds only, without supported user installer expectations |
 
 **Recommended: AX Code Desktop**
 
