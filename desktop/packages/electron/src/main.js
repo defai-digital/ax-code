@@ -1081,6 +1081,11 @@ const runWhere = (program) => {
   return first || null
 }
 
+const resolveWindowsCommandProcessor = () => {
+  const systemCmd = "C:\\Windows\\System32\\cmd.exe"
+  return fs.existsSync(systemCmd) ? systemCmd : runWhere("cmd.exe")
+}
+
 const findWindowsExecutable = (appId) => {
   for (const program of WINDOWS_APP_EXECUTABLES[appId] || []) {
     const resolved = runWhere(program)
@@ -1263,7 +1268,7 @@ const buildWindowsOpenProjectSpecs = ({ projectPath, appId, appName }) => {
         shellStart: true,
       })
     }
-    const commandPrompt = process.env.ComSpec || runWhere("cmd.exe")
+    const commandPrompt = resolveWindowsCommandProcessor()
     if (commandPrompt) specs.push({ program: commandPrompt, args: ["/k", "cd", "/d", projectPath], shellStart: true })
     return specs
   }
@@ -1324,7 +1329,7 @@ const resolveWindowsLaunchProgram = (program) => {
 
 const launchWindowsCommandScript = (spec, program) => {
   const commandLine = ["call", quoteWindowsCommandArg(program), ...spec.args.map(quoteWindowsCommandArg)].join(" ")
-  const child = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", commandLine], {
+  const child = spawn(resolveWindowsCommandProcessor() || "cmd.exe", ["/d", "/s", "/c", commandLine], {
     detached: true,
     stdio: "ignore",
     windowsHide: false,
@@ -1340,7 +1345,7 @@ const launchWindowsSpec = (spec) => {
     const commandLine = ["start", '""', quoteWindowsCommandArg(program), ...spec.args.map(quoteWindowsCommandArg)].join(
       " ",
     )
-    const child = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", commandLine], {
+    const child = spawn(resolveWindowsCommandProcessor() || "cmd.exe", ["/d", "/s", "/c", commandLine], {
       detached: true,
       stdio: "ignore",
       windowsHide: false,
