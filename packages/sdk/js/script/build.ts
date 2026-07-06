@@ -107,6 +107,57 @@ async function patchGeneratedSseClient(outputPath: string) {
   await fs.writeFile(file, source)
 }
 
+async function patchGeneratedParamsClient(outputPath: string) {
+  const file = path.join(dir, outputPath, "core", "params.gen.ts")
+  let source = await fs.readFile(file, "utf8")
+  const helper = `const isUnsafeParamKey = (key: string) => key === "__proto__" || key === "prototype" || key === "constructor"
+
+const setParamValue = (target: Record<string, unknown>, key: string, value: unknown) => {
+  if (isUnsafeParamKey(key)) {
+    return
+  }
+  target[key] = value
+}
+
+`
+
+  if (!source.includes("const setParamValue = ")) {
+    const marker = "export const buildClientParams = "
+    if (!source.includes(marker)) {
+      throw new Error(`Generated params client changed shape; failed to patch ${file}`)
+    }
+    source = source.replace(marker, `${helper}${marker}`)
+  }
+
+  const replacements: Array<[string, string]> = [
+    [
+      `(params[field.in] as Record<string, unknown>)[name] = arg;`,
+      `setParamValue(params[field.in] as Record<string, unknown>, name, arg);`,
+    ],
+    [
+      `(params[field.in] as Record<string, unknown>)[name] = value;`,
+      `setParamValue(params[field.in] as Record<string, unknown>, name, value);`,
+    ],
+    [
+      `(params[slot] as Record<string, unknown>)[key.slice(prefix.length)] = value;`,
+      `setParamValue(params[slot] as Record<string, unknown>, key.slice(prefix.length), value);`,
+    ],
+    [
+      `(params[slot as Slot] as Record<string, unknown>)[key] = value;`,
+      `setParamValue(params[slot as Slot] as Record<string, unknown>, key, value);`,
+    ],
+  ]
+
+  for (const [before, after] of replacements) {
+    if (!source.includes(before) && !source.includes(after)) {
+      throw new Error(`Generated params client changed shape; failed to patch ${file}`)
+    }
+    source = source.replace(before, after)
+  }
+
+  await fs.writeFile(file, source)
+}
+
 async function acquireBuildLock() {
   let announcedWait = false
   await fs.mkdir(path.dirname(buildLockDir), { recursive: true })
@@ -210,6 +261,8 @@ try {
 
   await generateClient("./src/gen")
   await generateClient("./src/v2/gen")
+  await patchGeneratedParamsClient("./src/gen")
+  await patchGeneratedParamsClient("./src/v2/gen")
   await patchGeneratedSseClient("./src/gen")
   await patchGeneratedSseClient("./src/v2/gen")
 

@@ -102,6 +102,15 @@ const stripEmptySlots = (params: Params) => {
   }
 }
 
+const isUnsafeParamKey = (key: string) => key === "__proto__" || key === "prototype" || key === "constructor"
+
+const setParamValue = (target: Record<string, unknown>, key: string, value: unknown) => {
+  if (isUnsafeParamKey(key)) {
+    return
+  }
+  target[key] = value
+}
+
 export const buildClientParams = (args: ReadonlyArray<unknown>, fields: FieldsConfig) => {
   const params: Params = {
     body: Object.create(null),
@@ -128,7 +137,7 @@ export const buildClientParams = (args: ReadonlyArray<unknown>, fields: FieldsCo
         const field = map.get(config.key)!
         const name = field.map || config.key
         if (field.in) {
-          ;(params[field.in] as Record<string, unknown>)[name] = arg
+          setParamValue(params[field.in] as Record<string, unknown>, name, arg)
         }
       } else {
         params.body = arg
@@ -140,7 +149,7 @@ export const buildClientParams = (args: ReadonlyArray<unknown>, fields: FieldsCo
         if (field) {
           if (field.in) {
             const name = field.map || key
-            ;(params[field.in] as Record<string, unknown>)[name] = value
+            setParamValue(params[field.in] as Record<string, unknown>, name, value)
           } else {
             params[field.map] = value
           }
@@ -149,11 +158,11 @@ export const buildClientParams = (args: ReadonlyArray<unknown>, fields: FieldsCo
 
           if (extra) {
             const [prefix, slot] = extra
-            ;(params[slot] as Record<string, unknown>)[key.slice(prefix.length)] = value
+            setParamValue(params[slot] as Record<string, unknown>, key.slice(prefix.length), value)
           } else if ("allowExtra" in config && config.allowExtra) {
             for (const [slot, allowed] of Object.entries(config.allowExtra)) {
               if (allowed) {
-                ;(params[slot as Slot] as Record<string, unknown>)[key] = value
+                setParamValue(params[slot as Slot] as Record<string, unknown>, key, value)
                 break
               }
             }

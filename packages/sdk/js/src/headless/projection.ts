@@ -309,7 +309,7 @@ function removeRequest<TRequest extends { id: string }>(
 function upsertByID<T extends { id: string }>(list: T[], item: T) {
   const result = binarySearch(list, item.id, (entry) => entry.id)
   if (result.found) {
-    list[result.index] = item
+    list.splice(result.index, 1, item)
     return
   }
   list.splice(result.index, 0, item)
