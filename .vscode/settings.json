@@ -16,5 +16,8 @@
   // 3) Opt into the TypeScript Native Preview (tsgo) language server when the
   //    "TypeScript (Native Preview)" extension is installed — this is the same
   //    resolver `pnpm typecheck` uses. Ignored if the extension is absent.
-  "typescript.experimental.useTsgo": true
+  "typescript.experimental.useTsgo": true,
+  // Point rust-analyzer at the Cargo workspace under crates/ so proc-macro
+  // expansion (#[napi]) works and phantom E0308 errors disappear.
+  "rust-analyzer.linkedProjects": ["crates/Cargo.toml"]
 }
