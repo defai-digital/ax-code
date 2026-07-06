@@ -1052,8 +1052,8 @@ describe("tui OpenTUI stability guardrails", () => {
     const syncStart = prompt.indexOf("function syncPromptInputFromRenderable")
     const syncEnd = prompt.indexOf("function requestInputLayoutRefresh", syncStart)
     const syncBody = prompt.slice(syncStart, syncEnd)
-    const pasteStart = prompt.indexOf("onPaste={async (event: PasteEvent)")
-    const pasteEnd = prompt.indexOf("ref={(r: TextareaRenderable)", pasteStart)
+    const pasteStart = prompt.indexOf("async function handleTerminalPaste(event: PasteEvent)")
+    const pasteEnd = prompt.indexOf("async function pasteWindowsClipboardText", pasteStart)
     const pasteBody = prompt.slice(pasteStart, pasteEnd)
 
     expect(refreshBody).toContain("syncPromptInputFromRenderable({ autocomplete: options.autocomplete })")
@@ -1065,6 +1065,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(autocomplete).toContain("hide,")
     expect(prompt).toContain("let suppressAutocompleteOnNextContentChange = false")
     expect(prompt).toContain("function suppressAutocompleteForNextContentChange()")
+    expect(prompt).toContain("createPromptPasteSubmitGate")
+    expect(prompt).toContain("pasteSubmitGate.deferSubmitUntilPasteHandled()")
+    expect(prompt).toContain("onPaste={handleTerminalPaste}")
     expect(prompt).toContain("const suppressAutocomplete = suppressAutocompleteOnNextContentChange")
     expect(prompt).toContain(
       "syncPromptInputFromRenderable({ autocomplete: suppressAutocomplete ? false : undefined })",

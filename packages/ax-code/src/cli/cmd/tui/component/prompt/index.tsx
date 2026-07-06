@@ -73,6 +73,7 @@ import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import {
   promptEscapeClearIntent,
+  createPromptPasteSubmitGate,
   isPromptExitCommand,
   isUnmodifiedPromptSubmitKey,
   promptSubmissionView,
@@ -383,6 +384,8 @@ export function Prompt(props: PromptProps) {
     suppressAutocompleteOnNextContentChange = true
   }
 
+  const pasteSubmitGate = createPromptPasteSubmitGate({ submit: () => void submit() })
+
   const unsubPromptAppend = sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
     if (!isRenderableAlive(input)) return
     input.insertText(evt.properties.text)
@@ -635,14 +638,7 @@ export function Prompt(props: PromptProps) {
         category: "Prompt",
         hidden: true,
         onSelect: async () => {
-          const content = await Clipboard.read()
-          if (content?.mime.startsWith("image/")) {
-            await pasteImage({
-              filename: "clipboard",
-              mime: content.mime,
-              content: content.data,
-            })
-          }
+          await pasteClipboardImage()
         },
       },
       {
@@ -1382,16 +1378,121 @@ export function Prompt(props: PromptProps) {
     return
   }
 
-  async function pasteWindowsClipboardText() {
-    const text = windowsClipboardTextPaste({
-      content: await Clipboard.read(),
-      platform: process.platform,
+  async function pasteClipboardImage() {
+    const content = await Clipboard.read()
+    if (!content?.mime.startsWith("image/")) return false
+    await pasteImage({
+      filename: "clipboard",
+      mime: content.mime,
+      content: content.data,
     })
-    if (!text) return false
-
-    input.insertText(text)
-    requestInputLayoutRefresh({ autocomplete: false })
     return true
+  }
+
+  async function handleTerminalPaste(event: PasteEvent) {
+    if (inputBlocked()) {
+      event.preventDefault()
+      return
+    }
+
+    let submitDeferred: boolean | undefined
+    pasteSubmitGate.beginPasteHandling()
+    try {
+      // Normalize line endings at the boundary.
+      // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste.
+      const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+      const pastedContent = normalizedText.trim()
+      if (!pastedContent) {
+        event.preventDefault()
+        submitDeferred = await pasteClipboardImage()
+        return
+      }
+
+      // Drag/drop into terminal arrives as pasted text with shell-style
+      // backslash escapes (spaces, iCloud's com\~apple\~CloudDocs,
+      // parentheses, etc.). Decode those before filesystem access.
+      const filepath = parsePastedFilePath(pastedContent)
+      const isUrl = /^(https?):\/\//.test(filepath)
+      if (!isUrl) {
+        try {
+          const mime = Filesystem.mimeType(filepath)
+          const filename = path.basename(filepath)
+          // Handle SVG as raw text content, not as base64 image.
+          if (mime === "image/svg+xml") {
+            event.preventDefault()
+            const content = await Filesystem.readText(filepath).catch((error) => {
+              log.warn("prompt svg paste read failed", { error, filepath })
+              toast.show({
+                message: error instanceof Error ? error.message : "Failed to read pasted SVG",
+                variant: "error",
+              })
+              return undefined
+            })
+            if (content) {
+              pasteText(content, `[SVG: ${filename ?? "image"}]`)
+              return
+            }
+            // Fall through to plain-text paste if read failed.
+          }
+          if (mime.startsWith("image/")) {
+            event.preventDefault()
+            const content = await Filesystem.readArrayBuffer(filepath)
+              .then((buffer) => Buffer.from(buffer).toString("base64"))
+              .catch((error) => {
+                log.warn("prompt image paste read failed", { error, filepath, mime })
+                toast.show({
+                  message: error instanceof Error ? error.message : "Failed to read pasted image",
+                  variant: "error",
+                })
+                return undefined
+              })
+            if (content) {
+              await pasteImage({
+                filename,
+                mime,
+                content,
+              })
+              return
+            }
+            // Fall through to plain-text paste if read failed.
+          }
+        } catch {}
+      }
+
+      const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
+      if ((lineCount >= 3 || pastedContent.length > 150) && !sync.data.config.experimental?.disable_paste_summary) {
+        event.preventDefault()
+        suppressAutocompleteForNextContentChange()
+        pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+        return
+      }
+
+      event.preventDefault()
+      suppressAutocompleteForNextContentChange()
+      input.insertText(normalizedText)
+      requestInputLayoutRefresh({ autocomplete: false })
+    } finally {
+      pasteSubmitGate.finishPasteHandling({ submitDeferred })
+    }
+  }
+
+  async function pasteWindowsClipboardText() {
+    pasteSubmitGate.beginPasteHandling()
+    let handledPaste = false
+    try {
+      const text = windowsClipboardTextPaste({
+        content: await Clipboard.read(),
+        platform: process.platform,
+      })
+      if (!text) return false
+
+      input.insertText(text)
+      requestInputLayoutRefresh({ autocomplete: false })
+      handledPaste = true
+      return true
+    } finally {
+      pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste })
+    }
   }
 
   const highlight = createMemo(() => {
@@ -1544,6 +1645,11 @@ export function Prompt(props: PromptProps) {
                   e.preventDefault()
                   return
                 }
+                if (isPromptSubmitKey(e) && pasteSubmitGate.deferSubmitUntilPasteHandled()) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  return
+                }
                 if (isPromptSubmitKey(e)) {
                   if (autocomplete?.visible) {
                     if (autocomplete.onKeyDown(e)) return
@@ -1557,23 +1663,31 @@ export function Prompt(props: PromptProps) {
                 // through bracketed paste, so we need to intercept the keypress and
                 // directly read from clipboard before the terminal handles it
                 if (keybind.match("input_paste", e)) {
-                  const content = await Clipboard.read()
-                  if (content?.mime.startsWith("image/")) {
-                    e.preventDefault()
-                    await pasteImage({
-                      filename: "clipboard",
-                      mime: content.mime,
-                      content: content.data,
-                    })
-                    return
-                  }
-                  const text = windowsClipboardTextPaste({ content, platform: process.platform })
-                  if (text) {
-                    e.preventDefault()
-                    suppressAutocompleteForNextContentChange()
-                    input.insertText(text)
-                    requestInputLayoutRefresh({ autocomplete: false })
-                    return
+                  pasteSubmitGate.beginPasteHandling()
+                  let handledPaste = false
+                  try {
+                    const content = await Clipboard.read()
+                    if (content?.mime.startsWith("image/")) {
+                      e.preventDefault()
+                      await pasteImage({
+                        filename: "clipboard",
+                        mime: content.mime,
+                        content: content.data,
+                      })
+                      handledPaste = true
+                      return
+                    }
+                    const text = windowsClipboardTextPaste({ content, platform: process.platform })
+                    if (text) {
+                      e.preventDefault()
+                      suppressAutocompleteForNextContentChange()
+                      input.insertText(text)
+                      requestInputLayoutRefresh({ autocomplete: false })
+                      handledPaste = true
+                      return
+                    }
+                  } finally {
+                    pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste })
                   }
                   // If no supported clipboard fallback applies, let the default paste behavior continue.
                 }
@@ -1654,90 +1768,7 @@ export function Prompt(props: PromptProps) {
                     input.cursorOffset = stringWidth(input.plainText)
                 }
               }}
-              onPaste={async (event: PasteEvent) => {
-                if (inputBlocked()) {
-                  event.preventDefault()
-                  return
-                }
-
-                // Normalize line endings at the boundary
-                // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste
-                // Replace CRLF first, then any remaining CR
-                const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-                const pastedContent = normalizedText.trim()
-                if (!pastedContent) {
-                  command.trigger("prompt.paste")
-                  return
-                }
-
-                // Drag/drop into terminal arrives as pasted text with shell-style
-                // backslash escapes (spaces, iCloud's com\~apple\~CloudDocs,
-                // parentheses, etc.). Decode those before filesystem access.
-                const filepath = parsePastedFilePath(pastedContent)
-                const isUrl = /^(https?):\/\//.test(filepath)
-                if (!isUrl) {
-                  try {
-                    const mime = Filesystem.mimeType(filepath)
-                    const filename = path.basename(filepath)
-                    // Handle SVG as raw text content, not as base64 image
-                    if (mime === "image/svg+xml") {
-                      event.preventDefault()
-                      const content = await Filesystem.readText(filepath).catch((error) => {
-                        log.warn("prompt svg paste read failed", { error, filepath })
-                        toast.show({
-                          message: error instanceof Error ? error.message : "Failed to read pasted SVG",
-                          variant: "error",
-                        })
-                        return undefined
-                      })
-                      if (content) {
-                        pasteText(content, `[SVG: ${filename ?? "image"}]`)
-                        return
-                      }
-                      // Fall through to plain-text paste if read failed
-                    }
-                    if (mime.startsWith("image/")) {
-                      event.preventDefault()
-                      const content = await Filesystem.readArrayBuffer(filepath)
-                        .then((buffer) => Buffer.from(buffer).toString("base64"))
-                        .catch((error) => {
-                          log.warn("prompt image paste read failed", { error, filepath, mime })
-                          toast.show({
-                            message: error instanceof Error ? error.message : "Failed to read pasted image",
-                            variant: "error",
-                          })
-                          return undefined
-                        })
-                      if (content) {
-                        await pasteImage({
-                          filename,
-                          mime,
-                          content,
-                        })
-                        return
-                      }
-                      // Fall through to plain-text paste if read failed
-                    }
-                  } catch {}
-                }
-
-                const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-                if (
-                  (lineCount >= 3 || pastedContent.length > 150) &&
-                  !sync.data.config.experimental?.disable_paste_summary
-                ) {
-                  event.preventDefault()
-                  suppressAutocompleteForNextContentChange()
-                  pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
-                  return
-                }
-
-                event.preventDefault()
-                suppressAutocompleteForNextContentChange()
-                input.insertText(normalizedText)
-                requestInputLayoutRefresh({ autocomplete: false })
-                return
-              }}
+              onPaste={handleTerminalPaste}
               ref={(r: TextareaRenderable) => {
                 input = r
                 if (promptPartTypeId === 0) {

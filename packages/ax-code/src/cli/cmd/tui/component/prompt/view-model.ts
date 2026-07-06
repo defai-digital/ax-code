@@ -82,6 +82,29 @@ export function windowsClipboardTextPaste(input: {
   return text.trim().length > 0 ? text : undefined
 }
 
+export function createPromptPasteSubmitGate(input: { submit: () => void }) {
+  let pasteInFlight = 0
+  let submitAfterPaste = false
+
+  return {
+    beginPasteHandling() {
+      pasteInFlight++
+    },
+    finishPasteHandling(options: { submitDeferred?: boolean } = {}) {
+      pasteInFlight = Math.max(0, pasteInFlight - 1)
+      if (pasteInFlight === 0 && options.submitDeferred === false) submitAfterPaste = false
+      if (pasteInFlight > 0 || !submitAfterPaste) return
+      submitAfterPaste = false
+      input.submit()
+    },
+    deferSubmitUntilPasteHandled() {
+      if (pasteInFlight === 0) return false
+      submitAfterPaste = true
+      return true
+    },
+  }
+}
+
 export function promptSubmissionView(input: {
   text: string
   parts: PromptInfo["parts"]

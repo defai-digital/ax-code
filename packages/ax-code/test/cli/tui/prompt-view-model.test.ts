@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  createPromptPasteSubmitGate,
   DOUBLE_ESCAPE_CLEAR_MS,
   isUnmodifiedPromptSubmitKey,
   promptEscapeClearIntent,
@@ -126,5 +127,45 @@ describe("prompt view model", () => {
 
   test("does not let raw CRLF override a non-submit key name", () => {
     expect(isUnmodifiedPromptSubmitKey({ name: "v", raw: "\r\n", sequence: "\r\n" })).toBe(false)
+  })
+
+  test("defers Enter submission until paste handling finishes", () => {
+    let submits = 0
+    const gate = createPromptPasteSubmitGate({ submit: () => submits++ })
+
+    gate.beginPasteHandling()
+    expect(gate.deferSubmitUntilPasteHandled()).toBe(true)
+    expect(submits).toBe(0)
+
+    gate.finishPasteHandling()
+    expect(submits).toBe(1)
+  })
+
+  test("waits for all in-flight paste handlers before deferred submit", () => {
+    let submits = 0
+    const gate = createPromptPasteSubmitGate({ submit: () => submits++ })
+
+    gate.beginPasteHandling()
+    gate.beginPasteHandling()
+    expect(gate.deferSubmitUntilPasteHandled()).toBe(true)
+
+    gate.finishPasteHandling()
+    expect(submits).toBe(0)
+
+    gate.finishPasteHandling()
+    expect(submits).toBe(1)
+    expect(gate.deferSubmitUntilPasteHandled()).toBe(false)
+  })
+
+  test("cancels deferred submit when paste fallback does not handle content", () => {
+    let submits = 0
+    const gate = createPromptPasteSubmitGate({ submit: () => submits++ })
+
+    gate.beginPasteHandling()
+    expect(gate.deferSubmitUntilPasteHandled()).toBe(true)
+    gate.finishPasteHandling({ submitDeferred: false })
+
+    expect(submits).toBe(0)
+    expect(gate.deferSubmitUntilPasteHandled()).toBe(false)
   })
 })
