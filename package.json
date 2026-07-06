@@ -15,8 +15,8 @@
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "pnpm --dir packages/ax-code exec node --experimental-ffi --env-file-if-exists=../../.env --import tsx --import ../../script/solid-loader.mjs --conditions=node src/index-node-tui.ts",
-    "cli": "pnpm --dir packages/ax-code exec node --experimental-ffi --import tsx --import ../../script/solid-loader.mjs --conditions=node src/index-node-tui.ts",
+    "dev": "pnpm --dir packages/ax-code exec node ../../script/node-ffi-runner.mjs --env-file-if-exists=../../.env --import tsx --import ../../script/solid-loader.mjs --conditions=node src/index-node-tui.ts",
+    "cli": "pnpm --dir packages/ax-code exec node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node src/index-node-tui.ts",
     "setup:cli": "tsx script/setup-cli.ts",
     "check:structure": "tsx script/structure.ts",
     "check:no-cost": "tsx script/check-no-cost.ts",

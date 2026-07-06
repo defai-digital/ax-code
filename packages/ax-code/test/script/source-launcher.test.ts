@@ -6,8 +6,9 @@ describe("script.source-launcher", () => {
     const out = sourceLauncherScript({ root: "/repo", windows: false })
     expect(out).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
     expect(out).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index-node-tui.ts"')
+    expect(out).toContain('AX_CODE_SOURCE_NODE_FFI_RUNNER="/repo/script/node-ffi-runner.mjs"')
     expect(out).toContain('export AX_CODE_ORIGINAL_CWD="$(pwd)"')
-    expect(out).toContain("exec node --experimental-ffi")
+    expect(out).toContain('exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(out).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')
   })
 
@@ -17,10 +18,11 @@ describe("script.source-launcher", () => {
     expect(out).toContain("set AX_CODE_ORIGINAL_CWD=%CD%")
     expect(out).toContain('set "AX_CODE_SOURCE_CWD=C:\\repo\\packages\\ax-code"')
     expect(out).toContain('set "AX_CODE_SOURCE_ENTRY=C:\\repo\\packages\\ax-code\\src\\index-node-tui.ts"')
+    expect(out).toContain('set "AX_CODE_SOURCE_NODE_FFI_RUNNER=C:\\repo\\script\\node-ffi-runner.mjs"')
     expect(out).toContain("chcp")
     expect(out).toContain("chcp 65001 >nul")
     expect(out).toContain("switched terminal code page")
-    expect(out).toContain("node --experimental-ffi")
+    expect(out).toContain('node "%AX_CODE_SOURCE_NODE_FFI_RUNNER%"')
   })
 
   test("unix launcher normalizes Windows-style separators in the root path", () => {
@@ -35,9 +37,13 @@ describe("script.source-launcher", () => {
     const unix = sourceLauncherScript({ root: "/missing/repo", windows: false })
     const windows = sourceLauncherScript({ root: "C:\\missing\\repo", windows: true })
     expect(unix).toContain('if [ ! -d "$AX_CODE_SOURCE_CWD" ]; then')
+    expect(unix).toContain('if [ ! -f "$AX_CODE_SOURCE_NODE_FFI_RUNNER" ]; then')
     expect(unix).toContain("source launcher points at a missing checkout")
+    expect(unix).toContain("source launcher points at a missing node:ffi runner")
     expect(windows).toContain('if not exist "%AX_CODE_SOURCE_CWD%\\"')
+    expect(windows).toContain('if not exist "%AX_CODE_SOURCE_NODE_FFI_RUNNER%"')
     expect(windows).toContain("source launcher points at a missing checkout")
+    expect(windows).toContain("source launcher points at a missing node:ffi runner")
   })
 
   test("preserves AX_CODE_ORIGINAL_CWD propagation contract", () => {

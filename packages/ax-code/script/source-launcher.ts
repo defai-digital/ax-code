@@ -40,32 +40,45 @@ export function sourceLauncherScript(input: SourceLauncherInput): string {
   const cwdPath = joiner.join(root, "packages", "ax-code")
   const entry = joiner.join(root, "packages", "ax-code", "src", "index-node-tui.ts")
   const loader = joiner.join(root, "script", "solid-loader.mjs")
+  const nodeFfiRunner = joiner.join(root, "script", "node-ffi-runner.mjs")
   if (input.windows) {
     return `@echo off
 set "AX_CODE_SOURCE_CWD=${cwdPath}"
 set "AX_CODE_SOURCE_ENTRY=${entry}"
 set "AX_CODE_SOURCE_LOADER=${loader}"
+set "AX_CODE_SOURCE_NODE_FFI_RUNNER=${nodeFfiRunner}"
 if not exist "%AX_CODE_SOURCE_CWD%\\" (
   echo ax-code source launcher points at a missing checkout: %AX_CODE_SOURCE_CWD% 1>&2
   echo Install the packaged runtime instead: curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install ^| bash 1>&2
   exit /b 127
 )
+if not exist "%AX_CODE_SOURCE_NODE_FFI_RUNNER%" (
+  echo ax-code source launcher points at a missing node:ffi runner: %AX_CODE_SOURCE_NODE_FFI_RUNNER% 1>&2
+  echo Reinstall the source launcher from the current checkout. 1>&2
+  exit /b 127
+)
 set AX_CODE_ORIGINAL_CWD=%CD%
 ${WINDOWS_UTF8_WARNING}cd /d "%AX_CODE_SOURCE_CWD%"
-node --experimental-ffi --disable-warning=ExperimentalWarning --import tsx --import "%AX_CODE_SOURCE_LOADER%" --conditions=node "%AX_CODE_SOURCE_ENTRY%" %*
+node "%AX_CODE_SOURCE_NODE_FFI_RUNNER%" --import tsx --import "%AX_CODE_SOURCE_LOADER%" --conditions=node "%AX_CODE_SOURCE_ENTRY%" %*
 `
   }
   return `#!/bin/sh
 AX_CODE_SOURCE_CWD="${cwdPath}"
 AX_CODE_SOURCE_ENTRY="${entry}"
 AX_CODE_SOURCE_LOADER="${loader}"
+AX_CODE_SOURCE_NODE_FFI_RUNNER="${nodeFfiRunner}"
 if [ ! -d "$AX_CODE_SOURCE_CWD" ]; then
   echo "ax-code source launcher points at a missing checkout: $AX_CODE_SOURCE_CWD" >&2
   echo "Install the packaged runtime instead: curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash" >&2
   exit 127
 fi
+if [ ! -f "$AX_CODE_SOURCE_NODE_FFI_RUNNER" ]; then
+  echo "ax-code source launcher points at a missing node:ffi runner: $AX_CODE_SOURCE_NODE_FFI_RUNNER" >&2
+  echo "Reinstall the source launcher from the current checkout." >&2
+  exit 127
+fi
 export AX_CODE_ORIGINAL_CWD="\$(pwd)"
 cd "$AX_CODE_SOURCE_CWD" || exit 1
-exec node --experimental-ffi --disable-warning=ExperimentalWarning --import tsx --import "$AX_CODE_SOURCE_LOADER" --conditions=node "$AX_CODE_SOURCE_ENTRY" "$@"
+exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER" --import tsx --import "$AX_CODE_SOURCE_LOADER" --conditions=node "$AX_CODE_SOURCE_ENTRY" "$@"
 `
 }

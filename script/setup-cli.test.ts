@@ -77,14 +77,16 @@ describe("setup-cli helpers", () => {
     const windows = sourceLauncherScript({ root: "/repo", windows: true })
     expect(unix).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
     expect(unix).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index-node-tui.ts"')
-    expect(unix).toContain("exec node --experimental-ffi")
+    expect(unix).toContain('AX_CODE_SOURCE_NODE_FFI_RUNNER="/repo/script/node-ffi-runner.mjs"')
+    expect(unix).toContain('exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(unix).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')
     expect(windows).toContain('set "AX_CODE_SOURCE_CWD=\\repo\\packages\\ax-code"')
     expect(windows).toContain('set "AX_CODE_SOURCE_ENTRY=\\repo\\packages\\ax-code\\src\\index-node-tui.ts"')
+    expect(windows).toContain('set "AX_CODE_SOURCE_NODE_FFI_RUNNER=\\repo\\script\\node-ffi-runner.mjs"')
     expect(windows).toContain("chcp")
     expect(windows).toContain("chcp 65001 >nul")
     expect(windows).toContain("switched terminal code page")
-    expect(windows).toContain("node --experimental-ffi")
+    expect(windows).toContain('node "%AX_CODE_SOURCE_NODE_FFI_RUNNER%"')
     expect(windows).toContain("%*")
   })
 
@@ -199,7 +201,7 @@ describe("setup-cli helpers", () => {
     expect(writes).toHaveLength(1)
     expect(writes[0][0]).toBe("/tmp/ax-code-test-source/bin/ax-code")
     expect(writes[0][1]).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
-    expect(writes[0][1]).toContain("exec node --experimental-ffi")
+    expect(writes[0][1]).toContain('exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
   })
 
   test("setupCli installs the bundled launcher when --bundled is explicit and reuses an existing binary", () => {
