@@ -21,6 +21,14 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 **macOS**
 
+If Homebrew is not installed yet, install it first:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Then install AX Code:
+
 ```bash
 brew tap defai-digital/ax-code
 brew tap defai-digital/ax-code-desktop
