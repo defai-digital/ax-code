@@ -1,5 +1,6 @@
 import type { ProjectEntry } from "@/lib/api/types"
 import type { DraftStarterRef } from "@/lib/draftStarters"
+import type { ShortcutCombo } from "@/lib/shortcuts"
 import { getTauriGlobal } from "@/lib/tauriGlobal"
 import { isLoopbackHostname } from "./loopback"
 
@@ -59,6 +60,7 @@ export type DesktopSettings = {
   notifyOnCompletion?: boolean
   notifyOnError?: boolean
   notifyOnQuestion?: boolean
+  notifyOnPermission?: boolean
 
   // Per-event notification templates
   notificationTemplates?: {
@@ -127,6 +129,7 @@ export type DesktopSettings = {
   padding?: number
   cornerRadius?: number
   inputBarOffset?: number
+  shortcutOverrides?: Record<string, ShortcutCombo>
 
   favoriteModels?: Array<{ providerID: string; modelID: string }>
   recentModels?: Array<{ providerID: string; modelID: string }>

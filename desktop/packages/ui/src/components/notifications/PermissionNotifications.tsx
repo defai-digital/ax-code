@@ -19,7 +19,15 @@ const isAppFocused = (): boolean => {
 const isViewingSession = (sessionId: string): boolean =>
   isAppFocused() && useSessionUIStore.getState().currentSessionId === sessionId
 
-function SessionPermissionWatcher({ sessionId, sessionTitle }: { sessionId: string; sessionTitle?: string }): null {
+function SessionPermissionWatcher({
+  sessionId,
+  sessionTitle,
+  sessionDirectory,
+}: {
+  sessionId: string
+  sessionTitle?: string
+  sessionDirectory?: string
+}): null {
   const { t } = useI18n()
   const permissions = useSessionPermissions(sessionId)
   const notifyOnPermission = useUIStore((s) => s.notifyOnPermission)
@@ -45,12 +53,14 @@ function SessionPermissionWatcher({ sessionId, sessionTitle }: { sessionId: stri
       // the debounce window.
       if (isViewingSession(sessionId)) return
       notifiedRef.current = true
-      const payload: NotificationPayload = {
+      const payload: NotificationPayload & { sessionId?: string; directory?: string } = {
         title: t("notifications.permission.title"),
         body: sessionTitle
           ? t("notifications.permission.bodyWithTitle", { title: sessionTitle })
           : t("notifications.permission.body"),
         tag: `permission:${sessionId}`,
+        sessionId,
+        ...(sessionDirectory ? { directory: sessionDirectory } : {}),
       }
       const apis = getRegisteredRuntimeAPIs()
       void apis?.notifications?.notifyAgentCompletion(payload)
@@ -102,7 +112,12 @@ export function PermissionNotifications(): React.ReactNode {
     <>
       <AttentionBadgeSync />
       {sessions.map((session) => (
-        <SessionPermissionWatcher key={session.id} sessionId={session.id} sessionTitle={session.title} />
+        <SessionPermissionWatcher
+          key={session.id}
+          sessionId={session.id}
+          sessionTitle={session.title}
+          sessionDirectory={(session as { directory?: string | null }).directory ?? undefined}
+        />
       ))}
     </>
   )

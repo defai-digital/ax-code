@@ -1154,7 +1154,7 @@ export const TerminalView: React.FC = () => {
         ) : null}
       </div>
 
-      <div className="relative flex-1 overflow-hidden" style={{ backgroundColor: xtermTheme.background }}>
+      <div className="relative flex-1 overflow-hidden border-t border-border/40" style={{ backgroundColor: xtermTheme.background }}>
         <div className="h-full w-full box-border pl-4 pr-1.5 pt-3 pb-4">
           {shouldRenderViewport ? (
             <TerminalViewport

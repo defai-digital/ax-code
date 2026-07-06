@@ -60,6 +60,7 @@ const WS_SEND_WAIT_MS = 1200
 const WS_RECONNECT_JITTER_MS = 250
 const WS_KEEPALIVE_INTERVAL_MS = 20000
 const WS_CONNECT_TIMEOUT_MS = 5000
+const TERMINAL_CREATE_TIMEOUT_MS = 10000
 const GLOBAL_TERMINAL_TRANSPORT_STATE_KEY = "__openchamberTerminalTransportState"
 
 const textEncoder = new TextEncoder()
@@ -760,15 +761,29 @@ const sendTerminalInputHttp = async (sessionId: string, data: string): Promise<v
 }
 
 export async function createTerminalSession(options: CreateTerminalOptions): Promise<TerminalSession> {
-  const response = await fetch(`${HTTP_DEFAULTS.apiPath.terminal}/create`, {
-    method: HTTP_DEFAULTS.method.post,
-    headers: HTTP_DEFAULTS.headers.contentTypeJson,
-    body: JSON.stringify({
-      cwd: options.cwd,
-      cols: options.cols ?? 80,
-      rows: options.rows ?? 24,
-    }),
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), TERMINAL_CREATE_TIMEOUT_MS)
+
+  let response: Response
+  try {
+    response = await fetch(`${HTTP_DEFAULTS.apiPath.terminal}/create`, {
+      method: HTTP_DEFAULTS.method.post,
+      headers: HTTP_DEFAULTS.headers.contentTypeJson,
+      signal: controller.signal,
+      body: JSON.stringify({
+        cwd: options.cwd,
+        cols: options.cols ?? 80,
+        rows: options.rows ?? 24,
+      }),
+    })
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("Terminal session creation timed out")
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Failed to create terminal" }))

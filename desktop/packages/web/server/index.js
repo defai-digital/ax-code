@@ -1060,7 +1060,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   setMessageStreamRuntime: (value) => {
     messageStreamRuntime = value
   },
-  shouldSkipAxCodeStop: () => ENV_SKIP_AX_CODE_START || isExternalAxCode,
+  shouldSkipAxCodeStop: () => isExternalAxCode || (ENV_SKIP_AX_CODE_START && !axCodeProcess),
   getAxCodePort: () => axCodePort,
   getAxCodeProcess: () => axCodeProcess,
   setAxCodeProcess: (value) => {

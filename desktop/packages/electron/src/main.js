@@ -1629,22 +1629,19 @@ const buildMacMenu = () => {
     {
       label: "View",
       submenu: [
-        { label: "Toggle Right Sidebar", accelerator: "Cmd+B", click: () => dispatchAction("toggle-right-sidebar") },
+        { label: "Toggle Right Sidebar", click: () => dispatchAction("toggle-right-sidebar") },
         {
           label: "Open Git Sidebar",
-          accelerator: "Cmd+Shift+G",
           click: () => dispatchAction("open-right-sidebar-git"),
         },
         {
           label: "Open Files Sidebar",
-          accelerator: "Cmd+Shift+F",
           click: () => dispatchAction("open-right-sidebar-files"),
         },
         { type: "separator" },
-        { label: "Toggle Terminal Dock", accelerator: "Cmd+J", click: () => dispatchAction("toggle-terminal") },
+        { label: "Toggle Terminal Dock", click: () => dispatchAction("toggle-terminal") },
         {
           label: "Toggle Terminal Expanded",
-          accelerator: "Cmd+Shift+J",
           click: () => dispatchAction("toggle-terminal-expanded"),
         },
         { type: "separator" },
@@ -1652,7 +1649,7 @@ const buildMacMenu = () => {
         { label: "Dark Theme", click: () => dispatchAction("theme-dark") },
         { label: "System Theme", click: () => dispatchAction("theme-system") },
         { type: "separator" },
-        { label: "Toggle Session Sidebar", accelerator: "Cmd+L", click: () => dispatchAction("toggle-sidebar") },
+        { label: "Toggle Session Sidebar", click: () => dispatchAction("toggle-sidebar") },
         { type: "separator" },
         { role: "resetZoom", label: "Actual Size" },
         { role: "zoomIn", label: "Zoom In" },

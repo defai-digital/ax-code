@@ -1000,13 +1000,13 @@ export const createAxCodeLifecycleRuntime = (deps) => {
       // Run health probes in parallel to avoid serial waterfall delays.
       // probeProcessHealth checks a previously-managed process (HMR transfer),
       // probeExternalServer checks for an already-running external server.
-      const skipStart = Boolean(env.ENV_SKIP_AX_CODE_START && env.ENV_EFFECTIVE_PORT)
+      const skipStart = Boolean(env.ENV_SKIP_AX_CODE_START)
       const externalProbePort = env.ENV_EFFECTIVE_PORT || 4096
       const externalProbeOrigin = env.ENV_EFFECTIVE_PORT ? env.ENV_CONFIGURED_AX_CODE_HOST?.origin : undefined
       const shouldProbeExternal = !skipStart
 
       const [processHealthy, externalHealthy] = await Promise.all([
-        managedAxCodeRuntime.probeProcessHealth().catch(() => false),
+        skipStart ? Promise.resolve(false) : managedAxCodeRuntime.probeProcessHealth().catch(() => false),
         shouldProbeExternal
           ? managedAxCodeRuntime.probeExternalServer(externalProbePort, externalProbeOrigin).catch(() => false)
           : Promise.resolve(false),
@@ -1023,12 +1023,13 @@ export const createAxCodeLifecycleRuntime = (deps) => {
           { source: "web-server", milestone: "ax-code.health.ready" },
         )
       } else if (skipStart) {
+        const skipStartPort = env.ENV_EFFECTIVE_PORT || 4096
         const label = env.ENV_CONFIGURED_AX_CODE_HOST
           ? env.ENV_CONFIGURED_AX_CODE_HOST.origin
-          : `http://localhost:${env.ENV_EFFECTIVE_PORT}`
+          : `http://localhost:${skipStartPort}`
         console.log(`Using external AX Code server at ${label} (skip-start mode)`)
         state.axCodeBaseUrl = env.ENV_CONFIGURED_AX_CODE_HOST?.origin ?? null
-        setAxCodePortInternal(env.ENV_EFFECTIVE_PORT)
+        setAxCodePortInternal(skipStartPort)
         state.isAxCodeReady = true
         state.isExternalAxCode = true
         state.lastAxCodeError = null
@@ -1036,7 +1037,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
         markStartup(
           "ax-code.health.ready",
           {
-            port: env.ENV_EFFECTIVE_PORT,
+            port: skipStartPort,
             via: "external-skip-start",
           },
           { source: "web-server", milestone: "ax-code.health.ready" },

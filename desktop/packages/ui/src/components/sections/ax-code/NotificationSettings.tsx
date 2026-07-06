@@ -7,6 +7,7 @@ import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n"
+import { updateDesktopSettings } from "@/lib/persistence"
 
 const DEFAULT_NOTIFICATION_TEMPLATES = {
   completion: {
@@ -57,6 +58,12 @@ export const NotificationSettings: React.FC = () => {
 
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission>("default")
 
+  const persistNotificationSettings = React.useCallback((changes: Parameters<typeof updateDesktopSettings>[0]) => {
+    void updateDesktopSettings(changes).catch((error) => {
+      console.warn("Failed to persist notification settings:", error)
+    })
+  }, [])
+
   React.useEffect(() => {
     if (!isBrowser) {
       return
@@ -70,11 +77,13 @@ export const NotificationSettings: React.FC = () => {
   const handleToggleChange = async (checked: boolean) => {
     if (isDesktop) {
       setNativeNotificationsEnabled(checked)
+      persistNotificationSettings({ nativeNotificationsEnabled: checked })
       return
     }
 
     if (!isBrowser) {
       setNativeNotificationsEnabled(checked)
+      persistNotificationSettings({ nativeNotificationsEnabled: checked })
       return
     }
     if (checked && typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -83,6 +92,7 @@ export const NotificationSettings: React.FC = () => {
         setNotificationPermission(permission)
         if (permission === "granted") {
           setNativeNotificationsEnabled(true)
+          persistNotificationSettings({ nativeNotificationsEnabled: true })
         } else {
           toast.error(t("settings.notifications.page.toast.permissionDenied.title"), {
             description: t("settings.notifications.page.toast.permissionDenied.description"),
@@ -94,8 +104,10 @@ export const NotificationSettings: React.FC = () => {
       }
     } else if (checked && notificationPermission === "granted") {
       setNativeNotificationsEnabled(true)
+      persistNotificationSettings({ nativeNotificationsEnabled: true })
     } else {
       setNativeNotificationsEnabled(false)
+      persistNotificationSettings({ nativeNotificationsEnabled: false })
     }
   }
 
@@ -107,13 +119,15 @@ export const NotificationSettings: React.FC = () => {
     field: "title" | "message",
     value: string,
   ) => {
-    setNotificationTemplates({
+    const nextTemplates = {
       ...notificationTemplates,
       [event]: {
         ...notificationTemplates[event],
         [field]: value,
       },
-    })
+    }
+    setNotificationTemplates(nextTemplates)
+    persistNotificationSettings({ notificationTemplates: nextTemplates })
   }
 
   const handleTestNotification = async () => {
@@ -186,17 +200,27 @@ export const NotificationSettings: React.FC = () => {
                 role="button"
                 tabIndex={0}
                 aria-pressed={notificationMode === "always"}
-                onClick={() => setNotificationMode(notificationMode === "always" ? "hidden-only" : "always")}
+                onClick={() => {
+                  const next = notificationMode === "always" ? "hidden-only" : "always"
+                  setNotificationMode(next)
+                  persistNotificationSettings({ notificationMode: next })
+                }}
                 onKeyDown={(event) => {
                   if (event.key === " " || event.key === "Enter") {
                     event.preventDefault()
-                    setNotificationMode(notificationMode === "always" ? "hidden-only" : "always")
+                    const next = notificationMode === "always" ? "hidden-only" : "always"
+                    setNotificationMode(next)
+                    persistNotificationSettings({ notificationMode: next })
                   }
                 }}
               >
                 <Checkbox
                   checked={notificationMode === "always"}
-                  onChange={(checked) => setNotificationMode(checked ? "always" : "hidden-only")}
+                  onChange={(checked) => {
+                    const next = checked ? "always" : "hidden-only"
+                    setNotificationMode(next)
+                    persistNotificationSettings({ notificationMode: next })
+                  }}
                   ariaLabel={t("settings.notifications.page.delivery.focusedAria")}
                 />
                 <span className="typography-ui-label text-foreground">
@@ -248,17 +272,26 @@ export const NotificationSettings: React.FC = () => {
                 role="button"
                 tabIndex={0}
                 aria-pressed={notifyOnCompletion}
-                onClick={() => setNotifyOnCompletion(!notifyOnCompletion)}
+                onClick={() => {
+                  const next = !notifyOnCompletion
+                  setNotifyOnCompletion(next)
+                  persistNotificationSettings({ notifyOnCompletion: next })
+                }}
                 onKeyDown={(event) => {
                   if (event.key === " " || event.key === "Enter") {
                     event.preventDefault()
-                    setNotifyOnCompletion(!notifyOnCompletion)
+                    const next = !notifyOnCompletion
+                    setNotifyOnCompletion(next)
+                    persistNotificationSettings({ notifyOnCompletion: next })
                   }
                 }}
               >
                 <Checkbox
                   checked={notifyOnCompletion}
-                  onChange={setNotifyOnCompletion}
+                  onChange={(checked) => {
+                    setNotifyOnCompletion(checked)
+                    persistNotificationSettings({ notifyOnCompletion: checked })
+                  }}
                   ariaLabel={t("settings.notifications.page.events.completionAria")}
                 />
                 <span className="typography-ui-label text-foreground">
@@ -271,17 +304,26 @@ export const NotificationSettings: React.FC = () => {
                 role="button"
                 tabIndex={0}
                 aria-pressed={notifyOnSubtasks}
-                onClick={() => setNotifyOnSubtasks(!notifyOnSubtasks)}
+                onClick={() => {
+                  const next = !notifyOnSubtasks
+                  setNotifyOnSubtasks(next)
+                  persistNotificationSettings({ notifyOnSubtasks: next })
+                }}
                 onKeyDown={(event) => {
                   if (event.key === " " || event.key === "Enter") {
                     event.preventDefault()
-                    setNotifyOnSubtasks(!notifyOnSubtasks)
+                    const next = !notifyOnSubtasks
+                    setNotifyOnSubtasks(next)
+                    persistNotificationSettings({ notifyOnSubtasks: next })
                   }
                 }}
               >
                 <Checkbox
                   checked={notifyOnSubtasks}
-                  onChange={setNotifyOnSubtasks}
+                  onChange={(checked) => {
+                    setNotifyOnSubtasks(checked)
+                    persistNotificationSettings({ notifyOnSubtasks: checked })
+                  }}
                   ariaLabel={t("settings.notifications.page.events.subtaskAria")}
                 />
                 <span className="typography-ui-label text-foreground">
@@ -294,17 +336,26 @@ export const NotificationSettings: React.FC = () => {
                 role="button"
                 tabIndex={0}
                 aria-pressed={notifyOnError}
-                onClick={() => setNotifyOnError(!notifyOnError)}
+                onClick={() => {
+                  const next = !notifyOnError
+                  setNotifyOnError(next)
+                  persistNotificationSettings({ notifyOnError: next })
+                }}
                 onKeyDown={(event) => {
                   if (event.key === " " || event.key === "Enter") {
                     event.preventDefault()
-                    setNotifyOnError(!notifyOnError)
+                    const next = !notifyOnError
+                    setNotifyOnError(next)
+                    persistNotificationSettings({ notifyOnError: next })
                   }
                 }}
               >
                 <Checkbox
                   checked={notifyOnError}
-                  onChange={setNotifyOnError}
+                  onChange={(checked) => {
+                    setNotifyOnError(checked)
+                    persistNotificationSettings({ notifyOnError: checked })
+                  }}
                   ariaLabel={t("settings.notifications.page.events.errorAria")}
                 />
                 <span className="typography-ui-label text-foreground">
@@ -317,17 +368,26 @@ export const NotificationSettings: React.FC = () => {
                 role="button"
                 tabIndex={0}
                 aria-pressed={notifyOnQuestion}
-                onClick={() => setNotifyOnQuestion(!notifyOnQuestion)}
+                onClick={() => {
+                  const next = !notifyOnQuestion
+                  setNotifyOnQuestion(next)
+                  persistNotificationSettings({ notifyOnQuestion: next })
+                }}
                 onKeyDown={(event) => {
                   if (event.key === " " || event.key === "Enter") {
                     event.preventDefault()
-                    setNotifyOnQuestion(!notifyOnQuestion)
+                    const next = !notifyOnQuestion
+                    setNotifyOnQuestion(next)
+                    persistNotificationSettings({ notifyOnQuestion: next })
                   }
                 }}
               >
                 <Checkbox
                   checked={notifyOnQuestion}
-                  onChange={setNotifyOnQuestion}
+                  onChange={(checked) => {
+                    setNotifyOnQuestion(checked)
+                    persistNotificationSettings({ notifyOnQuestion: checked })
+                  }}
                   ariaLabel={t("settings.notifications.page.events.questionAria")}
                 />
                 <span className="typography-ui-label text-foreground">
@@ -340,17 +400,26 @@ export const NotificationSettings: React.FC = () => {
                 role="button"
                 tabIndex={0}
                 aria-pressed={notifyOnPermission}
-                onClick={() => setNotifyOnPermission(!notifyOnPermission)}
+                onClick={() => {
+                  const next = !notifyOnPermission
+                  setNotifyOnPermission(next)
+                  persistNotificationSettings({ notifyOnPermission: next })
+                }}
                 onKeyDown={(event) => {
                   if (event.key === " " || event.key === "Enter") {
                     event.preventDefault()
-                    setNotifyOnPermission(!notifyOnPermission)
+                    const next = !notifyOnPermission
+                    setNotifyOnPermission(next)
+                    persistNotificationSettings({ notifyOnPermission: next })
                   }
                 }}
               >
                 <Checkbox
                   checked={notifyOnPermission}
-                  onChange={setNotifyOnPermission}
+                  onChange={(checked) => {
+                    setNotifyOnPermission(checked)
+                    persistNotificationSettings({ notifyOnPermission: checked })
+                  }}
                   ariaLabel={t("settings.notifications.page.events.permissionAria")}
                 />
                 <span className="typography-ui-label text-foreground">

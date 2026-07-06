@@ -214,6 +214,10 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
     })
   }, [pinned])
 
+  const handleMinimizeWindow = React.useCallback(() => {
+    void invokeDesktop("desktop_minimize_current_window").catch(() => {})
+  }, [])
+
   const handleOpenMainApp = React.useCallback(() => {
     const payload = buildMiniChatMainHandoffPayload({
       currentSessionId,
@@ -281,6 +285,19 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
           showPercentIcon
           percentIconClassName="h-5 w-5"
         />
+      ) : null}
+      {isElectronShell() ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={handleMinimizeWindow}
+          aria-label={t("miniChat.actions.minimizeAria")}
+          title={t("miniChat.actions.minimize")}
+          style={noDragRegionStyle}
+        >
+          <Icon name="subtract" className="h-4 w-4" />
+        </Button>
       ) : null}
       <Button
         type="button"

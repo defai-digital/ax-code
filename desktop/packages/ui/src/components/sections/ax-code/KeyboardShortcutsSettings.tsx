@@ -16,6 +16,7 @@ import {
   type ShortcutCombo,
 } from "@/lib/shortcuts"
 import { useI18n } from "@/lib/i18n"
+import { updateDesktopSettings } from "@/lib/persistence"
 
 const MODIFIER_KEYS = new Set(["shift", "control", "alt", "meta"])
 
@@ -100,7 +101,11 @@ export const KeyboardShortcutsSettings: React.FC = () => {
         return
       }
 
+      const nextOverrides = { ...shortcutOverrides, [actionId]: normalized }
       setShortcutOverride(actionId, normalized)
+      void updateDesktopSettings({ shortcutOverrides: nextOverrides }).catch((error) => {
+        console.warn("Failed to persist shortcut override:", error)
+      })
       setPendingOverwrite(null)
       setErrorText("")
       setWarningText(
@@ -114,7 +119,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
         return rest
       })
     },
-    [findConflict, setShortcutOverride, t],
+    [findConflict, setShortcutOverride, shortcutOverrides, t],
   )
 
   const confirmOverwrite = React.useCallback(() => {
@@ -122,8 +127,16 @@ export const KeyboardShortcutsSettings: React.FC = () => {
       return
     }
 
+    const nextOverrides = {
+      ...shortcutOverrides,
+      [pendingOverwrite.conflictActionId]: UNASSIGNED_SHORTCUT,
+      [pendingOverwrite.actionId]: pendingOverwrite.combo,
+    }
     setShortcutOverride(pendingOverwrite.conflictActionId, UNASSIGNED_SHORTCUT)
     setShortcutOverride(pendingOverwrite.actionId, pendingOverwrite.combo)
+    void updateDesktopSettings({ shortcutOverrides: nextOverrides }).catch((error) => {
+      console.warn("Failed to persist shortcut overwrite:", error)
+    })
     setPendingOverwrite(null)
     setErrorText("")
     setWarningText(
@@ -136,11 +149,16 @@ export const KeyboardShortcutsSettings: React.FC = () => {
       delete rest[pendingOverwrite.actionId]
       return rest
     })
-  }, [pendingOverwrite, setShortcutOverride, t])
+  }, [pendingOverwrite, setShortcutOverride, shortcutOverrides, t])
 
   const resetOne = React.useCallback(
     (actionId: string) => {
+      const nextOverrides = { ...shortcutOverrides }
+      delete nextOverrides[actionId]
       clearShortcutOverride(actionId)
+      void updateDesktopSettings({ shortcutOverrides: nextOverrides }).catch((error) => {
+        console.warn("Failed to persist shortcut reset:", error)
+      })
       setDraftByAction((current) => {
         const rest = { ...current }
         delete rest[actionId]
@@ -150,7 +168,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
       setErrorText("")
       setWarningText("")
     },
-    [clearShortcutOverride],
+    [clearShortcutOverride, shortcutOverrides],
   )
 
   return (
@@ -167,6 +185,9 @@ export const KeyboardShortcutsSettings: React.FC = () => {
             className="!font-normal"
             onClick={() => {
               resetAllShortcutOverrides()
+              void updateDesktopSettings({ shortcutOverrides: {} }).catch((error) => {
+                console.warn("Failed to persist shortcut reset:", error)
+              })
               setDraftByAction({})
               setPendingOverwrite(null)
               setErrorText("")

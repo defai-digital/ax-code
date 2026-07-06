@@ -46,6 +46,21 @@ export const createSettingsHelpers = (dependencies) => {
     return Object.keys(sanitized).length > 0 ? sanitized : undefined
   }
 
+  const sanitizeStringMap = (value) => {
+    if (!value || typeof value !== "object") {
+      return undefined
+    }
+
+    const sanitized = {}
+    for (const [key, entry] of Object.entries(value)) {
+      if (typeof key === "string" && typeof entry === "string") {
+        sanitized[key] = entry
+      }
+    }
+
+    return sanitized
+  }
+
   const sanitizeSettingsUpdate = (payload) => {
     if (!payload || typeof payload !== "object") {
       return {}
@@ -191,8 +206,14 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.notifyOnQuestion === "boolean") {
       result.notifyOnQuestion = candidate.notifyOnQuestion
     }
+    if (typeof candidate.notifyOnPermission === "boolean") {
+      result.notifyOnPermission = candidate.notifyOnPermission
+    }
     if (candidate.notificationTemplates && typeof candidate.notificationTemplates === "object") {
       result.notificationTemplates = candidate.notificationTemplates
+    }
+    if (candidate.shortcutOverrides && typeof candidate.shortcutOverrides === "object") {
+      result.shortcutOverrides = sanitizeStringMap(candidate.shortcutOverrides)
     }
     if (typeof candidate.summarizeLastMessage === "boolean") {
       result.summarizeLastMessage = candidate.summarizeLastMessage

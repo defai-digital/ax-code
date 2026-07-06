@@ -140,7 +140,9 @@ pub fn parse_input(input: &str) -> Vec<InputEvent> {
             continue;
         }
 
-        let ch = rest.chars().next().expect("idx is within input bounds");
+        let Some(ch) = rest.chars().next() else {
+            break;
+        };
         match ch {
             '\x03' => out.push(key("c", true, false, false)),
             '\x04' => out.push(key("d", true, false, false)),
@@ -313,7 +315,9 @@ pub fn parse_ansi(input: &str) -> Vec<TextRun> {
                 }
             }
         }
-        let ch = rest.chars().next().expect("idx is within input bounds");
+        let Some(ch) = rest.chars().next() else {
+            break;
+        };
         text.push(ch);
         idx += ch.len_utf8();
     }

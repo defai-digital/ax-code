@@ -453,6 +453,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
   const [consoleEvents, setConsoleEvents] = React.useState<PreviewConsoleEvent[]>([])
   const [inspectMode, setInspectMode] = React.useState(false)
   const [hoverTarget, setHoverTarget] = React.useState<PreviewElementMetadata | null>(null)
+  const [previewFrameState, setPreviewFrameState] = React.useState<"idle" | "loading" | "loaded" | "timeout">("idle")
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
   const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open)
   const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft)
@@ -921,9 +922,27 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
     isLoopback && proxyState.status === "ready" && (upstreamState === "unknown" || upstreamState === "starting")
 
   const showUpstreamUnreachable = isLoopback && proxyState.status === "ready" && upstreamState === "unreachable"
+  const shouldRenderPreviewFrame = Boolean(effectiveSrc && (!isLoopback || upstreamState === "reachable"))
+
+  React.useEffect(() => {
+    if (!shouldRenderPreviewFrame || typeof window === "undefined") {
+      setPreviewFrameState("idle")
+      return
+    }
+
+    setPreviewFrameState("loading")
+    const timeout = window.setTimeout(() => {
+      setPreviewFrameState((state) => (state === "loading" ? "timeout" : state))
+    }, 10000)
+
+    return () => {
+      window.clearTimeout(timeout)
+    }
+  }, [effectiveSrc, reloadNonce, shouldRenderPreviewFrame])
 
   const handlePreviewFrameLoad = React.useCallback(
     (event: React.SyntheticEvent<HTMLIFrameElement>) => {
+      setPreviewFrameState("loaded")
       if (!isLoopback || proxyState.status !== "ready") {
         return
       }
@@ -1035,7 +1054,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
               {t("contextPanel.preview.actions.retry")}
             </Button>
           </div>
-        ) : effectiveSrc && (!isLoopback || upstreamState === "reachable") ? (
+        ) : shouldRenderPreviewFrame ? (
           <div className="relative h-full w-full">
             <iframe
               ref={iframeRef}
@@ -1051,6 +1070,28 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl, onNavigate }) => {
                   : "allow-scripts allow-forms"
               }
             />
+            {previewFrameState === "timeout" ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/95 px-6 text-center text-sm text-muted-foreground">
+                <div>{t("contextPanel.preview.frameTimeout")}</div>
+                <div className="text-xs opacity-70">{t("contextPanel.preview.frameTimeoutHint")}</div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => bumpReload()}>
+                    {t("contextPanel.preview.actions.retry")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (directSrc) void openExternalUrl(directSrc)
+                    }}
+                    disabled={!directSrc}
+                  >
+                    {t("contextPanel.preview.actions.openExternal")}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             {inspectMode && hoverTarget ? (
               <div
                 className="pointer-events-none absolute rounded-sm border-2 border-[var(--interactive-focus-ring)] bg-[var(--interactive-focus-ring)]/35"

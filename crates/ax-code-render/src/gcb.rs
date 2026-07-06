@@ -33,6 +33,34 @@ pub enum Gcb {
     IncbConsonant = 19,
 }
 
+impl Gcb {
+    fn from_table_id(id: u8) -> Gcb {
+        match id {
+            0 => Gcb::Other,
+            1 => Gcb::Control,
+            2 => Gcb::Prepend,
+            3 => Gcb::Cr,
+            4 => Gcb::Lf,
+            5 => Gcb::RegionalIndicator,
+            6 => Gcb::SpacingMark,
+            7 => Gcb::L,
+            8 => Gcb::V,
+            9 => Gcb::T,
+            10 => Gcb::Lv,
+            11 => Gcb::Lvt,
+            12 => Gcb::Zwj,
+            13 => Gcb::Zwnj,
+            14 => Gcb::ExtendedPictographic,
+            15 => Gcb::EmojiModifierBase,
+            16 => Gcb::EmojiModifier,
+            17 => Gcb::IncbExtend,
+            18 => Gcb::IncbLinker,
+            19 => Gcb::IncbConsonant,
+            _ => Gcb::Other,
+        }
+    }
+}
+
 pub fn gcb_of(cp: u32) -> Gcb {
     let found = GCB_RANGES.binary_search_by(|&(lo, hi, _)| {
         if hi < cp {
@@ -44,10 +72,7 @@ pub fn gcb_of(cp: u32) -> Gcb {
         }
     });
     match found {
-        Ok(idx) => {
-            // Safety: the table only contains ids 0..=19 emitted by the generator.
-            unsafe { std::mem::transmute::<u8, Gcb>(GCB_RANGES[idx].2) }
-        }
+        Ok(idx) => Gcb::from_table_id(GCB_RANGES[idx].2),
         Err(_) => Gcb::Other,
     }
 }

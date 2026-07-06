@@ -13,10 +13,26 @@ import { normalizeProjectPath } from "@/lib/projectResolution"
 const CACHE_TTL_MS = 30_000
 const MAX_CACHE_ENTRIES = 40
 const DEFAULT_SEARCH_LIMIT = 60
+const SEARCH_TIMEOUT_MS = 12_000
 
 const normalizeSearchDirectory = (input: string): string => normalizeProjectPath(input) ?? ""
 
 const normalizeSearchQuery = (input: string): string => input.trim().toLowerCase()
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
 
 interface FileSearchCacheEntry {
   files: ProjectFileSearchHit[]
@@ -139,7 +155,7 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
                 type,
               })
 
-        const searchPromise = fetchFiles
+        const searchPromise = withTimeout(fetchFiles, SEARCH_TIMEOUT_MS, "File search timed out")
           .then((files) => {
             if (!firstFileSearchResultRecorded && files.length > 0) {
               firstFileSearchResultRecorded = true

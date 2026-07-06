@@ -317,6 +317,12 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.notifyOnQuestion === "boolean" && settings.notifyOnQuestion !== store.notifyOnQuestion) {
     store.setNotifyOnQuestion(settings.notifyOnQuestion)
   }
+  if (
+    typeof settings.notifyOnPermission === "boolean" &&
+    settings.notifyOnPermission !== store.notifyOnPermission
+  ) {
+    store.setNotifyOnPermission(settings.notifyOnPermission)
+  }
   if (settings.notificationTemplates && typeof settings.notificationTemplates === "object") {
     store.setNotificationTemplates(settings.notificationTemplates)
   }
@@ -691,6 +697,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.notifyOnQuestion === "boolean") {
     result.notifyOnQuestion = candidate.notifyOnQuestion
   }
+  if (typeof candidate.notifyOnPermission === "boolean") {
+    result.notifyOnPermission = candidate.notifyOnPermission
+  }
   if (candidate.notificationTemplates && typeof candidate.notificationTemplates === "object") {
     const templates = candidate.notificationTemplates as Record<string, unknown>
     const validateTemplate = (key: string): { title: string; message: string } | undefined => {
@@ -906,6 +915,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.inputBarOffset === "number" && Number.isFinite(candidate.inputBarOffset)) {
     result.inputBarOffset = candidate.inputBarOffset
   }
+  if (candidate.shortcutOverrides && typeof candidate.shortcutOverrides === "object") {
+    result.shortcutOverrides = parseStringRecord(candidate.shortcutOverrides) ?? {}
+  }
   const favoriteModels = sanitizeModelRefs(candidate.favoriteModels, 64)
   if (favoriteModels) {
     result.favoriteModels = favoriteModels
@@ -1096,8 +1108,17 @@ export const syncDesktopSettings = async (): Promise<void> => {
 // Coalesce rapid updateDesktopSettings calls into a single PUT
 let _pendingSettingsChanges: Partial<DesktopSettings> | null = null
 let _settingsFlushTimer: ReturnType<typeof setTimeout> | null = null
-let _pendingSettingsWaiters: Array<() => void> = []
+let _pendingSettingsWaiters: Array<{ resolve: () => void; reject: (error: Error) => void }> = []
 const SETTINGS_DEBOUNCE_MS = 200
+
+const resolveSettingsWaiters = (waiters: typeof _pendingSettingsWaiters) => {
+  for (const waiter of waiters) waiter.resolve()
+}
+
+const rejectSettingsWaiters = (waiters: typeof _pendingSettingsWaiters, error: unknown) => {
+  const normalized = error instanceof Error ? error : new Error(String(error))
+  for (const waiter of waiters) waiter.reject(normalized)
+}
 
 const _flushSettingsUpdate = async (): Promise<void> => {
   const changes = _pendingSettingsChanges
@@ -1106,7 +1127,7 @@ const _flushSettingsUpdate = async (): Promise<void> => {
   _pendingSettingsWaiters = []
   _settingsFlushTimer = null
   if (!changes || Object.keys(changes).length === 0) {
-    for (const waiter of waiters) waiter()
+    resolveSettingsWaiters(waiters)
     return
   }
 
@@ -1120,7 +1141,7 @@ const _flushSettingsUpdate = async (): Promise<void> => {
           applyDesktopUiPreferences(updated)
           dispatchSettingsSynced(updated)
         }
-        for (const waiter of waiters) waiter()
+        resolveSettingsWaiters(waiters)
         return
       } catch (error) {
         console.warn("Failed to update settings via runtime settings API:", error)
@@ -1134,8 +1155,9 @@ const _flushSettingsUpdate = async (): Promise<void> => {
     })
 
     if (!response.ok) {
-      console.warn("Failed to update shared settings via API:", response.status, response.statusText)
-      for (const waiter of waiters) waiter()
+      const error = new Error(`Failed to update shared settings via API: ${response.status} ${response.statusText}`)
+      console.warn(error.message)
+      rejectSettingsWaiters(waiters, error)
       return
     }
 
@@ -1147,10 +1169,10 @@ const _flushSettingsUpdate = async (): Promise<void> => {
       // Invalidate GET cache so next read sees the fresh data
       _settingsCache = null
     }
-    for (const waiter of waiters) waiter()
+    resolveSettingsWaiters(waiters)
   } catch (error) {
     console.warn("Failed to update shared settings via API:", error)
-    for (const waiter of waiters) waiter()
+    rejectSettingsWaiters(waiters, error)
   }
 }
 
@@ -1164,8 +1186,8 @@ export const updateDesktopSettings = (changes: Partial<DesktopSettings>): Promis
   if (_settingsFlushTimer) {
     clearTimeout(_settingsFlushTimer)
   }
-  const promise = new Promise<void>((resolve) => {
-    _pendingSettingsWaiters.push(resolve)
+  const promise = new Promise<void>((resolve, reject) => {
+    _pendingSettingsWaiters.push({ resolve, reject })
   })
   _settingsFlushTimer = setTimeout(() => void _flushSettingsUpdate(), SETTINGS_DEBOUNCE_MS)
   return promise

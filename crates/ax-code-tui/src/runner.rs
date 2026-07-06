@@ -70,16 +70,35 @@ impl CliArgs {
 pub fn init_terminal() -> io::Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    if let Err(error) = execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        let _ = disable_raw_mode();
+        return Err(error);
+    }
     let backend = CrosstermBackend::new(stdout);
-    Terminal::new(backend)
+    Terminal::new(backend).inspect_err(|_| {
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        let _ = disable_raw_mode();
+    })
 }
 
 /// Restore the terminal to its original state.
 pub fn restore_terminal() -> io::Result<()> {
-    disable_raw_mode()?;
-    execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
-    Ok(())
+    let raw_result = disable_raw_mode();
+    let screen_result = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+
+    match (raw_result, screen_result) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(raw_error), Ok(())) => Err(raw_error),
+        (Ok(()), Err(screen_error)) => Err(screen_error),
+        (Err(raw_error), Err(screen_error)) => Err(io::Error::new(
+            raw_error.kind(),
+            format!(
+                "failed to disable raw mode: {}; failed to restore screen/mouse: {}",
+                raw_error, screen_error
+            ),
+        )),
+    }
 }
 
 /// The main TUI runner that manages the event loop.
