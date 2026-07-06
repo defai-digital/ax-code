@@ -7,7 +7,7 @@ import { SessionDre } from "../../session/dre"
 import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
 import { activitySection } from "../../quality/dre-graph-activity-section"
-import { live, mermaidScript, themeScript, themeToggle } from "../../quality/dre-graph-assets"
+import { executionSummaryScript, live, themeScript, themeToggle } from "../../quality/dre-graph-assets"
 import { branchSection } from "../../quality/dre-graph-branch-section"
 import { changesSection } from "../../quality/dre-graph-changes-section"
 import { index as indexPage } from "../../quality/dre-graph-index-page"
@@ -129,11 +129,6 @@ function page(input: {
     `<span class="gviz-summary-sep">·</span>`,
     `<span class="gviz-summary-detail" id="gviz-summary-detail"></span>`,
     `</div>`,
-    `<div class="gviz-header">`,
-    `<span class="gviz-label">Execution Graph</span>`,
-    `<span class="gviz-status" id="gviz-status">loading…</span>`,
-    `</div>`,
-    `<div id="graph-viz" class="gviz-container"><span style="color:var(--muted);font-size:13px;font-style:italic;padding:12px;display:block">Loading…</span></div>`,
     `</div>`,
     `</header>`,
     // ── 1. Summary: "what happened and should I care?" ──
@@ -153,7 +148,7 @@ function page(input: {
     // ── Footer ──
     `<footer class="footer">AX Code DRE · Debugging & Refactoring Engine</footer>`,
     live({ sessionID: input.session.id, directory: input.session.directory }),
-    mermaidScript(input.session.id),
+    executionSummaryScript(input.session.id),
     `</body>`,
     `</html>`,
   ].join("")

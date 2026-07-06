@@ -81,7 +81,7 @@ export function activitySection(
                 ].join("")
               : ""
           const errorsHtml = step.errors.length
-            ? `<div class="act-error-list">${step.errors.map((e) => `<div class="gantt-error">${esc(e)}</div>`).join("")}</div>`
+            ? `<div class="act-error-list">${step.errors.map((e) => `<div class="act-error">${esc(e)}</div>`).join("")}</div>`
             : ""
 
           return [
@@ -158,7 +158,7 @@ export function activitySection(
     `<h3>Key Steps</h3>`,
     topStepsHtml,
     parsed.steps.length > 3
-      ? `<p class="muted" style="font-size:12px;margin-top:12px">Showing top 3 of ${parsed.steps.length} steps — full breakdown in the execution graph above</p>`
+      ? `<p class="muted" style="font-size:12px;margin-top:12px">Showing top 3 of ${parsed.steps.length} steps by duration.</p>`
       : "",
     detail?.notes.length
       ? [
