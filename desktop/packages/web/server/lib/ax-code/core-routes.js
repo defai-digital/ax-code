@@ -507,7 +507,7 @@ export const registerCommonRequestMiddleware = (app, dependencies) => {
 
   app.use((req, _res, next) => {
     if (verboseRequestLogs) {
-      console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`)
+      console.log(`${new Date().toISOString()} - desktop API request received`)
     }
     next()
   })

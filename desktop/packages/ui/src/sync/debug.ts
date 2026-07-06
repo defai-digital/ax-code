@@ -31,56 +31,53 @@ export function refreshSyncDebugFlag(): void {
 
 type SyncDebugCategory = "pipeline" | "reducer" | "dispatch"
 
-function log(cat: SyncDebugCategory, ...args: unknown[]): void {
+function log(cat: SyncDebugCategory, message: string): void {
   if (!isSyncDebugEnabled()) return
   const tag = `%c[sync:${cat}]`
   const style = "color: #888"
-  console.log(tag, style, ...args)
+  console.log(tag, style, message)
 }
 
 export const syncDebug = {
   pipeline: {
     /** Event coalesced (replaced an earlier event in the queue). */
-    coalesced: (eventType: string, coalesceKey: string) => log("pipeline", "coalesced", eventType, coalesceKey),
+    coalesced: (_eventType: string, _coalesceKey: string) => log("pipeline", "event coalesced"),
 
     /** Flush batch dispatched. */
-    flush: (count: number) => log("pipeline", "flush", `${count} events`),
+    flush: (_count: number) => log("pipeline", "batch flushed"),
   },
 
   reducer: {
     /** message.updated skipped because role/finish/completed matched existing. */
     messageUpdatedUnchanged: (
-      sessionID: string,
-      messageID: string,
-      role: string,
-      finish: unknown,
-      completed: unknown,
-    ) => log("reducer", "message.updated UNCHANGED (skipped)", { sessionID, messageID, role, finish, completed }),
+      _sessionID: string,
+      _messageID: string,
+      _role: string,
+      _finish: unknown,
+      _completed: unknown,
+    ) => log("reducer", "message.updated unchanged"),
 
     /** message.part.updated arrived but no parts array exists for this messageID. */
-    partUpdatedNoExistingParts: (messageID: string, partID: string, partType: string) =>
-      log("reducer", "message.part.updated NO EXISTING PARTS", { messageID, partID, partType }),
+    partUpdatedNoExistingParts: (_messageID: string, _partID: string, _partType: string) =>
+      log("reducer", "message.part.updated missing existing parts"),
 
     /** message.part.delta arrived but parts array missing — silently dropped. */
-    partDeltaNoParts: (messageID: string, partID: string) =>
-      log("reducer", "message.part.delta DROPPED (no parts array)", { messageID, partID }),
+    partDeltaNoParts: (_messageID: string, _partID: string) => log("reducer", "message.part.delta missing parts"),
 
     /** message.part.delta arrived but partID not found in parts array. */
-    partDeltaNotFound: (messageID: string, partID: string) =>
-      log("reducer", "message.part.delta DROPPED (partID not found)", { messageID, partID }),
+    partDeltaNotFound: (_messageID: string, _partID: string) => log("reducer", "message.part.delta part not found"),
 
     /** SKIP_PARTS filtered out a part. */
-    partSkipped: (messageID: string, partID: string, partType: string) =>
-      log("reducer", "message.part.updated SKIPPED (type filtered)", { messageID, partID, partType }),
+    partSkipped: (_messageID: string, _partID: string, _partType: string) =>
+      log("reducer", "message.part.updated skipped"),
   },
 
   dispatch: {
     /** Event dispatched to store but reducer returned false (no state change). */
-    eventNoChange: (eventType: string, sessionID?: string, messageID?: string) =>
-      log("dispatch", "event → no change", { eventType, sessionID, messageID }),
+    eventNoChange: (_eventType: string, _sessionID?: string, _messageID?: string) =>
+      log("dispatch", "event produced no state change"),
 
     /** Event applied to store successfully. */
-    eventApplied: (eventType: string, sessionID?: string, messageID?: string) =>
-      log("dispatch", "event → applied", { eventType, sessionID, messageID }),
+    eventApplied: (_eventType: string, _sessionID?: string, _messageID?: string) => log("dispatch", "event applied"),
   },
 } as const

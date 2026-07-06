@@ -31,7 +31,7 @@ function ok(name: string) {
   console.log(`  ✅ ${name}`)
 }
 function fail(name: string, err?: unknown): never {
-  console.error(`  ❌ ${name}${err ? ": " + (err as Error).message : ""}`)
+  console.error(`  ❌ ${name}${err ? " failed with an error" : ""}`)
   process.exit(1)
 }
 

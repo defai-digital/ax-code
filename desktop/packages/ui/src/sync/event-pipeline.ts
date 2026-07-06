@@ -946,7 +946,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
           consecutiveFailures += 1
           if (!streamErrorLogged) {
             streamErrorLogged = true
-            console.error("[event-pipeline] stream failed", error)
+            console.error("[event-pipeline] stream failed")
           }
           // Notify consumer that the stream has disconnected, so it can
           // update connection state (e.g. set isConnected = false).

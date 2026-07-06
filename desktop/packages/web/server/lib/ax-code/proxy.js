@@ -336,7 +336,7 @@ export const registerAxCodeProxy = (app, deps) => {
       finishedMetric = true
       const entry = sseMetrics.finish(streamMetricId, reason, details)
       if (entry && reason !== "complete") {
-        console.warn(`[proxy] ax-code SSE ${reason}: ${upstreamPath || "unknown"} (${entry.durationMs}ms)`)
+        console.warn("[proxy] ax-code SSE stream ended unexpectedly", { durationMs: entry.durationMs })
       }
     }
 
