@@ -3,6 +3,7 @@ import type { Plugin } from "vitest/config"
 import { transform as esbuildTransform } from "esbuild"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { defaultExcludedTests } from "./script/test-group"
 
 const dir = path.dirname(fileURLToPath(import.meta.url))
 const normalizeVitePath = (input: string) => input.replaceAll("\\", "/")
@@ -47,56 +48,6 @@ const forceEsbuildTs: Plugin = {
   },
 }
 
-// Tests that don't run in the default (unit) group: integration/flaky/isolation
-// tests, mirroring script/test-group.ts (e2e ∪ live ∪ recovery). They spawn real
-// subprocesses, need process isolation, or depend on native TUI FFI not present
-// under Node — run them in dedicated groups, not the default suite.
-const EXCLUDE_GROUPS = [
-  "test/session/structured-output-integration.test.ts",
-  "test/cli/smoke.test.ts",
-  "test/control-plane/session-proxy-middleware.test.ts",
-  "test/control-plane/workspace-sync.test.ts",
-  "test/control-plane/workspace-server-sse.test.ts",
-  "test/tool/bash.test.ts",
-  "test/lsp/client.test.ts",
-  "test/code-intelligence/query-native-dispatch.test.ts",
-  "test/mcp/headers.test.ts",
-  "test/mcp/oauth-callback.test.ts",
-  "test/mcp/oauth-browser.test.ts",
-  "test/script/update-models.test.ts",
-  "test/server/global-session-list.test.ts",
-  "test/server/project-init-git.test.ts",
-  "test/server/session-list.test.ts",
-  "test/server/session-messages.test.ts",
-  "test/server/session-select.test.ts",
-  "test/account/repo.test.ts",
-  "test/auth/auth.test.ts",
-  "test/control-plane/workspace-recovery.test.ts",
-  "test/isolation/isolation.test.ts",
-  "test/project/project.test.ts",
-  "test/provider/models.test.ts",
-  "test/session/diff-recovery.test.ts",
-  "test/session/message-recovery.test.ts",
-  "test/session/prompt-flow.test.ts",
-  "test/session/prompt-resume.test.ts",
-  "test/session/session-recovery.test.ts",
-  // LSP / heavy-I/O integration tests: spawn real language-server subprocesses
-  // whose stdio handshake times out under the Node runner (a node-vs-bun
-  // subprocess timing difference). Run as a dedicated integration group.
-  "test/lsp/call-hierarchy.test.ts",
-  "test/lsp/envelope-coverage.test.ts",
-  "test/lsp/lsp-cache-integration.test.ts",
-  "test/lsp/perf-sampler.test.ts",
-  "test/lsp/prewarm.test.ts",
-  "test/lsp/request-collapse.test.ts",
-  "test/lsp/workspace-symbol.test.ts",
-  "test/code-intelligence/builder.test.ts",
-  "test/control-plane/sse.test.ts",
-  // OpenTUI live-render test: needs node:ffi + a real terminal (createCliRenderer),
-  // which a headless vitest fork can't provide. Exclude like the e2e group.
-  "test/cli/tui/prompt-submit-key.test.ts",
-]
-
 // Exact file list from the group runners (test-groups.ts / test-ci.ts), if any.
 const includeFiles = process.env.AX_TEST_FILES
   ? process.env.AX_TEST_FILES.split(",")
@@ -120,14 +71,15 @@ export default defineConfig({
     // The group runners (test-groups.ts / test-ci.ts) pass an exact file list via
     // AX_TEST_FILES instead of vitest positional filters — vitest 4's positional
     // filter matches path segments opaquely and can't reliably target an exact
-    // set. An explicit `include` list is unambiguous. EXCLUDE_GROUPS contains the
-    // non-default groups (e2e/recovery/live) as well as quarantined files, so when
-    // a group explicitly requests files we drop those exact paths from the exclude
-    // — otherwise the recovery/e2e/live groups would self-exclude and run nothing.
+    // set. An explicit `include` list is unambiguous. defaultExcludedTests
+    // contains the non-default groups (e2e/recovery/live) as well as quarantined
+    // files, so when a group explicitly requests files we drop those exact paths
+    // from the exclude — otherwise the recovery/e2e/live groups would self-
+    // exclude and run nothing.
     include: includeFiles ?? ["test/**/*.test.{ts,tsx}"],
     exclude: includeFiles
-      ? ["**/node_modules/**", "test-vitest/**", ...EXCLUDE_GROUPS.filter((file) => !includeFiles.includes(file))]
-      : ["**/node_modules/**", "test-vitest/**", ...EXCLUDE_GROUPS],
+      ? ["**/node_modules/**", "test-vitest/**", ...defaultExcludedTests.filter((file) => !includeFiles.includes(file))]
+      : ["**/node_modules/**", "test-vitest/**", ...defaultExcludedTests],
     // Order matters: vitest.setup installs the Bun compat shim first; preload
     // then sets per-process (pid) XDG/home isolation so parallel forks don't
     // collide on the shared global SQLite db, and clears provider env vars.

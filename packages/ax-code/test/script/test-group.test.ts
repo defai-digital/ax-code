@@ -13,4 +13,16 @@ describe("test group classification", () => {
     expect(pick(files, "deterministic")).not.toContain("test/code-intelligence/query-native-dispatch.test.ts")
     expect(pick(files, "unit")).not.toContain("test/code-intelligence/query-native-dispatch.test.ts")
   })
+
+  test("keeps quarantined heavy integration tests out of deterministic groups", () => {
+    const files = [
+      "test/lsp/lsp-cache-integration.test.ts",
+      "test/code-intelligence/builder.test.ts",
+      "test/control-plane/sse.test.ts",
+      "test/lsp/cache.test.ts",
+    ]
+
+    expect(pick(files, "deterministic")).toEqual(["test/lsp/cache.test.ts"])
+    expect(pick(files, "unit")).toEqual(["test/lsp/cache.test.ts"])
+  })
 })

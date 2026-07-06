@@ -67,6 +67,20 @@ const recovery = new Set([
   "test/session/session-recovery.test.ts",
 ])
 
+// Heavy or timing-sensitive integration files that are intentionally excluded
+// from the default and deterministic groups. They are not part of the recovery
+// group either; run them directly when working on their subsystem.
+const quarantined = new Set([
+  "test/lsp/call-hierarchy.test.ts",
+  "test/lsp/envelope-coverage.test.ts",
+  "test/lsp/lsp-cache-integration.test.ts",
+  "test/lsp/request-collapse.test.ts",
+  "test/code-intelligence/builder.test.ts",
+  "test/control-plane/sse.test.ts",
+])
+
+export const defaultExcludedTests = [...live, ...e2e, ...recovery, ...quarantined]
+
 export async function list() {
   const out = await scan("test/**/*.test.ts", { cwd: root, absolute: false })
   out.sort()
@@ -77,13 +91,14 @@ export function pick(all: string[], name: string) {
   if (name === "live") return all.filter((file) => live.has(file))
   if (name === "e2e") return all.filter((file) => e2e.has(file))
   if (name === "recovery") return all.filter((file) => recovery.has(file))
-  if (name === "deterministic") return all.filter((file) => !live.has(file) && !e2e.has(file))
-  if (name === "unit") return all.filter((file) => !live.has(file) && !e2e.has(file) && !recovery.has(file))
+  if (name === "deterministic") return all.filter((file) => !live.has(file) && !e2e.has(file) && !quarantined.has(file))
+  if (name === "unit")
+    return all.filter((file) => !live.has(file) && !e2e.has(file) && !recovery.has(file) && !quarantined.has(file))
   throw new Error(`Unknown test group: ${name}`)
 }
 
 export function check(all: string[]) {
-  const known = [...live, ...e2e, ...recovery]
+  const known = defaultExcludedTests
   const miss = known.filter((file) => !all.includes(file))
   if (miss.length) throw new Error(`Missing grouped tests:\n${miss.join("\n")}`)
 }
