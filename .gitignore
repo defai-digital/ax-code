@@ -69,6 +69,7 @@ AGENTS.md
 
 # Internal project docs (not for public)
 ax-internal/
+.internal/
 ADRS/
 PRDS/
 TODOS/

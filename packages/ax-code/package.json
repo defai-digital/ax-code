@@ -22,6 +22,7 @@
     "check:tui-snapshot": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-tui-snapshot.ts",
     "check:golden-frames": "node ../../script/node-ffi-runner.mjs --import tsx --conditions=node script/check-golden-frames.ts",
     "check:bun-compat": "tsx script/check-bun-compat.ts",
+    "check:self-scan": "tsx script/self-scan.ts",
     "quality:rollout": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/quality-rollout.ts",
     "perf:index": "tsx script/perf-index.ts",
     "perf:report": "tsx script/perf-report.ts",

@@ -21,6 +21,7 @@
     "check:structure": "tsx script/structure.ts",
     "check:no-cost": "tsx script/check-no-cost.ts",
     "check:openapi": "pnpm --dir packages/sdk/js run validate:openapi",
+    "check:self-scan": "pnpm --dir packages/ax-code run check:self-scan",
     "check:desktop-boundaries": "tsx script/check-desktop-boundaries.ts",
     "check:desktop-boundaries:strict": "tsx script/check-desktop-boundaries.ts --fail-on-violation",
     "check:desktop-electron-runtime": "node desktop/scripts/check-electron-runtime.mjs",
