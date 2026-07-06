@@ -39,6 +39,23 @@ function readJsonFile() {
   }
 }
 
+function readSettingsJsonFile() {
+  try {
+    const raw = fs.readFileSync(SETTINGS_FILE, "utf8")
+    const trimmed = raw.trim()
+    if (!trimmed) {
+      return null
+    }
+    const parsed = JSON.parse(trimmed)
+    if (!parsed || typeof parsed !== "object") {
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 function writeJsonFile(payload) {
   ensureStorageDir()
 
@@ -273,15 +290,9 @@ export function getGitHubClientId() {
   const clientId = typeof raw === "string" ? raw.trim() : ""
   if (clientId) return clientId
 
-  try {
-    if (fs.existsSync(SETTINGS_FILE)) {
-      const parsed = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"))
-      const stored = typeof parsed?.githubClientId === "string" ? parsed.githubClientId.trim() : ""
-      if (stored) return stored
-    }
-  } catch {
-    // ignore
-  }
+  const parsed = readSettingsJsonFile()
+  const stored = typeof parsed?.githubClientId === "string" ? parsed.githubClientId.trim() : ""
+  if (stored) return stored
 
   return DEFAULT_GITHUB_CLIENT_ID
 }
@@ -291,15 +302,9 @@ export function getGitHubScopes() {
   const fromEnv = typeof raw === "string" ? raw.trim() : ""
   if (fromEnv) return fromEnv
 
-  try {
-    if (fs.existsSync(SETTINGS_FILE)) {
-      const parsed = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"))
-      const stored = typeof parsed?.githubScopes === "string" ? parsed.githubScopes.trim() : ""
-      if (stored) return stored
-    }
-  } catch {
-    // ignore
-  }
+  const parsed = readSettingsJsonFile()
+  const stored = typeof parsed?.githubScopes === "string" ? parsed.githubScopes.trim() : ""
+  if (stored) return stored
 
   return DEFAULT_GITHUB_SCOPES
 }
