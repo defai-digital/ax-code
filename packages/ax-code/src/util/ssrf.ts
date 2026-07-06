@@ -444,7 +444,7 @@ export namespace Ssrf {
         redirect: "manual",
       } as RequestInit)
     }
-    if (parsed.protocol === "https:" && !fetchFn) {
+    if (parsed.protocol === "https:") {
       return nodePinnedHttpsFetch({
         originalUrl: parsed,
         resolvedAddress: resolved.address,

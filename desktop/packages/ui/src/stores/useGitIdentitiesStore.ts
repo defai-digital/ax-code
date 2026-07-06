@@ -120,16 +120,14 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           try {
             let defaultId: string | null = null
 
-            if (defaultId === null) {
-              const runtimeSettings = getRegisteredRuntimeAPIs()?.settings
-              if (runtimeSettings) {
-                try {
-                  const result = await runtimeSettings.load()
-                  const settings = (result?.settings || {}) as Record<string, unknown>
-                  defaultId = normalize(settings.defaultGitIdentityId)
-                } catch {
-                  // fall through
-                }
+            const runtimeSettings = getRegisteredRuntimeAPIs()?.settings
+            if (runtimeSettings) {
+              try {
+                const result = await runtimeSettings.load()
+                const settings = (result?.settings || {}) as Record<string, unknown>
+                defaultId = normalize(settings.defaultGitIdentityId)
+              } catch {
+                // fall through
               }
             }
 

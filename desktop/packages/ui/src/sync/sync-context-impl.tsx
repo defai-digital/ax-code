@@ -1647,7 +1647,7 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
                   const response = (result as { response?: { status?: number } }).response
                   const status = response?.status
                   const message =
-                    typeof rawError === "object" && rawError !== null && "message" in rawError
+                    typeof rawError === "object" && "message" in rawError
                       ? String((rawError as { message?: unknown }).message)
                       : String(rawError)
                   const wrapped = new Error(`session.list failed${status ? ` (${status})` : ""}: ${message}`)

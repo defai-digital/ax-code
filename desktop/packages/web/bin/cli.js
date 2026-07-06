@@ -681,11 +681,7 @@ async function checkAxCodeCLI(onNotice) {
       return override
     }
     const message = `AX_CODE_BINARY="${process.env.AX_CODE_BINARY}" is not an executable file. Falling back to PATH lookup.`
-    if (typeof onNotice === "function") {
-      onNotice({ level: "warning", code: "AX_CODE_BINARY_INVALID", message })
-    } else {
-      console.warn(`Warning: ${message}`)
-    }
+    onNotice({ level: "warning", code: "AX_CODE_BINARY_INVALID", message })
   }
 
   const resolvedFromPath = searchPathFor("ax-code")

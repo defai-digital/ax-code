@@ -77,13 +77,13 @@ export function resolveInstallableRelease(
       assetName: assetNameFromUrl(overrideUrl),
       url: overrideUrl,
       sha256: env[AX_ENGINE_INSTALL_ENV.sha256]?.trim() || undefined,
-      teamId: env[AX_ENGINE_INSTALL_ENV.teamId]?.trim() || AX_ENGINE_EXPECTED_TEAM_ID || undefined,
+      teamId: env[AX_ENGINE_INSTALL_ENV.teamId]?.trim() || AX_ENGINE_EXPECTED_TEAM_ID,
     }
   }
 
   const pinned = AX_ENGINE_BINARY_RELEASE
   if (pinned && pinned.url && pinned.sha256) {
-    return { ...pinned, teamId: pinned.teamId ?? (AX_ENGINE_EXPECTED_TEAM_ID || undefined) }
+    return { ...pinned, teamId: pinned.teamId ?? AX_ENGINE_EXPECTED_TEAM_ID }
   }
   return undefined
 }
