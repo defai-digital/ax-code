@@ -21,13 +21,13 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 **macOS**
 
-If Homebrew is not installed yet, install it first:
+1. Install Homebrew if you do not already have it:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-Then install AX Code:
+2. Install AX Code CLI and Desktop:
 
 ```bash
 brew tap defai-digital/ax-code
@@ -38,8 +38,8 @@ brew install defai-digital/ax-code/ax-code
 brew install --cask defai-digital/ax-code-desktop/ax-code
 ```
 
-The CLI formula and Desktop cask live in separate Homebrew taps and are installed separately. The `brew trust`
-commands allow Homebrew installations with tap trust enforcement enabled to load the DEFAI taps.
+Already have Homebrew? Start from step 2. The `brew trust` commands support Homebrew setups that require
+explicit trust for third-party taps.
 
 ![Install AX Code with Homebrew](docs/images/install-homebrew-ax-code.gif)
 
