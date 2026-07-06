@@ -33,6 +33,8 @@ brew install --cask defai-digital/ax-code-desktop/ax-code
 The CLI formula and Desktop cask live in separate Homebrew taps and are installed separately. The `brew trust`
 commands allow Homebrew installations with tap trust enforcement enabled to load the DEFAI taps.
 
+![Install AX Code with Homebrew](docs/images/install-homebrew-ax-code.gif)
+
 **Windows**
 
 1. Install AX Code with PowerShell:
