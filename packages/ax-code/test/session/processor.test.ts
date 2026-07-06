@@ -116,7 +116,7 @@ describe("session.processor", () => {
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
     const batcher = src.slice(start, end)
-    expect(batcher).toContain("timer = setTimeout(() => { flush() }, DELTA_BATCH_MS)")
+    expect(batcher).toContain("flush()?.catch(")
     expect(batcher).toContain("timer.unref?.()")
   })
 

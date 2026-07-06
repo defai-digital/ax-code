@@ -521,10 +521,14 @@ use crate::ffi_utils as ffi;
 fn stream_of(handle: f64) -> Option<&'static mut Stream> {
     let ptr = ffi::addr_from_f64(handle)? as *mut Stream;
     if ptr.is_null() {
-        None
-    } else {
-        Some(unsafe { &mut *ptr })
+        return None;
     }
+    // Alive-sentinel guard: reject destroyed or invalid handles to prevent
+    // use-after-free. destroy_native_span_feed zeroes `alive` before dropping.
+    if unsafe { (*ptr).alive } != ALIVE_MAGIC {
+        return None;
+    }
+    Some(unsafe { &mut *ptr })
 }
 
 #[napi(js_name = "createNativeSpanFeed")]
@@ -840,6 +844,31 @@ mod tests {
             s.is_chunk_free(0),
             "chunk 0 should be free after draining its spans"
         );
+    }
+
+    #[test]
+    fn stream_of_rejects_destroyed_handle_via_alive_sentinel() {
+        // Create a stream, get its raw pointer, zero the alive sentinel
+        // (simulating destroy_native_span_feed), then verify stream_of
+        // returns None instead of dereferencing freed memory.
+        let stream = Stream::create(None).unwrap();
+        let ptr = Box::into_raw(stream);
+        let handle = ffi::addr_to_f64(ptr as usize);
+
+        // Before destroying: stream_of should succeed.
+        assert!(stream_of(handle).is_some(), "stream_of should work on a live handle");
+
+        // Simulate destroy: zero the alive sentinel.
+        unsafe { (*ptr).alive = 0 };
+
+        // After destroying: stream_of must reject the handle.
+        assert!(
+            stream_of(handle).is_none(),
+            "stream_of must return None for a destroyed handle (alive != ALIVE_MAGIC)"
+        );
+
+        // Reconstitute and drop to avoid leak.
+        drop(unsafe { Box::from_raw(ptr) });
     }
 
     #[test]

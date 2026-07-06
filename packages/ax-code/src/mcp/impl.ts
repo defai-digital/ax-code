@@ -881,7 +881,7 @@ export namespace MCP {
     // clean fetch.
     if (toolsPromise) return toolsPromise
     const generation = toolsCacheGeneration
-    const currentPromise = (async () => {
+    toolsPromise = (async () => {
       const result: Record<string, ConvertedMcpTool> = {}
       const s = await state()
       const cfg = await Config.get()
@@ -951,7 +951,7 @@ export namespace MCP {
       }
       return result
     })()
-    toolsPromise = currentPromise
+    const currentPromise = toolsPromise
     try {
       return await currentPromise
     } finally {
@@ -1190,6 +1190,7 @@ export namespace MCP {
       // If we get here, we're already authenticated.
       await transport.close?.().catch(() => {})
       await closeIfPossible(client, mcpName, "startAuth authenticated")
+      await McpAuth.clearOAuthState(mcpName).catch(() => {})
       return { authorizationUrl: "", oauthState }
     } catch (error) {
       if (!error) {

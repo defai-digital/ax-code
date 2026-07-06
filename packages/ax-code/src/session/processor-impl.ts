@@ -71,7 +71,7 @@ export namespace SessionProcessor {
         if (existing) existing.push(delta)
         else pending.set(partID, [delta])
         if (!timer) {
-          timer = setTimeout(() => { flush() }, DELTA_BATCH_MS)
+          timer = setTimeout(() => { flush()?.catch((err) => log.warn("delta flush failed", { error: err })) }, DELTA_BATCH_MS)
           timer.unref?.()
         }
       },
@@ -365,7 +365,7 @@ export namespace SessionProcessor {
 
                 case "reasoning-end":
                   if (value.id in reasoningMap) {
-                    deltaBatcher.flush()
+                    deltaBatcher.flush()?.catch((err) => log.warn("delta flush failed", { error: err }))
                     const part = reasoningMap[value.id]
                     finalizeBufferedPart(part, { overwriteEndTime: true })
                     if (value.providerMetadata) part.metadata = value.providerMetadata
@@ -1039,7 +1039,7 @@ export namespace SessionProcessor {
 
                 case "text-end":
                   if (currentText) {
-                    deltaBatcher.flush()
+                    deltaBatcher.flush()?.catch((err) => log.warn("delta flush failed", { error: err }))
                     currentText.text = currentText.text.trimEnd()
                     const textOutput = await Plugin.trigger(
                       "experimental.text.complete",
@@ -1076,6 +1076,15 @@ export namespace SessionProcessor {
                 // Await delta flush so all detached events are delivered
                 // before compaction rewrites history (BUG-4).
                 await deltaBatcher.flush()
+                // Finalize in-flight parts before compaction rewrites context
+                if (currentText) {
+                  finalizeBufferedPart(currentText, { overwriteEndTime: false })
+                  await Session.updatePart.force(currentText)
+                }
+                for (const part of Object.values(reasoningMap)) {
+                  finalizeBufferedPart(part, { overwriteEndTime: false })
+                  await Session.updatePart.force(part)
+                }
                 // Reset error pattern tracker on compaction — the context
                 // window is about to be rewritten, so stale pattern counts
                 // would mislead guidance in the new context.
@@ -1092,7 +1101,7 @@ export namespace SessionProcessor {
             }
           } catch (e: unknown) {
             streamErrored = true
-            deltaBatcher.flush()
+            deltaBatcher.flush()?.catch((err) => log.warn("delta flush failed", { error: err }))
             resetShortLivedToolLoopState()
             const errStack = e instanceof Error ? e.stack : undefined
             const errName = e instanceof Error ? e.name : (e as { constructor?: { name?: string } })?.constructor?.name
@@ -1227,7 +1236,7 @@ export namespace SessionProcessor {
             }
             Session.updateMessage.force(input.assistantMessage)
           })
-          deltaBatcher.flush()
+          deltaBatcher.flush()?.catch((err) => log.warn("delta flush failed", { error: err }))
           if (needsCompaction) return "compact"
           if (blocked) return "stop"
           if (input.assistantMessage.error) return "stop"

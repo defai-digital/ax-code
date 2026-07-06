@@ -152,9 +152,11 @@ pub fn parse_input(input: &str) -> Vec<InputEvent> {
                 };
                 if let Some(name) = name {
                     out.push(key(name, false, false, false));
-                    idx += 3; // \x1b + O + final
-                    continue;
                 }
+                // Always consume the 3-byte SS3 sequence, even for unknown finals,
+                // to prevent O + final byte leaking as phantom text input.
+                idx += 3; // \x1b + O + final
+                continue;
             }
         }
 
@@ -877,6 +879,31 @@ mod tests {
                 InputEvent::Text { text: "l".into() },
                 InputEvent::Text { text: "o".into() },
             ]
+        );
+    }
+
+    #[test]
+    fn ss3_unrecognized_final_byte_consumed_without_phantom_text() {
+        // \x1bO followed by an unrecognized final byte (e.g. 'A') must consume
+        // the full 3-byte sequence. Previously, the fallthrough emitted Escape +
+        // Text("O") + Text("A") — injecting phantom characters into the input stream.
+        let events = parse_input("\x1bOA");
+        assert!(
+            events.is_empty(),
+            "unrecognized SS3 final should produce no events, got: {events:?}"
+        );
+
+        // Unrecognized SS3 followed by valid text: only the trailing text should appear.
+        let events = parse_input("\x1bOXhello");
+        assert_eq!(events.len(), 5, "expected 5 text events for 'hello', got: {events:?}");
+        assert_eq!(events[0], InputEvent::Text { text: "h".into() });
+        assert_eq!(events[1], InputEvent::Text { text: "e".into() });
+
+        // Multiple unrecognized SS3 sequences back-to-back.
+        let events = parse_input("\x1bOA\x1bOB");
+        assert!(
+            events.is_empty(),
+            "two unrecognized SS3 sequences should produce no events, got: {events:?}"
         );
     }
 

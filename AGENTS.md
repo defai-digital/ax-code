@@ -91,6 +91,8 @@ Rust validation for the Cargo workspace should run from `crates/`, not the repos
 - `cargo build` — build all crates.
 - `cargo fmt --check` — verify Rust formatting (gofmt-style check; `cargo fmt` to auto-fix).
 
+**Rust compilation gate**: `cargo build` must pass for **all** crates in the workspace before any PR is submitted. If a change to one crate breaks compilation in another (e.g. via shared types or FFI signatures), the agent must fix the downstream breakage in the same change set. Run `cargo build` from `crates/` to verify the entire workspace compiles cleanly.
+
 ### Rebuilding After Source Changes
 
 After code changes, rebuild the bundled runtime and refresh the launcher:
