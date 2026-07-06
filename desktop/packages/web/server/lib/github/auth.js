@@ -14,16 +14,11 @@ const DEFAULT_GITHUB_CLIENT_ID = "Ov23lizomPOC3eFYo56r"
 const DEFAULT_GITHUB_SCOPES = "repo read:org workflow read:user user:email"
 
 function ensureStorageDir() {
-  if (!fs.existsSync(STORAGE_DIR)) {
-    fs.mkdirSync(STORAGE_DIR, { recursive: true })
-  }
+  fs.mkdirSync(STORAGE_DIR, { recursive: true })
 }
 
 function readJsonFile() {
   ensureStorageDir()
-  if (!fs.existsSync(STORAGE_FILE)) {
-    return null
-  }
   try {
     const raw = fs.readFileSync(STORAGE_FILE, "utf8")
     const trimmed = raw.trim()
@@ -36,6 +31,9 @@ function readJsonFile() {
     }
     return parsed
   } catch (error) {
+    if (error && error.code === "ENOENT") {
+      return null
+    }
     console.error("Failed to read GitHub auth file:", error)
     return null
   }
@@ -252,8 +250,10 @@ export function clearGitHubAuth() {
     }
     const remaining = list.filter((entry) => !entry.current)
     if (!remaining.length) {
-      if (fs.existsSync(STORAGE_FILE)) {
+      try {
         fs.unlinkSync(STORAGE_FILE)
+      } catch (error) {
+        if (!error || error.code !== "ENOENT") throw error
       }
       return true
     }
