@@ -61,7 +61,7 @@ explicit trust for third-party taps.
 1. Install AX Code with PowerShell:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
 2. Download and run the latest AX Code Desktop installer from the [GitHub Releases](https://github.com/defai-digital/ax-code/releases) page.
@@ -91,7 +91,7 @@ brew install defai-digital/ax-code/ax-code
 **Windows**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
 Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
@@ -116,7 +116,7 @@ brew upgrade --cask defai-digital/ax-code-desktop/ax-code
 **Windows**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
 ### From Source (contributors)

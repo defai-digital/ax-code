@@ -17,14 +17,14 @@ brew tap defai-digital/ax-code
 brew install ax-code
 
 # GitHub release installer (Windows PowerShell)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
 For security-sensitive environments, inspect the installer before execution and pin the release version used by CI:
 
 ```powershell
 $AX_CODE_VERSION = "<release>"
-irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 -OutFile ax-code-install.ps1
+irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 -OutFile ax-code-install.ps1
 Get-Content .\ax-code-install.ps1
 .\ax-code-install.ps1 -Version $AX_CODE_VERSION -NoModifyPath
 ```
@@ -42,7 +42,7 @@ Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on b
 | Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
 | Homebrew formula                     | `brew tap defai-digital/ax-code && brew install ax-code`                                                                                       | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
-| Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
+| Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `node-bundled`         | Manual               | Manual validation or troubleshooting                               |
 | Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
 | Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                               | `source`               | Contributor          | Contributor-only source debugging                                  |
@@ -73,7 +73,7 @@ For supported packaged channels:
 ```bash
 ax-code upgrade
 brew upgrade ax-code
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
 ## Contributor Launcher Behavior

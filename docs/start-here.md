@@ -47,7 +47,7 @@ The rest of the documentation maps onto those layers.
 - Start with the [root README](../README.md) for install and first launch.
 - Supported install paths use the compiled runtime:
   - Homebrew for macOS CLI: `brew tap defai-digital/ax-code && brew install ax-code`
-  - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"`
+  - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"`
 - The Bash installer is not the canonical Windows setup path.
 - npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for platform policy, runtime labels, and the local launcher matrix.
 - Use `/connect` or `ax-code providers login` to set a model. See [Supported Providers and Models](supported-providers.md) for Cloud API providers including OpenRouter, CLI providers, AX Engine, and model ids.

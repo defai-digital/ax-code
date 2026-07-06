@@ -58,9 +58,13 @@ export function expectedReleaseSignatures() {
   return expectedReleaseArchives().map((asset) => `${asset}.minisig`)
 }
 
+export function expectedReleaseInstallerAssets() {
+  return ["install.ps1"]
+}
+
 export function missingReleaseAssets(
   actual: Iterable<string>,
-  expected = [...expectedReleaseArchives(), ...expectedReleaseSignatures()],
+  expected = [...expectedReleaseArchives(), ...expectedReleaseSignatures(), ...expectedReleaseInstallerAssets()],
 ) {
   const found = new Set(actual)
   return expected.filter((asset) => !found.has(asset))

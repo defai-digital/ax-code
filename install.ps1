@@ -34,7 +34,7 @@ Options:
   -NoModifyPath         Do not update the user PATH
 
 Examples:
-  irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex
+  irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex
   .\install.ps1 -Version 5.8.0
   .\install.ps1 -Binary C:\path\to\ax-code.cmd
 "@
@@ -78,17 +78,24 @@ function Get-TargetArch {
   }
 }
 
-function Get-LatestVersion {
-  $release = Invoke-RestMethod `
-    -Uri "https://api.github.com/repos/$Repo/releases/latest" `
+function Get-LatestVersion([string]$FileName) {
+  $releases = Invoke-RestMethod `
+    -Uri "https://api.github.com/repos/$Repo/releases?per_page=50" `
     -UseBasicParsing `
     -Headers @{ "User-Agent" = "$App-installer" }
 
-  $tag = [string]$release.tag_name
-  if (-not $tag) {
-    throw "Failed to fetch latest release version"
+  foreach ($release in @($releases)) {
+    $tag = [string]$release.tag_name
+    if (-not $tag -or $tag -notmatch "^v\d+\.\d+\.\d+$") {
+      continue
+    }
+    $asset = @($release.assets) | Where-Object { [string]$_.name -eq $FileName } | Select-Object -First 1
+    if ($asset) {
+      return $tag.TrimStart("v")
+    }
   }
-  return $tag.TrimStart("v")
+
+  throw "Failed to fetch latest CLI release version containing $FileName"
 }
 
 function Resolve-ReleaseDownload {
@@ -100,8 +107,8 @@ function Resolve-ReleaseDownload {
     $specificVersion = $requested.TrimStart("v")
     $url = "https://github.com/$Repo/releases/download/v$specificVersion/$filename"
   } else {
-    $specificVersion = Get-LatestVersion
-    $url = "https://github.com/$Repo/releases/latest/download/$filename"
+    $specificVersion = Get-LatestVersion $filename
+    $url = "https://github.com/$Repo/releases/download/v$specificVersion/$filename"
   }
 
   return @{

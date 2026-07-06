@@ -166,7 +166,9 @@ jobs:
         shell: pwsh
         run: |
           $Version = "${{ steps.version.outputs.version }}"
-          ./install.ps1 -Version $Version -NoModifyPath
+          $Installer = Join-Path $env:RUNNER_TEMP "install.ps1"
+          Invoke-RestMethod -Uri "https://github.com/${{ github.repository }}/releases/download/v$Version/install.ps1" -OutFile $Installer -UseBasicParsing
+          & $Installer -Version $Version -NoModifyPath
           "$HOME\.ax-code\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: ax-code --version

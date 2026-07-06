@@ -4,6 +4,7 @@ import {
   defaultInstallChannel,
   defaultTag,
   expectedReleaseArchives,
+  expectedReleaseInstallerAssets,
   expectedReleaseSignatures,
   isPrerelease,
   missingReleaseAssets,
@@ -39,6 +40,7 @@ describe("publish-github-release helpers", () => {
       "ax-code-windows-x64.zip.minisig",
       "ax-code-windows-arm64.zip.minisig",
     ])
+    expect(expectedReleaseInstallerAssets()).toEqual(["install.ps1"])
   })
 
   test("reports missing release assets", () => {
@@ -48,6 +50,7 @@ describe("publish-github-release helpers", () => {
         "ax-code-windows-x64.zip",
         "ax-code-windows-arm64.zip",
         "ax-code-darwin-arm64.zip.minisig",
+        "install.ps1",
       ]),
     ).toEqual(["ax-code-windows-x64.zip.minisig", "ax-code-windows-arm64.zip.minisig"])
   })

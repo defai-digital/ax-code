@@ -507,6 +507,7 @@ jobs:
         run: |
           mkdir -p release-assets
           gh release download "$TAG" --repo "$REPOSITORY" --dir release-assets --clobber
+          cp install.ps1 release-assets/install.ps1
 
       - name: Sign release assets
         env:
@@ -542,10 +543,12 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          uploads=(release-assets/install.ps1)
           signatures=()
+          test -f release-assets/install.ps1
           while IFS= read -r -d '' file; do signatures+=("$file"); done < <(find release-assets -type f -name '*.minisig' -print0)
           test "${#signatures[@]}" -gt 0
-          gh release upload "$TAG" --repo "$REPOSITORY" --clobber "${signatures[@]}"
+          gh release upload "$TAG" --repo "$REPOSITORY" --clobber "${uploads[@]}" "${signatures[@]}"
 
   finalize-release:
     needs:

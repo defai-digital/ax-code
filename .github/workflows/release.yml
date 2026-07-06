@@ -287,6 +287,9 @@ jobs:
           path: packages/ax-code/dist/
           merge-multiple: true
 
+      - name: Add PowerShell installer release asset
+        run: cp install.ps1 packages/ax-code/dist/install.ps1
+
       - name: Install minisign
         run: brew install minisign
 
@@ -380,7 +383,7 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           shopt -s nullglob
-          files=(packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
+          files=(packages/ax-code/dist/install.ps1 packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "::error::no release assets found to upload"
             exit 1
