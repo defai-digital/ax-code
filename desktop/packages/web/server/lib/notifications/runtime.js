@@ -61,7 +61,7 @@ export const createNotificationTriggerRuntime = (deps) => {
 
   const setCachedSessionParentId = (sessionId, parentID) => {
     if (!parentID) return
-    sessionParentIdCache.set(sessionId, { parentID: parentID ?? null, at: Date.now() })
+    sessionParentIdCache.set(sessionId, { parentID, at: Date.now() })
   }
 
   const getParentIdFromPayload = (payload) => {
@@ -126,7 +126,7 @@ export const createNotificationTriggerRuntime = (deps) => {
     if (!sessionId || autoAcceptingSessions.size === 0) return false
     let current = sessionId
     const seen = new Set()
-    while (current && !seen.has(current)) {
+    while (!seen.has(current)) {
       if (autoAcceptingSessions.has(current)) return true
       seen.add(current)
       const parent = await fetchSessionParentId(current)

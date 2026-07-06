@@ -52,12 +52,10 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
         return
       }
 
-      if (!active) {
-        if (focus && !renderer.currentFocusedRenderable) {
-          focusRenderable(focus, { name: "keybind-leader-restore-focus" })
-        }
-        setStore("leader", false)
+      if (focus && !renderer.currentFocusedRenderable) {
+        focusRenderable(focus, { name: "keybind-leader-restore-focus" })
       }
+      setStore("leader", false)
     }
 
     function parse(evt: ParsedKey): Keybind.Info {

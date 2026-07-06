@@ -96,8 +96,6 @@ export const PrCommand = cmd({
           { nothrow: true },
         )
 
-        let sessionId: string | undefined
-
         if (prInfoResult.code === 0) {
           const prInfoText = prInfoResult.text
           if (prInfoText.trim()) {
@@ -132,8 +130,7 @@ export const PrCommand = cmd({
         UI.println("Starting ax-code...")
         UI.println()
 
-        const axcodeArgs = sessionId ? ["-s", sessionId] : []
-        const axcodeProcess = Process.spawn(["ax-code", ...axcodeArgs], {
+        const axcodeProcess = Process.spawn(["ax-code"], {
           stdin: "inherit",
           stdout: "inherit",
           stderr: "inherit",
