@@ -381,7 +381,7 @@ function downloadReleaseArchives(options: PublishGithubReleaseOptions, assetDir:
   if (options.dryRun) return
   const missing = archivePaths(assetDir).filter((file) => !fs.existsSync(file))
   if (missing.length > 0)
-    throw new Error(`Downloaded release is missing expected archives: ${missing.map(path.basename).join(", ")}`)
+    throw new Error(`Downloaded release is missing expected archives: ${missing.map((file) => path.basename(file)).join(", ")}`)
 }
 
 function signAndUpload(options: PublishGithubReleaseOptions, assetDir: string) {
@@ -453,7 +453,9 @@ async function main() {
   ensurePreflight(options)
   tagExists(options.tag, options)
   createAndPushTag(options)
-  watchWorkflow("release.yml", options.tag, "release", options)
+  // release.yml is triggered by tag pushes, not branches. Passing the tag name
+  // as --branch would filter out the run and the watch would time out.
+  watchWorkflow("release.yml", undefined, "release", options)
 
   const assetDir = releaseAssetDir(options)
   console.log(`Using release asset directory: ${assetDir}`)

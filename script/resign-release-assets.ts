@@ -225,7 +225,7 @@ function downloadArchives(tag: string, options: ResignOptions, assetDir: string)
   if (options.dryRun) return
   const missing = archivePaths(assetDir).filter((file) => !fs.existsSync(file))
   if (missing.length > 0) {
-    throw new Error(`${tag} is missing expected archives: ${missing.map(path.basename).join(", ")}`)
+    throw new Error(`${tag} is missing expected archives: ${missing.map((file) => path.basename(file)).join(", ")}`)
   }
 }
 

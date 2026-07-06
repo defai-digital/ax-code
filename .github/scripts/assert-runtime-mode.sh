@@ -13,8 +13,9 @@ LABEL="${3:-$CHANNEL}"
 CHECK_LABEL="${LABEL}"
 
 if [ "$CHANNEL" = "source" ]; then
-  RUNTIME_NAME="Bun"
-  RUNTIME_RE='(bun-bundled|source)'
+  # Source launcher runs on Node.js (Bun was removed from the project).
+  RUNTIME_NAME="Node"
+  RUNTIME_RE='source'
 else
   # Homebrew/Windows ship the node-bundled distribution.
   RUNTIME_NAME="Node"
