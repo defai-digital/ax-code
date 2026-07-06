@@ -1,13 +1,15 @@
 Capture a visual snapshot of a web page or image file for review.
 
 The snapshot tool captures the current visual state of a target (URL or
-local image file) and attaches it to the session as an image. The agent
-can then critique the snapshot using visual_critique or provide direct
-feedback.
+local image file, native screen/window, terminal window, or rectangular
+screen region) and attaches it to the session as an image. The agent can
+then critique the snapshot using visual_critique or provide direct feedback.
 
 This is a review-only tool — it captures a visual state without making
 any changes to the target. Use it to:
 - Review the current state of a local web app
+- Review a native desktop app window
+- Review a terminal/TUI window
 - Attach a screenshot for visual analysis
 - Compare before/after states by taking snapshots at different times
 
@@ -17,7 +19,15 @@ The snapshot is stored as a visual run artifact under
 Input:
 - url: URL to capture (for local web apps, e.g. http://localhost:3000)
 - filePath: Path to an existing image file to attach instead of capturing
-- At least one of `url` or `filePath` must be provided.
+- source: Native capture source for non-web UI (`screen`,
+  `frontmost-window`, `window`, `region`, or `terminal`)
+- appName/windowTitle/windowID: Optional native window selectors
+- x/y/width/height: Required for `source: "region"`
+- At least one of `url`, `filePath`, or `source` must be provided.
+
+Native support:
+- macOS supports screen, region, frontmost-window, window, and terminal capture.
+- Windows and Linux support screen/region capture as best-effort fallbacks.
 
 Output:
 - Screenshot attached as an image to the session

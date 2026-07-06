@@ -14,6 +14,8 @@ export type VisualRunStatus = "running" | "passed" | "failed" | "error" | "block
 export type VisualTarget =
   | { type: "url"; url: string; profile: "isolated" | "chrome" }
   | { type: "desktop-window"; appID: string; windowTitle?: string }
+  | { type: "screen"; display?: number; region?: { x: number; y: number; width: number; height: number } }
+  | { type: "terminal"; appName?: string; windowTitle?: string }
   | { type: "snapshot"; source: "desktop" | "upload" | "browser" }
 
 export type VisualArtifact = {
