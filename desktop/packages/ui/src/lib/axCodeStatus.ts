@@ -256,7 +256,7 @@ export const buildAxCodeStatusReport = async (): Promise<string> => {
 
   const lines: string[] = []
   lines.push(`Time: ${now.toISOString()}`)
-  lines.push(`AX Code Desktop version: ${appVersion}`)
+  lines.push(`AX Code version: ${appVersion}`)
   lines.push(`Runtime: ${origin || "(unknown)"} (api=${origin ? `${origin}${API_PATHS.base}` : "(unknown)"})`)
   lines.push(`Event stream: ${eventStreamStatus}`)
   lines.push(`Directory: ${directory || "(none)"}`)

@@ -147,7 +147,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) 
           <AxCodeIcon width={64} height={64} />
 
           <div className="space-y-1">
-            <h2 className="text-lg font-semibold">AX Code Desktop</h2>
+            <h2 className="text-lg font-semibold">AX Code</h2>
             <div className="space-y-0.5 typography-meta text-muted-foreground">
               {displayVersion && <p>{t("aboutDialog.openChamberVersionLabel", { version: displayVersion })}</p>}
               {axCodeVersion && <p>{t("aboutDialog.axCodeVersionLabel", { version: axCodeVersion })}</p>}

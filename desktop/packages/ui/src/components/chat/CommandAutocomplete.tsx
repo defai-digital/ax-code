@@ -330,7 +330,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                           <span className={TYPE_BADGE_CLASS}>{t("chat.commandAutocomplete.badge.command")}</span>
                         )}
                         {isOpenChamberBadge ? (
-                          <span className={NEUTRAL_BADGE_CLASS}>AX Code Desktop</span>
+                          <span className={NEUTRAL_BADGE_CLASS}>AX Code</span>
                         ) : isSystem ? (
                           <span className={NEUTRAL_BADGE_CLASS}>{t("chat.commandAutocomplete.badge.system")}</span>
                         ) : command.scope ? (

@@ -1255,7 +1255,7 @@ export const Header: React.FC = () => {
 
   const currentSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {
-      return activeProjectLabel ?? "AX Code Desktop"
+      return activeProjectLabel ?? "AX Code"
     }
     const trimmedTitle = currentSession?.title?.trim()
     return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : "Untitled Session"

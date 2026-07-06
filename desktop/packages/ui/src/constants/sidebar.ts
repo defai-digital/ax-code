@@ -64,8 +64,8 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
   },
   {
     id: "settings",
-    label: "AX Code Desktop",
-    description: "AX Code Desktop settings: themes, fonts, and preferences.",
+    label: "AX Code",
+    description: "AX Code settings: themes, fonts, and preferences.",
     icon: "settings-3",
   },
 ]

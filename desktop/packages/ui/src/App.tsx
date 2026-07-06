@@ -113,7 +113,7 @@ const UnsupportedMobileRuntimeScreen: React.FC = () => (
     <div className="flex max-w-md flex-col gap-3 text-center">
       <h1 className="typography-title text-foreground">Desktop Required</h1>
       <p className="typography-body text-muted-foreground">
-        AX Code Desktop is intended for enterprise desktop workstations. Mobile and tablet browsers are not supported.
+        AX Code is intended for enterprise desktop workstations. Mobile and tablet browsers are not supported.
       </p>
     </div>
   </div>

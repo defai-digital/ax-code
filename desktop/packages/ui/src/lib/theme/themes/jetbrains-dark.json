@@ -2,8 +2,8 @@
   "metadata": {
     "id": "jetbrains-dark",
     "name": "JetBrains",
-    "description": "JetBrains IDE-inspired colors for AX Code Desktop - dark variant",
-    "author": "Artem Evsevev, adapted for AX Code Desktop",
+    "description": "JetBrains IDE-inspired colors for AX Code - dark variant",
+    "author": "Artem Evsevev, adapted for AX Code",
     "version": "1.0.0",
     "variant": "dark",
     "tags": ["dark", "jetbrains", "ide", "blue"]

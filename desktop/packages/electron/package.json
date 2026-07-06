@@ -2,7 +2,7 @@
   "name": "@ax-code/electron",
   "version": "6.9.3",
   "private": true,
-  "description": "AX Code Desktop — Electron desktop shell",
+  "description": "AX Code — Electron desktop shell",
   "author": "DEFAI Private Limited",
   "main": "dist/main.js",
   "type": "commonjs",

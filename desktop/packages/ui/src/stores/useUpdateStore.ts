@@ -31,7 +31,7 @@ interface UpdateStore extends UpdateState {
 }
 
 const UPDATE_FAILED_MESSAGE = "Update failed. Please try again or open the release page."
-const RESTART_FAILED_MESSAGE = "Failed to restart AX Code Desktop."
+const RESTART_FAILED_MESSAGE = "Failed to restart AX Code."
 let updateCheckRequestId = 0
 let updateDownloadRequestId = 0
 
@@ -72,7 +72,7 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
     try {
       if (runtime === "desktop") {
         // The desktop shell updates itself via its native updater
-        // (electron-updater against the AX Code Desktop GitHub releases). That
+        // (electron-updater against the AX Code GitHub releases). That
         // result is authoritative — do not consult the OpenChamber npm/web
         // update API here, or the dialog would surface OpenChamber's package
         // version and changelog instead of AX Code's.

@@ -43,7 +43,7 @@ export const ConfigUpdateOverlay: React.FC = () => {
             </div>
           ) : (
             <div className="text-xs text-muted-foreground/80">
-              This can take a few minutes. AX Code Desktop will resume automatically.
+              This can take a few minutes. AX Code will resume automatically.
             </div>
           )}
         </div>

@@ -623,7 +623,7 @@ jobs:
             `  sha256 "${sha256}"`,
             '',
             `  url "https://github.com/defai-digital/ax-code/releases/download/${tag}/AX-Code-#{version}-mac-arm64.dmg"`,
-            '  name "AX Code Desktop"',
+            '  name "AX Code"',
             '  desc "AI coding assistant desktop app powered by AX Code"',
             '  homepage "https://github.com/defai-digital/ax-code"',
             '',

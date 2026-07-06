@@ -1,7 +1,7 @@
 {
   "name": "ax-code-desktop",
   "version": "6.9.3",
-  "description": "AX Code Desktop local web runtime.",
+  "description": "AX Code local web runtime.",
   "private": false,
   "license": "Apache-2.0",
   "type": "module",

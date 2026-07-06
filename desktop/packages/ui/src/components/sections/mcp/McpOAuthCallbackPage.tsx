@@ -18,7 +18,7 @@ const resolveMcpOAuthCallbackCode = (params: URLSearchParams): string => {
   const code = parseQueryParam(params, "code")
   if (!code) {
     throw new Error(
-      "Missing OAuth authorization code. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+      "Missing OAuth authorization code. Start authorization again from MCP Settings or paste the returned code into AX Code manually.",
     )
   }
   return code
@@ -27,7 +27,7 @@ const resolveMcpOAuthCallbackCode = (params: URLSearchParams): string => {
 const normalizeMcpAuthErrorMessage = (error: unknown, fallback: string): string => {
   const message = error instanceof Error ? error.message : fallback
   if (/oauth state required/i.test(message)) {
-    return "Authorization session expired or was cleared during reload. Return to AX Code Desktop and click Authorize again."
+    return "Authorization session expired or was cleared during reload. Return to AX Code and click Authorize again."
   }
   return message
 }
@@ -43,7 +43,7 @@ const resolvePendingAuthContextRef = (params: URLSearchParams): PendingAuthConte
   const stateKey = parseMcpOAuthCallbackStateKey(params)
   if (!stateKey) {
     throw new Error(
-      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code manually.",
     )
   }
   return { url: buildPendingAuthContextUrl(stateKey) }
@@ -62,7 +62,7 @@ const fetchPendingAuthContext = async (
   const response = await fetch(ref.url)
   if (!response.ok) {
     throw new Error(
-      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code manually.",
     )
   }
 
@@ -72,7 +72,7 @@ const fetchPendingAuthContext = async (
   } | null
   if (!payload?.name?.trim()) {
     throw new Error(
-      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+      "Authorization session details were not available. Start authorization again from MCP Settings or paste the returned code into AX Code manually.",
     )
   }
 
@@ -129,7 +129,7 @@ export const McpOAuthCallbackPage: React.FC = () => {
         await completeAuth(pendingContext.name, code, pendingContext.directory)
         await clearPendingAuthContext(pendingAuthContextRef)
         setStatus("success")
-        setMessage("Authorization completed. You can close this tab and return to AX Code Desktop.")
+        setMessage("Authorization completed. You can close this tab and return to AX Code.")
       } catch (authError) {
         await clearPendingAuthContext(pendingAuthContextRef)
         setStatus("error")
@@ -173,7 +173,7 @@ export const McpOAuthCallbackPage: React.FC = () => {
                 window.location.replace("/")
               }}
             >
-              Return to AX Code Desktop
+              Return to AX Code
             </Button>
           </div>
         )}

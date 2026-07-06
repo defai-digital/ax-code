@@ -12,7 +12,7 @@ import { getRequestOrigin, getRequestRpId } from "../security/request-origin.js"
 
 const DEFAULT_STORE_VERSION = 1
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60 * 1000
-const DEFAULT_RP_NAME = "AX Code Desktop"
+const DEFAULT_RP_NAME = "AX Code"
 
 const AX_CODE_DESKTOP_DATA_DIR = process.env.AX_CODE_DESKTOP_DATA_DIR
   ? path.resolve(process.env.AX_CODE_DESKTOP_DATA_DIR)
@@ -318,7 +318,7 @@ export const createUiPasskeys = ({
       rpID,
       userID,
       userName: "openchamber-ui",
-      userDisplayName: "AX Code Desktop UI",
+      userDisplayName: "AX Code UI",
       attestationType: "none",
       excludeCredentials: getPasskeysForRpId(store, rpID).map((passkey) => ({
         id: passkey.id,
@@ -456,7 +456,7 @@ export const createUiPasskeys = ({
     const passkey = store.passkeys.find((item) => item.id === response?.id)
 
     if (!passkey) {
-      const error = new Error("That passkey is not registered for this AX Code Desktop instance")
+      const error = new Error("That passkey is not registered for this AX Code instance")
       error.statusCode = 404
       throw error
     }
