@@ -261,7 +261,10 @@ export namespace LSPClient {
       })
       const exists = diagnostics.has(filePath)
       setDiagnostics(filePath, params.diagnostics)
-      if (!exists && input.serverID === "typescript") return
+      // Only suppress the first TypeScript diagnostic event when it carries
+      // zero diagnostics (the known "empty initial push" pattern). Real errors
+      // in the first event must not be silently dropped.
+      if (!exists && input.serverID === "typescript" && params.diagnostics.length === 0) return
       Bus.publishDetached(Event.Diagnostics, { path: filePath, serverID: input.serverID })
     })
     connection.onRequest("window/workDoneProgress/create", (params) => {

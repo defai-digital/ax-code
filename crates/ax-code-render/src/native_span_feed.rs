@@ -116,6 +116,7 @@ struct SpanRing {
     capacity: u32,
     head: u32,
     tail: u32,
+    count: u32,
 }
 
 impl SpanRing {
@@ -134,11 +135,12 @@ impl SpanRing {
             capacity,
             head: 0,
             tail: 0,
+            count: 0,
         }
     }
 
     fn count(&self) -> u32 {
-        self.tail.wrapping_sub(self.head)
+        self.count
     }
 
     fn grow(&mut self, block: bool) -> Result<(), StreamError> {
@@ -170,6 +172,7 @@ impl SpanRing {
         self.capacity = new_capacity;
         self.head = 0;
         self.tail = old_count;
+        // self.count unchanged — same logical elements
         Ok(())
     }
 
@@ -180,6 +183,7 @@ impl SpanRing {
         let index = (self.tail % self.capacity) as usize;
         self.buffer[index] = span;
         self.tail = self.tail.wrapping_add(1);
+        self.count += 1;
         Ok(())
     }
 
@@ -194,11 +198,15 @@ impl SpanRing {
             out[i as usize] = self.buffer[index];
         }
         self.head = self.head.wrapping_add(to_read);
+        self.count -= to_read;
         to_read
     }
 }
 
+const ALIVE_MAGIC: u32 = 0xDEAD_BEEF;
+
 pub struct Stream {
+    alive: u32,
     options: Options,
     chunks: Vec<Box<[u8]>>,
     current_chunk_index: usize,
@@ -220,6 +228,7 @@ impl Stream {
     pub fn create(options: Option<Options>) -> Option<Box<Stream>> {
         let opts = normalize_options(options.unwrap_or_else(default_options));
         let mut stream = Box::new(Stream {
+            alive: ALIVE_MAGIC,
             options: opts,
             chunks: Vec::new(),
             current_chunk_index: 0,
@@ -339,7 +348,10 @@ impl Stream {
         if (chunk_index as usize) < self.state_buffer.len() {
             let v = &mut self.state_buffer[chunk_index as usize];
             *v = v.saturating_add(1);
-            if *v == 255 {
+            // Only force write_offset to end-of-chunk when this is the
+            // currently-being-written chunk; otherwise we'd corrupt the
+            // active chunk's write position.
+            if *v == 255 && chunk_index as usize == self.current_chunk_index {
                 self.write_offset = self.options.chunk_size as usize;
             }
         }
@@ -430,6 +442,14 @@ impl Stream {
             return 0;
         }
         let count = self.span_ring.pop_many(out);
+        // Decrement per-chunk refcounts for each consumed span so that
+        // is_chunk_free() can recycle committed chunks.
+        for span in out.iter().take(count as usize) {
+            let idx = span.chunk_index as usize;
+            if idx < self.state_buffer.len() {
+                self.state_buffer[idx] = self.state_buffer[idx].saturating_sub(1);
+            }
+        }
         self.stats.pending_spans = self.span_ring.count();
         count
     }
@@ -535,6 +555,15 @@ pub fn destroy_native_span_feed(stream: f64) {
     let Some(ptr) = ffi::addr_from_f64(stream).map(|addr| addr as *mut Stream) else {
         return;
     };
+    if ptr.is_null() {
+        return;
+    }
+    // Double-free guard: check the alive sentinel before dropping.
+    let alive = unsafe { (*ptr).alive };
+    if alive != ALIVE_MAGIC {
+        return; // already destroyed or invalid pointer
+    }
+    unsafe { (*ptr).alive = 0 };
     drop(unsafe { Box::from_raw(ptr) });
 }
 
@@ -747,5 +776,93 @@ mod tests {
         }
         let out = drain_all(&mut s);
         assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn alive_sentinel_prevents_double_free() {
+        let stream = Stream::create(None).unwrap();
+        let ptr = Box::into_raw(stream);
+        // First destroy: sentinel is set, should succeed.
+        assert_eq!(unsafe { (*ptr).alive }, ALIVE_MAGIC);
+        unsafe { (*ptr).alive = 0 };
+        // Simulate second destroy: sentinel is zero, should bail out.
+        assert_ne!(unsafe { (*ptr).alive }, ALIVE_MAGIC);
+        // Reconstitute and drop to avoid leak.
+        drop(unsafe { Box::from_raw(ptr) });
+    }
+
+    #[test]
+    fn drain_spans_decrements_chunk_state() {
+        // Verify that draining spans decrements state_buffer so that
+        // committed chunks can be recycled via ensure_writable_chunk.
+        let opts = Options {
+            chunk_size: 16,
+            initial_chunks: 2,
+            max_bytes: 0,
+            growth_policy: GROWTH_BLOCK,
+            auto_commit_on_full: 1,
+            span_queue_capacity: 0,
+        };
+        let mut s = Stream::create(Some(opts)).unwrap();
+
+        // Fill both chunks to force auto-commit.
+        let data = vec![0xAA_u8; 16]; // exactly one chunk
+        s.write(&data).unwrap();
+        s.commit().unwrap();
+
+        // The first chunk should now have a non-zero state (span pending).
+        assert!(
+            s.state_buffer[0] > 0,
+            "state_buffer[0] should be non-zero after commit"
+        );
+
+        // Drain the spans.
+        let mut out = vec![
+            SpanInfo {
+                chunk_ptr: 0,
+                offset: 0,
+                len: 0,
+                chunk_index: 0,
+                reserved: 0,
+            }; 64
+        ];
+        let n = s.drain_spans(&mut out);
+        assert!(n > 0, "should have drained at least one span");
+
+        // After draining, state_buffer[0] should be decremented back to 0.
+        assert_eq!(
+            s.state_buffer[0], 0,
+            "state_buffer[0] should be 0 after draining all spans for chunk 0"
+        );
+
+        // is_chunk_free should now return true for chunk 0.
+        assert!(
+            s.is_chunk_free(0),
+            "chunk 0 should be free after draining its spans"
+        );
+    }
+
+    #[test]
+    fn span_ring_count_tracks_push_pop() {
+        let mut ring = SpanRing::new(4);
+        assert_eq!(ring.count(), 0);
+
+        let span = SpanInfo {
+            chunk_ptr: 0,
+            offset: 0,
+            len: 10,
+            chunk_index: 0,
+            reserved: 0,
+        };
+        ring.push(span, false).unwrap();
+        assert_eq!(ring.count(), 1);
+
+        ring.push(span, false).unwrap();
+        assert_eq!(ring.count(), 2);
+
+        let mut out = [span; 4];
+        let popped = ring.pop_many(&mut out);
+        assert_eq!(popped, 2);
+        assert_eq!(ring.count(), 0);
     }
 }

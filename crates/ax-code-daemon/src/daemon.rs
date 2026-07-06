@@ -268,11 +268,17 @@ pub fn daemon_start(project_dir: String, db_path: String) -> napi::Result<String
 pub fn daemon_stop(socket_path: String) -> napi::Result<()> {
     let resp = send_command(&socket_path, r#"{"cmd":"stop"}"#)?;
     if resp.contains("stopped") {
-        // Give the daemon thread time to exit its loop and clean up the socket.
-        // run_daemon removes the socket file on exit; we only remove as a fallback
-        // after a generous timeout to avoid a double-delete race.
-        std::thread::sleep(Duration::from_millis(300));
-        // Best-effort cleanup if run_daemon didn't remove it yet.
+        // Poll for socket removal instead of fixed sleep to avoid race with
+        // run_daemon's own cleanup. Check every 50ms for up to 1 second.
+        let sock = Path::new(&socket_path);
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while Instant::now() < deadline {
+            if !sock.exists() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        // Best-effort cleanup if run_daemon didn't remove it.
         let _ = std::fs::remove_file(&socket_path);
         Ok(())
     } else {

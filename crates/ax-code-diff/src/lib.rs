@@ -298,13 +298,7 @@ pub fn apply_chunks(
 
         // Handle pure addition (no old lines)
         if chunk.old_lines.is_empty() {
-            let insertion_idx = if !original_lines.is_empty()
-                && original_lines.last().map(|s| s.as_str()) == Some("")
-            {
-                original_lines.len() - 1
-            } else {
-                original_lines.len()
-            };
+            let insertion_idx = line_index.min(original_lines.len());
             replacements.push((insertion_idx, 0, chunk.new_lines.clone()));
             continue;
         }

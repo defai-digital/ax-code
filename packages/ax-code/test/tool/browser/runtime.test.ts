@@ -26,6 +26,8 @@ function createMockLocator() {
     screenshot: vi.fn().mockResolvedValue(Buffer.from("element-png-data")),
     evaluate: vi.fn().mockResolvedValue(undefined),
     dragTo: vi.fn().mockResolvedValue(undefined),
+    count: vi.fn().mockResolvedValue(1),
+    boundingBox: vi.fn().mockResolvedValue({ x: 0, y: 0, width: 200, height: 100 }),
   }
 }
 
@@ -373,7 +375,7 @@ describe("browser runtime", () => {
     expect(page.screenshot).toHaveBeenCalledWith(expect.objectContaining({ fullPage: false, type: "png" }))
   })
 
-  test("screenshot with UID captures element", async () => {
+  test("screenshot with UID captures element and returns element dimensions", async () => {
     const page = createMockPage()
     const ctx = createMockContext()
     injectPage(runtime, "page_1", page, ctx)
@@ -381,7 +383,24 @@ describe("browser runtime", () => {
     const shot = await runtime.screenshot("latest", { uid: "uid_5", format: "png" })
     expect(shot.pageID).toBe("page_1")
     expect(page.locator).toHaveBeenCalledWith('[data-uid="uid_5"]')
+    expect(page._locator.count).toHaveBeenCalled()
+    expect(page._locator.boundingBox).toHaveBeenCalled()
     expect(page._locator.screenshot).toHaveBeenCalled()
+    // Should return element bounding box dimensions, not viewport
+    expect(shot.width).toBe(200)
+    expect(shot.height).toBe(100)
+  })
+
+  test("screenshot with stale UID throws fast instead of timing out", async () => {
+    const page = createMockPage()
+    const ctx = createMockContext()
+    injectPage(runtime, "page_1", page, ctx)
+
+    // Simulate element not found (stale UID)
+    page._locator.count.mockResolvedValueOnce(0)
+
+    await expect(runtime.screenshot("latest", { uid: "uid_stale", format: "png" }))
+      .rejects.toThrow(/not found on page/)
   })
 
   test("screenshot with jpeg format sets quality", async () => {

@@ -82,18 +82,21 @@ export async function captureSnapshot(
 
       // Open the URL in a new page with default desktop viewport
       const page = await runtime.open(source.url, { width: 1440, height: 900 })
+      try {
+        // Take a screenshot
+        const screenshot = await runtime.screenshot(page.pageID, {
+          fullPage: false,
+          format: "png",
+        })
 
-      // Take a screenshot
-      const screenshot = await runtime.screenshot(page.pageID, {
-        fullPage: false,
-        format: "png",
-      })
-
-      screenshotData = screenshot.data
-      format = screenshot.format === "jpeg" ? "jpeg" : "png"
-      width = screenshot.width
-      height = screenshot.height
-      label = `Snapshot: ${source.url}`
+        screenshotData = screenshot.data
+        format = screenshot.format === "jpeg" ? "jpeg" : "png"
+        width = screenshot.width
+        height = screenshot.height
+        label = `Snapshot: ${source.url}`
+      } finally {
+        await runtime.closePage(page.pageID)
+      }
     }
   }
 

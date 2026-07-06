@@ -63,17 +63,20 @@ describe("session.processor", () => {
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
 
-    expect(src.slice(start, end)).toContain("deltaBatcher.flush()")
-    expect(src.slice(start, end)).toContain("persistFinalizedInFlightParts({ overwriteEndTime: false })")
+    // Delta flush must be awaited so events are delivered before compaction rewrites history (BUG-4).
+    expect(src.slice(start, end)).toContain("await deltaBatcher.flush()")
+    // Part finalization is consolidated into the final DB transaction (BUG-5),
+    // so persistFinalizedInFlightParts should NOT appear in the compaction block.
+    expect(src.slice(start, end)).not.toContain("persistFinalizedInFlightParts")
   })
 
-  test("finalizes in-flight parts before processor error handling", async () => {
+  test("finalizes in-flight parts in the final transaction, not in the catch block", async () => {
     const src = await readFile(path.join(import.meta.dirname, "../../src/session/processor-impl.ts"), "utf-8")
-    const catchStart = src.indexOf("} catch (e: unknown) {")
-    const retryStart = src.indexOf("const errStack", catchStart)
-    expect(catchStart).toBeGreaterThan(-1)
-    expect(retryStart).toBeGreaterThan(catchStart)
-    expect(src.slice(catchStart, retryStart)).toContain("persistFinalizedInFlightParts({ overwriteEndTime: true })")
+    // persistFinalizedInFlightParts was removed — part finalization is now
+    // inlined into the single final DB transaction (BUG-5).
+    expect(src).not.toContain("persistFinalizedInFlightParts")
+    // The final transaction must write finalized parts alongside other cleanup.
+    expect(src).toContain("for (const p of finalizedParts) Session.updatePart.force(p)")
   })
 
   test("resets short-lived tool loop state across compaction", async () => {
@@ -113,7 +116,7 @@ describe("session.processor", () => {
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
     const batcher = src.slice(start, end)
-    expect(batcher).toContain("timer = setTimeout(flush, DELTA_BATCH_MS)")
+    expect(batcher).toContain("timer = setTimeout(() => { flush() }, DELTA_BATCH_MS)")
     expect(batcher).toContain("timer.unref?.()")
   })
 

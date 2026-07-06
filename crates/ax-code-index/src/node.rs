@@ -152,8 +152,7 @@ impl IndexStore {
                 param_values.iter().map(|p| p.as_ref()).collect();
             let rows: Vec<NodeRow> = stmt
                 .query_map(params_ref.as_slice(), row_to_node)?
-                .filter_map(|r| r.ok())
-                .collect();
+                .collect::<Result<Vec<_>, _>>()?;
 
             json_str(&rows)
         })
@@ -198,8 +197,7 @@ impl IndexStore {
       let mut stmt = conn.prepare(&sql)?;
       let params_ref: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
       let rows: Vec<NodeRow> = stmt.query_map(params_ref.as_slice(), row_to_node)?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
       json_str(&rows)
     })
@@ -212,8 +210,7 @@ impl IndexStore {
         "SELECT {SELECT_COLS} FROM code_node WHERE project_id = ?1 AND file = ?2 ORDER BY range_start_line"
       ))?;
       let rows: Vec<NodeRow> = stmt.query_map(params![project_id, file], row_to_node)?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
       json_str(&rows)
     })
@@ -247,8 +244,7 @@ impl IndexStore {
         "SELECT {SELECT_COLS} FROM code_node WHERE project_id = ?1 ORDER BY time_updated DESC LIMIT ?2"
       ))?;
       let rows: Vec<NodeRow> = stmt.query_map(params![project_id, limit], row_to_node)?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
       json_str(&rows)
     })

@@ -23,9 +23,12 @@ pub(crate) fn global_pool() -> MutexGuard<'static, GraphemePool> {
         .unwrap_or_else(|e| e.into_inner())
 }
 
-pub(crate) fn resolve(handle: u32) -> Option<&'static mut OptimizedBuffer> {
+/// Resolve a handle to a raw pointer.  Callers must create scoped borrows
+/// via `unsafe { &mut *ptr }` so that aliased mutable references never
+/// coexist (soundness fix for the previous `&'static mut` return type).
+pub(crate) fn resolve(handle: u32) -> Option<*mut OptimizedBuffer> {
     handles::get(handle, Kind::OptimizedBuffer)
-        .map(|ptr| unsafe { &mut *(ptr as *mut OptimizedBuffer) })
+        .map(|ptr| ptr as *mut OptimizedBuffer)
 }
 
 fn read_rgba(addr: f64) -> Rgba {
@@ -72,21 +75,21 @@ pub fn destroy_optimized_buffer(handle: u32) {
 
 #[napi(js_name = "bufferClear")]
 pub fn buffer_clear(handle: u32, bg: f64) {
-    if let Some(buf) = resolve(handle) {
-        buf.clear(&mut global_pool(), read_rgba(bg), None);
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.clear(&mut global_pool(), read_rgba(bg), None);
     }
 }
 
 #[napi(js_name = "bufferSetCell")]
 pub fn buffer_set_cell(handle: u32, x: u32, y: u32, char: u32, fg: f64, bg: f64, attributes: u32) {
-    if let Some(buf) = resolve(handle) {
+    if let Some(ptr) = resolve(handle) {
         let cell = Cell {
             char,
             fg: read_rgba(fg),
             bg: read_rgba(bg),
             attributes,
         };
-        buf.set(&mut global_pool(), x, y, cell);
+        unsafe { &mut *ptr }.set(&mut global_pool(), x, y, cell);
     }
 }
 
@@ -100,135 +103,150 @@ pub fn buffer_set_cell_with_alpha_blending(
     bg: f64,
     attributes: u32,
 ) {
-    if let Some(buf) = resolve(handle) {
+    if let Some(ptr) = resolve(handle) {
         let cell = Cell {
             char,
             fg: read_rgba(fg),
             bg: read_rgba(bg),
             attributes,
         };
-        buf.set_cell_with_alpha_blending(&mut global_pool(), x, y, cell);
+        unsafe { &mut *ptr }.set_cell_with_alpha_blending(&mut global_pool(), x, y, cell);
     }
 }
 
 #[napi(js_name = "bufferDrawChar")]
 pub fn buffer_draw_char(handle: u32, char: u32, x: u32, y: u32, fg: f64, bg: f64, attributes: u32) {
-    if let Some(buf) = resolve(handle) {
+    if let Some(ptr) = resolve(handle) {
         let cell = Cell {
             char,
             fg: read_rgba(fg),
             bg: read_rgba(bg),
             attributes,
         };
-        buf.set_cell_with_alpha_blending(&mut global_pool(), x, y, cell);
+        unsafe { &mut *ptr }.set_cell_with_alpha_blending(&mut global_pool(), x, y, cell);
     }
 }
 
 #[napi(js_name = "bufferFillRect")]
 pub fn buffer_fill_rect(handle: u32, x: u32, y: u32, width: u32, height: u32, bg: f64) {
-    if let Some(buf) = resolve(handle) {
-        buf.fill_rect(&mut global_pool(), x, y, width, height, read_rgba(bg));
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.fill_rect(&mut global_pool(), x, y, width, height, read_rgba(bg));
     }
 }
 
 #[napi(js_name = "bufferPushScissorRect")]
 pub fn buffer_push_scissor_rect(handle: u32, x: i32, y: i32, width: u32, height: u32) {
-    if let Some(buf) = resolve(handle) {
-        buf.push_scissor_rect(x, y, width, height);
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.push_scissor_rect(x, y, width, height);
     }
 }
 
 #[napi(js_name = "bufferPopScissorRect")]
 pub fn buffer_pop_scissor_rect(handle: u32) {
-    if let Some(buf) = resolve(handle) {
-        buf.pop_scissor_rect();
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.pop_scissor_rect();
     }
 }
 
 #[napi(js_name = "bufferClearScissorRects")]
 pub fn buffer_clear_scissor_rects(handle: u32) {
-    if let Some(buf) = resolve(handle) {
-        buf.clear_scissor_rects();
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.clear_scissor_rects();
     }
 }
 
 #[napi(js_name = "bufferPushOpacity")]
 pub fn buffer_push_opacity(handle: u32, opacity: f64) {
-    if let Some(buf) = resolve(handle) {
-        buf.push_opacity(opacity as f32);
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.push_opacity(opacity as f32);
     }
 }
 
 #[napi(js_name = "bufferPopOpacity")]
 pub fn buffer_pop_opacity(handle: u32) {
-    if let Some(buf) = resolve(handle) {
-        buf.pop_opacity();
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.pop_opacity();
     }
 }
 
 #[napi(js_name = "bufferClearOpacity")]
 pub fn buffer_clear_opacity(handle: u32) {
-    if let Some(buf) = resolve(handle) {
-        buf.clear_opacity();
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.clear_opacity();
     }
 }
 
 #[napi(js_name = "bufferGetCurrentOpacity")]
 pub fn buffer_get_current_opacity(handle: u32) -> f64 {
-    resolve(handle).map_or(1.0, |buf| buf.current_opacity() as f64)
+    resolve(handle).map_or(1.0, |ptr| unsafe { &*ptr }.current_opacity() as f64)
 }
 
 #[napi(js_name = "bufferResize")]
 pub fn buffer_resize(handle: u32, width: u32, height: u32) {
-    if let Some(buf) = resolve(handle) {
-        buf.resize(&mut global_pool(), width, height);
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.resize(&mut global_pool(), width, height);
     }
 }
 
 #[napi(js_name = "getBufferWidth")]
 pub fn get_buffer_width(handle: u32) -> u32 {
-    resolve(handle).map_or(0, |buf| buf.width)
+    resolve(handle).map_or(0, |ptr| unsafe { &*ptr }.width)
 }
 
 #[napi(js_name = "getBufferHeight")]
 pub fn get_buffer_height(handle: u32) -> u32 {
-    resolve(handle).map_or(0, |buf| buf.height)
+    resolve(handle).map_or(0, |ptr| unsafe { &*ptr }.height)
 }
 
 #[napi(js_name = "bufferGetCharPtr")]
 pub fn buffer_get_char_ptr(handle: u32) -> f64 {
-    resolve(handle).map_or(0.0, |buf| ffi::addr_to_f64(buf.char.as_ptr() as usize))
+    match resolve(handle) {
+        Some(ptr) => ffi::addr_to_f64(unsafe { &*ptr }.char.as_ptr() as usize),
+        None => 0.0,
+    }
 }
 
 #[napi(js_name = "bufferGetFgPtr")]
 pub fn buffer_get_fg_ptr(handle: u32) -> f64 {
-    resolve(handle).map_or(0.0, |buf| ffi::addr_to_f64(buf.fg.as_ptr() as usize))
+    match resolve(handle) {
+        Some(ptr) => ffi::addr_to_f64(unsafe { &*ptr }.fg.as_ptr() as usize),
+        None => 0.0,
+    }
 }
 
 #[napi(js_name = "bufferGetBgPtr")]
 pub fn buffer_get_bg_ptr(handle: u32) -> f64 {
-    resolve(handle).map_or(0.0, |buf| ffi::addr_to_f64(buf.bg.as_ptr() as usize))
+    match resolve(handle) {
+        Some(ptr) => ffi::addr_to_f64(unsafe { &*ptr }.bg.as_ptr() as usize),
+        None => 0.0,
+    }
 }
 
 #[napi(js_name = "bufferGetAttributesPtr")]
 pub fn buffer_get_attributes_ptr(handle: u32) -> f64 {
-    resolve(handle).map_or(0.0, |buf| ffi::addr_to_f64(buf.attributes.as_ptr() as usize))
+    match resolve(handle) {
+        Some(ptr) => ffi::addr_to_f64(unsafe { &*ptr }.attributes.as_ptr() as usize),
+        None => 0.0,
+    }
 }
 
 #[napi(js_name = "bufferGetRealCharSize")]
 pub fn buffer_get_real_char_size(handle: u32) -> u32 {
-    resolve(handle).map_or(0, |buf| buf.get_real_char_size(&mut global_pool()))
+    match resolve(handle) {
+        Some(ptr) => unsafe { &mut *ptr }.get_real_char_size(&mut global_pool()),
+        None => 0,
+    }
 }
 
 #[napi(js_name = "bufferGetRespectAlpha")]
 pub fn buffer_get_respect_alpha(handle: u32) -> bool {
-    resolve(handle).is_some_and(|buf| buf.respect_alpha)
+    resolve(handle).is_some_and(|ptr| unsafe { &*ptr }.respect_alpha)
 }
 
 #[napi(js_name = "bufferSetRespectAlpha")]
 pub fn buffer_set_respect_alpha(handle: u32, respect_alpha: f64) {
-    if let Some(buf) = resolve(handle) {
-        buf.respect_alpha = respect_alpha != 0.0;
+    if let Some(ptr) = resolve(handle) {
+        unsafe { &mut *ptr }.respect_alpha = respect_alpha != 0.0;
     }
 }
 
@@ -244,7 +262,7 @@ pub fn buffer_draw_text(
     bg: f64,
     attributes: u32,
 ) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     if text_ptr == 0.0 || text_len == 0 {
         return;
     }
@@ -259,7 +277,7 @@ pub fn buffer_draw_text(
     } else {
         Some(read_rgba(bg))
     };
-    buf.draw_text(
+    unsafe { &mut *ptr }.draw_text(
         &mut global_pool(),
         text,
         x,
@@ -277,12 +295,12 @@ pub fn buffer_write_resolved_chars(
     output_len: u32,
     add_line_breaks: f64,
 ) -> u32 {
-    let Some(buf) = resolve(handle) else { return 0 };
+    let Some(ptr) = resolve(handle) else { return 0 };
     if output_len == 0 || output_ptr == 0.0 {
         return 0;
     }
     let mut resolved = Vec::new();
-    buf.write_resolved_chars(&mut global_pool(), &mut resolved, add_line_breaks != 0.0);
+    unsafe { &mut *ptr }.write_resolved_chars(&mut global_pool(), &mut resolved, add_line_breaks != 0.0);
     let Some(output_len) = ffi::byte_len_from_u32(output_len) else {
         return 0;
     };
@@ -309,7 +327,7 @@ pub fn buffer_draw_box(
     bottom_title_ptr: f64,
     bottom_title_len: u32,
 ) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     let Some(border_slice) = (unsafe { ffi::slice_from_f64::<u32>(border_chars, 11) }) else {
         return;
     };
@@ -333,7 +351,7 @@ pub fn buffer_draw_box(
     };
     let title = read_str(title_ptr, title_len);
     let bottom_title = read_str(bottom_title_ptr, bottom_title_len);
-    buf.draw_box(
+    unsafe { &mut *ptr }.draw_box(
         &mut global_pool(),
         x,
         y,
@@ -364,8 +382,8 @@ pub fn draw_frame_buffer_export(
     source_width: u32,
     source_height: u32,
 ) {
-    let Some(buf) = resolve(handle) else { return };
-    let Some(src) = resolve(src_handle) else {
+    let Some(dst_ptr) = resolve(handle) else { return };
+    let Some(src_ptr) = resolve(src_handle) else {
         return;
     };
     if handle == src_handle {
@@ -384,7 +402,10 @@ pub fn draw_frame_buffer_export(
     } else {
         Some(source_height)
     };
-    buf.draw_frame_buffer(&mut global_pool(), dest_x, dest_y, src, sx, sy, sw, sh);
+    // SAFETY: aliasing guard above ensures dst_ptr != src_ptr.
+    let dst = unsafe { &mut *dst_ptr };
+    let src = unsafe { &*src_ptr };
+    dst.draw_frame_buffer(&mut global_pool(), dest_x, dest_y, src, sx, sy, sw, sh);
 }
 
 #[napi(js_name = "attributesWithLink")]
@@ -407,7 +428,7 @@ pub fn buffer_draw_super_sample_buffer(
     format: u32,
     aligned_bytes_per_row: u32,
 ) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     if pixel_data == 0.0 || len == 0 {
         return;
     }
@@ -417,7 +438,7 @@ pub fn buffer_draw_super_sample_buffer(
     let Ok(format) = u8::try_from(format) else {
         return;
     };
-    buf.draw_super_sample_buffer(
+    unsafe { &mut *ptr }.draw_super_sample_buffer(
         &mut global_pool(),
         x,
         y,
@@ -437,14 +458,14 @@ pub fn buffer_draw_packed_buffer(
     terminal_width_cells: u32,
     terminal_height_cells: u32,
 ) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     if data == 0.0 || data_len == 0 {
         return;
     }
     let Some(bytes) = (unsafe { ffi::bytes_from_f64(data, data_len) }) else {
         return;
     };
-    buf.draw_packed_buffer(
+    unsafe { &mut *ptr }.draw_packed_buffer(
         &mut global_pool(),
         bytes,
         pos_x,
@@ -466,7 +487,7 @@ pub fn buffer_draw_grayscale_buffer(
     fg: f64,
     bg: f64,
 ) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     if intensities == 0.0 {
         return;
     }
@@ -486,7 +507,7 @@ pub fn buffer_draw_grayscale_buffer(
     } else {
         Some(read_rgba(bg))
     };
-    buf.draw_grayscale_buffer(
+    unsafe { &mut *ptr }.draw_grayscale_buffer(
         &mut global_pool(),
         pos_x,
         pos_y,
@@ -510,7 +531,7 @@ pub fn buffer_draw_grayscale_buffer_supersampled(
     fg: f64,
     bg: f64,
 ) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     if intensities == 0.0 {
         return;
     }
@@ -530,7 +551,7 @@ pub fn buffer_draw_grayscale_buffer_supersampled(
     } else {
         Some(read_rgba(bg))
     };
-    buf.draw_grayscale_buffer_supersampled(
+    unsafe { &mut *ptr }.draw_grayscale_buffer_supersampled(
         &mut global_pool(),
         pos_x,
         pos_y,
@@ -555,7 +576,7 @@ pub fn buffer_draw_grid(
     row_count: u32,
     options: f64,
 ) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     if border_chars == 0.0 || column_offsets == 0.0 || row_offsets == 0.0 || options == 0.0 {
         return;
     }
@@ -586,7 +607,7 @@ pub fn buffer_draw_grid(
         return;
     };
     let (draw_inner, draw_outer) = (opts[0] != 0, opts[1] != 0);
-    buf.draw_grid(
+    unsafe { &mut *ptr }.draw_grid(
         &chars,
         read_rgba(border_fg),
         read_rgba(border_bg),
@@ -606,7 +627,7 @@ pub fn buffer_color_matrix(
     strength: f64,
     target: u32,
 ) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     if matrix == 0.0 || cell_mask == 0.0 || cell_mask_count == 0 {
         return;
     }
@@ -625,12 +646,12 @@ pub fn buffer_color_matrix(
     let Ok(target) = u8::try_from(target) else {
         return;
     };
-    buf.color_matrix(mat, mask, strength as f32, target);
+    unsafe { &mut *ptr }.color_matrix(mat, mask, strength as f32, target);
 }
 
 #[napi(js_name = "bufferColorMatrixUniform")]
 pub fn buffer_color_matrix_uniform(handle: u32, matrix: f64, strength: f64, target: u32) {
-    let Some(buf) = resolve(handle) else { return };
+    let Some(ptr) = resolve(handle) else { return };
     if matrix == 0.0 {
         return;
     }
@@ -640,14 +661,14 @@ pub fn buffer_color_matrix_uniform(handle: u32, matrix: f64, strength: f64, targ
     let Ok(target) = u8::try_from(target) else {
         return;
     };
-    buf.color_matrix_uniform(mat, strength as f32, target);
+    unsafe { &mut *ptr }.color_matrix_uniform(mat, strength as f32, target);
 }
 
 #[napi(js_name = "bufferGetId")]
 pub fn buffer_get_id(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
-    let Some(buf) = resolve(handle) else { return 0 };
+    let Some(ptr) = resolve(handle) else { return 0 };
     if max_len == 0 || out_ptr == 0.0 {
         return 0;
     }
-    ffi::copy_bytes_to_f64(&buf.id, out_ptr, max_len)
+    ffi::copy_bytes_to_f64(&unsafe { &*ptr }.id, out_ptr, max_len)
 }

@@ -337,8 +337,18 @@ export namespace MCP {
   function registerClientOnClose(name: string, client: MCPClient) {
     client.onclose = Instance.bind(() => {
       void Promise.resolve()
-        .then(() => state())
+        .then(() => {
+          // Only update state if instance is still active.
+          // After disposal, state() would re-initialize disposed state,
+          // creating zombie entries.
+          try {
+            return state()
+          } catch {
+            return undefined
+          }
+        })
         .then((s) => {
+          if (!s) return
           if (s.clients[name] === client) {
             delete s.clients[name]
             s.status[name] = { status: "failed", error: "Server closed the connection" }
@@ -871,7 +881,7 @@ export namespace MCP {
     // clean fetch.
     if (toolsPromise) return toolsPromise
     const generation = toolsCacheGeneration
-    toolsPromise = (async () => {
+    const currentPromise = (async () => {
       const result: Record<string, ConvertedMcpTool> = {}
       const s = await state()
       const cfg = await Config.get()
@@ -941,7 +951,7 @@ export namespace MCP {
       }
       return result
     })()
-    const currentPromise = toolsPromise
+    toolsPromise = currentPromise
     try {
       return await currentPromise
     } finally {
@@ -1191,6 +1201,8 @@ export namespace MCP {
         pendingOAuthTransports.set(mcpName, transport)
         return { authorizationUrl: capturedUrl.toString(), oauthState }
       }
+      // Clear stale OAuth state so retry starts fresh
+      await McpAuth.clearOAuthState(mcpName).catch(() => {})
       await transport.close?.().catch(() => {})
       await closeIfPossible(client, mcpName, "startAuth error recovery")
       // Surface an actionable message when dynamic client registration was

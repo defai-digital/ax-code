@@ -47,18 +47,22 @@ export namespace SessionProcessor {
     const pending = new Map<PartID, string[]>() // partID -> accumulated delta chunks
     let timer: ReturnType<typeof setTimeout> | undefined
 
-    const flush = () => {
+    const flush = (): Promise<unknown> | undefined => {
       timer = undefined
-      for (const [partID, chunks] of pending) {
-        Bus.publishDetached(MessageV2.Event.PartDelta, {
-          sessionID,
-          messageID,
-          partID,
-          field: "text",
-          delta: chunks.join(""),
-        })
-      }
+      if (pending.size === 0) return undefined
+      const entries = [...pending]
       pending.clear()
+      return Promise.all(
+        entries.map(([partID, chunks]) =>
+          Bus.publish(MessageV2.Event.PartDelta, {
+            sessionID,
+            messageID,
+            partID,
+            field: "text",
+            delta: chunks.join(""),
+          }),
+        ),
+      )
     }
 
     return {
@@ -67,13 +71,13 @@ export namespace SessionProcessor {
         if (existing) existing.push(delta)
         else pending.set(partID, [delta])
         if (!timer) {
-          timer = setTimeout(flush, DELTA_BATCH_MS)
+          timer = setTimeout(() => { flush() }, DELTA_BATCH_MS)
           timer.unref?.()
         }
       },
       flush() {
         if (timer) clearTimeout(timer)
-        if (pending.size > 0) flush()
+        return flush()
       },
     }
   }
@@ -286,19 +290,9 @@ export namespace SessionProcessor {
               part.time = { start: part.time?.start ?? Date.now(), end: Date.now() }
             }
           }
-          const persistFinalizedInFlightParts = (input: { overwriteEndTime: boolean }) => {
-            if (currentText) {
-              finalizeBufferedPart(currentText, input)
-            }
-            for (const part of Object.values(reasoningMap)) {
-              finalizeBufferedPart(part, input)
-            }
-            const parts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
-            if (parts.length === 0) return
-            Database.transaction(() => {
-              for (const p of parts) Session.updatePart.force(p)
-            })
-          }
+          // Tracks whether the stream loop errored (used by the final
+          // transaction to decide whether to overwrite part end times).
+          let streamErrored = false
           try {
             let usedTools = false
             let receivedFinish = false
@@ -1079,11 +1073,9 @@ export namespace SessionProcessor {
                   continue
               }
               if (needsCompaction) {
-                // Persist finalized in-flight parts so they are not lost when
-                // compaction breaks the loop (the catch path handles errors
-                // separately; the break path previously skipped this).
-                persistFinalizedInFlightParts({ overwriteEndTime: false })
-                deltaBatcher.flush()
+                // Await delta flush so all detached events are delivered
+                // before compaction rewrites history (BUG-4).
+                await deltaBatcher.flush()
                 // Reset error pattern tracker on compaction — the context
                 // window is about to be rewritten, so stale pattern counts
                 // would mislead guidance in the new context.
@@ -1099,9 +1091,9 @@ export namespace SessionProcessor {
               throw new Error("Stream ended without finish event — possible network interruption")
             }
           } catch (e: unknown) {
+            streamErrored = true
             deltaBatcher.flush()
             resetShortLivedToolLoopState()
-            persistFinalizedInFlightParts({ overwriteEndTime: true })
             const errStack = e instanceof Error ? e.stack : undefined
             const errName = e instanceof Error ? e.name : (e as { constructor?: { name?: string } })?.constructor?.name
             const errMessage = toErrorMessage(e)
@@ -1188,9 +1180,23 @@ export namespace SessionProcessor {
             }
             snapshot = undefined
           }
+          // Finalize in-flight text/reasoning parts in memory before the
+          // transaction so all DB writes happen in a single batch (BUG-5).
+          const finalizeOverwrite = { overwriteEndTime: streamErrored }
+          if (currentText) {
+            finalizeBufferedPart(currentText, finalizeOverwrite)
+          }
+          for (const part of Object.values(reasoningMap)) {
+            finalizeBufferedPart(part, finalizeOverwrite)
+          }
+          const finalizedParts = [
+            ...(currentText ? [currentText] : []),
+            ...Object.values(reasoningMap),
+          ]
           // Batch final cleanup writes in one transaction
           input.assistantMessage.time.completed = Date.now()
           Database.transaction(() => {
+            for (const p of finalizedParts) Session.updatePart.force(p)
             if (finalPatch) {
               Session.updatePart.force({
                 id: PartID.ascending(),

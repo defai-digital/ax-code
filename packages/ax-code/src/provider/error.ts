@@ -4,6 +4,7 @@ import { iife } from "@/util/iife"
 import { isRecord } from "@/util/record"
 import { parseJsonRecord as parseJsonRecordUtil } from "@/util/json-record"
 import { toErrorMessage } from "@/util/error-message"
+import { Log } from "@/util/log"
 import type { ProviderID } from "./schema"
 
 export namespace ProviderError {
@@ -130,11 +131,14 @@ export namespace ProviderError {
     )
   }
 
+  const log = Log.create({ service: "provider.error" })
+
   function parseHostname(url: string | undefined): string {
     if (!url) return ""
     try {
       return new URL(url).hostname.toLowerCase()
     } catch {
+      log.warn("failed to parse URL for hostname extraction", { url })
       return ""
     }
   }

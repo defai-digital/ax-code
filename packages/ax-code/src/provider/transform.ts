@@ -199,9 +199,11 @@ export namespace ProviderTransform {
               }
             }
           } else {
-            // Non-data URLs: previous impl returned the full string as the
-            // mime via split(";")[0]. Preserve that behavior.
-            mime = imageStr
+            // Non-data URLs (https://, etc.) are images by default — they
+            // originated from image parts. Use an image mime so the modality
+            // check below can verify the model supports image input instead
+            // of silently passing through.
+            mime = "image/unknown"
           }
         } else {
           mime = part.mediaType

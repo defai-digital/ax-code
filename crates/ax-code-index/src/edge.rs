@@ -46,8 +46,7 @@ fn query_edges(
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt
         .query_map(p, row_to_edge)?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
@@ -170,8 +169,7 @@ impl IndexStore {
       let node_ids: Vec<String> = {
         let mut stmt = tx.prepare("SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2")?;
         let ids: Vec<String> = stmt.query_map(params![project_id, file], |row| row.get(0))?
-          .filter_map(|r| r.ok())
-          .collect();
+          .collect::<Result<Vec<_>, _>>()?;
         ids
       };
 

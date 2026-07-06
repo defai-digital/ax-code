@@ -147,6 +147,9 @@ process.on("uncaughtException", (error) => {
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) {
   app.quit()
+  // app.quit() is async; force immediate exit so we don't register
+  // handlers on the doomed second instance.
+  process.exit(0)
 }
 
 app.on("second-instance", (_event, argv, cwd) => {
@@ -230,9 +233,14 @@ function launchServer() {
       }
     })
 
-    serverChild.on("exit", (code) => {
+    const child = serverChild
+    child.on("exit", (code) => {
       const wasReady = settled
-      serverChild = null
+      // Only null the module variable if it still points to THIS process.
+      // After crash recovery the old process's exit event may fire AFTER
+      // the new process is assigned, which would incorrectly null the
+      // reference to the new server.
+      if (serverChild === child) serverChild = null
       if (!settled) {
         settled = true
         clearTimeout(timer)
@@ -767,7 +775,9 @@ const mutateSettingsRoot = (mutator) => {
     const nextRoot = result ?? current
     await writeJsonFile(settingsFilePath(), nextRoot)
   })
-  settingsMutationChain = next.catch(() => {})
+  settingsMutationChain = next.catch((err) => {
+    console.error("[electron] settings mutation failed:", err)
+  })
   return next
 }
 

@@ -43,8 +43,7 @@ fn query_files(
     let mut stmt = conn.prepare(sql)?;
     let rows = stmt
         .query_map(p, row_to_file)?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
 }
 
@@ -65,7 +64,7 @@ impl IndexStore {
         self.with_conn(|conn| {
       conn.execute(
         "INSERT INTO code_file (id, project_id, path, sha, size, lang, completeness) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-         ON CONFLICT (project_id, path) DO UPDATE SET sha = ?4, size = ?5, lang = ?6, completeness = ?7, indexed_at = (unixepoch('now', 'subsec') * 1000), time_updated = (unixepoch('now', 'subsec') * 1000)",
+         ON CONFLICT (project_id, path) DO UPDATE SET id = ?1, sha = ?4, size = ?5, lang = ?6, completeness = ?7, indexed_at = (unixepoch('now', 'subsec') * 1000), time_updated = (unixepoch('now', 'subsec') * 1000)",
         params![row.id, row.project_id, row.path, row.sha, row.size, row.lang, row.completeness],
       )?;
       Ok(())
@@ -148,8 +147,7 @@ impl IndexStore {
         let node_ids: Vec<String> = {
           let mut s = tx.prepare("SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2")?;
           let ids: Vec<String> = s.query_map(params![project_id, orphan_path], |row| row.get(0))?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
           ids
         };
 
@@ -214,8 +212,7 @@ impl IndexStore {
       let node_ids: Vec<String> = {
         let mut s = tx.prepare("SELECT id FROM code_node WHERE project_id = ?1 AND file = ?2")?;
         let ids: Vec<String> = s.query_map(params![project_id, file_path], |row| row.get(0))?
-          .filter_map(|r| r.ok())
-          .collect();
+          .collect::<Result<Vec<_>, _>>()?;
         ids
       };
 
@@ -269,7 +266,7 @@ impl IndexStore {
       // 6. Upsert file metadata
       tx.execute(
         "INSERT INTO code_file (id, project_id, path, sha, size, lang, completeness) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-         ON CONFLICT (project_id, path) DO UPDATE SET sha = ?4, size = ?5, lang = ?6, completeness = ?7, indexed_at = (unixepoch('now', 'subsec') * 1000), time_updated = (unixepoch('now', 'subsec') * 1000)",
+         ON CONFLICT (project_id, path) DO UPDATE SET id = ?1, sha = ?4, size = ?5, lang = ?6, completeness = ?7, indexed_at = (unixepoch('now', 'subsec') * 1000), time_updated = (unixepoch('now', 'subsec') * 1000)",
         params![file_meta.id, file_meta.project_id, file_meta.path, file_meta.sha, file_meta.size, file_meta.lang, file_meta.completeness],
       )?;
 

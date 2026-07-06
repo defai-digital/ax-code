@@ -217,7 +217,9 @@ export class BrowserRuntime {
           BrowserRuntime.instance.close().catch(() => {})
         }
       }
-      process.once("exit", cleanup)
+      // NOTE: "exit" handler removed — async close() cannot complete
+      // during the synchronous exit event. SIGINT/SIGTERM work because
+      // the process does not exit immediately on those signals.
       process.once("SIGINT", cleanup)
       process.once("SIGTERM", cleanup)
     }
@@ -280,7 +282,12 @@ export class BrowserRuntime {
       if (!this.launchPromise) {
         this.launchPromise = pw.chromium.launch({ headless: true })
       }
-      this.browser = await this.launchPromise
+      try {
+        this.browser = await this.launchPromise
+      } catch (err) {
+        this.launchPromise = undefined // Allow retry on next open()
+        throw err
+      }
       log.info("browser launched")
     }
 
@@ -437,14 +444,23 @@ export class BrowserRuntime {
         const navType = params.type as string | undefined
         if (navType === "back") {
           await pwPage.goBack()
+          for (const [uid, ref] of this.uidRegistry) {
+            if (ref.pageID === entry.pageID) this.uidRegistry.delete(uid)
+          }
           return "Navigated back"
         }
         if (navType === "forward") {
           await pwPage.goForward()
+          for (const [uid, ref] of this.uidRegistry) {
+            if (ref.pageID === entry.pageID) this.uidRegistry.delete(uid)
+          }
           return "Navigated forward"
         }
         if (navType === "reload") {
           await pwPage.reload()
+          for (const [uid, ref] of this.uidRegistry) {
+            if (ref.pageID === entry.pageID) this.uidRegistry.delete(uid)
+          }
           return "Page reloaded"
         }
         const navUrl = params.url as string
@@ -452,6 +468,9 @@ export class BrowserRuntime {
         await pwPage.goto(navUrl, { waitUntil: "domcontentloaded" })
         entry.url = navUrl
         entry.title = await pwPage.title()
+        for (const [uid, ref] of this.uidRegistry) {
+          if (ref.pageID === entry.pageID) this.uidRegistry.delete(uid)
+        }
         return `Navigated to ${navUrl}`
       }
       case "waitFor": {
@@ -498,10 +517,26 @@ export class BrowserRuntime {
     let buffer: Buffer
     if (options.uid) {
       const loc = entry.pwPage.locator(`[data-uid="${escapeUid(options.uid)}"]`)
+      // Fast-fail: avoid 30s timeout for stale UIDs
+      const count = await loc.count()
+      if (count === 0) {
+        throw new Error(
+          `Element with uid "${options.uid}" not found on page. Take a new browser_snapshot to get current element UIDs.`,
+        )
+      }
+      const box = await loc.boundingBox()
       buffer = await loc.screenshot({
         type: options.format === "jpeg" ? "jpeg" : "png",
         quality: options.format === "jpeg" ? (options.quality ?? 80) : undefined,
       })
+      const dims = box ?? { width: entry.viewport.width, height: entry.viewport.height }
+      return {
+        pageID: entry.pageID,
+        data: buffer,
+        format: options.format === "jpeg" ? "jpeg" : "png",
+        width: dims.width,
+        height: dims.height,
+      }
     } else {
       buffer = await entry.pwPage.screenshot({
         fullPage: options.fullPage ?? false,

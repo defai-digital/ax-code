@@ -140,6 +140,24 @@ pub fn parse_input(input: &str) -> Vec<InputEvent> {
             continue;
         }
 
+        // SS3 sequences: F1-F4 as \x1bOP..\x1bOS
+        if let Some(rest_after_o) = rest.strip_prefix("\x1bO") {
+            if let Some(ch) = rest_after_o.chars().next() {
+                let name = match ch {
+                    'P' => Some("f1"),
+                    'Q' => Some("f2"),
+                    'R' => Some("f3"),
+                    'S' => Some("f4"),
+                    _ => None,
+                };
+                if let Some(name) = name {
+                    out.push(key(name, false, false, false));
+                    idx += 3; // \x1b + O + final
+                    continue;
+                }
+            }
+        }
+
         let Some(ch) = rest.chars().next() else {
             break;
         };
@@ -524,6 +542,8 @@ fn is_wide(ch: char) -> bool {
         | 0xFE30..=0xFE6F
         | 0xFF00..=0xFF60
         | 0xFFE0..=0xFFE6
+        | 0x20000..=0x2A6DF
+        | 0x2A700..=0x2EBEF
     )
 }
 
@@ -834,5 +854,44 @@ mod tests {
         let repaired = buffer.write_wrapped("abc", Style::default());
         assert_eq!(repaired.cells.len(), 3);
         assert_eq!(repaired.cells[2].text, "c");
+    }
+
+    #[test]
+    fn parses_ss3_function_keys_f1_through_f4() {
+        assert_eq!(parse_input("\x1bOP"), vec![key("f1", false, false, false)]);
+        assert_eq!(parse_input("\x1bOQ"), vec![key("f2", false, false, false)]);
+        assert_eq!(parse_input("\x1bOR"), vec![key("f3", false, false, false)]);
+        assert_eq!(parse_input("\x1bOS"), vec![key("f4", false, false, false)]);
+    }
+
+    #[test]
+    fn ss3_followed_by_text_does_not_corrupt_output() {
+        // \x1bOP (F1) followed by plain text
+        assert_eq!(
+            parse_input("\x1bOPhello"),
+            vec![
+                key("f1", false, false, false),
+                InputEvent::Text { text: "h".into() },
+                InputEvent::Text { text: "e".into() },
+                InputEvent::Text { text: "l".into() },
+                InputEvent::Text { text: "l".into() },
+                InputEvent::Text { text: "o".into() },
+            ]
+        );
+    }
+
+    #[test]
+    fn cjk_supplementary_plane_characters_are_wide() {
+        // CJK Extension B: U+20000
+        assert_eq!(char_width('\u{20000}'), 2);
+        // CJK Extension B: U+2A6DF
+        assert_eq!(char_width('\u{2A6DF}'), 2);
+        // CJK Extension C: U+2A700
+        assert_eq!(char_width('\u{2A700}'), 2);
+        // CJK Extension F: U+2EBEF
+        assert_eq!(char_width('\u{2EBEF}'), 2);
+        // BMP CJK still wide (within existing range)
+        assert_eq!(char_width('\u{4E00}'), 2);
+        assert_eq!(char_width('\u{9FFF}'), 2);
     }
 }
