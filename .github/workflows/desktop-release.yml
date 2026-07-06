@@ -301,7 +301,7 @@ jobs:
 
       - name: Set up nuget
         if: ${{ env.HAS_AZURE_SIGNING == 'true' }}
-        uses: nuget/setup-nuget@v4
+        uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4
 
       - name: Set up Azure Trusted Signing tools
         if: ${{ env.HAS_AZURE_SIGNING == 'true' }}
@@ -390,7 +390,7 @@ jobs:
 
       - name: Set up nuget
         if: ${{ env.HAS_AZURE_SIGNING == 'true' }}
-        uses: nuget/setup-nuget@v4
+        uses: nuget/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4
 
       - name: Set up Azure Trusted Signing tools
         if: ${{ env.HAS_AZURE_SIGNING == 'true' }}

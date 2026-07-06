@@ -191,7 +191,7 @@ jobs:
       # The addon's build.rs compiles the vendored yoga C++ (C++20 via cc), so
       # each runner needs a working C/C++ toolchain (present on the GitHub images).
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
 
       - name: Build @ax-code/render native addon (napi, host platform)
         run: pnpm run build:native render
