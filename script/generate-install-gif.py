@@ -25,9 +25,9 @@ def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.Im
     return ImageFont.load_default()
 
 
-FONT_TITLE = font(28, bold=True)
-FONT_BODY = font(22)
-FONT_SMALL = font(20)
+FONT_TITLE = font(26, bold=True)
+FONT_BODY = font(20)
+FONT_SMALL = font(18)
 
 BG = "#0B0F14"
 PANEL = "#111820"
@@ -61,7 +61,7 @@ def draw_wrapped(draw: ImageDraw.ImageDraw, text: str, xy: tuple[int, int], fill
     x, y = xy
     words = text.split(" ")
     current = ""
-    line_height = 28
+    line_height = 26
     for word in words:
         probe = word if not current else f"{current} {word}"
         if draw.textlength(probe, font=FONT_BODY) <= max_width:
@@ -92,7 +92,7 @@ def render(count: int, cursor: bool) -> Image.Image:
     for kind, text in lines[:count]:
         if kind == "title":
             draw.text((72, y), text, font=FONT_TITLE, fill=LABEL)
-            y += 42
+            y += 38
             continue
         if kind == "muted":
             y = draw_wrapped(draw, text, (72, y), MUTED, WIDTH - 144)
@@ -111,7 +111,7 @@ def render(count: int, cursor: bool) -> Image.Image:
             draw.text((command_x, y), after, font=FONT_BODY, fill=TEXT)
         else:
             draw.text((72, y), text, font=FONT_BODY, fill=TEXT if kind == "shell" else BLUE)
-        y += 34
+        y += 31
 
     if cursor and count < len(lines):
         draw.rectangle((72, y + 4, 84, y + 26), fill=SUCCESS)
