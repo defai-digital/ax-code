@@ -294,17 +294,17 @@ export const Agent = z
     }
 
     // Convert legacy tools config to permissions
-    const permission: Permission = {}
+    const legacyPerms: Permission = {}
     for (const [tool, enabled] of Object.entries(agent.tools ?? {})) {
       const action = enabled ? "allow" : "deny"
       // write, edit, patch, multiedit all map to edit permission
       if (tool === "write" || tool === "edit" || tool === "patch" || tool === "multiedit") {
-        permission.edit = action
+        legacyPerms.edit = action
       } else {
-        permission[tool] = action
+        legacyPerms[tool] = action
       }
     }
-    Object.assign(permission, agent.permission)
+    const permission: Permission = { ...legacyPerms, ...agent.permission }
 
     // Convert legacy maxSteps to steps
     const steps = agent.steps ?? agent.maxSteps

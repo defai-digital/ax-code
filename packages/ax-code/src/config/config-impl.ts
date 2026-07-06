@@ -574,7 +574,7 @@ export namespace Config {
         }
         perms[tool] = action
       }
-      result.permission = mergeDeep(perms, result.permission ?? {})
+      result.permission = Object.assign(perms, result.permission)
     }
 
     if (!result.username) result.username = os.userInfo().username

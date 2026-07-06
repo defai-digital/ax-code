@@ -1833,6 +1833,36 @@ test("merges legacy tools with existing permission config", async () => {
   })
 })
 
+test("top-level permission wins over legacy tools on conflict", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Filesystem.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          tools: {
+            bash: true,
+            read: true,
+          },
+          permission: {
+            bash: "deny",
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.permission).toMatchObject({
+        bash: "deny",
+        read: "allow",
+      })
+    },
+  })
+})
+
 test("permission config preserves key order", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

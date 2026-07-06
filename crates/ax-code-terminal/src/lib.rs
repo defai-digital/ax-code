@@ -282,16 +282,36 @@ pub fn parse_ansi(input: &str) -> Vec<TextRun> {
     while idx < input.len() {
         let rest = &input[idx..];
         if rest.starts_with("\x1b[") {
-            if let Some(end) = rest.find('m') {
-                if !text.is_empty() {
-                    runs.push(TextRun {
-                        text: std::mem::take(&mut text),
-                        style: style.clone(),
-                    });
+            // Find the first CSI final byte (0x40–0x7E, i.e. '@' to '~')
+            // instead of blindly searching for 'm'. This prevents non-SGR
+            // sequences (cursor movement, erase, etc.) from consuming text
+            // that belongs to a later SGR sequence.
+            let body = &rest[2..];
+            let final_pos = body
+                .bytes()
+                .position(|b| (0x40..=0x7E).contains(&b));
+            match final_pos {
+                Some(pos) => {
+                    let final_byte = body.as_bytes()[pos] as char;
+                    if final_byte == 'm' {
+                        // SGR — apply styling
+                        if !text.is_empty() {
+                            runs.push(TextRun {
+                                text: std::mem::take(&mut text),
+                                style: style.clone(),
+                            });
+                        }
+                        apply_sgr(&mut style, &body[..pos]);
+                    }
+                    // For any CSI sequence (SGR or otherwise), skip past it
+                    idx += 2 + pos + 1;
+                    continue;
                 }
-                apply_sgr(&mut style, &rest[2..end]);
-                idx += end + 1;
-                continue;
+                None => {
+                    // Incomplete CSI sequence — skip the \x1b[ prefix
+                    idx += 2;
+                    continue;
+                }
             }
         }
         let ch = rest.chars().next().expect("idx is within input bounds");
@@ -332,7 +352,8 @@ fn apply_sgr(style: &mut Style, codes: &str) {
                     idx += consumed;
                 }
             }
-            30..=37 | 90..=97 => style.fg = Some(color_name(code)),
+            30..=37 => style.fg = Some(color_name(code)),
+            90..=97 => style.fg = Some(format!("bright-{}", color_name(code - 90))),
             39 => style.fg = None,
             40..=47 => style.bg = Some(color_name(code - 10)),
             100..=107 => style.bg = Some(format!("bright-{}", color_name(code - 100))),
@@ -662,8 +683,8 @@ mod tests {
         assert_eq!(runs[1].style.bg.as_deref(), Some("bright-red"));
         // Also verify bright foreground (90-97) works
         let runs2 = parse_ansi("\x1b[90mgray\x1b[97mwhite\x1b[0m");
-        assert_eq!(runs2[0].style.fg.as_deref(), Some("black"));
-        assert_eq!(runs2[1].style.fg.as_deref(), Some("white"));
+        assert_eq!(runs2[0].style.fg.as_deref(), Some("bright-black"));
+        assert_eq!(runs2[1].style.fg.as_deref(), Some("bright-white"));
     }
 
     #[test]
@@ -752,6 +773,55 @@ mod tests {
             parse_input("\x1b[1;5A"),
             vec![key("up", true, false, false)]
         );
+    }
+
+    #[test]
+    fn parse_ansi_skips_non_sgr_csi_sequences() {
+        // \x1b[2J (clear screen) must not consume "hello " as SGR params
+        let runs = parse_ansi("\x1b[2Jhello \x1b[31mred");
+        assert_eq!(runs.len(), 2);
+        assert_eq!(runs[0].text, "hello ");
+        assert_eq!(runs[0].style, Style::default());
+        assert_eq!(runs[1].text, "red");
+        assert_eq!(runs[1].style.fg.as_deref(), Some("red"));
+    }
+
+    #[test]
+    fn parse_ansi_skips_cursor_and_mode_sequences() {
+        // \x1b[H (cursor home), \x1b[?25h (show cursor), \x1b[1;1H (cursor position)
+        let runs = parse_ansi("\x1b[H\x1b[?25h\x1b[1;1Hvisible");
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].text, "visible");
+        assert_eq!(runs[0].style, Style::default());
+    }
+
+    #[test]
+    fn parse_ansi_handles_incomplete_csi_sequence() {
+        // Incomplete CSI (no final byte — only parameter bytes 0x30-0x3F)
+        // should skip the \x1b[ prefix and treat remaining as text
+        let runs = parse_ansi("\x1b[123");
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].text, "123");
+    }
+
+    #[test]
+    fn parse_ansi_consumes_unknown_final_byte_sequence() {
+        // 'a' (0x61) is a valid CSI final byte — the sequence \x1b[a is
+        // consumed as an unknown CSI command, leaving "bc" as text
+        let runs = parse_ansi("\x1b[abc");
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].text, "bc");
+    }
+
+    #[test]
+    fn parse_ansi_interleaved_non_sgr_and_sgr() {
+        // Non-SGR between two SGR sequences
+        let runs = parse_ansi("\x1b[1mbold\x1b[2J\x1b[31mred\x1b[0m");
+        assert_eq!(runs[0].text, "bold");
+        assert!(runs[0].style.bold);
+        assert_eq!(runs[1].text, "red");
+        assert_eq!(runs[1].style.fg.as_deref(), Some("red"));
+        assert!(runs[1].style.bold); // bold persists from earlier SGR
     }
 
     #[test]

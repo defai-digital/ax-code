@@ -29333,11 +29333,45 @@
     "env": [
       "SUBCONSCIOUS_API_KEY"
     ],
-    "npm": "@ai-sdk/openai-compatible",
+    "npm": "@ai-sdk/anthropic",
     "api": "https://api.subconscious.dev/v1",
     "name": "Subconscious",
     "doc": "https://docs.subconscious.dev",
     "models": {
+      "subconscious/glm-5.2": {
+        "id": "subconscious/glm-5.2",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "subconscious/tim-qwen3.6-27b": {
         "id": "subconscious/tim-qwen3.6-27b",
         "name": "TIM-Qwen3.6 27B",
@@ -29347,12 +29381,12 @@
         "reasoning_options": [
           {
             "type": "toggle"
+          },
+          {
+            "type": "budget_tokens"
           }
         ],
         "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-05-11",
