@@ -116,6 +116,10 @@ describe("prompt view model", () => {
     expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n" })).toBe(true)
   })
 
+  test("treats CSI-u LF as prompt submit after terminal paste", () => {
+    expect(isUnmodifiedPromptSubmitKey({ name: "\n", raw: "\u001b[10u", sequence: "\n" })).toBe(true)
+  })
+
   test("does not submit modified raw CRLF Enter", () => {
     expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n", shift: true })).toBe(false)
   })

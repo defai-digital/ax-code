@@ -17,7 +17,7 @@ export type ClipboardContentView = {
 }
 
 export const DOUBLE_ESCAPE_CLEAR_MS = 3_000
-const PROMPT_SUBMIT_KEY_NAMES = new Set(["return", "enter", "linefeed", "kpenter"])
+const PROMPT_SUBMIT_KEY_NAMES = new Set(["return", "enter", "linefeed", "kpenter", "\r", "\n"])
 const PROMPT_SUBMIT_KEY_SEQUENCES = new Set(["\r", "\n", "\r\n"])
 
 export function isUnmodifiedPromptSubmitKey(input: {

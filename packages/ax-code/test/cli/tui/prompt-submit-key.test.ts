@@ -82,6 +82,10 @@ test("raw CRLF Enter submits after terminal paste chunks", async () => {
   expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n" })).toBe(true)
 })
 
+test("CSI-u LF Enter submits after terminal paste chunks", async () => {
+  expect(isUnmodifiedPromptSubmitKey({ name: "\n", raw: "\u001b[10u", sequence: "\n" })).toBe(true)
+})
+
 test("modified raw CRLF Enter does not submit", async () => {
   expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n", shift: true })).toBe(false)
 })
