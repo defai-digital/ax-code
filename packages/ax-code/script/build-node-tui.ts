@@ -42,6 +42,105 @@ const legacyName = `${pkg.name}-${platform}-${arch}`
 const outRoot = path.join(dir, "dist", legacyName)
 const outBin = path.join(outRoot, "bin")
 const outLib = path.join(outRoot, "lib")
+const bundledNodeName = process.platform === "win32" ? "node.exe" : "node"
+
+type FfiNodeRuntime = {
+  path: string
+  version: string
+  platform: NodeJS.Platform
+  arch: NodeJS.Architecture
+}
+
+function inspectFfiNodeRuntime(nodePath: string): FfiNodeRuntime | undefined {
+  const result = spawnSync(
+    nodePath,
+    [
+      "--experimental-ffi",
+      "--disable-warning=ExperimentalWarning",
+      "-e",
+      "require('node:ffi'); process.stdout.write([process.version, process.platform, process.arch].join('\\n'))",
+    ],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 5_000,
+    },
+  )
+  if (result.status !== 0) return undefined
+  const [version, runtimePlatform, runtimeArch] = String(result.stdout).trim().split("\n")
+  if (!version || !runtimePlatform || !runtimeArch) return undefined
+  return {
+    path: nodePath,
+    version,
+    platform: runtimePlatform as NodeJS.Platform,
+    arch: runtimeArch as NodeJS.Architecture,
+  }
+}
+
+function candidateNodeRuntimePaths() {
+  const candidates = [
+    process.execPath,
+    ...String(process.env.PATH ?? "")
+      .split(path.delimiter)
+      .filter(Boolean)
+      .map((entry) => path.join(entry, bundledNodeName)),
+  ].filter((value): value is string => typeof value === "string" && value.length > 0)
+
+  const seen = new Set<string>()
+  return candidates.filter((candidate) => {
+    let real = candidate
+    try {
+      real = fs.realpathSync(candidate)
+    } catch {
+      return false
+    }
+    if (seen.has(real)) return false
+    seen.add(real)
+    return true
+  })
+}
+
+function resolveBundledNodeRuntime(targetArch: "x64" | "arm64") {
+  const explicit = process.env.AX_CODE_BUNDLED_NODE
+  if (explicit) {
+    const runtime = inspectFfiNodeRuntime(explicit)
+    if (!runtime) {
+      throw new Error(`AX_CODE_BUNDLED_NODE does not support node:ffi: ${explicit}`)
+    }
+    if (runtime.platform !== process.platform || runtime.arch !== targetArch) {
+      throw new Error(
+        `AX_CODE_BUNDLED_NODE resolved to ${runtime.version} ${runtime.platform}-${runtime.arch}, expected ${process.platform}-${targetArch}: ${explicit}`,
+      )
+    }
+    return runtime
+  }
+
+  const inspected: string[] = []
+  for (const candidate of candidateNodeRuntimePaths()) {
+    const runtime = inspectFfiNodeRuntime(candidate)
+    if (!runtime) {
+      inspected.push(`${candidate} (no node:ffi support)`)
+      continue
+    }
+    if (runtime.platform !== process.platform || runtime.arch !== targetArch) {
+      inspected.push(
+        `${candidate} (${runtime.version} ${runtime.platform}-${runtime.arch}, expected ${process.platform}-${targetArch})`,
+      )
+      continue
+    }
+    return runtime
+  }
+
+  throw new Error(
+    [
+      `Node TUI bundled builds require a Node runtime with node:ffi support for ${process.platform}-${targetArch}.`,
+      "Run the build with Node 26+, or set AX_CODE_BUNDLED_NODE to a Node 26+ executable.",
+      inspected.length ? `Inspected candidates:\n  - ${inspected.join("\n  - ")}` : "No Node candidates were found.",
+    ].join("\n"),
+  )
+}
+
+const bundledNodeRuntime = process.arch === arch ? resolveBundledNodeRuntime(arch) : undefined
 
 const migrationDirs = (await fs.promises.readdir(path.join(dir, "migration"), { withFileTypes: true }))
   .filter((e) => e.isDirectory() && /^\d{14}/.test(e.name))
@@ -142,18 +241,18 @@ if (result.errors.length > 0) {
 // instead of whatever `node` is on the user's PATH (ADR-046 Phase 0). The
 // node:ffi backend is experimental and has changed behavior across Node
 // releases (u32 argument marshalling); pinning the runtime contains that
-// exposure to release time. Cross-arch builds cannot copy process.execPath —
+// exposure to release time. Cross-arch builds cannot copy a host Node runtime —
 // they fall back to the PATH launcher and CI must supply the target runtime.
-const bundledNodeName = process.platform === "win32" ? "node.exe" : "node"
 const bundledNodeDir = path.join(outRoot, "node")
 let bundledNode = false
 if (process.arch === arch) {
+  const nodeRuntime = bundledNodeRuntime!
   // bin/ + lib/ mirrors the source install layout: shared-library Node builds
   // (e.g. Homebrew) are a small bin/node linked against ../lib/libnode.* via
   // @loader_path rpath, so the dylib must ship in the same relative spot.
   // Official release binaries are static — their lib/ has no libnode and only
   // the executable is copied.
-  const nodeRealPath = await fs.promises.realpath(process.execPath)
+  const nodeRealPath = await fs.promises.realpath(nodeRuntime.path)
   await fs.promises.mkdir(path.join(bundledNodeDir, "bin"), { recursive: true })
   await fs.promises.copyFile(nodeRealPath, path.join(bundledNodeDir, "bin", bundledNodeName))
   await fs.promises.chmod(path.join(bundledNodeDir, "bin", bundledNodeName), 0o755)
@@ -167,7 +266,7 @@ if (process.arch === arch) {
   }
   bundledNode = true
   console.log(
-    `Bundled Node runtime ${process.version} (${process.platform}-${arch}${libNodeFiles.length ? `, shared: ${libNodeFiles.join(", ")}` : ", static"})`,
+    `Bundled Node runtime ${nodeRuntime.version} (${process.platform}-${arch}${libNodeFiles.length ? `, shared: ${libNodeFiles.join(", ")}` : ", static"})`,
   )
 } else {
   console.warn(
