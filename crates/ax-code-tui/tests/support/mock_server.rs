@@ -186,7 +186,28 @@ async fn handle_connection(
         "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n".to_string()
     };
 
+    let response = with_connection_close(response);
     let _ = stream.write_all(response.as_bytes()).await;
+}
+
+fn with_connection_close(response: String) -> String {
+    if response
+        .lines()
+        .any(|line| line.eq_ignore_ascii_case("connection: close"))
+    {
+        return response;
+    }
+
+    match response.find("\r\n\r\n") {
+        Some(header_end) => {
+            let mut out = String::with_capacity(response.len() + "Connection: close\r\n".len());
+            out.push_str(&response[..header_end + 2]);
+            out.push_str("Connection: close\r\n");
+            out.push_str(&response[header_end + 2..]);
+            out
+        }
+        None => response,
+    }
 }
 
 /// Read a full HTTP/1 request, including the body advertised by Content-Length.
