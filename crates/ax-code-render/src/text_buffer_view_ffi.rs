@@ -5,6 +5,7 @@
 #![allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
 
 use crate::handles::{self, Kind};
+use crate::ffi_utils as ffi;
 use crate::segment::WrapMode;
 use crate::text_buffer_view::{TextBufferView, Viewport};
 use napi_derive::napi;
@@ -99,17 +100,29 @@ pub fn text_buffer_view_get_line_info_direct(handle: u32, out_ptr: f64) {
     if out_ptr == 0.0 {
         return;
     }
-    let out = (out_ptr as u64) as usize;
-    let write_pair = |off: usize, ptr: usize, len: usize| unsafe {
-        std::ptr::write_unaligned((out + off) as *mut usize, ptr);
-        std::ptr::write_unaligned((out + off + 8) as *mut u32, len as u32);
+    let Some(out) = ffi::addr_from_f64(out_ptr) else {
+        return;
+    };
+    let write_pair = |off: usize, ptr: usize, len: usize| {
+        let Some(len_off) = ffi::checked_offset(off, 8) else {
+            return false;
+        };
+        let Some(ptr_addr) = ffi::checked_offset(out, off) else {
+            return false;
+        };
+        let Some(len_addr) = ffi::checked_offset(out, len_off) else {
+            return false;
+        };
+        ffi::write_unaligned_addr(ptr_addr, ptr) && ffi::write_unaligned_addr(len_addr, ffi::len_to_u32(len))
     };
     let Some(view) = resolve(handle) else {
         write_pair(0, 0, 0);
         write_pair(16, 0, 0);
         write_pair(32, 0, 0);
         write_pair(48, 0, 0);
-        unsafe { std::ptr::write_unaligned((out + 64) as *mut u32, 0) };
+        if let Some(addr) = ffi::checked_offset(out, 64) {
+            let _ = ffi::write_unaligned_addr(addr, 0u32);
+        }
         return;
     };
     let max = view.refresh_line_info();
@@ -118,7 +131,9 @@ pub fn text_buffer_view_get_line_info_direct(handle: u32, out_ptr: f64) {
     write_pair(16, widths.as_ptr() as usize, widths.len());
     write_pair(32, sources.as_ptr() as usize, sources.len());
     write_pair(48, wraps.as_ptr() as usize, wraps.len());
-    unsafe { std::ptr::write_unaligned((out + 64) as *mut u32, max) };
+    if let Some(addr) = ffi::checked_offset(out, 64) {
+        let _ = ffi::write_unaligned_addr(addr, max);
+    }
 }
 
 #[napi(js_name = "textBufferViewGetPlainText")]
@@ -130,21 +145,13 @@ pub fn text_buffer_view_get_plain_text(handle: u32, out_ptr: f64, max_len: u32) 
         return 0;
     }
     let text = view.plain_text();
-    let copy = text.len().min(max_len as usize);
-    unsafe {
-        std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
-    };
-    copy as u32
+    ffi::copy_raw_to_f64(text.as_ptr(), text.len(), out_ptr, max_len)
 }
 
 // --- selection (C5b) --------------------------------------------------------
 
 fn read_rgba_ptr(addr: f64) -> Option<crate::buffer::Rgba> {
-    if addr == 0.0 {
-        return None;
-    }
-    let p = (addr as u64) as usize as *const u16;
-    Some(unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] })
+    ffi::read_rgba_f64(addr)
 }
 
 #[napi(js_name = "textBufferViewSetSelection")]
@@ -219,11 +226,7 @@ pub fn text_buffer_view_get_selected_text(handle: u32, out_ptr: f64, max_len: u3
         return 0;
     }
     let text = view.selected_text(max_len as usize);
-    let copy = text.len().min(max_len as usize);
-    unsafe {
-        std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
-    };
-    copy as u32
+    ffi::copy_raw_to_f64(text.as_ptr(), text.len(), out_ptr, max_len)
 }
 
 // --- draw + defaults + tab indicator (C5d) -----------------------------------
@@ -257,11 +260,14 @@ pub fn text_buffer_view_measure_for_dimensions(
         return false;
     }
     let (line_count, width_cols_max) = view.measure_for_dimensions(width, height);
-    let base = (out_ptr as u64) as usize;
-    unsafe {
-        (base as *mut u32).write_unaligned(line_count);
-        ((base + 4) as *mut u32).write_unaligned(width_cols_max);
-    }
+    let Some(base) = ffi::addr_from_f64(out_ptr) else {
+        return false;
+    };
+    let _ = ffi::write_unaligned_addr(base, line_count);
+    let Some(width_addr) = ffi::checked_offset(base, 4) else {
+        return false;
+    };
+    let _ = ffi::write_unaligned_addr(width_addr, width_cols_max);
     true
 }
 
@@ -315,7 +321,10 @@ pub fn text_buffer_set_default_attributes(handle: u32, attr_ptr: f64) {
         tb.default_attributes = if attr_ptr == 0.0 {
             None
         } else {
-            Some(unsafe { std::ptr::read_unaligned((attr_ptr as u64) as usize as *const u32) })
+            let Some(attributes) = ffi::read_unaligned_f64(attr_ptr) else {
+                return;
+            };
+            Some(attributes)
         };
     }
 }

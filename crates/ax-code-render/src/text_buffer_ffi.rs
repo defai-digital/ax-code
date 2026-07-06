@@ -7,6 +7,7 @@
 #![allow(dead_code)] // napi macro expansion hides usage from dead-code analysis
 
 use crate::handles::{self, Kind};
+use crate::ffi_utils as ffi;
 use crate::mem_registry::MemBuffer;
 use crate::text_buffer::{StyledChunkIn, TextBuffer};
 use crate::unicode::WidthMethod;
@@ -42,40 +43,52 @@ pub fn text_buffer_set_styled_text(handle: u32, chunks_ptr: f64, chunk_count: u3
     if chunks_ptr == 0.0 || chunk_count == 0 {
         return;
     }
-    let base = (chunks_ptr as u64) as usize;
+    let Some(base) = ffi::addr_from_f64(chunks_ptr) else {
+        return;
+    };
+    let Some(chunk_count) = ffi::record_count(chunk_count) else {
+        return;
+    };
     const STRIDE: usize = 56;
-    let read_usize =
-        |addr: usize| -> usize { unsafe { std::ptr::read_unaligned(addr as *const usize) } };
-    let read_u32 = |addr: usize| -> u32 { unsafe { std::ptr::read_unaligned(addr as *const u32) } };
-    let mut chunks: Vec<StyledChunkIn> = Vec::with_capacity(chunk_count as usize);
-    for i in 0..chunk_count as usize {
-        let off = base + i * STRIDE;
-        let text_ptr = read_usize(off);
-        let text_len = read_usize(off + 8);
+    let field_addr = |base: usize, field_offset: usize| -> Option<usize> {
+        ffi::checked_offset(base, field_offset)
+    };
+    let read_usize = |addr: usize, field_offset: usize| -> Option<usize> {
+        ffi::read_unaligned_addr(field_addr(addr, field_offset)?)
+    };
+    let read_u32 = |addr: usize, field_offset: usize| -> Option<u32> {
+        ffi::read_unaligned_addr(field_addr(addr, field_offset)?)
+    };
+    let mut chunks: Vec<StyledChunkIn> = Vec::with_capacity(chunk_count);
+    for i in 0..chunk_count {
+        let Some(off) = ffi::checked_record_addr(base, i, STRIDE) else {
+            return;
+        };
+        let Some(text_ptr) = read_usize(off, 0) else { return };
+        let Some(text_len) = read_usize(off, 8) else { return };
         let text: &[u8] = if text_ptr == 0 || text_len == 0 {
             &[]
         } else {
-            unsafe { std::slice::from_raw_parts(text_ptr as *const u8, text_len) }
+            let Some(bytes) = (unsafe { ffi::bytes_from_addr(text_ptr, text_len) }) else {
+                return;
+            };
+            bytes
         };
-        let link_ptr = read_usize(off + 40);
-        let link_len = read_usize(off + 48);
+        let Some(link_ptr) = read_usize(off, 40) else { return };
+        let Some(link_len) = read_usize(off, 48) else { return };
         let link = if link_ptr == 0 || link_len == 0 {
             None
         } else {
-            Some(unsafe { std::slice::from_raw_parts(link_ptr as *const u8, link_len) })
-        };
-        let read_rgba = |addr: usize| -> Option<crate::buffer::Rgba> {
-            if addr == 0 {
-                return None;
-            }
-            let p = addr as *const u16;
-            Some(unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] })
+            let Some(bytes) = (unsafe { ffi::bytes_from_addr(link_ptr, link_len) }) else {
+                return;
+            };
+            Some(bytes)
         };
         chunks.push(StyledChunkIn {
             text,
-            fg: read_rgba(read_usize(off + 16)),
-            bg: read_rgba(read_usize(off + 24)),
-            attributes: read_u32(off + 32),
+            fg: read_usize(off, 16).and_then(ffi::read_rgba_addr),
+            bg: read_usize(off, 24).and_then(ffi::read_rgba_addr),
+            attributes: read_u32(off, 32).unwrap_or(0),
             link,
         });
     }
@@ -89,11 +102,7 @@ pub fn text_buffer_get_plain_text(handle: u32, out_ptr: f64, max_len: u32) -> u3
         return 0;
     }
     let text = tb.plain_text();
-    let copy = text.len().min(max_len as usize);
-    unsafe {
-        std::ptr::copy_nonoverlapping(text.as_ptr(), (out_ptr as u64) as usize as *mut u8, copy)
-    };
-    copy as u32
+    ffi::copy_raw_to_f64(text.as_ptr(), text.len(), out_ptr, max_len)
 }
 
 #[napi(js_name = "textBufferGetLength")]
@@ -120,7 +129,7 @@ pub fn text_buffer_get_tab_width(handle: u32) -> u32 {
 #[napi(js_name = "textBufferSetTabWidth")]
 pub fn text_buffer_set_tab_width(handle: u32, width: u32) {
     if let Some(tb) = resolve(handle) {
-        tb.set_tab_width(width as u8);
+        tb.set_tab_width(width.min(u8::MAX as u32) as u8);
     }
 }
 
@@ -144,12 +153,18 @@ pub fn text_buffer_append(handle: u32, data_ptr: f64, data_len: u32) {
     if data_ptr == 0.0 || data_len == 0 {
         return;
     }
+    let Some(addr) = ffi::addr_from_f64(data_ptr) else {
+        return;
+    };
+    let Some(len) = ffi::byte_len_from_u32(data_len) else {
+        return;
+    };
     tb.append(
         MemBuffer::External {
-            ptr: (data_ptr as u64) as usize,
-            len: data_len as usize,
+            ptr: addr,
+            len,
         },
-        data_len as usize,
+        len,
     );
 }
 
@@ -172,14 +187,21 @@ pub fn text_buffer_register_mem_buffer(
             .register(MemBuffer::Owned(Vec::new()))
             .map_or(0xFFFF, |id| id as u32);
     }
-    let addr = (data_ptr as u64) as usize;
+    let Some(addr) = ffi::addr_from_f64(data_ptr) else {
+        return 0xFFFF;
+    };
+    let Some(len) = ffi::byte_len_from_u32(data_len) else {
+        return 0xFFFF;
+    };
     let buffer = if owned {
-        let bytes = unsafe { std::slice::from_raw_parts(addr as *const u8, data_len as usize) };
+        let Some(bytes) = (unsafe { ffi::bytes_from_addr(addr, len) }) else {
+            return 0xFFFF;
+        };
         MemBuffer::Owned(bytes.to_vec())
     } else {
         MemBuffer::External {
             ptr: addr,
-            len: data_len as usize,
+            len,
         }
     };
     tb.registry.register(buffer).map_or(0xFFFF, |id| id as u32)
@@ -197,20 +219,30 @@ pub fn text_buffer_replace_mem_buffer(
     let Some(tb) = resolve(handle) else {
         return false;
     };
+    let Ok(id) = u8::try_from(id) else {
+        return false;
+    };
     if data_ptr == 0.0 || data_len == 0 {
-        return tb.registry.replace(id as u8, MemBuffer::Owned(Vec::new()));
+        return tb.registry.replace(id, MemBuffer::Owned(Vec::new()));
     }
-    let addr = (data_ptr as u64) as usize;
+    let Some(addr) = ffi::addr_from_f64(data_ptr) else {
+        return false;
+    };
+    let Some(len) = ffi::byte_len_from_u32(data_len) else {
+        return false;
+    };
     let buffer = if owned {
-        let bytes = unsafe { std::slice::from_raw_parts(addr as *const u8, data_len as usize) };
+        let Some(bytes) = (unsafe { ffi::bytes_from_addr(addr, len) }) else {
+            return false;
+        };
         MemBuffer::Owned(bytes.to_vec())
     } else {
         MemBuffer::External {
             ptr: addr,
-            len: data_len as usize,
+            len,
         }
     };
-    tb.registry.replace(id as u8, buffer)
+    tb.registry.replace(id, buffer)
 }
 
 #[napi(js_name = "textBufferClearMemRegistry")]
@@ -223,7 +255,9 @@ pub fn text_buffer_clear_mem_registry(handle: u32) {
 #[napi(js_name = "textBufferSetTextFromMem")]
 pub fn text_buffer_set_text_from_mem(handle: u32, id: u32) {
     if let Some(tb) = resolve(handle) {
-        tb.set_text_from_mem(id as u8);
+        if let Ok(id) = u8::try_from(id) {
+            tb.set_text_from_mem(id);
+        }
     }
 }
 
@@ -240,14 +274,7 @@ pub fn text_buffer_get_text_range(
         return 0;
     }
     let out = tb.get_text_range(start_offset, end_offset, max_len as usize);
-    unsafe {
-        std::ptr::copy_nonoverlapping(
-            out.as_ptr(),
-            (out_ptr as u64) as usize as *mut u8,
-            out.len(),
-        )
-    };
-    out.len() as u32
+    ffi::copy_raw_to_f64(out.as_ptr(), out.len(), out_ptr, max_len)
 }
 
 #[napi(js_name = "textBufferGetTextRangeByCoords")]
@@ -265,28 +292,19 @@ pub fn text_buffer_get_text_range_by_coords(
         return 0;
     }
     let out = tb.get_text_range_by_coords(start_row, start_col, end_row, end_col, max_len as usize);
-    unsafe {
-        std::ptr::copy_nonoverlapping(
-            out.as_ptr(),
-            (out_ptr as u64) as usize as *mut u8,
-            out.len(),
-        )
-    };
-    out.len() as u32
+    ffi::copy_raw_to_f64(out.as_ptr(), out.len(), out_ptr, max_len)
 }
 
 /// ExternalHighlight extern layout: start@0 u32, end@4 u32, style_id@8 u32,
 /// priority@12 u8, hl_ref@14 u16 (size 16).
-fn read_external_highlight(addr: usize) -> (u32, u32, u32, u8, u16) {
-    unsafe {
-        (
-            std::ptr::read_unaligned(addr as *const u32),
-            std::ptr::read_unaligned((addr + 4) as *const u32),
-            std::ptr::read_unaligned((addr + 8) as *const u32),
-            std::ptr::read_unaligned((addr + 12) as *const u8),
-            std::ptr::read_unaligned((addr + 14) as *const u16),
-        )
-    }
+fn read_external_highlight(addr: usize) -> Option<(u32, u32, u32, u8, u16)> {
+    Some((
+        ffi::read_unaligned_addr(addr)?,
+        ffi::read_unaligned_addr(ffi::checked_offset(addr, 4)?)?,
+        ffi::read_unaligned_addr(ffi::checked_offset(addr, 8)?)?,
+        ffi::read_unaligned_addr(ffi::checked_offset(addr, 12)?)?,
+        ffi::read_unaligned_addr(ffi::checked_offset(addr, 14)?)?,
+    ))
 }
 
 #[napi(js_name = "textBufferAddHighlight")]
@@ -295,8 +313,10 @@ pub fn text_buffer_add_highlight(handle: u32, line_idx: u32, hl_ptr: f64) {
     if hl_ptr == 0.0 {
         return;
     }
-    let (start, end, style_id, priority, hl_ref) =
-        read_external_highlight((hl_ptr as u64) as usize);
+    let Some(addr) = ffi::addr_from_f64(hl_ptr) else { return };
+    let Some((start, end, style_id, priority, hl_ref)) = read_external_highlight(addr) else {
+        return;
+    };
     tb.add_highlight(
         line_idx as usize,
         start,
@@ -314,15 +334,19 @@ pub fn text_buffer_add_highlight_by_char_range(handle: u32, hl_ptr: f64) {
     if hl_ptr == 0.0 {
         return;
     }
-    let (start, end, style_id, priority, hl_ref) =
-        read_external_highlight((hl_ptr as u64) as usize);
+    let Some(addr) = ffi::addr_from_f64(hl_ptr) else { return };
+    let Some((start, end, style_id, priority, hl_ref)) = read_external_highlight(addr) else {
+        return;
+    };
     tb.add_highlight_by_char_range(start, end, style_id, priority, hl_ref, false);
 }
 
 #[napi(js_name = "textBufferRemoveHighlightsByRef")]
 pub fn text_buffer_remove_highlights_by_ref(handle: u32, hl_ref: u32) {
     if let Some(tb) = resolve(handle) {
-        tb.remove_highlights_by_ref(hl_ref as u16);
+        if let Ok(hl_ref) = u16::try_from(hl_ref) {
+            tb.remove_highlights_by_ref(hl_ref);
+        }
     }
 }
 
@@ -353,13 +377,20 @@ pub fn text_buffer_get_line_highlights_ptr(handle: u32, line_idx: u32, out_count
     if out_count == 0.0 {
         return 0.0;
     }
-    let out_count_ptr = (out_count as u64) as usize as *mut u32;
     let highs = tb.line_highlights_at(line_idx as usize);
     if highs.is_empty() {
-        unsafe { *out_count_ptr = 0 };
+        let _ = ffi::write_unaligned_f64(out_count, 0u32);
         return 0.0;
     }
-    let mut packed: Vec<u8> = Vec::with_capacity(highs.len() * 16);
+    let Some(count) = u32::try_from(highs.len()).ok() else {
+        let _ = ffi::write_unaligned_f64(out_count, 0u32);
+        return 0.0;
+    };
+    let Some(capacity) = highs.len().checked_mul(16) else {
+        let _ = ffi::write_unaligned_f64(out_count, 0u32);
+        return 0.0;
+    };
+    let mut packed: Vec<u8> = Vec::with_capacity(capacity);
     for hl in highs {
         packed.extend_from_slice(&hl.col_start.to_le_bytes());
         packed.extend_from_slice(&hl.col_end.to_le_bytes());
@@ -368,13 +399,16 @@ pub fn text_buffer_get_line_highlights_ptr(handle: u32, line_idx: u32, out_count
         packed.push(0); // padding
         packed.extend_from_slice(&hl.hl_ref.to_le_bytes());
     }
-    unsafe { *out_count_ptr = highs.len() as u32 };
+    let _ = ffi::write_unaligned_f64(out_count, count);
     let boxed = packed.into_boxed_slice();
     let len = boxed.len();
     let ptr = Box::into_raw(boxed) as *mut u8;
     // freeLineHighlights reconstructs from (ptr, count*16)
-    let _ = len;
-    ptr as usize as f64
+    let handle = ffi::addr_to_f64(ptr as usize);
+    if handle == 0.0 {
+        drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len)) });
+    }
+    handle
 }
 
 #[napi(js_name = "textBufferFreeLineHighlights")]
@@ -382,15 +416,24 @@ pub fn text_buffer_free_line_highlights(ptr: f64, count: u32) {
     if ptr == 0.0 || count == 0 {
         return;
     }
-    let raw = (ptr as u64) as usize as *mut u8;
-    let len = count as usize * 16;
+    let Some(count) = ffi::record_count(count) else {
+        return;
+    };
+    let Some(raw) = ffi::addr_from_f64(ptr).map(|addr| addr as *mut u8) else {
+        return;
+    };
+    let Some(len) = count.checked_mul(16) else {
+        return;
+    };
     drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(raw, len)) });
 }
 
 #[napi(js_name = "textBufferAppendFromMemId")]
 pub fn text_buffer_append_from_mem_id(handle: u32, id: u32) {
     if let Some(tb) = resolve(handle) {
-        tb.append_from_mem(id as u8);
+        if let Ok(id) = u8::try_from(id) {
+            tb.append_from_mem(id);
+        }
     }
 }
 
@@ -434,23 +477,16 @@ pub fn syntax_style_register(
     let name = if name_ptr == 0.0 || name_len == 0 {
         ""
     } else {
-        let bytes = unsafe {
-            std::slice::from_raw_parts((name_ptr as u64) as usize as *const u8, name_len as usize)
+        let Some(bytes) = (unsafe { ffi::bytes_from_f64(name_ptr, name_len) }) else {
+            return 0;
         };
         std::str::from_utf8(bytes).unwrap_or("")
-    };
-    let read_rgba = |addr: f64| -> Option<crate::buffer::Rgba> {
-        if addr == 0.0 {
-            return None;
-        }
-        let p = (addr as u64) as usize as *const u16;
-        Some(unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] })
     };
     style.register(
         name,
         StyleDefinition {
-            fg: read_rgba(fg),
-            bg: read_rgba(bg),
+            fg: ffi::read_rgba_f64(fg),
+            bg: ffi::read_rgba_f64(bg),
             attributes,
         },
     )
@@ -464,8 +500,8 @@ pub fn syntax_style_resolve_by_name(handle: u32, name_ptr: f64, name_len: u32) -
     if name_ptr == 0.0 || name_len == 0 {
         return style.resolve_by_name("").unwrap_or(0);
     }
-    let bytes = unsafe {
-        std::slice::from_raw_parts((name_ptr as u64) as usize as *const u8, name_len as usize)
+    let Some(bytes) = (unsafe { ffi::bytes_from_f64(name_ptr, name_len) }) else {
+        return 0;
     };
     std::str::from_utf8(bytes)
         .ok()
@@ -502,8 +538,8 @@ pub fn text_buffer_load_file(handle: u32, path_ptr: f64, path_len: u32) -> bool 
     if path_ptr == 0.0 || path_len == 0 {
         return false;
     }
-    let bytes = unsafe {
-        std::slice::from_raw_parts((path_ptr as u64) as usize as *const u8, path_len as usize)
+    let Some(bytes) = (unsafe { ffi::bytes_from_f64(path_ptr, path_len) }) else {
+        return false;
     };
     let Ok(path) = std::str::from_utf8(bytes) else {
         return false;

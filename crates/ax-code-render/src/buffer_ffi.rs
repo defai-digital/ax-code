@@ -9,6 +9,7 @@
 #![allow(dead_code)] // napi exports are consumed via generated extern "C" wrappers invisible to dead-code analysis
 
 use crate::buffer::{Cell, OptimizedBuffer, Rgba};
+use crate::ffi_utils as ffi;
 use crate::handles::{self, Kind};
 use crate::pool::GraphemePool;
 use napi_derive::napi;
@@ -27,12 +28,8 @@ pub(crate) fn resolve(handle: u32) -> Option<&'static mut OptimizedBuffer> {
         .map(|ptr| unsafe { &mut *(ptr as *mut OptimizedBuffer) })
 }
 
-unsafe fn read_rgba(addr: f64) -> Rgba {
-    let p = (addr as u64) as usize as *const u16;
-    if p.is_null() {
-        return [0, 0, 0, 0];
-    }
-    unsafe { [*p, *p.add(1), *p.add(2), *p.add(3)] }
+fn read_rgba(addr: f64) -> Rgba {
+    ffi::read_rgba_f64(addr).unwrap_or([0, 0, 0, 0])
 }
 
 #[napi(js_name = "createOptimizedBuffer")]
@@ -45,8 +42,10 @@ pub fn create_optimized_buffer(
     id_len: u32,
 ) -> u32 {
     let id = if id_ptr != 0.0 && id_len > 0 {
-        let p = (id_ptr as u64) as usize as *const u8;
-        unsafe { std::slice::from_raw_parts(p, id_len as usize) }.to_vec()
+        let Some(bytes) = (unsafe { ffi::bytes_from_f64(id_ptr, id_len) }) else {
+            return 0;
+        };
+        bytes.to_vec()
     } else {
         Vec::new()
     };
@@ -74,7 +73,7 @@ pub fn destroy_optimized_buffer(handle: u32) {
 #[napi(js_name = "bufferClear")]
 pub fn buffer_clear(handle: u32, bg: f64) {
     if let Some(buf) = resolve(handle) {
-        buf.clear(&mut global_pool(), unsafe { read_rgba(bg) }, None);
+        buf.clear(&mut global_pool(), read_rgba(bg), None);
     }
 }
 
@@ -83,8 +82,8 @@ pub fn buffer_set_cell(handle: u32, x: u32, y: u32, char: u32, fg: f64, bg: f64,
     if let Some(buf) = resolve(handle) {
         let cell = Cell {
             char,
-            fg: unsafe { read_rgba(fg) },
-            bg: unsafe { read_rgba(bg) },
+            fg: read_rgba(fg),
+            bg: read_rgba(bg),
             attributes,
         };
         buf.set(&mut global_pool(), x, y, cell);
@@ -104,8 +103,8 @@ pub fn buffer_set_cell_with_alpha_blending(
     if let Some(buf) = resolve(handle) {
         let cell = Cell {
             char,
-            fg: unsafe { read_rgba(fg) },
-            bg: unsafe { read_rgba(bg) },
+            fg: read_rgba(fg),
+            bg: read_rgba(bg),
             attributes,
         };
         buf.set_cell_with_alpha_blending(&mut global_pool(), x, y, cell);
@@ -117,8 +116,8 @@ pub fn buffer_draw_char(handle: u32, char: u32, x: u32, y: u32, fg: f64, bg: f64
     if let Some(buf) = resolve(handle) {
         let cell = Cell {
             char,
-            fg: unsafe { read_rgba(fg) },
-            bg: unsafe { read_rgba(bg) },
+            fg: read_rgba(fg),
+            bg: read_rgba(bg),
             attributes,
         };
         buf.set_cell_with_alpha_blending(&mut global_pool(), x, y, cell);
@@ -128,9 +127,7 @@ pub fn buffer_draw_char(handle: u32, char: u32, x: u32, y: u32, fg: f64, bg: f64
 #[napi(js_name = "bufferFillRect")]
 pub fn buffer_fill_rect(handle: u32, x: u32, y: u32, width: u32, height: u32, bg: f64) {
     if let Some(buf) = resolve(handle) {
-        buf.fill_rect(&mut global_pool(), x, y, width, height, unsafe {
-            read_rgba(bg)
-        });
+        buf.fill_rect(&mut global_pool(), x, y, width, height, read_rgba(bg));
     }
 }
 
@@ -200,22 +197,22 @@ pub fn get_buffer_height(handle: u32) -> u32 {
 
 #[napi(js_name = "bufferGetCharPtr")]
 pub fn buffer_get_char_ptr(handle: u32) -> f64 {
-    resolve(handle).map_or(0.0, |buf| buf.char.as_ptr() as usize as f64)
+    resolve(handle).map_or(0.0, |buf| ffi::addr_to_f64(buf.char.as_ptr() as usize))
 }
 
 #[napi(js_name = "bufferGetFgPtr")]
 pub fn buffer_get_fg_ptr(handle: u32) -> f64 {
-    resolve(handle).map_or(0.0, |buf| buf.fg.as_ptr() as usize as f64)
+    resolve(handle).map_or(0.0, |buf| ffi::addr_to_f64(buf.fg.as_ptr() as usize))
 }
 
 #[napi(js_name = "bufferGetBgPtr")]
 pub fn buffer_get_bg_ptr(handle: u32) -> f64 {
-    resolve(handle).map_or(0.0, |buf| buf.bg.as_ptr() as usize as f64)
+    resolve(handle).map_or(0.0, |buf| ffi::addr_to_f64(buf.bg.as_ptr() as usize))
 }
 
 #[napi(js_name = "bufferGetAttributesPtr")]
 pub fn buffer_get_attributes_ptr(handle: u32) -> f64 {
-    resolve(handle).map_or(0.0, |buf| buf.attributes.as_ptr() as usize as f64)
+    resolve(handle).map_or(0.0, |buf| ffi::addr_to_f64(buf.attributes.as_ptr() as usize))
 }
 
 #[napi(js_name = "bufferGetRealCharSize")]
@@ -251,22 +248,23 @@ pub fn buffer_draw_text(
     if text_ptr == 0.0 || text_len == 0 {
         return;
     }
-    let p = (text_ptr as u64) as usize as *const u8;
-    let bytes = unsafe { std::slice::from_raw_parts(p, text_len as usize) };
+    let Some(bytes) = (unsafe { ffi::bytes_from_f64(text_ptr, text_len) }) else {
+        return;
+    };
     let Ok(text) = std::str::from_utf8(bytes) else {
         return;
     };
     let bg_color = if bg == 0.0 {
         None
     } else {
-        Some(unsafe { read_rgba(bg) })
+        Some(read_rgba(bg))
     };
     buf.draw_text(
         &mut global_pool(),
         text,
         x,
         y,
-        unsafe { read_rgba(fg) },
+        read_rgba(fg),
         bg_color,
         attributes,
     );
@@ -285,12 +283,13 @@ pub fn buffer_write_resolved_chars(
     }
     let mut resolved = Vec::new();
     buf.write_resolved_chars(&mut global_pool(), &mut resolved, add_line_breaks != 0.0);
-    if resolved.len() > output_len as usize {
+    let Some(output_len) = ffi::byte_len_from_u32(output_len) else {
+        return 0;
+    };
+    if resolved.len() > output_len {
         return 0; // Zig: BufferTooSmall -> catch 0 in the export glue
     }
-    let out = (output_ptr as u64) as usize as *mut u8;
-    unsafe { std::ptr::copy_nonoverlapping(resolved.as_ptr(), out, resolved.len()) };
-    resolved.len() as u32
+    ffi::copy_bytes_to_f64(&resolved, output_ptr, ffi::len_to_u32(output_len))
 }
 
 #[napi(js_name = "bufferDrawBox")]
@@ -311,12 +310,11 @@ pub fn buffer_draw_box(
     bottom_title_len: u32,
 ) {
     let Some(buf) = resolve(handle) else { return };
-    let bc_ptr = (border_chars as u64) as usize as *const u32;
-    if bc_ptr.is_null() {
+    let Some(border_slice) = (unsafe { ffi::slice_from_f64::<u32>(border_chars, 11) }) else {
         return;
-    }
+    };
     let mut chars = [0u32; 11];
-    unsafe { std::ptr::copy_nonoverlapping(bc_ptr, chars.as_mut_ptr(), 11) };
+    chars.copy_from_slice(border_slice);
     let sides = (
         (packed_options & 0b1000) != 0,
         (packed_options & 0b0100) != 0,
@@ -330,8 +328,7 @@ pub fn buffer_draw_box(
         if ptr == 0.0 || len == 0 {
             return None;
         }
-        let p = (ptr as u64) as usize as *const u8;
-        let bytes = unsafe { std::slice::from_raw_parts(p, len as usize) };
+        let bytes = unsafe { ffi::bytes_from_f64(ptr, len)? };
         std::str::from_utf8(bytes).ok().map(|s| s.to_string())
     };
     let title = read_str(title_ptr, title_len);
@@ -344,9 +341,9 @@ pub fn buffer_draw_box(
         height,
         &chars,
         sides,
-        unsafe { read_rgba(border_color) },
-        unsafe { read_rgba(background_color) },
-        unsafe { read_rgba(title_color) },
+        read_rgba(border_color),
+        read_rgba(background_color),
+        read_rgba(title_color),
         should_fill,
         title.as_deref(),
         title_alignment,
@@ -411,17 +408,21 @@ pub fn buffer_draw_super_sample_buffer(
     aligned_bytes_per_row: u32,
 ) {
     let Some(buf) = resolve(handle) else { return };
-    if pixel_data == 0.0 {
+    if pixel_data == 0.0 || len == 0 {
         return;
     }
-    let p = (pixel_data as u64) as usize as *const u8;
-    let data = unsafe { std::slice::from_raw_parts(p, len as usize) };
+    let Some(data) = (unsafe { ffi::bytes_from_f64(pixel_data, len) }) else {
+        return;
+    };
+    let Ok(format) = u8::try_from(format) else {
+        return;
+    };
     buf.draw_super_sample_buffer(
         &mut global_pool(),
         x,
         y,
         data,
-        format as u8,
+        format,
         aligned_bytes_per_row,
     );
 }
@@ -437,11 +438,12 @@ pub fn buffer_draw_packed_buffer(
     terminal_height_cells: u32,
 ) {
     let Some(buf) = resolve(handle) else { return };
-    if data == 0.0 {
+    if data == 0.0 || data_len == 0 {
         return;
     }
-    let p = (data as u64) as usize as *const u8;
-    let bytes = unsafe { std::slice::from_raw_parts(p, data_len as usize) };
+    let Some(bytes) = (unsafe { ffi::bytes_from_f64(data, data_len) }) else {
+        return;
+    };
     buf.draw_packed_buffer(
         &mut global_pool(),
         bytes,
@@ -468,17 +470,21 @@ pub fn buffer_draw_grayscale_buffer(
     if intensities == 0.0 {
         return;
     }
-    let p = (intensities as u64) as usize as *const f32;
-    let data = unsafe { std::slice::from_raw_parts(p, (src_width * src_height) as usize) };
+    let Some(pixel_count) = src_width.checked_mul(src_height).map(|value| value as usize) else {
+        return;
+    };
+    let Some(data) = (unsafe { ffi::slice_from_f64::<f32>(intensities, pixel_count) }) else {
+        return;
+    };
     let fg_color = if fg == 0.0 {
         None
     } else {
-        Some(unsafe { read_rgba(fg) })
+        Some(read_rgba(fg))
     };
     let bg_color = if bg == 0.0 {
         None
     } else {
-        Some(unsafe { read_rgba(bg) })
+        Some(read_rgba(bg))
     };
     buf.draw_grayscale_buffer(
         &mut global_pool(),
@@ -508,17 +514,21 @@ pub fn buffer_draw_grayscale_buffer_supersampled(
     if intensities == 0.0 {
         return;
     }
-    let p = (intensities as u64) as usize as *const f32;
-    let data = unsafe { std::slice::from_raw_parts(p, (src_width * src_height) as usize) };
+    let Some(pixel_count) = src_width.checked_mul(src_height).map(|value| value as usize) else {
+        return;
+    };
+    let Some(data) = (unsafe { ffi::slice_from_f64::<f32>(intensities, pixel_count) }) else {
+        return;
+    };
     let fg_color = if fg == 0.0 {
         None
     } else {
-        Some(unsafe { read_rgba(fg) })
+        Some(read_rgba(fg))
     };
     let bg_color = if bg == 0.0 {
         None
     } else {
-        Some(unsafe { read_rgba(bg) })
+        Some(read_rgba(bg))
     };
     buf.draw_grayscale_buffer_supersampled(
         &mut global_pool(),
@@ -549,27 +559,37 @@ pub fn buffer_draw_grid(
     if border_chars == 0.0 || column_offsets == 0.0 || row_offsets == 0.0 || options == 0.0 {
         return;
     }
-    let bc_ptr = (border_chars as u64) as usize as *const u32;
+    let Some(border_slice) = (unsafe { ffi::slice_from_f64::<u32>(border_chars, 11) }) else {
+        return;
+    };
     let mut chars = [0u32; 11];
-    unsafe { std::ptr::copy_nonoverlapping(bc_ptr, chars.as_mut_ptr(), 11) };
-    let cols = unsafe {
-        std::slice::from_raw_parts(
-            (column_offsets as u64) as usize as *const i32,
-            column_count as usize + 1,
-        )
+    chars.copy_from_slice(border_slice);
+    let Some(column_count) = ffi::record_count(column_count) else {
+        return;
     };
-    let rows = unsafe {
-        std::slice::from_raw_parts(
-            (row_offsets as u64) as usize as *const i32,
-            row_count as usize + 1,
-        )
+    let Some(row_count) = ffi::record_count(row_count) else {
+        return;
     };
-    let opts = (options as u64) as usize as *const u8;
-    let (draw_inner, draw_outer) = unsafe { (*opts != 0, *opts.add(1) != 0) };
+    let Some(column_len) = column_count.checked_add(1) else {
+        return;
+    };
+    let Some(row_len) = row_count.checked_add(1) else {
+        return;
+    };
+    let Some(cols) = (unsafe { ffi::slice_from_f64::<i32>(column_offsets, column_len) }) else {
+        return;
+    };
+    let Some(rows) = (unsafe { ffi::slice_from_f64::<i32>(row_offsets, row_len) }) else {
+        return;
+    };
+    let Some(opts) = (unsafe { ffi::bytes_from_f64(options, 2) }) else {
+        return;
+    };
+    let (draw_inner, draw_outer) = (opts[0] != 0, opts[1] != 0);
     buf.draw_grid(
         &chars,
-        unsafe { read_rgba(border_fg) },
-        unsafe { read_rgba(border_bg) },
+        read_rgba(border_fg),
+        read_rgba(border_bg),
         cols,
         rows,
         draw_inner,
@@ -590,14 +610,22 @@ pub fn buffer_color_matrix(
     if matrix == 0.0 || cell_mask == 0.0 || cell_mask_count == 0 {
         return;
     }
-    let mat = unsafe { std::slice::from_raw_parts((matrix as u64) as usize as *const f32, 16) };
-    let mask = unsafe {
-        std::slice::from_raw_parts(
-            (cell_mask as u64) as usize as *const f32,
-            cell_mask_count as usize * 3,
-        )
+    let Some(mat) = (unsafe { ffi::slice_from_f64::<f32>(matrix, 16) }) else {
+        return;
     };
-    buf.color_matrix(mat, mask, strength as f32, target as u8);
+    let Some(cell_mask_count) = ffi::record_count(cell_mask_count) else {
+        return;
+    };
+    let Some(mask_len) = cell_mask_count.checked_mul(3) else {
+        return;
+    };
+    let Some(mask) = (unsafe { ffi::slice_from_f64::<f32>(cell_mask, mask_len) }) else {
+        return;
+    };
+    let Ok(target) = u8::try_from(target) else {
+        return;
+    };
+    buf.color_matrix(mat, mask, strength as f32, target);
 }
 
 #[napi(js_name = "bufferColorMatrixUniform")]
@@ -606,8 +634,13 @@ pub fn buffer_color_matrix_uniform(handle: u32, matrix: f64, strength: f64, targ
     if matrix == 0.0 {
         return;
     }
-    let mat = unsafe { std::slice::from_raw_parts((matrix as u64) as usize as *const f32, 16) };
-    buf.color_matrix_uniform(mat, strength as f32, target as u8);
+    let Some(mat) = (unsafe { ffi::slice_from_f64::<f32>(matrix, 16) }) else {
+        return;
+    };
+    let Ok(target) = u8::try_from(target) else {
+        return;
+    };
+    buf.color_matrix_uniform(mat, strength as f32, target);
 }
 
 #[napi(js_name = "bufferGetId")]
@@ -616,8 +649,5 @@ pub fn buffer_get_id(handle: u32, out_ptr: f64, max_len: u32) -> u32 {
     if max_len == 0 || out_ptr == 0.0 {
         return 0;
     }
-    let copy = buf.id.len().min(max_len as usize);
-    let out = (out_ptr as u64) as usize as *mut u8;
-    unsafe { std::ptr::copy_nonoverlapping(buf.id.as_ptr(), out, copy) };
-    copy as u32
+    ffi::copy_bytes_to_f64(&buf.id, out_ptr, max_len)
 }

@@ -495,9 +495,11 @@ impl Stream {
 
 // --- FFI exports (native-span-feed.zig `pub export fn`) -----------------------
 
+use crate::ffi_utils as ffi;
+
 #[inline]
 fn stream_of(handle: f64) -> Option<&'static mut Stream> {
-    let ptr = (handle as u64) as usize as *mut Stream;
+    let ptr = ffi::addr_from_f64(handle)? as *mut Stream;
     if ptr.is_null() {
         None
     } else {
@@ -510,21 +512,30 @@ pub fn create_native_span_feed(options_ptr: f64) -> f64 {
     let options = if options_ptr == 0.0 {
         None
     } else {
-        let p = (options_ptr as u64) as usize as *const Options;
-        Some(unsafe { *p })
+        let Some(options) = ffi::read_unaligned_f64(options_ptr) else {
+            return 0.0;
+        };
+        Some(options)
     };
     match Stream::create(options) {
-        Some(stream) => Box::into_raw(stream) as usize as f64,
+        Some(stream) => {
+            let ptr = Box::into_raw(stream);
+            let handle = ffi::addr_to_f64(ptr as usize);
+            if handle == 0.0 {
+                drop(unsafe { Box::from_raw(ptr) });
+            }
+            handle
+        }
         None => 0.0,
     }
 }
 
 #[napi(js_name = "destroyNativeSpanFeed")]
 pub fn destroy_native_span_feed(stream: f64) {
-    let ptr = (stream as u64) as usize as *mut Stream;
-    if !ptr.is_null() {
-        drop(unsafe { Box::from_raw(ptr) });
-    }
+    let Some(ptr) = ffi::addr_from_f64(stream).map(|addr| addr as *mut Stream) else {
+        return;
+    };
+    drop(unsafe { Box::from_raw(ptr) });
 }
 
 #[napi(js_name = "streamWrite")]
@@ -538,8 +549,9 @@ pub fn stream_write(stream: f64, src_ptr: f64, len: u32) -> i32 {
     if src_ptr == 0.0 {
         return STATUS_ERR_INVALID;
     }
-    let src =
-        unsafe { std::slice::from_raw_parts((src_ptr as u64) as usize as *const u8, len as usize) };
+    let Some(src) = (unsafe { ffi::bytes_from_f64(src_ptr, len) }) else {
+        return STATUS_ERR_INVALID;
+    };
     match s.write(src) {
         Ok(()) => STATUS_OK,
         Err(e) => error_to_status(e),
@@ -567,7 +579,9 @@ pub fn stream_reserve(stream: f64, min_len: u32, out_ptr: f64) -> i32 {
     };
     match s.reserve(min_len) {
         Ok(info) => {
-            unsafe { *((out_ptr as u64) as usize as *mut ReserveInfo) = info };
+            if !ffi::write_unaligned_f64(out_ptr, info) {
+                return STATUS_ERR_INVALID;
+            }
             STATUS_OK
         }
         Err(e) => error_to_status(e),
@@ -593,7 +607,9 @@ pub fn stream_set_options(stream: f64, options_ptr: f64) -> i32 {
     let Some(s) = stream_of(stream) else {
         return STATUS_ERR_INVALID;
     };
-    let opts = unsafe { *((options_ptr as u64) as usize as *const Options) };
+    let Some(opts) = ffi::read_unaligned_f64(options_ptr) else {
+        return STATUS_ERR_INVALID;
+    };
     match s.set_options(opts) {
         Ok(()) => STATUS_OK,
         Err(e) => error_to_status(e),
@@ -608,7 +624,9 @@ pub fn stream_get_stats(stream: f64, stats_ptr: f64) -> i32 {
     let Some(s) = stream_of(stream) else {
         return STATUS_ERR_INVALID;
     };
-    unsafe { *((stats_ptr as u64) as usize as *mut Stats) = s.get_stats() };
+    if !ffi::write_unaligned_f64(stats_ptr, s.get_stats()) {
+        return STATUS_ERR_INVALID;
+    }
     STATUS_OK
 }
 
@@ -620,11 +638,11 @@ pub fn stream_drain_spans(stream: f64, out_ptr: f64, max_spans: u32) -> u32 {
     let Some(s) = stream_of(stream) else {
         return 0;
     };
-    let out = unsafe {
-        std::slice::from_raw_parts_mut(
-            (out_ptr as u64) as usize as *mut SpanInfo,
-            max_spans as usize,
-        )
+    let Some(max_spans) = ffi::record_count(max_spans) else {
+        return 0;
+    };
+    let Some(out) = (unsafe { ffi::slice_mut_from_f64::<SpanInfo>(out_ptr, max_spans) }) else {
+        return 0;
     };
     s.drain_spans(out)
 }

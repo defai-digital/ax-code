@@ -29,6 +29,7 @@ pub mod edit_buffer;
 mod edit_buffer_ffi;
 pub mod editor_view;
 mod editor_view_ffi;
+mod ffi_utils;
 pub mod gcb;
 mod gcb_table;
 pub mod handles;
