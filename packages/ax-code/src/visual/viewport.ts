@@ -83,10 +83,12 @@ export async function captureViewportMatrix(
   const captures: ViewportCaptureResult[] = []
 
   for (const viewport of viewports) {
+    let pageID: string | undefined
     try {
       log.info("capturing viewport", { url, viewport: viewport.label, width: viewport.width, height: viewport.height })
 
       const page = await runtime.open(url, { width: viewport.width, height: viewport.height })
+      pageID = page.pageID
       const screenshot = await runtime.screenshot(page.pageID, { format: "png" })
 
       const artifact = await VisualArtifactStore.writeScreenshot(
@@ -102,6 +104,10 @@ export async function captureViewportMatrix(
       const message = err instanceof Error ? err.message : String(err)
       log.warn("viewport capture failed", { viewport: viewport.label, error: message })
       captures.push({ viewport, error: message })
+    } finally {
+      if (pageID) {
+        await runtime.closePage(pageID).catch(() => {})
+      }
     }
   }
 

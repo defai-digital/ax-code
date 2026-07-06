@@ -525,4 +525,87 @@ describe("browser runtime", () => {
   test("close is safe when no browser is open", async () => {
     await expect(runtime.close()).resolves.toBeUndefined()
   })
+
+  // -- closePage tests --
+
+  test("closePage removes page and cleans up state", async () => {
+    const page = createMockPage()
+    const ctx = createMockContext()
+    injectPage(runtime, "page_1", page, ctx)
+    getInternals(runtime).uidRegistry.set("uid_1", { pageID: "page_1", uid: "uid_1" })
+    getInternals(runtime).uidRegistry.set("uid_2", { pageID: "page_1", uid: "uid_2" })
+    getInternals(runtime).consoleBuffers.set("page_1", [{ type: "log", text: "hello", timestamp: 1 }])
+
+    await runtime.closePage("page_1")
+
+    expect(ctx.close).toHaveBeenCalled()
+    expect(getInternals(runtime).pages.size).toBe(0)
+    expect(getInternals(runtime).latestPageID).toBeUndefined()
+    expect(getInternals(runtime).uidRegistry.size).toBe(0)
+    expect(getInternals(runtime).consoleBuffers.has("page_1")).toBe(false)
+  })
+
+  test("closePage is no-op for unknown pageID", async () => {
+    await expect(runtime.closePage("nonexistent")).resolves.toBeUndefined()
+  })
+
+  test("closePage updates latestPageID to remaining page", async () => {
+    const page1 = createMockPage()
+    const page2 = createMockPage()
+    const ctx1 = createMockContext()
+    const ctx2 = createMockContext()
+    injectPage(runtime, "page_1", page1, ctx1)
+    injectPage(runtime, "page_2", page2, ctx2)
+
+    await runtime.closePage("page_2")
+
+    expect(getInternals(runtime).latestPageID).toBe("page_1")
+    expect(getInternals(runtime).pages.size).toBe(1)
+  })
+
+  // -- UID clearing on snapshot --
+
+  test("snapshot clears stale UIDs before re-populating", async () => {
+    const page = createMockPage()
+    const ctx = createMockContext()
+    injectPage(runtime, "page_1", page, ctx)
+
+    // Pre-populate with stale UIDs
+    getInternals(runtime).uidRegistry.set("uid_99", { pageID: "page_1", uid: "uid_99" })
+
+    page.evaluate.mockResolvedValueOnce([
+      { uid: "uid_1", role: "button", name: "Click", value: undefined, depth: 0 },
+    ])
+
+    await runtime.snapshot("latest", false)
+
+    // Stale UID should be gone, new UID should exist
+    expect(getInternals(runtime).uidRegistry.has("uid_99")).toBe(false)
+    expect(getInternals(runtime).uidRegistry.has("uid_1")).toBe(true)
+  })
+
+  // -- UID escaping --
+
+  test('action "click" escapes special characters in UID', async () => {
+    const page = createMockPage()
+    const ctx = createMockContext()
+    injectPage(runtime, "page_1", page, ctx)
+
+    await runtime.action("latest", "click", { uid: 'uid_1"; malicious' })
+    expect(page.locator).toHaveBeenCalledWith('[data-uid="uid_1\\"; malicious"]')
+  })
+
+  // -- evaluate no-args passes string directly --
+
+  test("evaluate without args passes string directly to page.evaluate", async () => {
+    const page = createMockPage()
+    const ctx = createMockContext()
+    injectPage(runtime, "page_1", page, ctx)
+
+    page.evaluate.mockResolvedValueOnce("result")
+    const result = await runtime.evaluate("latest", "() => document.title")
+    expect(result).toBe("result")
+    // Should pass the string directly, not a parsed function
+    expect(page.evaluate).toHaveBeenCalledWith("() => document.title")
+  })
 })

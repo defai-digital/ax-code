@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "vitest"
+import { describe, expect, test, beforeEach, afterEach, vi } from "vitest"
 import path from "path"
 import fs from "fs"
 import os from "os"
@@ -120,5 +120,47 @@ describe("visual.snapshot", () => {
       const pruned = await pruneSnapshots(tmpDir)
       expect(pruned).toBe(0)
     })
+  })
+
+  // -- URL source tests --
+
+  test("captureSnapshot from URL uses BrowserRuntime", async () => {
+    const closePage = vi.fn(async () => {})
+    const open = vi.fn(async () => ({
+      pageID: "page_1",
+      url: "http://localhost:3000",
+      title: "Test App",
+      viewport: { width: 1440, height: 900 },
+    }))
+    const screenshot = vi.fn(async () => ({
+      pageID: "page_1",
+      data: Buffer.from("url-png-data"),
+      format: "png" as const,
+      width: 1440,
+      height: 900,
+    }))
+
+    vi.doMock("@/tool/browser/runtime", () => ({
+      BrowserRuntime: {
+        get: () => ({ open, screenshot, closePage }),
+      },
+    }))
+
+    // Re-import to pick up the mock
+    const { captureSnapshot } = await import("../../src/visual/snapshot")
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "snap-url-"))
+    try {
+      const result = await captureSnapshot(tmpDir, "ses_test", {
+        type: "url",
+        url: "http://localhost:3000",
+      })
+
+      expect(result.run.target.type).toBe("snapshot")
+      expect(open).toHaveBeenCalledWith("http://localhost:3000", { width: 1440, height: 900 })
+      expect(screenshot).toHaveBeenCalled()
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 })

@@ -114,6 +114,11 @@ type PageEntry = {
 /** Ring buffer cap for console and network logs per page. */
 const BUFFER_CAP = 500
 
+/** Escape UID values for safe interpolation into CSS attribute selectors. */
+function escapeUid(uid: string): string {
+  return uid.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+}
+
 // ---------------------------------------------------------------------------
 // UID snapshot injection script
 // ---------------------------------------------------------------------------
@@ -197,10 +202,24 @@ export class BrowserRuntime {
   private uidRegistry = new Map<string, { pageID: string; uid: string }>()
   private latestPageID: string | undefined
   private pageCounter = 0
+  private launchPromise: Promise<PwBrowser> | undefined
+
+  private static disposeRegistered = false
 
   static get(): BrowserRuntime {
     if (!BrowserRuntime.instance) {
       BrowserRuntime.instance = new BrowserRuntime()
+    }
+    if (!BrowserRuntime.disposeRegistered) {
+      BrowserRuntime.disposeRegistered = true
+      const cleanup = () => {
+        if (BrowserRuntime.instance) {
+          BrowserRuntime.instance.close().catch(() => {})
+        }
+      }
+      process.once("exit", cleanup)
+      process.once("SIGINT", cleanup)
+      process.once("SIGTERM", cleanup)
     }
     return BrowserRuntime.instance
   }
@@ -258,7 +277,10 @@ export class BrowserRuntime {
     const pw = this.ensurePlaywright()
 
     if (!this.browser) {
-      this.browser = await pw.chromium.launch({ headless: true })
+      if (!this.launchPromise) {
+        this.launchPromise = pw.chromium.launch({ headless: true })
+      }
+      this.browser = await this.launchPromise
       log.info("browser launched")
     }
 
@@ -313,6 +335,11 @@ export class BrowserRuntime {
   async snapshot(pageID: string, verbose: boolean): Promise<BrowserSnapshot> {
     const entry = this.resolvePage(pageID)
 
+    // Clear stale UIDs for this page before re-populating
+    for (const [uid, ref] of this.uidRegistry) {
+      if (ref.pageID === entry.pageID) this.uidRegistry.delete(uid)
+    }
+
     // Inject UID assignment script and get element data
     const elements = (await entry.pwPage.evaluate(SNAPSHOT_SCRIPT)) as {
       uid: string
@@ -354,7 +381,7 @@ export class BrowserRuntime {
     const uid = params.uid as string | undefined
     const resolveLocator = () => {
       if (!uid) throw new Error(`Action "${actionType}" requires a uid parameter.`)
-      return pwPage.locator(`[data-uid="${uid}"]`)
+      return pwPage.locator(`[data-uid="${escapeUid(uid)}"]`)
     }
 
     switch (actionType) {
@@ -443,8 +470,8 @@ export class BrowserRuntime {
         if (!fromUid || !toUid) {
           throw new Error('Action "drag" requires fromUid and toUid parameters.')
         }
-        const from = pwPage.locator(`[data-uid="${fromUid}"]`)
-        const to = pwPage.locator(`[data-uid="${toUid}"]`)
+        const from = pwPage.locator(`[data-uid="${escapeUid(fromUid)}"]`)
+        const to = pwPage.locator(`[data-uid="${escapeUid(toUid)}"]`)
         await from.dragTo(to)
         return `Dragged ${fromUid} to ${toUid}`
       }
@@ -470,7 +497,7 @@ export class BrowserRuntime {
 
     let buffer: Buffer
     if (options.uid) {
-      const loc = entry.pwPage.locator(`[data-uid="${options.uid}"]`)
+      const loc = entry.pwPage.locator(`[data-uid="${escapeUid(options.uid)}"]`)
       buffer = await loc.screenshot({
         type: options.format === "jpeg" ? "jpeg" : "png",
         quality: options.format === "jpeg" ? (options.quality ?? 80) : undefined,
@@ -533,14 +560,12 @@ export class BrowserRuntime {
   async evaluate(pageID: string, fn: string, args?: { uid: string }[]): Promise<unknown> {
     const entry = this.resolvePage(pageID)
 
-    // Parse the function string into an evaluable function
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const parsedFn = new Function(`return (${fn})`)()
-
     if (args && args.length > 0) {
       // Resolve UIDs to element handles
-      const locators = args.map((a) => entry.pwPage.locator(`[data-uid="${a.uid}"]`))
-      // Use $eval-style: get the first element handle and evaluate
+      const locators = args.map((a) => entry.pwPage.locator(`[data-uid="${escapeUid(a.uid)}"]`))
+      // Parse function for element evaluation — Playwright serializes to browser context
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const parsedFn = new Function(`return (${fn})`)()
       if (locators.length === 1) {
         return locators[0]!.evaluate(parsedFn as (el: Element) => unknown)
       }
@@ -552,7 +577,8 @@ export class BrowserRuntime {
       )
     }
 
-    return entry.pwPage.evaluate(parsedFn as () => unknown)
+    // No-args: pass string directly to page.evaluate (runs in browser sandbox, not Node.js)
+    return entry.pwPage.evaluate(fn)
   }
 
   async close(): Promise<void> {
@@ -577,7 +603,40 @@ export class BrowserRuntime {
         // Browser may already be closed
       }
       this.browser = undefined
+      this.launchPromise = undefined
       log.info("browser closed")
     }
+  }
+
+  /**
+   * Close a single page and its browser context, releasing resources.
+   * Safe to call with an unknown pageID (no-op).
+   */
+  async closePage(pageID: string): Promise<void> {
+    const entry = this.pages.get(pageID)
+    if (!entry) return
+
+    // Clear UIDs belonging to this page
+    for (const [uid, ref] of this.uidRegistry) {
+      if (ref.pageID === entry.pageID) this.uidRegistry.delete(uid)
+    }
+
+    this.pages.delete(entry.pageID)
+    this.consoleBuffers.delete(entry.pageID)
+    this.networkBuffers.delete(entry.pageID)
+
+    try {
+      await entry.context.close()
+    } catch {
+      // Context may already be closed
+    }
+
+    // Update latestPageID if needed
+    if (this.latestPageID === entry.pageID) {
+      const remaining = [...this.pages.keys()]
+      this.latestPageID = remaining.length > 0 ? remaining[remaining.length - 1]! : undefined
+    }
+
+    log.info("page closed", { pageID: entry.pageID })
   }
 }

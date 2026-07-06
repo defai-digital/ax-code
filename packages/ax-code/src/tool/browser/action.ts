@@ -1,6 +1,7 @@
 import z from "zod"
 import { Tool } from "../tool"
 import DESCRIPTION from "./browser-action.txt"
+import { BrowserPermission } from "@/visual/permission"
 import { BrowserRuntime } from "./runtime"
 
 export const BrowserActionTool = Tool.define("browser_action", {
@@ -27,6 +28,20 @@ export const BrowserActionTool = Tool.define("browser_action", {
     filePaths: z.array(z.string()).optional().describe("File paths for uploadFile action"),
   }),
   async execute(params, ctx) {
+    // Validate URL for navigate actions to prevent bypassing browser_open guards
+    if (params.action === "navigate" && params.url && (!params.type || params.type === "url")) {
+      const validation = BrowserPermission.validateUrl(params.url)
+      if (!validation.valid) {
+        throw new Error(validation.reason)
+      }
+      await ctx.ask({
+        permission: "browser_open",
+        patterns: [params.url],
+        always: BrowserPermission.permissionPatterns(params.url),
+        metadata: { url: params.url },
+      })
+    }
+
     const runtime = BrowserRuntime.get()
     const result = await runtime.action("latest", params.action, params as Record<string, unknown>)
 
