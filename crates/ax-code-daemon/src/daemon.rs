@@ -125,12 +125,13 @@ fn socket_path_for(project_dir: &str) -> PathBuf {
 fn handle_client(stream: &UnixStream, state: &Arc<Mutex<DaemonState>>) {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
-    if reader.read_line(&mut line).unwrap_or(0) == 0 {
-        return;
-    }
-    let response = match serde_json::from_str::<Command>(line.trim()) {
-        Ok(cmd) => dispatch(cmd, state),
-        Err(e) => error_json(&e.to_string()),
+    let response = match reader.read_line(&mut line) {
+        Ok(0) => return, // client disconnected before sending
+        Ok(_) => match serde_json::from_str::<Command>(line.trim()) {
+            Ok(cmd) => dispatch(cmd, state),
+            Err(e) => error_json(&e.to_string()),
+        },
+        Err(e) => error_json(&format!("read error: {e}")),
     };
     if let Ok(mut writer) = stream.try_clone() {
         if let Err(e) = writer.write_all(response.as_bytes()) {
@@ -267,7 +268,11 @@ pub fn daemon_start(project_dir: String, db_path: String) -> napi::Result<String
 pub fn daemon_stop(socket_path: String) -> napi::Result<()> {
     let resp = send_command(&socket_path, r#"{"cmd":"stop"}"#)?;
     if resp.contains("stopped") {
-        std::thread::sleep(Duration::from_millis(100));
+        // Give the daemon thread time to exit its loop and clean up the socket.
+        // run_daemon removes the socket file on exit; we only remove as a fallback
+        // after a generous timeout to avoid a double-delete race.
+        std::thread::sleep(Duration::from_millis(300));
+        // Best-effort cleanup if run_daemon didn't remove it yet.
         let _ = std::fs::remove_file(&socket_path);
         Ok(())
     } else {

@@ -52,10 +52,11 @@ impl IndexStore {
     /// by clearing its cached instance on close.
     #[napi]
     pub fn close(&self) -> napi::Result<()> {
-        let mut guard = self
-            .conn
-            .lock()
-            .map_err(|e| napi::Error::from_reason(format!("lock poisoned: {e}")))?;
+        // BUG-277: recover from poisoned mutex rather than panicking across FFI
+        let mut guard = match self.conn.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         let Some(conn) = guard.take() else {
             return Ok(());
         };
@@ -77,10 +78,11 @@ impl IndexStore {
     where
         F: FnOnce(&Connection) -> Result<T, rusqlite::Error>,
     {
-        let guard = self
-            .conn
-            .lock()
-            .map_err(|e| napi::Error::from_reason(format!("lock poisoned: {e}")))?;
+        // BUG-277: recover from poisoned mutex rather than panicking across FFI
+        let guard = match self.conn.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         let conn = guard
             .as_ref()
             .ok_or_else(|| napi::Error::from_reason("index store is closed"))?;
@@ -91,10 +93,11 @@ impl IndexStore {
     where
         F: FnOnce(&mut Connection) -> Result<T, rusqlite::Error>,
     {
-        let mut guard = self
-            .conn
-            .lock()
-            .map_err(|e| napi::Error::from_reason(format!("lock poisoned: {e}")))?;
+        // BUG-277: recover from poisoned mutex rather than panicking across FFI
+        let mut guard = match self.conn.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         let conn = guard
             .as_mut()
             .ok_or_else(|| napi::Error::from_reason("index store is closed"))?;

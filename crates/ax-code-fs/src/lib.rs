@@ -179,6 +179,14 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
             continue;
         }
 
+        // Exclude hardcoded ignore folders (node_modules, dist, build, etc.)
+        if rel.components().any(|c| {
+            let name = c.as_os_str().to_str().unwrap_or("");
+            IGNORE_FOLDERS.contains(&name)
+        }) {
+            continue;
+        }
+
         // If globs are specified, the file must match at least one
         if !globs.is_empty() && !globs.iter().any(|g| g.is_match(rel_str)) {
             continue;
@@ -453,6 +461,14 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
 
         // Skip .git directory
         if rel.components().any(|c| c.as_os_str() == ".git") {
+            continue;
+        }
+
+        // Skip hardcoded ignore folders (node_modules, dist, build, etc.)
+        if rel.components().any(|c| {
+            let name = c.as_os_str().to_str().unwrap_or("");
+            IGNORE_FOLDERS.contains(&name)
+        }) {
             continue;
         }
 
@@ -760,6 +776,12 @@ pub fn scan_files(cwd: String, config_json: String) -> napi::Result<String> {
             None => continue,
         };
         if rel.components().any(|c| c.as_os_str() == ".git") {
+            continue;
+        }
+        if rel.components().any(|c| {
+            let name = c.as_os_str().to_str().unwrap_or("");
+            IGNORE_FOLDERS.contains(&name)
+        }) {
             continue;
         }
         if !include_matchers.is_empty() && !include_matchers.iter().any(|g| g.is_match(rel_str)) {
@@ -1315,6 +1337,30 @@ mod tests {
 
         assert!(results.contains(&"file.txt".to_string()));
         assert!(!results.iter().any(|p| p.contains(".git")));
+
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn walk_files_excludes_ignore_folders() {
+        let dir = make_tmp_dir("walk_ignore");
+
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::create_dir_all(dir.join("node_modules/foo")).unwrap();
+        fs::create_dir_all(dir.join("dist")).unwrap();
+        fs::create_dir_all(dir.join("build/out")).unwrap();
+        fs::write(dir.join("src/main.rs"), "fn main() {}").unwrap();
+        fs::write(dir.join("node_modules/foo/index.js"), "module.exports={}").unwrap();
+        fs::write(dir.join("dist/bundle.js"), "// bundle").unwrap();
+        fs::write(dir.join("build/out/app"), "binary").unwrap();
+
+        // hidden: false should still exclude node_modules/dist/build
+        let results = walk_files(dir.to_str().unwrap().into(), "{}".into()).unwrap();
+
+        assert!(results.contains(&"src/main.rs".to_string()));
+        assert!(!results.iter().any(|p| p.contains("node_modules")));
+        assert!(!results.iter().any(|p| p.contains("dist/")));
+        assert!(!results.iter().any(|p| p.contains("build/")));
 
         cleanup(&dir);
     }

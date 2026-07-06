@@ -335,7 +335,8 @@ fn apply_sgr(style: &mut Style, codes: &str) {
             }
             30..=37 | 90..=97 => style.fg = Some(color_name(code)),
             39 => style.fg = None,
-            40..=47 | 100..=107 => style.bg = Some(color_name(code - 10)),
+            40..=47 => style.bg = Some(color_name(code - 10)),
+            100..=107 => style.bg = Some(format!("bright-{}", color_name(code - 100))),
             49 => style.bg = None,
             _ => {}
         }
@@ -652,6 +653,18 @@ mod tests {
         assert_eq!(runs[1].style.fg.as_deref(), Some("ansi256:196"));
         assert_eq!(runs[1].style.bg.as_deref(), Some("rgb:1,2,3"));
         assert!(runs[1].style.bold);
+    }
+
+    #[test]
+    fn parses_bright_background_colors_distinct_from_standard() {
+        // Standard bg (41 = red) vs bright bg (101 = bright red) must differ
+        let runs = parse_ansi("\x1b[41mstd\x1b[101mbright\x1b[0m");
+        assert_eq!(runs[0].style.bg.as_deref(), Some("red"));
+        assert_eq!(runs[1].style.bg.as_deref(), Some("bright-red"));
+        // Also verify bright foreground (90-97) works
+        let runs2 = parse_ansi("\x1b[90mgray\x1b[97mwhite\x1b[0m");
+        assert_eq!(runs2[0].style.fg.as_deref(), Some("black"));
+        assert_eq!(runs2[1].style.fg.as_deref(), Some("white"));
     }
 
     #[test]
