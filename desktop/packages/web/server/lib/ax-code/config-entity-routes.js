@@ -97,9 +97,7 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
         return res.status(400).json({ error })
       }
 
-      console.log("[Server] Creating agent:", agentName)
-      console.log("[Server] Config received:", JSON.stringify(config, null, 2))
-      console.log("[Server] Scope:", scope, "Working directory:", directory)
+      console.log("[Server] Creating agent")
 
       createAgent(agentName, config, directory, scope)
       await refreshAxCodeAfterConfigChange("agent creation", {
@@ -127,14 +125,12 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
         return res.status(400).json({ error })
       }
 
-      console.log(`[Server] Updating agent: ${agentName}`)
-      console.log("[Server] Updates:", JSON.stringify(updates, null, 2))
-      console.log("[Server] Working directory:", directory)
+      console.log("[Server] Updating agent")
 
       updateAgent(agentName, updates, directory)
       await refreshAxCodeAfterConfigChange("agent update")
 
-      console.log(`[Server] Agent ${agentName} updated successfully`)
+      console.log("[Server] Agent updated successfully")
 
       res.json({
         success: true,
@@ -212,7 +208,7 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
       if (error) {
         return res.status(400).json({ error })
       }
-      console.log(`[API:POST /api/config/mcp] Creating MCP server: ${name}`)
+      console.log("[API:POST /api/config/mcp] Creating MCP server")
 
       await completeMcpMutation(res, "create", name, () => {
         createMcpConfig(name, config, directory, scope)
@@ -231,7 +227,7 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
       if (error) {
         return res.status(400).json({ error })
       }
-      console.log(`[API:PATCH /api/config/mcp] Updating MCP server: ${name}`)
+      console.log("[API:PATCH /api/config/mcp] Updating MCP server")
 
       await completeMcpMutation(res, "update", name, () => {
         updateMcpConfig(name, updates, directory)
@@ -252,7 +248,7 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
       if (error) {
         return res.status(400).json({ error })
       }
-      console.log(`[API:DELETE /api/config/mcp] Deleting MCP server: ${name}`)
+      console.log("[API:DELETE /api/config/mcp] Deleting MCP server")
 
       await completeMcpMutation(res, "delete", name, () => {
         deleteMcpConfig(name, directory)
@@ -295,9 +291,7 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
         return res.status(400).json({ error })
       }
 
-      console.log("[Server] Creating command:", commandName)
-      console.log("[Server] Config received:", JSON.stringify(config, null, 2))
-      console.log("[Server] Scope:", scope, "Working directory:", directory)
+      console.log("[Server] Creating command")
 
       createCommand(commandName, config, directory, scope)
       await refreshAxCodeAfterConfigChange("command creation", {
@@ -325,14 +319,12 @@ export const registerConfigEntityRoutes = (app, dependencies) => {
         return res.status(400).json({ error })
       }
 
-      console.log(`[Server] Updating command: ${commandName}`)
-      console.log("[Server] Updates:", JSON.stringify(updates, null, 2))
-      console.log("[Server] Working directory:", directory)
+      console.log("[Server] Updating command")
 
       updateCommand(commandName, updates, directory)
       await refreshAxCodeAfterConfigChange("command update")
 
-      console.log(`[Server] Command ${commandName} updated successfully`)
+      console.log("[Server] Command updated successfully")
 
       res.json({
         success: true,

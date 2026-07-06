@@ -582,8 +582,7 @@ export const registerSkillRoutes = (app, dependencies) => {
         return res.status(400).json({ error: error || "Project skill creation requires a directory" })
       }
 
-      console.log("[Server] Creating skill:", skillName)
-      console.log("[Server] Scope:", scope, "Working directory:", directory)
+      console.log("[Server] Creating skill")
 
       createSkill(skillName, { ...config, source: skillSource }, directory, scope)
       await refreshAxCodeAfterConfigChange("skill creation")
@@ -609,8 +608,7 @@ export const registerSkillRoutes = (app, dependencies) => {
         return res.status(400).json({ error })
       }
 
-      console.log(`[Server] Updating skill: ${skillName}`)
-      console.log("[Server] Working directory:", directory)
+      console.log("[Server] Updating skill")
 
       updateSkill(skillName, updates, directory, updates?.targetPath)
       await refreshAxCodeAfterConfigChange("skill update")

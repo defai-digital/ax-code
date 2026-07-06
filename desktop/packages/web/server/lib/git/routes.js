@@ -52,7 +52,7 @@ export function registerGitRoutes(app) {
     const { deleteProfile } = await getGitLibraries()
     try {
       deleteProfile(req.params.id)
-      console.log(`Deleted git identity profile: ${req.params.id}`)
+      console.log("Deleted git identity profile")
       res.json({ success: true })
     } catch (error) {
       console.error("Failed to delete git identity profile:", error)

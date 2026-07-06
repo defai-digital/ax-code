@@ -104,7 +104,7 @@ const createSimpleGit = (options) => {
     if (String(args[0] || "").includes(SIMPLE_GIT_UNSAFE_BINARY_WARNING)) {
       return
     }
-    originalWarn(...args)
+    originalWarn("simple-git warning while creating custom binary client")
   }
 
   try {
