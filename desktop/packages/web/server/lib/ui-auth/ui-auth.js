@@ -275,11 +275,11 @@ function getOrCreateJwtSecret() {
   }
 
   try {
-    if (fs.existsSync(JWT_SECRET_FILE)) {
-      return new TextEncoder().encode(fs.readFileSync(JWT_SECRET_FILE, "utf8").trim())
-    }
+    return new TextEncoder().encode(fs.readFileSync(JWT_SECRET_FILE, "utf8").trim())
   } catch (e) {
-    console.warn("[JWT] Failed to read secret file:", e.message)
+    if (e?.code !== "ENOENT") {
+      console.warn("[JWT] Failed to read secret file:", e.message)
+    }
   }
 
   const secret = crypto.randomBytes(32).toString("hex")
