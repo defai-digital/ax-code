@@ -960,7 +960,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
           <button
             type="button"
             onClick={handleTriggerUploadPlan}
-            disabled={!projectRef || isImportingPlan}
+            disabled={isImportingPlan}
             className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border/70 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={t("rightSidebar.contextNotesTodo.plans.importFromFile")}
             title={t("rightSidebar.contextNotesTodo.plans.importFromFile")}

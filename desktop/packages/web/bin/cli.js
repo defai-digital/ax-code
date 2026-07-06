@@ -45,14 +45,9 @@ const API_SYSTEM_INFO_PATH = `${API_BASE_PATH}/system/info`
 const API_SYSTEM_SHUTDOWN_PATH = `${API_BASE_PATH}/system/shutdown`
 const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"))
 
-let onCancelCleanup = null
 let activeCommandOptions = null
 let foregroundServerActive = false
 let foregroundShutdown = null
-
-function setCancelCleanup(handler) {
-  onCancelCleanup = typeof handler === "function" ? handler : null
-}
 
 const HAS_PLAIN_FLAG = process.argv.includes("--plain")
 const STYLE_ENABLED = process.stdout.isTTY && process.env.NO_COLOR !== "1" && !HAS_PLAIN_FLAG
@@ -2919,14 +2914,6 @@ if (isCliExecution) {
     isHandlingSigint = true
     ;(async () => {
       clackCancel("Operation cancelled.")
-      if (onCancelCleanup) {
-        try {
-          await onCancelCleanup()
-        } catch {
-        } finally {
-          setCancelCleanup(null)
-        }
-      }
       process.exit(130)
     })()
   })

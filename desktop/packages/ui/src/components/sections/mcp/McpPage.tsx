@@ -624,8 +624,9 @@ export const McpPage: React.FC = () => {
   const clearAuthMcp = useMcpStore((state) => state.clearAuth)
   const testConnectionMcp = useMcpStore((state) => state.testConnection)
 
-  const selectedServer = selectedMcpName ? getMcpByName(selectedMcpName) : null
-  const isNewServer = Boolean(mcpDraft && mcpDraft.name === selectedMcpName && !selectedServer)
+  const selectedMcpNameKey = selectedMcpName ?? ""
+  const selectedServer = getMcpByName(selectedMcpNameKey)
+  const isNewServer = Boolean(mcpDraft && mcpDraft.name === selectedMcpNameKey && !selectedServer)
 
   // ── form state ──
   const [draftName, setDraftName] = React.useState("")
@@ -662,8 +663,8 @@ export const McpPage: React.FC = () => {
   const [importJsonText, setImportJsonText] = React.useState("")
   const [importError, setImportError] = React.useState<string | null>(null)
   const runtimeActionKey = React.useMemo(
-    () => buildMcpRuntimeActionKey(selectedMcpName, currentDirectory),
-    [currentDirectory, selectedMcpName],
+    () => buildMcpRuntimeActionKey(selectedMcpNameKey, currentDirectory),
+    [currentDirectory, selectedMcpNameKey],
   )
   const runtimeActionKeyRef = React.useRef(runtimeActionKey)
 
@@ -901,7 +902,7 @@ export const McpPage: React.FC = () => {
   ])
 
   const handleSave = async () => {
-    const name = isNewServer ? draftName.trim() : (selectedMcpName ?? "")
+    const name = isNewServer ? draftName.trim() : selectedMcpNameKey
     if (!name) {
       toast.error(t("settings.mcp.page.toast.nameRequired"))
       return
@@ -1387,13 +1388,13 @@ export const McpPage: React.FC = () => {
     )
   }
 
-  const runtimeStatus = mcpStatus[selectedMcpName]
-  const runtimeDiagnostic = selectedMcpName ? mcpDiagnostics[selectedMcpName] : undefined
+  const runtimeStatus = mcpStatus[selectedMcpNameKey]
+  const runtimeDiagnostic = mcpDiagnostics[selectedMcpNameKey]
   const effectiveRuntimeStatus = runtimeStatus ?? runtimeDiagnostic
   const isConnected = runtimeStatus?.status === "connected"
   const needsAuthorization =
     runtimeStatus?.status === "needs_auth" || runtimeStatus?.status === "needs_client_registration"
-  const suggestedRedirectUri = buildMcpOAuthRedirectUri(selectedMcpName, currentDirectory)
+  const suggestedRedirectUri = buildMcpOAuthRedirectUri(selectedMcpNameKey, currentDirectory)
   const runtimeDescription = getStatusDescription(
     effectiveRuntimeStatus?.status,
     tUnsafe,
@@ -2100,7 +2101,7 @@ export const McpPage: React.FC = () => {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{t("settings.mcp.page.deleteDialog.title", { name: selectedMcpName ?? "" })}</DialogTitle>
+            <DialogTitle>{t("settings.mcp.page.deleteDialog.title", { name: selectedMcpNameKey })}</DialogTitle>
             <DialogDescription>
               {t("settings.mcp.page.deleteDialog.descriptionPrefix")}{" "}
               <code className="text-foreground">ax-code.json</code>.{" "}

@@ -181,8 +181,11 @@ export namespace Skill {
   }
 
   async function loadBuiltinSkills(): Promise<Array<{ location: string; content: string }>> {
-    const buildTimeSkills = readBuildTimeBuiltinSkills()
-    if (buildTimeSkills !== undefined) return parseBuiltinSkillEntries(buildTimeSkills)
+    const buildTimeBuiltinSkills = parseBuiltinSkillEntries(readBuildTimeBuiltinSkills() ?? [])
+    if (buildTimeBuiltinSkills.length > 0) {
+      return buildTimeBuiltinSkills
+    }
+
     const builtinDir = path.resolve(import.meta.dirname, "../../skills")
     const entries = await Filesystem.isDir(builtinDir).then((exists) => {
       if (!exists) return [] as string[]

@@ -625,17 +625,13 @@ export async function reloadAxCodeConfiguration(options?: {
   }
 }
 
-let unsubscribeAgentsConfigChanges: (() => void) | null = null
+subscribeToConfigChanges((event) => {
+  if (event.source === CONFIG_EVENT_SOURCE) {
+    return
+  }
 
-if (!unsubscribeAgentsConfigChanges) {
-  unsubscribeAgentsConfigChanges = subscribeToConfigChanges((event) => {
-    if (event.source === CONFIG_EVENT_SOURCE) {
-      return
-    }
-
-    if (scopeMatches(event, "agents")) {
-      const { loadAgents } = useAgentsStore.getState()
-      void loadAgents()
-    }
-  })
-}
+  if (scopeMatches(event, "agents")) {
+    const { loadAgents } = useAgentsStore.getState()
+    void loadAgents()
+  }
+})

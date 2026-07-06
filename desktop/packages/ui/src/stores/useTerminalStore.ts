@@ -81,8 +81,6 @@ interface TerminalStore {
 
 const TERMINAL_BUFFER_LIMIT = 1_000_000
 const TERMINAL_STORE_NAME = "terminal-store"
-let hydrationListenerAttached = false
-
 type PersistedTerminalTab = Pick<
   TerminalTab,
   "id" | "label" | "iconKey" | "terminalSessionId" | "lifecycle" | "createdAt"
@@ -750,8 +748,7 @@ export const useTerminalStore = create<TerminalStore>()(
 )
 
 // Ensure hydration completes even when no persisted state exists.
-if (typeof window !== "undefined" && !hydrationListenerAttached) {
-  hydrationListenerAttached = true
+if (typeof window !== "undefined") {
   const persistApi = (
     useTerminalStore as unknown as {
       persist?: {

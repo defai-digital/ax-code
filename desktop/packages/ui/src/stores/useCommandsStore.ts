@@ -493,17 +493,13 @@ export async function reloadAxCodeConfiguration(options?: { message?: string; de
   }
 }
 
-let unsubscribeCommandsConfigChanges: (() => void) | null = null
+subscribeToConfigChanges((event) => {
+  if (event.source === CONFIG_EVENT_SOURCE) {
+    return
+  }
 
-if (!unsubscribeCommandsConfigChanges) {
-  unsubscribeCommandsConfigChanges = subscribeToConfigChanges((event) => {
-    if (event.source === CONFIG_EVENT_SOURCE) {
-      return
-    }
-
-    if (scopeMatches(event, "commands")) {
-      const { loadCommands } = useCommandsStore.getState()
-      void loadCommands()
-    }
-  })
-}
+  if (scopeMatches(event, "commands")) {
+    const { loadCommands } = useCommandsStore.getState()
+    void loadCommands()
+  }
+})

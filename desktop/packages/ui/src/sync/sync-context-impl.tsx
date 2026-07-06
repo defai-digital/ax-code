@@ -1447,7 +1447,7 @@ function handleEvent(
   // no ToolPart component is mounted.
   if (payload.type === "session.idle") {
     const idleSessionId = getSessionIdFromPayload(payload)
-    if (idleSessionId && resolvedDirectory && resolvedDirectory !== "global") {
+    if (idleSessionId && resolvedDirectory !== "global") {
       const sessionState = store.getState()
       const idleSession = Binary.find(sessionState.session, idleSessionId, (s) => s.id)
       const parentID = idleSession ? (idleSession as Session & { parentID?: string | null }).parentID : null

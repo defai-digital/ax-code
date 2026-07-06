@@ -482,17 +482,13 @@ export async function refreshSkillsAfterAxCodeRestart(options?: { message?: stri
 }
 
 // Subscribe to config changes from other stores
-let unsubscribeSkillsConfigChanges: (() => void) | null = null
+subscribeToConfigChanges((event) => {
+  if (event.source === CONFIG_EVENT_SOURCE) {
+    return
+  }
 
-if (!unsubscribeSkillsConfigChanges) {
-  unsubscribeSkillsConfigChanges = subscribeToConfigChanges((event) => {
-    if (event.source === CONFIG_EVENT_SOURCE) {
-      return
-    }
-
-    if (scopeMatches(event, "skills")) {
-      const { loadSkills } = useSkillsStore.getState()
-      void loadSkills()
-    }
-  })
-}
+  if (scopeMatches(event, "skills")) {
+    const { loadSkills } = useSkillsStore.getState()
+    void loadSkills()
+  }
+})

@@ -1869,32 +1869,26 @@ if (typeof window !== "undefined") {
   window.__zustand_config_store__ = useConfigStore
 }
 
-let unsubscribeConfigStoreChanges: (() => void) | null = null
+subscribeToConfigChanges(async (event) => {
+  const tasks: Promise<void>[] = []
 
-if (!unsubscribeConfigStoreChanges) {
-  unsubscribeConfigStoreChanges = subscribeToConfigChanges(async (event) => {
-    const tasks: Promise<void>[] = []
+  if (scopeMatches(event, "agents")) {
+    const { loadAgents } = useConfigStore.getState()
+    tasks.push(loadAgents().then(() => {}))
+  }
 
-    if (scopeMatches(event, "agents")) {
-      const { loadAgents } = useConfigStore.getState()
-      tasks.push(loadAgents().then(() => {}))
-    }
+  if (scopeMatches(event, "providers")) {
+    const { loadProviders } = useConfigStore.getState()
+    tasks.push(loadProviders())
+  }
 
-    if (scopeMatches(event, "providers")) {
-      const { loadProviders } = useConfigStore.getState()
-      tasks.push(loadProviders())
-    }
+  if (tasks.length > 0) {
+    await Promise.all(tasks)
+  }
+})
 
-    if (tasks.length > 0) {
-      await Promise.all(tasks)
-    }
-  })
-}
-
-let unsubscribeConfigStoreDirectoryChanges: (() => void) | null = null
-
-if (typeof window !== "undefined" && !unsubscribeConfigStoreDirectoryChanges) {
-  unsubscribeConfigStoreDirectoryChanges = useDirectoryStore.subscribe((state, prevState) => {
+if (typeof window !== "undefined") {
+  useDirectoryStore.subscribe((state, prevState) => {
     const nextKey = toDirectoryKey(state.currentDirectory)
     const prevKey = toDirectoryKey(prevState.currentDirectory)
     if (nextKey === prevKey) {

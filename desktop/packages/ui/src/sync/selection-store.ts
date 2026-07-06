@@ -140,8 +140,6 @@ const agentModelVariantSelections = new Map<string, Map<string, Map<string, stri
 
 // Maximum number of sessions to persist to local storage to prevent unbounded growth
 const MAX_PERSISTED_SESSIONS = 150
-let hydrationListenerAttached = false
-
 export const useSelectionStore = create<SelectionState>()(
   persist(
     (set, get) => ({
@@ -269,8 +267,7 @@ export const useSelectionStore = create<SelectionState>()(
 )
 
 // Ensure hydration completes even when no persisted state exists.
-if (typeof window !== "undefined" && !hydrationListenerAttached) {
-  hydrationListenerAttached = true
+if (typeof window !== "undefined") {
   const persistApi = (
     useSelectionStore as unknown as {
       persist?: {
