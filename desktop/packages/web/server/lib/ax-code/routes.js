@@ -8,17 +8,24 @@ import path from "path"
 const PROMPT_ASYNC_IDEMPOTENCY_TTL_MS = 2 * 60 * 1000
 const PROVIDER_AUTH_SCOPES = new Set(["auth", "user", "project", "custom", "all"])
 
-class ProviderAuthScopeError extends Error {
-  constructor(message) {
+class ProviderAuthRouteError extends Error {
+  constructor(statusCode, message) {
     super(message)
-    this.statusCode = 400
+    this.statusCode = statusCode
   }
+}
+
+const resolveProviderAuthId = (providerId) => {
+  if (typeof providerId === "string" && providerId.trim()) {
+    return providerId
+  }
+  throw new ProviderAuthRouteError(400, "Provider ID is required")
 }
 
 const resolveProviderAuthScope = (scope) => {
   if (typeof scope !== "string") return "auth"
   if (PROVIDER_AUTH_SCOPES.has(scope)) return scope
-  throw new ProviderAuthScopeError("Invalid scope")
+  throw new ProviderAuthRouteError(400, "Invalid scope")
 }
 
 export const registerAxCodeRoutes = (app, dependencies) => {
@@ -519,11 +526,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
 
   app.delete("/api/provider/:providerId/auth", async (req, res) => {
     try {
-      const { providerId } = req.params
-      if (!providerId) {
-        return res.status(400).json({ error: "Provider ID is required" })
-      }
-
+      const providerId = resolveProviderAuthId(req.params?.providerId)
       const scope = resolveProviderAuthScope(req.query?.scope)
       const headerDirectory = typeof req.get === "function" ? req.get("x-ax-code-directory") : null
       const queryDirectory = Array.isArray(req.query?.directory) ? req.query.directory[0] : req.query?.directory
@@ -573,7 +576,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
         reloadTimeoutMs: reload?.reloadTimeoutMs,
       })
     } catch (error) {
-      if (error instanceof ProviderAuthScopeError) {
+      if (error instanceof ProviderAuthRouteError) {
         return res.status(error.statusCode).json({ error: error.message })
       }
       console.error("Failed to disconnect provider:", error)

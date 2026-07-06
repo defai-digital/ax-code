@@ -14,6 +14,16 @@ const parseQueryParam = (params: URLSearchParams, key: string): string | null =>
   return trimmed || null
 }
 
+const resolveMcpOAuthCallbackCode = (params: URLSearchParams): string => {
+  const code = parseQueryParam(params, "code")
+  if (!code) {
+    throw new Error(
+      "Missing OAuth authorization code. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
+    )
+  }
+  return code
+}
+
 const normalizeMcpAuthErrorMessage = (error: unknown, fallback: string): string => {
   const message = error instanceof Error ? error.message : fallback
   if (/oauth state required/i.test(message)) {
@@ -85,7 +95,6 @@ export const McpOAuthCallbackPage: React.FC = () => {
     }
 
     const params = new URLSearchParams(window.location.search)
-    const code = parseQueryParam(params, "code")
     const error = parseQueryParam(params, "error")
     const errorDescription = parseQueryParam(params, "error_description")
     let pendingAuthContextRef: PendingAuthContextRef
@@ -99,20 +108,22 @@ export const McpOAuthCallbackPage: React.FC = () => {
     }
 
     if (error) {
-      void clearPendingAuthContext(pendingAuthContextRef)
       setStatus("error")
       setMessage(errorDescription ?? error)
       return
     }
 
+    let code: string
+    try {
+      code = resolveMcpOAuthCallbackCode(params)
+    } catch (codeError) {
+      setStatus("error")
+      setMessage(normalizeMcpAuthErrorMessage(codeError, "Failed to complete MCP authorization."))
+      return
+    }
+
     void (async () => {
       try {
-        if (!code) {
-          throw new Error(
-            "Missing OAuth authorization code. Start authorization again from MCP Settings or paste the returned code into AX Code Desktop manually.",
-          )
-        }
-
         const pendingContext = await fetchPendingAuthContext(pendingAuthContextRef)
 
         await completeAuth(pendingContext.name, code, pendingContext.directory)
