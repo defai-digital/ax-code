@@ -13,6 +13,7 @@ catalog:
   "@octokit/rest": "22.0.0"
   "@octokit/webhooks-types": "7.6.1"
   "@playwright/test": "1.51.0"
+  "playwright-core": "1.51.0"
   "@standard-schema/spec": "1.0.0"
   "@tsconfig/node24": "24.0.4"
   "@types/luxon": "3.7.1"
