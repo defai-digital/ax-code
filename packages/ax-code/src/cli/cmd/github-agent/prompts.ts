@@ -29,10 +29,6 @@ export type ReviewCommentContext = {
   originalCommitId: string
 } | null
 
-function sanitizeLogValue(value: unknown): string {
-  return String(value).replace(/[\r\n]/g, " ")
-}
-
 export function parseGitHubUserAttachmentUrl(rawUrl: string): URL | null {
   let parsed: URL
   try {
@@ -135,7 +131,7 @@ export async function getUserPrompt(params: {
     const start = m.index ?? 0
     const attachmentUrl = parseGitHubUserAttachmentUrl(url)
     if (!attachmentUrl) {
-      console.error("Skipping invalid GitHub attachment URL:", sanitizeLogValue(url))
+      console.error("Skipping invalid GitHub attachment URL")
       continue
     }
 
@@ -150,7 +146,7 @@ export async function getUserPrompt(params: {
       redirect: "manual",
     })
     if (!res.ok) {
-      console.error("Failed to download image:", sanitizeLogValue(attachmentUrl.toString()))
+      console.error(`Failed to download GitHub attachment: HTTP ${res.status}`)
       continue
     }
 

@@ -16,10 +16,6 @@ import { createAxCodeClient } from "@ax-code/sdk/v2/client"
 import { spawn } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
-function sanitizeLogValue(value: unknown): string {
-  return String(value).replace(/[\r\n]/g, " ")
-}
-
 // Minimal stand-in for Bun's `$` shell (this legacy entry point used it for git
 // commands). Single-quotes each interpolation so values with spaces stay one
 // argument, runs via the shell, and throws on a non-zero exit like Bun's `$`.
@@ -548,7 +544,7 @@ async function getUserPrompt() {
     if (!url) continue
     const attachmentUrl = parseGitHubUserAttachmentUrl(url)
     if (!attachmentUrl) {
-      console.error("Skipping invalid GitHub attachment URL:", sanitizeLogValue(url))
+      console.error("Skipping invalid GitHub attachment URL")
       continue
     }
     const filename = path.basename(attachmentUrl.pathname)
@@ -556,7 +552,7 @@ async function getUserPrompt() {
     // Download image
     const res = await fetchGitHubUserAttachment(attachmentUrl)
     if (!res.ok) {
-      console.error("Failed to download image:", sanitizeLogValue(attachmentUrl.toString()))
+      console.error(`Failed to download GitHub attachment: HTTP ${res.status}`)
       continue
     }
 
