@@ -7,6 +7,7 @@ export function createSyncBootstrapPhaseSequence(input: {
   blockingTasks: BootstrapTask[]
   coreTasks: BootstrapTask[]
   deferredTasks: BootstrapTask[]
+  coreConcurrency?: number
   deferredDelayMs?: number
   deferredConcurrency?: number
   deferredBackground?: boolean
@@ -36,6 +37,7 @@ export function createSyncBootstrapPhaseSequence(input: {
     },
     {
       tasks: input.coreTasks,
+      concurrency: input.coreConcurrency,
       onRejected(error) {
         input.logError("core bootstrap item failed", { error })
       },

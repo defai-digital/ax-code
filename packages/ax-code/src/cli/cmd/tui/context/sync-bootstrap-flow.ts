@@ -20,8 +20,10 @@ const BOOTSTRAP_SESSION_LIST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 // LSP/MCP/VCS/workspace probes can otherwise compete with the first prompt.
 export const DEFAULT_DEFERRED_BOOTSTRAP_DELAY_MS = 2_000
 export const DEFAULT_DEFERRED_BOOTSTRAP_CONCURRENCY = 1
+export const DEFAULT_CORE_BOOTSTRAP_CONCURRENCY = 3
 export const AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS = "AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS"
 export const AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY = "AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY"
+export const AX_CODE_TUI_CORE_BOOTSTRAP_CONCURRENCY = "AX_CODE_TUI_CORE_BOOTSTRAP_CONCURRENCY"
 
 export function tuiDeferredBootstrapDelayMs(env: Record<string, string | undefined> = process.env) {
   return parseIntegerEnv({
@@ -37,6 +39,15 @@ export function tuiDeferredBootstrapConcurrency(env: Record<string, string | und
     env,
     name: AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY,
     fallback: DEFAULT_DEFERRED_BOOTSTRAP_CONCURRENCY,
+    min: 1,
+  })
+}
+
+export function tuiCoreBootstrapConcurrency(env: Record<string, string | undefined> = process.env) {
+  return parseIntegerEnv({
+    env,
+    name: AX_CODE_TUI_CORE_BOOTSTRAP_CONCURRENCY,
+    fallback: DEFAULT_CORE_BOOTSTRAP_CONCURRENCY,
     min: 1,
   })
 }
@@ -106,6 +117,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   logWarn: (label: string, data: { error: string }) => void
   logError: (label: string, data: { error: string }) => void
   onFailure: (error: unknown) => Promise<void> | void
+  coreConcurrency?: number
   deferredDelayMs?: number
   deferredConcurrency?: number
   deferredBackground?: boolean
@@ -114,6 +126,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
     blockingTasks: BootstrapTask[]
     coreTasks: BootstrapTask[]
     deferredTasks: BootstrapTask[]
+    coreConcurrency?: number
     deferredDelayMs?: number
     deferredConcurrency?: number
     deferredBackground?: boolean
@@ -185,6 +198,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
               blockingTasks,
               coreTasks,
               deferredTasks,
+              coreConcurrency: input.coreConcurrency ?? tuiCoreBootstrapConcurrency(),
               deferredDelayMs: isStartupBootstrap ? (input.deferredDelayMs ?? tuiDeferredBootstrapDelayMs()) : 0,
               deferredConcurrency: input.deferredConcurrency ?? tuiDeferredBootstrapConcurrency(),
               deferredBackground: input.deferredBackground ?? true,

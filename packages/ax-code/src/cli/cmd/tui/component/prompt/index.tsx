@@ -1685,11 +1685,13 @@ export function Prompt(props: PromptProps) {
                 })
                 if (pendingIntent === "cancel") {
                   e.preventDefault()
+                  e.stopPropagation()
                   cancelPendingSubmit()
                   return
                 }
                 if (pendingIntent === "block" || props.disabled) {
                   e.preventDefault()
+                  e.stopPropagation()
                   return
                 }
                 if (isPromptSubmitKey(e) && pasteSubmitGate.deferSubmitUntilPasteHandled()) {
@@ -1702,6 +1704,7 @@ export function Prompt(props: PromptProps) {
                     if (autocomplete.onKeyDown(e)) return
                   }
                   e.preventDefault()
+                  e.stopPropagation()
                   void submit()
                   return
                 }
