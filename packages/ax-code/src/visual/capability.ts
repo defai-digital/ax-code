@@ -6,6 +6,8 @@
  * that provider model metadata must advertise.
  */
 
+import type { ProviderModel } from "@/provider/model-info"
+
 export type ModelReasoningLevel = "none" | "basic" | "strong"
 export type ModelSearchMode = "none" | "tool" | "server"
 
@@ -62,4 +64,28 @@ export function missingCapabilityDiagnostic(
   }
   if (missing.length === 0) return undefined
   return `Model "${modelName}" does not support: ${missing.join(", ")}. Configure a capable model for this visual task.`
+}
+
+/**
+ * Bridge from ProviderModel capabilities (model-info.ts) to the visual
+ * capability surface. Converts the raw provider metadata into the shape
+ * used by `hasVisualCapabilities` / `missingCapabilityDiagnostic`.
+ */
+export function toVisualCapabilities(model: ProviderModel): ModelVisualCapabilities {
+  const caps = model.capabilities
+  const hasReasoning = caps.reasoning
+  const hasInterleaved = caps.interleaved !== false && caps.interleaved !== undefined
+  const reasoning: ModelReasoningLevel = hasReasoning && hasInterleaved ? "strong" : hasReasoning ? "basic" : "none"
+
+  return {
+    toolCall: caps.toolcall,
+    visionInput: caps.input.image,
+    jsonSchema: caps.toolcall, // tool-call-capable models reliably support JSON output
+    reasoning,
+    visualUiCritique: caps.input.image, // vision is the prerequisite for UI critique
+    browserActionPlanning: caps.toolcall && caps.input.image, // needs both vision and tool use
+    search: "none",
+    maxImagePixels: undefined,
+    maxImagesPerRequest: undefined,
+  }
 }

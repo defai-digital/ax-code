@@ -4,6 +4,7 @@ import DESCRIPTION from "./visual-critique.txt"
 import { VisualArtifactStore } from "@/visual/artifact"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { checkVisualRouting } from "@/visual/router"
 
 const log = Log.create({ service: "tool.visual_critique" })
 
@@ -17,6 +18,12 @@ export const VisualCritiqueTool = Tool.define("visual_critique", {
       .describe("Focus area to guide the critique"),
   }),
   async execute(params) {
+    // Check that the current model supports vision input
+    const routing = await checkVisualRouting({ visionInput: true })
+    if (!routing.ok) {
+      throw new Error(routing.diagnostic)
+    }
+
     const projectDir = Instance.directory
 
     // Read the run summary to find screenshot artifacts

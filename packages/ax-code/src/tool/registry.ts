@@ -53,6 +53,7 @@ import { BrowserNetworkTool } from "./browser/network"
 import { BrowserEvaluateTool } from "./browser/evaluate"
 import { VisualCritiqueTool } from "./visual/critique"
 import { VisualCompareTool } from "./visual/compare"
+import { VisualSnapshotTool } from "./visual/snapshot"
 import { DebugOpenCaseTool } from "./debug_open_case"
 import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
 import { DebugPlanInstrumentationTool } from "./debug_plan_instrumentation"
@@ -239,6 +240,7 @@ export namespace ToolRegistry {
             BrowserEvaluateTool,
             VisualCritiqueTool,
             VisualCompareTool,
+            VisualSnapshotTool,
           ]
         : []),
       ...custom,
