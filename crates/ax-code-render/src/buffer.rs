@@ -1936,7 +1936,7 @@ impl OptimizedBuffer {
                     }
                     let bx = column_offsets[col_border_idx as usize];
                     if bx >= buf_w {
-                        break;
+                        continue;
                     }
                     if bx < 0 {
                         continue;
@@ -1975,7 +1975,7 @@ impl OptimizedBuffer {
                     let start_x = column_offsets[col_idx as usize] + 1;
                     let end_x = column_offsets[col_idx as usize + 1] + boundary_padding;
                     if start_x >= buf_w {
-                        break;
+                        continue;
                     }
                     if end_x <= 0 {
                         continue;
@@ -2017,7 +2017,7 @@ impl OptimizedBuffer {
                     }
                     let bx = column_offsets[col_border_idx as usize];
                     if bx >= buf_w {
-                        break;
+                        continue;
                     }
                     if bx < 0 {
                         continue;

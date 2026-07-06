@@ -198,11 +198,10 @@ fn parse_csi_key(input: &str) -> Option<(InputEvent, usize)> {
         _ => return None,
     };
 
-    let modifier = if final_ch == '~' {
-        params.get(1).copied()
-    } else {
-        params.get(1).copied().or_else(|| params.first().copied())
-    };
+    // Modifier is always in params[1] (the value after the semicolon).
+    // For CSI letter finals (A/B/C/D/H/F), params[0] is the repeat count
+    // (e.g. \x1b[5A = "up 5 times"), not a modifier code.
+    let modifier = params.get(1).copied();
     let (shift, alt, ctrl) = key_modifiers(modifier);
     Some((key(name, ctrl, alt, shift), consumed))
 }
@@ -737,6 +736,22 @@ mod tests {
         assert_eq!(patches.len(), 1);
         assert_eq!(patches[0].x, 3);
         assert_eq!(patches[0].cell.text, "c");
+    }
+
+    #[test]
+    fn parse_csi_arrow_with_repeat_count_is_not_modifier() {
+        // \x1b[5A means "up 5 times" in xterm, not Ctrl+Up.
+        // The repeat count is in params[0]; the modifier (if any) is in params[1].
+        assert_eq!(parse_input("\x1b[5A"), vec![key("up", false, false, false)]);
+        assert_eq!(
+            parse_input("\x1b[3B"),
+            vec![key("down", false, false, false)]
+        );
+        // \x1b[1;5A is the modified form (Ctrl+Up) — params[1]=5 is the modifier.
+        assert_eq!(
+            parse_input("\x1b[1;5A"),
+            vec![key("up", true, false, false)]
+        );
     }
 
     #[test]

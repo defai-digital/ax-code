@@ -116,7 +116,11 @@ impl AdvisoryLock {
                     if Instant::now() >= deadline {
                         return Ok(false);
                     }
-                    std::thread::sleep(poll_interval.min(deadline - Instant::now()));
+                    std::thread::sleep(
+                        deadline
+                            .saturating_duration_since(Instant::now())
+                            .min(poll_interval),
+                    );
                 }
             }
         }

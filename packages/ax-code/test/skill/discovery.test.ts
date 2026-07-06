@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll, vi, type MockInstance } fr
 import { Discovery } from "../../src/skill/discovery"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
+import { Ssrf } from "../../src/util/ssrf"
 import { rm, readFile, readdir } from "fs/promises"
 import path from "path"
 import dns from "dns/promises"
@@ -13,6 +14,7 @@ let externalFetchCount = 0
 const origin = "http://example.com"
 const originalFetch = globalThis.fetch
 let lookupSpy: MockInstance
+let pinnedFetchSpy: MockInstance
 
 const fixturePath = path.join(import.meta.dirname, "../fixture/skills")
 const cacheDir = path.join(Global.Path.cache, "skills")
@@ -107,11 +109,17 @@ beforeAll(async () => {
   ) as typeof fetch
 
   lookupSpy = vi.spyOn(dns, "lookup").mockImplementation(async () => [{ address: "93.184.216.34", family: 4 }] as any)
+  pinnedFetchSpy = vi.spyOn(Ssrf, "pinnedFetch").mockImplementation(async (url, init) => {
+    await Ssrf.assertPublicUrl(url, init?.label)
+    const { label: _label, ...fetchInit } = init ?? {}
+    return globalThis.fetch(url, fetchInit)
+  })
   CLOUDFLARE_SKILLS_URL = `${origin}/.well-known/skills/`
 })
 
 afterAll(async () => {
   globalThis.fetch = originalFetch
+  pinnedFetchSpy.mockRestore()
   lookupSpy.mockRestore()
   await rm(cacheDir, { recursive: true, force: true })
 })
