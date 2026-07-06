@@ -13,6 +13,8 @@ type Exit = ((reason?: unknown) => Promise<void>) & {
   }
 }
 
+const TUI_EXIT_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGTRAP"]
+
 export const { use: useExit, provider: ExitProvider } = createSimpleContext({
   name: "Exit",
   init: (input: { onExit?: () => Promise<void> }) => {
@@ -54,12 +56,12 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
         message: store,
       },
     )
-    // Register SIGINT/SIGTERM/SIGHUP/SIGQUIT so external kill, SSH
-    // disconnect, ^C, and ^\ all route through the same TUI teardown path
+    // Register terminal-affecting signals so external kill, SSH disconnect,
+    // ^C, ^\, and native renderer traps all route through the same TUI teardown path
     // (destroyTuiRenderer → disableTuiMouseTracking → flushTuiStdout).
     // Without this, the terminal is left in alt-screen + raw mode + mouse
     // tracking on anything other than a clean React unmount or SIGHUP.
-    const unregister = registerShutdownSignals(() => void exit())
+    const unregister = registerShutdownSignals(() => void exit(), { signals: TUI_EXIT_SIGNALS })
     onCleanup(unregister)
     return exit
   },

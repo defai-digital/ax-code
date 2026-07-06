@@ -4,7 +4,13 @@ type FlushableStream = {
   destroyed?: boolean
 }
 
+type RawModeStream = {
+  isTTY?: boolean
+  setRawMode?: (mode: boolean) => unknown
+}
+
 export const TUI_MOUSE_TRACKING_DISABLE_SEQUENCE = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l"
+export const TUI_TERMINAL_CRASH_RESET_SEQUENCE = `${TUI_MOUSE_TRACKING_DISABLE_SEQUENCE}\x1b[?2004l\x1b[?25h\x1b[?1049l`
 
 // Cursor-home + erase-entire-display. In main-screen mode the renderer paints
 // directly on the normal terminal buffer (no alternate screen to restore on
@@ -29,6 +35,28 @@ export function clearTuiMainScreen(stream: FlushableStream = process.stdout) {
     return true
   } catch {
     return false
+  }
+}
+
+export function restoreTuiStdinMode(stream: RawModeStream = process.stdin) {
+  if (!stream.isTTY || typeof stream.setRawMode !== "function") return false
+  try {
+    stream.setRawMode(false)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function resetTuiTerminalState(input: { stdout?: FlushableStream; stdin?: RawModeStream } = {}) {
+  const stdinRestored = restoreTuiStdinMode(input.stdin)
+  const stdout = input.stdout ?? process.stdout
+  if (stdout.writable === false || stdout.destroyed) return stdinRestored
+  try {
+    stdout.write(TUI_TERMINAL_CRASH_RESET_SEQUENCE)
+    return true
+  } catch {
+    return stdinRestored
   }
 }
 

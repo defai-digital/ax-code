@@ -10,7 +10,9 @@ import {
   clearTuiMainScreen,
   disableTuiMouseTracking,
   flushTuiStdout,
+  resetTuiTerminalState,
   TUI_MAIN_SCREEN_CLEAR_SEQUENCE,
+  TUI_TERMINAL_CRASH_RESET_SEQUENCE,
   TUI_MOUSE_TRACKING_DISABLE_SEQUENCE,
 } from "../../../src/cli/cmd/tui/terminal-cleanup"
 
@@ -107,6 +109,31 @@ describe("tui renderer profile", () => {
     expect(disableTuiMouseTracking(stream)).toBe(false)
     expect(clearTuiMainScreen(stream)).toBe(false)
     await expect(flushTuiStdout(stream)).resolves.toBeUndefined()
+  })
+
+  test("crash cleanup disables terminal modes and raw input best-effort", () => {
+    const writes: string[] = []
+    const rawModes: boolean[] = []
+
+    const restored = resetTuiTerminalState({
+      stdout: {
+        writable: true,
+        write(chunk: string) {
+          writes.push(chunk)
+          return true
+        },
+      },
+      stdin: {
+        isTTY: true,
+        setRawMode(mode: boolean) {
+          rawModes.push(mode)
+        },
+      },
+    })
+
+    expect(restored).toBe(true)
+    expect(rawModes).toEqual([false])
+    expect(writes).toEqual([TUI_TERMINAL_CRASH_RESET_SEQUENCE])
   })
 
   test("destroyTuiRenderer resets terminal state before resolving", async () => {

@@ -207,6 +207,13 @@ test("TUI worker removes signal handlers during RPC shutdown", async () => {
   expect(src).not.toContain('process.on("SIGINT"')
 })
 
+test("TUI renderer routes native trace traps through terminal cleanup", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/context/exit.tsx"), "utf-8")
+
+  expect(src).toContain('"SIGTRAP"')
+  expect(src).toContain("registerShutdownSignals(() => void exit(), { signals: TUI_EXIT_SIGNALS })")
+})
+
 test("TUI worker always forces exit after uncaught exceptions", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts"), "utf-8")
   const start = src.indexOf('registerTuiProcessHandler(\n  "uncaughtException"')

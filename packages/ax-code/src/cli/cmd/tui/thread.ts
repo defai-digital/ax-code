@@ -24,7 +24,7 @@ import { internalBaseUrl } from "@/util/internal-url"
 import type { StreamConnectionStatus } from "./util/resilient-stream"
 import { runtimeMode } from "@/installation/runtime-mode"
 import { spawn } from "node:child_process"
-import { flushTuiStdout } from "./terminal-cleanup"
+import { flushTuiStdout, resetTuiTerminalState } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
 import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
@@ -692,10 +692,20 @@ export const TuiThreadCommand = cmd({
         timeoutMs: workerReadyTimeoutMs,
       })
       const internalEvents = createEventSource(client)
+      let threadErrorExitScheduled = false
       const error = (e: unknown) => {
         DiagnosticLog.recordProcess("tui.threadError", { error: e })
         Log.Default.error(e)
-        setTimeout(() => process.exit(1), 100).unref()
+        process.exitCode = 1
+        resetTuiTerminalState()
+        if (threadErrorExitScheduled) return
+        threadErrorExitScheduled = true
+        const timer = setTimeout(() => process.exit(1), 100)
+        timer.unref?.()
+        void flushTuiStdout().finally(() => {
+          clearTimeout(timer)
+          process.exit(1)
+        })
       }
       const reload = () => {
         client.call("reload", undefined).catch((err) => {
