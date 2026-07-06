@@ -305,40 +305,48 @@ export function Prompt(props: PromptProps) {
     })
   })
 
+  function openProviderDialog() {
+    const marker = dialog.stack.at(-1)
+    import("../dialog-provider")
+      .then(({ DialogProvider }) => {
+        if (dialog.stack.at(-1) !== marker) return
+        dialog.replace(() => <DialogProvider />)
+      })
+      .catch((error) => {
+        log.warn("failed to load provider dialog", { error })
+        toast.show({ message: "Failed to open provider dialog", variant: "error" })
+      })
+  }
+
   function promptModelWarning() {
     if (!sync.data.provider_loaded) {
       toast.show({
         variant: "info",
         message: "Providers are still loading. Please wait about 10 seconds and try again.",
-        duration: 2000,
+        duration: 4000,
       })
       return
     }
     if (sync.data.provider_failed) {
       toast.show({
         variant: "warning",
-        message: "Providers failed to load",
-        duration: 3000,
+        message: "Providers failed to load — check your configuration",
+        duration: 5000,
       })
+      // Open provider dialog so the user can reconfigure or retry.
+      openProviderDialog()
       return
     }
+    const hasProviders = sync.data.provider.length > 0
     toast.show({
       variant: "warning",
-      message: "Connect a provider to send prompts",
-      duration: 3000,
+      message: hasProviders
+        ? "No model available — check your provider configuration"
+        : "No provider configured — connect a provider to send prompts",
+      duration: 5000,
     })
-    if (sync.data.provider.length === 0) {
-      const marker = dialog.stack.at(-1)
-      import("../dialog-provider")
-        .then(({ DialogProvider }) => {
-          if (dialog.stack.at(-1) !== marker) return
-          dialog.replace(() => <DialogProvider />)
-        })
-        .catch((error) => {
-          log.warn("failed to load provider dialog", { error })
-          toast.show({ message: "Failed to open provider dialog", variant: "error" })
-        })
-    }
+    // Open provider dialog so the user can configure or fix provider access.
+    openProviderDialog()
   }
 
   function errorMessage(error: unknown) {
@@ -368,6 +376,7 @@ export function Prompt(props: PromptProps) {
   useKeyboard((evt) => {
     if (!isRenderableAlive(input) || !input.focused) return
     if (!isPromptSubmitKey(evt)) return
+    log.info("tui.prompt.useKeyboard: submit key detected", { keyName: evt.name })
     if (pasteSubmitGate.deferSubmitUntilPasteHandled()) {
       evt.preventDefault()
       evt.stopPropagation()
@@ -1025,9 +1034,19 @@ export function Prompt(props: PromptProps) {
   }
 
   async function submit() {
-    if (inputBlocked() || submitInFlight) return
+    if (inputBlocked()) {
+      log.info("tui.prompt.submit: blocked", { inputBlocked: inputBlocked(), submitInFlight })
+      return
+    }
+    if (submitInFlight) {
+      log.info("tui.prompt.submit: already in flight")
+      return
+    }
     const promptInput = syncPromptInputFromRenderable()
-    if (!promptInput) return
+    if (!promptInput) {
+      log.info("tui.prompt.submit: empty prompt input")
+      return
+    }
     if (isPromptExitCommand(promptInput)) {
       exit()
       return
@@ -1047,15 +1066,30 @@ export function Prompt(props: PromptProps) {
     const slashToken = inputText.startsWith("/") ? firstLine.split(" ")[0] : undefined
     const slashName = slashToken?.slice(1)
     const slashHasArguments = slashToken ? inputText.trim() !== slashToken : false
-    if (currentMode === "normal" && slashName && !slashHasArguments && command.trySlash(slashName)) return
+    if (currentMode === "normal" && slashName && !slashHasArguments && command.trySlash(slashName)) {
+      log.info("tui.prompt.submit: slash command dispatched", { command: slashName })
+      return
+    }
 
-    if (autocomplete?.visible) return
+    if (autocomplete?.visible) {
+      log.info("tui.prompt.submit: autocomplete visible, skipping")
+      return
+    }
 
     const selectedModel = local.model.current()
     if (!selectedModel) {
+      log.info("tui.prompt.submit: no model available", {
+        providerLoaded: sync.data.provider_loaded,
+        providerFailed: sync.data.provider_failed,
+        providerCount: sync.data.provider.length,
+      })
       promptModelWarning()
       return
     }
+    log.info("tui.prompt.submit: proceeding", {
+      model: providerModelKey(selectedModel),
+      sessionID: props.sessionID ?? draftSessionID() ?? "new",
+    })
 
     const runID = ++submitRunID
     let sessionID = props.sessionID ?? draftSessionID()
@@ -1518,6 +1552,14 @@ export function Prompt(props: PromptProps) {
     if (store.mode === "shell") {
       const example = SHELL_PLACEHOLDERS[store.placeholder % SHELL_PLACEHOLDERS.length]
       return `Run a command... "${example}"`
+    }
+    if (!sync.data.provider_loaded || !local.model.ready) {
+      return "Providers are loading... please wait"
+    }
+    if (!local.model.current()) {
+      return sync.data.provider.length > 0
+        ? "No model available — check your provider setup"
+        : "No provider configured — press Enter to connect"
     }
     return `Ask anything... "${PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]}"`
   })

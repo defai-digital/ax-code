@@ -915,9 +915,9 @@ describe("tui OpenTUI stability guardrails", () => {
     const submitEnd = prompt.indexOf("const selectedModel", submitStart)
     const submitBody = prompt.slice(submitStart, submitEnd)
     const slashDispatch = submitBody.indexOf(
-      'if (currentMode === "normal" && slashName && !slashHasArguments && command.trySlash(slashName)) return',
+      'if (currentMode === "normal" && slashName && !slashHasArguments && command.trySlash(slashName)) {',
     )
-    const autocompleteReturn = submitBody.indexOf("if (autocomplete?.visible) return")
+    const autocompleteReturn = submitBody.indexOf("if (autocomplete?.visible) {")
 
     expect(slashDispatch).toBeGreaterThan(-1)
     expect(autocompleteReturn).toBeGreaterThan(-1)
