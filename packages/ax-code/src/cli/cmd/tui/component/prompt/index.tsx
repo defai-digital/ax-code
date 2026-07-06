@@ -363,9 +363,16 @@ export function Prompt(props: PromptProps) {
     return isUnmodifiedPromptSubmitKey(event)
   }
 
+  const pasteSubmitGate = createPromptPasteSubmitGate({ submit: () => void submit() })
+
   useKeyboard((evt) => {
     if (!isRenderableAlive(input) || !input.focused) return
     if (!isPromptSubmitKey(evt)) return
+    if (pasteSubmitGate.deferSubmitUntilPasteHandled()) {
+      evt.preventDefault()
+      evt.stopPropagation()
+      return
+    }
     if (autocomplete?.visible) {
       if (autocomplete.onKeyDown(evt)) return
     }
@@ -383,8 +390,6 @@ export function Prompt(props: PromptProps) {
   function suppressAutocompleteForNextContentChange() {
     suppressAutocompleteOnNextContentChange = true
   }
-
-  const pasteSubmitGate = createPromptPasteSubmitGate({ submit: () => void submit() })
 
   const unsubPromptAppend = sdk.event.on(TuiEvent.PromptAppend.type, (evt) => {
     if (!isRenderableAlive(input)) return

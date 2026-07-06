@@ -900,6 +900,7 @@ describe("tui OpenTUI stability guardrails", () => {
     const keyboardHandlerStart = prompt.indexOf("useKeyboard((evt) => {")
     const keyboardHandlerEnd = prompt.indexOf("const fileStyleId", keyboardHandlerStart)
     const keyboardHandler = prompt.slice(keyboardHandlerStart, keyboardHandlerEnd)
+    expect(keyboardHandler).toContain("if (pasteSubmitGate.deferSubmitUntilPasteHandled())")
     expect(keyboardHandler).toContain("if (autocomplete.onKeyDown(evt)) return")
     expect(autocomplete).toContain(
       'if (name === "return" || name === "enter" || name === "linefeed" || name === "kpenter")',
