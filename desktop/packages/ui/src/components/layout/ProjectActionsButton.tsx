@@ -855,7 +855,7 @@ export const ProjectActionsButton = ({
         "app-region-no-drag inline-flex shrink-0 items-center self-center rounded-[9px] [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px]",
         "bg-[var(--surface-elevated)] overflow-hidden",
         "border border-border/60",
-        compact ? "h-9" : "h-7",
+        "h-7",
         className,
       )}
     >
@@ -865,7 +865,7 @@ export const ProjectActionsButton = ({
         disabled={isLoading || isStoppingSelected}
         className={cn(
           "inline-flex h-full items-center justify-center typography-ui-label font-medium text-foreground hover:bg-interactive-hover",
-          compact ? "w-9 px-0" : "px-2.5",
+          "px-2.5",
           "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed",
         )}
         aria-label={
@@ -892,9 +892,7 @@ export const ProjectActionsButton = ({
               type="button"
               onClick={handleOpenSelectedPreview}
               className={cn(
-                compact
-                  ? "inline-flex h-full w-8 items-center justify-center"
-                  : "inline-flex h-full w-7 items-center justify-center",
+                "inline-flex h-full w-7 items-center justify-center",
                 "border-l border-[var(--interactive-border)] text-foreground",
                 "hover:bg-interactive-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
               )}
@@ -912,9 +910,7 @@ export const ProjectActionsButton = ({
           <button
             type="button"
             className={cn(
-              compact
-                ? "inline-flex h-full w-8 items-center justify-center"
-                : "inline-flex h-full w-7 items-center justify-center",
+              "inline-flex h-full w-7 items-center justify-center",
               "border-l border-[var(--interactive-border)] text-muted-foreground",
               "hover:bg-interactive-hover hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
             )}

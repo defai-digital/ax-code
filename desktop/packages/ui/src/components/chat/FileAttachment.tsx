@@ -533,7 +533,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
   }
 
   return (
-    <div className={cn("grid gap-2", compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
+    <div className="grid gap-2 grid-cols-1 sm:grid-cols-2">
       {fileItems.map((file, index) => {
         const fileName = resolveDisplayName(file)
         const isImage = file.mime?.startsWith("image/")
@@ -567,20 +567,14 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
                   }}
                   className={cn(
                     "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left",
-                    compact ? "text-xs" : "text-sm",
+                    "text-sm",
                   )}
                 >
                   <div className="flex-shrink-0">
                     {githubLinkKind === "pr" ? (
-                      <Icon
-                        name="git-pull-request"
-                        className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")}
-                      />
+                      <Icon name="git-pull-request" className="text-muted-foreground h-4 w-4" />
                     ) : (
-                      <Icon
-                        name="github"
-                        className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")}
-                      />
+                      <Icon name="github" className="text-muted-foreground h-4 w-4" />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -620,22 +614,16 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
                 }}
                 className={cn(
                   "flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/10 hover:bg-muted/20 transition-colors text-left",
-                  compact ? "text-xs" : "text-sm",
+                  "text-sm",
                 )}
               >
                 <div className="flex-shrink-0">
                   {file.mime?.startsWith("image/") ? (
-                    <Icon
-                      name="file-image"
-                      className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")}
-                    />
+                    <Icon name="file-image" className="text-muted-foreground h-4 w-4" />
                   ) : file.mime?.includes("pdf") ? (
-                    <Icon
-                      name="file-pdf"
-                      className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")}
-                    />
+                    <Icon name="file-pdf" className="text-muted-foreground h-4 w-4" />
                   ) : (
-                    <Icon name="file" className={cn("text-muted-foreground", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+                    <Icon name="file" className="text-muted-foreground h-4 w-4" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
