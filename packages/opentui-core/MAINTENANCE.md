@@ -62,6 +62,12 @@ Switches (case-insensitive):
 - `AX_CODE_NATIVE_RENDER_SCOPE=yoga` — with `=1`, route only yoga/audio to
   Rust; the render pipeline stays on Zig (the Phase-1 behavior).
 
+The TUI also exposes these as a first-class flag — `ax-code --tui-mode=zig`
+(default), `--tui-mode=native` (full Rust core), or `--tui-mode=yoga` (Rust
+yoga/audio only) — mapped onto the env switches in
+`packages/ax-code/src/cli/cmd/tui/render-backend.ts` before the renderer
+library is resolved.
+
 The render families share a backend-specific handle registry, so they flip
 atomically (a Zig renderer handle can't be used by a Rust buffer call). The
 overlay bridge narrows BigInt pointer args to Number and null/undefined pointer

@@ -14,6 +14,7 @@ import { Filesystem } from "@/util/filesystem"
 import type { Event } from "@ax-code/sdk/v2"
 import type { EventSource } from "./context/sdk"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
+import { TUI_MODE_CHOICES, applyTuiRenderBackendMode } from "./render-backend"
 import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
 import { writeHeapSnapshot } from "v8"
@@ -541,6 +542,12 @@ export const TuiThreadCommand = cmd({
       .option("agent", {
         type: "string",
         describe: "agent to use",
+      })
+      .option("tui-mode", {
+        type: "string",
+        choices: TUI_MODE_CHOICES as unknown as string[],
+        describe:
+          "TUI render backend: zig (bundled library, default), native (Rust render core), yoga (Rust yoga/audio only)",
       }),
   handler: async (args) => {
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
@@ -556,8 +563,12 @@ export const TuiThreadCommand = cmd({
         process.exitCode = 1
         return
       }
+      // Must run before the renderer library is resolved (app import below)
+      // and before the backend child inherits our env.
+      applyTuiRenderBackendMode(args["tui-mode"] as string | undefined)
       DiagnosticLog.recordProcess("tui.threadStarted", {
         args: process.argv.slice(2),
+        tuiMode: (args["tui-mode"] as string | undefined) ?? "default(zig)",
       })
 
       // Resolve relative --project paths from the caller's original cwd, then
