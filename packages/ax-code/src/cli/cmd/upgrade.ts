@@ -3,6 +3,28 @@ import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
 import { Installation } from "../../installation"
 
+function formatShadowedLauncherWarning(target: string, check: Installation.LauncherCheck): string {
+  const lines = [
+    `Upgraded to v${target}, but your shell resolves \`ax-code\` to:`,
+    `  ${check.activePath}`,
+    check.activeVersion
+      ? `That launcher reports v${check.activeVersion} — running \`ax-code\` will keep using the older version until this is resolved.`
+      : `That launcher's version could not be determined — running \`ax-code\` may not use the version you just installed.`,
+  ]
+  const otherLaunchers = check.launchers.slice(1)
+  if (otherLaunchers.length) {
+    lines.push("", "Other ax-code executables found on PATH:", ...otherLaunchers.map((p) => `  ${p}`))
+  }
+  lines.push(
+    "",
+    "Try:",
+    ...(process.platform === "win32"
+      ? [`  where ax-code`, `  Move-Item "${check.activePath}" "${check.activePath}.bak"`]
+      : [`  which -a ax-code`, `  hash -r`, `  mv ${check.activePath} ${check.activePath}.bak`]),
+  )
+  return lines.join("\n")
+}
+
 export const UpgradeCommand = {
   command: "upgrade [target]",
   describe: "upgrade ax-code to the latest or a specific version",
@@ -50,7 +72,15 @@ export const UpgradeCommand = {
 
     const checkSpinner = prompts.spinner()
     checkSpinner.start("Checking for updates...")
-    const target = args.target ? args.target.replace(/^v/, "") : await Installation.latest()
+    let target: string
+    try {
+      target = args.target ? args.target.replace(/^v/, "") : await Installation.latest()
+    } catch (err) {
+      checkSpinner.stop("Failed to check for updates")
+      prompts.log.error(err instanceof Error ? err.message : String(err))
+      prompts.outro("Done")
+      return
+    }
     checkSpinner.stop(`Latest version: ${target}`)
 
     if (Installation.VERSION === target) {
@@ -73,6 +103,12 @@ export const UpgradeCommand = {
     }
     spinner.stop(`Upgraded to v${target}`)
     prompts.log.success(`v${Installation.VERSION} → v${target}`)
+
+    const launcherCheck = await Installation.verifyActiveLauncher(target).catch(() => undefined)
+    if (launcherCheck && !launcherCheck.ok && launcherCheck.activePath) {
+      prompts.log.warn(formatShadowedLauncherWarning(target, launcherCheck))
+    }
+
     prompts.outro("Done")
   },
 }

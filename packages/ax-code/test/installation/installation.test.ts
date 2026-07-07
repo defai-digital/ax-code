@@ -15,6 +15,7 @@ function withTestDependencies<T>(
       cmd: string[],
       opts?: { cwd?: string; env?: Record<string, string>; input?: Uint8Array },
     ) => Promise<{ code: number; stdout: string; stderr: string }> | { code: number; stdout: string; stderr: string }
+    which?: (cmd: string) => string[]
   },
   fn: () => Promise<T>,
 ) {
@@ -25,6 +26,7 @@ function withTestDependencies<T>(
         const result = await options.run?.(cmd, opts)
         return result ?? { code: 0, stdout: "", stderr: "" }
       },
+      which: (cmd) => options.which?.(cmd) ?? [],
     },
     fn,
   )
@@ -103,6 +105,82 @@ describe("installation", () => {
       )
 
       expect(result).toBe("2.1.0")
+    })
+
+    test("raises a recoverable error instead of crashing on empty brew info output", async () => {
+      const promise = withTestDependencies(
+        {
+          run: (cmd) => {
+            if (cmd[0] === "brew" && cmd.includes("defai-digital/tap/ax-code") && cmd.includes("--formula")) {
+              return { code: 0, stdout: "ax-code", stderr: "" }
+            }
+            // Simulates a failed `brew info --json=v2` invocation that writes
+            // nothing to stdout — this used to throw a raw
+            // "Unexpected end of JSON input" SyntaxError.
+            if (cmd[0] === "brew" && cmd.includes("--json=v2")) return { code: 1, stdout: "", stderr: "" }
+            return { code: 0, stdout: "", stderr: "" }
+          },
+        },
+        () => Installation.latest("brew"),
+      )
+
+      await expect(promise).rejects.toThrow(/Failed to parse .*brew info.*JSON \(empty output\)/)
+    })
+
+    test("raises a recoverable error instead of crashing on a malformed API response", async () => {
+      const promise = withTestDependencies(
+        {
+          fetch: () => new Response("not json", { status: 200 }),
+        },
+        () => Installation.latest("unknown"),
+      )
+
+      await expect(promise).rejects.toThrow(/Failed to parse response from .* as JSON/)
+    })
+  })
+
+  describe("verifyActiveLauncher", () => {
+    test("is ok when no launcher is found on PATH", async () => {
+      const result = await withTestDependencies({ which: () => [] }, () => Installation.verifyActiveLauncher("2.0.0"))
+
+      expect(result).toEqual({ ok: true, launchers: [] })
+    })
+
+    test("is ok when the first PATH match reports the upgraded version", async () => {
+      const result = await withTestDependencies(
+        {
+          which: () => ["/opt/homebrew/bin/ax-code"],
+          run: (cmd) => {
+            if (cmd[1] === "--version") return { code: 0, stdout: "2.0.0\n", stderr: "" }
+            return { code: 0, stdout: "", stderr: "" }
+          },
+        },
+        () => Installation.verifyActiveLauncher("2.0.0"),
+      )
+
+      expect(result.ok).toBe(true)
+      expect(result.activePath).toBe("/opt/homebrew/bin/ax-code")
+      expect(result.activeVersion).toBe("2.0.0")
+    })
+
+    test("flags a stale launcher earlier on PATH that shadows the upgrade", async () => {
+      const result = await withTestDependencies(
+        {
+          which: () => ["/Users/devop/.local/bin/ax-code", "/opt/homebrew/bin/ax-code"],
+          run: (cmd) => {
+            if (cmd[0] === "/Users/devop/.local/bin/ax-code" && cmd[1] === "--version") {
+              return { code: 0, stdout: "1.9.7\n", stderr: "" }
+            }
+            return { code: 0, stdout: "", stderr: "" }
+          },
+        },
+        () => Installation.verifyActiveLauncher("2.0.0"),
+      )
+
+      expect(result.ok).toBe(false)
+      expect(result.activePath).toBe("/Users/devop/.local/bin/ax-code")
+      expect(result.activeVersion).toBe("1.9.7")
+      expect(result.launchers).toEqual(["/Users/devop/.local/bin/ax-code", "/opt/homebrew/bin/ax-code"])
     })
   })
 
