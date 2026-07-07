@@ -123,16 +123,25 @@ export namespace AutonomousContinuationPrompt {
     consecutiveToolOnlyTurns: number
     maxToolOnlyTurns: number
     final?: boolean
+    // Set once the FINAL checkpoint has already fired earlier this run and
+    // the model resumed a fresh tool-only streak anyway — the grace period
+    // is spent, so tools are being stripped from the very next request
+    // rather than trusting another advisory nudge (see #340).
+    forced?: boolean
   }) {
     return (
       `Agent-loop checkpoint: your last ${input.consecutiveToolOnlyTurns} turns each ended in further tool calls ` +
       `without a completed text response. The loop stops automatically after ${input.maxToolOnlyTurns} consecutive such turns. ` +
-      (input.final
-        ? `This is the FINAL checkpoint before that stop. Finish now: complete at most a few essential tool calls, ` +
-          `then end your turn with a text response covering what was accomplished, what remains, and any blockers. `
-        : `Pause and write a brief synthesis: what you have established so far, what remains, and your next concrete step. ` +
-          `If you are mid-implementation, continue the remaining work after the synthesis — completing a turn with a text ` +
-          `response resets this counter. `) +
+      (input.forced
+        ? `You already received one final checkpoint warning this run and resumed tool-only calling anyway. ` +
+          `Tools are disabled for your next turn — respond now with a text summary covering what was ` +
+          `accomplished, what remains, and any blockers. `
+        : input.final
+          ? `This is the FINAL checkpoint before that stop. Finish now: complete at most a few essential tool calls, ` +
+            `then end your turn with a text response covering what was accomplished, what remains, and any blockers. `
+          : `Pause and write a brief synthesis: what you have established so far, what remains, and your next concrete step. ` +
+            `If you are mid-implementation, continue the remaining work after the synthesis — completing a turn with a text ` +
+            `response resets this counter. `) +
       `If you are re-covering the same ground without new findings, stop exploring and produce your final answer ` +
       `or explain what blocks completion.`
     )

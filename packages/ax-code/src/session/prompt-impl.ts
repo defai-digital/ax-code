@@ -53,6 +53,7 @@ import {
   isEmptyModelTurn,
   isTruncatedModelTurn,
   modelTurnFinished,
+  resolveTurnToolChoice,
   toolOnlyTurnDecision,
   type GoalBudgetWrapUp,
 } from "./prompt-autonomous-decisions"
@@ -257,6 +258,18 @@ export namespace SessionPrompt {
     // warning at TOOL_ONLY_TURN_FINAL_NUDGE). Reset alongside
     // consecutiveToolOnlyTurns.
     let toolOnlyNudges = 0
+    // How many times the FINAL tool-only-turn checkpoint has fired this run.
+    // Deliberately NOT reset alongside consecutiveToolOnlyTurns/toolOnlyNudges:
+    // a model can trivially "reset the clock" by producing one completed-text
+    // turn (even a token acknowledgment) right after the final checkpoint,
+    // then resume a fresh tool-only streak with a full new budget — see #340.
+    // The first final checkpoint is advisory (gives the model its existing
+    // 5-turn buffer to wrap up on its own). If the streak reaches the final
+    // checkpoint again afterward, the model already burned that grace period,
+    // so forceTextOnlyTurn below strips tools from the very next request
+    // instead of trusting another advisory nudge.
+    let toolOnlyFinalCheckpointHits = 0
+    let forceTextOnlyTurn = false
     const cachedSystemPrompt: PromptRequestCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -673,6 +686,18 @@ export namespace SessionPrompt {
       const structuredOutput = createStructuredOutputTurn(request.format)
       structuredOutput.attachTool(tools)
 
+      // Consume the one-shot forced-text-only turn (see the
+      // toolOnlyFinalCheckpointHits/forceTextOnlyTurn declarations above) —
+      // but only when it was actually applied. If structuredOutput wins this
+      // turn, forceTextOnlyTurn stays pending for a later turn instead of
+      // being silently dropped (see resolveTurnToolChoice).
+      const toolChoiceResolution = resolveTurnToolChoice({
+        structuredOutputChoice: structuredOutput.toolChoice,
+        forceTextOnlyTurn,
+      })
+      const toolChoice = toolChoiceResolution.toolChoice
+      if (toolChoiceResolution.consumedForceTextOnlyTurn) forceTextOnlyTurn = false
+
       const result = await processor.process({
         user: lastUser,
         agent,
@@ -683,7 +708,7 @@ export namespace SessionPrompt {
         messages: request.requestMessages,
         tools,
         model,
-        toolChoice: structuredOutput.toolChoice,
+        toolChoice,
         config: cfg,
       })
 
@@ -1004,14 +1029,22 @@ export namespace SessionPrompt {
           nudgeThreshold: TOOL_ONLY_TURN_NUDGE,
           finalNudgeThreshold: TOOL_ONLY_TURN_FINAL_NUDGE,
           maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
+          finalCheckpointHits: toolOnlyFinalCheckpointHits,
         })
         if (toolOnlyTransition.action === "nudge") {
+          // See the toolOnlyFinalCheckpointHits declaration above: a repeat
+          // final checkpoint means the model already spent its one advisory
+          // grace period and resumed tool-only calling anyway, so this time
+          // force the next turn to be text-only instead of nudging again.
+          if (toolOnlyTransition.final) toolOnlyFinalCheckpointHits += 1
+          if (toolOnlyTransition.forced) forceTextOnlyTurn = true
           log.info("tool-only turn nudge", {
             command: "session.prompt.loop",
             status: "nudge",
             sessionID,
             consecutiveToolOnlyTurns,
             finalNudge: toolOnlyTransition.final,
+            forced: toolOnlyTransition.forced,
           })
           const latestMessages = await Session.messages({ sessionID })
           await createAutonomousTextContinuation({
@@ -1021,6 +1054,7 @@ export namespace SessionPrompt {
               consecutiveToolOnlyTurns,
               maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
               final: toolOnlyTransition.final,
+              forced: toolOnlyTransition.forced,
             }),
           })
           toolOnlyNudges += 1

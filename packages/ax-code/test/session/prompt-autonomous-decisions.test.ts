@@ -9,6 +9,7 @@ import {
   isEmptyModelTurn,
   isTruncatedModelTurn,
   modelTurnFinished,
+  resolveTurnToolChoice,
   toolOnlyTurnDecision,
   totalStepLimitDecision,
   truncatedModelTurnDecision,
@@ -756,6 +757,7 @@ describe("tool-only turn decision", () => {
     nudgeThreshold: 15,
     finalNudgeThreshold: 30,
     maxToolOnlyTurns: 35,
+    finalCheckpointHits: 0,
   }
 
   test("walks a full streak: nudge at 15, final nudge at 30, stop past 35", () => {
@@ -768,7 +770,7 @@ describe("tool-only turn decision", () => {
         ...config,
       })
       if (decision.action === "nudge") {
-        events.push(`nudge:${streak}:${decision.final ? "final" : "first"}`)
+        events.push(`nudge:${streak}:${decision.final ? "final" : "first"}${decision.forced ? ":forced" : ""}`)
         toolOnlyNudges += 1
       }
       if (decision.action === "stop") {
@@ -800,6 +802,7 @@ describe("tool-only turn decision", () => {
       nudgeThreshold: 15,
       finalNudgeThreshold: 40,
       maxToolOnlyTurns: 35,
+      finalCheckpointHits: 0,
     })
     expect(decision).toEqual({ action: "stop" })
   })
@@ -810,6 +813,75 @@ describe("tool-only turn decision", () => {
       toolOnlyNudges: 0,
       ...config,
     })
-    expect(decision).toEqual({ action: "nudge", final: false })
+    expect(decision).toEqual({ action: "nudge", final: false, forced: false })
+  })
+
+  test("first final checkpoint is advisory, not forced", () => {
+    const decision = toolOnlyTurnDecision({
+      consecutiveToolOnlyTurns: 30,
+      toolOnlyNudges: 1,
+      ...config,
+    })
+    expect(decision).toEqual({ action: "nudge", final: true, forced: false })
+  })
+
+  // Regression for #340: a model can reset consecutiveToolOnlyTurns to 0 by
+  // producing a single completed-text turn right after the final checkpoint
+  // (even a token acknowledgment), then resume a fresh tool-only streak with
+  // a full new budget — repeating indefinitely without ever reaching the
+  // hard stop, and without ever being forced to produce a real summary.
+  test("a second streak reaching the final checkpoint is forced, not advisory", () => {
+    const decision = toolOnlyTurnDecision({
+      consecutiveToolOnlyTurns: 30,
+      toolOnlyNudges: 1,
+      ...config,
+      finalCheckpointHits: 1, // the first streak already hit the final checkpoint once
+    })
+    expect(decision).toEqual({ action: "nudge", final: true, forced: true })
+  })
+
+  test("first nudge within a later streak is never forced, only the final checkpoint is", () => {
+    const decision = toolOnlyTurnDecision({
+      consecutiveToolOnlyTurns: 15,
+      toolOnlyNudges: 0,
+      ...config,
+      finalCheckpointHits: 2,
+    })
+    expect(decision).toEqual({ action: "nudge", final: false, forced: false })
+  })
+})
+
+describe("resolve turn tool choice", () => {
+  test("passes through undefined when neither structured output nor forcing apply", () => {
+    expect(resolveTurnToolChoice({ structuredOutputChoice: undefined, forceTextOnlyTurn: false })).toEqual({
+      toolChoice: undefined,
+      consumedForceTextOnlyTurn: false,
+    })
+  })
+
+  test("forces none and consumes the flag when only forceTextOnlyTurn is set", () => {
+    expect(resolveTurnToolChoice({ structuredOutputChoice: undefined, forceTextOnlyTurn: true })).toEqual({
+      toolChoice: "none",
+      consumedForceTextOnlyTurn: true,
+    })
+  })
+
+  test("structured output required wins when only it is set", () => {
+    expect(resolveTurnToolChoice({ structuredOutputChoice: "required", forceTextOnlyTurn: false })).toEqual({
+      toolChoice: "required",
+      consumedForceTextOnlyTurn: false,
+    })
+  })
+
+  // Regression for the #340 fix's own gap: structured output must still win
+  // (a schema-forced turn cannot skip calling its output tool), but the
+  // pending forceTextOnlyTurn must NOT be silently discarded — otherwise a
+  // session using structured output could permanently disable the tool-only
+  // circuit breaker's forced-turn enforcement.
+  test("structured output wins over forcing but leaves the flag pending for a later turn", () => {
+    expect(resolveTurnToolChoice({ structuredOutputChoice: "required", forceTextOnlyTurn: true })).toEqual({
+      toolChoice: "required",
+      consumedForceTextOnlyTurn: false,
+    })
   })
 })

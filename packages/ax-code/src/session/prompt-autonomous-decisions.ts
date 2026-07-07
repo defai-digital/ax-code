@@ -230,7 +230,10 @@ export function globalStepLimitDecision(input: {
   }
 }
 
-type ToolOnlyTurnDecision = { action: "ignore" } | { action: "nudge"; final: boolean } | { action: "stop" }
+type ToolOnlyTurnDecision =
+  | { action: "ignore" }
+  | { action: "nudge"; final: boolean; forced: boolean }
+  | { action: "stop" }
 
 // Circuit breaker for streaks of turns that end in further tool calls without
 // a completed text response. Two checkpoints (a synthesis nudge, then a final
@@ -238,22 +241,58 @@ type ToolOnlyTurnDecision = { action: "ignore" } | { action: "nudge"; final: boo
 // length INCLUDING the current turn; `toolOnlyNudges` is how many checkpoints
 // have already fired this streak. The caller resets both whenever a turn
 // finishes with a text response.
+//
+// That per-streak reset is exactly what makes the final checkpoint gameable:
+// a model can produce one completed-text turn (even a token acknowledgment)
+// right after the final checkpoint, then resume a fresh tool-only streak with
+// a full new budget, indefinitely. `finalCheckpointHits` — a count that is
+// NOT reset alongside the streak — tracks how many times the final checkpoint
+// has fired this run. The first time is advisory (`forced: false`, matching
+// prior behavior: the model gets its existing buffer up to maxToolOnlyTurns
+// to wrap up on its own). Every time after that means the model already spent
+// its grace period and resumed tool-only calling anyway, so the decision
+// becomes `forced: true` — the caller strips tools from the very next
+// request instead of trusting another advisory nudge (see #340).
 export function toolOnlyTurnDecision(input: {
   consecutiveToolOnlyTurns: number
   toolOnlyNudges: number
   nudgeThreshold: number
   finalNudgeThreshold: number
   maxToolOnlyTurns: number
+  finalCheckpointHits: number
 }): ToolOnlyTurnDecision {
   const thresholds = [input.nudgeThreshold, input.finalNudgeThreshold]
   const nextThreshold = thresholds[input.toolOnlyNudges]
   if (nextThreshold !== undefined && input.consecutiveToolOnlyTurns >= nextThreshold) {
-    return { action: "nudge", final: input.toolOnlyNudges === thresholds.length - 1 }
+    const final = input.toolOnlyNudges === thresholds.length - 1
+    return { action: "nudge", final, forced: final && input.finalCheckpointHits > 0 }
   }
   if (input.consecutiveToolOnlyTurns > input.maxToolOnlyTurns) {
     return { action: "stop" }
   }
   return { action: "ignore" }
+}
+
+// Resolves the toolChoice for a turn given two independent, possibly
+// conflicting demands: structured output (a schema-forced turn MUST call its
+// output tool) and the tool-only-turn circuit breaker (a forced turn MUST
+// NOT call any tool). structuredOutputChoice wins when both are set — a
+// pending forceTextOnlyTurn is left un-consumed (consumedForceTextOnlyTurn:
+// false) rather than being dropped, so the caller can retry it on a later
+// turn once structured output is no longer required. Silently discarding it
+// on the structured-output turn would leave the tool-only-turn breaker
+// permanently unenforceable for the rest of that session — see #340.
+export function resolveTurnToolChoice(input: {
+  structuredOutputChoice: "required" | undefined
+  forceTextOnlyTurn: boolean
+}): { toolChoice: "required" | "none" | undefined; consumedForceTextOnlyTurn: boolean } {
+  if (input.structuredOutputChoice) {
+    return { toolChoice: input.structuredOutputChoice, consumedForceTextOnlyTurn: false }
+  }
+  if (input.forceTextOnlyTurn) {
+    return { toolChoice: "none", consumedForceTextOnlyTurn: true }
+  }
+  return { toolChoice: undefined, consumedForceTextOnlyTurn: false }
 }
 
 // The cumulative ceiling across ALL continuations. Unlike the per-continuation

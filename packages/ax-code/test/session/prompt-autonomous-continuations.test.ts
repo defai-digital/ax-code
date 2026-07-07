@@ -128,6 +128,19 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).not.toContain("resets this counter")
   })
 
+  test("forced tool-only nudge tells the model tools are disabled this turn", () => {
+    const text = AutonomousContinuationPrompt.toolOnlyTurnNudge({
+      consecutiveToolOnlyTurns: 30,
+      maxToolOnlyTurns: 35,
+      final: true,
+      forced: true,
+    })
+
+    expect(text).toContain("already received one final checkpoint warning")
+    expect(text).toContain("Tools are disabled for your next turn")
+    expect(text).not.toContain("FINAL checkpoint before that stop")
+  })
+
   test("builds pending-todo continuation guidance with stagnation detail", () => {
     const text = AutonomousContinuationPrompt.todoContinuation({
       pendingTodos,
