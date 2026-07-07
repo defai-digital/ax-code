@@ -315,6 +315,26 @@ Validation:
 - `pnpm --dir packages/sdk/js exec tsc --build --force`
 - `pnpm run check:openapi`
 
+### Phase 2.7: Formal Session Move Contract
+
+Status: Implemented
+
+Scope:
+
+- Add `POST /session/:sessionID/move` as a formal server contract over the Phase 2.6 validation rules.
+- Update only the session's owning directory; do not move files, change git state, or switch worktrees.
+- Reject invalid targets with a structured 400 response that includes validation reason and validation context.
+- Block move while the session is busy.
+- Return the updated session so Desktop can route subsequent actions through the new directory.
+
+Validation:
+
+- `pnpm --dir packages/ax-code exec vitest run test/server/route-validation.test.ts`
+- `pnpm --dir packages/ax-code typecheck`
+- `pnpm --dir packages/sdk/js run build`
+- `pnpm --dir packages/sdk/js exec tsc --build --force`
+- `pnpm run check:openapi`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.

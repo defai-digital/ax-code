@@ -29,7 +29,7 @@ import { Log } from "../../util/log"
 import { Permission } from "@/permission"
 import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
-import { errors, notFound } from "../error"
+import { errors, invalidRequest, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
 import { parseCurrentProjectSessionID, requireCurrentProjectSession } from "./session-lookup"
@@ -584,6 +584,53 @@ export const SessionRoutes = lazy(() =>
           await SessionMove.validate({
             sessionID,
             ...c.req.valid("json"),
+          }),
+        )
+      },
+    )
+    .post(
+      "/:sessionID/move",
+      describeRoute({
+        summary: "Move session",
+        tags: ["Session"],
+        description:
+          "Move a session to a validated target directory by updating the session's owning directory. This does not move files.",
+        operationId: "session.move",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator("json", SessionMove.ValidateInput.omit({ sessionID: true })),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        const validation = await SessionMove.validate({
+          sessionID,
+          ...c.req.valid("json"),
+        })
+        if (!validation.valid) {
+          return invalidRequest(c, {
+            message: "Invalid session move target",
+            details: {
+              resource: "sessionMoveTarget",
+              reason: validation.reason,
+              validation,
+            },
+          })
+        }
+        SessionPrompt.assertNotBusy(sessionID)
+        return c.json(
+          await Session.setDirectory({
+            sessionID,
+            directory: validation.target.directory,
           }),
         )
       },

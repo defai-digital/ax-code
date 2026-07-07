@@ -201,6 +201,8 @@ import type {
   SessionMessagesErrors,
   SessionMessagesResponses,
   SessionMetadata,
+  SessionMoveErrors,
+  SessionMoveResponses,
   SessionMoveValidateErrors,
   SessionMoveValidateResponses,
   SessionPromptAsyncErrors,
@@ -4063,6 +4065,43 @@ export class Session2 extends HeyApiClient {
         },
       },
     )
+  }
+
+  /**
+   * Move session
+   *
+   * Move a session to a validated target directory by updating the session's owning directory. This does not move files.
+   */
+  public move<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      targetDirectory: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "targetDirectory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionMoveResponses, SessionMoveErrors, ThrowOnError>({
+      url: "/session/{sessionID}/move",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 
   /**

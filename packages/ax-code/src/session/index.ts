@@ -496,6 +496,11 @@ export namespace Session {
     updateAndPublish(input.sessionID, { title: input.title }),
   )
 
+  export const setDirectory = fn(
+    z.object({ sessionID: SessionID.zod, directory: z.string().trim().min(1) }),
+    async (input) => updateAndPublish(input.sessionID, { directory: input.directory, time_updated: Date.now() }),
+  )
+
   export const setArchived = fn(
     z.object({ sessionID: SessionID.zod, time: z.number().int().min(0).optional() }),
     async (input) => updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() }),

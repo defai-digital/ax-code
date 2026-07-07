@@ -10850,6 +10850,45 @@ export type SessionMoveValidateResponses = {
 
 export type SessionMoveValidateResponse = SessionMoveValidateResponses[keyof SessionMoveValidateResponses]
 
+export type SessionMoveData = {
+  body?: {
+    targetDirectory: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/move"
+}
+
+export type SessionMoveErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+export type SessionMoveError = SessionMoveErrors[keyof SessionMoveErrors]
+
+export type SessionMoveResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionMoveResponse = SessionMoveResponses[keyof SessionMoveResponses]
+
 export type SessionRollbackPreviewData = {
   body?: SessionRollbackApplyInput
   path: {

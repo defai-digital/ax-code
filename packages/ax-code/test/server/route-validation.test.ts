@@ -223,6 +223,67 @@ describe("server route validation", () => {
     })
   })
 
+  test("session move route updates the session directory after validation", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const targetDirectory = path.join(root, "src")
+        try {
+          const res = await Server.Default().request(`/session/${session.id}/move`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ targetDirectory }),
+          })
+
+          expect(res.status).toBe(200)
+          expect(await res.json()).toMatchObject({
+            id: session.id,
+            directory: targetDirectory,
+          })
+          expect((await Session.get(session.id)).directory).toBe(targetDirectory)
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("session move route rejects an invalid target without changing the session", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const targetDirectory = path.join(os.tmpdir(), `ax-code-invalid-move-target-${process.pid}-${Date.now()}`)
+        try {
+          const res = await Server.Default().request(`/session/${session.id}/move`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ targetDirectory }),
+          })
+
+          expect(res.status).toBe(400)
+          expect(await res.json()).toMatchObject({
+            name: "InvalidRequestError",
+            message: "Invalid session move target",
+            status: 400,
+            details: {
+              resource: "sessionMoveTarget",
+              reason: "target_missing",
+              validation: {
+                valid: false,
+                reason: "target_missing",
+              },
+            },
+          })
+          expect((await Session.get(session.id)).directory).toBe(root)
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("session update route round-trips valid product metadata and rejects invalid reserved metadata", async () => {
     await Instance.provide({
       directory: root,
