@@ -130,28 +130,29 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(result.status).toBe(0)
   })
 
-  it("render pipeline byte-matches the goldens by DEFAULT (Rust) and under the =0 off-switch (Zig)", () => {
-    // ADR-046: the render pipeline now routes to the Rust addon BY DEFAULT (no
-    // env) — the path real users get. AX_CODE_NATIVE_RENDER=0 forces the bundled
-    // Zig library. Both must byte-match the committed goldens, proving the Rust
-    // render core is frame-parity across yoga layout, styled attributes, CJK/
-    // emoji wrapping, alpha blending, scroll offset, selection, and the command-
+  it("render pipeline byte-matches the goldens by DEFAULT (Zig) and under the =1 opt-in (Rust)", () => {
+    // ADR-046 rollback: after the v6.9.x hang/crash field reports, the render
+    // pipeline routes to the bundled Zig library BY DEFAULT (no env) — the
+    // path real users get. AX_CODE_NATIVE_RENDER=1 opts into the Rust addon.
+    // Both must byte-match the committed goldens, proving the Rust render core
+    // is frame-parity across yoga layout, styled attributes, CJK/emoji
+    // wrapping, alpha blending, scroll offset, selection, and the command-
     // palette popup — through the real OpenTUI renderable layer.
     const goldens = (env: Record<string, string>) =>
       runNode(["--import", "tsx", "--conditions=node", path.join(pkgDir, "script/check-golden-frames.ts")], env)
 
-    const rustDefault = goldens({})
-    expect(rustDefault.stderr).not.toContain("frame drift")
-    expect(rustDefault.stdout).toContain("all golden frames match")
-    expect(rustDefault.status).toBe(0)
+    const zigDefault = goldens({})
+    expect(zigDefault.stderr).not.toContain("frame drift")
+    expect(zigDefault.stdout).toContain("all golden frames match")
+    expect(zigDefault.status).toBe(0)
 
-    const zigOff = goldens({ AX_CODE_NATIVE_RENDER: "0" })
-    expect(zigOff.stderr).not.toContain("frame drift")
-    expect(zigOff.stdout).toContain("all golden frames match")
-    expect(zigOff.status).toBe(0)
+    const rustOptIn = goldens({ AX_CODE_NATIVE_RENDER: "1" })
+    expect(rustOptIn.stderr).not.toContain("frame drift")
+    expect(rustOptIn.stdout).toContain("all golden frames match")
+    expect(rustOptIn.status).toBe(0)
   })
 
-  it("render routes to Rust by default, and to Zig under =0 / SCOPE=yoga", () => {
+  it("render routes to Zig by default, and to Rust only under the =1 opt-in", () => {
     // getBuildOptions is a documented no-op in the Rust addon but populated by
     // the Zig dylib, so it distinguishes which backend the render family uses.
     const probe = `
@@ -166,12 +167,14 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
       console.log(buf.every((b) => b === 0xAB) ? "render:RUST" : "render:ZIG")
     `
     const render = (env: Record<string, string>) => runNode(["--input-type=module", "-e", probe], env).stdout
-    expect(render({})).toContain("render:RUST") // default
-    expect(render({ AX_CODE_NATIVE_RENDER: "0" })).toContain("render:ZIG") // off-switch
-    expect(render({ AX_CODE_NATIVE_RENDER_SCOPE: "yoga" })).toContain("render:ZIG") // escape hatch
+    expect(render({})).toContain("render:ZIG") // default: battle-tested Zig
+    expect(render({ AX_CODE_NATIVE_RENDER: "1" })).toContain("render:RUST") // opt-in
+    expect(render({ AX_CODE_NATIVE_RENDER: "0" })).toContain("render:ZIG") // explicit off
+    // SCOPE=yoga narrows an =1 opt-in to yoga/audio only — render stays Zig.
+    expect(render({ AX_CODE_NATIVE_RENDER: "1", AX_CODE_NATIVE_RENDER_SCOPE: "yoga" })).toContain("render:ZIG")
   })
 
-  it("overlay engages by default and disengages under =0 (audio-stub fingerprint)", () => {
+  it("overlay engages under =1 and stays disengaged by default (audio-stub fingerprint)", () => {
     const fingerprint = `
       import { Yoga } from "@ax-code/opentui-core"
       const { resolveRenderLib } = await import("@ax-code/opentui-core")
@@ -179,13 +182,13 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
       const engine = resolveRenderLib().opentui.symbols.createAudioEngine(0)
       console.log("engine:" + engine)
     `
-    // Default (no env): the Rust addon's audio stub returns handle 0.
-    const on = runNode(["--input-type=module", "-e", fingerprint])
+    // Opt-in (=1): the Rust addon's audio stub returns handle 0.
+    const on = runNode(["--input-type=module", "-e", fingerprint], { AX_CODE_NATIVE_RENDER: "1" })
     expect(on.stdout).toContain("engine:0")
     expect(on.stderr).not.toContain("failed to load")
 
-    // Off-switch: the bundled Zig backend returns a non-zero engine handle.
-    const off = runNode(["--input-type=module", "-e", fingerprint], { AX_CODE_NATIVE_RENDER: "0" })
+    // Default (no env): the bundled Zig backend returns a non-zero engine handle.
+    const off = runNode(["--input-type=module", "-e", fingerprint])
     expect(off.stdout).toMatch(/engine:[1-9]/)
   })
 })

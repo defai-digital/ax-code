@@ -11883,19 +11883,21 @@ function ffiCellOrigin(x, y) {
 // ax-code local fix (ADR-046): route the render pipeline (renderer/buffer/text/
 // edit/editor/feed/terminal families) plus yoga/audio to the @ax-code/render
 // napi addon (Rust, vendored facebook/yoga v3.2.1 — the same tag the upstream
-// Zig library pins). This is ON BY DEFAULT; AX_CODE_NATIVE_RENDER=0 (or off/
-// false) forces the bundled Zig library, and AX_CODE_NATIVE_RENDER_SCOPE=yoga
-// routes only yoga/audio. If the addon can't be loaded (JS-only install, unbuilt
-// dev checkout) it falls back to Zig silently. BigInt args (backend ptr()/
-// callback pointers) are narrowed to numbers — addresses stay below 2^53 so this
-// is exact — because the napi addon takes f64 parameters.
+// Zig library pins). This is OFF BY DEFAULT (opt in with
+// AX_CODE_NATIVE_RENDER=1): after the v6.9.x field reports of CLI hangs and
+// crash-to-quit with long-output models traced to the Rust core, the
+// battle-tested Zig library is the default again until the Rust core has more
+// production mileage. AX_CODE_NATIVE_RENDER_SCOPE=yoga routes only yoga/audio.
+// If the addon can't be loaded (JS-only install, unbuilt dev checkout) it
+// falls back to Zig silently. BigInt args (backend ptr()/callback pointers)
+// are narrowed to numbers — addresses stay below 2^53 so this is exact —
+// because the napi addon takes f64 parameters.
 var nativeRenderAddon;
 var nativeRenderAddonFailed = false;
 function applyNativeRenderOverlay(symbols) {
   const flag = (process.env.AX_CODE_NATIVE_RENDER || "").toLowerCase();
   const explicitlyOn = flag === "1" || flag === "true" || flag === "on";
-  const disabled = flag === "0" || flag === "false" || flag === "off";
-  if (disabled || nativeRenderAddonFailed) {
+  if (!explicitlyOn || nativeRenderAddonFailed) {
     return symbols;
   }
   if (!nativeRenderAddon) {
