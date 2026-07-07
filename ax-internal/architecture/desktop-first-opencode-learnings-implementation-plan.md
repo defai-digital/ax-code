@@ -45,7 +45,7 @@ Validation:
 
 ### Phase 0.2: Tab And Draft Identity Audit
 
-Status: Planned
+Status: Implemented
 
 Scope:
 
@@ -53,10 +53,20 @@ Scope:
 - Identify any draft state keyed only by current route or session ID.
 - Produce a minimal patch plan for durable tab/draft keys.
 
+Implemented findings:
+
+- `sendMessage` could be called without an active session or open draft, allowing the lower route layer to receive an empty session id. It now fails fast with a store error.
+- Inline comment drafts used a global `"draft"` session key for new sessions. Draft comment keys are now scoped by draft directory, falling back to project id when directory is not available.
+
 Acceptance:
 
 - There is a concrete list of unsafe identity keys, or a documented finding that current keys are sufficient.
 - Proposed key shape includes server, project, directory, worktree, and session or draft identity where applicable.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/sync/session-ui-store.test.ts src/stores/useInlineCommentDraftStore.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
 
 ### Phase 0.3: Durable Desktop Tab Projection
 
@@ -143,4 +153,3 @@ Acceptance:
 - Phase 1 must complete before considering confined MCP code mode.
 - Phase 2 can run in parallel with Phase 1 only if it does not require shared API contract churn.
 - Phase 3 must not start until ADR review confirms the sandbox and audit model.
-

@@ -10,7 +10,11 @@ import { useInputStore } from "@/sync/input-store"
 import type { AttachedFile } from "@/stores/types/sessionTypes"
 import * as sessionActions from "@/sync/session-actions"
 import { useDirectorySync, useUserMessageHistory } from "@/sync/sync-context"
-import { useInlineCommentDraftStore, type InlineCommentDraft } from "@/stores/useInlineCommentDraftStore"
+import {
+  buildInlineCommentSessionKey,
+  useInlineCommentDraftStore,
+  type InlineCommentDraft,
+} from "@/stores/useInlineCommentDraftStore"
 import { useSnippetsStore } from "@/stores/useSnippetsStore"
 import { appendInlineComments } from "@/lib/messages/inlineComments"
 import { renderMagicPrompt } from "@/lib/magicPrompts"
@@ -291,11 +295,10 @@ const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ se
   const noTextContent = t("chat.revertPopover.noTextContent")
   const items = React.useMemo(() => {
     if (!revertMessageID) return []
-    return getRevertedUserMessages(sessionMessages, revertMessageID)
-      .map((message) => ({
-        id: message.id,
-        text: getRevertedPreview(partsByMessage[message.id] ?? [], noTextContent),
-      }))
+    return getRevertedUserMessages(sessionMessages, revertMessageID).map((message) => ({
+      id: message.id,
+      text: getRevertedPreview(partsByMessage[message.id] ?? [], noTextContent),
+    }))
   }, [noTextContent, partsByMessage, revertMessageID, sessionMessages])
   const firstRevertedMessageId = items[0]?.id
 
@@ -886,6 +889,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   )
   const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft)
   const newSessionDraftOpen = Boolean(newSessionDraft?.open)
+  const inlineCommentSessionKey = React.useMemo(
+    () =>
+      buildInlineCommentSessionKey({
+        sessionId: currentSessionId,
+        draftDirectory: newSessionDraftOpen
+          ? (newSessionDraft?.bootstrapPendingDirectory ?? newSessionDraft?.directoryOverride ?? null)
+          : null,
+        draftProjectId: newSessionDraftOpen ? (newSessionDraft?.selectedProjectId ?? null) : null,
+      }),
+    [
+      currentSessionId,
+      newSessionDraft?.bootstrapPendingDirectory,
+      newSessionDraft?.directoryOverride,
+      newSessionDraft?.selectedProjectId,
+      newSessionDraftOpen,
+    ],
+  )
   const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget)
   const availableWorktreesByProject = useSessionUIStore((s) => s.availableWorktreesByProject)
   const abortPromptSessionId = useSessionUIStore((s) => s.abortPromptSessionId)
@@ -1304,18 +1324,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   const draftCount = useInlineCommentDraftStore(
     React.useCallback(
       (state) => {
-        const sessionKey = currentSessionId ?? (newSessionDraftOpen ? "draft" : "")
-        if (!sessionKey) return 0
-        return (state.drafts[sessionKey] ?? []).length
+        if (!inlineCommentSessionKey) return 0
+        return (state.drafts[inlineCommentSessionKey] ?? []).length
       },
-      [currentSessionId, newSessionDraftOpen],
+      [inlineCommentSessionKey],
     ),
   )
   const draftSourceKey = useInlineCommentDraftStore(
     React.useCallback(
       (state) => {
-        const sessionKey = currentSessionId ?? (newSessionDraftOpen ? "draft" : "")
-        const drafts = sessionKey ? (state.drafts[sessionKey] ?? []) : []
+        const drafts = inlineCommentSessionKey ? (state.drafts[inlineCommentSessionKey] ?? []) : []
         let previewConsole = 0
         let previewAnnotation = 0
         let review = 0
@@ -1326,7 +1344,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         }
         return `${previewConsole}:${previewAnnotation}:${review}`
       },
-      [currentSessionId, newSessionDraftOpen],
+      [inlineCommentSessionKey],
     ),
   )
   const consumeDrafts = useInlineCommentDraftStore((state) => state.consumeDrafts)
@@ -1337,16 +1355,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     .map((entry) => Number(entry) || 0)
   const removePreviewDrafts = React.useCallback(
     (source: "preview-console" | "preview-annotation") => {
-      const sessionKey = currentSessionId ?? (newSessionDraftOpen ? "draft" : "")
-      if (!sessionKey) return
-      const drafts = useInlineCommentDraftStore.getState().drafts[sessionKey] ?? []
+      if (!inlineCommentSessionKey) return
+      const drafts = useInlineCommentDraftStore.getState().drafts[inlineCommentSessionKey] ?? []
       for (const draft of drafts) {
         if (draft.source === source) {
-          removeInlineCommentDraft(sessionKey, draft.id)
+          removeInlineCommentDraft(inlineCommentSessionKey, draft.id)
         }
       }
     },
-    [currentSessionId, newSessionDraftOpen, removeInlineCommentDraft],
+    [inlineCommentSessionKey, removeInlineCommentDraft],
   )
 
   // User message history for up/down arrow navigation.
@@ -1714,10 +1731,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
       }
     }
 
-    const sessionKey = currentSessionId ?? (newSessionDraftOpen ? "draft" : null)
     let drafts: InlineCommentDraft[] = []
-    if (!queuedOnly && sessionKey) {
-      drafts = consumeDrafts(sessionKey)
+    if (!queuedOnly && inlineCommentSessionKey) {
+      drafts = consumeDrafts(inlineCommentSessionKey)
     }
 
     if (drafts.length > 0) {

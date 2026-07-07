@@ -6,7 +6,7 @@ export type InlineCommentSource = "diff" | "plan" | "file" | "preview-console" |
 
 export interface InlineCommentDraft {
   id: string
-  sessionKey: string // sessionId or 'draft' for new sessions
+  sessionKey: string // sessionId or scoped draft key for new sessions
   source: InlineCommentSource
   fileLabel: string // filename or 'plan'
   startLine: number
@@ -38,6 +38,40 @@ interface InlineCommentDraftActions {
 }
 
 type InlineCommentDraftStore = InlineCommentDraftState & InlineCommentDraftActions
+
+export type InlineCommentSessionKeyInput = {
+  sessionId?: string | null
+  draftDirectory?: string | null
+  draftProjectId?: string | null
+}
+
+const LEGACY_UNSCOPED_DRAFT_KEY = "draft"
+
+const normalizeKeyPart = (value?: string | null): string | null => {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const normalized = trimmed.replace(/\\/g, "/")
+  if (normalized === "/") return "/"
+  return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized
+}
+
+export const buildInlineCommentSessionKey = ({
+  sessionId,
+  draftDirectory,
+  draftProjectId,
+}: InlineCommentSessionKeyInput): string | null => {
+  const normalizedSessionId = normalizeKeyPart(sessionId)
+  if (normalizedSessionId) return normalizedSessionId
+
+  const normalizedDirectory = normalizeKeyPart(draftDirectory)
+  if (normalizedDirectory) return `draft:${normalizedDirectory}`
+
+  const normalizedProjectId = normalizeKeyPart(draftProjectId)
+  if (normalizedProjectId) return `draft:project:${normalizedProjectId}`
+
+  return null
+}
 
 const isValidSource = (value: unknown): value is InlineCommentSource =>
   value === "diff" ||
@@ -92,6 +126,7 @@ const sanitizeDraftMap = (input: unknown): Record<string, InlineCommentDraft[]> 
   const result: Record<string, InlineCommentDraft[]> = {}
 
   for (const [sessionKey, sessionDrafts] of entries) {
+    if (sessionKey === LEGACY_UNSCOPED_DRAFT_KEY) continue
     if (!Array.isArray(sessionDrafts)) continue
 
     const sanitized = sessionDrafts
@@ -216,7 +251,7 @@ export const useInlineCommentDraftStore = create<InlineCommentDraftStore>()(
       {
         name: "openchamber-inline-comment-drafts",
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 1,
+        version: 2,
         migrate: (persistedState: unknown) => {
           if (!persistedState || typeof persistedState !== "object") {
             return { drafts: {} }

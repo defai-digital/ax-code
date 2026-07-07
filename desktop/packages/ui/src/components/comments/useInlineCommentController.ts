@@ -1,6 +1,7 @@
 import React from "react"
 import { toast } from "@/components/ui"
 import {
+  buildInlineCommentSessionKey,
   useInlineCommentDraftStore,
   type InlineCommentDraft,
   type InlineCommentSource,
@@ -55,7 +56,8 @@ export function useInlineCommentController<TRange extends LineRange>(
   const { source, fileLabel, language, getCodeForRange, toStoreRange, fromDraftRange } = options
 
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
-  const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open)
+  const newSessionDraft = useSessionUIStore((state) => state.newSessionDraft)
+  const newSessionDraftOpen = Boolean(newSessionDraft?.open)
 
   const addDraft = useInlineCommentDraftStore((state) => state.addDraft)
   const updateDraft = useInlineCommentDraftStore((state) => state.updateDraft)
@@ -67,8 +69,20 @@ export function useInlineCommentController<TRange extends LineRange>(
   const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null)
 
   const sessionKey = React.useMemo(() => {
-    return currentSessionId ?? (newSessionDraftOpen ? "draft" : null)
-  }, [currentSessionId, newSessionDraftOpen])
+    return buildInlineCommentSessionKey({
+      sessionId: currentSessionId,
+      draftDirectory: newSessionDraftOpen
+        ? (newSessionDraft?.bootstrapPendingDirectory ?? newSessionDraft?.directoryOverride ?? null)
+        : null,
+      draftProjectId: newSessionDraftOpen ? (newSessionDraft?.selectedProjectId ?? null) : null,
+    })
+  }, [
+    currentSessionId,
+    newSessionDraft?.bootstrapPendingDirectory,
+    newSessionDraft?.directoryOverride,
+    newSessionDraft?.selectedProjectId,
+    newSessionDraftOpen,
+  ])
 
   const drafts = React.useMemo(() => {
     if (!sessionKey || !fileLabel) return []

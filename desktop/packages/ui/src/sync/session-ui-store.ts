@@ -380,6 +380,14 @@ const DEFAULT_DRAFT: NewSessionDraftState = {
   parentID: null,
 }
 
+const INVALID_SEND_TARGET_MESSAGE = "Cannot send message without an active session or draft"
+
+const normalizeSessionId = (sessionId?: string | null): string | null => {
+  if (typeof sessionId !== "string") return null
+  const trimmed = sessionId.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -715,7 +723,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     options?: SendMessageOptions,
   ) => {
     // Clear non-Git changed-files bar on new user message for current session
-    const sid = options?.sessionId ?? get().currentSessionId
+    const sid = normalizeSessionId(options?.sessionId ?? get().currentSessionId)
     if (sid) {
       const map = new Map(get().pendingChangesBarDismissed)
       map.delete(sid)
@@ -837,35 +845,36 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     }
 
     // ---- Existing session ----
-    const targetSessionId = options?.sessionId ?? get().currentSessionId
-    const sessionAgentSelection = targetSessionId
-      ? useSelectionStore.getState().getSessionAgentSelection(targetSessionId)
-      : null
+    const targetSessionId = normalizeSessionId(options?.sessionId ?? get().currentSessionId)
+    if (!targetSessionId) {
+      set({ error: INVALID_SEND_TARGET_MESSAGE })
+      throw new Error(INVALID_SEND_TARGET_MESSAGE)
+    }
+
+    const sessionAgentSelection = useSelectionStore.getState().getSessionAgentSelection(targetSessionId)
     const configAgentName = useConfigStore.getState().currentAgentName
     const effectiveAgent = trimmedAgent || sessionAgentSelection || configAgentName || undefined
 
-    if (targetSessionId && effectiveAgent) {
+    if (effectiveAgent) {
       useSelectionStore.getState().saveSessionAgentSelection(targetSessionId, effectiveAgent)
       useSelectionStore
         .getState()
         .saveAgentModelVariantForSession(targetSessionId, effectiveAgent, providerID, modelID, variant)
     }
 
-    if (targetSessionId) {
-      const viewportState = useViewportStore.getState()
-      const memState = viewportState.sessionMemoryState.get(targetSessionId)
-      if (!memState || !memState.lastUserMessageAt) {
-        const newMemState = new Map(viewportState.sessionMemoryState)
-        newMemState.set(targetSessionId, {
-          viewportAnchor: 0,
-          isStreaming: false,
-          lastAccessedAt: Date.now(),
-          backgroundMessageCount: 0,
-          ...memState,
-          lastUserMessageAt: Date.now(),
-        })
-        useViewportStore.setState({ sessionMemoryState: newMemState })
-      }
+    const viewportState = useViewportStore.getState()
+    const memState = viewportState.sessionMemoryState.get(targetSessionId)
+    if (!memState || !memState.lastUserMessageAt) {
+      const newMemState = new Map(viewportState.sessionMemoryState)
+      newMemState.set(targetSessionId, {
+        viewportAnchor: 0,
+        isStreaming: false,
+        lastAccessedAt: Date.now(),
+        backgroundMessageCount: 0,
+        ...memState,
+        lastUserMessageAt: Date.now(),
+      })
+      useViewportStore.setState({ sessionMemoryState: newMemState })
     }
 
     const currentSessionDirectory = targetSessionId
@@ -875,13 +884,9 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       await waitForWorktreeBootstrap(currentSessionDirectory)
     }
 
-    if (targetSessionId) {
-      notifyMessageSent(targetSessionId)
-    }
+    notifyMessageSent(targetSessionId)
 
-    if (targetSessionId) {
-      markPendingUserSendAnimation(targetSessionId)
-    }
+    markPendingUserSendAnimation(targetSessionId)
 
     const files = attachments?.map((a) => ({
       type: "file" as const,
@@ -891,7 +896,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     }))
 
     await routeMessage({
-      sessionId: targetSessionId || "",
+      sessionId: targetSessionId,
       directory: currentSessionDirectory,
       content,
       providerID,

@@ -9,7 +9,7 @@ import { formatInlineCommentDrafts } from "@/lib/messages/inlineComments"
 import { toast } from "@/components/ui"
 
 interface DiffCommentSummaryBarProps {
-  sessionKey: string
+  sessionKey: string | null
 }
 
 const EMPTY_DRAFTS: InlineCommentDraft[] = []
@@ -17,7 +17,7 @@ const EMPTY_DRAFTS: InlineCommentDraft[] = []
 export const DiffCommentSummaryBar: React.FC<DiffCommentSummaryBarProps> = memo(({ sessionKey }) => {
   const { t } = useI18n()
   const drafts = useInlineCommentDraftStore(
-    React.useCallback((s) => s.drafts[sessionKey] ?? EMPTY_DRAFTS, [sessionKey]),
+    React.useCallback((s) => (sessionKey ? (s.drafts[sessionKey] ?? EMPTY_DRAFTS) : EMPTY_DRAFTS), [sessionKey]),
   )
   const consumeDrafts = useInlineCommentDraftStore((s) => s.consumeDrafts)
   const clearDrafts = useInlineCommentDraftStore((s) => s.clearDrafts)
@@ -27,7 +27,7 @@ export const DiffCommentSummaryBar: React.FC<DiffCommentSummaryBarProps> = memo(
   if (draftCount === 0) return null
 
   const handleSendToAgent = async () => {
-    if (!currentSessionId) {
+    if (!currentSessionId || !sessionKey) {
       toast.error(t("diffView.comments.noSession"))
       return
     }
@@ -53,6 +53,7 @@ export const DiffCommentSummaryBar: React.FC<DiffCommentSummaryBarProps> = memo(
   }
 
   const handleDiscard = () => {
+    if (!sessionKey) return
     clearDrafts(sessionKey)
   }
 

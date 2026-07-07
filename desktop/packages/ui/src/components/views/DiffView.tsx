@@ -28,6 +28,7 @@ import { PierreDiffViewer } from "./PierreDiffViewer"
 import { DiffCommentSummaryBar } from "./DiffCommentSummaryBar"
 import { DiffHunkReviewList } from "./DiffHunkReviewList"
 import { useDiffHunkRevert } from "./useDiffHunkRevert"
+import { buildInlineCommentSessionKey } from "@/stores/useInlineCommentDraftStore"
 import { useDeviceInfo } from "@/lib/device"
 import { FileTypeIcon } from "@/components/icons/FileTypeIcon"
 import { Icon } from "@/components/icon/Icon"
@@ -929,6 +930,10 @@ export const DiffView: React.FC<DiffViewProps> = ({
   const effectiveDirectory = useEffectiveDirectory()
   const { screenWidth, isMobile } = useDeviceInfo()
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const inlineCommentSessionKey = React.useMemo(
+    () => buildInlineCommentSessionKey({ sessionId: currentSessionId, draftDirectory: effectiveDirectory ?? null }),
+    [currentSessionId, effectiveDirectory],
+  )
 
   const isGitRepo = useIsGitRepo(effectiveDirectory ?? null)
   const status = useGitStatus(effectiveDirectory ?? null)
@@ -1846,7 +1851,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
       </div>
 
       {renderContent()}
-      <DiffCommentSummaryBar sessionKey={currentSessionId ?? "draft"} />
+      <DiffCommentSummaryBar sessionKey={inlineCommentSessionKey} />
     </div>
   )
 }

@@ -17,7 +17,12 @@ import { useSessionUIStore } from "./session-ui-store"
 
 const resetSessionStores = () => {
   useSessionWorktreeStore.setState({ attachments: new Map() })
-  useSessionUIStore.setState({ currentSessionId: null, worktreeMetadata: new Map() })
+  useSessionUIStore.setState({
+    currentSessionId: null,
+    newSessionDraft: { open: false, directoryOverride: null, parentID: null },
+    error: null,
+    worktreeMetadata: new Map(),
+  })
 }
 
 const expectAttachment = (sessionId: string): SessionWorktreeAttachment => {
@@ -190,5 +195,13 @@ describe("session-worktree-store worktree routing", () => {
 
     const attachment = expectAttachment("session-not-repo")
     expect(attachment.worktreeStatus).toBe("not-a-repo")
+  })
+
+  test("sendMessage rejects when there is no active session or draft", async () => {
+    await expect(useSessionUIStore.getState().sendMessage("hello", "provider-id", "model-id")).rejects.toThrow(
+      "Cannot send message without an active session or draft",
+    )
+
+    expect(useSessionUIStore.getState().error).toBe("Cannot send message without an active session or draft")
   })
 })
