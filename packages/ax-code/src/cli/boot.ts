@@ -47,6 +47,7 @@ import { WebUiCommand } from "./cmd/webui"
 import { WorkflowCommand } from "./cmd/workflow"
 import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
+import { ensureWindowsUtf8Console } from "./bootstrap/windows-console"
 import { migrate } from "./bootstrap/migrate"
 import { FormatError } from "./error"
 import { UI } from "./ui"
@@ -229,6 +230,10 @@ export function cli(argv = hideBin(process.argv)) {
 
 export async function run() {
   clearForcedExitTimer()
+  // Must happen before any TUI output: the native renderer writes raw UTF-8
+  // bytes to the console handle, which mojibake under legacy Windows code
+  // pages (#307, #315, #338).
+  ensureWindowsUtf8Console()
   const argv = hideBin(process.argv)
   if (argv.includes("--uninstall") || argv.includes("-uninstall")) {
     const cmd = cli(["uninstall"])

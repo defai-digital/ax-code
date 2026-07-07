@@ -22,11 +22,15 @@ export type SourceLauncherInput = {
   windows?: boolean
 }
 
+// Note: the parentheses in the echoed text need caret-escaping inside the
+// if-block, but the stderr redirect must NOT be escaped — `1^>^&2` prints a
+// literal "1>&2" at the end of the warning (seen in issue #315's output)
+// instead of redirecting.
 export const WINDOWS_UTF8_WARNING = `for /f "tokens=2 delims=:" %%A in ('chcp') do set "AX_CODE_ACTIVE_CODEPAGE=%%A"
 set "AX_CODE_ACTIVE_CODEPAGE=%AX_CODE_ACTIVE_CODEPAGE: =%"
 if not "%AX_CODE_ACTIVE_CODEPAGE%"=="65001" (
   chcp 65001 >nul
-  echo AX Code warning: switched terminal code page from %AX_CODE_ACTIVE_CODEPAGE% to UTF-8 ^(65001^) for TUI rendering. 1^>^&2
+  echo AX Code warning: switched terminal code page from %AX_CODE_ACTIVE_CODEPAGE% to UTF-8 ^(65001^) for TUI rendering. 1>&2
 )
 `
 

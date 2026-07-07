@@ -22,6 +22,10 @@ describe("script.source-launcher", () => {
     expect(out).toContain("chcp")
     expect(out).toContain("chcp 65001 >nul")
     expect(out).toContain("switched terminal code page")
+    // The stderr redirect must be a real redirect, not caret-escaped text —
+    // `1^>^&2` printed a literal "1>&2" at the end of the warning (#315).
+    expect(out).toContain("for TUI rendering. 1>&2")
+    expect(out).not.toContain("1^>^&2")
     expect(out).toContain('node "%AX_CODE_SOURCE_NODE_FFI_RUNNER%"')
   })
 
