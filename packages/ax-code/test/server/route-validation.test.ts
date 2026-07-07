@@ -144,6 +144,85 @@ describe("server route validation", () => {
     })
   })
 
+  test("session move validation accepts an existing target inside the current project", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        try {
+          const res = await Server.Default().request(`/session/${session.id}/move/validate`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              targetDirectory: "src",
+            }),
+          })
+
+          expect(res.status).toBe(200)
+          const body = (await res.json()) as {
+            valid: boolean
+            reason: string
+            current: { directory: string; projectID: string; worktree: string }
+            target: {
+              directory: string
+              exists: boolean
+              isDirectory: boolean
+              sameDirectory: boolean
+              withinCurrentProject: boolean
+              git: { worktree: string | null; branch: string | null; dirty: boolean | null }
+            }
+          }
+          expect(body.valid).toBe(true)
+          expect(body.reason).toBe("ok")
+          expect(body.current.directory).toBe(root)
+          expect(body.target).toMatchObject({
+            directory: path.join(root, "src"),
+            exists: true,
+            isDirectory: true,
+            sameDirectory: false,
+            withinCurrentProject: true,
+          })
+          expect(body.target.git.worktree).toBe(path.resolve(root, "../.."))
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("session move validation returns a typed result for a missing target", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const targetDirectory = path.join(os.tmpdir(), `ax-code-missing-move-target-${process.pid}-${Date.now()}`)
+        try {
+          const res = await Server.Default().request(`/session/${session.id}/move/validate`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ targetDirectory }),
+          })
+
+          expect(res.status).toBe(200)
+          expect(await res.json()).toMatchObject({
+            valid: false,
+            reason: "target_missing",
+            target: {
+              directory: targetDirectory,
+              exists: false,
+              isDirectory: false,
+              sameDirectory: false,
+              withinCurrentProject: false,
+              git: { worktree: null, branch: null, dirty: null },
+            },
+          })
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("session update route round-trips valid product metadata and rejects invalid reserved metadata", async () => {
     await Instance.provide({
       directory: root,

@@ -201,6 +201,8 @@ import type {
   SessionMessagesErrors,
   SessionMessagesResponses,
   SessionMetadata,
+  SessionMoveValidateErrors,
+  SessionMoveValidateResponses,
   SessionPromptAsyncErrors,
   SessionPromptAsyncResponses,
   SessionPromptErrors,
@@ -4022,6 +4024,45 @@ export class Session2 extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  /**
+   * Validate session move target
+   *
+   * Validate whether a session can move to a target directory without mutating session or project state.
+   */
+  public moveValidate<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      targetDirectory: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "targetDirectory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionMoveValidateResponses, SessionMoveValidateErrors, ThrowOnError>(
+      {
+        url: "/session/{sessionID}/move/validate",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
   }
 
   /**

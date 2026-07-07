@@ -17,6 +17,7 @@ import { SessionDre } from "../../session/dre"
 import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
 import { SessionRollback } from "../../session/rollback"
+import { SessionMove } from "../../session/move"
 import { SessionSemanticDiff } from "../../session/semantic-diff"
 import { SessionGoal } from "../../session/goal"
 import { TaskQueue } from "../../session/task-queue"
@@ -553,6 +554,38 @@ export const SessionRoutes = lazy(() =>
         const sessionID = await parseCurrentProjectSessionID(c)
         const query = c.req.valid("query")
         return c.json(SessionRollback.filter(await SessionRollback.points(sessionID), query.tool))
+      },
+    )
+    .post(
+      "/:sessionID/move/validate",
+      describeRoute({
+        summary: "Validate session move target",
+        tags: ["Session"],
+        description:
+          "Validate whether a session can move to a target directory without mutating session or project state.",
+        operationId: "session.move_validate",
+        responses: {
+          200: {
+            description: "Session move target validation",
+            content: {
+              "application/json": {
+                schema: resolver(SessionMove.Validation),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator("json", SessionMove.ValidateInput.omit({ sessionID: true })),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        return c.json(
+          await SessionMove.validate({
+            sessionID,
+            ...c.req.valid("json"),
+          }),
+        )
       },
     )
     .post(

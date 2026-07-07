@@ -3334,6 +3334,30 @@ export type SessionRollbackPoint = {
   kinds: Array<string>
 }
 
+export type SessionMoveValidation = {
+  sessionID: string
+  valid: boolean
+  reason: "ok" | "target_missing" | "target_not_directory" | "outside_current_project" | "same_directory"
+  current: {
+    directory: string
+    projectID: string
+    worktree: string
+  }
+  target: {
+    directory: string
+    exists: boolean
+    isDirectory: boolean
+    sameDirectory: boolean
+    withinCurrentProject: boolean
+    git: {
+      worktree: string | null
+      branch: string | null
+      dirty: boolean | null
+    }
+  }
+  warnings: Array<string>
+}
+
 export type SessionRollbackPreview = {
   point: SessionRollbackPoint
   diffs: Array<FileDiff>
@@ -10786,6 +10810,45 @@ export type SessionRollbackResponses = {
 }
 
 export type SessionRollbackResponse = SessionRollbackResponses[keyof SessionRollbackResponses]
+
+export type SessionMoveValidateData = {
+  body?: {
+    targetDirectory: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/move/validate"
+}
+
+export type SessionMoveValidateErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+export type SessionMoveValidateError = SessionMoveValidateErrors[keyof SessionMoveValidateErrors]
+
+export type SessionMoveValidateResponses = {
+  /**
+   * Session move target validation
+   */
+  200: SessionMoveValidation
+}
+
+export type SessionMoveValidateResponse = SessionMoveValidateResponses[keyof SessionMoveValidateResponses]
 
 export type SessionRollbackPreviewData = {
   body?: SessionRollbackApplyInput

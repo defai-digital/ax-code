@@ -295,6 +295,26 @@ Validation:
 - `pnpm --dir desktop/packages/ui type-check`
 - `pnpm run check:desktop-boundaries:strict`
 
+### Phase 2.6: Session Move Target Validation Contract
+
+Status: Implemented
+
+Scope:
+
+- Add `POST /session/:sessionID/move/validate` as a read-only server contract.
+- Validate target directory existence, directory type, same-directory no-op state, and current project boundary membership.
+- Include git worktree, branch, and dirty-state context when the target is inside a git worktree.
+- Support relative target paths from the current instance directory.
+- Keep actual session move mutation and Desktop target picker for a later slice.
+
+Validation:
+
+- `pnpm --dir packages/ax-code exec vitest run test/server/route-validation.test.ts`
+- `pnpm --dir packages/ax-code typecheck`
+- `pnpm --dir packages/sdk/js run build`
+- `pnpm --dir packages/sdk/js exec tsc --build --force`
+- `pnpm run check:openapi`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.
