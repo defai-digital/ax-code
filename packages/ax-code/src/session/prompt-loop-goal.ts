@@ -30,7 +30,6 @@ export function handlePromptLoopGoalContinuation(
     sessionID: SessionID
     goal: GoalContinuationInfo | undefined
     continuations: number
-    maxContinuations: number
     budgetLimitContinuationSent: boolean
   },
   deps: PromptLoopGoalDeps = {},
@@ -38,7 +37,6 @@ export function handlePromptLoopGoalContinuation(
   const decision = goalContinuationDecision({
     goal: input.goal,
     continuations: input.continuations,
-    maxContinuations: input.maxContinuations,
     budgetLimitContinuationSent: input.budgetLimitContinuationSent,
   })
 

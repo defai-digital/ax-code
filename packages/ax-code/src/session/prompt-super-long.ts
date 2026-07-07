@@ -63,6 +63,10 @@ export async function enforceSuperLongDeadline(input: {
   // (non-Super-Long) turn instead of stopping — otherwise the session is
   // permanently bricked: while Super-Long stays enabled, every new prompt
   // would re-emit the deadline stop before any work could happen.
+  // durableTotalSteps is still returned: touchRun above already accumulated
+  // `stepsSinceLastCheck` into the durable record, so the caller must advance
+  // its reported-steps watermark — otherwise every later iteration of the
+  // degraded run re-reports the same steps and inflates the durable counter.
   if (deadline.ok && deadline.expired && input.lastUser.time.created > startedAt + deadline.durationMs) {
     log.info("super-long window expired before this prompt; continuing without super-long", {
       command: "session.prompt.loop",
@@ -71,7 +75,7 @@ export async function enforceSuperLongDeadline(input: {
       startedAt,
       durationMs: deadline.durationMs,
     })
-    return { action: "continue", enabled: false }
+    return { action: "continue", enabled: false, durableTotalSteps: run.totalSteps }
   }
 
   log.warn(stop.logMessage, {

@@ -912,7 +912,6 @@ export namespace SessionPrompt {
           sessionID,
           goal,
           continuations,
-          maxContinuations,
           budgetLimitContinuationSent: goalBudgetLimitContinuationSent,
         })
         goalBudgetLimitContinuationSent = goalTransition.budgetLimitContinuationSent

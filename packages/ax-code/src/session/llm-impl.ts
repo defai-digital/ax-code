@@ -190,6 +190,12 @@ export namespace LLM {
       autonomousEnabled &&
       SuperLongPolicy.runtimeState({
         modelID: input.model.id,
+        // providerID must flow into the capability-based model default
+        // (supportsLongAgent): provider-filtered registry entries never match
+        // when providerID is omitted, so dropping it here could pace/remind a
+        // run the prompt loop's deadline enforcement (which passes providerID)
+        // never treats as Super-Long — or vice versa.
+        providerID: input.model.providerID,
         config: SuperLongPolicy.fromConfig(cfg.super_long),
       }).enabled
     // The verification-loop reminder is provider-agnostic supervision text —

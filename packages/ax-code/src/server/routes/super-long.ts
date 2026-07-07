@@ -36,9 +36,15 @@ const SuperLongStatusQuery = z.object({
   sessionID: SessionID.zod.optional(),
 })
 
-function configuredModelID(config: Config.Info | undefined, explicitModel?: string) {
+// Split the configured "provider/model" reference. The providerID matters:
+// the capability-based model default (supportsLongAgent) has provider-filtered
+// registry entries that never match when providerID is omitted, so dropping it
+// made this route report a state the runtime readers could disagree with.
+function configuredModel(config: Config.Info | undefined, explicitModel?: string) {
   const model = explicitModel ?? config?.model ?? ""
-  return model.includes("/") ? model.split("/").slice(1).join("/") : model
+  if (!model.includes("/")) return { modelID: model, providerID: undefined }
+  const [providerID, ...rest] = model.split("/")
+  return { modelID: rest.join("/"), providerID: providerID || undefined }
 }
 
 function autonomousEnabled(config: Config.Info | undefined) {
@@ -59,8 +65,10 @@ function superLongRuntimeState(config: Config.Info | undefined, explicitModel?: 
   // made this GET report a state the runtime readers (LLM/prompt) did not use.
   // See the flag contract note at src/flag/flag.ts (defineBooleanFlagWithOverride
   // for AX_CODE_SUPER_LONG): the reported state must match runtime behavior.
+  const { modelID, providerID } = configuredModel(config, explicitModel)
   return SuperLongPolicy.runtimeState({
-    modelID: configuredModelID(config, explicitModel),
+    modelID,
+    providerID,
     config: SuperLongPolicy.fromConfig(config?.super_long),
   })
 }
@@ -71,8 +79,10 @@ function superLongConfigState(config: Config.Info | undefined, explicitModel?: s
   // what the user persisted to ax-code.json (or the model default
   // when no explicit setting exists). Env vars are reconciled to
   // match this value after the GET returns.
+  const { modelID, providerID } = configuredModel(config, explicitModel)
   return SuperLongPolicy.state({
-    modelID: configuredModelID(config, explicitModel),
+    modelID,
+    providerID,
     config: SuperLongPolicy.fromConfig(config?.super_long),
   })
 }

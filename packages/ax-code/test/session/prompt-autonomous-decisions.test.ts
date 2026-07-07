@@ -136,7 +136,6 @@ describe("autonomous continuation decisions", () => {
         timeUsedSeconds: 2,
       },
       continuations: 0,
-      maxContinuations: Number.NaN,
       budgetLimitContinuationSent: false,
     })
     expect(goalDecision.action).toBe("continue_active")
@@ -242,7 +241,6 @@ describe("autonomous continuation decisions", () => {
           timeUsedSeconds: 2,
         },
         continuations: 1,
-        maxContinuations: 3,
         budgetLimitContinuationSent: false,
       }),
     ).toEqual({
@@ -260,7 +258,6 @@ describe("autonomous continuation decisions", () => {
           timeUsedSeconds: 2,
         },
         continuations: 3,
-        maxContinuations: 3,
         budgetLimitContinuationSent: false,
       }),
     ).toEqual({
@@ -281,7 +278,6 @@ describe("autonomous continuation decisions", () => {
           timeUsedSeconds: 9,
         },
         continuations: 0,
-        maxContinuations: 3,
         budgetLimitContinuationSent: false,
       }),
     ).toEqual({
@@ -298,7 +294,6 @@ describe("autonomous continuation decisions", () => {
       goalContinuationDecision({
         goal: undefined,
         continuations: 0,
-        maxContinuations: 3,
         budgetLimitContinuationSent: false,
       }),
     ).toEqual({ action: "ignore" })
@@ -314,7 +309,6 @@ describe("autonomous continuation decisions", () => {
         timeUsedSeconds: 9,
       },
       continuations: 0,
-      maxContinuations: 3,
       budgetLimitContinuationSent: true,
     })
 
@@ -334,7 +328,6 @@ describe("autonomous continuation decisions", () => {
         timeUsedSeconds: 9,
       },
       continuations: 0,
-      maxContinuations: 3,
       budgetLimitContinuationSent: true,
     })
 
@@ -357,7 +350,6 @@ describe("autonomous continuation decisions", () => {
         timeUsedSeconds: 9,
       },
       continuations: 25,
-      maxContinuations: 3,
       budgetLimitContinuationSent: false,
     })
 

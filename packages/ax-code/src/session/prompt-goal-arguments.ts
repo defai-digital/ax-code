@@ -14,6 +14,9 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
   if (lower === "pause") return { action: "pause" }
   if (lower === "resume") return { action: "resume" }
   if (lower === "clear") return { action: "clear" }
+  // "status" is a common way to ask for the current goal; without this alias
+  // it would silently CREATE a goal whose objective is the word "status".
+  if (lower === "status") return { action: "view" }
 
   // The flag is matched case-insensitively to stay consistent with the
   // pause/resume/clear keywords above (which compare against `lower`).
@@ -31,8 +34,17 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
       }
     }
     const objective = budgetMatch[2]?.trim()
-    // --budget N without an objective is not a valid create — treat as view
-    if (!objective) return { action: "view" }
+    // --budget N without an objective is not a valid create. Error explicitly
+    // instead of silently showing the goal view — the user's intent (set a
+    // budget) cannot be honored, and budgets of existing goals are immutable.
+    if (!objective) {
+      return {
+        action: "error",
+        message:
+          `--budget requires a goal objective (e.g. /goal --budget ${value} <objective>). ` +
+          `A budget applies only to a new goal; run /goal with no arguments to view the current goal.`,
+      }
+    }
     return {
       action: "create",
       tokenBudget: Number(value),

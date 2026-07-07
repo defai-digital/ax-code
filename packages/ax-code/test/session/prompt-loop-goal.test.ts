@@ -11,7 +11,6 @@ describe("prompt loop goal continuation", () => {
         sessionID: SessionID.descending(),
         goal: undefined,
         continuations: 0,
-        maxContinuations: 3,
         budgetLimitContinuationSent: true,
       },
       {
@@ -35,7 +34,6 @@ describe("prompt loop goal continuation", () => {
         timeUsedSeconds: 2,
       },
       continuations: 1,
-      maxContinuations: 3,
       budgetLimitContinuationSent: false,
     })
 
@@ -58,7 +56,6 @@ describe("prompt loop goal continuation", () => {
         timeUsedSeconds: 9,
       },
       continuations: 0,
-      maxContinuations: 3,
       budgetLimitContinuationSent: false,
     })
 
@@ -81,7 +78,6 @@ describe("prompt loop goal continuation", () => {
         timeUsedSeconds: 0,
       },
       continuations: 0,
-      maxContinuations: 3,
       budgetLimitContinuationSent: true, // stale from a prior goal in this session
     })
 
@@ -100,7 +96,6 @@ describe("prompt loop goal continuation", () => {
         timeUsedSeconds: 2,
       },
       continuations: 3,
-      maxContinuations: 3,
       budgetLimitContinuationSent: false,
     })
 
@@ -125,7 +120,6 @@ describe("prompt loop goal continuation", () => {
           timeUsedSeconds: 9,
         },
         continuations: 2,
-        maxContinuations: 3,
         budgetLimitContinuationSent: true,
       },
       {

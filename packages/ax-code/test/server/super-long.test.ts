@@ -138,6 +138,28 @@ describe("super-long route", () => {
     })
   })
 
+  test("the model default respects the provider prefix, not just the model name", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      // Same model name as the alibaba default-on case, but routed through a
+      // gateway whose capability entry blocks prompt caching — the long-agent
+      // default is off there. Dropping the provider prefix used to fall
+      // through to the provider-agnostic registry entry and report a state
+      // the prompt loop (which passes providerID) never used.
+      await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "llmgateway/qwen3.7-max" }))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ enabled: false })
+          expect(process.env.AX_CODE_SUPER_LONG).toBe("false")
+        },
+      })
+    })
+  })
+
   test("PUT persists super_long to config and overrides model default", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })

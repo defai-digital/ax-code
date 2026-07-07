@@ -379,10 +379,12 @@ export function completionGateRetryDecision(input: {
   }
 }
 
+// Deliberately takes no maxContinuations: goal continuations are uncapped —
+// the cumulative total-step ceiling and the goal's own budget/status are the
+// bounds on an active goal, not session.max_continuations.
 export function goalContinuationDecision(input: {
   goal: GoalForContinuationDecision | undefined
   continuations: number
-  maxContinuations: number
   budgetLimitContinuationSent: boolean
 }): GoalContinuationDecision {
   if (!input.goal) return { action: "ignore" }

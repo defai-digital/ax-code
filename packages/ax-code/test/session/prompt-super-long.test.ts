@@ -158,6 +158,7 @@ describe("enforceSuperLongDeadline", () => {
     const publishError = vi.spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
     try {
       const expiryMs = 72 * 60 * 60 * 1000
+      touchRun.mockResolvedValue({ startedAt: 0, totalSteps: 17 })
       // The user message postdates the deadline: a fresh supervised prompt,
       // not the tail of the long run — the session must not stay bricked.
       const result = await enforceSuperLongDeadline({
@@ -165,10 +166,15 @@ describe("enforceSuperLongDeadline", () => {
         lastUser: userMessage(expiryMs + 60_000),
         autonomous: true,
         config: { enabled: true },
+        stepsSinceLastCheck: 3,
         now: expiryMs + 120_000,
       })
 
-      expect(result).toEqual({ action: "continue", enabled: false })
+      // durableTotalSteps must be surfaced: touchRun already accumulated the
+      // 3-step delta, so the caller has to advance its reported watermark or
+      // every later iteration of the degraded run re-reports the same steps.
+      expect(result).toEqual({ action: "continue", enabled: false, durableTotalSteps: 17 })
+      expect(touchRun).toHaveBeenCalledWith({ sessionID: "ses_test", now: expiryMs + 120_000, stepsDelta: 3 })
       expect(updateMessageWithParts).not.toHaveBeenCalled()
       expect(publishError).not.toHaveBeenCalled()
     } finally {

@@ -14,6 +14,11 @@ describe("parseGoalArguments", () => {
     expect(parseGoalArguments("CLEAR")).toEqual({ action: "clear" })
   })
 
+  test("status is a view alias rather than a goal objective", () => {
+    expect(parseGoalArguments("status")).toEqual({ action: "view" })
+    expect(parseGoalArguments(" Status ")).toEqual({ action: "view" })
+  })
+
   test("a keyword embedded in a longer phrase is treated as an objective", () => {
     expect(parseGoalArguments("pause the deployment")).toEqual({
       action: "create",
@@ -76,10 +81,13 @@ describe("parseGoalArguments", () => {
     })
   })
 
-  test("a budget flag with no objective falls back to view", () => {
-    expect(parseGoalArguments("--budget 500")).toEqual({ action: "view" })
-    expect(parseGoalArguments("--budget=500")).toEqual({ action: "view" })
-    expect(parseGoalArguments("--BUDGET 500")).toEqual({ action: "view" })
+  test("a budget flag with no objective errors instead of silently showing the view", () => {
+    for (const raw of ["--budget 500", "--budget=500", "--BUDGET 500"]) {
+      const decision = parseGoalArguments(raw)
+      expect(decision.action).toBe("error")
+      if (decision.action !== "error") throw new Error("expected error")
+      expect(decision.message).toContain("--budget requires a goal objective")
+    }
   })
 
   test("negative, decimal, and non-numeric budgets error instead of leaking into the objective", () => {

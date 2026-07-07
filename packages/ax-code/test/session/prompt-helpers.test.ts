@@ -151,9 +151,13 @@ describe("session.prompt helpers", () => {
     })
   })
 
-  test("treats --budget N without an objective as a view action", () => {
-    expect(parseGoalArguments("--budget 1000")).toEqual({ action: "view" })
-    expect(parseGoalArguments("--token-budget 500")).toEqual({ action: "view" })
+  test("errors on --budget N without an objective instead of silently viewing", () => {
+    for (const raw of ["--budget 1000", "--token-budget 500"]) {
+      const decision = parseGoalArguments(raw)
+      expect(decision.action).toBe("error")
+      if (decision.action !== "error") throw new Error("expected error")
+      expect(decision.message).toContain("--budget requires a goal objective")
+    }
   })
 
   test("appends shell output chunks until the byte cap", () => {
