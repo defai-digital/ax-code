@@ -96,17 +96,27 @@ Validation:
 
 ### Phase 0.4: Session-Scoped Failure Boundaries
 
-Status: Planned
+Status: Implemented
 
 Scope:
 
 - Ensure a failed session view cannot blank unrelated Desktop sessions.
 - Add focused error boundary coverage around high-risk session panes if missing.
 
+Implemented finding:
+
+- `ChatErrorBoundary` was scoped by `sessionId` in props but did not reset when `sessionId` changed. A render crash in one session could keep the chat pane stuck on the error state after switching sessions.
+- The boundary now resets its error state when the active session changes.
+
 Acceptance:
 
 - One failed session pane shows a recoverable error state.
 - Other tabs and global navigation remain usable.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/components/chat/ChatErrorBoundary.test.tsx`
+- `pnpm --dir desktop/packages/ui type-check`
 
 ## Phase 1: Desktop MCP Context Browser
 
