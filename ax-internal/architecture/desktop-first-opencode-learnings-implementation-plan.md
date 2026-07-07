@@ -147,6 +147,26 @@ Validation:
 - `pnpm --dir packages/sdk/js exec tsc --build --force`
 - `pnpm run check:openapi`
 
+### Phase 1.2: Desktop MCP Resource Browser
+
+Status: Implemented
+
+Scope:
+
+- Add a Desktop MCP resource browser to the selected server settings page.
+- Show resources from the formal MCP resource contract, scoped to the selected server.
+- Support manual refresh, resource preview, copy URI, and copy text for text resources.
+- Keep composer insertion for a later slice to avoid mixing browsing UX with message composition contracts.
+
+Implemented finding:
+
+- After Phase 1.1, Desktop had a stable resource API but no user-facing way to inspect resources. The first UI slice now makes resources visible without invoking an agent tool call.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/components/sections/mcp/McpResourceBrowser.test.ts src/stores/useMcpStore.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
+
 Scope:
 
 - Inventory existing MCP server/resource/template endpoints and SDK coverage.

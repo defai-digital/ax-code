@@ -18,6 +18,7 @@ import {
   parseMcpOAuthCallbackContext,
   parseMcpOAuthCallbackStateKey,
 } from "@/components/sections/mcp/mcpOAuth"
+import { McpResourceBrowser } from "@/components/sections/mcp/McpResourceBrowser"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { API_ENDPOINTS } from "@/lib/http"
 import {
@@ -1630,6 +1631,14 @@ export const McpPage: React.FC = () => {
               </div>
             </div>
           )}
+
+        {!isNewServer && (
+          <McpResourceBrowser
+            serverName={selectedMcpNameKey}
+            directory={currentDirectory ?? null}
+            connected={enabled && isConnected}
+          />
+        )}
 
         {/* Server Identity */}
         <div className="mb-6">
