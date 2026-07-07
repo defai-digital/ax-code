@@ -17,6 +17,7 @@ import {
   type AxEngineModelJobSummary,
   type AxEngineModelsResponse,
 } from "@/lib/ax-code/axEngineModelsApi"
+import { downloadToastTracker } from "@/lib/ax-code/axEngineDownloadToasts"
 import { getCurrentDirectory } from "@/lib/ax-code/providerApi"
 
 const formatBytes = (value?: number) => {
@@ -69,26 +70,37 @@ export const LocalModelsPage: React.FC = () => {
   // Ticks once a second while a download is active so the in-row elapsed timer
   // advances smoothly between the 2s catalog polls.
   const [now, setNow] = React.useState(() => Date.now())
-  // Downloads we've shown a persistent toast for, so we can resolve it to
-  // success/failure once the async job finishes (observed on a later poll).
-  const announcedRef = React.useRef<Map<string, { name: string }>>(new Map())
+  const mountedRef = React.useRef(true)
+  // The fetch retries internally for up to ~18s while the CLI restarts; without
+  // this guard the 2s poll stacks concurrent requests and an older response can
+  // resolve after a newer one, clobbering fresher job state.
+  const inFlightRef = React.useRef(false)
 
   const load = React.useCallback(async () => {
-    setError(null)
+    if (inFlightRef.current) return
+    inFlightRef.current = true
     try {
       const next = await fetchAxEngineModels(directory)
+      if (!mountedRef.current) return
+      setError(null)
       setData(next)
     } catch (err) {
+      if (!mountedRef.current) return
       const message = err instanceof Error ? err.message : "Failed to load local models"
       setError(message)
     } finally {
-      setLoading(false)
+      inFlightRef.current = false
+      if (mountedRef.current) setLoading(false)
     }
   }, [directory])
 
   React.useEffect(() => {
+    mountedRef.current = true
     setLoading(true)
     void load()
+    return () => {
+      mountedRef.current = false
+    }
   }, [load])
 
   const hasActiveJob = data?.jobs.some((job) => job.status === "queued" || job.status === "running") ?? false
@@ -105,46 +117,39 @@ export const LocalModelsPage: React.FC = () => {
     return () => window.clearInterval(timer)
   }, [hasActiveJob])
 
-  // Resolve the persistent "Downloading…" toast once its job reaches a terminal
-  // state. The job finishes server-side, so we learn the outcome on a poll.
+  // Resolve the persistent "Downloading…" toast once its job reaches a
+  // terminal state. The tracker lives at module level (and polls on its own
+  // while jobs are pending), so navigating away from this page cannot orphan a
+  // toast; reconciling here as well just applies fresh poll data sooner.
   React.useEffect(() => {
     if (!data) return
-    const announced = announcedRef.current
-    for (const [jobId, info] of announced) {
-      const job = data.jobs.find((entry) => entry.id === jobId)
-      if (!job) continue
-      if (job.status === "complete") {
-        toast.success(`${info.name} downloaded`, {
-          id: `axe-dl-${jobId}`,
-          description: "Ready to start.",
-        })
-        announced.delete(jobId)
-      } else if (job.status === "failed") {
-        toast.error(`${info.name} download failed`, {
-          id: `axe-dl-${jobId}`,
-          description: job.error,
-        })
-        announced.delete(jobId)
-      } else if (job.status === "cancelled") {
-        toast.dismiss(`axe-dl-${jobId}`)
-        announced.delete(jobId)
-      }
-    }
+    downloadToastTracker.reconcile(data.jobs)
   }, [data])
 
   const handleDownload = async (model: AxEngineModelCatalogEntry) => {
     setBusyKey(model.id)
     try {
       const job = await startAxEngineModelDownload(model.id, directory)
-      announcedRef.current.set(job.id, { name: model.name })
-      toast.loading(`Downloading ${model.name}…`, {
-        id: `axe-dl-${job.id}`,
-        description: "Large models can take several minutes — you can keep working while it downloads.",
-        duration: Infinity,
-      })
+      downloadToastTracker.announce(job, model.name, directory)
       await load()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start download")
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const handleCancel = async (job: AxEngineModelJobSummary) => {
+    setBusyKey(job.id)
+    try {
+      const result = await cancelAxEngineModelDownload(job.id, directory)
+      // The job can finish between the last poll and the click — the server
+      // then reports the already-terminal state instead of cancelling.
+      if (result?.status === "complete") toast.success("Download had already finished")
+      else toast.success("Download cancelled")
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Model action failed")
     } finally {
       setBusyKey(null)
     }
@@ -304,7 +309,7 @@ export const LocalModelsPage: React.FC = () => {
                     onDownload={() => void handleDownload(model)}
                     onCancel={() => {
                       if (!job) return
-                      void runAction(job.id, () => cancelAxEngineModelDownload(job.id, directory), "Download cancelled")
+                      void handleCancel(job)
                     }}
                     onDelete={() => {
                       const ok = window.confirm(`Delete local copy of ${model.name}?`)
