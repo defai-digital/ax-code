@@ -47,7 +47,12 @@ import { executeSubtask } from "./prompt-subtask"
 import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
-import { isEmptyModelTurn, isTruncatedModelTurn, modelTurnFinished } from "./prompt-autonomous-decisions"
+import {
+  emptyModelTurnIncompleteMessage,
+  isEmptyModelTurn,
+  isTruncatedModelTurn,
+  modelTurnFinished,
+} from "./prompt-autonomous-decisions"
 import { toErrorMessage } from "../util/error-message"
 import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
@@ -614,6 +619,29 @@ export namespace SessionPrompt {
       })
       if (!emptyModelTurn) emptyModelTurnRetries = 0
       if (!truncatedModelTurn) truncatedModelTurnRetries = 0
+
+      // A provider turn that returns finish="other" with zero tokens is a
+      // failed response, not a completed one. The autonomous branch below has
+      // its own recover/stop handling; in supervised mode, stop with an
+      // explicit failure instead of letting the next iteration treat the
+      // empty turn as a clean assistant exit and mark the session completed.
+      if (!effectivelyAutonomous && emptyModelTurn && !processor.message.error && !abort.aborted) {
+        const message = emptyModelTurnIncompleteMessage(describeStreamErrorCause(processor.streamError))
+        log.warn("empty model turn in supervised mode", {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "EMPTY_MODEL_TURN",
+          sessionID,
+        })
+        await publishPromptFailure({
+          sessionID,
+          assistant: processor.message,
+          message,
+        })
+        reason = "stalled"
+        break
+      }
+
       let completionGateAllowedComplete = false
 
       if (modelFinished && !processor.message.error) {
@@ -814,6 +842,13 @@ export namespace SessionPrompt {
       // Without autonomy, active goals persist for the next user-driven turn.
       if (effectivelyAutonomous && modelFinished && !processor.message.error) {
         const goal = updatedGoal ?? activeGoal
+        // A budget-limited goal whose wrap-up turn ended with a gate-approved,
+        // todo-free completion is a successful stop — report "completed"
+        // instead of converting it into the budget-stall error below.
+        if (goal?.status === "budget_limited" && goalBudgetLimitContinuationSent && completionGateAllowedComplete) {
+          reason = "completed"
+          break
+        }
         const goalTransition = handlePromptLoopGoalContinuation({
           sessionID,
           goal,

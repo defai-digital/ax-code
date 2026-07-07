@@ -151,6 +151,11 @@ export namespace SessionProcessor {
     }
     const recentToolRing: RingEntry[] = []
     const doomLoopWarnings: Record<string, string> = {}
+    // Per-turn count of autonomous doom-loop detections per tool. The first
+    // detection warns; a repeat within the same turn means the model saw the
+    // warning in a tool result and re-entered the cycle anyway, so it
+    // escalates to the interactive doom_loop permission.
+    const doomLoopDetections = new Map<string, number>()
     // Window large enough to evaluate the longest cycle length plus headroom.
     const recentToolRingLimit = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
     const finishTrackedToolCall = (input: {
@@ -525,14 +530,41 @@ export namespace SessionProcessor {
                           ? "Doom-loop detection saw this tool call repeat with the same input. The tool was still executed so the conversation history stays consistent. On the next step, change strategy instead of repeating the same call."
                           : `Doom-loop detection saw this tool call form part of a repeating ${cycleLen}-step cycle. The tool was still executed so the conversation history stays consistent. On the next step, break the cycle and change strategy instead of repeating the same sequence of calls.`
                       if (autonomous) {
-                        // In autonomous mode, skip Permission.ask() (which
-                        // would auto-approve and waste the detection). Clear
-                        // the ring buffer so the tool call proceeds this time
-                        // but the detector rearms for the next batch. The
-                        // model sees the tool result plus a reminder in its
-                        // history, which should prompt a strategy change.
-                        // Step limits bound total damage if the model keeps
-                        // repeating.
+                        // First detection: warn only. The model sees the tool
+                        // result plus a reminder in its history, which should
+                        // prompt a strategy change.
+                        // Repeat detection for the same tool within this turn:
+                        // the model ignored the warning and re-entered the
+                        // cycle, so warning again would just spin unattended.
+                        // Escalate to the same interactive doom_loop
+                        // permission that supervised mode uses — a human
+                        // decides whether the repetition is intentional.
+                        // (An explicit user allow rule for doom_loop still
+                        // skips the prompt; that is a deliberate opt-out.)
+                        const priorDetections = doomLoopDetections.get(value.toolName) ?? 0
+                        doomLoopDetections.set(value.toolName, priorDetections + 1)
+                        if (priorDetections >= 1) {
+                          log.warn("autonomous doom_loop repeated after warning, escalating to permission ask", {
+                            tool: value.toolName,
+                            sessionID: input.sessionID,
+                            detections: priorDetections + 1,
+                          })
+                          const agent = await Agent.get(input.assistantMessage.agent)
+                          await Permission.ask(
+                            {
+                              permission: "doom_loop",
+                              patterns: [value.toolName],
+                              sessionID: input.assistantMessage.sessionID,
+                              metadata: {
+                                tool: value.toolName,
+                                input: storedInput,
+                              },
+                              always: [value.toolName],
+                              ruleset: agent?.permission ?? [],
+                            },
+                            { signal: input.abort },
+                          )
+                        }
                         // Filter rather than clear: clearing the whole
                         // ring rearms detection for ALL tools, widening
                         // the next-detection window for unrelated tools

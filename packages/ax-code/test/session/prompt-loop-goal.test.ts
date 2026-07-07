@@ -110,4 +110,33 @@ describe("prompt loop goal continuation", () => {
     expect(result.text).toContain("finish refactor")
     expect(result.text).toContain("continuation 4")
   })
+
+  test("publishes an error and stops after the budget wrap-up turn has been sent", () => {
+    const published: { message: string }[] = []
+
+    const result = handlePromptLoopGoalContinuation(
+      {
+        sessionID: SessionID.descending(),
+        goal: {
+          objective: "wrap up refactor",
+          status: "budget_limited",
+          tokenBudget: 100,
+          tokensUsed: 120,
+          timeUsedSeconds: 9,
+        },
+        continuations: 2,
+        maxContinuations: 3,
+        budgetLimitContinuationSent: true,
+      },
+      {
+        publishError(input) {
+          published.push({ message: input.message })
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "stop", reason: "stalled", budgetLimitContinuationSent: true })
+    expect(published).toHaveLength(1)
+    expect(published[0]?.message).toContain("token budget")
+  })
 })

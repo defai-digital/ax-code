@@ -292,15 +292,7 @@ describe("autonomous continuation decisions", () => {
     })
   })
 
-  test("ignores missing goals and already-sent budget wrap-ups", () => {
-    const goal = {
-      objective: "finish refactor",
-      status: "budget_limited",
-      tokenBudget: 100,
-      tokensUsed: 120,
-      timeUsedSeconds: 9,
-    }
-
+  test("ignores missing goals", () => {
     expect(
       goalContinuationDecision({
         goal: undefined,
@@ -309,14 +301,45 @@ describe("autonomous continuation decisions", () => {
         budgetLimitContinuationSent: false,
       }),
     ).toEqual({ action: "ignore" })
-    expect(
-      goalContinuationDecision({
-        goal,
-        continuations: 0,
-        maxContinuations: 3,
-        budgetLimitContinuationSent: true,
-      }),
-    ).toEqual({ action: "ignore" })
+  })
+
+  test("stops explicitly once the budget wrap-up turn has been sent", () => {
+    const decision = goalContinuationDecision({
+      goal: {
+        objective: "finish refactor",
+        status: "budget_limited",
+        tokenBudget: 100,
+        tokensUsed: 120,
+        timeUsedSeconds: 9,
+      },
+      continuations: 0,
+      maxContinuations: 3,
+      budgetLimitContinuationSent: true,
+    })
+
+    expect(decision).toMatchObject({ action: "stop_budget_limit", reason: "stalled" })
+    if (decision.action !== "stop_budget_limit") throw new Error("expected stop_budget_limit")
+    expect(decision.message).toContain('Goal "finish refactor" reached its token budget')
+    expect(decision.message).toContain("120 of 100 tokens used")
+    expect(decision.message).toContain("wrap-up turn has already run")
+  })
+
+  test("budget stop works without a recorded token budget", () => {
+    const decision = goalContinuationDecision({
+      goal: {
+        objective: "finish refactor",
+        status: "budget_limited",
+        tokensUsed: 120,
+        timeUsedSeconds: 9,
+      },
+      continuations: 0,
+      maxContinuations: 3,
+      budgetLimitContinuationSent: true,
+    })
+
+    expect(decision).toMatchObject({ action: "stop_budget_limit" })
+    if (decision.action !== "stop_budget_limit") throw new Error("expected stop_budget_limit")
+    expect(decision.message).not.toContain("undefined")
   })
 
   test("issues the budget wrap-up even when continuations has exceeded maxContinuations", () => {

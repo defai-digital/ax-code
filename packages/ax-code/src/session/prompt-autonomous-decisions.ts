@@ -4,7 +4,7 @@ const EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE =
   `Autonomous mode received an empty model turn: the provider returned finish=other with zero input, ` +
   `output, and reasoning tokens. The session is stopped, but the work should not be treated as complete.`
 
-function emptyModelTurnIncompleteMessage(cause: string | undefined): string {
+export function emptyModelTurnIncompleteMessage(cause: string | undefined): string {
   const trimmed = cause?.trim()
   if (!trimmed) return EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE
   return `${EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE} Underlying provider error: ${trimmed}`
@@ -367,6 +367,24 @@ export function goalContinuationDecision(input: {
       action: "continue_active",
       objective: input.goal.objective,
       continuation: normalizedDecisionCount(input.continuations) + 1,
+    }
+  }
+
+  // After the single wrap-up turn has run, a goal still sitting at
+  // budget_limited must stop the loop explicitly. Previously this fell
+  // through to "ignore", leaving termination to unrelated completion paths —
+  // a wrap-up turn that kept tool-calling could keep the loop running with
+  // no goal driver and no budget stop ever surfacing to the user.
+  if (input.goal.status === "budget_limited" && input.budgetLimitContinuationSent) {
+    const budget = input.goal.tokenBudget
+    return {
+      action: "stop_budget_limit",
+      reason: "stalled",
+      message:
+        `Goal "${input.goal.objective}" reached its token budget` +
+        (budget !== undefined ? ` (${input.goal.tokensUsed} of ${budget} tokens used)` : "") +
+        `. The wrap-up turn has already run, so the session is stopped. ` +
+        `Review the wrap-up summary, then resume with a new prompt or raise the budget and reactivate the goal.`,
     }
   }
 
