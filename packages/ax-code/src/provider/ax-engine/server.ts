@@ -59,6 +59,8 @@ export type AxEngineServerOptions = {
   speculationProfile?: string
   mtpMode?: string
   signal?: AbortSignal
+  /** Override for the readiness wait (default 240s); primarily a test seam. */
+  readyTimeoutMs?: number
 }
 
 // The ax-engine server sizes its context window as `--total-blocks` *
@@ -125,6 +127,56 @@ function pidLive(pid: number) {
   }
 }
 
+// `kill(pid, 0)` only proves *some* process owns the pid — after a reboot or
+// pid recycling it can be an unrelated process. Before trusting (or, worse,
+// killing) a pid recorded in server.json, check that its command line still
+// looks like the ax-engine server it was recorded as.
+async function pidIsAxEngineServer(pid: number, binaryPath?: string): Promise<boolean> {
+  const result = await Process.text(["ps", "-o", "command=", "-p", String(pid)], { timeout: 3000, nothrow: true })
+  if (result.code !== 0) return false
+  const command = result.text.trim()
+  if (!command) return false
+  return command.includes("ax-engine") || (!!binaryPath && command.includes(binaryPath))
+}
+
+async function serverProcessAlive(state: Pick<AxEngineServerState, "pid" | "binaryPath">): Promise<boolean> {
+  return pidLive(state.pid) && (await pidIsAxEngineServer(state.pid, state.binaryPath))
+}
+
+const SERVER_EXIT_GRACE_MS = 5_000
+
+async function waitForPidExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!pidLive(pid)) return true
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  return !pidLive(pid)
+}
+
+// SIGTERM the recorded server and wait for it to actually exit, escalating to
+// SIGKILL after a grace period. Waiting matters: respawning while the old
+// process is still dying leaves two multi-GB model servers transiently
+// resident (an OOM risk on exactly the machines local inference targets) and
+// lets the dying process keep holding the preferred port. Never signals a pid
+// whose command line no longer looks like ax-engine, so a recycled pid is
+// never killed.
+async function terminateServerProcess(state: Pick<AxEngineServerState, "pid" | "binaryPath">): Promise<void> {
+  if (!(await serverProcessAlive(state))) return
+  try {
+    process.kill(state.pid, "SIGTERM")
+  } catch {
+    return
+  }
+  if (await waitForPidExit(state.pid, SERVER_EXIT_GRACE_MS)) return
+  try {
+    process.kill(state.pid, "SIGKILL")
+  } catch {
+    return
+  }
+  await waitForPidExit(state.pid, 2_000)
+}
+
 type WaitForReadyResult =
   | {
       ready: true
@@ -137,8 +189,12 @@ type WaitForReadyResult =
 type SpawnedServerProcess = Pick<ReturnType<typeof Process.spawn>, "pid" | "exitCode" | "signalCode">
 
 export async function isServerReady(baseURL: string, signal?: AbortSignal) {
+  // Every probe gets its own 2s timeout even when a caller signal is provided;
+  // otherwise a wedged accept loop can hang a single fetch indefinitely —
+  // waitForReady's deadline is only checked between polls.
+  const probeSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(2000)]) : AbortSignal.timeout(2000)
   return fetch(`${baseURL.replace(/\/+$/, "")}/models`, {
-    signal: signal ?? AbortSignal.timeout(2000),
+    signal: probeSignal,
     headers: { authorization: `Bearer ${AX_ENGINE_API_KEY}` },
   })
     .then((res) => {
@@ -297,7 +353,7 @@ export async function getServerStatus(): Promise<AxEngineServerRuntimeStatus> {
   }
   const state = stateResult.state
   if (!state) return { running: false, ready: false, blockers: [] }
-  const running = pidLive(state.pid)
+  const running = await serverProcessAlive(state)
   if (!running) {
     await removeServerState()
     return { running: false, ready: false, blockers: [] }
@@ -372,42 +428,46 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
   const speculationMatches = existing?.speculationProfile === speculationProfile
   const mtpModeMatches = existing?.mtpMode === mtpMode
-  if (existing && pidLive(existing.pid) && (await isServerReady(existing.baseURL, options.signal))) {
-    if (contextMatches && speculationMatches && mtpModeMatches) {
-      if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
-      try {
-        await loadServerModel({
-          baseURL: existing.baseURL,
-          apiModelID: options.apiModelID,
-          modelPath: options.modelPath,
-          signal: options.signal,
-        })
-        const nextState: AxEngineServerState = {
-          ...existing,
-          modelID: options.modelID,
-          apiModelID: options.apiModelID,
-          modelPath: options.modelPath,
-          modelRevision: options.modelRevision,
-          speculationProfile,
-          mtpMode,
-          lastHealthAt: Date.now(),
-        }
-        await writeServerState(nextState)
-        return nextState
-      } catch {
+  if (existing) {
+    const alive = await serverProcessAlive(existing)
+    if (alive && (await isServerReady(existing.baseURL, options.signal))) {
+      if (contextMatches && speculationMatches && mtpModeMatches) {
+        if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
         try {
-          process.kill(existing.pid, "SIGTERM")
+          await loadServerModel({
+            baseURL: existing.baseURL,
+            apiModelID: options.apiModelID,
+            modelPath: options.modelPath,
+            signal: options.signal,
+          })
+          const nextState: AxEngineServerState = {
+            ...existing,
+            modelID: options.modelID,
+            apiModelID: options.apiModelID,
+            modelPath: options.modelPath,
+            modelRevision: options.modelRevision,
+            speculationProfile,
+            mtpMode,
+            lastHealthAt: Date.now(),
+          }
+          await writeServerState(nextState)
+          return nextState
         } catch {
-          // Already gone.
+          await terminateServerProcess(existing)
+          await removeServerState()
         }
+      } else {
+        await terminateServerProcess(existing)
         await removeServerState()
       }
     } else {
-      try {
-        process.kill(existing.pid, "SIGTERM")
-      } catch {
-        // Already gone.
-      }
+      // Live-but-not-ready: the server lock is ours, so no live caller is
+      // waiting on this server — it is wedged, orphaned mid-startup by a
+      // caller that died, or a recycled pid. Clear it out before starting
+      // fresh so two model servers never run at once (previously this path
+      // spawned a duplicate over the old process). terminateServerProcess
+      // no-ops for dead or foreign pids.
+      await terminateServerProcess(existing)
       await removeServerState()
     }
   }
@@ -445,20 +505,11 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   }
   proc.unref?.()
 
-  const ready = await waitForReady(resolvedBaseURL, { signal: options.signal, process: proc })
-  if (!ready.ready) {
-    await Process.killProcessTree(proc).catch(() => undefined)
-    if (ready.reason === "aborted") options.signal?.throwIfAborted()
-    const logExcerpt = await readServerLogExcerpt(serverLogStart)
-    const code =
-      ready.reason === "process-exited" ? AX_ENGINE_ERROR.ServerStartFailed : AX_ENGINE_ERROR.ServerHealthFailed
-    const message =
-      ready.reason === "process-exited"
-        ? "ax-engine server exited before becoming ready"
-        : "ax-engine server did not become ready"
-    throw new Error(formatServerStartupFailure({ code, origin, message, logExcerpt }))
-  }
-
+  // Record the spawned (detached, unref'd) server before the readiness wait —
+  // a cold model load can take minutes, and if this process dies during it the
+  // engine would otherwise become an invisible multi-GB orphan that nothing
+  // can discover or stop. With the record in place, the next ensureServer or
+  // stopServer finds it via server.json and reclaims it.
   const state: AxEngineServerState = {
     pid: proc.pid!,
     port,
@@ -472,25 +523,46 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     speculationProfile,
     mtpMode,
     startedAt: Date.now(),
-    lastHealthAt: Date.now(),
   }
   await writeServerState(state)
-  return state
+
+  const ready = await waitForReady(resolvedBaseURL, {
+    signal: options.signal,
+    process: proc,
+    timeoutMs: options.readyTimeoutMs,
+  })
+  if (!ready.ready) {
+    await Process.killProcessTree(proc).catch(() => undefined)
+    await removeServerState()
+    if (ready.reason === "aborted") options.signal?.throwIfAborted()
+    const logExcerpt = await readServerLogExcerpt(serverLogStart)
+    const code =
+      ready.reason === "process-exited" ? AX_ENGINE_ERROR.ServerStartFailed : AX_ENGINE_ERROR.ServerHealthFailed
+    const message =
+      ready.reason === "process-exited"
+        ? "ax-engine server exited before becoming ready"
+        : "ax-engine server did not become ready"
+    throw new Error(formatServerStartupFailure({ code, origin, message, logExcerpt }))
+  }
+
+  const readyState: AxEngineServerState = { ...state, lastHealthAt: Date.now() }
+  await writeServerState(readyState)
+  return readyState
 }
 
 export async function stopServer() {
-  using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 10_000, staleMs: 60_000 })
+  // staleMs must tolerate the longest legitimate serverLock hold: FileLock
+  // steals by lockfile age using the *acquirer's* staleMs, and a cold start
+  // legitimately holds this lock for up to ~240s of readiness waiting. The
+  // previous 60s here let a concurrent stop steal the lock and delete
+  // server.json out from under a still-loading start. Dead holders are
+  // reclaimed immediately via FileLock's pid-liveness check regardless.
+  using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 10_000, staleMs: 5 * 60_000 })
   const stateResult = await readServerState()
   if (stateResult.error) {
     throw new Error(`${AX_ENGINE_ERROR.ServerHealthFailed}: failed to read server state`)
   }
   const state = stateResult.state
-  if (state && pidLive(state.pid)) {
-    try {
-      process.kill(state.pid, "SIGTERM")
-    } catch {
-      // Already gone.
-    }
-  }
+  if (state) await terminateServerProcess(state)
   await removeServerState()
 }

@@ -22,6 +22,18 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "ax-engine-model-cache" })
 
+// Longest a model download is allowed to run.
+const DOWNLOAD_TIMEOUT_MS = 6 * 60 * 60 * 1000
+
+// FileLock steals by lockfile age using the *acquirer's* staleMs — a live
+// holder's lock is taken once it is older than whatever the next caller
+// passes. Every prepareLock acquirer must therefore tolerate the longest
+// legitimate hold (a full model download), or a quick caller (markPrepared,
+// reclaim) would steal the lock from a download in progress and break the
+// serialization it exists for. Dead holders are still reclaimed immediately
+// via FileLock's pid-liveness check regardless of this value.
+const PREPARE_LOCK_STALE_MS = DOWNLOAD_TIMEOUT_MS + 30 * 60 * 1000
+
 // The Hugging Face repo that backs a model+quantization, used to locate the
 // shared snapshot the engine downloaded.
 export function hfRepoFor(modelID: AxEngineModelID, quantization: AxEngineQuantization): string | undefined {
@@ -210,7 +222,7 @@ async function readPrepareState(): Promise<{ state?: AxEnginePrepareState; error
 }
 
 export async function clearPreparedStateForPath(target: string): Promise<boolean> {
-  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 10 * 60_000 })
+  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
   const current = await readPrepareState()
   if (!current.state || current.error) return false
   if (current.state.path !== target && !Filesystem.contains(target, current.state.path)) return false
@@ -327,7 +339,7 @@ export async function markPrepared(input: {
   quantization?: AxEngineQuantization
   revision?: string
 }): Promise<AxEnginePrepareState> {
-  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 10 * 60_000 })
+  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
   if (!(await exists(input.modelPath))) {
     throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path does not exist`)
   }
@@ -395,10 +407,10 @@ export async function downloadModel(input: {
   const cmd = [input.binaryPath, "download", repo, "--json"]
   if (dest) cmd.push("--dest", dest)
 
-  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 60 * 60_000 })
+  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
   await assertDiskSpace({ modelID, quantization, downloadDir: dest ?? HfCache.root() })
   const result = await Process.text(cmd, {
-    timeout: 6 * 60 * 60 * 1000,
+    timeout: DOWNLOAD_TIMEOUT_MS,
     abort: input.signal,
     nothrow: true,
   })
@@ -451,7 +463,7 @@ export async function reclaimManagedCopy(
   // exists in the HF cache — otherwise we would destroy the only copy.
   if (!snapshotPath || !(await HfCache.isCompleteSnapshot(snapshotPath))) return undefined
 
-  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 10 * 60_000 })
+  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
 
   // Repoint prepare.json off the managed dir before deleting it.
   const current = await readPrepareState()

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
+import { spawn } from "child_process"
 import fs from "fs/promises"
 import path from "path"
 
@@ -31,6 +32,8 @@ import {
   ensureServer,
   getDiskStatus,
   getServerStatus,
+  isServerReady,
+  stopServer,
   getModelStatus,
   isPlausiblySupportedHost,
   markPrepared,
@@ -498,6 +501,203 @@ describe("ax-engine server lifecycle", () => {
       mutablePaths.serverLock = originalServerLock
       mutablePaths.serverLog = originalServerLog
     }
+  })
+
+  type ServerPaths = typeof AxEnginePaths & {
+    state: string
+    log: string
+    serverState: string
+    serverLock: string
+    serverLog: string
+  }
+
+  async function withServerPaths<T>(dir: string, fn: () => Promise<T>): Promise<T> {
+    const mutable = AxEnginePaths as ServerPaths
+    const original = {
+      state: mutable.state,
+      log: mutable.log,
+      serverState: mutable.serverState,
+      serverLock: mutable.serverLock,
+      serverLog: mutable.serverLog,
+    }
+    mutable.state = path.join(dir, "state")
+    mutable.log = path.join(dir, "log")
+    mutable.serverState = path.join(mutable.state, "server.json")
+    mutable.serverLock = path.join(mutable.state, "server")
+    mutable.serverLog = path.join(mutable.log, "server.log")
+    await fs.mkdir(mutable.state, { recursive: true })
+    await fs.mkdir(mutable.log, { recursive: true })
+    try {
+      return await fn()
+    } finally {
+      Object.assign(mutable, original)
+    }
+  }
+
+  function fakeServerState(overrides: Record<string, unknown> = {}) {
+    return {
+      pid: 0,
+      port: 38181,
+      baseURL: "http://127.0.0.1:38181/v1",
+      modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
+      apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
+      modelPath: "/models/qwen",
+      binaryPath: "/opt/homebrew/bin/ax-engine",
+      startedAt: Date.now(),
+      ...overrides,
+    }
+  }
+
+  function alive(pid: number) {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  test("getServerStatus does not trust a recycled pid that is no longer ax-engine", async () => {
+    await using tmp = await tmpdir()
+    const decoy = spawn("sleep", ["60"])
+    try {
+      await withServerPaths(tmp.path, async () => {
+        await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(fakeServerState({ pid: decoy.pid })))
+
+        const status = await getServerStatus()
+        expect(status.running).toBe(false)
+        await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+      })
+      // The unrelated process that recycled the pid must never be signalled.
+      expect(alive(decoy.pid!)).toBe(true)
+    } finally {
+      decoy.kill("SIGKILL")
+    }
+  })
+
+  test("stopServer never signals a pid whose command is not ax-engine", async () => {
+    await using tmp = await tmpdir()
+    const decoy = spawn("sleep", ["60"])
+    try {
+      await withServerPaths(tmp.path, async () => {
+        await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(fakeServerState({ pid: decoy.pid })))
+
+        await stopServer()
+        await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+      })
+      expect(alive(decoy.pid!)).toBe(true)
+    } finally {
+      decoy.kill("SIGKILL")
+    }
+  })
+
+  test("stopServer escalates to SIGKILL when the server ignores SIGTERM", async () => {
+    await using tmp = await tmpdir()
+    const binary = path.join(tmp.path, "ax-engine")
+    await fs.writeFile(binary, ["#!/bin/sh", "trap '' TERM", "while :; do sleep 1; done", ""].join("\n"))
+    await fs.chmod(binary, 0o755)
+    const server = spawn(binary, ["serve", "/models/qwen"])
+    try {
+      await withServerPaths(tmp.path, async () => {
+        await fs.writeFile(
+          AxEnginePaths.serverState,
+          JSON.stringify(fakeServerState({ pid: server.pid, binaryPath: binary })),
+        )
+
+        await stopServer()
+        expect(alive(server.pid!)).toBe(false)
+        await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+      })
+    } finally {
+      if (server.pid && alive(server.pid)) server.kill("SIGKILL")
+    }
+  })
+
+  test("ensureServer records the spawned server before readiness and cleans up on failure", async () => {
+    await using tmp = await tmpdir()
+    const binary = path.join(tmp.path, "ax-engine")
+    // Stays alive but never serves: the readiness wait must fail while the
+    // provisional server.json record exists.
+    await fs.writeFile(binary, ["#!/bin/sh", "sleep 30", ""].join("\n"))
+    await fs.chmod(binary, 0o755)
+
+    await withServerPaths(tmp.path, async () => {
+      const pending = ensureServer({
+        binaryPath: binary,
+        modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
+        apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
+        modelPath: "/models/qwen",
+        preferredPort: 38191,
+        readyTimeoutMs: 1500,
+      })
+
+      let recordedPid = 0
+      await vi.waitFor(async () => {
+        const state = JSON.parse(await fs.readFile(AxEnginePaths.serverState, "utf8"))
+        expect(state.pid).toBeGreaterThan(0)
+        recordedPid = state.pid
+      })
+      expect(alive(recordedPid)).toBe(true)
+
+      await expect(pending).rejects.toThrow("did not become ready")
+      // Failure cleanup: no lingering record, no lingering process.
+      await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+      await vi.waitFor(() => expect(alive(recordedPid)).toBe(false))
+    })
+  })
+
+  test("ensureServer terminates a live-but-not-ready recorded server instead of spawning a duplicate", async () => {
+    await using tmp = await tmpdir()
+    const oldBinary = path.join(tmp.path, "ax-engine")
+    await fs.writeFile(oldBinary, ["#!/bin/sh", "sleep 60", ""].join("\n"))
+    await fs.chmod(oldBinary, 0o755)
+    const oldServer = spawn(oldBinary, ["serve", "/models/qwen"])
+
+    const newBinary = path.join(tmp.path, "ax-engine-exits")
+    await fs.writeFile(newBinary, ["#!/bin/sh", "exit 7", ""].join("\n"))
+    await fs.chmod(newBinary, 0o755)
+
+    try {
+      await withServerPaths(tmp.path, async () => {
+        await fs.writeFile(
+          AxEnginePaths.serverState,
+          JSON.stringify(
+            fakeServerState({ pid: oldServer.pid, binaryPath: oldBinary, port: 38195, baseURL: "http://127.0.0.1:38195/v1" }),
+          ),
+        )
+
+        await expect(
+          ensureServer({
+            binaryPath: newBinary,
+            modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
+            apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
+            modelPath: "/models/qwen",
+            preferredPort: 38195,
+            readyTimeoutMs: 1500,
+          }),
+        ).rejects.toThrow("exited before becoming ready")
+      })
+      // The wedged/orphaned old server must have been reclaimed, not left
+      // running alongside the replacement.
+      expect(alive(oldServer.pid!)).toBe(false)
+    } finally {
+      if (oldServer.pid && alive(oldServer.pid)) oldServer.kill("SIGKILL")
+    }
+  })
+
+  test("readiness probes time out individually even when a caller signal is provided", async () => {
+    globalThis.fetch = ((_input: unknown, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))
+      })) as unknown as typeof fetch
+
+    const controller = new AbortController()
+    const started = Date.now()
+    // Before the per-probe timeout, a hanging fetch with a caller signal that
+    // never fires would block this call forever.
+    const ready = await isServerReady("http://127.0.0.1:38199/v1", controller.signal)
+    expect(ready).toBe(false)
+    expect(Date.now() - started).toBeLessThan(10_000)
   })
 })
 
