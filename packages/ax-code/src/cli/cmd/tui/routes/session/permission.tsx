@@ -20,11 +20,19 @@ import { SessionDiffRenderer } from "./render-adapter"
 import { Log } from "@/util/log"
 import { normalize as normalizePathValue, diffSummary } from "./format"
 import { Global } from "@/global"
+import { withTimeout } from "@/util/timeout"
 
 const log = Log.create({ service: "tui.permission" })
 
 type PermissionStage = "permission" | "always" | "reject"
 const CONFIRM_KEYS = new Set(["return", "linefeed", "kpenter"])
+
+// The reply request goes through a no-timeout fetch (SDK connections stay
+// open indefinitely for streaming), so a dropped/stalled response never
+// rejects on its own. Without a bound here, `store.submitting` (below) can
+// latch true forever, silently swallowing every further Enter/click on this
+// prompt — the "confirmation gets stuck" failure mode. See #341.
+const PERMISSION_REPLY_TIMEOUT_MS = 20_000
 
 function normalizePath(input?: string) {
   return normalizePathValue(input, Global.Path.home)
@@ -266,14 +274,17 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     // props.request may already be the next queued request.
     const { sessionID, id } = props.request
     void Promise.resolve()
-      .then(run)
+      .then(() =>
+        withTimeout(run(), PERMISSION_REPLY_TIMEOUT_MS, "Permission reply timed out — the server did not respond"),
+      )
       .then(() => {
         removeRequestLocally(sessionID, id)
       })
       .catch((error) => {
-        // Reset the in-flight guard on failure so a transient API/network
-        // error does not permanently wedge the prompt. The prompt stays
-        // mounted on failure, so the user can retry. See #255.
+        // Reset the in-flight guard on failure (including the timeout above)
+        // so a transient API/network error does not permanently wedge the
+        // prompt. The prompt stays mounted on failure, so the user can
+        // retry. See #255, #341.
         setStore("submitting", false)
         log.warn(failureLabel, { error, requestID: props.request.id })
         toast.show({

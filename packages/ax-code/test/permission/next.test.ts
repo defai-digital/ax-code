@@ -828,7 +828,7 @@ test("ask - autonomous network search permissions require ruleset approval", asy
 
 // reply tests
 
-test("reply - once resolves the pending ask", async () => {
+test("reply - once resolves the pending ask and reports it applied", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -845,11 +845,68 @@ test("reply - once resolves the pending ask", async () => {
 
       await waitForPending(1)
 
-      await Permission.reply({
+      const applied = await Permission.reply({
         requestID: PermissionID.make("per_test1"),
         reply: "once",
       })
 
+      expect(applied).toBe(true)
+      await expect(askPromise).resolves.toBeUndefined()
+    },
+  })
+})
+
+test("reply - returns false for a requestID that was never pending", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const applied = await Permission.reply({
+        requestID: PermissionID.ascending(),
+        reply: "once",
+      })
+
+      expect(applied).toBe(false)
+    },
+  })
+})
+
+// Regression for #341: a client-side timeout can unblock the TUI while the
+// original reply is still in flight server-side, letting the user submit a
+// second reply for the same requestID. The first reply to actually run must
+// resolve the ask; the second must report it did nothing (`false`) rather
+// than silently reporting success for a no-op — a caller that surfaces `true`
+// unconditionally would tell the user their second choice took effect when
+// it never reached the (already-resolved) request.
+test("reply - a second reply for an already-resolved requestID reports it did not apply", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const askPromise = Permission.ask({
+        id: PermissionID.make("per_test_dup"),
+        sessionID: SessionID.make("session_test"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      })
+
+      await waitForPending(1)
+
+      const first = await Permission.reply({
+        requestID: PermissionID.make("per_test_dup"),
+        reply: "once",
+      })
+      const second = await Permission.reply({
+        requestID: PermissionID.make("per_test_dup"),
+        reply: "reject",
+      })
+
+      expect(first).toBe(true)
+      expect(second).toBe(false)
+      // The first (applied) reply wins — the ask resolves rather than rejects.
       await expect(askPromise).resolves.toBeUndefined()
     },
   })

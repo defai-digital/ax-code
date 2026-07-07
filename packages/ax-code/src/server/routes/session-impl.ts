@@ -1469,18 +1469,19 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const params = c.req.valid("param")
         await parseCurrentProjectSessionID(c)
-        const pending = await Permission.list()
-        if (!pending.some((request) => request.id === params.permissionID)) {
+        // Check the actual reply outcome, not just pre-call pendingness — see
+        // the sibling /permission/:requestID/reply route for why. See #341.
+        const applied = await Permission.reply({
+          requestID: params.permissionID,
+          reply: c.req.valid("json").response,
+        })
+        if (!applied) {
           return notFound(c, {
             name: "PermissionUnavailableError",
             message: "Permission request is unavailable",
             resource: "permission",
           })
         }
-        await Permission.reply({
-          requestID: params.permissionID,
-          reply: c.req.valid("json").response,
-        })
         return c.json(true)
       },
     ),

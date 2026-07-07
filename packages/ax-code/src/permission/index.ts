@@ -408,11 +408,17 @@ export namespace Permission {
     }
   }
 
-  async function replyPromise(input: z.infer<typeof ReplyInput>) {
+  // Returns whether the reply actually applied — false means the request was
+  // already resolved (e.g. a prior reply from the same client, or a race
+  // between two in-flight replies for the same requestID). Callers must
+  // surface `false` as an error rather than the generic success response;
+  // an unconditional success response on a no-op reply silently tells the
+  // caller their choice took effect when it did not. See #341.
+  async function replyPromise(input: z.infer<typeof ReplyInput>): Promise<boolean> {
     const s = await state()
     const { approved, pending, projectID } = s
     const existing = pending.get(input.requestID)
-    if (!existing) return
+    if (!existing) return false
 
     const publishReply = (entry: PendingEntry, reply: z.infer<typeof ReplyInput>["reply"]) => {
       Bus.publishDetached(Event.Replied, {
@@ -437,18 +443,18 @@ export namespace Permission {
         publishReply(entry, input.reply)
         entry.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
       }
-      return
+      return true
     }
 
     if (input.reply === "once") {
       pending.delete(input.requestID)
       publishReply(existing, input.reply)
       existing.deferred.resolve(undefined)
-      return
+      return true
     }
 
-    await serializeAlwaysReply(s, async () => {
-      if (!pending.delete(input.requestID)) return
+    return serializeAlwaysReply(s, async () => {
+      if (!pending.delete(input.requestID)) return false
 
       const rules = existing.info.always.map((pattern) => ({
         permission: existing.info.permission,
@@ -507,6 +513,7 @@ export namespace Permission {
         }
         item.deferred.resolve(undefined)
       }
+      return true
     })
   }
 

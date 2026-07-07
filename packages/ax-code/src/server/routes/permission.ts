@@ -31,15 +31,19 @@ export const PermissionRoutes = lazy(() =>
       validator("json", z.object({ reply: Permission.Reply, message: z.string().optional() })),
       withPermissionRequestID(async (requestID, c) => {
         const json = c.req.valid("json")
-        const pending = await Permission.list()
-        if (!pending.some((request) => request.id === requestID)) {
+        // Check the actual reply outcome, not just pre-call pendingness — a
+        // concurrent reply for the same requestID (e.g. a client retry after
+        // a timed-out first attempt) can resolve the request in the gap
+        // between a pre-check and the reply call, which would otherwise
+        // report success for a reply that silently did nothing. See #341.
+        const applied = await Permission.reply({ requestID, reply: json.reply, message: json.message })
+        if (!applied) {
           return notFound(c, {
             name: "PermissionUnavailableError",
             message: "Permission request is unavailable",
             resource: "permission",
           })
         }
-        await Permission.reply({ requestID, reply: json.reply, message: json.message })
         return c.json(true)
       }),
     )
