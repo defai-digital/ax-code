@@ -168,7 +168,19 @@ jobs:
           $Version = "${{ steps.version.outputs.version }}"
           $Installer = Join-Path $env:RUNNER_TEMP "install.ps1"
           Invoke-RestMethod -Uri "https://github.com/${{ github.repository }}/releases/download/v$Version/install.ps1" -OutFile $Installer -UseBasicParsing
-          & $Installer -Version $Version -NoModifyPath
+          & $Installer -Version $Version
+          $Resolved = (Get-Command ax-code -ErrorAction Stop).Source
+          Write-Host "Resolved ax-code to $Resolved"
+          $ExpectedCmd = Join-Path $HOME ".ax-code\bin\ax-code.cmd"
+          $ExpectedExe = Join-Path $HOME ".ax-code\bin\ax-code.exe"
+          if (($Resolved -ine $ExpectedCmd) -and ($Resolved -ine $ExpectedExe)) {
+            throw "expected installer-linked ax-code at $ExpectedCmd or $ExpectedExe, got $Resolved"
+          }
+          $Output = (ax-code --version).Trim()
+          Write-Host $Output
+          if ($Output -ne $Version -and $Output -ne "v$Version") {
+            throw "expected installer-linked ax-code --version to be $Version, got $Output"
+          }
           "$HOME\.ax-code\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: ax-code --version

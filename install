@@ -577,6 +577,84 @@ add_to_path() {
     fi
 }
 
+ensure_path_config_file() {
+    local file=""
+
+    for file in $config_files; do
+        if [[ -f $file ]]; then
+            echo "$file"
+            return 0
+        fi
+    done
+
+    for file in $config_files; do
+        case "$file" in
+            "$HOME"/*|"$XDG_CONFIG_HOME"/*)
+                mkdir -p "$(dirname "$file")"
+                touch "$file"
+                echo "$file"
+                return 0
+            ;;
+        esac
+    done
+
+    return 1
+}
+
+link_installed_binary_on_path() {
+    local resolved=""
+    local path_entry=""
+    local link_path=""
+    local existing_target=""
+    local path_entries=()
+
+    resolved=$(command -v ax-code 2>/dev/null || true)
+    if [ "$resolved" = "${INSTALL_DIR}/ax-code" ]; then
+        return 0
+    fi
+
+    IFS=':' read -r -a path_entries <<< "$PATH"
+    for path_entry in "${path_entries[@]}"; do
+        [ -n "$path_entry" ] || continue
+        [ "$path_entry" != "$INSTALL_DIR" ] || continue
+        [ -d "$path_entry" ] || continue
+        [ -w "$path_entry" ] || continue
+
+        case "$path_entry" in
+            "$HOME"/*) ;;
+            *) continue ;;
+        esac
+
+        link_path="$path_entry/ax-code"
+        if [ -e "$link_path" ] || [ -L "$link_path" ]; then
+            existing_target=$(readlink "$link_path" 2>/dev/null || true)
+            if [ "$existing_target" = "${INSTALL_DIR}/ax-code" ]; then
+                return 0
+            fi
+            continue
+        fi
+
+        if ln -s "${INSTALL_DIR}/ax-code" "$link_path" 2>/dev/null; then
+            print_message info "${MUTED}Linked ${NC}ax-code ${MUTED}into current PATH at ${NC}$link_path"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+warn_if_not_on_current_path() {
+    local resolved=""
+
+    resolved=$(command -v ax-code 2>/dev/null || true)
+    if [ -n "$resolved" ]; then
+        return 0
+    fi
+
+    print_message warning "${ORANGE}Warning:${NC} ax-code was installed, but this shell cannot find it yet."
+    print_message warning "Open a new shell, or run: export PATH=${INSTALL_DIR}:\$PATH"
+}
+
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 
 current_shell=$(basename "$SHELL")
@@ -603,13 +681,8 @@ case $current_shell in
 esac
 
 if [[ "$no_modify_path" != "true" ]]; then
-    config_file=""
-    for file in $config_files; do
-        if [[ -f $file ]]; then
-            config_file=$file
-            break
-        fi
-    done
+    link_installed_binary_on_path || true
+    config_file=$(ensure_path_config_file || true)
 
     if [[ -z $config_file ]]; then
         print_message warning "No config file found for $current_shell. You may need to manually add to PATH:"
@@ -646,6 +719,7 @@ if [ -n "${GITHUB_ACTIONS-}" ] && [ "${GITHUB_ACTIONS}" == "true" ]; then
 fi
 
 warn_path_precedence
+warn_if_not_on_current_path
 
 echo -e ""
 echo -e "${MUTED}                    ${NC}             ▄     "

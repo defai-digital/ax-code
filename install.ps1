@@ -315,6 +315,17 @@ function Warn-PathPrecedence {
   }
 }
 
+function Assert-CurrentPathLink {
+  $resolved = Get-Command ax-code -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $resolved -or -not $resolved.Source) {
+    throw "Installed ax-code into $InstallDir, but this PowerShell session cannot resolve ax-code on PATH. Run: `$env:Path = `"$InstallDir;`$env:Path`""
+  }
+
+  if (($resolved.Source -ieq $InstallCmdPath) -or ($resolved.Source -ieq $InstallPath)) {
+    Write-Info "ax-code is available on PATH: $($resolved.Source)"
+  }
+}
+
 if ($Help) {
   Show-Usage
   exit 0
@@ -337,6 +348,8 @@ if ($NoModifyPath) {
   Write-Info "Add this directory to PATH to use ax-code globally: $InstallDir"
 } else {
   Add-ToUserPath
+  Assert-CurrentPathLink
+  Write-Info "Open a new terminal if the parent shell still cannot find ax-code."
 }
 
 Warn-PathPrecedence

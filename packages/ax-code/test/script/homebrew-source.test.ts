@@ -254,7 +254,10 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("- windows")
     expect(text).toContain("brew install defai-digital/ax-code/ax-code")
     expect(text).toContain("Invoke-RestMethod -Uri")
-    expect(text).toContain("& $Installer -Version $Version -NoModifyPath")
+    expect(text).toContain("& $Installer -Version $Version")
+    expect(text).not.toContain("& $Installer -Version $Version -NoModifyPath")
+    expect(text).toContain("Get-Command ax-code -ErrorAction Stop")
+    expect(text).toContain("expected installer-linked ax-code")
     expect(text).toContain("releases/download/v$Version/install.ps1")
     expect(text).toContain("windows-2022")
     expect(text).toContain("windows-11-arm")
@@ -337,5 +340,11 @@ describe("distribution support guardrails", () => {
     expect(buildJob![0]).not.toContain("smoke-runtime: compiled")
     expect(buildJob![0]).not.toContain("find dist -path")
     expect(buildJob![0]).toContain('grep -E "Runtime: .* \\(${{ matrix.smoke-runtime }}\\)"')
+  })
+
+  test("release Unix launcher can use bundled node.exe from Windows zips", async () => {
+    const text = await readFile(axCodeNodeTuiBuildScript, "utf-8")
+    expect(text).toContain('"$dir/../node/bin/node"')
+    expect(text).toContain('"$dir/../node/bin/node.exe"')
   })
 })

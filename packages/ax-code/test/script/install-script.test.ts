@@ -52,6 +52,15 @@ describe("install script", () => {
     expect(text).toContain("export PATH=${INSTALL_DIR}:\\$PATH")
   })
 
+  test("links or writes PATH config for Unix installers", async () => {
+    const text = await readFile(installScript, "utf-8")
+    expect(text).toContain("ensure_path_config_file")
+    expect(text).toContain("link_installed_binary_on_path")
+    expect(text).toContain('ln -s "${INSTALL_DIR}/ax-code" "$link_path"')
+    expect(text).toContain("warn_if_not_on_current_path")
+    expect(text).toContain("Open a new shell, or run: export PATH=${INSTALL_DIR}:\\$PATH")
+  })
+
   test("provides a native Windows PowerShell release installer", async () => {
     const text = await readFile(installPowerShellScript, "utf-8")
     expect(text).toContain("param(")
@@ -80,6 +89,9 @@ describe("install script", () => {
     expect(text).toContain("Downloaded archive did not contain the bundled Node runtime")
     expect(text).toContain("Installed AX Code bundled Node runtime does not support --experimental-ffi")
     expect(text).toContain('[Environment]::SetEnvironmentVariable("Path", $newPath, "User")')
+    expect(text).toContain("Assert-CurrentPathLink")
+    expect(text).toContain("Get-Command ax-code")
+    expect(text).toContain("ax-code is available on PATH")
     expect(text).toContain("Warn-PathPrecedence")
   })
 
