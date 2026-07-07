@@ -1184,6 +1184,7 @@ export const settingsDict = {
   "settings.mcp.page.resources.empty": "No resources reported.",
   "settings.mcp.page.resources.copyUriTitle": "Copy resource URI",
   "settings.mcp.page.resources.copyTextTitle": "Copy resource text",
+  "settings.mcp.page.resources.addToComposerTitle": "Add resource to composer",
   "settings.mcp.page.resources.preview.loading": "Loading preview...",
   "settings.mcp.page.resources.preview.none": "No resource selected.",
   "settings.mcp.page.resources.preview.empty": "No preview content.",
@@ -1299,6 +1300,7 @@ export const settingsDict = {
   "settings.mcp.page.toast.connectionTestFinished": "Connection test finished. Refresh status for details.",
   "settings.mcp.page.toast.resourceUriCopied": "Resource URI copied",
   "settings.mcp.page.toast.resourceTextCopied": "Resource text copied",
+  "settings.mcp.page.toast.resourceAddedToComposer": "Resource added to composer",
   "settings.mcp.page.toast.authorizationFailed": "Authorization failed",
   "settings.mcp.page.toast.authorizationStillInProgress":
     "Authorization is still in progress in your browser. Paste the callback URL or code if needed.",

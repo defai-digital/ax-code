@@ -3,7 +3,7 @@ import type { Session } from "@ax-code/sdk/v2/client"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import type { SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import { useSessionWorktreeStore } from "./session-worktree-store"
-import { useSessionUIStore } from "./session-ui-store"
+import { attachmentToRouteFileInput, useSessionUIStore } from "./session-ui-store"
 
 /**
  * Unit tests for session worktree routing through the authoritative store.
@@ -250,5 +250,40 @@ describe("session-worktree-store worktree routing", () => {
 
     expect(useSessionUIStore.getState().restorePersistedCurrentSession()).toBe(false)
     expect(useSessionUIStore.getState().currentSessionId).toBeNull()
+  })
+})
+
+describe("session-ui-store attachments", () => {
+  test("preserves MCP resource source metadata for prompt file parts", () => {
+    expect(
+      attachmentToRouteFileInput({
+        id: "mcp-resource-1",
+        file: new File([], "readme", { type: "text/markdown" }),
+        dataUrl: "mcp://docs/readme.md",
+        mimeType: "text/markdown",
+        filename: "readme",
+        size: 0,
+        source: "mcp-resource",
+        resource: {
+          clientName: "docs",
+          uri: "mcp://docs/readme.md",
+        },
+      }),
+    ).toMatchObject({
+      type: "file",
+      mime: "text/markdown",
+      url: "mcp://docs/readme.md",
+      filename: "readme",
+      source: {
+        type: "resource",
+        clientName: "docs",
+        uri: "mcp://docs/readme.md",
+        text: {
+          value: "readme",
+          start: 0,
+          end: 6,
+        },
+      },
+    })
   })
 })

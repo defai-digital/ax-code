@@ -117,4 +117,27 @@ describe("input-store attachments", () => {
 
     expect(useInputStore.getState().attachedFiles).toEqual([])
   })
+
+  test("adds MCP resource attachments without reading local files", () => {
+    useInputStore.getState().addMcpResourceAttachment({
+      client: "docs",
+      name: "readme",
+      uri: "mcp://docs/readme.md",
+      mimeType: "text/markdown",
+    })
+
+    expect(pendingReaders).toHaveLength(0)
+    expect(useInputStore.getState().attachedFiles).toMatchObject([
+      {
+        dataUrl: "mcp://docs/readme.md",
+        filename: "readme",
+        mimeType: "text/markdown",
+        source: "mcp-resource",
+        resource: {
+          clientName: "docs",
+          uri: "mcp://docs/readme.md",
+        },
+      },
+    ])
+  })
 })

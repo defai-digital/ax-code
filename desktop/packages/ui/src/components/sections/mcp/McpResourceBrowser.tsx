@@ -7,6 +7,7 @@ import { Icon } from "@/components/icon/Icon"
 import { copyTextToClipboard } from "@/lib/clipboard"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { useInputStore } from "@/sync/input-store"
 import { useMcpStore } from "@/stores/useMcpStore"
 
 const MAX_PREVIEW_CHARS = 12_000
@@ -64,6 +65,7 @@ export const McpResourceBrowser: React.FC<McpResourceBrowserProps> = ({ serverNa
   const resourceError = useMcpStore((state) => state.getResourceErrorForDirectory(directory ?? null))
   const refreshResources = useMcpStore((state) => state.refreshResources)
   const readResource = useMcpStore((state) => state.readResource)
+  const addMcpResourceAttachment = useInputStore((state) => state.addMcpResourceAttachment)
   const [selectedUri, setSelectedUri] = React.useState<string | null>(null)
   const [preview, setPreview] = React.useState<ResourcePreview | null>(null)
   const [previewError, setPreviewError] = React.useState<string | null>(null)
@@ -129,6 +131,14 @@ export const McpResourceBrowser: React.FC<McpResourceBrowserProps> = ({ serverNa
       }
     },
     [t],
+  )
+
+  const handleAddToComposer = React.useCallback(
+    (resource: McpResource) => {
+      addMcpResourceAttachment(resource)
+      toast.success(t("settings.mcp.page.toast.resourceAddedToComposer"))
+    },
+    [addMcpResourceAttachment, t],
   )
 
   return (
@@ -212,6 +222,15 @@ export const McpResourceBrowser: React.FC<McpResourceBrowserProps> = ({ serverNa
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 px-0 text-muted-foreground"
+                        title={t("settings.mcp.page.resources.addToComposerTitle")}
+                        onClick={() => handleAddToComposer(selectedResource)}
+                      >
+                        <Icon name="add" className="h-3.5 w-3.5" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

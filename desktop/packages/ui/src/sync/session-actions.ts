@@ -3,7 +3,7 @@
  * Replaces the action methods from the old useSessionStore.
  */
 
-import type { AxCodeClient, Session, Message, Part } from "@ax-code/sdk/v2/client"
+import type { AxCodeClient, FilePartInput, Session, Message, Part } from "@ax-code/sdk/v2/client"
 import { Binary } from "./binary"
 import { useSessionUIStore } from "./session-ui-store"
 import { useInputStore } from "./input-store"
@@ -618,7 +618,7 @@ export async function optimisticSend(input: {
   providerID: string
   modelID: string
   agent?: string
-  files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
+  files?: Array<Pick<FilePartInput, "type" | "mime" | "url" | "filename" | "source">>
   /** The actual API call — receives the optimistic messageID so the server can use the same ID */
   send: (messageID: string) => Promise<void>
 }): Promise<void> {
@@ -639,6 +639,7 @@ export async function optimisticSend(input: {
         mime: f.mime,
         url: f.url,
         filename: f.filename,
+        ...(f.source ? { source: f.source } : {}),
       } as Part)
     }
   }

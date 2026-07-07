@@ -249,6 +249,7 @@ type FileInputLite = {
   mime: string
   filename?: string
   url: string
+  source?: FilePartInput["source"]
 }
 
 export type DirectorySwitchResult = {
@@ -793,6 +794,7 @@ class AxCodeService {
       mime: normalized.mime,
       filename: normalized.filename,
       url: normalized.url,
+      ...(file.source ? { source: file.source } : {}),
     }
   }
 

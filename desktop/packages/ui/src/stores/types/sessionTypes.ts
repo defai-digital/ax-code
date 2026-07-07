@@ -17,8 +17,12 @@ export interface AttachedFile {
   mimeType: string
   filename: string
   size: number
-  source: "local" | "server"
+  source: "local" | "server" | "mcp-resource"
   serverPath?: string
+  resource?: {
+    clientName: string
+    uri: string
+  }
 }
 
 export type EditPermissionMode = "allow" | "ask" | "deny" | "full"

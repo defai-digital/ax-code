@@ -167,6 +167,25 @@ Validation:
 - `pnpm --dir desktop/packages/ui test -- src/components/sections/mcp/McpResourceBrowser.test.ts src/stores/useMcpStore.test.ts`
 - `pnpm --dir desktop/packages/ui type-check`
 
+### Phase 1.3: MCP Resource Composer References
+
+Status: Implemented
+
+Scope:
+
+- Add selected MCP resources to the Desktop composer as visible attachments.
+- Preserve `source: { type: "resource", clientName, uri }` through Desktop send routing.
+- Let the runtime resolve resource contents through the existing MCP permission/read path.
+
+Implemented finding:
+
+- Desktop attachments previously modeled only local/server files, so MCP resource references would be flattened into normal file URLs and lose the runtime resource source metadata.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/sync/input-store.test.ts src/sync/session-ui-store.test.ts src/components/sections/mcp/McpResourceBrowser.test.ts src/stores/useMcpStore.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
+
 Scope:
 
 - Inventory existing MCP server/resource/template endpoints and SDK coverage.

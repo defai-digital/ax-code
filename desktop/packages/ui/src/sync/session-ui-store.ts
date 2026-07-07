@@ -13,7 +13,7 @@
  */
 
 import { create } from "zustand"
-import type { Session, Part, Message, TextPart } from "@ax-code/sdk/v2/client"
+import type { FilePartInput, Session, Part, Message, TextPart } from "@ax-code/sdk/v2/client"
 import type { AttachedFile, SessionContextUsage, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import type { WorktreeMetadata } from "@/types/worktree"
 import { axCodeClient } from "@/lib/ax-code/client"
@@ -60,6 +60,32 @@ import { getNextUserMessageAfter, getPreviousUserMessageBefore } from "./revert-
 
 export type { AttachedFile }
 
+export type RouteFileInput = Pick<FilePartInput, "type" | "mime" | "url" | "filename" | "source">
+
+export function attachmentToRouteFileInput(attachment: AttachedFile): RouteFileInput {
+  const source =
+    attachment.source === "mcp-resource" && attachment.resource
+      ? {
+          type: "resource" as const,
+          clientName: attachment.resource.clientName,
+          uri: attachment.resource.uri,
+          text: {
+            value: attachment.filename,
+            start: 0,
+            end: attachment.filename.length,
+          },
+        }
+      : undefined
+
+  return {
+    type: "file",
+    mime: attachment.mimeType,
+    url: attachment.dataUrl,
+    filename: attachment.filename,
+    ...(source ? { source } : {}),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Send routing — shell mode, slash commands, or normal prompt
 // ---------------------------------------------------------------------------
@@ -74,11 +100,11 @@ export function routeMessage(params: {
   agentMentionName?: string
   variant?: string
   inputMode?: "normal" | "shell"
-  files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
+  files?: RouteFileInput[]
   additionalParts?: Array<{
     text: string
     synthetic?: boolean
-    files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
+    files?: RouteFileInput[]
   }>
 }): Promise<void> {
   const run = (): Promise<void> => {
@@ -877,12 +903,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
       markPendingUserSendAnimation(created.id)
 
-      const files = attachments?.map((a) => ({
-        type: "file" as const,
-        mime: a.mimeType,
-        url: a.dataUrl,
-        filename: a.filename,
-      }))
+      const files = attachments?.map(attachmentToRouteFileInput)
 
       await routeMessage({
         sessionId: created.id,
@@ -898,12 +919,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         additionalParts: mergedAdditionalParts?.map((p) => ({
           text: p.text,
           synthetic: p.synthetic,
-          files: p.attachments?.map((a: AttachedFile) => ({
-            type: "file" as const,
-            mime: a.mimeType,
-            url: a.dataUrl,
-            filename: a.filename,
-          })),
+          files: p.attachments?.map(attachmentToRouteFileInput),
         })),
       })
       return
@@ -953,12 +969,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     markPendingUserSendAnimation(targetSessionId)
 
-    const files = attachments?.map((a) => ({
-      type: "file" as const,
-      mime: a.mimeType,
-      url: a.dataUrl,
-      filename: a.filename,
-    }))
+    const files = attachments?.map(attachmentToRouteFileInput)
 
     await routeMessage({
       sessionId: targetSessionId,
@@ -974,12 +985,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       additionalParts: additionalParts?.map((p) => ({
         text: p.text,
         synthetic: p.synthetic,
-        files: p.attachments?.map((a) => ({
-          type: "file" as const,
-          mime: a.mimeType,
-          url: a.dataUrl,
-          filename: a.filename,
-        })),
+        files: p.attachments?.map(attachmentToRouteFileInput),
       })),
     })
   },

@@ -63,6 +63,7 @@ export type InputState = {
   clearAttachedFiles: () => void
   /** Add attachments restored from a reverted message (file already on server) */
   addRestoredAttachment: (file: { url: string; mimeType: string; filename: string }) => void
+  addMcpResourceAttachment: (resource: { client: string; name: string; uri: string; mimeType?: string }) => void
 }
 
 export const useInputStore = create<InputState>()((set, get) => ({
@@ -149,6 +150,25 @@ export const useInputStore = create<InputState>()((set, get) => ({
       size: getDataUrlByteSize(url),
       source: "local",
       serverPath: url,
+    }
+    set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
+  },
+
+  addMcpResourceAttachment: (resource) => {
+    const filename = resource.name.trim() || resource.uri.split("/").filter(Boolean).pop() || resource.uri
+    const mimeType = resource.mimeType?.trim() || "text/plain"
+    const attached: AttachedFile = {
+      id: `mcp-resource-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file: new File([], filename, { type: mimeType }),
+      dataUrl: resource.uri,
+      mimeType,
+      filename,
+      size: 0,
+      source: "mcp-resource",
+      resource: {
+        clientName: resource.client,
+        uri: resource.uri,
+      },
     }
     set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
   },
