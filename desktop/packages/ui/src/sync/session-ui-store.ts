@@ -249,6 +249,7 @@ export type SessionUIState = {
   getContextUsage: (contextLimit: number, outputLimit: number) => SessionContextUsage | null
   setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => void
   overrideNewSessionDraftTarget: (options: Record<string, unknown>) => void
+  restorePersistedCurrentSession: () => boolean
   resolvePendingDraftWorktreeTarget: (
     requestId: string,
     directory: string | null,
@@ -323,8 +324,10 @@ const resolveDirectoryKey = (session: Session): string | null => {
 
 const safeStorage = getSafeStorage()
 const DRAFT_TARGET_STORAGE_KEY = "oc.chatInput.lastDraftTarget"
+const ACTIVE_SESSION_TARGET_STORAGE_KEY = "oc.sessionUI.activeSessionTarget"
 
 type PersistedDraftTarget = { projectId: string | null; directory: string | null }
+type PersistedActiveSessionTarget = { sessionId: string; directory: string | null; updatedAt: number }
 
 const readPersistedDraftTarget = (): PersistedDraftTarget | null => {
   try {
@@ -343,6 +346,46 @@ const readPersistedDraftTarget = (): PersistedDraftTarget | null => {
 const persistDraftTarget = (target: PersistedDraftTarget): void => {
   try {
     safeStorage.setItem(DRAFT_TARGET_STORAGE_KEY, JSON.stringify(target))
+  } catch {
+    /* ignored */
+  }
+}
+
+const readPersistedActiveSessionTarget = (): PersistedActiveSessionTarget | null => {
+  try {
+    const raw = safeStorage.getItem(ACTIVE_SESSION_TARGET_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { sessionId?: unknown; directory?: unknown; updatedAt?: unknown }
+    const sessionId = typeof parsed?.sessionId === "string" ? parsed.sessionId.trim() : ""
+    if (!sessionId) return null
+    return {
+      sessionId,
+      directory: normalizePath(typeof parsed?.directory === "string" ? parsed.directory : null),
+      updatedAt: typeof parsed?.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : 0,
+    }
+  } catch {
+    return null
+  }
+}
+
+const persistActiveSessionTarget = (target: { sessionId: string; directory: string | null }): void => {
+  try {
+    safeStorage.setItem(
+      ACTIVE_SESSION_TARGET_STORAGE_KEY,
+      JSON.stringify({
+        sessionId: target.sessionId,
+        directory: normalizePath(target.directory),
+        updatedAt: Date.now(),
+      } satisfies PersistedActiveSessionTarget),
+    )
+  } catch {
+    /* ignored */
+  }
+}
+
+const clearPersistedActiveSessionTarget = (): void => {
+  try {
+    safeStorage.removeItem(ACTIVE_SESSION_TARGET_STORAGE_KEY)
   } catch {
     /* ignored */
   }
@@ -453,8 +496,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     // Mark session viewed in notification store + update active session ref
     if (id) {
+      persistActiveSessionTarget({ sessionId: id, directory: resolvedDir ?? null })
       markSessionViewed(id)
       setActiveSession(resolvedDir ?? "", id)
+    } else {
+      clearPersistedActiveSessionTarget()
     }
   },
 
@@ -658,6 +704,25 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       return { newSessionDraft: nextDraft }
     })
     void activateConfigForDirectory(nextDirectory)
+  },
+
+  restorePersistedCurrentSession: () => {
+    if (get().currentSessionId || get().newSessionDraft?.open) return false
+
+    const target = readPersistedActiveSessionTarget()
+    if (!target) return false
+
+    const globalStore = useGlobalSessionsStore.getState()
+    if (globalStore.hasLoaded && globalStore.status === "ready") {
+      const sessionExists = globalStore.activeSessions.some((session) => session.id === target.sessionId)
+      if (!sessionExists) {
+        clearPersistedActiveSessionTarget()
+        return false
+      }
+    }
+
+    get().setCurrentSession(target.sessionId, target.directory)
+    return true
   },
 
   resolvePendingDraftWorktreeTarget: (requestId, directory, options) =>

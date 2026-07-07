@@ -36,6 +36,7 @@ import { AboutDialog } from "@/components/ui/AboutDialog"
 import { RuntimeAPIProvider } from "@/contexts/RuntimeAPIProvider"
 import { registerRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { useUIStore } from "@/stores/useUIStore"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useGitHubAuthStore } from "@/stores/useGitHubAuthStore"
 import { useFeatureFlagsStore } from "@/stores/useFeatureFlagsStore"
 import type { RuntimeAPIs } from "@/lib/api/types"
@@ -230,6 +231,7 @@ function App({ apis }: AppProps) {
   const loadAgents = useConfigStore((state) => state.loadAgents)
   const error = useSessionUIStore((s) => s.error)
   const clearError = useSessionUIStore((s) => s.clearError)
+  const restorePersistedCurrentSession = useSessionUIStore((s) => s.restorePersistedCurrentSession)
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory)
   const setDirectory = useDirectoryStore((state) => state.setDirectory)
   const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory)
@@ -255,6 +257,9 @@ function App({ apis }: AppProps) {
   const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), [])
   const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible
   const isMcpOAuthCallback = React.useMemo(() => isMcpOAuthCallbackPath(), [])
+  const hasLoadedGlobalSessions = useGlobalSessionsStore((state) => state.hasLoaded)
+  const globalActiveSessionCount = useGlobalSessionsStore((state) => state.activeSessions.length)
+  const restorePersistedSessionAttemptedRef = React.useRef(false)
 
   React.useEffect(() => {
     setStreamPerfEnabled(showMemoryDebug)
@@ -514,6 +519,24 @@ function App({ apis }: AppProps) {
 
     // Session loading is handled by the sync system's bootstrap — no manual loadSessions needed.
   }, [currentDirectory, isSwitchingDirectory, isConnected, isUnsupportedMobile])
+
+  React.useEffect(() => {
+    if (embeddedSessionChat || isUnsupportedMobile || !isConnected || !hasLoadedGlobalSessions) {
+      return
+    }
+    if (restorePersistedSessionAttemptedRef.current) {
+      return
+    }
+    restorePersistedSessionAttemptedRef.current = true
+    restorePersistedCurrentSession()
+  }, [
+    embeddedSessionChat,
+    globalActiveSessionCount,
+    hasLoadedGlobalSessions,
+    isConnected,
+    isUnsupportedMobile,
+    restorePersistedCurrentSession,
+  ])
 
   React.useEffect(() => {
     if (!embeddedSessionChat || typeof window === "undefined") {

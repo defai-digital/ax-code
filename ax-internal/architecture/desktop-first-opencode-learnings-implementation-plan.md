@@ -70,7 +70,7 @@ Validation:
 
 ### Phase 0.3: Durable Desktop Tab Projection
 
-Status: Planned
+Status: Implemented
 
 Scope:
 
@@ -78,10 +78,21 @@ Scope:
 - Preserve tab target, title, project/directory, branch, status, and last active tab across reload.
 - Avoid introducing runtime ownership into Desktop.
 
+Implemented decision:
+
+- A full tab projection is not yet needed for the first durable slice.
+- Desktop now persists the last active chat session target as `{ sessionId, directory, updatedAt }` from `session-ui-store`.
+- App startup restores that target after global sessions have loaded. It validates existence when the snapshot is ready and avoids clearing the target on transient global session load errors.
+
 Acceptance:
 
 - Reload preserves the user's active Desktop session context.
 - Opening a tab cannot accidentally target a different project, server, or worktree.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/sync/session-ui-store.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
 
 ### Phase 0.4: Session-Scoped Failure Boundaries
 

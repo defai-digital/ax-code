@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest"
+import type { Session } from "@ax-code/sdk/v2/client"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import type { SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import { useSessionWorktreeStore } from "./session-worktree-store"
 import { useSessionUIStore } from "./session-ui-store"
@@ -16,7 +18,16 @@ import { useSessionUIStore } from "./session-ui-store"
  */
 
 const resetSessionStores = () => {
+  useSessionUIStore.getState().setCurrentSession(null)
   useSessionWorktreeStore.setState({ attachments: new Map() })
+  useGlobalSessionsStore.setState({
+    activeSessions: [],
+    archivedSessions: [],
+    sessionsByDirectory: new Map(),
+    hasLoaded: false,
+    status: "idle",
+    pendingRemoval: new Map(),
+  })
   useSessionUIStore.setState({
     currentSessionId: null,
     newSessionDraft: { open: false, directoryOverride: null, parentID: null },
@@ -203,5 +214,41 @@ describe("session-worktree-store worktree routing", () => {
     )
 
     expect(useSessionUIStore.getState().error).toBe("Cannot send message without an active session or draft")
+  })
+
+  test("restores the persisted active session target after reload", () => {
+    const session = {
+      id: "ses_restore",
+      title: "Restore me",
+      directory: "/repo/a",
+      time: { created: 1, updated: 2 },
+    } as Session
+
+    useGlobalSessionsStore.setState({
+      activeSessions: [session],
+      archivedSessions: [],
+      hasLoaded: true,
+      status: "ready",
+    })
+
+    useSessionUIStore.getState().setCurrentSession(session.id, "/repo/a")
+    useSessionUIStore.setState({ currentSessionId: null })
+
+    expect(useSessionUIStore.getState().restorePersistedCurrentSession()).toBe(true)
+    expect(useSessionUIStore.getState().currentSessionId).toBe(session.id)
+  })
+
+  test("does not restore a persisted session missing from a ready global snapshot", () => {
+    useSessionUIStore.getState().setCurrentSession("ses_missing", "/repo/missing")
+    useSessionUIStore.setState({ currentSessionId: null })
+    useGlobalSessionsStore.setState({
+      activeSessions: [],
+      archivedSessions: [],
+      hasLoaded: true,
+      status: "ready",
+    })
+
+    expect(useSessionUIStore.getState().restorePersistedCurrentSession()).toBe(false)
+    expect(useSessionUIStore.getState().currentSessionId).toBeNull()
   })
 })
