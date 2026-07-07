@@ -8,7 +8,9 @@
  *
  * Each accessor:
  *   - returns `undefined` if the feature flag is off
- *   - returns `undefined` if the package is not installed (MODULE_NOT_FOUND)
+ *   - returns `undefined` and logs once if the package is not installed
+ *     (MODULE_NOT_FOUND) — the JS fallback is several times slower, so the
+ *     fallback must be visible in logs when diagnosing performance
  *   - returns `undefined` and logs a warning for any other load error
  *   - caches the resolved value (or failure) via `lazy()`
  */
@@ -51,7 +53,9 @@ function loadAddon(pkg: string, enabled: boolean): unknown {
     value = _require(pkg)
   } catch (e: unknown) {
     const code = (e as { code?: string })?.code
-    if (code !== "MODULE_NOT_FOUND" && code !== "ERR_MODULE_NOT_FOUND") {
+    if (code === "MODULE_NOT_FOUND" || code === "ERR_MODULE_NOT_FOUND") {
+      log.info("native addon not installed, using slower JS fallback", { pkg })
+    } else {
       log.warn("failed to load native addon", { pkg, error: formatNativeAddonLoadError(e) })
     }
     value = undefined

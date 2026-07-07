@@ -39,13 +39,20 @@ export type StreamPerfSnapshot = {
   entries: StreamPerfEntry[]
 }
 
+// Cached: streamPerfEnabled is called on every streaming render, and a
+// synchronous localStorage read per call is itself measurable overhead.
+// Toggle at runtime via setStreamPerfEnabled, which refreshes the cache.
+let streamPerfEnabledCache: boolean | null = null
+
 export const streamPerfEnabled = (): boolean => {
+  if (streamPerfEnabledCache !== null) return streamPerfEnabledCache
   if (typeof window === "undefined") return false
   try {
-    return window.localStorage.getItem(STREAM_PERF_STORAGE_KEY) === "1"
+    streamPerfEnabledCache = window.localStorage.getItem(STREAM_PERF_STORAGE_KEY) === "1"
   } catch {
-    return false
+    streamPerfEnabledCache = false
   }
+  return streamPerfEnabledCache
 }
 
 const nowMs = (): number => {
@@ -108,6 +115,7 @@ export const setStreamPerfEnabled = (enabled: boolean): void => {
   try {
     if (enabled) {
       window.localStorage.setItem(STREAM_PERF_STORAGE_KEY, "1")
+      streamPerfEnabledCache = true
       window.__openchamberStreamPerfState = {
         counters: new Map<string, PerfCounter>(),
         startedAt: Date.now(),
@@ -117,6 +125,7 @@ export const setStreamPerfEnabled = (enabled: boolean): void => {
     }
 
     window.localStorage.removeItem(STREAM_PERF_STORAGE_KEY)
+    streamPerfEnabledCache = false
     delete window.__openchamberStreamPerfState
   } catch {
     // ignore storage failures in debug helper

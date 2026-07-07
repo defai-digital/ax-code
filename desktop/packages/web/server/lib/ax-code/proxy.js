@@ -1,3 +1,5 @@
+import http from "node:http"
+
 import { createProxyMiddleware } from "http-proxy-middleware"
 
 import {
@@ -731,9 +733,16 @@ export const registerAxCodeProxy = (app, deps) => {
     },
   }
 
+  // http-proxy defaults to `agent: false` (a fresh TCP connection per request).
+  // The target is normally the local ax-code server, so reuse loopback sockets —
+  // otherwise every proxied API call pays connection setup twice over. Skip the
+  // agent for env-configured https upstreams, where an http.Agent would not TLS.
+  const proxyKeepAliveAgent = resolveProxyTarget().startsWith("https:") ? undefined : new http.Agent({ keepAlive: true })
+
   const dashboardProxy = createProxyMiddleware({
     target: resolveProxyTarget(),
     changeOrigin: true,
+    agent: proxyKeepAliveAgent,
     // Dynamic target — port can change after restart
     router: () => resolveProxyTarget(),
     on: dashboardProxyEvents,
@@ -750,6 +759,7 @@ export const registerAxCodeProxy = (app, deps) => {
   const apiProxy = createProxyMiddleware({
     target: resolveProxyTarget(),
     changeOrigin: true,
+    agent: proxyKeepAliveAgent,
     pathRewrite: { "^/api": "" },
     // Dynamic target — port can change after restart
     router: () => resolveProxyTarget(),

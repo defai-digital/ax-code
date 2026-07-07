@@ -825,6 +825,22 @@ const AssistantMessageActionButtons = React.memo(
   },
 )
 
+// Streaming text deltas replace the message's parts array every tick while the
+// non-text part objects stay reference-identical. Filtered projections (tool
+// parts, reasoning parts) therefore usually contain the exact same elements —
+// reuse the previous array so memos keyed on them skip recomputation.
+const useStableArrayIdentity = <T,>(items: T[]): T[] => {
+  const ref = React.useRef(items)
+  if (ref.current !== items) {
+    const previous = ref.current
+    const unchanged = previous.length === items.length && items.every((item, index) => item === previous[index])
+    if (!unchanged) {
+      ref.current = items
+    }
+  }
+  return ref.current
+}
+
 const AssistantMessageBody = React.memo(
   ({
     sessionId,
@@ -879,9 +895,11 @@ const AssistantMessageBody = React.memo(
         })
     }, [parts])
 
-    const toolParts = React.useMemo(() => {
-      return visibleParts.filter((part): part is ToolPartType => part.type === "tool")
-    }, [visibleParts])
+    const toolParts = useStableArrayIdentity(
+      React.useMemo(() => {
+        return visibleParts.filter((part): part is ToolPartType => part.type === "tool")
+      }, [visibleParts]),
+    )
 
     const toolRevealStateRef = React.useRef<{
       messageId: string
@@ -962,7 +980,13 @@ const AssistantMessageBody = React.memo(
     const assistantTextParts = React.useMemo(() => {
       return visibleParts.filter((part) => part.type === "text")
     }, [visibleParts])
-    const assistantPlanText = React.useMemo(() => flattenAssistantTextParts(assistantTextParts), [assistantTextParts])
+    // Plan text/title only feed the save-as-plan and multi-run actions, which
+    // stay disabled until the message completes — skip the O(text) flatten on
+    // every streaming delta.
+    const assistantPlanText = React.useMemo(
+      () => (awaitingMessageCompletion ? "" : flattenAssistantTextParts(assistantTextParts)),
+      [awaitingMessageCompletion, assistantTextParts],
+    )
     const suggestedPlanTitle = React.useMemo(() => suggestPlanTitleFromText(assistantPlanText), [assistantPlanText])
 
     const openContextPreview = useUIStore((state) => state.openContextPreview)
@@ -972,6 +996,11 @@ const AssistantMessageBody = React.memo(
 
     const messagePreviewUrl = React.useMemo(() => {
       if (isMobile || isMiniChatSurface) {
+        return null
+      }
+      // Only rendered in the turn footer, which shows once the turn has a stop
+      // finish or an error — skip the O(text) URL scans on streaming deltas.
+      if (messageFinish !== "stop" && !errorMessage) {
         return null
       }
 
@@ -1000,7 +1029,7 @@ const AssistantMessageBody = React.memo(
         return url
       }
       return null
-    }, [assistantTextParts, isMobile, isMiniChatSurface, toolParts])
+    }, [assistantTextParts, errorMessage, isMobile, isMiniChatSurface, messageFinish, toolParts])
 
     const createSessionFromAssistantMessage = useSessionUIStore((state) => state.createSessionFromAssistantMessage)
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
@@ -1070,9 +1099,11 @@ const AssistantMessageBody = React.memo(
       return toolParts.every((toolPart) => isToolFinalized(toolPart))
     }, [toolParts, hasPendingTools, isToolFinalized])
 
-    const reasoningParts = React.useMemo(() => {
-      return visibleParts.filter((part) => part.type === "reasoning")
-    }, [visibleParts])
+    const reasoningParts = useStableArrayIdentity(
+      React.useMemo(() => {
+        return visibleParts.filter((part) => part.type === "reasoning")
+      }, [visibleParts]),
+    )
 
     const reasoningComplete = React.useMemo(() => {
       if (reasoningParts.length === 0) {

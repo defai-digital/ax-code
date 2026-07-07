@@ -7,7 +7,10 @@ interface UseStreamingTextThrottleInput {
   identityKey?: string
 }
 
-const DEFAULT_STREAMING_TEXT_THROTTLE_MS = 100
+// Aligned with the 33ms event flush frame (sync/event-pipeline.ts) so streamed
+// text renders on the next frame after dispatch instead of stacking a second,
+// longer buffer on top of it.
+const DEFAULT_STREAMING_TEXT_THROTTLE_MS = 33
 
 export const computeStreamingThrottleDelay = (lastEmitAt: number, now: number, throttleMs: number): number => {
   const elapsed = now - lastEmitAt
