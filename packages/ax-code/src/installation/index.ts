@@ -13,6 +13,7 @@ import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { Process } from "../util/process"
 import { whichAll } from "../util/which"
+import { parseJsonResult } from "../util/json-value"
 
 declare global {
   const AX_CODE_VERSION: string
@@ -187,14 +188,12 @@ export namespace Installation {
 
   // Parses external-command/HTTP output that is expected to be JSON but, in
   // practice, can come back empty or truncated (a failed `brew` invocation, a
-  // rate-limited API response) — surfaces a recoverable error instead of a
-  // raw "Unexpected end of JSON input" crash.
+  // rate-limited API response) — surfaces a recoverable, contextual error
+  // instead of a raw "Unexpected end of JSON input" crash.
   function parseJson(raw: string, context: string): unknown {
-    try {
-      return JSON.parse(raw)
-    } catch {
-      throw new Error(`Failed to parse ${context} as JSON${raw.trim() ? "" : " (empty output)"}`)
-    }
+    const parsed = parseJsonResult(raw)
+    if (!parsed.ok) throw new Error(`Failed to parse ${context} as JSON${raw.trim() ? "" : " (empty output)"}`)
+    return parsed.value
   }
 
   async function fetchJson<T>(schema: z.ZodType<T>, url: string) {
