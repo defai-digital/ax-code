@@ -39,6 +39,7 @@ import {
   useGlobalSessionStatus,
   useSession,
   useSessionPermissions,
+  useSessionQuestions,
 } from "@/sync/sync-context"
 import { useSync } from "@/sync/use-sync"
 import { useViewportStore } from "@/sync/viewport-store"
@@ -367,6 +368,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   )
   const sessionStatus = useGlobalSessionStatus(session.id)
   const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined)
+  const sessionQuestions = useSessionQuestions(session.id, sessionDirectory ?? undefined)
   const sessionGitDirty = useGitStore(
     React.useCallback(
       (s) => (sessionDirectory ? s.directories.get(sessionDirectory)?.status?.isClean === false : false),
@@ -394,6 +396,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const badgeState: SessionBadgeState = useSessionBadgeState(session.id, {
     status: sessionStatus,
     permissions: sessionPermissions,
+    questions: sessionQuestions,
     isDirty: sessionGitDirty,
     hasUnreadAttention: showUnreadStatus,
   })
@@ -640,12 +643,12 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
             title={t("sessions.sidebar.session.status.active")}
           />
         )
-      case "waiting_for_permission":
+      case "waiting_for_input":
         return (
           <span
             className="h-1.5 w-1.5 rounded-full bg-[var(--status-warning)]"
-            aria-label={t("sessions.sidebar.session.status.waitingForPermission")}
-            title={t("sessions.sidebar.session.status.waitingForPermission")}
+            aria-label={t("sessions.sidebar.session.status.waitingForInput")}
+            title={t("sessions.sidebar.session.status.waitingForInput")}
           />
         )
       case "done_with_uncommitted":

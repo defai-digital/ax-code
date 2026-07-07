@@ -5,7 +5,7 @@ import type { Session } from "@ax-code/sdk/v2"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Icon } from "@/components/icon/Icon"
 import { useSessionUIStore } from "@/sync/session-ui-store"
-import { useGlobalSessionStatus, useSessionPermissions } from "@/sync/sync-context"
+import { useGlobalSessionStatus, useSessionPermissions, useSessionQuestions } from "@/sync/sync-context"
 import { useSessionUnseenCount } from "@/sync/notification-store"
 import { useSwitcherItems } from "@/components/session/sidebar/hooks/useSwitcherItems"
 import { useUIStore } from "@/stores/useUIStore"
@@ -206,6 +206,7 @@ function SwitcherRow({
 
   const sessionStatus = useGlobalSessionStatus(session.id)
   const sessionPermissions = useSessionPermissions(session.id)
+  const sessionQuestions = useSessionQuestions(session.id)
   const sessionDirectory = resolveGlobalSessionDirectory(session)
   const sessionGitDirty = useGitStore(
     React.useCallback(
@@ -225,6 +226,7 @@ function SwitcherRow({
   const badgeState: SessionBadgeState = useSessionBadgeState(session.id, {
     status: sessionStatus,
     permissions: sessionPermissions,
+    questions: sessionQuestions,
     isDirty: sessionGitDirty,
     hasUnreadAttention: showUnreadDot,
   })
@@ -354,11 +356,11 @@ function SwitcherRow({
               aria-label={t("sessions.sidebar.session.status.active")}
               title={t("sessions.sidebar.session.status.active")}
             />
-          ) : badgeState === "waiting_for_permission" ? (
+          ) : badgeState === "waiting_for_input" ? (
             <span
               className="h-1.5 w-1.5 rounded-full bg-[var(--status-warning)]"
-              aria-label={t("sessions.sidebar.session.status.waitingForPermission")}
-              title={t("sessions.sidebar.session.status.waitingForPermission")}
+              aria-label={t("sessions.sidebar.session.status.waitingForInput")}
+              title={t("sessions.sidebar.session.status.waitingForInput")}
             />
           ) : badgeState === "done_with_uncommitted" ? (
             <span

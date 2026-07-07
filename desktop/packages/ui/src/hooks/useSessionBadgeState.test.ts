@@ -1,15 +1,18 @@
 import { describe, expect, test } from "vitest"
 import type { SessionStatus } from "@ax-code/sdk/v2/client"
 import type { PermissionRequest } from "@/types/permission"
+import type { QuestionRequest } from "@/types/question"
 
 import { computeSessionBadgeState } from "./useSessionBadgeState"
 
 const permission = { id: "perm_1" } as PermissionRequest
+const question = { id: "ques_1", sessionID: "ses_1", questions: [] } as QuestionRequest
 const status = (type: string): SessionStatus => ({ type }) as SessionStatus
 
 const base = {
   status: undefined as SessionStatus | undefined,
   permissions: [] as readonly PermissionRequest[],
+  questions: [] as readonly QuestionRequest[],
   ranWithUncommitted: false,
   hasError: false,
   hasUnreadAttention: false,
@@ -30,7 +33,29 @@ describe("computeSessionBadgeState", () => {
         hasError: true,
         hasUnreadAttention: true,
       }),
-    ).toBe("waiting_for_permission")
+    ).toBe("waiting_for_input")
+  })
+
+  test("pending questions use the blocking request badge", () => {
+    expect(
+      computeSessionBadgeState({
+        ...base,
+        questions: [question],
+      }),
+    ).toBe("waiting_for_input")
+  })
+
+  test("pending questions outrank running, error, dirty state, and unread attention", () => {
+    expect(
+      computeSessionBadgeState({
+        ...base,
+        status: status("busy"),
+        questions: [question],
+        ranWithUncommitted: true,
+        hasError: true,
+        hasUnreadAttention: true,
+      }),
+    ).toBe("waiting_for_input")
   })
 
   test("busy and retry map to running", () => {

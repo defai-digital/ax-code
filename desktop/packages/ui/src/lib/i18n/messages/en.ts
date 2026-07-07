@@ -283,7 +283,7 @@ export const dict = {
   "sessions.sidebar.session.status.permissionRequired": "Permission required",
   "sessions.sidebar.session.status.doneWithUncommitted": "Finished with uncommitted changes",
   "sessions.sidebar.session.status.error": "Session error",
-  "sessions.sidebar.session.status.waitingForPermission": "Waiting for approval",
+  "sessions.sidebar.session.status.waitingForInput": "Waiting for input",
   "sessions.sidebar.softRemoval.undo": "Undo",
   "sessions.sidebar.folder.waitingApproval": "{count} waiting for approval",
   "sessions.sidebar.session.subsessions.collapse": "Collapse subsessions",

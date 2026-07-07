@@ -1,13 +1,14 @@
 import React from "react"
 import type { SessionStatus } from "@ax-code/sdk/v2/client"
 import type { PermissionRequest } from "@/types/permission"
+import type { QuestionRequest } from "@/types/question"
 import { useSessionHasError } from "@/sync/notification-store"
 import { useSessionRunEndedAt } from "@/sync/run-state-store"
 
 export type SessionBadgeState =
   | "idle"
   | "running"
-  | "waiting_for_permission"
+  | "waiting_for_input"
   | "done_with_uncommitted"
   | "error"
   | "unread"
@@ -15,13 +16,14 @@ export type SessionBadgeState =
 export function computeSessionBadgeState(args: {
   status: SessionStatus | undefined
   permissions: readonly PermissionRequest[]
+  questions: readonly QuestionRequest[]
   ranWithUncommitted: boolean
   hasError: boolean
   hasUnreadAttention: boolean
 }): SessionBadgeState {
-  const { status, permissions, ranWithUncommitted, hasError, hasUnreadAttention } = args
+  const { status, permissions, questions, ranWithUncommitted, hasError, hasUnreadAttention } = args
 
-  if (permissions.length > 0) return "waiting_for_permission"
+  if (permissions.length > 0 || questions.length > 0) return "waiting_for_input"
 
   const type = status?.type ?? "idle"
   if (type === "busy" || type === "retry") return "running"
@@ -46,6 +48,7 @@ export function useSessionBadgeState(
   options: {
     status: SessionStatus | undefined
     permissions: readonly PermissionRequest[]
+    questions: readonly QuestionRequest[]
     isDirty: boolean
     hasUnreadAttention: boolean
   },
@@ -59,10 +62,18 @@ export function useSessionBadgeState(
       computeSessionBadgeState({
         status: options.status,
         permissions: options.permissions,
+        questions: options.questions,
         ranWithUncommitted,
         hasError,
         hasUnreadAttention: options.hasUnreadAttention,
       }),
-    [options.status, options.permissions, ranWithUncommitted, hasError, options.hasUnreadAttention],
+    [
+      options.status,
+      options.permissions,
+      options.questions,
+      ranWithUncommitted,
+      hasError,
+      options.hasUnreadAttention,
+    ],
   )
 }
