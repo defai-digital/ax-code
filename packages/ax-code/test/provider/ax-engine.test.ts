@@ -35,6 +35,8 @@ import {
   isPlausiblySupportedHost,
   markPrepared,
   normalizeQuantization,
+  noteActiveAxEngineServer,
+  rewriteToActiveAxEngineServer,
   parseDfPkAvailableBytes,
   parseChipGeneration,
   parseMacosMajor,
@@ -50,6 +52,7 @@ const originalFetch = globalThis.fetch
 
 afterEach(async () => {
   globalThis.fetch = originalFetch
+  noteActiveAxEngineServer(undefined)
   await Instance.disposeAll()
 })
 
@@ -537,6 +540,69 @@ describe("ax-engine server launch args", () => {
       "--total-blocks",
       "1025",
     ])
+  })
+})
+
+describe("ax-engine active server base URL rewrite", () => {
+  const assumed = "http://127.0.0.1:18181/v1"
+
+  test("passes requests through untouched when no managed server is tracked", () => {
+    expect(rewriteToActiveAxEngineServer(`${assumed}/chat/completions`, assumed)).toBe(`${assumed}/chat/completions`)
+  })
+
+  test("rewrites requests to the port the managed server actually bound", () => {
+    noteActiveAxEngineServer("http://127.0.0.1:18183/v1")
+    expect(rewriteToActiveAxEngineServer(`${assumed}/chat/completions`, assumed)).toBe(
+      "http://127.0.0.1:18183/v1/chat/completions",
+    )
+    expect(rewriteToActiveAxEngineServer(assumed, assumed)).toBe("http://127.0.0.1:18183/v1")
+    expect(rewriteToActiveAxEngineServer(new URL(`${assumed}/models`), assumed)).toBe(
+      "http://127.0.0.1:18183/v1/models",
+    )
+  })
+
+  test("preserves method and headers when rewriting a Request object", () => {
+    noteActiveAxEngineServer("http://127.0.0.1:18183/v1")
+    const rewritten = rewriteToActiveAxEngineServer(
+      new Request(`${assumed}/chat/completions`, { method: "POST", headers: { authorization: "Bearer local" } }),
+      assumed,
+    )
+    expect(rewritten).toBeInstanceOf(Request)
+    expect((rewritten as Request).url).toBe("http://127.0.0.1:18183/v1/chat/completions")
+    expect((rewritten as Request).method).toBe("POST")
+    expect((rewritten as Request).headers.get("authorization")).toBe("Bearer local")
+  })
+
+  test("leaves foreign origins and prefix look-alikes untouched", () => {
+    noteActiveAxEngineServer("http://127.0.0.1:18183/v1")
+    expect(rewriteToActiveAxEngineServer("http://127.0.0.1:181812/v1/models", assumed)).toBe(
+      "http://127.0.0.1:181812/v1/models",
+    )
+    expect(rewriteToActiveAxEngineServer("https://api.example.com/v1/chat", assumed)).toBe(
+      "https://api.example.com/v1/chat",
+    )
+  })
+
+  test("the loader's fetch routes SDK requests to the active server", async () => {
+    const seen: string[] = []
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      seen.push(input instanceof Request ? input.url : String(input))
+      return new Response("{}", { status: 200 })
+    }) as unknown as typeof fetch
+
+    const loader = await axEngineLoader()({
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "custom",
+      env: [],
+      options: {},
+      models: {},
+    } as any)
+
+    // Simulate ensureServer having fallen back to a non-default port.
+    noteActiveAxEngineServer("http://127.0.0.1:18183/v1")
+    await loader.options!.fetch(`${assumed}/chat/completions`)
+    expect(seen).toEqual(["http://127.0.0.1:18183/v1/chat/completions"])
   })
 })
 

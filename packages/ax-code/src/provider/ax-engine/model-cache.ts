@@ -396,7 +396,7 @@ export async function downloadModel(input: {
   if (dest) cmd.push("--dest", dest)
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 60 * 60_000 })
-  await assertDiskSpace({ quantization, downloadDir: dest ?? HfCache.root() })
+  await assertDiskSpace({ modelID, quantization, downloadDir: dest ?? HfCache.root() })
   const result = await Process.text(cmd, {
     timeout: 6 * 60 * 60 * 1000,
     abort: input.signal,

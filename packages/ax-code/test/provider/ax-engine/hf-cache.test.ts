@@ -199,6 +199,42 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     expect(await Filesystem.exists(AxEnginePaths.prepareState)).toBe(false)
   })
 
+  test("downloadModel checks disk space against the requested model, not the default", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    const originalText = Process.text
+    // 60 GiB free: enough for gemma-4-12b (48 GiB) but not for the default
+    // model's 96 GiB requirement, which a call site that drops modelID would
+    // apply to every download.
+    const availableBlocks = (60 * 1024 ** 3) / 1024
+    const spy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
+      if (cmd[0] === "df") {
+        const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
+/dev/test 200000000 1000000 ${availableBlocks} 1% ${cmd.at(-1) ?? "/"}
+`)
+        return Promise.resolve({ code: 0, stdout, stderr: Buffer.alloc(0), text: stdout.toString() })
+      }
+      return originalText(cmd, opts)
+    })
+    try {
+      const binary = path.join(dir.path, "fake-ax-engine")
+      await fs.writeFile(
+        binary,
+        `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: COMMIT }))})\n`,
+      )
+      await fs.chmod(binary, 0o755)
+
+      const prepared = await downloadModel({ binaryPath: binary, modelID: GEMMA.modelID, quantization: GEMMA.quant })
+      expect(prepared.path).toBe(snapshot)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   test("getModelStatus falls back to another complete HF snapshot when refs/main is incomplete", async () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")

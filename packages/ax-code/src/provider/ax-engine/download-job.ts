@@ -26,6 +26,13 @@ type AxEngineDownloadJob = AxEngineModelJobSummary & {
   promise: Promise<AxEngineModelJobSummary>
 }
 
+export type AxEngineDownloadJobRuntime = {
+  requireEligibility?: typeof requirePlatformEligibility
+  getDependencyStatus?: typeof getDependencyStatus
+  getDiskStatus?: typeof getDiskStatus
+  downloadModel?: typeof downloadModel
+}
+
 const jobs = new Map<string, AxEngineDownloadJob>()
 const recentJobs: AxEngineModelJobSummary[] = []
 
@@ -46,10 +53,18 @@ export async function listDownloadJobs(): Promise<AxEngineModelJobSummary[]> {
   return [...jobs.values()].map(summarize).concat(recentJobs)
 }
 
-export async function startDownloadJob(input: {
-  modelID: AxEngineModelID
-  quantization?: AxEngineQuantization
-}): Promise<AxEngineModelJobSummary> {
+export async function startDownloadJob(
+  input: {
+    modelID: AxEngineModelID
+    quantization?: AxEngineQuantization
+  },
+  runtime: AxEngineDownloadJobRuntime = {},
+): Promise<AxEngineModelJobSummary> {
+  const requireEligibility = runtime.requireEligibility ?? requirePlatformEligibility
+  const dependencyStatus = runtime.getDependencyStatus ?? getDependencyStatus
+  const diskStatus = runtime.getDiskStatus ?? getDiskStatus
+  const download = runtime.downloadModel ?? downloadModel
+
   if (!isAxEngineModelID(input.modelID)) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: unknown AX Engine model`)
   }
@@ -70,22 +85,22 @@ export async function startDownloadJob(input: {
   }
   const run = async (): Promise<AxEngineModelJobSummary> => {
     try {
-      const eligibility = await requirePlatformEligibility()
+      const eligibility = await requireEligibility()
       const definition = AX_ENGINE_MODEL_DEFINITIONS[input.modelID]
       if (eligibility.memoryBytes !== undefined && eligibility.memoryBytes < definition.minMemoryBytes) {
         throw new Error(
           `${AX_ENGINE_ERROR.InsufficientMemory}: ${Math.ceil(definition.minMemoryBytes / 1024 ** 3)} GB unified memory is required`,
         )
       }
-      const dependency = await getDependencyStatus()
+      const dependency = await dependencyStatus()
       if (!dependency.available || !dependency.binaryPath) {
         throw new Error(dependency.blockers[0] ?? `${AX_ENGINE_ERROR.BinaryMissing}: ax-engine binary is not available`)
       }
-      const disk = await getDiskStatus({ modelID: input.modelID, quantization })
+      const disk = await diskStatus({ modelID: input.modelID, quantization })
       if (!disk.ok) throw new Error(disk.blockers[0] ?? `${AX_ENGINE_ERROR.InsufficientDisk}: insufficient disk space`)
       job.status = "running"
       job.startedAt = Date.now()
-      const prepared = await downloadModel({
+      const prepared = await download({
         binaryPath: dependency.binaryPath,
         modelID: input.modelID,
         quantization,
@@ -107,7 +122,10 @@ export async function startDownloadJob(input: {
       }
       return summarize(job)
     } finally {
-      jobs.delete(key)
+      // A cancelled/failed job can already have been replaced under this key by
+      // a newer start; deleting unconditionally would evict the newer running
+      // job from the map (making it uncancellable and invisible to listing).
+      if (jobs.get(key) === job) jobs.delete(key)
       remember(job)
     }
   }

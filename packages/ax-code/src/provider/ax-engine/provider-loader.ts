@@ -32,6 +32,31 @@ function reclaimManagedCopiesOnce() {
   void reclaimManagedModelCopies().catch(() => undefined)
 }
 
+// The OpenAI-compatible SDK is constructed once against the default port, but
+// ensureServer may bind a fallback port (18182+) when the preferred one is
+// held by a foreign process — the server's real address lives in its state,
+// not in the SDK. Track the base URL of the server this process last verified
+// or started and rewrite outgoing requests to it at fetch time, so a port
+// fallback (or a respawn on a new port) still reaches the managed server even
+// through cached SDK/language-model instances.
+let activeServerBaseURL: string | undefined
+
+export function noteActiveAxEngineServer(baseURL: string | undefined) {
+  activeServerBaseURL = baseURL
+}
+
+export function rewriteToActiveAxEngineServer(
+  input: string | URL | Request,
+  assumedBaseURL: string,
+): string | URL | Request {
+  const active = activeServerBaseURL
+  if (!active || active === assumedBaseURL) return input
+  const url = input instanceof Request ? input.url : input.toString()
+  if (url !== assumedBaseURL && !url.startsWith(`${assumedBaseURL}/`)) return input
+  const rewritten = `${active}${url.slice(assumedBaseURL.length)}`
+  return input instanceof Request ? new Request(rewritten, input) : rewritten
+}
+
 function configuredBaseURL(provider: Provider.Info) {
   const baseURL = provider.options?.baseURL
   const raw = typeof baseURL === "string" && baseURL.trim() ? baseURL.trim() : process.env.AX_ENGINE_HOST
@@ -66,7 +91,10 @@ async function ensureReady(provider: Provider.Info, options: AxEngineModelOption
   const apiModelID = AX_ENGINE_MODEL_DEFINITIONS[modelID].apiModelID
   const baseURL = configuredBaseURL(provider)
   if (baseURL) {
-    if (await serverAdvertisesModel(baseURL, apiModelID, signal)) return
+    if (await serverAdvertisesModel(baseURL, apiModelID, signal)) {
+      noteActiveAxEngineServer(baseURL)
+      return
+    }
     throw new Error(`ax-engine server at ${baseURL} does not advertise model ${apiModelID}`)
   }
 
@@ -90,7 +118,7 @@ async function ensureReady(provider: Provider.Info, options: AxEngineModelOption
       ].join("\n"),
     )
   }
-  await ensureServer({
+  const state = await ensureServer({
     binaryPath: dependency.binaryPath,
     modelID,
     apiModelID: AX_ENGINE_MODEL_DEFINITIONS[modelID].apiModelID,
@@ -101,6 +129,7 @@ async function ensureReady(provider: Provider.Info, options: AxEngineModelOption
     baseURL,
     signal,
   })
+  noteActiveAxEngineServer(state.baseURL)
 }
 
 export function axEngineLoader(): CustomLoader {
@@ -114,7 +143,7 @@ export function axEngineLoader(): CustomLoader {
         apiKey: AX_ENGINE_API_KEY,
         includeUsage: false,
         fetch: async (input: string | Request | URL, init?: RequestInit) => {
-          return fetch(input, init)
+          return fetch(rewriteToActiveAxEngineServer(input, baseURL), init)
         },
       },
       async discoverModels() {
