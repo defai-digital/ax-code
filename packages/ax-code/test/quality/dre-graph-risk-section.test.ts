@@ -55,10 +55,7 @@ describe("quality.dre-graph-risk-section", () => {
 
     expect(html).toContain(`<section class="band" id="risk">`)
     expect(html).toContain(`<h2>Risk Analysis</h2><p>Risk &lt;summary&gt;&amp;</p>`)
-    expect(html).toContain(`<span class="ri-label">Readiness</span><span class="ri-value">needs validation</span>`)
-    expect(html).toContain(`<span class="ri-label">Confidence</span><span class="ri-value">65%</span>`)
-    expect(html).toContain(`<span class="ri-label">Validation</span><span class="ri-value">partial validation</span>`)
-    expect(html).toContain(`<span class="ri-label">Diff source</span><span class="ri-value">derived</span>`)
+    expect(html).not.toContain("risk-status-row")
     expect(html).toContain(`<span class="signal-label">Files changed</span><span class="signal-value medium">4</span>`)
     expect(html).toContain(`<span class="signal-label">Lines changed</span><span class="signal-value medium">80</span>`)
     expect(html).toContain(
@@ -69,6 +66,7 @@ describe("quality.dre-graph-risk-section", () => {
     expect(html).toContain(
       `<span class="signal-label">Validations</span><span class="signal-value high">1/2 passed</span>`,
     )
+    expect(html).toContain(`<span class="signal-label">Diff source</span><span class="signal-value medium">derived</span>`)
   })
 
   test("renders flags, bars, and escaped evidence lists", () => {

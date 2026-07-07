@@ -82,12 +82,22 @@ export function live(input: { sessionID?: string; directory?: string }) {
     `  return pick(payload.properties ?? {}) === cfg.sessionID`,
     `}`,
     `const key = "dre-live:" + (cfg.sessionID ?? cfg.directory ?? "index")`,
+    // Streaming detail events fire continuously while an agent is working; a
+    // 2s reload cadence turns the page into a reload loop that also tears down
+    // the SSE connection on every cycle. Lifecycle events keep the short gap so
+    // completion still shows up quickly, and an earlier pull reschedules a
+    // pending slower one.
     `const gap = 2000`,
+    `const streamGap = 10000`,
     `let wait = 0`,
-    `const pull = () => {`,
-    `  if (wait) return`,
+    `let waitAt = Infinity`,
+    `const pull = (min = gap) => {`,
     `  const last = Number(window.sessionStorage.getItem(key) ?? "0")`,
-    `  const left = Math.max(350, gap - (Date.now() - last))`,
+    `  const left = Math.max(350, min - (Date.now() - last))`,
+    `  const at = Date.now() + left`,
+    `  if (wait && at >= waitAt) return`,
+    `  if (wait) window.clearTimeout(wait)`,
+    `  waitAt = at`,
     `  set("updating", "wait")`,
     `  wait = window.setTimeout(() => {`,
     `    window.sessionStorage.setItem(key, String(Date.now()))`,
@@ -104,7 +114,7 @@ export function live(input: { sessionID?: string; directory?: string }) {
     `    return`,
     `  }`,
     `  if (next === seen) return`,
-    `  pull()`,
+    `  pull(cfg.sessionID == null ? gap : streamGap)`,
     `}`,
     `let _liveSrc = null;`,
     `if (typeof EventSource !== "function") {`,
@@ -117,7 +127,7 @@ export function live(input: { sessionID?: string; directory?: string }) {
     `  src.onerror = () => set("offline", "off")`,
     `  src.onmessage = (event) => {`,
     `    const data = JSON.parse(event.data)`,
-    `    if (keep(data)) pull()`,
+    `    if (keep(data)) pull(detail.includes(data.payload.type) ? streamGap : gap)`,
     `  }`,
     `}`,
     `const _poll = window.setInterval(() => {`,
@@ -140,7 +150,7 @@ export function live(input: { sessionID?: string; directory?: string }) {
   ].join("\n")
 }
 
-export function executionSummaryScript(sid: string) {
+export function executionSummaryScript(sid: string, directory?: string) {
   return [
     `<script>`,
     `const _AGENT = {`,
@@ -181,6 +191,9 @@ export function executionSummaryScript(sid: string) {
     `  }`,
     `}`,
     `const _sid = ${json(sid)};`,
+    // The graph route scopes sessions to the request directory and 409s on a
+    // cross-project mismatch, so the directory must ride along on the fetch.
+    `const _dirQuery = ${json(directory ? `&directory=${encodeURIComponent(directory)}` : "")};`,
     `let _rendering = false;`,
     `let _renderQueued = false;`,
     `function _summaryUnavailable() {`,
@@ -193,7 +206,7 @@ export function executionSummaryScript(sid: string) {
     `  if (_rendering) { _renderQueued = true; return; }`,
     `  _rendering = true;`,
     `  try {`,
-    `    const jsonRes = await fetch('/graph/' + _sid + '?format=json', { cache: 'no-store' });`,
+    `    const jsonRes = await fetch('/graph/' + _sid + '?format=json' + _dirQuery, { cache: 'no-store' });`,
     `    if (!jsonRes.ok) { _summaryUnavailable(); return; }`,
     `    const j = await jsonRes.json();`,
     `    if (!j || !j.data) { _summaryUnavailable(); return; }`,

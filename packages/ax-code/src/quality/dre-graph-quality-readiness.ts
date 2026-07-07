@@ -19,6 +19,7 @@ export function qualityReadinessSection(input: SessionRisk.Detail) {
 
   return [
     `<div style="margin-top:20px"><h3>Quality Readiness</h3>`,
+    `<p class="muted" style="font-size:12px;margin-top:-6px;margin-bottom:10px">Replay-based readiness estimate per workflow — how likely review, debug, and QA passes are to hold up.</p>`,
     `<div class="validation-list">`,
     summaries
       .map(({ workflow, summary }) => {

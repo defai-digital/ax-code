@@ -1,42 +1,15 @@
 import { SessionDre } from "../session/dre"
 import { SessionRisk } from "../session/risk"
-import { confidenceTone, esc, num, readiness, readinessTone, tone, validation } from "./dre-graph-format"
+import { esc, num, tone } from "./dre-graph-format"
 import { qualityReadinessSection } from "./dre-graph-quality-readiness"
 import { barChart, chip } from "./dre-graph-widgets"
 
 export function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
   const detail = dre.detail
   const sig = input.assessment.signals
-  const conf = input.assessment.confidence
-  const rdns = input.assessment.readiness
 
-  // Status indicators row — the quick "should I worry?" signals
-  const statusRow = [
-    `<div class="risk-status-row">`,
-    // Readiness indicator — most important
-    `<div class="risk-indicator ${readinessTone(rdns)}">`,
-    `<span class="ri-icon">${rdns === "ready" ? "✓" : rdns === "needs_validation" ? "◔" : rdns === "needs_review" ? "◑" : "✗"}</span>`,
-    `<div class="ri-content"><span class="ri-label">Readiness</span><span class="ri-value">${readiness(rdns)}</span></div>`,
-    `</div>`,
-    // Confidence
-    `<div class="risk-indicator ${confidenceTone(conf)}">`,
-    `<span class="ri-icon">${conf >= 0.8 ? "●" : conf >= 0.6 ? "◔" : "○"}</span>`,
-    `<div class="ri-content"><span class="ri-label">Confidence</span><span class="ri-value">${Math.round(conf * 100)}%</span></div>`,
-    `</div>`,
-    // Validation
-    `<div class="risk-indicator ${readinessTone(sig.validationState === "passed" ? "ready" : sig.validationState === "failed" ? "blocked" : sig.validationState === "partial" ? "needs_review" : "needs_validation")}">`,
-    `<span class="ri-icon">${sig.validationState === "passed" ? "✓" : sig.validationState === "failed" ? "✗" : sig.validationState === "partial" ? "◔" : "—"}</span>`,
-    `<div class="ri-content"><span class="ri-label">Validation</span><span class="ri-value">${validation(sig)}</span></div>`,
-    `</div>`,
-    // Diff source
-    `<div class="risk-indicator ${sig.diffState === "recorded" ? "low" : sig.diffState === "derived" ? "medium" : "high"}">`,
-    `<span class="ri-icon">${sig.diffState === "recorded" ? "◉" : sig.diffState === "derived" ? "◔" : "○"}</span>`,
-    `<div class="ri-content"><span class="ri-label">Diff source</span><span class="ri-value">${sig.diffState}</span></div>`,
-    `</div>`,
-    `</div>`,
-  ].join("")
-
-  // Signals grid — the detailed signal data
+  // Signals grid — the detailed signal data (readiness/confidence/validation already lead the page in Verdict;
+  // this section covers only what isn't shown there, plus the diff-source caveat)
   const signalItems = [
     {
       label: "Files changed",
@@ -68,6 +41,11 @@ export function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot)
       value: `${sig.validationCount - sig.validationFailures}/${sig.validationCount} passed`,
       kind: sig.validationFailures > 0 ? "high" : sig.validationCount > 0 ? "low" : "neutral",
     },
+    {
+      label: "Diff source",
+      value: sig.diffState,
+      kind: sig.diffState === "recorded" ? "low" : sig.diffState === "derived" ? "medium" : "high",
+    },
   ]
   const flags = [
     ...(sig.crossModule ? [chip({ label: "cross-module", kind: "medium" })] : []),
@@ -80,8 +58,6 @@ export function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot)
     `<section class="band" id="risk">`,
     `<div class="wrap">`,
     `<div class="section-head"><h2>Risk Analysis</h2><p>${esc(input.assessment.summary)}</p></div>`,
-    // Status indicators — top row, full width
-    statusRow,
     // Flags
     flags.length ? `<div class="risk-flags">${flags.join("")}</div>` : "",
     `<div class="grid">`,
@@ -119,6 +95,7 @@ export function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot)
     detail?.scorecard.breakdown.length
       ? [
           `<div style="margin-top:20px"><h3>Decision Scorecard</h3>`,
+          `<p class="muted" style="font-size:12px;margin-top:-6px;margin-bottom:10px">How this session's outcome compares against historical replay data.</p>`,
           barChart({
             items: detail.scorecard.breakdown.map((item) => ({
               label: item.label,

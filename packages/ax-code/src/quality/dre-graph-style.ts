@@ -106,7 +106,7 @@ export function style() {
     .summary-details { flex: 1; min-width: 0; }
     .summary-decision { font-size: 22px; font-weight: 600; line-height: 1.3; margin-bottom: 6px; letter-spacing: -0.02em; color: var(--text); }
     .summary-plan { color: var(--muted); font-size: 14px; margin-bottom: 24px; line-height: 1.6; }
-    .summary-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
     .summary-stats .stat { min-width: 0; }
     .semantic-banner {
       margin-top: 28px; padding: 16px 20px;
@@ -211,31 +211,6 @@ export function style() {
     }
     .driver-item:last-child { border-bottom: none; }
     .driver-icon { color: var(--accent); flex-shrink: 0; }
-
-    /* Risk status indicators */
-    .risk-status-row {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
-      margin: 16px 0 12px;
-    }
-    .risk-indicator {
-      display: flex; gap: 10px; align-items: center;
-      padding: 12px 14px; border-radius: var(--radius-sm);
-      background: var(--panel); border: 1px solid var(--line-subtle);
-      transition: border-color 0.15s;
-    }
-    .risk-indicator:hover { border-color: var(--line); }
-    .ri-icon {
-      width: 28px; height: 28px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 700; flex-shrink: 0;
-    }
-    .risk-indicator.low .ri-icon { background: rgba(34,197,94,0.12); color: var(--low); }
-    .risk-indicator.medium .ri-icon { background: rgba(234,179,8,0.12); color: var(--warn); }
-    .risk-indicator.high .ri-icon { background: rgba(239,68,68,0.12); color: var(--high); }
-    .risk-indicator.critical .ri-icon { background: rgba(220,38,38,0.12); color: var(--critical); }
-    .ri-content { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-    .ri-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
-    .ri-value { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* Risk flags */
     .risk-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
@@ -434,10 +409,6 @@ export function style() {
     .gauge { display: block; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2)); }
     .summary-risk { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
 
-    /* Summary row — stats + donut side by side */
-    .summary-row { display: flex; gap: 24px; align-items: flex-start; }
-    .summary-row .summary-stats { flex: 1; }
-
     /* Bar chart */
     .bar-chart { display: grid; gap: 8px; }
     .bar-row { display: grid; grid-template-columns: 130px 1fr 48px; gap: 10px; align-items: center; }
@@ -446,13 +417,6 @@ export function style() {
     .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; min-width: 2px; }
     .bar-value { font-size: 12px; font-weight: 600; text-align: right; font-family: ui-monospace, SFMono-Regular, monospace; }
     .bar-detail { grid-column: 1 / -1; font-size: 11px; color: var(--muted); margin-top: -4px; padding-left: 0; }
-
-    /* Donut chart */
-    .donut-wrap { display: flex; gap: 14px; align-items: center; flex-shrink: 0; }
-    .donut-legend { display: grid; gap: 5px; }
-    .donut-item { display: flex; gap: 6px; align-items: center; font-size: 12px; white-space: nowrap; color: var(--text-secondary); }
-    .donut-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .donut-item strong { margin-left: auto; font-family: ui-monospace, SFMono-Regular, monospace; color: var(--text); }
 
     /* ── Verdict ── */
     .verdict { padding: 20px 24px; }
@@ -466,7 +430,7 @@ export function style() {
     .verdict-headline.medium { color: var(--warn); }
     .verdict-headline.high { color: var(--high); }
     .verdict-headline.critical { color: var(--critical); }
-    .verdict-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+    .verdict-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
     .verdict-callout { display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface); font-size: 13px; margin-top: 6px; color: var(--text-secondary); }
     .verdict-callout-icon { flex-shrink: 0; font-size: 14px; }
 
@@ -560,9 +524,7 @@ export function style() {
       .grid, .step-grid { grid-template-columns: 1fr; }
       .summary-grid { flex-direction: column; align-items: center; text-align: center; }
       .summary-stats { grid-template-columns: repeat(2, 1fr); }
-      .risk-status-row { grid-template-columns: repeat(2, 1fr); }
       .signal-grid { grid-template-columns: repeat(2, 1fr); }
-      .summary-row { flex-direction: column; }
       .bar-row { grid-template-columns: 100px 1fr 40px; }
       .hero-title { font-size: 22px; }
       .nav-inner { gap: 2px; }

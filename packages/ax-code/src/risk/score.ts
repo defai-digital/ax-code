@@ -310,7 +310,7 @@ export namespace Risk {
     )
 
     score = Math.min(score, 100)
-    const level: Level = score >= 70 ? "CRITICAL" : score >= 45 ? "HIGH" : score >= 20 ? "MEDIUM" : "LOW"
+    const level = levelForScore(score)
     const conf = confidence(next)
     const ready = readiness(next, conf)
 
@@ -507,6 +507,10 @@ export namespace Risk {
       semanticRisk: semantic?.risk ?? null,
       primaryChange: semantic?.primary ?? null,
     })
+  }
+
+  export function levelForScore(score: number): Level {
+    return score >= 70 ? "CRITICAL" : score >= 45 ? "HIGH" : score >= 20 ? "MEDIUM" : "LOW"
   }
 
   function isValidation(input: string) {

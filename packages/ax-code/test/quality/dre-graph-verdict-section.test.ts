@@ -56,8 +56,11 @@ describe("quality.dre-graph-verdict-section", () => {
     expect(html).toContain(`<div class="verdict-inner medium">`)
     expect(html).toContain(`Needs validation before accepting`)
     expect(html).toContain(`<strong class="stat-value">61%</strong>`)
-    expect(html).toContain(`<strong class="stat-value">78/100</strong>`)
     expect(html).toContain(`<strong class="stat-value">0.82</strong>`)
+    expect(html).toContain(`class="gauge"`)
+    expect(html).toContain(`>78</text>`)
+    expect(html).toContain(`>HIGH</text>`)
+    expect(html).toContain("Heuristic score from session signals")
   })
 
   test("renders escaped validation command summary and semantic callouts", () => {

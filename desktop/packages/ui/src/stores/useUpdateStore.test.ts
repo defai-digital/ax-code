@@ -166,17 +166,50 @@ describe("useUpdateStore runtime detection", () => {
       download.resolve(null)
       await downloadUpdate
 
-      expect(invokedCommands).toEqual([
-        "desktop_check_for_updates",
-        "desktop_check_for_updates",
-        "desktop_download_and_install_update",
-      ])
+      expect(invokedCommands).toEqual(["desktop_check_for_updates", "desktop_download_and_install_update"])
       expect(useUpdateStore.getState()).toMatchObject({
         checking: false,
         available: false,
         downloading: false,
         downloaded: false,
         info: null,
+      })
+    } finally {
+      restoreWindow()
+    }
+  })
+
+  test("downloads the confirmed desktop update without rechecking", async () => {
+    let updateChecks = 0
+    mockElectronUpdaterWindow(async (command) => {
+      invokedCommands.push(command)
+      if (command === "desktop_check_for_updates") {
+        updateChecks += 1
+        if (updateChecks > 1) {
+          throw new Error("unexpected second update check")
+        }
+        return {
+          available: true,
+          version: "1.1.2",
+          currentVersion: "1.1.1",
+        }
+      }
+      if (command === "desktop_download_and_install_update") {
+        return null
+      }
+      return null
+    })
+
+    try {
+      await useUpdateStore.getState().checkForUpdates()
+      await useUpdateStore.getState().downloadUpdate()
+
+      expect(invokedCommands).toEqual(["desktop_check_for_updates", "desktop_download_and_install_update"])
+      expect(useUpdateStore.getState()).toMatchObject({
+        available: true,
+        downloading: false,
+        downloaded: true,
+        error: null,
       })
     } finally {
       restoreWindow()
@@ -210,7 +243,6 @@ describe("useUpdateStore runtime detection", () => {
       await downloadUpdate
 
       expect(invokedCommands).toEqual([
-        "desktop_check_for_updates",
         "desktop_check_for_updates",
         "desktop_download_and_install_update",
         "desktop_check_for_updates",

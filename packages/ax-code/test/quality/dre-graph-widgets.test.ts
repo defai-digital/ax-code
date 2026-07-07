@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { barChart, chip, donut, flow, gauge, stat, stepSummary } from "../../src/quality/dre-graph-widgets"
+import { barChart, chip, flow, gauge, stat, stepSummary } from "../../src/quality/dre-graph-widgets"
 
 describe("quality.dre-graph-widgets", () => {
   test("escapes chip and stat text", () => {
@@ -54,21 +54,5 @@ describe("quality.dre-graph-widgets", () => {
     expect(html).toContain("unsafe&lt;script&gt;")
     expect(html).toContain("5%&lt;")
     expect(html).toContain("detail&amp;")
-  })
-
-  test("renders donut legend percentages and escapes labels", () => {
-    expect(donut({ segments: [{ label: "empty", value: 0, color: "#fff" }] })).toBe(`<p class="empty">No data.</p>`)
-
-    const html = donut({
-      segments: [
-        { label: "input<script>", value: 25, color: "#38bdf8" },
-        { label: "output", value: 75, color: "#f97316" },
-      ],
-      size: 96,
-    })
-    expect(html).toContain(`width="96" height="96"`)
-    expect(html).toContain("input&lt;script&gt;")
-    expect(html).toContain("(25%)")
-    expect(html).toContain("(75%)")
   })
 })

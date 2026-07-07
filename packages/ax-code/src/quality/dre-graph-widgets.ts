@@ -1,4 +1,4 @@
-import { esc, num, tone } from "./dre-graph-format"
+import { esc, tone } from "./dre-graph-format"
 
 export function chip(input: { label: string; kind?: string }) {
   return `<span class="chip ${esc(input.kind ?? "neutral")}">${esc(input.label)}</span>`
@@ -13,7 +13,6 @@ export function stat(input: { label: string; value: string; kind?: string; icon?
     "</div>",
   ].join("")
 }
-
 export function flow(nodes: string[], opts?: { max?: number }) {
   if (nodes.length === 0) return `<p class="empty">No recorded nodes.</p>`
   const runs: { name: string; count: number }[] = []
@@ -115,36 +114,6 @@ export function barChart(input: {
         ].join("")
       })
       .join(""),
-    `</div>`,
-  ].join("")
-}
-
-export function donut(input: { segments: { label: string; value: number; color: string }[]; size?: number }) {
-  const total = input.segments.reduce((a, b) => a + b.value, 0)
-  if (total === 0) return `<p class="empty">No data.</p>`
-  const size = input.size ?? 80
-  const r = 30
-  const circ = 2 * Math.PI * r
-  let offset = 0
-  const arcs = input.segments.map((seg) => {
-    const pct = seg.value / total
-    const dash = circ * pct
-    const gap = circ - dash
-    const arc = `<circle cx="40" cy="40" r="${r}" fill="none" stroke="${seg.color}" stroke-width="8" stroke-dasharray="${dash} ${gap}" stroke-dashoffset="${-offset}" transform="rotate(-90 40 40)"/>`
-    offset += dash
-    return arc
-  })
-  return [
-    `<div class="donut-wrap">`,
-    `<svg viewBox="0 0 80 80" width="${size}" height="${size}">${arcs.join("")}</svg>`,
-    `<div class="donut-legend">`,
-    input.segments
-      .map(
-        (seg) =>
-          `<div class="donut-item"><span class="donut-dot" style="background:${seg.color}"></span><span>${esc(seg.label)}</span><strong>${num(seg.value)}</strong><span class="muted">(${Math.round((seg.value / total) * 100)}%)</span></div>`,
-      )
-      .join(""),
-    `</div>`,
     `</div>`,
   ].join("")
 }

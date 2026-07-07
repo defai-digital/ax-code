@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { live, mermaidScript, themeScript, themeToggle } from "../../src/quality/dre-graph-assets"
+import { executionSummaryScript, live, themeScript, themeToggle } from "../../src/quality/dre-graph-assets"
 
 describe("quality.dre-graph-assets", () => {
   test("renders theme bootstrap and toggle scripts", () => {
@@ -27,25 +27,40 @@ describe("quality.dre-graph-assets", () => {
     expect(html).toContain(`const allow = cfg.sessionID == null ? session : [...session, ...detail]`)
   })
 
-  test("renders mermaid graph loader with script-safe session id", () => {
-    const html = mermaidScript("<session>&\u2028")
+  test("paces reloads slower for streaming detail events than lifecycle events", () => {
+    const html = live({ sessionID: "session-1", directory: "src" })
+
+    expect(html).toContain(`const gap = 2000`)
+    expect(html).toContain(`const streamGap = 10000`)
+    expect(html).toContain(`if (keep(data)) pull(detail.includes(data.payload.type) ? streamGap : gap)`)
+    expect(html).toContain(`pull(cfg.sessionID == null ? gap : streamGap)`)
+    expect(html).toContain(`if (wait && at >= waitAt) return`)
+  })
+
+  test("renders execution summary loader with script-safe session id", () => {
+    const html = executionSummaryScript("<session>&\u2028")
 
     expect(html).toContain(`const _sid = "\\u003csession\\u003e\\u0026\\u2028";`)
-    expect(html).toContain(`fetch('/graph/' + _sid + '?format=svggantt'`)
+    expect(html).toContain(`const _dirQuery = "";`)
+    expect(html).toContain(`fetch('/graph/' + _sid + '?format=json' + _dirQuery`)
     expect(html).toContain(`if (_rendering) { _renderQueued = true; return; }`)
-    expect(html).toContain(`if (_renderQueued) { _renderQueued = false; _renderGraph(); }`)
+    expect(html).toContain(`if (_renderQueued) { _renderQueued = false; _renderSummary(); }`)
     expect(html).toContain(`window._reinitGraph = function()`)
   })
 
-  test("sanitizes fetched SVG before inserting graph markup", () => {
-    const html = mermaidScript("session-1")
+  test("scopes the execution summary graph fetch to the session directory", () => {
+    const html = executionSummaryScript("session-1", "/work/my project&x")
 
-    expect(html).toContain("function _replaceGraphSvg(el,text)")
-    expect(html).toContain("new DOMParser().parseFromString(text, 'image/svg+xml')")
-    expect(html).toContain("svg.querySelectorAll('script,foreignObject')")
-    expect(html).toContain("name.startsWith('on') || value.startsWith('javascript:')")
-    expect(html).toContain("el.replaceChildren(document.importNode(svg, true))")
-    expect(html).toContain("if (el) _replaceGraphSvg(el, text);")
-    expect(html).not.toContain("if (el) el.innerHTML = text;")
+    expect(html).toContain(`const _dirQuery = "\\u0026directory=%2Fwork%2Fmy%20project%26x";`)
+  })
+
+  test("polls for and reports the execution summary status", () => {
+    const html = executionSummaryScript("session-1")
+
+    expect(html).toContain("function _updateSummary(graph)")
+    expect(html).toContain("function _summaryUnavailable()")
+    expect(html).toContain("const _refresh = window.setInterval(_renderSummary, 15000)")
+    expect(html).toContain("getElementById('gviz-summary-status')")
+    expect(html).toContain("getElementById('gviz-summary-detail')")
   })
 })

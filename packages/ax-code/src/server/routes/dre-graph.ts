@@ -6,6 +6,7 @@ import { SessionBranchRank } from "../../session/branch"
 import { SessionDre } from "../../session/dre"
 import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
+import { Risk } from "../../risk/score"
 import { activitySection } from "../../quality/dre-graph-activity-section"
 import { executionSummaryScript, live, themeScript, themeToggle } from "../../quality/dre-graph-assets"
 import { branchSection } from "../../quality/dre-graph-branch-section"
@@ -65,6 +66,11 @@ async function loadSessionList(): Promise<Session.Info[]> {
   return [...Session.list({ limit: 50, directory: Instance.directory })]
 }
 
+async function loadSessionSummaries(): Promise<{ session: Session.Info; risk: Risk.Assessment }[]> {
+  const list = await loadSessionList()
+  return list.map((session) => ({ session, risk: Risk.fromSession(session.id) }))
+}
+
 function disableClientCache(c: { header: (name: string, value: string) => void }) {
   c.header("cache-control", "no-store")
 }
@@ -101,10 +107,10 @@ function page(input: {
     `<body>`,
     // ── Nav ──
     `<nav class="nav"><div class="nav-inner">`,
-    `<span class="nav-brand">AX Code DRE</span>`,
+    `<span class="nav-brand" title="Debugging & Refactoring Engine">AX Code DRE</span>`,
     `<div class="nav-sep"></div>`,
-    `<a class="nav-link" href="#summary">Summary</a>`,
     `<a class="nav-link" href="#verdict">Verdict</a>`,
+    `<a class="nav-link" href="#summary">Summary</a>`,
     `<a class="nav-link" href="#changes">Changes</a>`,
     `<a class="nav-link" href="#risk">Risk</a>`,
     `<a class="nav-link" href="#validation">Validation</a>`,
@@ -131,10 +137,10 @@ function page(input: {
     `</div>`,
     `</div>`,
     `</header>`,
-    // ── 1. Summary: "what happened and should I care?" ──
-    summary({ dre: input.dre, risk: input.risk, graph: input.graph }),
-    // ── 2. Verdict: "should I accept this?" ──
+    // ── 1. Verdict: "should I accept this?" — leads the page (BLUF) ──
     verdictSection({ dre: input.dre, risk: input.risk }),
+    // ── 2. Summary: "what happened?" ──
+    summary({ dre: input.dre, graph: input.graph }),
     // ── 3. Changes: "what files changed and how risky?" ──
     changesSection({ dre: input.dre }),
     // ── 4. Risk: "why is the risk what it is?" ──
@@ -148,7 +154,7 @@ function page(input: {
     // ── Footer ──
     `<footer class="footer">AX Code DRE · Debugging & Refactoring Engine</footer>`,
     live({ sessionID: input.session.id, directory: input.session.directory }),
-    executionSummaryScript(input.session.id),
+    executionSummaryScript(input.session.id, input.session.directory),
     `</body>`,
     `</html>`,
   ].join("")
@@ -158,10 +164,10 @@ export const DreGraphRoutes = lazy(() =>
   new Hono()
     .get("/", async (c) => {
       const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
-      const list = await loadSessionList()
+      const rows = await loadSessionSummaries()
       disableClientCache(c)
       c.header("content-type", "text/html; charset=utf-8")
-      return c.body(indexPage({ list, search }))
+      return c.body(indexPage({ rows, search }))
     })
     .get("/fingerprint", async (c) => {
       const list = await loadSessionList()

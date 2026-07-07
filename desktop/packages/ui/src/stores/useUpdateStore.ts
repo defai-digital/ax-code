@@ -131,30 +131,6 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
     set({ downloading: true, error: null, progress: null })
 
     try {
-      const desktopInfo = await checkForDesktopUpdates()
-      if (!isCurrentRequest()) return
-      if (desktopInfo?.error) {
-        console.warn("Desktop update recheck failed:", desktopInfo.error)
-        throw new Error(UPDATE_FAILED_MESSAGE)
-      }
-      if (!desktopInfo?.available) {
-        throw new Error("Update detected, but desktop package is not ready yet. Retry in a moment.")
-      }
-
-      set((state) => ({
-        info: state.info
-          ? {
-              ...state.info,
-              ...desktopInfo,
-              // Keep the richer sidecar-sourced changelog; desktopInfo.body is
-              // often the bare "See release notes at..." fallback from the
-              // updater and would otherwise clobber the nice changelog.
-              body: state.info.body || desktopInfo.body,
-              available: state.info.available,
-            }
-          : desktopInfo,
-      }))
-
       const ok = await downloadDesktopUpdate((progress) => {
         if (!isCurrentRequest()) return
         set({ progress })

@@ -1,7 +1,7 @@
 import { SessionDre } from "../session/dre"
 import { SessionRisk } from "../session/risk"
 import { confidenceTone, esc, readiness, readinessTone, tone, validation } from "./dre-graph-format"
-import { chip, stat } from "./dre-graph-widgets"
+import { chip, gauge, stat } from "./dre-graph-widgets"
 
 export function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionRisk.Detail }) {
   const detail = input.dre.detail
@@ -26,6 +26,11 @@ export function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionR
   return [
     `<section class="verdict" id="verdict">`,
     `<div class="verdict-inner ${readyTone}">`,
+    `<div class="summary-grid">`,
+    `<div class="summary-risk">`,
+    gauge({ score: input.risk.assessment.score, max: 100, level: input.risk.assessment.level }),
+    `</div>`,
+    `<div class="summary-details">`,
     `<div class="verdict-headline ${readyTone}">${esc(headlines[ready] ?? readiness(ready))}</div>`,
     `<div class="verdict-grid">`,
     stat({
@@ -33,7 +38,6 @@ export function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionR
       value: `${Math.round(input.risk.assessment.confidence * 100)}%`,
       kind: confidenceTone(input.risk.assessment.confidence),
     }),
-    stat({ label: "Risk", value: `${input.risk.assessment.score}/100`, kind: tone(input.risk.assessment.level) }),
     stat({
       label: "Validation",
       value: validationLabel,
@@ -54,6 +58,9 @@ export function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionR
     input.risk.assessment.mitigations.length > 0
       ? `<div class="verdict-callout"><span class="verdict-callout-icon" style="color:var(--low)">\u2192</span> ${esc(input.risk.assessment.mitigations[0])}</div>`
       : "",
+    `<p class="muted" style="font-size:11px;margin-top:12px">Heuristic score from session signals \u2014 not a calibrated defect probability.</p>`,
+    `</div>`,
+    `</div>`,
     `</div>`,
     `</section>`,
   ].join("")
