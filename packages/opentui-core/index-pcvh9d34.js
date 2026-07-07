@@ -11932,7 +11932,8 @@ function applyNativeRenderOverlay(symbols) {
   // handle can't be used by a Rust buffer call. AX_CODE_NATIVE_RENDER_SCOPE=yoga
   // is the escape hatch back to the Phase-1 yoga/audio-only routing. The
   // full-pipeline parity is gated by check:golden-frames (Zig baseline vs Rust).
-  const routeAll = process.env.AX_CODE_NATIVE_RENDER_SCOPE !== "yoga";
+  const scope = (process.env.AX_CODE_NATIVE_RENDER_SCOPE || "").toLowerCase();
+  const routeAll = scope !== "yoga";
   for (const key of Object.keys(overlaid)) {
     const isOverlayFamily =
       routeAll || key.startsWith("yoga") || key.startsWith("audio") || key === "createAudioEngine" || key === "destroyAudioEngine";

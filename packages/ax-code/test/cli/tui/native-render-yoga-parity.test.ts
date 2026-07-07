@@ -2,16 +2,16 @@
 // byte-equivalent to the bundled Zig backend, and the AX_CODE_NATIVE_RENDER
 // overlay must actually engage (not silently fall back).
 //
-// Vitest workers do not run with --experimental-ffi, so both checks spawn a
-// child node process the same way the shipped launcher does. When the Rust
-// addon has not been built locally (probe exits 2), the suite skips instead
+// Vitest workers do not run with --experimental-ffi, so these checks spawn a
+// child Node runtime with node:ffi support the same way the shipped launcher
+// does. When the Rust addon has not been built locally, the suite skips instead
 // of failing — CI lanes without a cargo toolchain stay green.
 
-import { spawnSync } from "node:child_process"
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
+import { runFfiNode } from "../../fixture/ffi-node"
 
 const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const addonBuilt = existsSync(
@@ -19,11 +19,7 @@ const addonBuilt = existsSync(
 )
 
 const runNode = (args: string[], env: Record<string, string> = {}) =>
-  spawnSync(
-    process.execPath,
-    ["--experimental-ffi", "--disable-warning=ExperimentalWarning", ...args],
-    { cwd: pkgDir, encoding: "utf8", env: { ...process.env, ...env }, timeout: 120_000 },
-  )
+  runFfiNode(args, { cwd: pkgDir, env, timeout: 120_000 })
 
 describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () => {
   it("matches the Zig backend op-for-op", () => {
@@ -172,6 +168,7 @@ describe.skipIf(!addonBuilt)("native render yoga parity (ADR-046 Phase 1)", () =
     expect(render({ AX_CODE_NATIVE_RENDER: "0" })).toContain("render:ZIG") // explicit off
     // SCOPE=yoga narrows an =1 opt-in to yoga/audio only — render stays Zig.
     expect(render({ AX_CODE_NATIVE_RENDER: "1", AX_CODE_NATIVE_RENDER_SCOPE: "yoga" })).toContain("render:ZIG")
+    expect(render({ AX_CODE_NATIVE_RENDER: "1", AX_CODE_NATIVE_RENDER_SCOPE: "YOGA" })).toContain("render:ZIG")
   })
 
   it("overlay engages under =1 and stays disengaged by default (audio-stub fingerprint)", () => {
