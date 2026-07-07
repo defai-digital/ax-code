@@ -158,6 +158,23 @@ describe("installAxEngineBinary", () => {
     )
   })
 
+  test("refuses to install a release without a pinned sha256", async () => {
+    await expect(
+      installAxEngineBinary({}, baseRuntime({ resolveRelease: () => ({ ...RELEASE, sha256: undefined }) })),
+    ).rejects.toThrow("without a pinned SHA-256")
+    expect(await getManagedBinary()).toBeUndefined()
+  })
+
+  test("refuses to install a release from a non-https url", async () => {
+    await expect(
+      installAxEngineBinary(
+        {},
+        baseRuntime({ resolveRelease: () => ({ ...RELEASE, url: "http://example.com/ax-engine.tar.gz" }) }),
+      ),
+    ).rejects.toThrow("non-HTTPS")
+    expect(await getManagedBinary()).toBeUndefined()
+  })
+
   test("propagates platform ineligibility", async () => {
     await expect(
       installAxEngineBinary(

@@ -87,6 +87,40 @@ describe("HfCache.snapshotDir / isCompleteSnapshot", () => {
     expect(await HfCache.snapshotDir(GEMMA.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
     expect(await HfCache.completeSnapshotDir(GEMMA.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
   })
+
+  test("rejects a snapshot with a dangling weight symlink", async () => {
+    await using dir = await tmpdir()
+    const hfRoot = path.join(dir.path, "hub")
+    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    // Simulate an interrupted download: the snapshot link exists but the blob
+    // it points at was never written.
+    await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
+    await fs.symlink(
+      path.join("..", "..", "blobs", "never-downloaded"),
+      path.join(snapshot, "model-00001-of-00001.safetensors"),
+    )
+    expect(await HfCache.isCompleteSnapshot(snapshot)).toBe(false)
+  })
+
+  test("rejects a snapshot missing shards named by the weight index", async () => {
+    await using dir = await tmpdir()
+    const hfRoot = path.join(dir.path, "hub")
+    const snapshot = await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT)
+    await fs.writeFile(
+      path.join(snapshot, "model.safetensors.index.json"),
+      JSON.stringify({
+        weight_map: {
+          "a.weight": "model-00001-of-00002.safetensors",
+          "b.weight": "model-00002-of-00002.safetensors",
+        },
+      }),
+    )
+    await fs.writeFile(path.join(snapshot, "model-00001-of-00002.safetensors"), "shard1")
+    expect(await HfCache.isCompleteSnapshot(snapshot)).toBe(false)
+
+    await fs.writeFile(path.join(snapshot, "model-00002-of-00002.safetensors"), "shard2")
+    expect(await HfCache.isCompleteSnapshot(snapshot)).toBe(true)
+  })
 })
 
 describe("ax-engine model storage uses the HF snapshot", () => {

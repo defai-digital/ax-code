@@ -206,6 +206,21 @@ export async function installAxEngineBinary(
     )
   }
 
+  // Never install an unverifiable archive. Without a pinned digest (an
+  // AX_ENGINE_INSTALL_URL override with no AX_ENGINE_INSTALL_SHA256, since the
+  // built-in pin always carries one) the managed install degrades from
+  // hash-pinned to trust-the-network, and plain http makes that trivially
+  // exploitable. The ad-hoc `codesign --verify` that follows is not a
+  // countermeasure — any attacker binary can be ad-hoc signed.
+  if (!release.sha256?.trim()) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.DownloadFailed}: refusing to install ax-engine without a pinned SHA-256 — set ${AX_ENGINE_INSTALL_ENV.sha256} for the overridden release`,
+    )
+  }
+  if (!release.url.startsWith("https://")) {
+    throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: refusing to install ax-engine from a non-HTTPS URL`)
+  }
+
   const existing = inflight.get(release.version)
   if (existing) return existing
 

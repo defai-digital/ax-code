@@ -69,10 +69,10 @@ export type AxEngineBinaryRelease = {
 // machine can override this via the AX_ENGINE_INSTALL_* env vars without
 // editing here.
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = {
-  version: "6.6.0",
-  assetName: "ax-engine-v6.6.0-macos-arm64.tar.gz",
-  url: "https://github.com/defai-digital/ax-engine/releases/download/v6.6.0/ax-engine-v6.6.0-macos-arm64.tar.gz",
-  sha256: "32ba4da8b52dc184f9cbc530c891cd3a9f93c80cc07cefed40399a25db26766f",
+  version: "6.7.1",
+  assetName: "ax-engine-v6.7.1-macos-arm64.tar.gz",
+  url: "https://github.com/defai-digital/ax-engine/releases/download/v6.7.1/ax-engine-v6.7.1-macos-arm64.tar.gz",
+  sha256: "b96fd7c9db8cd24e16825bf5882b2ac008289f9736c0912c6cc8edbb9f86bd7c",
 }
 
 export const AX_ENGINE_MODEL_IDS = [

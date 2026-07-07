@@ -107,13 +107,24 @@ async function exists(file: string) {
 }
 
 async function directorySize(dir: string): Promise<number | undefined> {
+  // HF snapshots are symlink farms into blobs/ — following links (deduped by
+  // real path so a blob is only counted once) is what makes the reported model
+  // size real instead of the few KB of link entries.
   let total = 0
+  const seen = new Set<string>()
   async function walk(current: string) {
     const entries = await fs.readdir(current, { withFileTypes: true })
     for (const entry of entries) {
       const p = path.join(current, entry.name)
-      if (entry.isDirectory()) await walk(p)
-      else if (entry.isFile()) total += (await fs.stat(p)).size
+      if (entry.isDirectory()) {
+        await walk(p)
+        continue
+      }
+      const real = await fs.realpath(p).catch(() => undefined)
+      if (!real || seen.has(real)) continue
+      seen.add(real)
+      const stat = await fs.stat(real).catch(() => undefined)
+      if (stat?.isFile()) total += stat.size
     }
   }
   try {

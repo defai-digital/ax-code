@@ -85,12 +85,28 @@ export namespace HfCache {
   }
 
   // A snapshot is usable by ax-engine only when it carries MLX weights and the
-  // AX model-manifest.json the engine generates after download.
+  // AX model-manifest.json the engine generates after download. HF snapshots
+  // are symlink farms into blobs/: an interrupted download leaves dangling
+  // links (or a partial shard set) that a name listing alone cannot detect, so
+  // every entry must resolve and, when the repo ships a shard index, every
+  // shard it names must be present.
   export async function isCompleteSnapshot(dir: string): Promise<boolean> {
     if (!(await isDir(dir))) return false
     if (!(await fileExists(path.join(dir, "model-manifest.json")))) return false
-    const entries = await fs.readdir(dir).catch(() => [] as string[])
-    return entries.some((name) => name.endsWith(".safetensors"))
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => undefined)
+    if (!entries) return false
+    let hasWeights = false
+    for (const entry of entries) {
+      const target = path.join(dir, entry.name)
+      if (entry.isSymbolicLink() && !(await fileExists(target))) return false
+      if (entry.name.endsWith(".safetensors")) hasWeights = true
+    }
+    if (!hasWeights) return false
+    const shards = await readWeightIndexShards(path.join(dir, "model.safetensors.index.json"))
+    for (const shard of shards ?? []) {
+      if (!(await fileExists(path.join(dir, shard)))) return false
+    }
+    return true
   }
 
   // True when a path lives inside the Hugging Face Hub cache, so callers can
@@ -98,6 +114,20 @@ export namespace HfCache {
   export function isInside(target: string, env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): boolean {
     const rel = path.relative(root(env, home), path.resolve(target))
     return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel))
+  }
+}
+
+// Distinct shard filenames from a model.safetensors.index.json weight_map, or
+// undefined when the file is absent/unreadable (single-file repos have none).
+async function readWeightIndexShards(file: string): Promise<string[] | undefined> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(file, "utf8")) as { weight_map?: Record<string, unknown> }
+    if (!parsed || typeof parsed !== "object" || !parsed.weight_map || typeof parsed.weight_map !== "object") {
+      return undefined
+    }
+    return [...new Set(Object.values(parsed.weight_map).filter((value): value is string => typeof value === "string"))]
+  } catch {
+    return undefined
   }
 }
 
