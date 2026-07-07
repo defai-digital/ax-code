@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { useI18n, type I18nKey } from "@/lib/i18n"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useExecutionModeStore, type ExecutionMode } from "@/stores/useExecutionModeStore"
+import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
 
 type ModeMeta = {
   value: ExecutionMode
@@ -53,7 +54,10 @@ export const ExecutionModeSelector: React.FC<ExecutionModeSelectorProps> = ({
 }) => {
   const { t } = useI18n()
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory)
-  const dirKey = (currentDirectory ?? "").trim()
+  // Must match the key the store writes under (normalizeDirectoryKey), not a
+  // plain trim — otherwise unnormalized paths (trailing slash, backslashes)
+  // subscribe to a key the store never populates.
+  const dirKey = normalizeDirectoryKey(currentDirectory)
 
   const mode = useExecutionModeStore((s) => s.modeByDirectory[dirKey])
   const pending = useExecutionModeStore((s) => s.pendingByDirectory[dirKey] === true)

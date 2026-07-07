@@ -12,6 +12,7 @@ import {
 export const providerId = "codex"
 export const providerName = "Codex"
 export const aliases = ["openai", "codex", "chatgpt"]
+const MONETARY_QUOTA_LABELS_ENABLED = false
 
 export const isConfigured = () => {
   const auth = readAuthFile()
@@ -83,7 +84,8 @@ export const fetchQuota = async () => {
     if (credits) {
       const balance = toNumber(credits.balance)
       const unlimited = Boolean(credits.unlimited)
-      const label = unlimited ? "Unlimited" : balance !== null ? `$${formatMoney(balance)} remaining` : null
+      const formattedBalance = MONETARY_QUOTA_LABELS_ENABLED && balance !== null ? formatMoney(balance) : null
+      const label = unlimited ? "Unlimited" : formattedBalance ? `$${formattedBalance} remaining` : null
       windows.credits = toUsageWindow({
         usedPercent: null,
         windowSeconds: null,

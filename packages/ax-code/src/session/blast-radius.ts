@@ -11,7 +11,7 @@ import {
 } from "@/constants/session"
 import { Recorder } from "@/replay/recorder"
 import type { SessionID } from "./schema"
-import { Flag } from "@/flag/flag"
+import { ScopedFlag } from "@/flag/scoped"
 
 export namespace BlastRadius {
   const log = Log.create({ service: "session.blast-radius" })
@@ -287,7 +287,7 @@ export namespace BlastRadius {
    * a different path, instead of the session terminating.
    */
   export function assertWritable(sessionID: SessionID, filePath: string) {
-    const isAutonomous = Flag.AX_CODE_AUTONOMOUS
+    const isAutonomous = ScopedFlag.autonomous()
     if (!isAutonomous) return
     const result = isPathBlocked(sessionID, filePath)
     if (result.blocked) {
@@ -317,7 +317,7 @@ export namespace BlastRadius {
    * exceeds the file or line cap.
    */
   export function recordWriteAndAssert(sessionID: SessionID, filePath: string, lineDelta: number) {
-    const isAutonomous = Flag.AX_CODE_AUTONOMOUS
+    const isAutonomous = ScopedFlag.autonomous()
     if (!isAutonomous) return
     recordWrite(sessionID, filePath, lineDelta)
     assertWithinCaps(sessionID)

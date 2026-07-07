@@ -2,6 +2,7 @@ import path from "path"
 import fs from "fs/promises"
 import { Agent } from "../agent/agent"
 import { Flag } from "../flag/flag"
+import { ScopedFlag } from "../flag/scoped"
 import { Filesystem } from "../util/filesystem"
 import { Session } from "."
 import { MessageV2 } from "./message-v2"
@@ -102,7 +103,7 @@ export async function insertReminders(input: InsertRemindersInput) {
       }),
     )
   }
-  const autonomousDecisionLedger = Flag.AX_CODE_AUTONOMOUS
+  const autonomousDecisionLedger = ScopedFlag.autonomous()
     ? autonomousDecisionLedgerReminder(input.messages)
     : undefined
   if (autonomousDecisionLedger) {

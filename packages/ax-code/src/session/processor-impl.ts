@@ -8,7 +8,7 @@ import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
-import { Flag } from "@/flag/flag"
+import { ScopedFlag } from "@/flag/scoped"
 import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
 import { BlastRadius } from "./blast-radius"
 import { detectCycle, type RingEntry } from "./cycle-detection"
@@ -263,7 +263,7 @@ export namespace SessionProcessor {
         attempt = 0
         needsCompaction = false
         lastStreamError = undefined
-        const autonomous = Flag.AX_CODE_AUTONOMOUS
+        const autonomous = ScopedFlag.autonomous()
         const shouldBreak = autonomous ? false : (await Config.get()).experimental?.continue_loop_on_deny !== true
         if (autonomous) {
           // Apply per-session cap overrides from config so users can widen

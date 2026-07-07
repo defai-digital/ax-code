@@ -49938,47 +49938,6 @@
     "name": "LLM Gateway",
     "doc": "https://llmgateway.io/docs",
     "models": {
-      "claude-3-7-sonnet": {
-        "id": "claude-3-7-sonnet",
-        "name": "Claude 3.7 Sonnet",
-        "description": "Balanced Claude model for coding, analysis, agent workflows, and cost control",
-        "family": "claude",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          },
-          {
-            "type": "budget_tokens",
-            "min": 1024,
-            "max": 8191
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-02-24",
-        "last_updated": "2025-02-24",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "output": 8192
-        }
-      },
       "qwen-coder-plus": {
         "id": "qwen-coder-plus",
         "name": "Qwen Coder Plus",
@@ -52824,49 +52783,6 @@
         "limit": {
           "context": 32768,
           "output": 8192
-        }
-      },
-      "claude-3-7-sonnet-20250219": {
-        "id": "claude-3-7-sonnet-20250219",
-        "name": "Claude Sonnet 3.7",
-        "description": "Balanced Claude model for coding, analysis, agent workflows, and cost control",
-        "family": "claude-sonnet",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          },
-          {
-            "type": "budget_tokens",
-            "min": 1024,
-            "max": 8191
-          }
-        ],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2024-10-31",
-        "release_date": "2025-02-19",
-        "last_updated": "2025-02-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "output": 64000
         }
       },
       "o1": {

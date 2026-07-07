@@ -22,6 +22,7 @@ import { Recorder } from "../replay/recorder"
 import type { SessionID } from "./schema"
 import { Log } from "@/util/log"
 import { Flag } from "../flag/flag"
+import { ScopedFlag } from "../flag/scoped"
 
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
@@ -82,7 +83,7 @@ export namespace SystemPrompt {
           `</live_search>`,
         ]
       : []
-    const autonomousWorkflow = Flag.AX_CODE_AUTONOMOUS
+    const autonomousWorkflow = ScopedFlag.autonomous()
       ? [
           `<autonomous_workflow>`,
           `  Autonomous mode is enabled.`,

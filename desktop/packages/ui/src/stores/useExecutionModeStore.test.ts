@@ -59,7 +59,6 @@ describe("useExecutionModeStore", () => {
     useExecutionModeStore.setState({
       modeByDirectory: { "/repo": "manual" },
       pendingByDirectory: {},
-      loadedByDirectory: { "/repo": true },
     })
     setAutonomousEnabledMock.mockRejectedValueOnce(new Error("server unavailable"))
 
@@ -70,13 +69,45 @@ describe("useExecutionModeStore", () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
+  test("settles on the mid-transition server state when a later step fails", async () => {
+    const { setAutonomousEnabledMock, toastErrorMock, useExecutionModeStore } = await importStore()
+    useExecutionModeStore.setState({
+      modeByDirectory: { "/repo": "long-run" },
+      pendingByDirectory: {},
+    })
+    // long-run → manual: super-long-off lands, autonomous-off fails. The
+    // server now holds autonomous-without-super-long, so the UI must show
+    // "autonomous", not revert to "long-run".
+    setAutonomousEnabledMock.mockRejectedValueOnce(new Error("server unavailable"))
+
+    await useExecutionModeStore.getState().setMode("/repo", "manual")
+
+    expect(useExecutionModeStore.getState().isPending("/repo")).toBe(false)
+    expect(useExecutionModeStore.getState().getMode("/repo")).toBe("autonomous")
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+  })
+
+  test("re-fetches on every load so out-of-band changes propagate", async () => {
+    const { getAutonomousEnabledMock, getSuperLongEnabledMock, useExecutionModeStore } = await importStore()
+
+    await useExecutionModeStore.getState().loadMode("/repo")
+    expect(useExecutionModeStore.getState().getMode("/repo")).toBe("autonomous")
+
+    // Setting changed externally (e.g. via the CLI) — a later load must pick
+    // it up instead of serving the cached value forever.
+    getAutonomousEnabledMock.mockResolvedValueOnce(false)
+    getSuperLongEnabledMock.mockResolvedValueOnce(false)
+    await useExecutionModeStore.getState().loadMode("/repo")
+
+    expect(useExecutionModeStore.getState().getMode("/repo")).toBe("manual")
+  })
+
   test("normalizes directory keys across Windows path variants", async () => {
     const { useExecutionModeStore } = await importStore()
 
     useExecutionModeStore.setState({
       modeByDirectory: { "C:/Repo": "autonomous" },
       pendingByDirectory: {},
-      loadedByDirectory: { "C:/Repo": true },
     })
 
     expect(useExecutionModeStore.getState().getMode("c:\\Repo\\")).toBe("autonomous")

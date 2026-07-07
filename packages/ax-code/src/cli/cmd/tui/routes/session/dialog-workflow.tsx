@@ -144,7 +144,7 @@ function DialogWorkflowDetail(props: { runID: string }) {
       {
         title: "View workflow eval summary",
         value: "workflow.detail.eval-summary",
-        description: "Inspect promotion gate, budget, verification, cost, and finding outcome metrics.",
+        description: "Inspect promotion gate, budget, verification, token usage, and finding outcome metrics.",
         category: "Actions",
         onSelect: (ctx) => {
           ctx.replace(() => <DialogWorkflowEvalSummary runID={props.runID} />)

@@ -13,7 +13,7 @@ import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
-import { Flag } from "@/flag/flag"
+import { ScopedFlag } from "@/flag/scoped"
 import { Token } from "@/util/token"
 import { markEstimatedUsage } from "../usage"
 import { Shell } from "@/shell/shell"
@@ -66,7 +66,7 @@ export function cliEnv(providerEnvKeys: readonly string[] = []) {
 }
 
 function autonomousCliArgs(providerID: string): string[] {
-  if (!Flag.AX_CODE_AUTONOMOUS) return []
+  if (!ScopedFlag.autonomous()) return []
   if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
   if (providerID === "gemini-cli") return ["--approval-mode", "yolo"]
   return []

@@ -7,6 +7,7 @@ import { FileLock } from "@/util/filelock"
 import { Lock } from "@/util/lock"
 import { Log } from "@/util/log"
 import { FeatureFlag } from "@/util/feature-flags"
+import { ScopedFlag, isScopedFlagName } from "@/flag/scoped"
 import { toErrorMessage } from "@/util/error-message"
 import { parseJsonResult } from "@/util/json-value"
 import { isRecord } from "@/util/record"
@@ -54,6 +55,11 @@ export async function persistProjectConfigFeatureResponse<FeatureValue extends s
   const persisted = await persistProjectConfigResponse(options)
   if (persisted) return persisted
   FeatureFlag.set(options.featureFlag, options.featureValue)
+  // Also record per directory: the env is process-global and last-writer-wins
+  // across projects, so runtime readers prefer the scoped value.
+  if (typeof options.featureValue === "boolean" && isScopedFlagName(options.featureFlag)) {
+    ScopedFlag.recordCurrent(options.featureFlag, options.featureValue)
+  }
   return options.responseState
 }
 
@@ -80,6 +86,9 @@ export async function readProjectConfigFeatureState(options: {
   const config = await readProjectConfig()
   const enabled = options.read(config)
   FeatureFlag.set(options.featureFlag, enabled)
+  if (isScopedFlagName(options.featureFlag)) {
+    ScopedFlag.recordCurrent(options.featureFlag, enabled)
+  }
   return { enabled }
 }
 

@@ -32,6 +32,8 @@ export type ModelPickerFavoriteEntry = ModelPickerEntry
 
 type HiddenModel = { providerID: string; modelID: string }
 
+const MODEL_COST_DISPLAY_ENABLED = false
+
 type IndexSelectionStore = {
   getSnapshot: () => number
   subscribe: (listener: () => void) => () => void
@@ -77,8 +79,7 @@ const hasTooltipMetadata = (metadata?: ModelMetadata) => {
   return Boolean(
     metadata.tool_call ||
       metadata.reasoning ||
-      metadata.cost?.input !== undefined ||
-      metadata.cost?.output !== undefined ||
+      (MODEL_COST_DISPLAY_ENABLED && (metadata.cost?.input !== undefined || metadata.cost?.output !== undefined)) ||
       (metadata.modalities?.input?.length ?? 0) > 0 ||
       (metadata.modalities?.output?.length ?? 0) > 0,
   )
@@ -138,7 +139,8 @@ const ModelPickerRowTooltip: React.FC<{
                 <span className="typography-meta text-foreground">{outputModalities.join(", ")}</span>
               </div>
             ) : null}
-            {metadata?.cost?.input !== undefined || metadata?.cost?.output !== undefined ? (
+            {MODEL_COST_DISPLAY_ENABLED &&
+            (metadata?.cost?.input !== undefined || metadata?.cost?.output !== undefined) ? (
               <div className="flex items-center justify-between gap-3 text-muted-foreground">
                 <span className="typography-meta font-medium">{labels.costPerMillion}</span>
                 <span className="typography-meta text-foreground">

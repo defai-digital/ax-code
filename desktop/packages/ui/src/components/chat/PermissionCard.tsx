@@ -107,8 +107,8 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({ permission, onRe
       if (!unmountedRef.current) {
         // Surface the failure to the user so they can retry instead of
         // silently believing the permission was granted/denied.
-        toast.error("Permission response failed", {
-          description: error instanceof Error ? error.message : "Please try again",
+        toast.error(t("chat.permissionCard.responseFailed.title"), {
+          description: error instanceof Error ? error.message : t("chat.permissionCard.responseFailed.retry"),
         })
         // Reset guard on failure so the user can retry.
         submittingRef.current = false

@@ -19,6 +19,7 @@ import { evaluate as evalRule } from "./evaluate"
 import { classify as classifyRisk } from "./risk-classes"
 import { PermissionID } from "./schema"
 import { Flag } from "@/flag/flag"
+import { ScopedFlag } from "@/flag/scoped"
 
 export namespace Permission {
   const log = Log.create({ service: "permission" })
@@ -243,14 +244,14 @@ export namespace Permission {
   function enforceSafetyPolicy(request: Omit<z.infer<typeof AskInput>, "ruleset" | "agent">, agent?: string) {
     const tool = typeof request.metadata?.tool === "string" ? request.metadata.tool : undefined
     const decision = SafetyPolicy.decide({
-      mode: Flag.AX_CODE_AUTONOMOUS ? "autonomous" : "normal",
+      mode: ScopedFlag.autonomous() ? "autonomous" : "normal",
       permission: request.permission,
       tool,
       path: request.patterns[0],
       paths: request.patterns,
     })
     const enforced =
-      decision.action === "deny" && Flag.AX_CODE_AUTONOMOUS && classifyRisk(request.permission) !== "safe"
+      decision.action === "deny" && ScopedFlag.autonomous() && classifyRisk(request.permission) !== "safe"
     if (Recorder.active(request.sessionID) && (decision.action !== "allow" || decision.checkpointRequired)) {
       Recorder.emit(
         AgentControlEvents.safetyDecided({
@@ -323,7 +324,7 @@ export namespace Permission {
     // explicitly opted out of all restrictions. In that posture, risk-class
     // permissions are auto-approved so the sandbox toggle meaningfully
     // controls whether the agent runs without approval prompts.
-    if (Flag.AX_CODE_AUTONOMOUS && !INTERACTIVE_ONLY.has(request.permission)) {
+    if (ScopedFlag.autonomous() && !INTERACTIVE_ONLY.has(request.permission)) {
       const riskClass = classifyRisk(request.permission)
       if (riskClass === "safe") {
         log.info("autonomous auto-approve (safe)", { permission: request.permission, patterns: request.patterns })

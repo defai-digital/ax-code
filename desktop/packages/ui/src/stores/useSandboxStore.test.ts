@@ -53,7 +53,6 @@ describe("useSandboxStore", () => {
     useSandboxStore.setState({
       sandboxByDirectory: { "/repo": false },
       pendingByDirectory: {},
-      loadedByDirectory: { "/repo": true },
     })
     setIsolationMock.mockRejectedValueOnce(new Error("server unavailable"))
 
@@ -64,13 +63,40 @@ describe("useSandboxStore", () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
 
+  test("restores read-only instead of upgrading to workspace-write on re-enable", async () => {
+    const { getIsolationMock, setIsolationMock, useSandboxStore } = await importStore()
+    getIsolationMock.mockResolvedValueOnce({ mode: "read-only" })
+
+    await useSandboxStore.getState().loadSandbox("/repo")
+    expect(useSandboxStore.getState().isSandbox("/repo")).toBe(true)
+
+    await useSandboxStore.getState().setSandbox("/repo", false)
+    expect(setIsolationMock).toHaveBeenLastCalledWith("full-access")
+
+    await useSandboxStore.getState().setSandbox("/repo", true)
+    expect(setIsolationMock).toHaveBeenLastCalledWith("read-only")
+  })
+
+  test("re-fetches on every load so out-of-band changes propagate", async () => {
+    const { getIsolationMock, useSandboxStore } = await importStore()
+
+    await useSandboxStore.getState().loadSandbox("/repo")
+    expect(useSandboxStore.getState().isSandbox("/repo")).toBe(true)
+
+    // Setting changed externally (e.g. via the CLI) — a later load must pick
+    // it up instead of serving the cached value forever.
+    getIsolationMock.mockResolvedValueOnce({ mode: "full-access" })
+    await useSandboxStore.getState().loadSandbox("/repo")
+
+    expect(useSandboxStore.getState().isSandbox("/repo")).toBe(false)
+  })
+
   test("normalizes directory keys across Windows path variants", async () => {
     const { useSandboxStore } = await importStore()
 
     useSandboxStore.setState({
       sandboxByDirectory: { "C:/Repo": true },
       pendingByDirectory: {},
-      loadedByDirectory: { "C:/Repo": true },
     })
 
     expect(useSandboxStore.getState().isSandbox("c:\\Repo\\")).toBe(true)

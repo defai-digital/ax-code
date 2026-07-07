@@ -220,9 +220,9 @@ export function Session() {
   })
 
   const dimensions = useTerminalDimensions()
-  // Lean-by-default per ADR-035: the sidebar stays hidden until the user opts in
-  // via `/sidebar`, the `sidebar_toggle` keybind, or the command palette.
-  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "hide")
+  // Default to auto-showing the sidebar on wide terminals. Narrow terminals
+  // still use the overlay path when the user explicitly toggles it.
+  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [conceal, setConceal] = createSignal(true)
   const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)

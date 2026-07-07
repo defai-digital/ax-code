@@ -21,6 +21,7 @@ import type { MessageV2 } from "./message-v2"
 import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
+import { ScopedFlag } from "@/flag/scoped"
 import { Permission } from "@/permission"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { withTimeout } from "@/util/timeout"
@@ -138,7 +139,7 @@ export namespace LLM {
     if (joined) system.push(joined)
     const reasoningPolicyDecision = ReasoningPolicy.decide({
       small: input.small,
-      autonomous: Flag.AX_CODE_AUTONOMOUS,
+      autonomous: ScopedFlag.autonomous(),
       userVariant: input.user.variant,
       model: input.model,
       agent: input.agent,
@@ -184,7 +185,7 @@ export namespace LLM {
     if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
 
     const longAgentProfile = longAgentProfileForModel(input.model.id, input.model.providerID)
-    const autonomousEnabled = Flag.AX_CODE_AUTONOMOUS
+    const autonomousEnabled = ScopedFlag.autonomous()
     const superLongEnabled =
       !input.small &&
       autonomousEnabled &&
@@ -197,6 +198,7 @@ export namespace LLM {
         // never treats as Super-Long — or vice versa.
         providerID: input.model.providerID,
         config: SuperLongPolicy.fromConfig(cfg.super_long),
+        scoped: ScopedFlag.superLong(),
       }).enabled
     // The verification-loop reminder is provider-agnostic supervision text —
     // it must fire for every Super-Long run, not just models whose long-agent

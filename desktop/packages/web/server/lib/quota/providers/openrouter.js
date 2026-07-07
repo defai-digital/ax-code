@@ -4,6 +4,7 @@ import { getAuthEntry, normalizeAuthEntry, buildResult, toUsageWindow, toNumber,
 export const providerId = "openrouter"
 export const providerName = "OpenRouter"
 export const aliases = ["openrouter"]
+const MONETARY_QUOTA_LABELS_ENABLED = false
 
 export const isConfigured = () => {
   const auth = readAuthFile()
@@ -52,7 +53,7 @@ export const fetchQuota = async () => {
     const totalUsage = toNumber(credits.total_usage)
     const remaining = totalCredits !== null && totalUsage !== null ? Math.max(0, totalCredits - totalUsage) : null
     let valueLabel = null
-    if (remaining !== null && totalUsage !== null) {
+    if (MONETARY_QUOTA_LABELS_ENABLED && remaining !== null && totalUsage !== null) {
       valueLabel = `$${formatMoney(remaining)} left · $${formatMoney(totalUsage)} spent`
     }
 

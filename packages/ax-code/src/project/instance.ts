@@ -9,6 +9,7 @@ import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
 import { Context } from "../util/context"
+import { ScopedFlag } from "@/flag/scoped"
 import { Project } from "./project"
 import { State } from "./state"
 
@@ -18,6 +19,9 @@ export interface Shape {
   project: Project.Info
 }
 const context = Context.create<Shape>("instance")
+// Let directory-scoped feature flags resolve against the active instance
+// without a flag → instance import cycle.
+ScopedFlag.setDirectoryResolver(() => context.peek()?.directory)
 const cache = new Map<string, Promise<Shape>>()
 const lifecycle = {
   listeners: new Set<(event: Instance.LifecycleEvent) => void>(),

@@ -88,7 +88,14 @@ export function createRuntimeSyncActions(input: {
   }
 
   async function syncRuntimeFlag(pathname: string, apply: (value: boolean) => void) {
-    const body = await fetchOptionalRuntimeJson<RuntimeFlagPayload>(pathname)
+    // Scope the read to the active directory like syncIsolation; without the
+    // header the server reads its own cwd's ax-code.json.
+    const body = await fetchOptionalRuntimeJson<RuntimeFlagPayload>(pathname, {
+      headers: directoryRequestHeaders({
+        directory: input.directory,
+        accept: "application/json",
+      }),
+    })
     if (!body) return
     apply(normalizeRuntimeFlagState(body))
   }

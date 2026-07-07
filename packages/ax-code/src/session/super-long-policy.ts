@@ -30,7 +30,7 @@ export namespace SuperLongPolicy {
 
   export type StateDecision = {
     enabled: boolean
-    source: "session-override" | "env" | "config" | "model-default"
+    source: "scoped" | "session-override" | "env" | "config" | "model-default"
   }
 
   export type DurationDecision =
@@ -142,7 +142,17 @@ export namespace SuperLongPolicy {
     providerID?: string
     config?: RuntimeConfig
     env?: Record<string, string | undefined>
+    /**
+     * Directory-scoped value (ScopedFlag.superLong()). Takes precedence over
+     * the env vars: those are process-global and last-writer-wins across
+     * directories, while the scoped value is recorded per directory by every
+     * code path that also writes the envs.
+     */
+    scoped?: boolean
   }): StateDecision {
+    if (input.scoped !== undefined) {
+      return { enabled: input.scoped, source: "scoped" }
+    }
     const env = input.env ?? process.env
     const sessionOverride = Env.parseBoolean(env[SESSION_OVERRIDE_ENV])
     if (sessionOverride !== undefined) {

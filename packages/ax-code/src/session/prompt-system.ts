@@ -1,5 +1,5 @@
 import type { Agent } from "../agent/agent"
-import { Flag } from "../flag/flag"
+import { ScopedFlag } from "../flag/scoped"
 import { providerModelKey } from "../provider/model-key"
 import type { ProviderID } from "../provider/schema"
 import { InstructionPrompt } from "./instruction"
@@ -91,7 +91,7 @@ export async function systemPrompt(input: {
   // In autonomous mode, inject pending todos into the system context each turn
   // so the model always knows exactly what's left. This is live state visible
   // at the start of every reasoning cycle, not just an upfront instruction.
-  const pendingTodos = Flag.AX_CODE_AUTONOMOUS && input.sessionID ? Todo.active(input.sessionID) : []
+  const pendingTodos = ScopedFlag.autonomous() && input.sessionID ? Todo.active(input.sessionID) : []
   const pendingTodosSection =
     pendingTodos.length > 0
       ? [

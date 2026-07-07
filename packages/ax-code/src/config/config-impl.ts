@@ -44,6 +44,7 @@ import { withTimeout } from "@/util/timeout"
 import * as ConfigSchema from "./schema"
 import { isRecord } from "../util/record"
 import { FeatureFlag } from "../util/feature-flags"
+import { ScopedFlag } from "../flag/scoped"
 import { parseJsonResult } from "../util/json-value"
 import { FileCommand } from "../command/file-command"
 // Single source of truth for the public config schema URL. Written into
@@ -596,8 +597,17 @@ export namespace Config {
     // env, so headless runs ignored the setting. An explicit
     // AX_CODE_AUTONOMOUS env var always wins, and projects that don't set
     // the key keep the flag default (on).
-    if (process.env["AX_CODE_AUTONOMOUS"] === undefined && result.autonomous !== undefined) {
+    // An env managed by route/config reconciliation just mirrors whichever
+    // directory wrote it last, so it must not block this directory's own
+    // reconciliation; only a pristine user-set env keeps override semantics.
+    if (
+      (process.env["AX_CODE_AUTONOMOUS"] === undefined || ScopedFlag.isManaged("AX_CODE_AUTONOMOUS")) &&
+      result.autonomous !== undefined
+    ) {
       FeatureFlag.set("AX_CODE_AUTONOMOUS", result.autonomous !== false)
+      // Also record per directory so runtime readers on a multi-directory
+      // server don't inherit another project's env reconciliation.
+      ScopedFlag.recordCurrent("AX_CODE_AUTONOMOUS", result.autonomous !== false)
     }
 
     return {

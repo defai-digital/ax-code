@@ -4,6 +4,7 @@ import { validator } from "../validation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { FeatureFlag } from "../../util/feature-flags"
+import { ScopedFlag } from "../../flag/scoped"
 import {
   BooleanFeatureState,
   persistProjectConfigBooleanFeatureResponse,
@@ -100,6 +101,7 @@ export const AutonomousRoutes = lazy(() =>
           // shadow the config on subsequent super-long GETs.
           FeatureFlag.set(SUPER_LONG_OVERRIDE, false)
           process.env[SUPER_LONG_BASE] = "false"
+          ScopedFlag.recordCurrent("AX_CODE_SUPER_LONG", false)
         }
         log.info("autonomous mode changed", { enabled })
         return c.json(state)

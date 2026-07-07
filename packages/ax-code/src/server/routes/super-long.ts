@@ -6,6 +6,7 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { BooleanFeatureState, persistProjectConfigBooleanFeatureResponse, readProjectConfig } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
+import { ScopedFlag } from "../../flag/scoped"
 import { Env } from "../../util/env"
 import { SuperLongPolicy } from "../../session/super-long-policy"
 import { SuperLongRuntime } from "../../session/super-long-runtime"
@@ -23,7 +24,7 @@ const SuperLongState = BooleanFeatureState.meta({ ref: "SuperLongState" })
 const SuperLongStatus = z
   .object({
     enabled: z.boolean(),
-    source: z.enum(["session-override", "env", "config", "model-default"]),
+    source: z.enum(["scoped", "session-override", "env", "config", "model-default"]),
     durationMs: z.number().nullable(),
     startedAt: z.number().nullable(),
     elapsedMs: z.number().nullable(),
@@ -70,6 +71,7 @@ function superLongRuntimeState(config: Config.Info | undefined, explicitModel?: 
     modelID,
     providerID,
     config: SuperLongPolicy.fromConfig(config?.super_long),
+    scoped: ScopedFlag.superLong(),
   })
 }
 
@@ -128,6 +130,7 @@ export const SuperLongRoutes = lazy(() =>
         // make runtime readers disagree with the UI.
         delete process.env[SUPER_LONG_OVERRIDE]
         process.env[SUPER_LONG_BASE] = String(desired)
+        ScopedFlag.recordCurrent("AX_CODE_SUPER_LONG", desired)
         return c.json({ enabled: desired })
       },
     )
@@ -213,6 +216,8 @@ export const SuperLongRoutes = lazy(() =>
             return serviceUnavailable(c, {
               message: "Super-Long requires autonomous mode or equivalent runtime guardrails.",
               details: { resource: "superLong" },
+              // Retrying cannot succeed until autonomous is enabled first.
+              retryable: false,
             })
           }
         }
@@ -247,6 +252,7 @@ export const SuperLongRoutes = lazy(() =>
         // from the shell could shadow the PUT until the next GET
         // reconciliation.
         FeatureFlag.set(SUPER_LONG_BASE, enabled)
+        // Note: the persist helper above already recorded the scoped value.
         log.info("super-long mode changed", { enabled })
         return c.json(state)
       },

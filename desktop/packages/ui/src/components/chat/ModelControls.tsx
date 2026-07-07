@@ -46,6 +46,7 @@ type ModelControlIconName = IconName
 
 type ModelControlProviderModel = Record<string, unknown> & { id?: string; name?: string }
 
+const MODEL_COST_DISPLAY_ENABLED = false
 const buildModelRefKey = (providerID: string, modelID: string) => `${providerID}:${modelID}`
 const asPermissionRuleset = (value: unknown): PermissionRule[] | null => {
   if (!Array.isArray(value)) {
@@ -512,12 +513,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
   const availableVariants = getCurrentModelVariants()
   const hasVariants = availableVariants.length > 0
 
-  const costRows = [
-    { label: "Input", value: formatCost(currentMetadata?.cost?.input) },
-    { label: "Output", value: formatCost(currentMetadata?.cost?.output) },
-    { label: "Cache read", value: formatCost(currentMetadata?.cost?.cache_read) },
-    { label: "Cache write", value: formatCost(currentMetadata?.cost?.cache_write) },
-  ]
+  const costRows: Array<{ label: string; value: string }> = MODEL_COST_DISPLAY_ENABLED
+    ? [
+        { label: "Input", value: formatCost(currentMetadata?.cost?.input) },
+        { label: "Output", value: formatCost(currentMetadata?.cost?.output) },
+        { label: "Cache read", value: formatCost(currentMetadata?.cost?.cache_read) },
+        { label: "Cache write", value: formatCost(currentMetadata?.cost?.cache_write) },
+      ]
+    : []
 
   const limitRows = [
     { label: "Context", value: formatTokens(currentMetadata?.limit?.context) },
@@ -1251,17 +1254,19 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
               </div>
             </div>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">
-              {t("chat.modelControls.costPerMillion")}
-            </span>
-            {costRows.map((row) => (
-              <div key={row.label} className="flex items-center justify-between gap-3">
-                <span className="typography-meta font-medium text-muted-foreground/80">{row.label}</span>
-                <span className="typography-meta font-medium text-foreground">{row.value}</span>
-              </div>
-            ))}
-          </div>
+          {MODEL_COST_DISPLAY_ENABLED && costRows.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">
+                {t("chat.modelControls.costPerMillion")}
+              </span>
+              {costRows.map((row) => (
+                <div key={row.label} className="flex items-center justify-between gap-3">
+                  <span className="typography-meta font-medium text-muted-foreground/80">{row.label}</span>
+                  <span className="typography-meta font-medium text-foreground">{row.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">
               {t("chat.modelControls.limits")}

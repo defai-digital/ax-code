@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSandboxStore } from "@/stores/useSandboxStore"
+import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
 
 interface SandboxToggleProps {
   className?: string
@@ -13,7 +14,10 @@ interface SandboxToggleProps {
 export const SandboxToggle: React.FC<SandboxToggleProps> = ({ className, iconSizeClass = "h-3.5 w-3.5" }) => {
   const { t } = useI18n()
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory)
-  const dirKey = (currentDirectory ?? "").trim()
+  // Must match the key the store writes under (normalizeDirectoryKey), not a
+  // plain trim — otherwise unnormalized paths (trailing slash, backslashes)
+  // subscribe to a key the store never populates.
+  const dirKey = normalizeDirectoryKey(currentDirectory)
 
   const sandbox = useSandboxStore((s) => s.sandboxByDirectory[dirKey])
   const pending = useSandboxStore((s) => s.pendingByDirectory[dirKey] === true)

@@ -497,6 +497,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const retryTimers = new Set<() => void>()
   let forkRetryDisposed = false
   let sandboxPutController: AbortController | undefined
+  // Remember the restricted mode we toggled away from so turning the sandbox
+  // back on restores a configured "read-only" instead of silently upgrading
+  // it to "workspace-write".
+  let lastRestrictedIsolationMode: "read-only" | "workspace-write" | undefined
 
   function createBooleanRuntimeToggle(input: {
     endpoint: "/smart-llm" | "/autonomous" | "/super-long"
@@ -516,7 +520,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       const controller = new AbortController()
       putController = controller
       input.setCurrent(next)
-      void putJsonWithTimeout(input.endpoint, { enabled: next }, undefined, { signal: controller.signal }).catch(
+      // Scope the write to the active directory (worktree/workspace aware);
+      // without the header the server persists to its own cwd's ax-code.json.
+      const headers = directoryRequestHeaders({ directory: sdk.directory })
+      void putJsonWithTimeout(input.endpoint, { enabled: next }, headers, { signal: controller.signal }).catch(
         (error) => {
           if (controller.signal.aborted || putController !== controller) return
           Log.Default.warn(input.label.warn, { error, enabled: next })
@@ -564,9 +571,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     // Track which steps actually landed so a mid-sequence failure rolls
     // the client back to what the server really holds, not to `previous`.
     const applied = { ...previous }
+    // Scope the writes to the active directory (worktree/workspace aware);
+    // without the header the server persists to its own cwd's ax-code.json.
+    const headers = directoryRequestHeaders({ directory: sdk.directory })
     void (async () => {
       for (const step of steps) {
-        await putJsonWithTimeout(step.endpoint, { enabled: step.enabled }, undefined, { signal: controller.signal })
+        await putJsonWithTimeout(step.endpoint, { enabled: step.enabled }, headers, { signal: controller.signal })
         applied[step.key] = step.enabled
       }
     })().catch((error) => {
@@ -1179,7 +1189,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
       onSelect: (dialog) => {
         const previousMode = sync.data.isolation.mode
-        const next = previousMode === "full-access" ? "workspace-write" : "full-access"
+        if (previousMode === "read-only" || previousMode === "workspace-write") {
+          lastRestrictedIsolationMode = previousMode
+        }
+        const next =
+          previousMode === "full-access" ? (lastRestrictedIsolationMode ?? "workspace-write") : "full-access"
         sandboxPutController?.abort()
         const controller = new AbortController()
         sandboxPutController = controller

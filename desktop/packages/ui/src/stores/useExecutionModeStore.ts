@@ -23,10 +23,14 @@ const deriveMode = (autonomous: boolean, superLong: boolean): ExecutionMode => {
   return superLong ? "long-run" : "autonomous"
 }
 
+const modeFlags = (mode: ExecutionMode): { autonomous: boolean; superLong: boolean } => ({
+  autonomous: mode !== "manual",
+  superLong: mode === "long-run",
+})
+
 type ExecutionModeState = {
   modeByDirectory: Record<string, ExecutionMode>
   pendingByDirectory: Record<string, boolean>
-  loadedByDirectory: Record<string, boolean>
 }
 
 type ExecutionModeActions = {
@@ -38,45 +42,76 @@ type ExecutionModeActions = {
 
 type ExecutionModeStore = ExecutionModeState & ExecutionModeActions
 
+type ApplyModeResult = {
+  ok: boolean
+  /**
+   * The mode the server actually holds after the attempt, derived from which
+   * calls landed. Null when nothing is known (no prior confirmed mode and no
+   * call landed).
+   */
+  settled: ExecutionMode | null
+}
+
 /**
  * Apply a target mode by toggling the two server flags in a dependency-safe
  * order (autonomous must be on before super-long can be enabled, and off
- * after super-long is disabled). Returns the derived mode the server settled
- * on, or null if any call failed.
+ * after super-long is disabled). Tracks which writes landed so a
+ * mid-sequence failure settles on server truth instead of the stale
+ * pre-toggle mode — e.g. switching long-run → manual where super-long-off
+ * lands but autonomous-off fails leaves the server in "autonomous", not the
+ * previous "long-run".
  */
-const applyMode = async (directory: string | null | undefined, mode: ExecutionMode): Promise<ExecutionMode | null> => {
+const applyMode = async (
+  directory: string | null | undefined,
+  mode: ExecutionMode,
+  previous: ExecutionMode | undefined,
+): Promise<ApplyModeResult> => {
+  const applied: { autonomous: boolean | null; superLong: boolean | null } = previous
+    ? { ...modeFlags(previous) }
+    : { autonomous: null, superLong: null }
+  const settled = (): ExecutionMode | null =>
+    applied.autonomous === null || applied.superLong === null
+      ? null
+      : deriveMode(applied.autonomous, applied.superLong)
+
   try {
     return await axCodeClient.withDirectory(directory ?? null, async () => {
       if (mode === "manual") {
         const superLong = await axCodeClient.setSuperLongEnabled(false)
+        if (superLong === null) return { ok: false, settled: settled() }
+        applied.superLong = superLong
         const autonomous = await axCodeClient.setAutonomousEnabled(false)
-        if (superLong === null || autonomous === null) return null
-        return deriveMode(autonomous, superLong)
+        if (autonomous === null) return { ok: false, settled: settled() }
+        applied.autonomous = autonomous
+        return { ok: true, settled: settled() }
       }
 
       const autonomous = await axCodeClient.setAutonomousEnabled(true)
-      if (autonomous === null) return null
+      if (autonomous === null) return { ok: false, settled: settled() }
+      applied.autonomous = autonomous
       const superLong = await axCodeClient.setSuperLongEnabled(mode === "long-run")
-      if (superLong === null) return null
-      return deriveMode(autonomous, superLong)
+      if (superLong === null) return { ok: false, settled: settled() }
+      applied.superLong = superLong
+      return { ok: true, settled: settled() }
     })
   } catch {
-    return null
+    return { ok: false, settled: settled() }
   }
 }
 
 export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => ({
   modeByDirectory: {},
   pendingByDirectory: {},
-  loadedByDirectory: {},
 
   getMode: (directory) => get().modeByDirectory[normalizeDirectoryKey(directory)],
   isPending: (directory) => get().pendingByDirectory[normalizeDirectoryKey(directory)] === true,
 
   loadMode: async (directory) => {
     const key = normalizeDirectoryKey(directory)
-    const { pendingByDirectory, loadedByDirectory } = get()
-    if (pendingByDirectory[key] || loadedByDirectory[key]) return
+    // No "already loaded" latch: these flags can change out-of-band (CLI,
+    // other windows) and are not pushed over SSE, so re-fetch whenever a
+    // consumer mounts. The last confirmed mode stays visible while loading.
+    if (get().pendingByDirectory[key]) return
 
     set((s) => ({ pendingByDirectory: { ...s.pendingByDirectory, [key]: true } }))
 
@@ -104,7 +139,6 @@ export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => 
           ...s.modeByDirectory,
           [key]: deriveMode(flags.autonomous, flags.superLong),
         }
-        next.loadedByDirectory = { ...s.loadedByDirectory, [key]: true }
       }
       return next
     })
@@ -121,28 +155,26 @@ export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => 
       pendingByDirectory: { ...s.pendingByDirectory, [key]: true },
     }))
 
-    const settled = await applyMode(directory, mode)
+    const result = await applyMode(directory, mode, previous)
 
     set((s) => {
       const pendingByDirectory = { ...s.pendingByDirectory, [key]: false }
-      if (settled === null) {
-        // Revert to the last confirmed mode (or drop the optimistic value).
+      if (result.settled === null) {
+        // Nothing confirmed: drop the optimistic value so the UI stays
+        // neutral until the next load re-reads server state.
         const modeByDirectory = { ...s.modeByDirectory }
-        if (previous === undefined) {
-          delete modeByDirectory[key]
-        } else {
-          modeByDirectory[key] = previous
-        }
+        delete modeByDirectory[key]
         return { modeByDirectory, pendingByDirectory }
       }
+      // Reflect what the server actually holds — on partial failure this is
+      // the mid-transition state, not the pre-toggle mode.
       return {
-        modeByDirectory: { ...s.modeByDirectory, [key]: settled },
-        loadedByDirectory: { ...s.loadedByDirectory, [key]: true },
+        modeByDirectory: { ...s.modeByDirectory, [key]: result.settled },
         pendingByDirectory,
       }
     })
 
-    if (settled === null) {
+    if (!result.ok) {
       toast.error(formatMessage(useI18nStore.getState().dictionary, "chat.chatInput.executionMode.updateFailed"))
     }
   },

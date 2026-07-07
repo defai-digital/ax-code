@@ -542,6 +542,7 @@ const PermissionAutoAcceptButton = React.memo(function PermissionAutoAcceptButto
         "rounded-md hover:bg-transparent",
         !permissionScopeSessionId && "opacity-30",
       )}
+      aria-disabled={!permissionScopeSessionId}
       onMouseDown={(event) => {
         event.preventDefault()
       }}

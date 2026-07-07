@@ -2258,7 +2258,7 @@ export type Config = {
    */
   autonomous?: boolean
   /**
-   * Enable Super-Long supervised long-run mode (default: on for Qwen3.7-Max, off otherwise)
+   * Enable Super-Long supervised long-run mode (default: on for models with a 64k+ context window, thinking, and prompt caching — e.g. Qwen 3.7 Max/Plus; off otherwise)
    */
   super_long?:
     | boolean
@@ -2292,13 +2292,17 @@ export type Config = {
      */
     auto_prune?: boolean
     /**
-     * Maximum agentic steps per session turn before stopping (default: 200)
+     * Maximum agentic steps per session turn before stopping (default: 500)
      */
     max_steps?: number
     /**
      * In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)
      */
     max_continuations?: number
+    /**
+     * Hard ceiling on cumulative steps across ALL auto-continuations, including active goals and Super-Long runs (default: max_steps × (max_continuations + 1); Super-Long default: max_steps × 40)
+     */
+    max_total_steps?: number
     /**
      * In autonomous mode, how many times to auto-continue when todos remain pending after the model stops (default: 10, 0 to disable)
      */
@@ -2548,7 +2552,7 @@ export type SuperLongState = {
 
 export type SuperLongStatus = {
   enabled: boolean
-  source: "session-override" | "env" | "config" | "model-default"
+  source: "scoped" | "session-override" | "env" | "config" | "model-default"
   durationMs: number | null
   startedAt: number | null
   elapsedMs: number | null

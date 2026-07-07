@@ -22,6 +22,7 @@ import { isRecord } from "@/lib/record"
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json"
 const MODELS_DEV_PROXY_URL = API_ENDPOINTS.openchamber.modelsMetadata
+const MODEL_COST_METADATA_ENABLED = false
 
 const FALLBACK_PROVIDER_ID = "opencode"
 const FALLBACK_MODEL_ID = "big-pickle"
@@ -312,7 +313,7 @@ const transformModelsDevResponse = (payload: unknown): Map<string, ModelMetadata
               output: isStringArray(modelValue.modalities.output) ? modelValue.modalities.output : undefined,
             }
           : undefined,
-        cost: modelValue.cost,
+        ...(MODEL_COST_METADATA_ENABLED ? { cost: modelValue.cost } : {}),
         limit: modelValue.limit,
         knowledge: typeof modelValue.knowledge === "string" ? modelValue.knowledge : undefined,
         release_date: typeof modelValue.release_date === "string" ? modelValue.release_date : undefined,

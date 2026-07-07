@@ -1,3 +1,36 @@
+const MODEL_COST_METADATA_ENABLED = false
+
+const stripModelCostMetadata = (metadata) => {
+  if (MODEL_COST_METADATA_ENABLED || !metadata || typeof metadata !== "object") {
+    return metadata
+  }
+
+  for (const provider of Object.values(metadata)) {
+    const models = provider && typeof provider === "object" ? provider.models : null
+    if (!models || typeof models !== "object") {
+      continue
+    }
+    for (const model of Object.values(models)) {
+      if (!model || typeof model !== "object") {
+        continue
+      }
+      delete model.cost
+      const experimental = model.experimental
+      const modes = experimental && typeof experimental === "object" ? experimental.modes : null
+      if (!modes || typeof modes !== "object") {
+        continue
+      }
+      for (const mode of Object.values(modes)) {
+        if (mode && typeof mode === "object") {
+          delete mode.cost
+        }
+      }
+    }
+  }
+
+  return metadata
+}
+
 export const registerOpenChamberRoutes = (app, dependencies) => {
   const {
     modelsDevApiUrl,
@@ -33,7 +66,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
         throw new Error(`models.dev responded with status ${response.status}`)
       }
 
-      const metadata = await response.json()
+      const metadata = stripModelCostMetadata(await response.json())
       cachedModelsMetadata = metadata
       cachedModelsMetadataTimestamp = Date.now()
 

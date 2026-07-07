@@ -14,6 +14,8 @@ import { useI18n } from "@/lib/i18n"
 
 type SessionMessage = { info: Message; parts: Part[] }
 
+const CONTEXT_COST_DISPLAY_ENABLED = false
+
 type ProviderModelLike = {
   id?: string
   name?: string
@@ -346,10 +348,12 @@ export const ContextPanelContent: React.FC = () => {
 
     const tokenBreakdown = contextMessage ? extractTokenBreakdown(contextMessage) : EMPTY_BREAKDOWN
 
-    const totalAssistantCost = assistantMessages.reduce((sum, message) => {
-      const cost = toNonNegativeNumber((message.info as { cost?: unknown }).cost)
-      return sum + cost
-    }, 0)
+    const totalAssistantCost = CONTEXT_COST_DISPLAY_ENABLED
+      ? assistantMessages.reduce((sum, message) => {
+          const cost = toNonNegativeNumber((message.info as { cost?: unknown }).cost)
+          return sum + cost
+        }, 0)
+      : 0
 
     const latestAssistantInfo = (contextMessage?.info ?? null) as
       | (Message & { providerID?: string; modelID?: string })
@@ -489,14 +493,14 @@ export const ContextPanelContent: React.FC = () => {
 
         {/* ── Stat grid ── */}
         <div className="mb-5 grid grid-cols-2 gap-2">
-          {(
-            [
-              { label: t("contextSidebar.stats.messages"), value: formatNumber(viewModel.messagesCount) },
-              { label: t("contextSidebar.stats.user"), value: formatNumber(viewModel.userMessagesCount) },
-              { label: t("contextSidebar.stats.assistant"), value: formatNumber(viewModel.assistantMessagesCount) },
-              { label: t("contextSidebar.stats.cost"), value: formatMoney(viewModel.totalAssistantCost) },
-            ] as const
-          ).map((item) => (
+          {[
+            { label: t("contextSidebar.stats.messages"), value: formatNumber(viewModel.messagesCount) },
+            { label: t("contextSidebar.stats.user"), value: formatNumber(viewModel.userMessagesCount) },
+            { label: t("contextSidebar.stats.assistant"), value: formatNumber(viewModel.assistantMessagesCount) },
+            ...(CONTEXT_COST_DISPLAY_ENABLED
+              ? [{ label: t("contextSidebar.stats.cost"), value: formatMoney(viewModel.totalAssistantCost) }]
+              : []),
+          ].map((item) => (
             <div key={item.label} className="rounded-lg bg-[var(--surface-elevated)]/70 px-3 py-2.5">
               <div className="typography-micro text-muted-foreground/70">{item.label}</div>
               <div className="mt-0.5 typography-ui-label tabular-nums text-foreground">{item.value}</div>

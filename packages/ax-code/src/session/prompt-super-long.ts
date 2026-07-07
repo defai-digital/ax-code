@@ -4,6 +4,7 @@ import type { MessageV2 } from "./message-v2"
 import { assistantRespondedAfterUser } from "./prompt-loop-decisions"
 import { createSyntheticFailureAssistant } from "./prompt-loop-failure"
 import type { SessionID } from "./schema"
+import { ScopedFlag } from "../flag/scoped"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -28,6 +29,7 @@ export async function enforceSuperLongDeadline(input: {
     modelID: input.lastUser.model.modelID,
     providerID: input.lastUser.model.providerID,
     config: input.config,
+    scoped: ScopedFlag.superLong(),
   })
   const enabled = input.autonomous && state.enabled
   // Skip entirely when disabled — a misconfigured duration must not stop

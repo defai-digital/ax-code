@@ -8,14 +8,20 @@ import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
  * Sandbox (isolation) mode toggle for the desktop UI. The AX Code server
  * persists isolation to ax-code.json scoped by directory. Sandbox is "on"
  * when the isolation mode is not "full-access" (i.e. "read-only" or
- * "workspace-write"). Toggling sandbox on sets mode to "workspace-write";
- * toggling off sets mode to "full-access".
+ * "workspace-write"). Toggling sandbox off sets mode to "full-access";
+ * toggling it back on restores the last restricted mode we saw for the
+ * directory (so a configured "read-only" is not silently upgraded to
+ * "workspace-write"), defaulting to "workspace-write".
  */
+
+type RestrictedMode = "read-only" | "workspace-write"
+
+const isRestrictedMode = (mode: string): mode is RestrictedMode => mode === "read-only" || mode === "workspace-write"
 
 type SandboxState = {
   sandboxByDirectory: Record<string, boolean>
   pendingByDirectory: Record<string, boolean>
-  loadedByDirectory: Record<string, boolean>
+  restrictedModeByDirectory: Record<string, RestrictedMode>
 }
 
 type SandboxActions = {
@@ -30,15 +36,17 @@ type SandboxStore = SandboxState & SandboxActions
 export const useSandboxStore = create<SandboxStore>()((set, get) => ({
   sandboxByDirectory: {},
   pendingByDirectory: {},
-  loadedByDirectory: {},
+  restrictedModeByDirectory: {},
 
   isSandbox: (directory) => get().sandboxByDirectory[normalizeDirectoryKey(directory)],
   isPending: (directory) => get().pendingByDirectory[normalizeDirectoryKey(directory)] === true,
 
   loadSandbox: async (directory) => {
     const key = normalizeDirectoryKey(directory)
-    const { pendingByDirectory, loadedByDirectory } = get()
-    if (pendingByDirectory[key] || loadedByDirectory[key]) return
+    // No "already loaded" latch: isolation can change out-of-band (CLI,
+    // other windows) and is not pushed over SSE, so re-fetch whenever a
+    // consumer mounts. The last confirmed state stays visible while loading.
+    if (get().pendingByDirectory[key]) return
 
     set((s) => ({ pendingByDirectory: { ...s.pendingByDirectory, [key]: true } }))
 
@@ -60,7 +68,9 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
           ...s.sandboxByDirectory,
           [key]: isolation.mode !== "full-access",
         }
-        next.loadedByDirectory = { ...s.loadedByDirectory, [key]: true }
+        if (isRestrictedMode(isolation.mode)) {
+          next.restrictedModeByDirectory = { ...s.restrictedModeByDirectory, [key]: isolation.mode }
+        }
       }
       return next
     })
@@ -77,7 +87,7 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
       pendingByDirectory: { ...s.pendingByDirectory, [key]: true },
     }))
 
-    const mode = enabled ? "workspace-write" : "full-access"
+    const mode = enabled ? (get().restrictedModeByDirectory[key] ?? "workspace-write") : "full-access"
     let result: Awaited<ReturnType<typeof axCodeClient.setIsolation>> | null = null
     try {
       result = await axCodeClient.withDirectory(directory ?? null, async () => {
@@ -99,11 +109,14 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
         }
         return { sandboxByDirectory, pendingByDirectory }
       }
-      return {
+      const next: Partial<SandboxState> = {
         sandboxByDirectory: { ...s.sandboxByDirectory, [key]: result.mode !== "full-access" },
-        loadedByDirectory: { ...s.loadedByDirectory, [key]: true },
         pendingByDirectory,
       }
+      if (isRestrictedMode(result.mode)) {
+        next.restrictedModeByDirectory = { ...s.restrictedModeByDirectory, [key]: result.mode }
+      }
+      return next
     })
 
     if (result === null) {

@@ -241,7 +241,8 @@ describe("super-long route", () => {
             name: "ServiceUnavailableError",
             message: "Super-Long requires autonomous mode or equivalent runtime guardrails.",
             status: 409,
-            retryable: true,
+            // Retrying cannot succeed until autonomous is enabled first.
+            retryable: false,
             details: { resource: "superLong" },
           })
           expect(process.env[OVERRIDE]).toBeUndefined()

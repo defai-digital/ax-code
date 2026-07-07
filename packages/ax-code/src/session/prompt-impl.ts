@@ -12,7 +12,7 @@ import { BlastRadius } from "./blast-radius"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
 import { defer } from "../util/defer"
-import { Flag } from "../flag/flag"
+import { ScopedFlag } from "../flag/scoped"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
@@ -347,7 +347,7 @@ export namespace SessionPrompt {
       // autonomous must be too — otherwise a mid-run "Manual" toggle has no
       // effect on continuations while still silently retightening the
       // Super-Long ceiling, an inconsistent half-applied state.
-      const effectivelyAutonomous = Flag.AX_CODE_AUTONOMOUS
+      const effectivelyAutonomous = ScopedFlag.autonomous()
 
       // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
       let msgs: MessageV2.WithParts[]

@@ -951,6 +951,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               </Show>
             </text>
             <text fg={theme.textMuted}>
+              Sidebar <span style={{ fg: theme.text }}>/sidebar on</span>
+            </text>
+            <text fg={theme.textMuted}>
               <span style={{ fg: theme.success }}>•</span> <b>AX</b>
               <span style={{ fg: theme.text }}>
                 <b> Code</b>

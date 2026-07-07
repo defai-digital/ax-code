@@ -1271,11 +1271,68 @@ async function resyncDirectoryAfterReconnect(
   ingestDirectoryStateIntoRoutingIndex(routingIndex, directory, store.getState())
 }
 
+/**
+ * True when the parent chain for `sessionID` cannot be walked to a root with
+ * the sessions the sync layer currently knows — e.g. a freshly spawned
+ * subagent whose session record hasn't arrived yet. In that case an
+ * auto-accepting ancestor may exist that the synchronous lineage check
+ * cannot see.
+ */
+function isSessionLineageIncomplete(sessionID: string, sessions: Session[]): boolean {
+  const byId = new Map(sessions.map((session) => [session.id, session]))
+  const seen = new Set<string>()
+  let current: string | undefined = sessionID
+  while (current && !seen.has(current)) {
+    seen.add(current)
+    const record = byId.get(current)
+    if (!record) return true
+    current = record.parentID ?? undefined
+  }
+  return false
+}
+
+/**
+ * Resolve the parent chain via the API for a session the sync layer hasn't
+ * indexed yet, and auto-accept the permission if an ancestor with
+ * auto-accept enabled turns up. Runs in the background after the permission
+ * has been surfaced normally; a late accept cleans up the toast and store
+ * through the resulting permission.replied event.
+ */
+async function autoAcceptViaResolvedLineage(
+  permission: PermissionRequest,
+  directory: string,
+  knownSessions: Session[],
+): Promise<void> {
+  const autoAccept = usePermissionStore.getState().autoAccept
+  const byId = new Map(knownSessions.map((session) => [session.id, session]))
+  const seen = new Set<string>()
+  let current: string | undefined = permission.sessionID
+  while (current && !seen.has(current)) {
+    if (Object.prototype.hasOwnProperty.call(autoAccept, current)) {
+      if (autoAccept[current] !== true) return
+      await sessionActions.respondToPermission(permission.sessionID, permission.id, "once")
+      return
+    }
+    seen.add(current)
+    let parentID: string | undefined = byId.get(current)?.parentID ?? undefined
+    if (parentID === undefined && !byId.has(current)) {
+      const result: { data?: { parentID?: string | null } } | undefined = await axCodeClient
+        .getScopedSdkClient(directory)
+        .session.get({ sessionID: current, directory })
+        .catch(() => undefined)
+      if (!result?.data) return
+      parentID = result.data.parentID ?? undefined
+    }
+    current = parentID
+  }
+}
+
 function handleEvent(
   rawDirectory: string,
   payload: Event,
   childStores: ChildStoreManager,
   routingIndex: EventRoutingIndex,
+  options?: { skipPermissionAutoAccept?: boolean },
 ) {
   const directory = resolveDirectoryFromRoutingIndex(routingIndex, rawDirectory, payload, childStores)
 
@@ -1349,10 +1406,26 @@ function handleEvent(
   if (payload.type === "permission.asked") {
     const permission = payload.properties as PermissionRequest
     const permissionStore = usePermissionStore.getState()
-    if (permissionStore.isSessionAutoAccepting(permission.sessionID)) {
+    if (!options?.skipPermissionAutoAccept && permissionStore.isSessionAutoAccepting(permission.sessionID)) {
       updateRoutingIndexFromEvent(routingIndex, resolvedDirectory, payload)
-      void sessionActions.respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined)
+      void sessionActions.respondToPermission(permission.sessionID, permission.id, "once").catch(() => {
+        // The auto-reply failed, so the permission is still pending
+        // server-side. Surface it through the normal path (toast + store)
+        // instead of dropping it silently until the next resync.
+        handleEvent(rawDirectory, payload, childStores, routingIndex, { skipPermissionAutoAccept: true })
+      })
       return
+    }
+
+    // A freshly spawned subagent session may not be indexed yet, hiding an
+    // auto-accepting ancestor from the synchronous check above. Resolve the
+    // chain via the API in the background while the permission is surfaced
+    // normally below; a late accept cleans up via permission.replied.
+    if (!options?.skipPermissionAutoAccept) {
+      const knownSessions = store.getState().session
+      if (isSessionLineageIncomplete(permission.sessionID, knownSessions)) {
+        void autoAcceptViaResolvedLineage(permission, resolvedDirectory, knownSessions).catch(() => undefined)
+      }
     }
 
     const toastKey = getPermissionToastKey(permission.sessionID, permission.id)
