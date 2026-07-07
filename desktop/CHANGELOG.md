@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.10.1] - 2026-07-07
+
+### Fixed
+
+- CLI: refreshes the current stable release line with accumulated runtime and release workflow fixes.
+- Desktop: refreshes signed Desktop release assets from the current monorepo release line.
+- Release: refreshes signed CLI and Desktop assets with Homebrew formula and cask updates.
+
 ## [6.10.0] - 2026-07-07
 
 ### Fixed
