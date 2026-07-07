@@ -17,6 +17,11 @@ export const TOOL_ONLY_TURN_NUDGE = 15
 // is stuck in a read-only exploration loop (e.g. repeatedly listing
 // directories or running the same shell commands).
 export const MAX_TOOL_ONLY_TURNS = 35
+// Final-warning checkpoint shortly before the hard limit: the first nudge at
+// TOOL_ONLY_TURN_NUDGE fires once per streak, so without this a model that
+// kept tool-calling would go from that single reminder straight to a hard
+// stop 20 turns later with no further signal.
+export const TOOL_ONLY_TURN_FINAL_NUDGE = MAX_TOOL_ONLY_TURNS - 5
 // Truncated turns (finish=length) are a normal consequence of output-token
 // limits — the model was actively generating useful content that exceeded its
 // budget. Recovery ("continue from where you left off") is usually effective,

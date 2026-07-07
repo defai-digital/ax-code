@@ -99,16 +99,33 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("credible suspected")
   })
 
-  test("builds tool-only turn nudge guidance", () => {
+  test("builds tool-only turn nudge guidance without misleading claims", () => {
     const text = AutonomousContinuationPrompt.toolOnlyTurnNudge({
       consecutiveToolOnlyTurns: 15,
       maxToolOnlyTurns: 35,
     })
 
-    expect(text).toContain("15 consecutive turns calling tools")
-    expect(text).toContain("tool-calling limit (35 turns)")
-    expect(text).toContain("Stop broad exploration")
-    expect(text).toContain("produce a final text response")
+    expect(text).toContain("last 15 turns each ended in further tool calls")
+    expect(text).toContain("stops automatically after 35 consecutive")
+    expect(text).toContain("continue the remaining work after the synthesis")
+    expect(text).toContain("resets this counter")
+    // The streak only proves the finish reason was tool-calls; the model may
+    // have produced narration text, and it may be doing legitimate
+    // implementation work rather than exploring.
+    expect(text).not.toContain("without producing any text response")
+    expect(text).not.toContain("Stop broad exploration now")
+  })
+
+  test("final tool-only nudge demands wrap-up before the hard stop", () => {
+    const text = AutonomousContinuationPrompt.toolOnlyTurnNudge({
+      consecutiveToolOnlyTurns: 30,
+      maxToolOnlyTurns: 35,
+      final: true,
+    })
+
+    expect(text).toContain("FINAL checkpoint")
+    expect(text).toContain("end your turn with a text response")
+    expect(text).not.toContain("resets this counter")
   })
 
   test("builds pending-todo continuation guidance with stagnation detail", () => {

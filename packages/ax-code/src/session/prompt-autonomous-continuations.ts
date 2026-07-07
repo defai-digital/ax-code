@@ -112,15 +112,29 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  // Wording notes: the streak counts turns whose finish reason was
+  // "tool-calls" — the model may well have emitted narration text inside
+  // those turns, so do NOT claim it produced "no text response". The streak
+  // also fires on productive implementation work, not just exploration, so
+  // the guidance must allow continuing legitimate work after a synthesis
+  // rather than commanding the model to stop. The checkpoint runs in both
+  // supervised and autonomous sessions, so it must not claim "autonomous".
   export function toolOnlyTurnNudge(input: {
     consecutiveToolOnlyTurns: number
     maxToolOnlyTurns: number
+    final?: boolean
   }) {
     return (
-      `You have made ${input.consecutiveToolOnlyTurns} consecutive turns calling tools without producing any text response. ` +
-      `You are approaching the autonomous tool-calling limit (${input.maxToolOnlyTurns} turns). ` +
-      `Stop broad exploration now. Synthesize what you have learned from the tools you have called, ` +
-      `produce a final text response summarizing your findings, or explain what blocks completion.`
+      `Agent-loop checkpoint: your last ${input.consecutiveToolOnlyTurns} turns each ended in further tool calls ` +
+      `without a completed text response. The loop stops automatically after ${input.maxToolOnlyTurns} consecutive such turns. ` +
+      (input.final
+        ? `This is the FINAL checkpoint before that stop. Finish now: complete at most a few essential tool calls, ` +
+          `then end your turn with a text response covering what was accomplished, what remains, and any blockers. `
+        : `Pause and write a brief synthesis: what you have established so far, what remains, and your next concrete step. ` +
+          `If you are mid-implementation, continue the remaining work after the synthesis — completing a turn with a text ` +
+          `response resets this counter. `) +
+      `If you are re-covering the same ground without new findings, stop exploring and produce your final answer ` +
+      `or explain what blocks completion.`
     )
   }
 

@@ -52,6 +52,7 @@ import {
   isEmptyModelTurn,
   isTruncatedModelTurn,
   modelTurnFinished,
+  toolOnlyTurnDecision,
 } from "./prompt-autonomous-decisions"
 import { toErrorMessage } from "../util/error-message"
 import { insertReminders } from "./prompt-reminders"
@@ -68,7 +69,12 @@ import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
-import { TOOL_ONLY_TURN_NUDGE, MAX_TOOL_ONLY_TURNS, promptLoopLimits } from "./prompt-loop-config"
+import {
+  TOOL_ONLY_TURN_NUDGE,
+  TOOL_ONLY_TURN_FINAL_NUDGE,
+  MAX_TOOL_ONLY_TURNS,
+  promptLoopLimits,
+} from "./prompt-loop-config"
 import {
   CommandInput as CommandInputSchema,
   type CommandInput as CommandInputType,
@@ -227,9 +233,11 @@ export namespace SessionPrompt {
     // MAX_TOOL_ONLY_TURNS, the model is stuck in a read-only exploration
     // loop (e.g. endlessly listing directories) and we break out.
     let consecutiveToolOnlyTurns = 0
-    // Whether a nudge continuation has already been injected during the
-    // current streak of tool-only turns. Reset alongside consecutiveToolOnlyTurns.
-    let toolOnlyNudged = false
+    // Number of nudge continuations injected during the current streak of
+    // tool-only turns (first checkpoint at TOOL_ONLY_TURN_NUDGE, final
+    // warning at TOOL_ONLY_TURN_FINAL_NUDGE). Reset alongside
+    // consecutiveToolOnlyTurns.
+    let toolOnlyNudges = 0
     const cachedSystemPrompt: PromptRequestCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -258,7 +266,7 @@ export namespace SessionPrompt {
       step = 0
       consecutiveErrors = 0
       consecutiveToolOnlyTurns = 0
-      toolOnlyNudged = false
+      toolOnlyNudges = 0
       fallbackModelOverride = undefined
       failedFallbackProviderIDs.clear()
       cachedMsgs = undefined
@@ -619,6 +627,17 @@ export namespace SessionPrompt {
       })
       if (!emptyModelTurn) emptyModelTurnRetries = 0
       if (!truncatedModelTurn) truncatedModelTurnRetries = 0
+      // Reset the tool-only streak HERE, not in the tracking block further
+      // down: a turn that finished with a text response but is immediately
+      // followed by a todo/gate/convergence continuation `continue`s past
+      // that block, and the streak would otherwise keep accumulating across
+      // completed text turns — making the checkpoint messages factually
+      // wrong ("N consecutive turns ended in tool calls") and eventually
+      // hard-stopping a healthy session.
+      if (modelFinished) {
+        consecutiveToolOnlyTurns = 0
+        toolOnlyNudges = 0
+      }
 
       // A provider turn that returns finish="other" with zero tokens is a
       // failed response, not a completed one. The autonomous branch below has
@@ -885,20 +904,27 @@ export namespace SessionPrompt {
       // loop — e.g. repeatedly listing directories or running shell
       // commands). Track consecutive tool-only outer-loop turns and break
       // when the count exceeds MAX_TOOL_ONLY_TURNS.
-      if (modelFinished) {
-        consecutiveToolOnlyTurns = 0
-        toolOnlyNudged = false
-      } else {
+      // Streak reset for finished turns happens earlier (right after
+      // modelFinished is computed) so autonomous continuations cannot skip
+      // it. Errored turns neither reset nor count: the error transition
+      // below owns that path, and injecting a nudge on an errored turn
+      // would defer error recovery by a turn.
+      if (!modelFinished && !processor.message.error) {
         consecutiveToolOnlyTurns += 1
-        // Nudge: inject a continuation message after TOOL_ONLY_TURN_NUDGE
-        // consecutive tool-only turns to steer the model toward producing
-        // a final text response. Only fire once per streak.
-        if (!toolOnlyNudged && consecutiveToolOnlyTurns >= TOOL_ONLY_TURN_NUDGE) {
-          log.info("autonomous tool-only turn nudge", {
+        const toolOnlyTransition = toolOnlyTurnDecision({
+          consecutiveToolOnlyTurns,
+          toolOnlyNudges,
+          nudgeThreshold: TOOL_ONLY_TURN_NUDGE,
+          finalNudgeThreshold: TOOL_ONLY_TURN_FINAL_NUDGE,
+          maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
+        })
+        if (toolOnlyTransition.action === "nudge") {
+          log.info("tool-only turn nudge", {
             command: "session.prompt.loop",
             status: "nudge",
             sessionID,
             consecutiveToolOnlyTurns,
+            finalNudge: toolOnlyTransition.final,
           })
           const latestMessages = await Session.messages({ sessionID })
           await createAutonomousTextContinuation({
@@ -907,13 +933,14 @@ export namespace SessionPrompt {
             text: AutonomousContinuationPrompt.toolOnlyTurnNudge({
               consecutiveToolOnlyTurns,
               maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
+              final: toolOnlyTransition.final,
             }),
           })
-          toolOnlyNudged = true
+          toolOnlyNudges += 1
           continue
         }
-        if (consecutiveToolOnlyTurns > MAX_TOOL_ONLY_TURNS) {
-          log.warn("autonomous tool-only turn convergence limit", {
+        if (toolOnlyTransition.action === "stop") {
+          log.warn("tool-only turn convergence limit", {
             command: "session.prompt.loop",
             status: "stopped",
             errorCode: "TOOL_ONLY_TURN_LIMIT",
@@ -921,14 +948,22 @@ export namespace SessionPrompt {
             consecutiveToolOnlyTurns,
             maxToolOnlyTurns: MAX_TOOL_ONLY_TURNS,
           })
+          // This circuit breaker runs in both supervised and autonomous
+          // sessions, so the message must not claim "autonomous mode", and
+          // the reminder count is derived rather than hard-coded so it stays
+          // truthful if the thresholds are ever retuned.
+          const reminderClause =
+            toolOnlyNudges > 0
+              ? `, despite ${toolOnlyNudges} checkpoint reminder${toolOnlyNudges === 1 ? "" : "s"}`
+              : ""
           await publishPromptFailure({
             sessionID,
             assistant: processor.message,
             message:
-              `Autonomous mode stopped: the agent made ${consecutiveToolOnlyTurns} consecutive turns ` +
-              `calling tools without producing a final text response. ` +
-              `The model appears stuck in a tool-calling loop. ` +
-              `Try rephrasing the request or breaking it into smaller steps.`,
+              `Agent loop stopped: ${consecutiveToolOnlyTurns} consecutive turns each ended in further ` +
+              `tool calls without a completed text response${reminderClause}. ` +
+              `The loop was halted as a circuit breaker; work done so far is preserved in the transcript. ` +
+              `Resume with a more specific request, or break the task into smaller steps.`,
           })
           reason = "stalled"
           break

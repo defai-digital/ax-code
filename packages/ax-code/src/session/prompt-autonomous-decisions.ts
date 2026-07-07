@@ -217,6 +217,32 @@ export function globalStepLimitDecision(input: {
   }
 }
 
+type ToolOnlyTurnDecision = { action: "ignore" } | { action: "nudge"; final: boolean } | { action: "stop" }
+
+// Circuit breaker for streaks of turns that end in further tool calls without
+// a completed text response. Two checkpoints (a synthesis nudge, then a final
+// warning) fire before the hard stop. `consecutiveToolOnlyTurns` is the streak
+// length INCLUDING the current turn; `toolOnlyNudges` is how many checkpoints
+// have already fired this streak. The caller resets both whenever a turn
+// finishes with a text response.
+export function toolOnlyTurnDecision(input: {
+  consecutiveToolOnlyTurns: number
+  toolOnlyNudges: number
+  nudgeThreshold: number
+  finalNudgeThreshold: number
+  maxToolOnlyTurns: number
+}): ToolOnlyTurnDecision {
+  const thresholds = [input.nudgeThreshold, input.finalNudgeThreshold]
+  const nextThreshold = thresholds[input.toolOnlyNudges]
+  if (nextThreshold !== undefined && input.consecutiveToolOnlyTurns >= nextThreshold) {
+    return { action: "nudge", final: input.toolOnlyNudges === thresholds.length - 1 }
+  }
+  if (input.consecutiveToolOnlyTurns > input.maxToolOnlyTurns) {
+    return { action: "stop" }
+  }
+  return { action: "ignore" }
+}
+
 // The cumulative ceiling across ALL continuations. Unlike the per-continuation
 // step limit, `totalSteps` is never reset by continueAutonomousLoop, so this
 // bound applies equally to plain autonomous continuations, active goals (which

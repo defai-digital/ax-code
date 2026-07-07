@@ -9,6 +9,7 @@ import {
   isEmptyModelTurn,
   isTruncatedModelTurn,
   modelTurnFinished,
+  toolOnlyTurnDecision,
   totalStepLimitDecision,
   truncatedModelTurnDecision,
 } from "../../src/session/prompt-autonomous-decisions"
@@ -736,5 +737,68 @@ describe("total step limit decision", () => {
     const decision = totalStepLimitDecision({ totalSteps: 500, totalStepLimit: 500, continuations: 0 })
     if (decision.action !== "stop") throw new Error("expected stop")
     expect(decision.message).not.toContain("auto-continuations")
+  })
+})
+
+describe("tool-only turn decision", () => {
+  const config = {
+    nudgeThreshold: 15,
+    finalNudgeThreshold: 30,
+    maxToolOnlyTurns: 35,
+  }
+
+  test("walks a full streak: nudge at 15, final nudge at 30, stop past 35", () => {
+    let toolOnlyNudges = 0
+    const events: string[] = []
+    for (let streak = 1; streak <= 36; streak += 1) {
+      const decision = toolOnlyTurnDecision({
+        consecutiveToolOnlyTurns: streak,
+        toolOnlyNudges,
+        ...config,
+      })
+      if (decision.action === "nudge") {
+        events.push(`nudge:${streak}:${decision.final ? "final" : "first"}`)
+        toolOnlyNudges += 1
+      }
+      if (decision.action === "stop") {
+        events.push(`stop:${streak}`)
+        break
+      }
+    }
+    expect(events).toEqual(["nudge:15:first", "nudge:30:final", "stop:36"])
+  })
+
+  test("ignores below thresholds and exactly at the hard limit", () => {
+    expect(toolOnlyTurnDecision({ consecutiveToolOnlyTurns: 14, toolOnlyNudges: 0, ...config })).toEqual({
+      action: "ignore",
+    })
+    expect(toolOnlyTurnDecision({ consecutiveToolOnlyTurns: 29, toolOnlyNudges: 1, ...config })).toEqual({
+      action: "ignore",
+    })
+    expect(toolOnlyTurnDecision({ consecutiveToolOnlyTurns: 35, toolOnlyNudges: 2, ...config })).toEqual({
+      action: "ignore",
+    })
+  })
+
+  test("stops without a pending nudge when thresholds are misconfigured above the limit", () => {
+    // If the final checkpoint is tuned above the hard limit, the stop must
+    // still fire rather than waiting forever for the unreachable nudge.
+    const decision = toolOnlyTurnDecision({
+      consecutiveToolOnlyTurns: 36,
+      toolOnlyNudges: 1,
+      nudgeThreshold: 15,
+      finalNudgeThreshold: 40,
+      maxToolOnlyTurns: 35,
+    })
+    expect(decision).toEqual({ action: "stop" })
+  })
+
+  test("late first nudge fires even when the streak jumped past the threshold", () => {
+    const decision = toolOnlyTurnDecision({
+      consecutiveToolOnlyTurns: 20,
+      toolOnlyNudges: 0,
+      ...config,
+    })
+    expect(decision).toEqual({ action: "nudge", final: false })
   })
 })
