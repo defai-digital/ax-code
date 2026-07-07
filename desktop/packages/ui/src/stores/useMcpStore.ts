@@ -1,11 +1,12 @@
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
-import type { McpStatus } from "@ax-code/sdk/v2"
+import type { McpReadResourceResult, McpResource, McpStatus } from "@ax-code/sdk/v2"
 import { axCodeClient } from "@/lib/ax-code/client"
 import { normalizeProjectPath } from "@/lib/projectResolution"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 
 export type McpStatusMap = Record<string, McpStatus>
+export type McpResourceMap = Record<string, McpResource>
 export type McpRuntimeDiagnostic = {
   status: "failed"
   error: string
@@ -13,6 +14,7 @@ export type McpRuntimeDiagnostic = {
 export type McpRuntimeDiagnosticMap = Record<string, McpRuntimeDiagnostic>
 
 const EMPTY_STATUS: McpStatusMap = {}
+const EMPTY_RESOURCES: McpResourceMap = {}
 const EMPTY_DIAGNOSTICS: McpRuntimeDiagnosticMap = {}
 
 type McpHealth = {
@@ -58,17 +60,26 @@ type TestConnectionResult = {
 
 const mcpStatusRefreshRequestIds = new Map<string, number>()
 let mcpStatusRefreshSequence = 0
+const mcpResourceRefreshRequestIds = new Map<string, number>()
+let mcpResourceRefreshSequence = 0
 
 interface McpStore {
   byDirectory: Record<string, McpStatusMap>
+  resourcesByDirectory: Record<string, McpResourceMap>
   diagnosticsByDirectory: Record<string, McpRuntimeDiagnosticMap>
   loadingKeys: Record<string, boolean>
+  resourceLoadingKeys: Record<string, boolean>
   lastErrorKeys: Record<string, string | null>
+  resourceErrorKeys: Record<string, string | null>
 
   getStatusForDirectory: (directory?: string | null) => McpStatusMap
+  getResourcesForDirectory: (directory?: string | null) => McpResourceMap
   getDiagnosticForDirectory: (directory?: string | null) => McpRuntimeDiagnosticMap
   getErrorForDirectory: (directory?: string | null) => string | null
+  getResourceErrorForDirectory: (directory?: string | null) => string | null
   refresh: (options?: McpRefreshOptions) => Promise<void>
+  refreshResources: (options?: McpRefreshOptions) => Promise<void>
+  readResource: (name: string, uri: string, directory?: string | null) => Promise<McpReadResourceResult>
   connect: (name: string, directory?: string | null) => Promise<void>
   disconnect: (name: string, directory?: string | null) => Promise<void>
   startAuth: (name: string, directory?: string | null) => Promise<string>
@@ -80,13 +91,21 @@ interface McpStore {
 export const useMcpStore = create<McpStore>()(
   devtools((set, get) => ({
     byDirectory: {},
+    resourcesByDirectory: {},
     diagnosticsByDirectory: {},
     loadingKeys: {},
+    resourceLoadingKeys: {},
     lastErrorKeys: {},
+    resourceErrorKeys: {},
 
     getStatusForDirectory: (directory) => {
       const key = toKey(directory ?? useDirectoryStore.getState().currentDirectory)
       return get().byDirectory[key] ?? EMPTY_STATUS
+    },
+
+    getResourcesForDirectory: (directory) => {
+      const key = toKey(directory ?? useDirectoryStore.getState().currentDirectory)
+      return get().resourcesByDirectory[key] ?? EMPTY_RESOURCES
     },
 
     getDiagnosticForDirectory: (directory) => {
@@ -97,6 +116,11 @@ export const useMcpStore = create<McpStore>()(
     getErrorForDirectory: (directory) => {
       const key = toKey(directory ?? useDirectoryStore.getState().currentDirectory)
       return get().lastErrorKeys[key] ?? null
+    },
+
+    getResourceErrorForDirectory: (directory) => {
+      const key = toKey(directory ?? useDirectoryStore.getState().currentDirectory)
+      return get().resourceErrorKeys[key] ?? null
     },
 
     refresh: async (options) => {
@@ -147,6 +171,60 @@ export const useMcpStore = create<McpStore>()(
           mcpStatusRefreshRequestIds.delete(key)
         }
       }
+    },
+
+    refreshResources: async (options) => {
+      const directory = normalizeDirectory(options?.directory ?? useDirectoryStore.getState().currentDirectory)
+      const key = toKey(directory)
+      const requestId = ++mcpResourceRefreshSequence
+      mcpResourceRefreshRequestIds.set(key, requestId)
+      const isCurrentRefresh = () => mcpResourceRefreshRequestIds.get(key) === requestId
+
+      if (!options?.silent) {
+        set((state) => ({
+          resourceLoadingKeys: { ...state.resourceLoadingKeys, [key]: true },
+          resourceErrorKeys: { ...state.resourceErrorKeys, [key]: null },
+        }))
+      }
+
+      try {
+        const api = getMcpApiClient(directory)
+        const result = await api.mcp.resources.list(undefined, { throwOnError: true })
+        const data = (result.data ?? {}) as McpResourceMap
+
+        if (!isCurrentRefresh()) {
+          return
+        }
+
+        set((state) => ({
+          resourcesByDirectory: { ...state.resourcesByDirectory, [key]: data ?? {} },
+          resourceLoadingKeys: { ...state.resourceLoadingKeys, [key]: false },
+          resourceErrorKeys: { ...state.resourceErrorKeys, [key]: null },
+        }))
+      } catch (error) {
+        if (!isCurrentRefresh()) {
+          return
+        }
+        const message = error instanceof Error ? error.message : "Failed to load MCP resources"
+        set((state) => ({
+          resourceLoadingKeys: { ...state.resourceLoadingKeys, [key]: false },
+          resourceErrorKeys: { ...state.resourceErrorKeys, [key]: message },
+        }))
+      } finally {
+        if (isCurrentRefresh()) {
+          mcpResourceRefreshRequestIds.delete(key)
+        }
+      }
+    },
+
+    readResource: async (name, uri, directory) => {
+      const normalized = normalizeDirectory(directory ?? useDirectoryStore.getState().currentDirectory)
+      const api = getMcpApiClient(normalized)
+      const result = await api.mcp.resource.read({ name, uri }, { throwOnError: true })
+      if (!result.data) {
+        throw new Error("MCP resource response did not include contents")
+      }
+      return result.data
     },
 
     connect: async (name, directory) => {

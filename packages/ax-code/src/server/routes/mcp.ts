@@ -4,7 +4,7 @@ import { validator } from "../validation"
 import z from "zod"
 import { MCP } from "../../mcp"
 import { Config } from "../../config/config"
-import { errors, invalidRequest } from "../error"
+import { errors, invalidRequest, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { withRouteParam } from "./route-params"
 import { ServerRuntimeAuth } from "../runtime-auth"
@@ -16,6 +16,9 @@ const MCP_NAME_PARAM = z
   .regex(/^[a-zA-Z0-9_-]+$/)
 const MCP_NAME_PARAM_OBJECT = z.object({
   name: MCP_NAME_PARAM,
+})
+const MCP_RESOURCE_READ_QUERY = z.object({
+  uri: z.string().min(1).max(8192),
 })
 
 function withMcpName(handler: (name: string, c: any) => unknown) {
@@ -89,6 +92,59 @@ export const McpRoutes = lazy(() =>
         const result = await MCP.add(name, config)
         return c.json(result.status)
       },
+    )
+    .get(
+      "/resources",
+      describeRoute({
+        summary: "List MCP resources",
+        description: "List available MCP resources from connected Model Context Protocol (MCP) servers.",
+        operationId: "mcp.resources.list",
+        responses: {
+          200: {
+            description: "MCP resources",
+            content: {
+              "application/json": {
+                schema: resolver(z.record(z.string(), MCP.Resource)),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(await MCP.resources())
+      },
+    )
+    .get(
+      "/:name/resource",
+      describeRoute({
+        summary: "Read MCP resource",
+        description: "Read one MCP resource from a connected Model Context Protocol (MCP) server.",
+        operationId: "mcp.resource.read",
+        responses: {
+          200: {
+            description: "MCP resource contents",
+            content: {
+              "application/json": {
+                schema: resolver(MCP.ReadResourceResult),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", MCP_NAME_PARAM_OBJECT),
+      validator("query", MCP_RESOURCE_READ_QUERY),
+      withMcpName(async (name, c) => {
+        const { uri } = c.req.valid("query")
+        const result = await MCP.readResource(name, uri)
+        if (!result) {
+          return notFound(c, {
+            message: "MCP resource not found",
+            resource: "mcpResource",
+          })
+        }
+        return c.json(result)
+      }),
     )
     .post(
       "/:name/auth",

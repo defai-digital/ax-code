@@ -122,6 +122,31 @@ Validation:
 
 Goal: make MCP resources discoverable and intentionally insertable from Desktop.
 
+### Phase 1.1: Formal MCP Resource Contract
+
+Status: Implemented
+
+Scope:
+
+- Promote MCP resource listing from experimental-only API to formal `/mcp/resources`.
+- Add formal resource read API at `/mcp/:name/resource?uri=...`.
+- Add Desktop MCP store cache/read helpers against the formal route.
+- Keep UI browser work for the next phase so the contract can be tested independently.
+
+Implemented finding:
+
+- Desktop could only depend on the experimental resource listing route, and there was no formal read route for a selected resource. This made Phase 1 browser work depend on unstable API shape.
+
+Validation:
+
+- `pnpm --dir packages/ax-code exec vitest run test/server/route-validation.test.ts`
+- `pnpm --dir desktop/packages/ui test -- src/stores/useMcpStore.test.ts`
+- `pnpm --dir packages/ax-code typecheck`
+- `pnpm --dir desktop/packages/ui type-check`
+- `pnpm --dir packages/sdk/js run build`
+- `pnpm --dir packages/sdk/js exec tsc --build --force`
+- `pnpm run check:openapi`
+
 Scope:
 
 - Inventory existing MCP server/resource/template endpoints and SDK coverage.

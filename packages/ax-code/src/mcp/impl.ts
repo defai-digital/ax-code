@@ -89,6 +89,28 @@ export namespace MCP {
     .meta({ ref: "McpResource" })
   export type Resource = z.infer<typeof Resource>
 
+  const ResourceContentsBase = z.object({
+    uri: z.string().optional(),
+    mimeType: z.string().optional(),
+  })
+
+  export const ReadResourceResult = z
+    .object({
+      contents: z.array(
+        z.union([
+          ResourceContentsBase.extend({
+            text: z.string(),
+          }).passthrough(),
+          ResourceContentsBase.extend({
+            blob: z.string(),
+          }).passthrough(),
+        ]),
+      ),
+    })
+    .passthrough()
+    .meta({ ref: "McpReadResourceResult" })
+  export type ReadResourceResult = z.infer<typeof ReadResourceResult>
+
   export const ToolsChanged = BusEvent.define(
     "mcp.tools.changed",
     z.object({

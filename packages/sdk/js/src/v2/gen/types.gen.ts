@@ -3529,6 +3529,24 @@ export type McpStatus =
   | McpStatusNeedsClientRegistration
   | McpStatusNeedsTrust
 
+export type McpReadResourceResult = {
+  contents: Array<
+    | {
+        uri?: string
+        mimeType?: string
+        text: string
+        [key: string]: unknown
+      }
+    | {
+        uri?: string
+        mimeType?: string
+        blob: string
+        [key: string]: unknown
+      }
+  >
+  [key: string]: unknown
+}
+
 export type Path = {
   home: string
   state: string
@@ -12416,6 +12434,60 @@ export type McpAddResponses = {
 }
 
 export type McpAddResponse = McpAddResponses[keyof McpAddResponses]
+
+export type McpResourcesListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/mcp/resources"
+}
+
+export type McpResourcesListResponses = {
+  /**
+   * MCP resources
+   */
+  200: {
+    [key: string]: McpResource
+  }
+}
+
+export type McpResourcesListResponse = McpResourcesListResponses[keyof McpResourcesListResponses]
+
+export type McpResourceReadData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query: {
+    directory?: string
+    uri: string
+  }
+  url: "/mcp/{name}/resource"
+}
+
+export type McpResourceReadErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+export type McpResourceReadError = McpResourceReadErrors[keyof McpResourceReadErrors]
+
+export type McpResourceReadResponses = {
+  /**
+   * MCP resource contents
+   */
+  200: McpReadResourceResult
+}
+
+export type McpResourceReadResponse = McpResourceReadResponses[keyof McpResourceReadResponses]
 
 export type McpAuthRemoveData = {
   body?: never

@@ -82,6 +82,9 @@ import type {
   McpDisconnectResponses,
   McpLocalConfig,
   McpRemoteConfig,
+  McpResourceReadErrors,
+  McpResourceReadResponses,
+  McpResourcesListResponses,
   McpStatusResponses,
   OutputFormat,
   Part as Part2,
@@ -5777,6 +5780,61 @@ export class Event_ extends HeyApiClient {
   }
 }
 
+export class Resources extends HeyApiClient {
+  /**
+   * List MCP resources
+   *
+   * List available MCP resources from connected Model Context Protocol (MCP) servers.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<McpResourcesListResponses, unknown, ThrowOnError>({
+      url: "/mcp/resources",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Resource2 extends HeyApiClient {
+  /**
+   * Read MCP resource
+   *
+   * Read one MCP resource from a connected Model Context Protocol (MCP) server.
+   */
+  public read<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      uri: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "uri" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<McpResourceReadResponses, McpResourceReadErrors, ThrowOnError>({
+      url: "/mcp/{name}/resource",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Auth2 extends HeyApiClient {
   /**
    * Remove MCP OAuth
@@ -6019,6 +6077,16 @@ export class Mcp extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _resources?: Resources
+  get resources(): Resources {
+    return (this._resources ??= new Resources({ client: this.client }))
+  }
+
+  private _resource?: Resource2
+  get resource(): Resource2 {
+    return (this._resource ??= new Resource2({ client: this.client }))
   }
 
   private _auth?: Auth2

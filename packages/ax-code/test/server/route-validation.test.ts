@@ -18,6 +18,7 @@ import { appErrorEnvelope } from "../../src/server/error"
 import { DefaultQueryNumber, OptionalQueryNumber } from "../../src/server/routes/query"
 import { parsePtyReconnectCursor } from "../../src/server/routes/pty"
 import { File } from "../../src/file"
+import { MCP } from "../../src/mcp"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -593,6 +594,78 @@ describe("server route validation", () => {
 
         const readOnly = await Server.Default().request("/mcp")
         expect(readOnly.status).toBe(200)
+      },
+    })
+  })
+
+  test("mcp resource routes list and read connected resources", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const resourcesSpy = vi.spyOn(MCP, "resources").mockResolvedValue({
+          "docs:readme": {
+            client: "docs",
+            name: "readme",
+            uri: "mcp://docs/readme.md",
+            mimeType: "text/markdown",
+          },
+        })
+        const readSpy = vi.spyOn(MCP, "readResource").mockResolvedValue({
+          contents: [
+            {
+              uri: "mcp://docs/readme.md",
+              mimeType: "text/markdown",
+              text: "# README",
+            },
+          ],
+        } as Awaited<ReturnType<typeof MCP.readResource>>)
+
+        try {
+          const list = await Server.Default().request("/mcp/resources")
+          expect(list.status).toBe(200)
+          expect(await list.json()).toMatchObject({
+            "docs:readme": {
+              client: "docs",
+              name: "readme",
+              uri: "mcp://docs/readme.md",
+            },
+          })
+
+          const read = await Server.Default().request(
+            `/mcp/docs/resource?uri=${encodeURIComponent("mcp://docs/readme.md")}`,
+          )
+          expect(read.status).toBe(200)
+          expect(readSpy).toHaveBeenCalledWith("docs", "mcp://docs/readme.md")
+          expect(await read.json()).toMatchObject({
+            contents: [{ text: "# README" }],
+          })
+        } finally {
+          resourcesSpy.mockRestore()
+          readSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("mcp resource read returns not found when the runtime has no resource contents", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const readSpy = vi.spyOn(MCP, "readResource").mockResolvedValue(undefined)
+
+        try {
+          const res = await Server.Default().request(
+            `/mcp/docs/resource?uri=${encodeURIComponent("mcp://docs/missing.md")}`,
+          )
+          expect(res.status).toBe(404)
+          expect(await res.json()).toMatchObject({
+            name: "NotFoundError",
+            message: "MCP resource not found",
+            details: { resource: "mcpResource" },
+          })
+        } finally {
+          readSpy.mockRestore()
+        }
       },
     })
   })
