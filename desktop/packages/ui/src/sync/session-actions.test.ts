@@ -1,11 +1,23 @@
 import { describe, expect, test, beforeEach, vi } from "vitest"
 import type { PermissionRequest } from "@/types/permission"
-import type { Message, Part } from "@ax-code/sdk/v2/client"
+import type { Message, Part, Session } from "@ax-code/sdk/v2/client"
 import { resolveResyncedSessionStatus, hasCompletedAssistantReply } from "./reconnect-recovery"
 
 // Mock SDK client that records permission.reply / question.reply calls
 const replyCalls: Array<{ method: string; params: Record<string, unknown> }> = []
 const createSessionCalls: Array<{ client: "scoped" | "global"; params: Record<string, unknown> }> = []
+const sessionCalls: Array<{ method: string; params: Record<string, unknown> }> = []
+const setCurrentSessionMock = vi.fn()
+const inputCalls: Array<{ method: string; params?: Record<string, unknown> }> = []
+let inputStoreState: {
+  pendingInputText: string | null
+  pendingInputMode: "replace" | "append"
+  attachedFiles: Array<Record<string, unknown>>
+} = {
+  pendingInputText: null,
+  pendingInputMode: "replace",
+  attachedFiles: [],
+}
 type MockSessionCreateResult = {
   data?: { id: string; directory: unknown }
   error?: { message: string }
@@ -50,6 +62,43 @@ const mockScopedClient = {
       return Promise.resolve({ data: { id: "ses_scoped", directory: params.directory } })
     }),
     messages: vi.fn(() => Promise.resolve(scopedMessagesResult)),
+    abort: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.abort", params })
+      return Promise.resolve({ data: true })
+    }),
+    revert: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.revert", params })
+      return Promise.resolve({
+        data: {
+          id: params.sessionID,
+          directory: params.directory,
+          revert: { messageID: params.messageID },
+          time: { created: 1, updated: 2 },
+        },
+      })
+    }),
+    unrevert: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.unrevert", params })
+      return Promise.resolve({
+        data: {
+          id: params.sessionID,
+          directory: params.directory,
+          revert: undefined,
+          time: { created: 1, updated: 3 },
+        },
+      })
+    }),
+    fork: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.fork", params })
+      return Promise.resolve({
+        data: {
+          id: "session-b-fork",
+          directory: params.directory,
+          title: "Forked",
+          time: { created: 2, updated: 2 },
+        },
+      })
+    }),
   },
   question: {
     reply: vi.fn((params: Record<string, unknown>) => {
@@ -116,14 +165,38 @@ vi.doMock("./session-ui-store", () => ({
         if (sessionId === "session-b") return "/other/project"
         return null
       },
-      setCurrentSession: vi.fn(),
+      setCurrentSession: setCurrentSessionMock,
     }),
   },
 }))
 
-// Mock useInputStore (imported but not used in permission functions)
 vi.doMock("./input-store", () => ({
-  useInputStore: {},
+  useInputStore: {
+    getState: () => ({
+      ...inputStoreState,
+      clearAttachedFiles: () => {
+        inputCalls.push({ method: "clearAttachedFiles" })
+        inputStoreState = { ...inputStoreState, attachedFiles: [] }
+      },
+      addRestoredAttachment: (params: Record<string, unknown>) => {
+        inputCalls.push({ method: "addRestoredAttachment", params })
+        inputStoreState = {
+          ...inputStoreState,
+          attachedFiles: [...inputStoreState.attachedFiles, { source: "server", ...params }],
+        }
+      },
+      addMcpResourceAttachment: (params: Record<string, unknown>) => {
+        inputCalls.push({ method: "addMcpResourceAttachment", params })
+        inputStoreState = {
+          ...inputStoreState,
+          attachedFiles: [...inputStoreState.attachedFiles, { source: "mcp-resource", ...params }],
+        }
+      },
+    }),
+    setState: (patch: Partial<typeof inputStoreState>) => {
+      inputStoreState = { ...inputStoreState, ...patch }
+    },
+  },
 }))
 
 // Mock useGlobalSessionsStore (imported but not used in permission functions)
@@ -171,6 +244,14 @@ function createChildStores(entries: Array<[string, StoreApi<DirectoryStore>]>) {
 // prompt leaks in and the grace-window watchdog re-arms unboundedly (OOM).
 beforeEach(() => {
   vi.resetModules()
+  sessionCalls.length = 0
+  inputCalls.length = 0
+  setCurrentSessionMock.mockClear()
+  inputStoreState = {
+    pendingInputText: null,
+    pendingInputMode: "replace",
+    attachedFiles: [],
+  }
 })
 
 describe("respondToPermission passes directory", () => {
@@ -278,6 +359,129 @@ describe("createSession passes directory", () => {
     await expect(createSession("Desktop session", "/selected/project", null)).rejects.toThrow(
       "Failed to create session: Project directory is not accessible",
     )
+  })
+})
+
+describe("rollback and fork actions use the session directory", () => {
+  beforeEach(() => {
+    sessionCalls.length = 0
+    inputCalls.length = 0
+  })
+
+  test("revertToMessage uses the mapped session directory and restores MCP resource attachments", async () => {
+    const store = createStore({})
+    store.setState({
+      session: [
+        {
+          id: "session-b",
+          directory: "/other/project",
+          time: { created: 1, updated: 1 },
+        } as unknown as Session,
+      ],
+      message: {
+        "session-b": [
+          {
+            id: "msg-b",
+            sessionID: "session-b",
+            role: "user",
+            time: { created: 1 },
+          } as unknown as Message,
+        ],
+      },
+      part: {
+        "msg-b": [
+          {
+            id: "prt-text",
+            type: "text",
+            messageID: "msg-b",
+            text: "redo this",
+          } as unknown as Part,
+          {
+            id: "prt-resource",
+            type: "file",
+            messageID: "msg-b",
+            mime: "text/markdown",
+            filename: "readme.md",
+            source: {
+              type: "resource",
+              clientName: "docs",
+              uri: "mcp://docs/readme.md",
+            },
+          } as unknown as Part,
+        ],
+      },
+    })
+
+    const { revertToMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(
+      mockSdk as unknown as AxCodeClient,
+      createChildStores([["/other/project", store]]),
+      () => "/test/project",
+    )
+
+    await revertToMessage("session-b", "msg-b")
+
+    expect(sessionCalls).toContainEqual({
+      method: "session.revert",
+      params: {
+        sessionID: "session-b",
+        directory: "/other/project",
+        messageID: "msg-b",
+      },
+    })
+    expect(inputStoreState.pendingInputText).toBe("redo this")
+    expect(inputCalls).toContainEqual({
+      method: "addMcpResourceAttachment",
+      params: {
+        client: "docs",
+        name: "readme.md",
+        uri: "mcp://docs/readme.md",
+        mimeType: "text/markdown",
+      },
+    })
+  })
+
+  test("forkFromMessage switches to the fork in the original session directory", async () => {
+    const store = createStore({})
+    store.setState({
+      session: [
+        {
+          id: "session-b",
+          directory: "/other/project",
+          time: { created: 1, updated: 1 },
+        } as unknown as Session,
+      ],
+      part: {
+        "msg-b": [
+          {
+            id: "prt-text",
+            type: "text",
+            messageID: "msg-b",
+            text: "try an alternate path",
+          } as unknown as Part,
+        ],
+      },
+    })
+
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(
+      mockSdk as unknown as AxCodeClient,
+      createChildStores([["/other/project", store]]),
+      () => "/test/project",
+    )
+
+    await forkFromMessage("session-b", "msg-b")
+
+    expect(sessionCalls).toContainEqual({
+      method: "session.fork",
+      params: {
+        sessionID: "session-b",
+        directory: "/other/project",
+        messageID: "msg-b",
+      },
+    })
+    expect(setCurrentSessionMock).toHaveBeenCalledWith("session-b-fork", "/other/project")
+    expect(inputStoreState.pendingInputText).toBe("try an alternate path")
   })
 })
 

@@ -203,6 +203,26 @@ Acceptance:
 
 Goal: expose high-value runtime primitives through safe Desktop workflows.
 
+### Phase 2.1: Rollback Directory Safety And Points Contract
+
+Status: Implemented
+
+Scope:
+
+- Fix Desktop revert/unrevert/refetch/fork actions to use the target session directory instead of the current global directory.
+- Preserve MCP resource attachments when a reverted or forked prompt is restored into the composer.
+- Add a Desktop rollback points store over the existing generated SDK `session.rollbackPoints` contract.
+- Keep visual rollback preview/apply UI for the next slice.
+
+Implemented finding:
+
+- `revertToMessage`, `unrevertSession`, `refetchSessionMessages`, and `forkFromMessage` could route through the active Desktop directory rather than the session's owning directory. In multi-project or worktree usage, this could call the wrong runtime instance or mutate the wrong child store.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/sync/session-actions.test.ts src/stores/useSessionRollbackStore.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.

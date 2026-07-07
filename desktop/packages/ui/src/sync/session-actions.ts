@@ -104,6 +104,11 @@ function dir() {
   return _getDirectory() || undefined
 }
 
+function scopedClientForDirectory(directory?: string | null): AxCodeClient {
+  if (directory) return axCodeClient.getScopedSdkClient(directory)
+  return sdk()
+}
+
 function formatSdkError(error: unknown): string {
   if (error instanceof Error) return error.message
   if (typeof error === "string") return error
@@ -370,11 +375,8 @@ function getDirectoryStore(directory?: string) {
 }
 
 function getSessionReplyClient(sessionId?: string): AxCodeClient {
-  const directory = sessionId ? useSessionUIStore.getState().getDirectoryForSession(sessionId) : null
-  if (directory) {
-    return axCodeClient.getScopedSdkClient(directory)
-  }
-  return sdk()
+  const directory = sessionId ? getSessionDirectory(sessionId) : null
+  return scopedClientForDirectory(directory)
 }
 
 function restoreFilePartsToInput(fileParts: Array<Record<string, unknown>>): void {
@@ -383,6 +385,16 @@ function restoreFilePartsToInput(fileParts: Array<Record<string, unknown>>): voi
     const url = typeof filePart.url === "string" ? filePart.url : ""
     const mime = typeof filePart.mime === "string" ? filePart.mime : "application/octet-stream"
     const filename = typeof filePart.filename === "string" ? filePart.filename : "attachment"
+    const source = filePart.source as { type?: unknown; clientName?: unknown; uri?: unknown } | undefined
+    if (source?.type === "resource" && typeof source.clientName === "string" && typeof source.uri === "string") {
+      useInputStore.getState().addMcpResourceAttachment({
+        client: source.clientName,
+        name: filename,
+        uri: source.uri,
+        mimeType: mime,
+      })
+      continue
+    }
     if (url) {
       useInputStore.getState().addRestoredAttachment({ url, mimeType: mime, filename })
     }
@@ -449,7 +461,7 @@ export async function createSession(
 ): Promise<Session | null> {
   try {
     const directory = directoryOverride ?? dir()
-    const client = directory ? axCodeClient.getScopedSdkClient(directory) : sdk()
+    const client = scopedClientForDirectory(directory)
     const result = await client.session.create({
       directory,
       title,
@@ -517,7 +529,10 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
     ui.setCurrentSession(null)
   }
   try {
-    await sdk().session.delete({ sessionID: sessionId, directory: sessionDirectory })
+    await scopedClientForDirectory(sessionDirectory).session.delete({
+      sessionID: sessionId,
+      directory: sessionDirectory,
+    })
     useGlobalSessionsStore.getState().removeSessions([sessionId])
     return true
   } catch (error) {
@@ -549,7 +564,7 @@ export async function deleteSessionInDirectory(sessionId: string, directory: str
   const ui = useSessionUIStore.getState()
   if (ui.currentSessionId === sessionId) ui.setCurrentSession(null)
   try {
-    await sdk().session.delete({ sessionID: sessionId, directory })
+    await scopedClientForDirectory(directory).session.delete({ sessionID: sessionId, directory })
     useGlobalSessionsStore.getState().removeSessions([sessionId])
     return true
   } catch (error) {
@@ -568,7 +583,11 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
   }
   try {
     const archivedAt = Date.now()
-    await sdk().session.update({ sessionID: sessionId, directory: sessionDirectory, time: { archived: archivedAt } })
+    await scopedClientForDirectory(sessionDirectory).session.update({
+      sessionID: sessionId,
+      directory: sessionDirectory,
+      time: { archived: archivedAt },
+    })
     useGlobalSessionsStore.getState().archiveSessions([sessionId], archivedAt)
     return true
   } catch (error) {
@@ -586,7 +605,11 @@ export async function archiveSession(sessionId: string): Promise<boolean> {
 
 export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
   const sessionDirectory = getSessionDirectory(sessionId)
-  const result = await sdk().session.update({ sessionID: sessionId, directory: sessionDirectory, title })
+  const result = await scopedClientForDirectory(sessionDirectory).session.update({
+    sessionID: sessionId,
+    directory: sessionDirectory,
+    title,
+  })
   if (result.data) {
     useGlobalSessionsStore.getState().upsertSession(result.data)
   }
@@ -795,14 +818,16 @@ export async function rejectQuestion(sessionId: string, requestId: string): Prom
  * 5. Set pendingInputText so the reverted message text appears in the input
  */
 export async function revertToMessage(sessionId: string, messageId: string): Promise<void> {
-  const store = dirStore()
+  const directory = getSessionDirectory(sessionId)
+  const client = scopedClientForDirectory(directory)
+  const store = getDirectoryStore(directory)
   const state = store.getState()
 
   // Abort if busy before mutating session state
   const status = state.session_status[sessionId]
   if (status && status.type !== "idle") {
     try {
-      await sdk().session.abort({ sessionID: sessionId, directory: dir() })
+      await client.session.abort({ sessionID: sessionId, directory })
     } catch {
       // ignore abort errors
     }
@@ -867,8 +892,7 @@ export async function revertToMessage(sessionId: string, messageId: string): Pro
 
   // Call SDK and merge authoritative result into store
   try {
-    const directory = dir()
-    const result = await sdk().session.revert({ sessionID: sessionId, directory, messageID: messageId })
+    const result = await client.session.revert({ sessionID: sessionId, directory, messageID: messageId })
     if (result.data) {
       const current = store.getState()
       const updated = [...current.session]
@@ -903,8 +927,13 @@ export async function revertToMessage(sessionId: string, messageId: string): Pro
 }
 
 export async function refetchSessionMessages(sessionId: string): Promise<void> {
-  const store = dirStore()
-  const result = await sdk().session.messages({ sessionID: sessionId, directory: dir(), limit: MESSAGE_REFETCH_LIMIT })
+  const directory = getSessionDirectory(sessionId)
+  const store = getDirectoryStore(directory)
+  const result = await scopedClientForDirectory(directory).session.messages({
+    sessionID: sessionId,
+    directory,
+    limit: MESSAGE_REFETCH_LIMIT,
+  })
   const records = (result.data ?? []).filter((record: { info?: { id?: string } }) => !!record?.info?.id)
   if (records.length === 0) return
 
@@ -927,7 +956,9 @@ export async function refetchSessionMessages(sessionId: string): Promise<void> {
  * Restore all previously reverted messages. Aborts if busy, merges result.
  */
 export async function unrevertSession(sessionId: string): Promise<void> {
-  const store = dirStore()
+  const directory = getSessionDirectory(sessionId)
+  const client = scopedClientForDirectory(directory)
+  const store = getDirectoryStore(directory)
   const state = store.getState()
   const previousMessageCount = state.message[sessionId]?.length ?? 0
 
@@ -935,13 +966,13 @@ export async function unrevertSession(sessionId: string): Promise<void> {
   const status = state.session_status[sessionId]
   if (status && status.type !== "idle") {
     try {
-      await sdk().session.abort({ sessionID: sessionId, directory: dir() })
+      await client.session.abort({ sessionID: sessionId, directory })
     } catch {
       // ignore
     }
   }
 
-  const result = await sdk().session.unrevert({ sessionID: sessionId, directory: dir() })
+  const result = await client.session.unrevert({ sessionID: sessionId, directory })
   if (result.data) {
     const current = store.getState()
     const sessions = [...current.session]
@@ -968,7 +999,9 @@ export async function unrevertSession(sessionId: string): Promise<void> {
  * 4. Switch to new session and set pending input text
  */
 export async function forkFromMessage(sessionId: string, messageId: string): Promise<void> {
-  const store = dirStore()
+  const directory = getSessionDirectory(sessionId)
+  const client = scopedClientForDirectory(directory)
+  const store = getDirectoryStore(directory)
   const state = store.getState()
 
   // Extract message text and file attachments for input restoration.
@@ -987,7 +1020,7 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
     .trim()
   const fileParts = parts.filter((p) => p.type === "file" && !isSyntheticPart(p)) as Array<Record<string, unknown>>
 
-  const result = await sdk().session.fork({ sessionID: sessionId, directory: dir(), messageID: messageId })
+  const result = await client.session.fork({ sessionID: sessionId, directory, messageID: messageId })
   if (!result.data) return
 
   const forkedSession = result.data
@@ -1002,7 +1035,8 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
   }
 
   // Switch to new session
-  useSessionUIStore.getState().setCurrentSession(forkedSession.id)
+  const forkedDirectory = (forkedSession as { directory?: string | null }).directory ?? directory ?? null
+  useSessionUIStore.getState().setCurrentSession(forkedSession.id, forkedDirectory)
 
   // Restore forked message text and file attachments to input
   if (messageText) {
