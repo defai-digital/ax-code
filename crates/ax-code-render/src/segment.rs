@@ -99,7 +99,15 @@ impl TextChunk {
 
     pub fn bytes<'a>(&self, registry: &'a MemRegistry) -> &'a [u8] {
         match registry.get(self.mem_id) {
-            Some(buf) => &buf[self.byte_start as usize..self.byte_end as usize],
+            Some(buf) => {
+                // Clamp instead of slicing blind: replaceMemBuffer can shrink a
+                // slot while rope chunks still reference the old extent, and an
+                // out-of-range slice panics (surfacing as a JS exception on
+                // every draw that touches the chunk).
+                let end = (self.byte_end as usize).min(buf.len());
+                let start = (self.byte_start as usize).min(end);
+                &buf[start..end]
+            }
             None => &[],
         }
     }

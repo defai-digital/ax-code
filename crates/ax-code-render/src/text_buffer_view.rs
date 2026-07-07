@@ -76,6 +76,9 @@ pub struct TextBufferView {
     pub tab_indicator_color: Option<Rgba>,
     pub truncate: bool,
     dirty: bool,
+    /// Content epoch of the text buffer the caches were built against
+    /// (`TextBuffer::content_epoch`). `None` = never built.
+    seen_epoch: Option<(u64, u64)>,
     caches: VirtualLineCaches,
     // Slices exposed through GetLineInfoDirect must stay alive between calls.
     info_starts: Vec<u32>,
@@ -102,6 +105,7 @@ impl TextBufferView {
             tab_indicator_color: None,
             truncate: false,
             dirty: true,
+            seen_epoch: None,
             caches: VirtualLineCaches::default(),
             info_starts: Vec::new(),
             info_widths: Vec::new(),
@@ -262,32 +266,47 @@ impl TextBufferView {
         if last < vlines_len { last } else { 0 }
     }
 
-    /// Zig `updateVirtualLines`. NOTE: the view has no cheap content-epoch
-    /// signal yet (registerView/isViewDirty land with the production flip),
-    /// so it recomputes whenever any dependency may have changed — same
-    /// observable results, more work. Only wrap=none/no-width is implemented
-    /// in this tranche.
+    /// Zig `updateVirtualLines`. Rebuilds only when the view's own settings
+    /// changed (`dirty`) or the underlying buffer's content epoch moved —
+    /// callers hit this on every draw/measure/selection query, and streaming
+    /// output makes both the call rate and the line count grow together, so
+    /// an unconditional rebuild degrades quadratically over a session.
     pub fn update_virtual_lines(&mut self) {
         let Some(tb) = resolve_tb(self.text_buffer) else {
             return;
         };
+        let epoch = tb.content_epoch();
+        if !self.dirty && self.seen_epoch == Some(epoch) {
+            return;
+        }
         self.caches = VirtualLineCaches::default();
         if self.wrap_mode == WrapMode::None || self.wrap_width.is_none() {
             let line_count = tb.get_line_count();
+            let all_chunks = tb.all_line_chunks();
             let mut col_offset: u32 = 0;
             for row in 0..line_count {
-                let width = tb.line_width_at(row);
                 let idx = self.caches.starts.len() as u32;
                 self.caches.first_vline.push(idx);
                 self.caches.vline_counts.push(1);
                 let mut vline = VirtualLine {
-                    width_cols: width,
+                    width_cols: 0,
                     col_offset,
                     source_line: row,
                     source_col_offset: 0,
                     chunks: Vec::new(),
                 };
-                Self::collect_line_chunks(tb, row, &mut vline.chunks);
+                let mut width: u32 = 0;
+                if let Some(chunks) = all_chunks.get(row as usize) {
+                    for (chunk_ref, chunk_width) in chunks {
+                        width += chunk_width;
+                        vline.chunks.push(VirtualChunk {
+                            grapheme_start: 0,
+                            width: *chunk_width,
+                            chunk: *chunk_ref,
+                        });
+                    }
+                }
+                vline.width_cols = width;
                 self.caches.starts.push(col_offset);
                 self.caches.widths.push(width);
                 self.caches.sources.push(row);
@@ -299,16 +318,7 @@ impl TextBufferView {
             self.wrap_virtual_lines(tb);
         }
         self.dirty = false;
-    }
-
-    fn collect_line_chunks(tb: &mut TextBuffer, row: u32, out: &mut Vec<VirtualChunk>) {
-        for (chunk_ref, width) in tb.line_chunks(row) {
-            out.push(VirtualChunk {
-                grapheme_start: 0,
-                width,
-                chunk: chunk_ref,
-            });
-        }
+        self.seen_epoch = Some(epoch);
     }
 
     /// Faithful port of the Zig wrap engine (WrapContext): word mode backtracks
@@ -396,9 +406,13 @@ impl TextBufferView {
         let method = tb.width_method;
         let is_word = self.wrap_mode == WrapMode::Word;
         let line_count = tb.get_line_count();
+        // One rope walk for every row's working set — the per-row
+        // line_chunks_full(row) variant re-walks the rope from the start each
+        // call, which is O(lines²) across this loop.
+        let all_chunks = tb.all_line_chunks_full();
         for row in 0..line_count {
-            let chunks = tb.line_chunks_full(row);
-            for (chunk_ref, chunk_width, bytes, graphemes, wrap_offsets) in &chunks {
+            let chunks: &[_] = all_chunks.get(row as usize).map_or(&[], |v| v.as_slice());
+            for (chunk_ref, chunk_width, bytes, graphemes, wrap_offsets) in chunks {
                 let chunk_bytes: &[u8] = bytes;
                 let is_ascii = (chunk_ref.flags & crate::segment::FLAG_ASCII_ONLY) != 0;
                 if is_word {
@@ -884,5 +898,99 @@ impl TextBufferView {
     pub fn reset_local_selection(&mut self) {
         self.selection = None;
         self.selection_anchor_offset = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::handles;
+    use crate::mem_registry::MemBuffer;
+    use crate::unicode::WidthMethod;
+
+    fn tb_handle_with(text: &str) -> (u32, *mut TextBuffer) {
+        let mut tb = Box::new(TextBuffer::new(WidthMethod::Unicode));
+        tb.set_text(MemBuffer::Owned(text.as_bytes().to_vec()), text.len());
+        let ptr = Box::into_raw(tb);
+        let handle = handles::insert(Kind::TextBuffer, ptr as usize);
+        assert_ne!(handle, 0);
+        (handle, ptr)
+    }
+
+    fn destroy_tb(handle: u32) {
+        if let Some(ptr) = handles::remove(handle, Kind::TextBuffer) {
+            drop(unsafe { Box::from_raw(ptr as *mut TextBuffer) });
+        }
+    }
+
+    #[test]
+    fn virtual_lines_refresh_when_buffer_content_changes() {
+        let (handle, ptr) = tb_handle_with("one\ntwo");
+        let mut view = TextBufferView::new(handle);
+        assert_eq!(view.virtual_lines().len(), 2);
+        // Mutate the buffer WITHOUT touching the view: the epoch gate must
+        // notice the rope change and rebuild instead of serving stale caches.
+        let tb = unsafe { &mut *ptr };
+        tb.append(MemBuffer::Owned(b"\nthree".to_vec()), 6);
+        assert_eq!(view.virtual_lines().len(), 3);
+        // And with NO change, cached results are reused but stay correct.
+        assert_eq!(view.virtual_lines().len(), 3);
+        destroy_tb(handle);
+    }
+
+    #[test]
+    fn virtual_lines_match_per_row_walk_with_cjk() {
+        let text = "中文宽度 test\n🚀 emoji line\nplain ascii\n第二行中文字";
+        let (handle, ptr) = tb_handle_with(text);
+        let mut view = TextBufferView::new(handle);
+        let tb = unsafe { &mut *ptr };
+        let line_count = tb.get_line_count();
+        let vlines = view.virtual_lines().to_vec();
+        assert_eq!(vlines.len(), line_count as usize);
+        for row in 0..line_count {
+            // Batched single-walk collection must agree with the original
+            // per-row rope walks (width and chunk refs).
+            assert_eq!(vlines[row as usize].width_cols, tb.line_width_at(row));
+            let per_row = tb.line_chunks(row);
+            let batched = &vlines[row as usize].chunks;
+            assert_eq!(batched.len(), per_row.len());
+            for (vc, (chunk_ref, width)) in batched.iter().zip(per_row.iter()) {
+                assert_eq!(vc.width, *width);
+                assert_eq!(vc.chunk.byte_start, chunk_ref.byte_start);
+                assert_eq!(vc.chunk.byte_end, chunk_ref.byte_end);
+            }
+        }
+        destroy_tb(handle);
+    }
+
+    #[test]
+    fn wrapped_virtual_lines_refresh_on_append() {
+        let (handle, ptr) = tb_handle_with("中文宽度中文宽度中文宽度");
+        let mut view = TextBufferView::new(handle);
+        view.set_wrap_mode(WrapMode::Char);
+        view.set_wrap_width(Some(8));
+        let before = view.virtual_lines().len();
+        assert!(before >= 3, "24 columns of CJK at wrap 8: got {before}");
+        let tb = unsafe { &mut *ptr };
+        tb.append(MemBuffer::Owned("中文宽度".as_bytes().to_vec()), 12);
+        let after = view.virtual_lines().len();
+        assert!(after > before, "append must invalidate wrapped caches");
+        destroy_tb(handle);
+    }
+
+    #[test]
+    fn shrinking_mem_buffer_does_not_panic() {
+        // replaceMemBuffer can hand chunks a shorter backing buffer; reads must
+        // clamp instead of panicking (this previously sliced out of range).
+        let (handle, ptr) = tb_handle_with("hello wide 中文 world");
+        let tb = unsafe { &mut *ptr };
+        let mem_id = 0u8; // set_text registers the first slot
+        assert!(tb.registry.replace(mem_id, MemBuffer::Owned(b"hi".to_vec())));
+        tb.mark_content_changed();
+        let mut view = TextBufferView::new(handle);
+        let _ = view.virtual_lines().len();
+        let plain = tb.plain_text();
+        assert!(plain.len() <= 2, "clamped reads: got {:?}", plain);
+        destroy_tb(handle);
     }
 }

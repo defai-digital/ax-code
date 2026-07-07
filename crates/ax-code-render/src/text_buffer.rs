@@ -38,6 +38,11 @@ pub struct TextBuffer {
     pub syntax_style: Option<u32>, // handle into the global registry
     line_highlights: Vec<Vec<crate::segment::Highlight>>,
     internal_highlight_count: u32,
+    /// Content epoch for mutations the rope version cannot see: registry
+    /// replace/unregister behind existing chunks, tab-width changes, and
+    /// `reset` (which swaps in a fresh rope whose version restarts at 0).
+    /// Views combine this with `rope.version()` to detect staleness.
+    revision: u64,
 }
 
 impl TextBuffer {
@@ -54,7 +59,18 @@ impl TextBuffer {
             syntax_style: None,
             line_highlights: Vec::new(),
             internal_highlight_count: 0,
+            revision: 0,
         }
+    }
+
+    /// See the `revision` field. Combined with `rope.version()` this forms the
+    /// full content epoch a view must compare before trusting cached layout.
+    pub fn content_epoch(&self) -> (u64, u64) {
+        (self.revision, self.rope.version())
+    }
+
+    pub fn mark_content_changed(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
     }
 
     pub fn get_length(&self) -> u32 {
@@ -87,6 +103,7 @@ impl TextBuffer {
         } else {
             clamped + 1
         };
+        self.mark_content_changed();
     }
 
     pub fn clear(&mut self) {
@@ -100,11 +117,19 @@ impl TextBuffer {
         self.styled_text_mem_id = None;
         self.registry.clear();
         self.rope = Rope::new();
+        // The fresh rope's version restarts at 0, which could collide with a
+        // version a view has already seen — bump the buffer revision so the
+        // combined epoch still changes.
+        self.mark_content_changed();
     }
 
     pub fn create_chunk(&self, mem_id: u8, byte_start: u32, byte_end: u32) -> TextChunk {
         let buf = self.registry.get(mem_id).unwrap_or(&[]);
-        let bytes = &buf[byte_start as usize..byte_end as usize];
+        // Clamped like TextChunk::bytes — callers can pass ranges computed
+        // against a buffer that has since been replaced with a shorter one.
+        let end = (byte_end as usize).min(buf.len());
+        let start = (byte_start as usize).min(end);
+        let bytes = &buf[start..end];
         let text = std::str::from_utf8(bytes).unwrap_or("");
         let ascii = is_ascii_only(text);
         let flags = if !bytes.is_empty() && ascii {
@@ -717,6 +742,92 @@ impl TextBuffer {
                 }
             }
             line <= row
+        });
+        out
+    }
+
+    /// Chunk refs + widths for ALL logical lines in a single rope walk.
+    /// `line_chunks(row)` walks the rope from the start for every call, so a
+    /// per-row loop over it is O(lines²) — pathological for long streamed
+    /// output where views rebuild on every content change. One walk is O(n).
+    pub fn all_line_chunks(&self) -> Vec<Vec<(crate::text_buffer_view::ChunkRef, u32)>> {
+        let line_count = self.get_line_count() as usize;
+        let mut out: Vec<Vec<(crate::text_buffer_view::ChunkRef, u32)>> =
+            vec![Vec::new(); line_count];
+        let mut line: usize = 0;
+        self.rope.walk(&mut |segment, _| {
+            match segment {
+                Segment::LineStart => {}
+                Segment::Brk => line += 1,
+                Segment::Text(chunk) => {
+                    if line < line_count {
+                        out[line].push((
+                            crate::text_buffer_view::ChunkRef {
+                                mem_id: chunk.mem_id,
+                                byte_start: chunk.byte_start,
+                                byte_end: chunk.byte_end,
+                                flags: chunk.flags,
+                            },
+                            chunk.width as u32,
+                        ));
+                    }
+                }
+            }
+            line < line_count
+        });
+        out
+    }
+
+    /// `line_chunks_full` for ALL logical lines in a single rope walk (see
+    /// `all_line_chunks` for why the per-row variant is quadratic).
+    #[allow(clippy::type_complexity)]
+    pub fn all_line_chunks_full(
+        &self,
+    ) -> Vec<
+        Vec<(
+            crate::text_buffer_view::ChunkRef,
+            u32,
+            Vec<u8>,
+            std::rc::Rc<Vec<crate::unicode::GraphemeInfo>>,
+            std::rc::Rc<Vec<crate::unicode::WordWrapBreak>>,
+        )>,
+    > {
+        let tab_width = self.tab_width;
+        let method = self.width_method;
+        let registry = &self.registry;
+        let line_count = self.get_line_count() as usize;
+        let mut out: Vec<
+            Vec<(
+                crate::text_buffer_view::ChunkRef,
+                u32,
+                Vec<u8>,
+                std::rc::Rc<Vec<crate::unicode::GraphemeInfo>>,
+                std::rc::Rc<Vec<crate::unicode::WordWrapBreak>>,
+            )>,
+        > = vec![Vec::new(); line_count];
+        let mut line: usize = 0;
+        self.rope.walk(&mut |segment, _| {
+            match segment {
+                Segment::LineStart => {}
+                Segment::Brk => line += 1,
+                Segment::Text(chunk) => {
+                    if line < line_count {
+                        out[line].push((
+                            crate::text_buffer_view::ChunkRef {
+                                mem_id: chunk.mem_id,
+                                byte_start: chunk.byte_start,
+                                byte_end: chunk.byte_end,
+                                flags: chunk.flags,
+                            },
+                            chunk.width as u32,
+                            chunk.bytes(registry).to_vec(),
+                            chunk.graphemes(registry, tab_width, method),
+                            chunk.wrap_offsets(registry),
+                        ));
+                    }
+                }
+            }
+            line < line_count
         });
         out
     }

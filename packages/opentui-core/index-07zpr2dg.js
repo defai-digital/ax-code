@@ -7144,6 +7144,7 @@ Captured external output:
   feedIdleRenderScheduled = false;
   ordinaryFrameWaitingForFeed = false;
   ordinaryFrameWaitControlState = null;
+  consecutiveFrameFailures = 0;
   get controlState() {
     return this._controlState;
   }
@@ -7475,7 +7476,19 @@ Captured external output:
     if (!feed || this.feedIdleRenderScheduled || this._isDestroyed)
       return;
     this.feedIdleRenderScheduled = true;
-    feed.idle().then(() => {
+    // ax-code local fix: while feedIdleRenderScheduled is true, requestRender()
+    // is a no-op — if the feed's idle promise is ever lost (missed drain event
+    // from the native side under heavy streaming output), rendering would stop
+    // permanently. Cap the wait; a premature wake at worst re-queues after
+    // another backpressured commit attempt.
+    const idleWithTimeout = Promise.race([
+      feed.idle(),
+      new Promise((resolve) => {
+        const timer = setTimeout(resolve, 2000);
+        timer.unref?.();
+      })
+    ]);
+    idleWithTimeout.then(() => {
       this.feedIdleRenderScheduled = false;
       const ordinaryFrameWasWaiting = this.ordinaryFrameWaitingForFeed;
       const ordinaryFrameWaitControlState = this.ordinaryFrameWaitControlState;
@@ -9695,6 +9708,32 @@ Captured external output:
           this.immediateRerenderRequested = false;
           this.renderTimeout = null;
         }
+      }
+      this.consecutiveFrameFailures = 0;
+    } catch (error) {
+      // ax-code local fix: a throw inside the frame (renderable render, native
+      // draw, or layout) previously escaped this async function — the app's
+      // unhandledRejection handler then force-exited the process ("crash to
+      // quit"), and even without that handler the frame timer chain died and
+      // the TUI froze. Content-dependent throws (e.g. pathological streamed
+      // CJK/emoji output hitting the native renderer) must cost one dropped
+      // frame, not the session. Log rate-limited and reschedule; back off if
+      // the failure persists so a permanently broken frame doesn't spin.
+      this.consecutiveFrameFailures++;
+      if (this.consecutiveFrameFailures <= 3 || this.consecutiveFrameFailures % 100 === 0) {
+        console.error(
+          `[CliRenderer] frame render failed (x${this.consecutiveFrameFailures}); dropping frame:`,
+          error
+        );
+      }
+      if (!this._isDestroyed && (this._isRunning || this.immediateRerenderRequested)) {
+        const delay = this.consecutiveFrameFailures > 120 ? 250 : Math.max(this.targetFrameTime || 16, 16);
+        this.immediateRerenderRequested = false;
+        this.clock.clearTimeout(this.renderTimeout);
+        this.renderTimeout = this.clock.setTimeout(() => {
+          this.renderTimeout = null;
+          this.loop();
+        }, delay);
       }
     } finally {
       this.rendering = false;

@@ -153,7 +153,9 @@ pub fn grapheme_id_from_char(c: u32) -> u32 {
 /// Zig packGraphemeStart: the encoded extent is capped at 4 cells even when
 /// the logical cluster width is larger (wcwidth ZWJ families).
 pub fn pack_grapheme_start(gid: u32, total_width: u32) -> u32 {
-    let right = (total_width - 1).min(CHAR_EXT_MASK);
+    // saturating: a zero-width cluster (possible under wcwidth for combining/
+    // ZWJ sequences) must not underflow into a giant extent.
+    let right = total_width.saturating_sub(1).min(CHAR_EXT_MASK);
     CHAR_FLAG_GRAPHEME
         | ((right & CHAR_EXT_MASK) << CHAR_EXT_RIGHT_SHIFT)
         | (gid & crate::pool::GRAPHEME_ID_MASK)

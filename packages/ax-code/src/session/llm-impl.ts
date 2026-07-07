@@ -375,11 +375,17 @@ export namespace LLM {
       ...headers,
     }
     const streamErrorHolder: { error?: unknown } = {}
+    // Idle watchdog: OpenAI-compatible providers (GLM/z.ai, Qwen/DashScope,
+    // gateways) can stall mid-stream without closing the connection — no
+    // chunk, no error, no finish. The bare `for await` over fullStream then
+    // waits forever and the turn hangs until the user aborts. Abort the
+    // request ourselves when no chunk arrives within the idle window.
+    const idleTimeoutMs = streamIdleTimeoutMs()
+    const idleAbort = new AbortController()
+    const streamAbort = input.abort ? AbortSignal.any([input.abort, idleAbort.signal]) : idleAbort.signal
     let output: StreamOutput
     try {
       output = streamText({
-        // @ts-expect-error
-        maxDuration: 300_000,
         onError(error) {
           streamErrorHolder.error = error
           l.error("stream error", {
@@ -415,7 +421,7 @@ export namespace LLM {
         tools,
         toolChoice: supportsToolCalls ? input.toolChoice : "none",
         maxOutputTokens,
-        abortSignal: input.abort,
+        abortSignal: streamAbort,
         headers: requestHeaders,
         maxRetries: input.retries ?? 0,
         messages,
@@ -453,7 +459,15 @@ export namespace LLM {
       enumerable: false,
       configurable: true,
     })
-    return attachSuperLongPacingReservation(output, pacingReservation, input.abort)
+    // Watchdog goes inside the pacing wrapper so a pre-first-chunk stall still
+    // releases the pacing reservation through the pacing iterator's catch path.
+    const guarded = attachStreamIdleWatchdog(output, {
+      idleAbort,
+      idleTimeoutMs,
+      providerID: input.model.providerID,
+      modelID: input.model.id,
+    })
+    return attachSuperLongPacingReservation(guarded, pacingReservation, input.abort)
   }
 
   export type SuperLongPacingReservation = {
@@ -542,6 +556,86 @@ export namespace LLM {
     const next = SuperLongPolicy.recordRequest({ now: input.now, state, policy: input.policy })
     superLongPacing.set(input.key, next)
     return { decision, state: next }
+  }
+
+  // 5 minutes of zero chunks: generous enough for long server-side prefill on
+  // 1M-context requests (which emit nothing while the provider processes the
+  // prompt), short enough that a dead connection surfaces as an error instead
+  // of an indefinite hang. Override with AX_CODE_STREAM_IDLE_TIMEOUT_MS
+  // (0 disables the watchdog).
+  const STREAM_IDLE_TIMEOUT_MS = 300_000
+
+  export function streamIdleTimeoutMs(): number {
+    const raw = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+    if (raw !== undefined && raw !== "") {
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed
+    }
+    return STREAM_IDLE_TIMEOUT_MS
+  }
+
+  export function attachStreamIdleWatchdog<T extends { fullStream: AsyncIterable<unknown> }>(
+    output: T,
+    options: {
+      idleAbort: AbortController
+      idleTimeoutMs: number
+      providerID: string
+      modelID: string
+    },
+  ): T {
+    if (options.idleTimeoutMs <= 0) return output
+
+    // Manual race (see util/timeout.ts): once the watchdog fires, the still-
+    // pending inner next() must not become an unhandled rejection when the
+    // aborted fetch later rejects it.
+    const raceIdle = <R>(op: Promise<R>): Promise<R> =>
+      new Promise<R>((resolve, reject) => {
+        let settled = false
+        const timer = setTimeout(() => {
+          if (settled) return
+          settled = true
+          options.idleAbort.abort()
+          reject(
+            new Error(
+              `Model stream stalled — no data from ${options.providerID}/${options.modelID} for ${Math.round(options.idleTimeoutMs / 1000)}s; the request was aborted. This is usually a provider or network issue — retry, or raise AX_CODE_STREAM_IDLE_TIMEOUT_MS.`,
+            ),
+          )
+        }, options.idleTimeoutMs)
+        timer.unref?.()
+        op.then(
+          (value) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timer)
+            resolve(value)
+          },
+          (error) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timer)
+            reject(error)
+          },
+        )
+      })
+
+    const fullStream: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]() {
+        const inner = output.fullStream[Symbol.asyncIterator]()
+        return {
+          next: () => raceIdle(inner.next()),
+          return: (value?: unknown) =>
+            inner.return ? inner.return(value) : Promise.resolve({ done: true as const, value }),
+          throw: (error?: unknown) => (inner.throw ? inner.throw(error) : Promise.reject(error)),
+        }
+      },
+    }
+
+    return new Proxy(output, {
+      get(target, prop, receiver) {
+        if (prop === "fullStream") return fullStream
+        return Reflect.get(target, prop, receiver)
+      },
+    })
   }
 
   function attachSuperLongPacingReservation<T extends { fullStream: AsyncIterable<unknown> }>(

@@ -223,7 +223,11 @@ pub fn text_buffer_replace_mem_buffer(
         return false;
     };
     if data_ptr == 0.0 || data_len == 0 {
-        return tb.registry.replace(id, MemBuffer::Owned(Vec::new()));
+        let replaced = tb.registry.replace(id, MemBuffer::Owned(Vec::new()));
+        if replaced {
+            tb.mark_content_changed();
+        }
+        return replaced;
     }
     let Some(addr) = ffi::addr_from_f64(data_ptr) else {
         return false;
@@ -242,13 +246,18 @@ pub fn text_buffer_replace_mem_buffer(
             len,
         }
     };
-    tb.registry.replace(id, buffer)
+    let replaced = tb.registry.replace(id, buffer);
+    if replaced {
+        tb.mark_content_changed();
+    }
+    replaced
 }
 
 #[napi(js_name = "textBufferClearMemRegistry")]
 pub fn text_buffer_clear_mem_registry(handle: u32) {
     if let Some(tb) = resolve(handle) {
         tb.registry.clear();
+        tb.mark_content_changed();
     }
 }
 

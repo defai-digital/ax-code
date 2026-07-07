@@ -2214,3 +2214,103 @@ describe("session.llm.extractTouchedFiles", () => {
     expect(result).toHaveLength(20)
   })
 })
+
+describe("session.llm.streamIdleWatchdog", () => {
+  const makeOutput = (iterator: AsyncIterator<unknown>) =>
+    ({
+      fullStream: {
+        [Symbol.asyncIterator]: () => iterator,
+      },
+    }) as { fullStream: AsyncIterable<unknown> }
+
+  test("passes chunks through and completes when the stream behaves", async () => {
+    async function* gen() {
+      yield "a"
+      yield "b"
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(gen()), {
+      idleAbort,
+      idleTimeoutMs: 5_000,
+      providerID: "test",
+      modelID: "m",
+    })
+    const seen: unknown[] = []
+    for await (const chunk of guarded.fullStream) seen.push(chunk)
+    expect(seen).toEqual(["a", "b"])
+    expect(idleAbort.signal.aborted).toBe(false)
+  })
+
+  test("aborts and throws when no chunk arrives within the idle window", async () => {
+    const never = new Promise<IteratorResult<unknown>>(() => {})
+    const iterator: AsyncIterator<unknown> = { next: () => never }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+      idleAbort,
+      idleTimeoutMs: 20,
+      providerID: "z-ai",
+      modelID: "glm-5",
+    })
+    await expect(async () => {
+      for await (const _ of guarded.fullStream) {
+        // no chunks ever arrive
+      }
+    }).rejects.toThrow(/stream stalled.*z-ai\/glm-5/)
+    expect(idleAbort.signal.aborted).toBe(true)
+  })
+
+  test("watchdog timer resets on every chunk", async () => {
+    let yielded = 0
+    const iterator: AsyncIterator<unknown> = {
+      next: () =>
+        new Promise((resolve) => {
+          // each chunk arrives after 15ms — under the 25ms idle window, but
+          // 4 chunks take 60ms total, past a naive whole-stream deadline
+          setTimeout(() => {
+            yielded++
+            resolve(yielded <= 4 ? { done: false, value: yielded } : { done: true, value: undefined })
+          }, 15)
+        }),
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+      idleAbort,
+      idleTimeoutMs: 25,
+      providerID: "test",
+      modelID: "m",
+    })
+    const seen: unknown[] = []
+    for await (const chunk of guarded.fullStream) seen.push(chunk)
+    expect(seen).toEqual([1, 2, 3, 4])
+    expect(idleAbort.signal.aborted).toBe(false)
+  })
+
+  test("disabled when timeout is 0", () => {
+    const idleAbort = new AbortController()
+    const output = makeOutput({ next: async () => ({ done: true, value: undefined }) })
+    const guarded = LLM.attachStreamIdleWatchdog(output, {
+      idleAbort,
+      idleTimeoutMs: 0,
+      providerID: "test",
+      modelID: "m",
+    })
+    expect(guarded).toBe(output)
+  })
+
+  test("streamIdleTimeoutMs honors the env override", () => {
+    const prev = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+    try {
+      process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "1234"
+      expect(LLM.streamIdleTimeoutMs()).toBe(1234)
+      process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "0"
+      expect(LLM.streamIdleTimeoutMs()).toBe(0)
+      process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "not-a-number"
+      expect(LLM.streamIdleTimeoutMs()).toBe(300_000)
+      delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+      expect(LLM.streamIdleTimeoutMs()).toBe(300_000)
+    } finally {
+      if (prev === undefined) delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+      else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev
+    }
+  })
+})

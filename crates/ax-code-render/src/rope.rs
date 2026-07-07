@@ -288,6 +288,13 @@ impl<T: RopeItem> Rope<T> {
         self.root.metrics().count
     }
 
+    /// Mutation epoch: bumped by every structural change (insert/delete/clear/
+    /// set_items/undo/redo). Lets views cache derived state and cheaply detect
+    /// staleness without walking the tree.
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
     pub fn total_weight(&self) -> u32 {
         self.root.metrics().weight()
     }
