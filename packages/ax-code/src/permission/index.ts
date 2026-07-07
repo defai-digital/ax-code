@@ -384,7 +384,10 @@ export namespace Permission {
       if (signal) deferred.reject(abortError(signal))
     }
     signal?.addEventListener("abort", onAbort, { once: true })
-    if (signal?.aborted) onAbort()
+    if (signal?.aborted) {
+      onAbort()
+      return await deferred.promise
+    }
 
     Bus.publishDetached(Event.Asked, info)
     if (Recorder.active(info.sessionID)) {

@@ -1501,3 +1501,54 @@ test("ask - abort publishes a reject reply so prompts unmount", async () => {
     },
   })
 })
+
+test("ask - abort after listener registration does not publish stale ask", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const asked: unknown[] = []
+      const replied: unknown[] = []
+      const unsubscribeAsked = Bus.subscribe(Permission.Event.Asked, async (event) => {
+        asked.push(event.properties)
+      })
+      const unsubscribeReplied = Bus.subscribe(Permission.Event.Replied, async (event) => {
+        replied.push(event.properties)
+      })
+      try {
+        const lateAbortSignal = {
+          aborted: false,
+          reason: new Error("late abort"),
+          addEventListener: vi.fn(() => {
+            lateAbortSignal.aborted = true
+          }),
+          removeEventListener: vi.fn(),
+        }
+
+        await expect(
+          Permission.ask(
+            {
+              sessionID: SessionID.make("session_test"),
+              permission: "bash",
+              patterns: ["ls"],
+              metadata: {},
+              always: [],
+              ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
+            },
+            { signal: lateAbortSignal as unknown as AbortSignal },
+          ),
+        ).rejects.toThrow("late abort")
+
+        await sleep(20)
+
+        expect(asked).toHaveLength(0)
+        expect(replied).toHaveLength(1)
+        expect(await Permission.list()).toHaveLength(0)
+      } finally {
+        unsubscribeAsked()
+        unsubscribeReplied()
+        await rejectAll()
+      }
+    },
+  })
+})
