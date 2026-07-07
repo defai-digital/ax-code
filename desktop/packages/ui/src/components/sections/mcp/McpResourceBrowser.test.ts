@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { McpReadResourceResult, McpResource } from "@ax-code/sdk/v2"
 
-import { resourcePreview, resourcesForServer } from "./McpResourceBrowser"
+import { resourcePreview, resourcesForServer } from "./McpResourceBrowser.helpers"
 
 describe("McpResourceBrowser helpers", () => {
   test("filters resources to the selected server and sorts by name then URI", () => {

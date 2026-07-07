@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { SessionRollbackPoint } from "@ax-code/sdk/v2"
-import { formatRollbackPointMeta } from "./TimelineDialog"
+import { formatRollbackPointMeta } from "./TimelineDialog.helpers"
 
 const rollbackPoint = (overrides: Partial<SessionRollbackPoint>): SessionRollbackPoint => ({
   step: 1,

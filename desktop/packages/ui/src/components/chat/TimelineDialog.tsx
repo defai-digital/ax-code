@@ -11,6 +11,7 @@ import { useI18n } from "@/lib/i18n"
 import { useDeviceInfo } from "@/lib/device"
 import { cn } from "@/lib/utils"
 import { useSessionRollbackStore } from "@/stores/useSessionRollbackStore"
+import { formatRollbackPointMeta } from "./TimelineDialog.helpers"
 
 interface TimelineDialogProps {
   open: boolean
@@ -114,7 +115,7 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
       directory: currentSessionDirectory,
       silent: rollbackPoints.length > 0,
     })
-  }, [currentSessionDirectory, currentSessionId, open, refreshRollbackPoints])
+  }, [currentSessionDirectory, currentSessionId, open, refreshRollbackPoints, rollbackPoints.length])
 
   const navigateToMessage = React.useCallback(
     async (messageId: string) => {
@@ -434,28 +435,6 @@ function RollbackPointsStrip({
       )}
     </section>
   )
-}
-
-export function formatRollbackPointMeta(point: SessionRollbackPoint): string {
-  const labels = point.tools.length > 0 ? point.tools : point.kinds
-  const segments = [labels.length > 0 ? labels.join(", ") : "No tool calls"]
-  if (point.tokens) {
-    segments.push(`${formatTokenCount(point.tokens.input)} in / ${formatTokenCount(point.tokens.output)} out`)
-  }
-  if (typeof point.duration === "number") {
-    segments.push(formatDuration(point.duration))
-  }
-  return segments.join(" | ")
-}
-
-function formatTokenCount(value: number): string {
-  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`
-  return String(value)
-}
-
-function formatDuration(durationMs: number): string {
-  if (durationMs >= 1000) return `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s`
-  return `${Math.max(0, Math.round(durationMs))}ms`
 }
 
 function getFullText(parts: Part[]): string {
