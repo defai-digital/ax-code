@@ -353,6 +353,24 @@ Validation:
 - `pnpm --dir desktop/packages/ui type-check`
 - `pnpm run check:desktop-boundaries:strict`
 
+### Phase 2.9: Desktop Session Move Target Picker
+
+Status: Implemented
+
+Scope:
+
+- Add a Desktop session-row menu action for moving a session to another directory.
+- Show a confirmation dialog with current project root, same-project worktrees, and a custom target path.
+- Require explicit target validation before enabling the move action.
+- Reuse the Phase 2.8 Desktop action wiring so cache transfer, active-session routing, and git refresh stay centralized.
+- Keep this Desktop-first; no additional TUI workflow is introduced.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/components/session/sessionMoveDialogModel.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
+- `pnpm run check:desktop-boundaries:strict`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.

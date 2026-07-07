@@ -61,6 +61,7 @@ import { useI18n } from "@/lib/i18n"
 import { parseMultiRunSessionTitle } from "@/lib/multirun/title"
 import { MultiRunFusionDialog } from "@/components/multirun/MultiRunFusionDialog"
 import { FusionIcon } from "@/components/icons/FusionIcon"
+import { SessionMoveDialog } from "../SessionMoveDialog"
 import type { SessionSecondaryMeta } from "./types"
 
 type Folder = { id: string; name: string; sessionIds: string[] }
@@ -361,6 +362,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
 
   const [exportDialogOpen, setExportDialogOpen] = React.useState(false)
   const [exportIncludeSubtasks, setExportIncludeSubtasks] = React.useState(true)
+  const [moveDialogOpen, setMoveDialogOpen] = React.useState(false)
 
   const menuInstanceKey = `${renderContext}:${archivedBucket ? "archived" : "active"}:${session.id}`
   const isZombie = useViewportStore(
@@ -896,6 +898,10 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
             return (
               <>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setMoveDialogOpen(true)} className="[&>svg]:mr-1">
+                  <Icon name="drag-move-2" className="mr-1 h-4 w-4" />
+                  {t("sessions.sidebar.session.menu.moveSession")}
+                </DropdownMenuItem>
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="[&>svg]:mr-1">
                     <Icon name="folder" className="h-4 w-4" />
@@ -1302,6 +1308,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       </Dialog>
       {isMultiRunLikeSession ? (
         <MultiRunFusionDialog session={resolvedSession} open={fusionDialogOpen} onOpenChange={setFusionDialogOpen} />
+      ) : null}
+      {sessionDirectory && !archivedBucket ? (
+        <SessionMoveDialog
+          open={moveDialogOpen}
+          onOpenChange={setMoveDialogOpen}
+          session={resolvedSession}
+          currentDirectory={sessionDirectory}
+        />
       ) : null}
     </React.Fragment>
   )
