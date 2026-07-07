@@ -7,7 +7,6 @@ export const API_PATHS = {
   openchamber: "/api/openchamber",
   passkeys: "/api/passkeys",
   preview: "/api/preview",
-  canvas: "/api/canvas",
   projects: "/api/projects",
   terminal: "/api/terminal",
 } as const
@@ -152,7 +151,6 @@ export const API_ENDPOINTS = {
   preview: {
     targets: `${API_PATHS.preview}/targets`,
   },
-  canvas: API_PATHS.canvas,
   projects: {
     scheduledTasksBase: `${API_PATHS.projects}/:projectId/scheduled-tasks`,
     scheduledTaskById: `${API_PATHS.projects}/:projectId/scheduled-tasks/:taskId`,

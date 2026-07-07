@@ -4,7 +4,6 @@ import { registerGitHubRoutes } from "../github/routes.js"
 import { registerGitRoutes } from "../git/routes.js"
 import { registerMagicPromptRoutes } from "../magic-prompts/routes.js"
 import { registerSessionFoldersRoutes } from "../session-folders/routes.js"
-import { registerCanvasRoutes } from "../canvas/routes.js"
 import { registerConfigEntityRoutes } from "./config-entity-routes.js"
 import { registerSettingsUtilityRoutes } from "./core-routes.js"
 import { registerProjectIconRoutes } from "./project-icon-routes.js"
@@ -278,11 +277,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       fsPromises,
       path,
       openchamberDataDir,
-    })
-    registerCanvasRoutes(app, {
-      fsPromises,
-      path,
-      resolveProjectDirectory,
     })
     registerFsRoutes(app, {
       os,

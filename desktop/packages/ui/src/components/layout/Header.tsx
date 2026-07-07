@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SortableTabsStrip, type SortableTabsStripItem } from "@/components/ui/sortable-tabs-strip"
 
-import { useUIStore, type ContextPanelMode } from "@/stores/useUIStore"
+import { isContextPanelMode, useUIStore, type ContextPanelMode } from "@/stores/useUIStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSessionWorktreeStore } from "@/sync/session-worktree-store"
@@ -759,8 +759,13 @@ const getActiveContextMode = (
     return null
   }
 
+  const validTabs = panelState.tabs.filter((tab) => isContextPanelMode(tab.mode))
+  if (validTabs.length === 0) {
+    return null
+  }
+
   const activeTab =
-    panelState.tabs.find((tab) => tab.id === panelState.activeTabId) ?? panelState.tabs[panelState.tabs.length - 1]
+    validTabs.find((tab) => tab.id === panelState.activeTabId) ?? validTabs[validTabs.length - 1]
   return activeTab?.mode ?? null
 }
 
@@ -786,7 +791,7 @@ export const Header: React.FC = () => {
   const openContextOverview = useUIStore((state) => state.openContextOverview)
   const openContextPlan = useUIStore((state) => state.openContextPlan)
   const openContextBrowser = useUIStore((state) => state.openContextBrowser)
-  const openContextCanvas = useUIStore((state) => state.openContextCanvas)
+  const openContextDashboard = useUIStore((state) => state.openContextDashboard)
   const closeContextPanel = useUIStore((state) => state.closeContextPanel)
   const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory)
   const activeMainTab = useUIStore((state) => state.activeMainTab)
@@ -1468,20 +1473,20 @@ export const Header: React.FC = () => {
     openContextBrowser(directory)
   }, [closeContextPanel, contextPanelByDirectory, openContextBrowser, openDirectory])
 
-  const handleOpenContextCanvas = React.useCallback(() => {
+  const handleOpenContextDashboard = React.useCallback(() => {
     const directory = normalize(openDirectory || "")
     if (!directory) {
       return
     }
 
     const panelState = contextPanelByDirectory[directory]
-    if (getActiveContextMode(panelState) === "canvas") {
+    if (getActiveContextMode(panelState) === "dashboard") {
       closeContextPanel(directory)
       return
     }
 
-    openContextCanvas(directory)
-  }, [closeContextPanel, contextPanelByDirectory, openContextCanvas, openDirectory])
+    openContextDashboard(directory)
+  }, [closeContextPanel, contextPanelByDirectory, openContextDashboard, openDirectory])
 
   const isContextPlanActive = React.useMemo(() => {
     const directory = normalize(openDirectory || "")
@@ -1501,13 +1506,13 @@ export const Header: React.FC = () => {
     return getActiveContextMode(panelState) === "browser"
   }, [contextPanelByDirectory, openDirectory])
 
-  const isContextCanvasActive = React.useMemo(() => {
+  const isContextDashboardActive = React.useMemo(() => {
     const directory = normalize(openDirectory || "")
     if (!directory) {
       return false
     }
     const panelState = contextPanelByDirectory[directory]
-    return getActiveContextMode(panelState) === "canvas"
+    return getActiveContextMode(panelState) === "dashboard"
   }, [contextPanelByDirectory, openDirectory])
 
   const desktopHeaderIconButtonClass = DESKTOP_HEADER_ICON_BUTTON_CLASS
@@ -1894,11 +1899,11 @@ export const Header: React.FC = () => {
         Icon={"global"}
       />
       <HeaderIconActionButton
-        title="Open Canvas"
-        ariaLabel="Open Canvas"
-        onClick={handleOpenContextCanvas}
-        pressed={isContextCanvasActive}
-        Icon={"sticky-note"}
+        title="Open Dashboard"
+        ariaLabel="Open Dashboard"
+        onClick={handleOpenContextDashboard}
+        pressed={isContextDashboardActive}
+        Icon={"bar-chart-box"}
       />
       <HeaderIconActionButton
         title={t("header.actions.rightSidebarWithShortcut", { shortcut: shortcutLabel("toggle_right_sidebar") })}

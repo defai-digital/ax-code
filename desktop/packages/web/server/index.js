@@ -101,7 +101,13 @@ function headerIncludesEventStream(value) {
  * non-standard clients (e.g. curl, fetch) that omit Accept.
  * Path-based exclusion acts as a deterministic fallback.
  */
-const SSE_PATH_PREFIXES = ["/api/event", "/api/global/event", "/api/notifications/stream", "/api/openchamber/events"]
+const SSE_PATH_PREFIXES = [
+  "/api/event",
+  "/api/global/event",
+  "/global/event",
+  "/api/notifications/stream",
+  "/api/openchamber/events",
+]
 
 function shouldSkipCompression(req, res) {
   if (headerIncludesEventStream(req.headers.accept)) {

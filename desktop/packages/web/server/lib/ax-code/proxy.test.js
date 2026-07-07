@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   createCompatibilityRewriteCounter,
   createDirectoryQueryCanonicalizer,
+  isDashboardProxyPathname,
   isAxCodeReadinessValueReady,
 } from "./proxy.js"
 
@@ -113,5 +114,15 @@ describe("createCompatibilityRewriteCounter", () => {
     counter.increment("configProviders")
     counter.reset()
     expect(counter.snapshot()).toEqual({ provider: 0, configProviders: 0, total: 0 })
+  })
+})
+
+describe("isDashboardProxyPathname", () => {
+  it("matches DRE graph dashboard paths without matching unrelated paths", () => {
+    expect(isDashboardProxyPathname("/dre-graph")).toBe(true)
+    expect(isDashboardProxyPathname("/dre-graph/session/session-1")).toBe(true)
+    expect(isDashboardProxyPathname("/graph/session-1")).toBe(true)
+    expect(isDashboardProxyPathname("/api/dre-graph")).toBe(false)
+    expect(isDashboardProxyPathname("/dre-graphical")).toBe(false)
   })
 })

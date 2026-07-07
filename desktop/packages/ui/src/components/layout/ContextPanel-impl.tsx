@@ -11,7 +11,7 @@ import { useEffectiveDirectory } from "@/hooks/useEffectiveDirectory"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { useFilesViewTabsStore } from "@/stores/useFilesViewTabsStore"
-import { useUIStore, type ContextPanelMode } from "@/stores/useUIStore"
+import { isContextPanelMode, useUIStore, type ContextPanelMode } from "@/stores/useUIStore"
 import { useInlineCommentDraftStore } from "@/stores/useInlineCommentDraftStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useInputStore } from "@/sync/input-store"
@@ -44,8 +44,8 @@ const FilesView = lazyWithChunkRecovery(() =>
 const PlanView = lazyWithChunkRecovery(() =>
   import("@/components/views/PlanView").then((m) => ({ default: m.PlanView })),
 )
-const CanvasPanel = lazyWithChunkRecovery(() =>
-  import("@/components/canvas/CanvasPanel").then((m) => ({ default: m.CanvasPanel })),
+const DashboardPanel = lazyWithChunkRecovery(() =>
+  import("@/components/dashboard/DashboardPanel").then((m) => ({ default: m.DashboardPanel })),
 )
 
 const CONTEXT_PANEL_MIN_WIDTH = 380
@@ -146,7 +146,7 @@ const getModeLabel = (mode: ContextPanelMode, t: TranslateFn): string => {
   if (mode === "plan") return t("contextPanel.mode.plan")
   if (mode === "preview") return t("contextPanel.mode.preview")
   if (mode === "browser") return t("contextPanel.mode.browser")
-  if (mode === "canvas") return "Canvas"
+  if (mode === "dashboard") return "Dashboard"
   return t("contextPanel.mode.context")
 }
 
@@ -229,8 +229,8 @@ const getTabIcon = (tab: { mode: ContextPanelMode; targetPath: string | null }):
     return <Icon name="global" className="h-3.5 w-3.5" />
   }
 
-  if (tab.mode === "canvas") {
-    return <Icon name="sticky-note" className="h-3.5 w-3.5" />
+  if (tab.mode === "dashboard") {
+    return <Icon name="bar-chart-box" className="h-3.5 w-3.5" />
   }
 
   return undefined
@@ -2119,7 +2119,10 @@ export const ContextPanel: React.FC = () => {
   const openContextPreview = useUIStore((state) => state.openContextPreview)
   const { themeMode, lightThemeId, darkThemeId, currentTheme } = useThemeSystem()
 
-  const tabs = React.useMemo(() => panelState?.tabs ?? [], [panelState?.tabs])
+  const tabs = React.useMemo(
+    () => (panelState?.tabs ?? []).filter((tab) => isContextPanelMode(tab.mode)),
+    [panelState?.tabs],
+  )
   const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1] ?? null
   const isOpen = Boolean(panelState?.isOpen && activeTab)
   const isExpanded = Boolean(isOpen && panelState?.expanded)
@@ -2438,9 +2441,9 @@ export const ContextPanel: React.FC = () => {
         rawUrl={activeTab.targetPath ?? ""}
         onNavigate={(url) => openContextPreview(effectiveDirectory, url)}
       />
-    ) : activeTab?.mode === "canvas" ? (
+    ) : activeTab?.mode === "dashboard" ? (
       <React.Suspense fallback={null}>
-        <CanvasPanel directory={effectiveDirectory} />
+        <DashboardPanel directory={effectiveDirectory} />
       </React.Suspense>
     ) : (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">

@@ -220,6 +220,12 @@ export const createCompatibilityRewriteCounter = () => {
   }
 }
 
+export const isDashboardProxyPathname = (pathname) =>
+  pathname === "/dre-graph" ||
+  pathname.startsWith("/dre-graph/") ||
+  pathname === "/graph" ||
+  pathname.startsWith("/graph/")
+
 export const createSseBoundaryTracker = () => {
   const decoder = new TextDecoder()
   let tail = ""
@@ -650,65 +656,104 @@ export const registerAxCodeProxy = (app, deps) => {
 
   app.get("/api/global/event", forwardSseRequest)
   app.get("/api/event", forwardSseRequest)
+  app.get("/global/event", forwardSseRequest)
 
   // Generic proxy for non-SSE ax-code API routes.
+  const proxyEvents = {
+    proxyReq: (proxyReq) => {
+      // Inject ax-code auth headers
+      const authHeaders = getAxCodeAuthHeaders()
+      if (authHeaders.Authorization) {
+        proxyReq.setHeader("Authorization", authHeaders.Authorization)
+      }
+
+      // Strip browser Origin header — ax-code validates Origin against its own
+      // server origin and rejects requests from the sidecar's port with
+      // "origin mismatch". This is server-to-server proxy traffic; no Origin needed.
+      proxyReq.removeHeader("origin")
+
+      // Defensive: request identity encoding from upstream ax-code.
+      // This avoids compressed-body/header mismatches in multi-proxy setups.
+      proxyReq.setHeader("accept-encoding", "identity")
+    },
+    proxyRes: (proxyRes) => {
+      for (const key of Object.keys(proxyRes.headers || {})) {
+        if (!shouldForwardProxyResponseHeader(key)) {
+          delete proxyRes.headers[key]
+        }
+      }
+    },
+    error: (err, _req, res) => {
+      console.error("[proxy] ax-code proxy error:", err.message)
+      if (res && !res.headersSent && typeof res.status === "function") {
+        // This callback only fires when the proxy could not complete the
+        // upstream request (ECONNREFUSED, socket hangup, timeout, etc.) —
+        // i.e. ax-code was unreachable for THIS request. That is always
+        // transient from the client's perspective, so signal
+        // `restarting: true` so clients keep polling instead of
+        // dead-ending on "Unable to load providers" / "Failed to load
+        // provider authentication methods".
+        //
+        // Do NOT gate this on the desktop's readiness flags: a health
+        // check can pass moments before ax-code crashes or becomes
+        // unreachable, leaving isAxCodeReady=true while the connection
+        // fails. Gating on stale state then emits a bare 503 (no
+        // `restarting`), which the Desktop treats as a terminal error.
+        // The provider list survives because it is persisted in the
+        // config store and silently re-polls, but the uncached
+        // auth-methods / available-providers loaders dead-end — making
+        // the panel look "loaded but broken".
+        res.status(503).json({
+          error: "ax-code service unavailable",
+          restarting: true,
+        })
+      }
+    },
+  }
+
+  const dashboardProxyEvents = {
+    ...proxyEvents,
+    proxyRes: (proxyRes) => {
+      proxyEvents.proxyRes(proxyRes)
+
+      for (const key of Object.keys(proxyRes.headers || {})) {
+        const normalizedKey = key.toLowerCase()
+        if (
+          normalizedKey === "x-frame-options" ||
+          normalizedKey === "content-security-policy" ||
+          normalizedKey === "content-security-policy-report-only" ||
+          normalizedKey === "x-content-security-policy" ||
+          normalizedKey === "x-webkit-csp"
+        ) {
+          delete proxyRes.headers[key]
+        }
+      }
+    },
+  }
+
+  const dashboardProxy = createProxyMiddleware({
+    target: resolveProxyTarget(),
+    changeOrigin: true,
+    // Dynamic target — port can change after restart
+    router: () => resolveProxyTarget(),
+    on: dashboardProxyEvents,
+  })
+
+  app.use((req, res, next) => {
+    const pathname = (req.path || req.url || "").split("?")[0]
+    if (isDashboardProxyPathname(pathname)) {
+      return dashboardProxy(req, res, next)
+    }
+    return next()
+  })
+
   const apiProxy = createProxyMiddleware({
     target: resolveProxyTarget(),
     changeOrigin: true,
     pathRewrite: { "^/api": "" },
     // Dynamic target — port can change after restart
     router: () => resolveProxyTarget(),
-    on: {
-      proxyReq: (proxyReq) => {
-        // Inject ax-code auth headers
-        const authHeaders = getAxCodeAuthHeaders()
-        if (authHeaders.Authorization) {
-          proxyReq.setHeader("Authorization", authHeaders.Authorization)
-        }
-
-        // Strip browser Origin header — ax-code validates Origin against its own
-        // server origin and rejects requests from the sidecar's port with
-        // "origin mismatch". This is server-to-server proxy traffic; no Origin needed.
-        proxyReq.removeHeader("origin")
-
-        // Defensive: request identity encoding from upstream ax-code.
-        // This avoids compressed-body/header mismatches in multi-proxy setups.
-        proxyReq.setHeader("accept-encoding", "identity")
-      },
-      proxyRes: (proxyRes) => {
-        for (const key of Object.keys(proxyRes.headers || {})) {
-          if (!shouldForwardProxyResponseHeader(key)) {
-            delete proxyRes.headers[key]
-          }
-        }
-      },
-      error: (err, _req, res) => {
-        console.error("[proxy] ax-code proxy error:", err.message)
-        if (res && !res.headersSent && typeof res.status === "function") {
-          // This callback only fires when the proxy could not complete the
-          // upstream request (ECONNREFUSED, socket hangup, timeout, etc.) —
-          // i.e. ax-code was unreachable for THIS request. That is always
-          // transient from the client's perspective, so signal
-          // `restarting: true` so clients keep polling instead of
-          // dead-ending on "Unable to load providers" / "Failed to load
-          // provider authentication methods".
-          //
-          // Do NOT gate this on the desktop's readiness flags: a health
-          // check can pass moments before ax-code crashes or becomes
-          // unreachable, leaving isAxCodeReady=true while the connection
-          // fails. Gating on stale state then emits a bare 503 (no
-          // `restarting`), which the Desktop treats as a terminal error.
-          // The provider list survives because it is persisted in the
-          // config store and silently re-polls, but the uncached
-          // auth-methods / available-providers loaders dead-end — making
-          // the panel look "loaded but broken".
-          res.status(503).json({
-            error: "ax-code service unavailable",
-            restarting: true,
-          })
-        }
-      },
-    },
+    on: proxyEvents,
   })
 
   // Best-effort fallback for stale clients still sending symlink paths.

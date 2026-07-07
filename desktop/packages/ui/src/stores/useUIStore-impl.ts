@@ -11,7 +11,31 @@ import type { TimeFormatPreference } from "@/lib/timeFormat"
 
 export type MainTab = "chat" | "plan" | "git" | "diff" | "terminal" | "files" | "context"
 export type RightSidebarTab = "git" | "files" | "context"
-export type ContextPanelMode = "diff" | "file" | "context" | "plan" | "chat" | "preview" | "browser" | "canvas"
+export type ContextPanelMode =
+  | "diff"
+  | "file"
+  | "context"
+  | "plan"
+  | "chat"
+  | "preview"
+  | "browser"
+  | "dashboard"
+
+const CONTEXT_PANEL_MODES = new Set<ContextPanelMode>([
+  "diff",
+  "file",
+  "context",
+  "plan",
+  "chat",
+  "preview",
+  "browser",
+  "dashboard",
+])
+
+export const isContextPanelMode = (mode: unknown): mode is ContextPanelMode => {
+  return typeof mode === "string" && CONTEXT_PANEL_MODES.has(mode as ContextPanelMode)
+}
+
 export type MermaidRenderingMode = "svg" | "ascii"
 export type UserMessageRenderingMode = "markdown" | "plain"
 export type ChatRenderMode = "sorted" | "live"
@@ -148,7 +172,7 @@ const buildDefaultContextPanelTabDedupeKey = (mode: ContextPanelMode, targetPath
     return targetPath || mode
   }
 
-  if (mode === "canvas") {
+  if (mode === "dashboard") {
     return mode
   }
 
@@ -232,16 +256,7 @@ const sanitizeContextPanelTabs = (tabs: unknown): ContextPanelTab[] => {
       touchedAt?: unknown
     }
 
-    if (
-      candidate.mode !== "diff" &&
-      candidate.mode !== "file" &&
-      candidate.mode !== "context" &&
-      candidate.mode !== "plan" &&
-      candidate.mode !== "chat" &&
-      candidate.mode !== "preview" &&
-      candidate.mode !== "browser" &&
-      candidate.mode !== "canvas"
-    ) {
+    if (!isContextPanelMode(candidate.mode)) {
       continue
     }
 
@@ -295,6 +310,7 @@ const touchContextPanelState = (prev?: ContextPanelDirectoryState): ContextPanel
     const activeTabId = resolveActiveContextPanelTabID(tabs, prev.activeTabId)
     return {
       ...prev,
+      isOpen: tabs.length > 0 ? prev.isOpen : false,
       tabs,
       activeTabId,
       touchedAt: Date.now(),
@@ -433,12 +449,7 @@ const sanitizeContextPanelByDirectory = (value: unknown): Record<string, Context
 
     if (
       tabs.length === 0 &&
-      (candidate.mode === "diff" ||
-        candidate.mode === "file" ||
-        candidate.mode === "context" ||
-        candidate.mode === "plan" ||
-        candidate.mode === "chat" ||
-        candidate.mode === "canvas")
+      isContextPanelMode(candidate.mode)
     ) {
       tabs = [
         createContextPanelTab({
@@ -453,6 +464,9 @@ const sanitizeContextPanelByDirectory = (value: unknown): Record<string, Context
 
     const resolvedActiveTabId = resolveActiveContextPanelTabID(tabs, activeTabId)
     const clampedTabs = clampContextPanelTabs(tabs, CONTEXT_PANEL_MAX_TABS, resolvedActiveTabId)
+    if (clampedTabs.length === 0) {
+      continue
+    }
 
     next[directory] = {
       isOpen: candidate.isOpen === true,
@@ -634,7 +648,7 @@ interface UIStore {
   openContextPlan: (directory: string) => void
   openContextPreview: (directory: string, url: string) => void
   openContextBrowser: (directory: string, url?: string) => void
-  openContextCanvas: (directory: string) => void
+  openContextDashboard: (directory: string) => void
   setContextPanelTabTargetPath: (directory: string, tabID: string, targetPath: string) => void
   setActiveContextPanelTab: (directory: string, tabID: string) => void
   reorderContextPanelTabs: (directory: string, activeTabID: string, overTabID: string) => void
@@ -1100,13 +1114,13 @@ export const useUIStore = create<UIStore>()(
           })
         },
 
-        openContextCanvas: (directory) => {
+        openContextDashboard: (directory) => {
           const normalizedDirectory = normalizeDirectoryPath((directory || "").trim())
           if (!normalizedDirectory) return
           get().openContextPanelTab(normalizedDirectory, {
-            mode: "canvas",
-            dedupeKey: "canvas",
-            label: "Canvas",
+            mode: "dashboard",
+            dedupeKey: "dashboard",
+            label: "Dashboard",
           })
         },
 
@@ -2051,7 +2065,7 @@ export const useUIStore = create<UIStore>()(
       {
         name: "ui-store",
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 9,
+        version: 10,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== "object") {
             return persistedState
@@ -2139,6 +2153,10 @@ export const useUIStore = create<UIStore>()(
             if (state.gitChangesViewMode !== "flat" && state.gitChangesViewMode !== "tree") {
               state.gitChangesViewMode = "flat"
             }
+          }
+
+          if (version < 10) {
+            state.contextPanelByDirectory = sanitizeContextPanelByDirectory(state.contextPanelByDirectory)
           }
 
           return state
