@@ -67,7 +67,7 @@ function SessionPermissionWatcher({
     }, PERMISSION_NOTIFY_DEBOUNCE_MS)
 
     return () => clearTimeout(timer)
-  }, [sessionId, sessionTitle, hasPermissions, enabled, currentSessionId, t])
+  }, [sessionId, sessionTitle, hasPermissions, enabled, currentSessionId, sessionDirectory, t])
 
   return null
 }

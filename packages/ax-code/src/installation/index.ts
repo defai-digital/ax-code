@@ -12,6 +12,8 @@ import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { Process } from "../util/process"
+import { whichAll } from "../util/which"
+import { parseJsonResult } from "../util/json-value"
 
 declare global {
   const AX_CODE_VERSION: string
@@ -127,11 +129,15 @@ export namespace Installation {
   interface Dependencies {
     fetch: typeof fetch
     run: (cmd: string[], opts?: RunOptions) => Promise<CommandResult>
+    which: (cmd: string) => string[]
   }
 
   const defaultDependencies: Dependencies = {
     fetch: globalThis.fetch.bind(globalThis),
     run: runCommand,
+    // extraDirs: false — the shadow-launcher check reports what the shell
+    // would actually resolve, not ax-code's own fallback install locations.
+    which: (cmd) => whichAll(cmd, undefined, { extraDirs: false }),
   }
 
   let dependencies = defaultDependencies
@@ -180,9 +186,19 @@ export namespace Installation {
     return response
   }
 
+  // Parses external-command/HTTP output that is expected to be JSON but, in
+  // practice, can come back empty or truncated (a failed `brew` invocation, a
+  // rate-limited API response) — surfaces a recoverable, contextual error
+  // instead of a raw "Unexpected end of JSON input" crash.
+  function parseJson(raw: string, context: string): unknown {
+    const parsed = parseJsonResult(raw)
+    if (!parsed.ok) throw new Error(`Failed to parse ${context} as JSON${raw.trim() ? "" : " (empty output)"}`)
+    return parsed.value
+  }
+
   async function fetchJson<T>(schema: z.ZodType<T>, url: string) {
     const response = await fetchOk(url, { headers: { accept: "application/json" } })
-    return schema.parse(await response.json())
+    return schema.parse(parseJson(await response.text(), `response from ${url}`))
   }
 
   async function getBrewFormula() {
@@ -261,7 +277,7 @@ export namespace Installation {
       const formula = await getBrewFormula()
       if (formula.includes("/")) {
         const infoJson = await text(["brew", "info", "--json=v2", formula])
-        const info = BrewInfoV2.parse(JSON.parse(infoJson))
+        const info = BrewInfoV2.parse(parseJson(infoJson, `'brew info --json=v2 ${formula}' output`))
         if (!info.formulae.length) return "unknown"
         return info.formulae[0].versions.stable
       }
@@ -321,5 +337,23 @@ export namespace Installation {
       stderr: result.stderr,
     })
     await text([process.execPath, "--version"])
+  }
+
+  export interface LauncherCheck {
+    // False when a different "ax-code" earlier on PATH would run instead of
+    // (or reports a different version than) the one just upgraded — e.g. a
+    // Homebrew upgrade succeeding while a stale ~/.local/bin/ax-code shadows it.
+    ok: boolean
+    launchers: string[]
+    activePath?: string
+    activeVersion?: string
+  }
+
+  export async function verifyActiveLauncher(target: string, binName = "ax-code"): Promise<LauncherCheck> {
+    const launchers = dependencies.which(binName)
+    const activePath = launchers[0]
+    if (!activePath) return { ok: true, launchers }
+    const activeVersion = (await text([activePath, "--version"])).trim() || undefined
+    return { ok: activeVersion === target, launchers, activePath, activeVersion }
   }
 }

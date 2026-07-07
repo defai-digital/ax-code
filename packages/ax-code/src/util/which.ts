@@ -40,3 +40,23 @@ export function which(cmd: string, env?: NodeJS.ProcessEnv) {
 
   return resolved
 }
+
+// Every match for `cmd` across PATH, in resolution order — the first entry is
+// what invoking the bare command name would run. Used to detect stale
+// launchers that shadow a freshly installed/upgraded binary.
+//
+// `extraDirs` controls whether common install directories (`~/.local/bin`,
+// etc.) are searched in addition to the real PATH — those aren't part of the
+// shell's actual resolution order, so callers that need to report exactly
+// what the shell would run (rather than merely detect an install) should
+// pass `extraDirs: false`.
+export function whichAll(cmd: string, env?: NodeJS.ProcessEnv, opts: { extraDirs?: boolean } = {}): string[] {
+  const base = env?.PATH ?? env?.Path ?? process.env.PATH ?? process.env.Path ?? ""
+  const result = whichPkg.sync(cmd, {
+    all: true,
+    nothrow: true,
+    path: opts.extraDirs === false ? base : searchPath(base),
+    pathExt: env?.PATHEXT ?? env?.PathExt ?? process.env.PATHEXT ?? process.env.PathExt,
+  })
+  return Array.isArray(result) ? result : []
+}
