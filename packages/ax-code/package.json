@@ -9,7 +9,7 @@
     "typecheck": "tsgo --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:unit": "vitest run",
+    "test:unit": "tsx script/test-groups.ts unit",
     "test:recovery": "tsx script/test-groups.ts recovery",
     "test:e2e": "tsx script/test-groups.ts e2e",
     "test:deterministic": "tsx script/test-groups.ts deterministic",

@@ -1,7 +1,17 @@
 import { describe, expect, test } from "vitest"
+import { readFile } from "node:fs/promises"
+import path from "node:path"
 import { pick } from "../../script/test-group"
 
+const repoRoot = path.resolve(import.meta.dirname, "../../../..")
+
 describe("test group classification", () => {
+  test("package unit script uses the explicit unit group runner", async () => {
+    const pkg = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
+
+    expect(pkg.scripts["test:unit"]).toBe("tsx script/test-groups.ts unit")
+  })
+
   test("keeps module-mocking tests out of same-process deterministic groups", () => {
     const files = [
       "test/code-intelligence/query-native-dispatch.test.ts",
