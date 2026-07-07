@@ -1110,7 +1110,12 @@ export const GitView: React.FC = () => {
       return
     }
 
-    const filesToCommit = stagedChangeEntries.map((file) => file.path).sort()
+    // With nothing staged, commit all pending changes instead of dead-ending —
+    // the "Agent finished with uncommitted files" nudge lands here with only
+    // untracked/unstaged files.
+    const stagedPaths = stagedChangeEntries.map((file) => file.path).sort()
+    const commitAll = stagedPaths.length === 0
+    const filesToCommit = commitAll ? changeEntries.map((file) => file.path).sort() : stagedPaths
     if (filesToCommit.length === 0) {
       toast.error(t("gitView.toast.stageFileToCommit"))
       return
@@ -1121,7 +1126,7 @@ export const GitView: React.FC = () => {
     try {
       await git.createGitCommit(currentDirectory, commitMessage.trim(), {
         files: filesToCommit,
-        stageFiles: [],
+        stageFiles: commitAll ? filesToCommit : [],
       })
       bumpIndexRevision(currentDirectory)
       toast.success(t("gitView.toast.commitCreated"))
@@ -1144,7 +1149,8 @@ export const GitView: React.FC = () => {
 
   const handleGenerateCommitMessage = React.useCallback(async () => {
     if (!currentDirectory) return
-    const selectedFilePaths = stagedChangeEntries.map((file) => file.path).sort()
+    const stagedPaths = stagedChangeEntries.map((file) => file.path).sort()
+    const selectedFilePaths = stagedPaths.length > 0 ? stagedPaths : changeEntries.map((file) => file.path).sort()
     if (selectedFilePaths.length === 0) {
       toast.error(t("gitView.toast.stageFileToDescribe"))
       return
@@ -1187,7 +1193,7 @@ export const GitView: React.FC = () => {
     } finally {
       setIsGeneratingMessage(false)
     }
-  }, [currentDirectory, stagedChangeEntries, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom, t])
+  }, [changeEntries, currentDirectory, stagedChangeEntries, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom, t])
 
   const formatBlockingReason = (reason: ReturnType<typeof getMutationBlockingReasons>[number]): string => {
     if (reason.reason === "attention") {
@@ -2380,6 +2386,7 @@ export const GitView: React.FC = () => {
 
                       <CommitSection
                         stagedCount={stagedCount}
+                        changedCount={changeEntries.length}
                         commitMessage={commitMessage}
                         onCommitMessageChange={setCommitMessage}
                         generatedHighlights={generatedHighlights}

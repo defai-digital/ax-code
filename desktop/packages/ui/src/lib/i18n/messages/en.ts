@@ -475,6 +475,8 @@ export const dict = {
   "gitView.commit.aiHighlights.insertTooltip": "Insert  tooltip",
   "gitView.commit.aiHighlights.title": "Highlights",
   "gitView.commit.commit": "Commit",
+  "gitView.commit.commitAll": "Commit all",
+  "gitView.commit.commitAllHint": "Nothing staged — commit includes all changes.",
   "gitView.commit.commitAria": "Commit  aria label",
   "gitView.commit.committing": "Committing...",
   "gitView.commit.generate": "Generate",
@@ -2459,14 +2461,6 @@ export const dict = {
   "notificationCenter.system": "System",
   "notificationCenter.allow": "Allow",
   "notificationCenter.deny": "Deny",
-
-  // Session export
-  "sessionExport.title": "Export Session",
-  "sessionExport.markdown": "Export as Markdown",
-  "sessionExport.copyClipboard": "Copy to Clipboard",
-  "sessionExport.toast.copied": "Session copied to clipboard",
-  "sessionExport.toast.saved": "Session exported successfully",
-  "sessionExport.toast.failed": "Failed to export session",
 
   // Onboarding tour
   "featureTour.step1.title": "Your Sessions",

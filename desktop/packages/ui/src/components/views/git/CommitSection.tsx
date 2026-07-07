@@ -8,6 +8,7 @@ import type { CommitAction } from "./types"
 
 interface CommitSectionProps {
   stagedCount: number
+  changedCount: number
   commitMessage: string
   onCommitMessageChange: (value: string) => void
   generatedHighlights: string[]
@@ -23,6 +24,7 @@ interface CommitSectionProps {
 
 export const CommitSection: React.FC<CommitSectionProps> = ({
   stagedCount,
+  changedCount,
   commitMessage,
   onCommitMessageChange,
   generatedHighlights,
@@ -37,7 +39,10 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
 }) => {
   const { t } = useI18n()
   const hasStagedFiles = stagedCount > 0
-  const canCommit = commitMessage.trim() && hasStagedFiles && commitAction === null && !hasPendingIndexMutation
+  // Nothing staged commits all pending changes (mirrors handleCommit), so any
+  // change at all makes the button usable.
+  const hasCommittableFiles = hasStagedFiles || changedCount > 0
+  const canCommit = commitMessage.trim() && hasCommittableFiles && commitAction === null && !hasPendingIndexMutation
   const { isMobile, hasTouchInput } = useDeviceInfo()
 
   const containerClassName = "border-0 bg-transparent rounded-none"
@@ -50,7 +55,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
         <h3 className="typography-ui-header font-semibold text-foreground">{t("gitView.commit.title")}</h3>
         {!hasStagedFiles ? (
           <span className="min-w-0 truncate typography-meta text-muted-foreground">
-            {t("gitView.commit.stageFilesHint")}
+            {changedCount > 0 ? t("gitView.commit.commitAllHint") : t("gitView.commit.stageFilesHint")}
           </span>
         ) : null}
       </div>
@@ -79,7 +84,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
             variant="outline"
             size="sm"
             onClick={onGenerateMessage}
-            disabled={isGeneratingMessage || commitAction !== null || hasPendingIndexMutation || stagedCount === 0}
+            disabled={isGeneratingMessage || commitAction !== null || hasPendingIndexMutation || !hasCommittableFiles}
             type="button"
             aria-label={t("gitView.commit.generateAria")}
             className="commit-actions__btn"
@@ -110,7 +115,9 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
             ) : (
               <>
                 <Icon name="git-commit" className="size-4" />
-                <span className="commit-actions__label">{t("gitView.commit.commit")}</span>
+                <span className="commit-actions__label">
+                  {hasStagedFiles ? t("gitView.commit.commit") : t("gitView.commit.commitAll")}
+                </span>
               </>
             )}
           </Button>

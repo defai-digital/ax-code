@@ -72,7 +72,6 @@ import { resolveSessionDiffStats } from "@/components/session/sidebar/utils"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
 import { SyncStatusIndicator } from "@/components/ui/SyncStatusIndicator"
-import { ExportSessionButton } from "@/components/session/ExportSessionButton"
 import { NotificationCenter } from "@/components/notifications/NotificationCenter"
 import { useNotificationStore } from "@/stores/useNotificationStore"
 import type { Session } from "@ax-code/sdk/v2/client"
@@ -1870,7 +1869,6 @@ export const Header: React.FC = () => {
         onDevShutdown={handleDevShutdown}
       />
       <SyncStatusIndicator />
-      <ExportSessionButton />
       <HeaderIconActionButton
         title={t("notificationCenter.title")}
         ariaLabel={t("notificationCenter.title")}
