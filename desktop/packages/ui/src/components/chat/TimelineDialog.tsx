@@ -6,10 +6,11 @@ import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSessionMessageRecords } from "@/sync/sync-context"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/icon/Icon"
-import type { Part } from "@ax-code/sdk/v2"
+import type { Part, SessionRollbackPoint } from "@ax-code/sdk/v2"
 import { useI18n } from "@/lib/i18n"
 import { useDeviceInfo } from "@/lib/device"
 import { cn } from "@/lib/utils"
+import { useSessionRollbackStore } from "@/stores/useSessionRollbackStore"
 
 interface TimelineDialogProps {
   open: boolean
@@ -28,9 +29,22 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
 }) => {
   const { t } = useI18n()
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
+  const currentSessionDirectory = useSessionUIStore((state) =>
+    currentSessionId ? state.getDirectoryForSession(currentSessionId) : null,
+  )
   const messages = useSessionMessageRecords(currentSessionId ?? "")
   const revertToMessage = useSessionUIStore((state) => state.revertToMessage)
   const forkFromMessage = useSessionUIStore((state) => state.forkFromMessage)
+  const rollbackPoints = useSessionRollbackStore((state) =>
+    currentSessionId ? state.getPoints(currentSessionId, { directory: currentSessionDirectory }) : [],
+  )
+  const isLoadingRollbackPoints = useSessionRollbackStore((state) =>
+    currentSessionId ? state.isLoading(currentSessionId, { directory: currentSessionDirectory }) : false,
+  )
+  const rollbackError = useSessionRollbackStore((state) =>
+    currentSessionId ? state.getError(currentSessionId, { directory: currentSessionDirectory }) : null,
+  )
+  const refreshRollbackPoints = useSessionRollbackStore((state) => state.refreshPoints)
   const { isMobile, isTablet } = useDeviceInfo()
   const alwaysShowActions = isMobile || isTablet
 
@@ -93,6 +107,14 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
       block: "nearest",
     })
   }, [selectedIndex])
+
+  React.useEffect(() => {
+    if (!open || !currentSessionId) return
+    void refreshRollbackPoints(currentSessionId, {
+      directory: currentSessionDirectory,
+      silent: rollbackPoints.length > 0,
+    })
+  }, [currentSessionDirectory, currentSessionId, open, refreshRollbackPoints])
 
   const navigateToMessage = React.useCallback(
     async (messageId: string) => {
@@ -177,6 +199,14 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
             className="pl-9 w-full"
           />
         </div>
+
+        <RollbackPointsStrip
+          points={rollbackPoints}
+          isLoading={isLoadingRollbackPoints}
+          error={rollbackError}
+          onRefresh={() => refreshRollbackPoints(currentSessionId, { directory: currentSessionDirectory })}
+          t={t}
+        />
 
         <div className="flex-1 overflow-y-auto">
           {filteredMessages.length === 0 ? (
@@ -329,6 +359,103 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
       </DialogContent>
     </Dialog>
   )
+}
+
+type TimelineTranslation = ReturnType<typeof useI18n>["t"]
+
+function RollbackPointsStrip({
+  points,
+  isLoading,
+  error,
+  onRefresh,
+  t,
+}: {
+  points: SessionRollbackPoint[]
+  isLoading: boolean
+  error: string | null
+  onRefresh: () => Promise<unknown>
+  t: TimelineTranslation
+}) {
+  if (!isLoading && !error && points.length === 0) return null
+
+  const visiblePoints = [...points].sort((a, b) => b.step - a.step).slice(0, 4)
+
+  return (
+    <section className="mt-3 rounded-md border border-border bg-muted/20 p-2">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Icon name="history" className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="typography-meta font-medium text-foreground">{t("chat.timeline.rollback.title")}</span>
+            <span className="typography-meta text-muted-foreground">
+              {t("chat.timeline.rollback.count", { count: points.length })}
+            </span>
+          </div>
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground disabled:opacity-50"
+              disabled={isLoading}
+              onClick={(event) => {
+                event.stopPropagation()
+                void onRefresh()
+              }}
+              aria-label={t("chat.timeline.rollback.refresh")}
+            >
+              <Icon name="refresh" className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent sideOffset={6}>{t("chat.timeline.rollback.refresh")}</TooltipContent>
+        </Tooltip>
+      </div>
+
+      {error ? (
+        <div className="typography-meta text-status-error">{error}</div>
+      ) : visiblePoints.length === 0 ? (
+        <div className="typography-meta text-muted-foreground">{t("chat.timeline.rollback.loading")}</div>
+      ) : (
+        <div className="grid gap-1">
+          {visiblePoints.map((point) => (
+            <div
+              key={`${point.messageID}:${point.partID}:${point.step}`}
+              className="flex min-w-0 items-center justify-between gap-3 rounded bg-background/45 px-2 py-1"
+            >
+              <span className="typography-meta flex-shrink-0 font-medium text-foreground">
+                {t("chat.timeline.rollback.step", { step: point.step })}
+              </span>
+              <span className="typography-meta min-w-0 truncate text-muted-foreground">
+                {formatRollbackPointMeta(point)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+export function formatRollbackPointMeta(point: SessionRollbackPoint): string {
+  const labels = point.tools.length > 0 ? point.tools : point.kinds
+  const segments = [labels.length > 0 ? labels.join(", ") : "No tool calls"]
+  if (point.tokens) {
+    segments.push(`${formatTokenCount(point.tokens.input)} in / ${formatTokenCount(point.tokens.output)} out`)
+  }
+  if (typeof point.duration === "number") {
+    segments.push(formatDuration(point.duration))
+  }
+  return segments.join(" | ")
+}
+
+function formatTokenCount(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`
+  return String(value)
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs >= 1000) return `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)}s`
+  return `${Math.max(0, Math.round(durationMs))}ms`
 }
 
 function getFullText(parts: Part[]): string {

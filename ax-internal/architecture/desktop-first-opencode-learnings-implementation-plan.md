@@ -223,6 +223,22 @@ Validation:
 - `pnpm --dir desktop/packages/ui test -- src/sync/session-actions.test.ts src/stores/useSessionRollbackStore.test.ts`
 - `pnpm --dir desktop/packages/ui type-check`
 
+### Phase 2.2: Timeline Rollback Points Visibility
+
+Status: Implemented
+
+Scope:
+
+- Show rollback points in the Desktop conversation timeline as a compact read-only strip.
+- Include rollback step, tool/kind labels, token counts, duration, refresh, loading, and error states.
+- Use the Phase 2.1 rollback points store and session directory scoping.
+- Do not expose apply rollback yet; file-impact diff preview and confirmation remain required before write-affecting actions.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/components/chat/TimelineDialog.test.ts src/stores/useSessionRollbackStore.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.

@@ -1508,6 +1508,11 @@ export const dict = {
   "chat.timeline.help.clickMessage": "Click on a message to scroll to it in the conversation",
   "chat.timeline.help.undoToPoint": "Undo to this point (message text will populate input)",
   "chat.timeline.help.createSessionFromHere": "Create a new session starting from here",
+  "chat.timeline.rollback.title": "Rollback points",
+  "chat.timeline.rollback.count": "{count} available",
+  "chat.timeline.rollback.refresh": "Refresh rollback points",
+  "chat.timeline.rollback.loading": "Loading rollback points...",
+  "chat.timeline.rollback.step": "Step {step}",
   "chat.statusRow.todo.status.inProgress": "In progress",
   "chat.statusRow.todo.status.pending": "Pending",
   "chat.statusRow.todo.status.completed": "Completed",
@@ -2466,7 +2471,8 @@ export const dict = {
 
   // Onboarding tour
   "featureTour.step1.title": "Your Sessions",
-  "featureTour.step1.description": "Manage all your AI sessions here. Create, organize, and switch between conversations.",
+  "featureTour.step1.description":
+    "Manage all your AI sessions here. Create, organize, and switch between conversations.",
   "featureTour.step2.title": "Content Tabs",
   "featureTour.step2.description": "Switch between Chat, Git, Diff, Files, Terminal, and Plan views.",
   "featureTour.step3.title": "Chat Input",
