@@ -556,6 +556,42 @@ export const SessionRoutes = lazy(() =>
       },
     )
     .post(
+      "/:sessionID/rollback/preview",
+      describeRoute({
+        summary: "Preview rollback point",
+        tags: ["Session"],
+        description:
+          "Preview the file changes covered by a step-level rollback point selected by step index or tool name.",
+        operationId: "session.rollback_preview",
+        responses: {
+          200: {
+            description: "Rollback preview",
+            content: {
+              "application/json": {
+                schema: resolver(SessionRollback.PreviewResult),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator("json", SessionRollback.ApplyInput),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        SessionPrompt.assertNotBusy(sessionID)
+        const result = await SessionRollback.preview({ sessionID, ...c.req.valid("json") })
+        if (!result) {
+          return notFound(c, {
+            name: "SessionRollbackPointNotFoundError",
+            message: "Rollback point not found",
+            resource: "rollbackPoint",
+          })
+        }
+        return c.json(result)
+      },
+    )
+    .post(
       "/:sessionID/rollback",
       describeRoute({
         summary: "Apply rollback point",

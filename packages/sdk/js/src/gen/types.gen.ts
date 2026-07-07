@@ -3334,6 +3334,16 @@ export type SessionRollbackPoint = {
   kinds: Array<string>
 }
 
+export type SessionRollbackPreview = {
+  point: SessionRollbackPoint
+  diffs: Array<FileDiff>
+  summary: {
+    files: number
+    additions: number
+    deletions: number
+  }
+}
+
 export type SessionRollbackApplyInput = {
   step?: number
   tool?: string
@@ -10776,6 +10786,43 @@ export type SessionRollbackResponses = {
 }
 
 export type SessionRollbackResponse = SessionRollbackResponses[keyof SessionRollbackResponses]
+
+export type SessionRollbackPreviewData = {
+  body?: SessionRollbackApplyInput
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/rollback/preview"
+}
+
+export type SessionRollbackPreviewErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+export type SessionRollbackPreviewError = SessionRollbackPreviewErrors[keyof SessionRollbackPreviewErrors]
+
+export type SessionRollbackPreviewResponses = {
+  /**
+   * Rollback preview
+   */
+  200: SessionRollbackPreview
+}
+
+export type SessionRollbackPreviewResponse = SessionRollbackPreviewResponses[keyof SessionRollbackPreviewResponses]
 
 export type SessionTodoData = {
   body?: never

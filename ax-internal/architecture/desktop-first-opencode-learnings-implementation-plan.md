@@ -258,6 +258,26 @@ Validation:
 - `pnpm --dir packages/sdk/js exec tsc --build --force`
 - `pnpm run check:openapi`
 
+### Phase 2.4: Formal Rollback Preview Contract
+
+Status: Implemented
+
+Scope:
+
+- Add `POST /session/:sessionID/rollback/preview` as a read-only server contract.
+- Select rollback points by `step` or `tool`, matching list/apply semantics.
+- Return the selected point, file diffs, and summary totals for Desktop confirmation UI.
+- Return a typed 404 when the requested rollback point does not exist.
+- Do not mutate snapshots, session revert state, messages, or files.
+
+Validation:
+
+- `pnpm --dir packages/ax-code exec vitest run test/server/route-validation.test.ts`
+- `pnpm --dir packages/ax-code typecheck`
+- `pnpm --dir packages/sdk/js run build`
+- `pnpm --dir packages/sdk/js exec tsc --build --force`
+- `pnpm run check:openapi`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.

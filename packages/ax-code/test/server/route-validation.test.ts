@@ -266,6 +266,58 @@ describe("server route validation", () => {
     })
   })
 
+  test("session rollback preview route returns selected point and diff summary without applying", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const preview = {
+          point: {
+            step: 3,
+            messageID: MessageID.ascending(),
+            partID: PartID.ascending(),
+            tools: ["write: src/app.ts"],
+            kinds: ["write"],
+          },
+          diffs: [
+            {
+              file: "src/app.ts",
+              before: "old",
+              after: "new",
+              additions: 1,
+              deletions: 1,
+              status: "modified" as const,
+            },
+          ],
+          summary: { files: 1, additions: 1, deletions: 1 },
+        } satisfies SessionRollback.PreviewResult
+        const previewSpy = vi.spyOn(SessionRollback, "preview").mockResolvedValue(preview)
+        const applySpy = vi.spyOn(SessionRollback, "apply")
+
+        try {
+          const res = await Server.Default().request(`/session/${session.id}/rollback/preview`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ step: 3 }),
+          })
+
+          expect(res.status).toBe(200)
+          expect(previewSpy).toHaveBeenCalledWith({ sessionID: session.id, step: 3 })
+          expect(applySpy).not.toHaveBeenCalled()
+          expect(await res.json()).toMatchObject({
+            point: { step: 3 },
+            diffs: [{ file: "src/app.ts", additions: 1, deletions: 1 }],
+            summary: { files: 1, additions: 1, deletions: 1 },
+          })
+        } finally {
+          previewSpy.mockRestore()
+          applySpy.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("session rollback route returns a typed 404 when the point is missing", async () => {
     await Instance.provide({
       directory: root,
@@ -291,6 +343,38 @@ describe("server route validation", () => {
           expect(applySpy).not.toHaveBeenCalled()
         } finally {
           pointsSpy.mockRestore()
+          applySpy.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("session rollback preview route returns a typed 404 when the point is missing", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const previewSpy = vi.spyOn(SessionRollback, "preview").mockResolvedValue(undefined)
+        const applySpy = vi.spyOn(SessionRollback, "apply")
+
+        try {
+          const res = await Server.Default().request(`/session/${session.id}/rollback/preview`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ step: 99 }),
+          })
+
+          expect(res.status).toBe(404)
+          expect(await res.json()).toMatchObject({
+            name: "SessionRollbackPointNotFoundError",
+            message: "Rollback point not found",
+            status: 404,
+            details: { resource: "rollbackPoint" },
+          })
+          expect(applySpy).not.toHaveBeenCalled()
+        } finally {
+          previewSpy.mockRestore()
           applySpy.mockRestore()
           await Session.remove(session.id)
         }

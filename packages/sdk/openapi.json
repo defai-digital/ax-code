@@ -26687,6 +26687,91 @@
         ]
       }
     },
+    "/session/{sessionID}/rollback/preview": {
+      "post": {
+        "operationId": "session.rollback_preview",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Preview rollback point",
+        "tags": [
+          "Session"
+        ],
+        "description": "Preview the file changes covered by a step-level rollback point selected by step index or tool name.",
+        "responses": {
+          "200": {
+            "description": "Rollback preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRollbackPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRollbackApplyInput"
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.rollback_preview({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/session/{sessionID}/todo": {
       "get": {
         "operationId": "session.todo",
@@ -45520,6 +45605,44 @@
           "partID",
           "tools",
           "kinds"
+        ]
+      },
+      "SessionRollbackPreview": {
+        "type": "object",
+        "properties": {
+          "point": {
+            "$ref": "#/components/schemas/SessionRollbackPoint"
+          },
+          "diffs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileDiff"
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "files": {
+                "type": "number"
+              },
+              "additions": {
+                "type": "number"
+              },
+              "deletions": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "files",
+              "additions",
+              "deletions"
+            ]
+          }
+        },
+        "required": [
+          "point",
+          "diffs",
+          "summary"
         ]
       },
       "SessionRollbackApplyInput": {

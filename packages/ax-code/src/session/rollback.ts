@@ -3,6 +3,8 @@ import { ExecutionGraph } from "../graph"
 import type { ReplayEvent } from "../replay/event"
 import { EventQuery } from "../replay/query"
 import { Session } from "."
+import { Snapshot } from "../snapshot"
+import { SessionSummary } from "./summary"
 import { MessageID, PartID, SessionID } from "./schema"
 import { SessionRevert } from "./revert"
 import { uniqueStrings } from "../util/string-list"
@@ -52,6 +54,23 @@ export namespace SessionRollback {
       ref: "SessionRollbackApplyInput",
     })
   export type ApplyInput = z.output<typeof ApplyInput>
+
+  const Summary = z.object({
+    files: z.number(),
+    additions: z.number(),
+    deletions: z.number(),
+  })
+
+  export const PreviewResult = z
+    .object({
+      point: Point,
+      diffs: Snapshot.FileDiff.array(),
+      summary: Summary,
+    })
+    .meta({
+      ref: "SessionRollbackPreview",
+    })
+  export type PreviewResult = z.output<typeof PreviewResult>
 
   export function resolve(msgs: Message, evts: ReplayEvent[]) {
     const bymsg = new Map<string, number[]>()
@@ -140,12 +159,43 @@ export namespace SessionRollback {
     return [...input.points].reverse().find((point) => match(point, input.tool!))
   }
 
+  function messagesFromPoint(msgs: Awaited<ReturnType<typeof Session.messages>>, point: Point) {
+    let started = false
+    return msgs.flatMap((msg) => {
+      if (started) return [msg]
+      if (msg.info.id !== point.messageID) return []
+      const index = msg.parts.findIndex((part) => part.id === point.partID)
+      if (index < 0) return []
+      started = true
+      return [{ ...msg, parts: msg.parts.slice(index) }]
+    })
+  }
+
   export async function points(sessionID: SessionID) {
     const msgs = await Session.messages({ sessionID })
     return detail({
       points: resolve(msgs, EventQuery.bySession(sessionID)),
       graph: ExecutionGraph.build(sessionID),
     })
+  }
+
+  export async function preview(input: { sessionID: SessionID; step?: number; tool?: string }) {
+    const [msgs, availablePoints] = await Promise.all([
+      Session.messages({ sessionID: input.sessionID }),
+      points(input.sessionID),
+    ])
+    const point = pick({ points: availablePoints, step: input.step, tool: input.tool })
+    if (!point) return
+    const diffs = await SessionSummary.computeDiff({ messages: messagesFromPoint(msgs, point) })
+    return {
+      point,
+      diffs,
+      summary: {
+        files: diffs.length,
+        additions: diffs.reduce((sum, diff) => sum + diff.additions, 0),
+        deletions: diffs.reduce((sum, diff) => sum + diff.deletions, 0),
+      },
+    } satisfies PreviewResult
   }
 
   export async function apply(input: SessionRevert.RevertInput) {

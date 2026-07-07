@@ -213,6 +213,8 @@ import type {
   SessionRollbackErrors,
   SessionRollbackPointsErrors,
   SessionRollbackPointsResponses,
+  SessionRollbackPreviewErrors,
+  SessionRollbackPreviewResponses,
   SessionRollbackResponses,
   SessionSemanticDiffErrors,
   SessionSemanticDiffResponses,
@@ -4012,6 +4014,47 @@ export class Session2 extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<SessionRollbackResponses, SessionRollbackErrors, ThrowOnError>({
       url: "/session/{sessionID}/rollback",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Preview rollback point
+   *
+   * Preview the file changes covered by a step-level rollback point selected by step index or tool name.
+   */
+  public rollbackPreview<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      sessionRollbackApplyInput?: SessionRollbackApplyInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { key: "sessionRollbackApplyInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      SessionRollbackPreviewResponses,
+      SessionRollbackPreviewErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/rollback/preview",
       ...options,
       ...params,
       headers: {
