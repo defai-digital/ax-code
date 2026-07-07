@@ -8,6 +8,7 @@ import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SessionRollback } from "../../src/session/rollback"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
 import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
@@ -221,6 +222,76 @@ describe("server route validation", () => {
           })
         } finally {
           busySpy.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("session rollback route applies a selected rollback point", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const point = {
+          step: 2,
+          messageID: MessageID.ascending(),
+          partID: PartID.ascending(),
+          tools: ["edit: src/app.ts"],
+          kinds: ["edit"],
+        } satisfies SessionRollback.Point
+        const pointsSpy = vi.spyOn(SessionRollback, "points").mockResolvedValue([point])
+        const applySpy = vi.spyOn(SessionRollback, "apply").mockResolvedValue(session)
+
+        try {
+          const res = await Server.Default().request(`/session/${session.id}/rollback`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ step: 2 }),
+          })
+
+          expect(res.status).toBe(200)
+          expect(applySpy).toHaveBeenCalledWith({
+            sessionID: session.id,
+            messageID: point.messageID,
+            partID: point.partID,
+          })
+          expect(await res.json()).toMatchObject({ id: session.id })
+        } finally {
+          pointsSpy.mockRestore()
+          applySpy.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("session rollback route returns a typed 404 when the point is missing", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        const pointsSpy = vi.spyOn(SessionRollback, "points").mockResolvedValue([])
+        const applySpy = vi.spyOn(SessionRollback, "apply")
+
+        try {
+          const res = await Server.Default().request(`/session/${session.id}/rollback`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ step: 99 }),
+          })
+
+          expect(res.status).toBe(404)
+          expect(await res.json()).toMatchObject({
+            name: "SessionRollbackPointNotFoundError",
+            message: "Rollback point not found",
+            status: 404,
+            details: { resource: "rollbackPoint" },
+          })
+          expect(applySpy).not.toHaveBeenCalled()
+        } finally {
+          pointsSpy.mockRestore()
+          applySpy.mockRestore()
           await Session.remove(session.id)
         }
       },

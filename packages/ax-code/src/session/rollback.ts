@@ -40,6 +40,19 @@ export namespace SessionRollback {
     })
   export type Point = z.output<typeof Point>
 
+  export const ApplyInput = z
+    .object({
+      step: z.number().int().min(1).optional(),
+      tool: z.string().trim().min(1).optional(),
+    })
+    .refine((input) => input.step != null || input.tool != null, {
+      message: "Either step or tool is required",
+    })
+    .meta({
+      ref: "SessionRollbackApplyInput",
+    })
+  export type ApplyInput = z.output<typeof ApplyInput>
+
   export function resolve(msgs: Message, evts: ReplayEvent[]) {
     const bymsg = new Map<string, number[]>()
     let stepCount = 0

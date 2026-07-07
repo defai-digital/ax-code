@@ -555,6 +555,52 @@ export const SessionRoutes = lazy(() =>
         return c.json(SessionRollback.filter(await SessionRollback.points(sessionID), query.tool))
       },
     )
+    .post(
+      "/:sessionID/rollback",
+      describeRoute({
+        summary: "Apply rollback point",
+        tags: ["Session"],
+        description: "Apply a step-level rollback point selected by step index or tool name.",
+        operationId: "session.rollback",
+        responses: {
+          200: {
+            description: "Updated session",
+            content: {
+              "application/json": {
+                schema: resolver(Session.Info),
+              },
+            },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator("json", SessionRollback.ApplyInput),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        SessionPrompt.assertNotBusy(sessionID)
+        const body = c.req.valid("json")
+        const point = SessionRollback.pick({
+          points: await SessionRollback.points(sessionID),
+          step: body.step,
+          tool: body.tool,
+        })
+        if (!point) {
+          return notFound(c, {
+            name: "SessionRollbackPointNotFoundError",
+            message: "Rollback point not found",
+            resource: "rollbackPoint",
+          })
+        }
+        return c.json(
+          await SessionRollback.apply({
+            sessionID,
+            messageID: point.messageID,
+            partID: point.partID,
+          }),
+        )
+      },
+    )
     .get(
       "/:sessionID/todo",
       describeRoute({

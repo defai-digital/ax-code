@@ -239,6 +239,25 @@ Validation:
 - `pnpm --dir desktop/packages/ui test -- src/components/chat/TimelineDialog.test.ts src/stores/useSessionRollbackStore.test.ts`
 - `pnpm --dir desktop/packages/ui type-check`
 
+### Phase 2.3: Formal Rollback Apply Contract
+
+Status: Implemented
+
+Scope:
+
+- Add `POST /session/:sessionID/rollback` as a formal server contract over existing `SessionRollback.apply`.
+- Select rollback points by `step` or `tool` using the same point resolver as the listing contract.
+- Return a typed 404 when the requested rollback point does not exist.
+- Keep Desktop apply UI disabled until diff preview and confirmation are implemented.
+
+Validation:
+
+- `pnpm --dir packages/ax-code exec vitest run test/server/route-validation.test.ts`
+- `pnpm --dir packages/ax-code typecheck`
+- `pnpm --dir packages/sdk/js run build`
+- `pnpm --dir packages/sdk/js exec tsc --build --force`
+- `pnpm run check:openapi`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.

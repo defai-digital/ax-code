@@ -3334,6 +3334,11 @@ export type SessionRollbackPoint = {
   kinds: Array<string>
 }
 
+export type SessionRollbackApplyInput = {
+  step?: number
+  tool?: string
+}
+
 export type SessionMetadata = {
   [key: string]: unknown
 }
@@ -10734,6 +10739,43 @@ export type SessionRollbackPointsResponses = {
 }
 
 export type SessionRollbackPointsResponse = SessionRollbackPointsResponses[keyof SessionRollbackPointsResponses]
+
+export type SessionRollbackData = {
+  body?: SessionRollbackApplyInput
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/rollback"
+}
+
+export type SessionRollbackErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+export type SessionRollbackError = SessionRollbackErrors[keyof SessionRollbackErrors]
+
+export type SessionRollbackResponses = {
+  /**
+   * Updated session
+   */
+  200: Session
+}
+
+export type SessionRollbackResponse = SessionRollbackResponses[keyof SessionRollbackResponses]
 
 export type SessionTodoData = {
   body?: never

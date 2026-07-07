@@ -26602,6 +26602,89 @@
             "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.rollback_points({\n  ...\n})"
           }
         ]
+      },
+      "post": {
+        "operationId": "session.rollback",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Apply rollback point",
+        "tags": [
+          "Session"
+        ],
+        "description": "Apply a step-level rollback point selected by step index or tool name.",
+        "responses": {
+          "200": {
+            "description": "Updated session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRollbackApplyInput"
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.rollback({\n  ...\n})"
+          }
+        ]
       }
     },
     "/session/{sessionID}/todo": {
@@ -45438,6 +45521,20 @@
           "tools",
           "kinds"
         ]
+      },
+      "SessionRollbackApplyInput": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "tool": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       },
       "SessionMetadata": {
         "type": "object",
