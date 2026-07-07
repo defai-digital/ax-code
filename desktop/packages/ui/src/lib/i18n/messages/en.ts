@@ -1519,6 +1519,7 @@ export const dict = {
   "chat.timeline.rollback.apply": "Apply rollback",
   "chat.timeline.rollback.applyFailed": "Failed to apply rollback",
   "chat.timeline.rollback.toast.applied": "Rollback applied",
+  "chat.sessionMove.toast.moved": "Session moved",
   "chat.timeline.rollback.previewSummary": "{files} files affected",
   "chat.timeline.rollback.noFileChanges": "No file changes in this rollback point",
   "chat.timeline.rollback.moreFiles": "{count} more files",

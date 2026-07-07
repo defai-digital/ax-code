@@ -10,6 +10,7 @@ import type {
   Message,
   Part,
   SessionRollbackApplyInput,
+  SessionMoveValidation,
 } from "@ax-code/sdk/v2/client"
 import { Binary } from "./binary"
 import { useSessionUIStore } from "./session-ui-store"
@@ -381,6 +382,80 @@ function getDirectoryStore(directory?: string) {
   return _childStores.ensureChild(resolvedDirectory)
 }
 
+function upsertSessionList(sessions: Session[], session: Session): Session[] {
+  const next = [...sessions]
+  const idx = next.findIndex((item) => item.id === session.id)
+  if (idx >= 0) {
+    next[idx] = session
+    return next
+  }
+  return [session, ...next]
+}
+
+function removeRecordKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  if (!Object.prototype.hasOwnProperty.call(record, key)) return record
+  const next = { ...record }
+  delete next[key]
+  return next
+}
+
+function moveSessionLocalState(sessionId: string, sourceDirectory: string | undefined, session: Session): void {
+  const targetDirectory = (session as { directory?: string | null }).directory ?? sourceDirectory
+  if (!targetDirectory) return
+
+  const sourceStore = getDirectoryStore(sourceDirectory)
+  const targetStore = getDirectoryStore(targetDirectory)
+
+  if (sourceDirectory === targetDirectory) {
+    sourceStore.setState((state) => ({
+      session: upsertSessionList(state.session, session),
+    }))
+    return
+  }
+
+  const sourceState = sourceStore.getState()
+  const movedMessages = sourceState.message[sessionId]
+  const movedStatus = sourceState.session_status[sessionId]
+  const movedDiff = sourceState.session_diff[sessionId]
+  const movedTodo = sourceState.todo[sessionId]
+  const movedPermission = sourceState.permission[sessionId]
+  const movedQuestion = sourceState.question[sessionId]
+  const movedParts = Object.fromEntries(
+    (movedMessages ?? [])
+      .map((message) => [message.id, sourceState.part[message.id]] as const)
+      .filter((entry): entry is readonly [string, Part[]] => Array.isArray(entry[1])),
+  )
+
+  targetStore.setState((state) => ({
+    session: upsertSessionList(state.session, session),
+    ...(movedMessages ? { message: { ...state.message, [sessionId]: movedMessages } } : {}),
+    ...(Object.keys(movedParts).length > 0 ? { part: { ...state.part, ...movedParts } } : {}),
+    ...(movedStatus ? { session_status: { ...state.session_status, [sessionId]: movedStatus } } : {}),
+    ...(movedDiff ? { session_diff: { ...state.session_diff, [sessionId]: movedDiff } } : {}),
+    ...(movedTodo ? { todo: { ...state.todo, [sessionId]: movedTodo } } : {}),
+    ...(movedPermission ? { permission: { ...state.permission, [sessionId]: movedPermission } } : {}),
+    ...(movedQuestion ? { question: { ...state.question, [sessionId]: movedQuestion } } : {}),
+  }))
+
+  sourceStore.setState((state) => {
+    const nextPart = { ...state.part }
+    for (const message of movedMessages ?? []) {
+      delete nextPart[message.id]
+    }
+
+    return {
+      session: state.session.filter((item) => item.id !== sessionId),
+      message: removeRecordKey(state.message, sessionId),
+      part: nextPart,
+      session_status: removeRecordKey(state.session_status, sessionId),
+      session_diff: removeRecordKey(state.session_diff, sessionId),
+      todo: removeRecordKey(state.todo, sessionId),
+      permission: removeRecordKey(state.permission, sessionId),
+      question: removeRecordKey(state.question, sessionId),
+    }
+  })
+}
+
 function getSessionReplyClient(sessionId?: string): AxCodeClient {
   const directory = sessionId ? getSessionDirectory(sessionId) : null
   return scopedClientForDirectory(directory)
@@ -620,6 +695,54 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
   if (result.data) {
     useGlobalSessionsStore.getState().upsertSession(result.data)
   }
+}
+
+export async function validateSessionMoveTarget(
+  sessionId: string,
+  targetDirectory: string,
+): Promise<SessionMoveValidation> {
+  const directory = getSessionDirectory(sessionId)
+  const result = await scopedClientForDirectory(directory).session.moveValidate(
+    {
+      sessionID: sessionId,
+      directory,
+      targetDirectory,
+    },
+    { throwOnError: true },
+  )
+  if (!result.data) throw new Error("Failed to validate session move target")
+  return result.data
+}
+
+export async function moveSession(sessionId: string, targetDirectory: string): Promise<Session> {
+  const directory = getSessionDirectory(sessionId)
+  const result = await scopedClientForDirectory(directory).session.move(
+    {
+      sessionID: sessionId,
+      directory,
+      targetDirectory,
+    },
+    { throwOnError: true },
+  )
+  const session = result.data
+  if (!session) throw new Error("Failed to move session")
+
+  moveSessionLocalState(sessionId, directory, session)
+  useGlobalSessionsStore.getState().upsertSession(session)
+
+  const nextDirectory = (session as { directory?: string | null }).directory
+  if (nextDirectory) {
+    registerSessionDirectory(session.id, nextDirectory)
+    sessionEvents.requestGitRefresh({ directory: nextDirectory })
+  }
+  if (directory && directory !== nextDirectory) {
+    sessionEvents.requestGitRefresh({ directory })
+  }
+  if (useSessionUIStore.getState().currentSessionId === sessionId) {
+    useSessionUIStore.getState().setCurrentSession(sessionId, nextDirectory ?? directory ?? null)
+  }
+
+  return session
 }
 
 export async function shareSession(sessionId: string): Promise<Session | null> {

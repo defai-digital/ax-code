@@ -8,7 +8,11 @@ const replyCalls: Array<{ method: string; params: Record<string, unknown> }> = [
 const createSessionCalls: Array<{ client: "scoped" | "global"; params: Record<string, unknown> }> = []
 const sessionCalls: Array<{ method: string; params: Record<string, unknown> }> = []
 const setCurrentSessionMock = vi.fn()
+const upsertSessionMock = vi.fn()
+const removeSessionsMock = vi.fn()
+const registeredSessionDirectories: Array<{ sessionID: string; directory: string }> = []
 const inputCalls: Array<{ method: string; params?: Record<string, unknown> }> = []
+let mockCurrentSessionId: string | null = null
 let inputStoreState: {
   pendingInputText: string | null
   pendingInputMode: "replace" | "append"
@@ -110,6 +114,41 @@ const mockScopedClient = {
         },
       })
     }),
+    moveValidate: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.moveValidate", params })
+      return Promise.resolve({
+        data: {
+          sessionID: params.sessionID,
+          valid: true,
+          reason: "ok",
+          current: {
+            directory: params.directory,
+            projectID: "proj_1",
+            worktree: "/worktree",
+          },
+          target: {
+            directory: params.targetDirectory,
+            exists: true,
+            isDirectory: true,
+            sameDirectory: false,
+            withinCurrentProject: true,
+            git: { worktree: "/worktree", branch: "main", dirty: false },
+          },
+          warnings: [],
+        },
+      })
+    }),
+    move: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.move", params })
+      return Promise.resolve({
+        data: {
+          id: params.sessionID,
+          directory: params.targetDirectory,
+          title: "Moved",
+          time: { created: 1, updated: 5 },
+        },
+      })
+    }),
   },
   question: {
     reply: vi.fn((params: Record<string, unknown>) => {
@@ -171,6 +210,7 @@ vi.doMock("@/stores/useConfigStore", () => ({
 vi.doMock("./session-ui-store", () => ({
   useSessionUIStore: {
     getState: () => ({
+      currentSessionId: mockCurrentSessionId,
       getDirectoryForSession: (sessionId: string) => {
         if (sessionId === "session-a") return "/test/project"
         if (sessionId === "session-b") return "/other/project"
@@ -214,14 +254,17 @@ vi.doMock("./input-store", () => ({
 vi.doMock("@/stores/useGlobalSessionsStore", () => ({
   useGlobalSessionsStore: {
     getState: () => ({
-      upsertSession: vi.fn(),
+      upsertSession: upsertSessionMock,
+      removeSessions: removeSessionsMock,
     }),
   },
 }))
 
 // Mock sync-refs (imported but not used in permission functions)
 vi.doMock("./sync-refs", () => ({
-  registerSessionDirectory: () => {},
+  registerSessionDirectory: (sessionID: string, directory: string) => {
+    registeredSessionDirectories.push({ sessionID, directory })
+  },
 }))
 
 import { create, type StoreApi } from "zustand"
@@ -258,7 +301,11 @@ beforeEach(() => {
   resetScopedMessagesResult()
   sessionCalls.length = 0
   inputCalls.length = 0
+  registeredSessionDirectories.length = 0
+  upsertSessionMock.mockClear()
+  removeSessionsMock.mockClear()
   setCurrentSessionMock.mockClear()
+  mockCurrentSessionId = null
   inputStoreState = {
     pendingInputText: null,
     pendingInputMode: "replace",
@@ -561,6 +608,91 @@ describe("rollback and fork actions use the session directory", () => {
     expect(store.getState().message["session-b"].map((message) => message.id)).toEqual(["msg-kept"])
     expect(store.getState().part["msg-kept"]?.map((part) => part.id)).toEqual(["prt-kept-new"])
     expect(store.getState().part["msg-stale"]).toBeUndefined()
+  })
+
+  test("validateSessionMoveTarget uses the mapped session directory", async () => {
+    const { validateSessionMoveTarget, setActionRefs } = await import("./session-actions")
+    setActionRefs(
+      mockSdk as unknown as AxCodeClient,
+      createChildStores([["/other/project", createStore({})]]),
+      () => "/test/project",
+    )
+
+    const validation = await validateSessionMoveTarget("session-b", "/target/project")
+
+    expect(validation.valid).toBe(true)
+    expect(sessionCalls).toContainEqual({
+      method: "session.moveValidate",
+      params: {
+        sessionID: "session-b",
+        directory: "/other/project",
+        targetDirectory: "/target/project",
+      },
+    })
+  })
+
+  test("moveSession moves local session cache to the target directory", async () => {
+    mockCurrentSessionId = "session-b"
+    const sourceStore = createStore({})
+    const targetStore = createStore({})
+    sourceStore.setState({
+      session: [
+        {
+          id: "session-b",
+          directory: "/other/project",
+          time: { created: 1, updated: 1 },
+        } as unknown as Session,
+      ],
+      session_status: { "session-b": { type: "idle" } },
+      message: {
+        "session-b": [
+          {
+            id: "msg-b",
+            sessionID: "session-b",
+            role: "user",
+            time: { created: 1 },
+          } as unknown as Message,
+        ],
+      },
+      part: {
+        "msg-b": [{ id: "prt-b", type: "text", messageID: "msg-b", text: "keep me" } as unknown as Part],
+      },
+    })
+
+    const { moveSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(
+      mockSdk as unknown as AxCodeClient,
+      createChildStores([
+        ["/other/project", sourceStore],
+        ["/target/project", targetStore],
+      ]),
+      () => "/test/project",
+    )
+
+    const moved = await moveSession("session-b", "/target/project")
+
+    expect(moved).toMatchObject({ id: "session-b", directory: "/target/project" })
+    expect(sessionCalls).toContainEqual({
+      method: "session.move",
+      params: {
+        sessionID: "session-b",
+        directory: "/other/project",
+        targetDirectory: "/target/project",
+      },
+    })
+    expect(sourceStore.getState().session).toHaveLength(0)
+    expect(sourceStore.getState().message["session-b"]).toBeUndefined()
+    expect(sourceStore.getState().part["msg-b"]).toBeUndefined()
+    expect(sourceStore.getState().session_status["session-b"]).toBeUndefined()
+    expect(targetStore.getState().session.map((session) => session.id)).toEqual(["session-b"])
+    expect(targetStore.getState().message["session-b"]?.map((message) => message.id)).toEqual(["msg-b"])
+    expect(targetStore.getState().part["msg-b"]?.map((part) => part.id)).toEqual(["prt-b"])
+    expect(targetStore.getState().session_status["session-b"]).toEqual({ type: "idle" })
+    expect(upsertSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "session-b", directory: "/target/project" }),
+    )
+    expect(registeredSessionDirectories).toContainEqual({ sessionID: "session-b", directory: "/target/project" })
+    expect(setCurrentSessionMock).toHaveBeenCalledWith("session-b", "/target/project")
   })
 })
 

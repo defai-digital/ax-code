@@ -335,6 +335,24 @@ Validation:
 - `pnpm --dir packages/sdk/js exec tsc --build --force`
 - `pnpm run check:openapi`
 
+### Phase 2.8: Desktop Session Move Action Wiring
+
+Status: Implemented
+
+Scope:
+
+- Add Desktop action helpers for session move target validation and apply.
+- Route validation and move calls through the session's owning directory, not the current global directory.
+- After move, transfer local session-scoped cache from the source child store to the target child store.
+- Update global session state, session-directory routing, active session directory, and git refresh requests.
+- Keep the visible target picker and confirmation UI for the next slice.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/sync/session-actions.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
+- `pnpm run check:desktop-boundaries:strict`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.

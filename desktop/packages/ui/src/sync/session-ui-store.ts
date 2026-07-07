@@ -13,7 +13,15 @@
  */
 
 import { create } from "zustand"
-import type { FilePartInput, Session, Part, Message, TextPart, SessionRollbackApplyInput } from "@ax-code/sdk/v2/client"
+import type {
+  FilePartInput,
+  Session,
+  Part,
+  Message,
+  TextPart,
+  SessionRollbackApplyInput,
+  SessionMoveValidation,
+} from "@ax-code/sdk/v2/client"
 import type { AttachedFile, SessionContextUsage, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import type { WorktreeMetadata } from "@/types/worktree"
 import { axCodeClient } from "@/lib/ax-code/client"
@@ -49,6 +57,8 @@ import {
   revertToMessage as revertToMessageAction,
   unrevertSession,
   applyRollbackPoint as applyRollbackPointAction,
+  validateSessionMoveTarget as validateSessionMoveTargetAction,
+  moveSession as moveSessionAction,
   forkFromMessage as forkFromMessageAction,
 } from "./session-actions"
 import { useInputStore, type SyntheticContextPart } from "./input-store"
@@ -310,6 +320,8 @@ export type SessionUIState = {
   archiveSession: (id: string) => Promise<boolean>
   archiveSessions: (ids: string[]) => Promise<{ archivedIds: string[]; failedIds: string[] }>
   updateSessionTitle: (sessionId: string, title: string) => Promise<void>
+  validateSessionMoveTarget: (sessionId: string, targetDirectory: string) => Promise<SessionMoveValidation>
+  moveSession: (sessionId: string, targetDirectory: string) => Promise<Session>
   shareSession: (sessionId: string) => Promise<Session | null>
   unshareSession: (sessionId: string) => Promise<Session | null>
   revertToMessage: (sessionId: string, messageId: string, options?: { skipRedoPush?: boolean }) => Promise<void>
@@ -1054,6 +1066,17 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // ---------------------------------------------------------------------------
   updateSessionTitle: async (sessionId, title) => {
     await updateSessionTitleAction(sessionId, title)
+  },
+
+  validateSessionMoveTarget: async (sessionId, targetDirectory) => {
+    return validateSessionMoveTargetAction(sessionId, targetDirectory)
+  },
+
+  moveSession: async (sessionId, targetDirectory) => {
+    const session = await moveSessionAction(sessionId, targetDirectory)
+    const { dictionary } = useI18nStore.getState()
+    toast.success(formatMessage(dictionary, "chat.sessionMove.toast.moved"))
+    return session
   },
 
   shareSession: async (sessionId) => {
