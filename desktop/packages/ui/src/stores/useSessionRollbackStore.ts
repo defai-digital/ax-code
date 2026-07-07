@@ -1,6 +1,6 @@
 import { create } from "zustand"
 import { devtools } from "zustand/middleware"
-import type { SessionRollbackPoint } from "@ax-code/sdk/v2"
+import type { SessionRollbackApplyInput, SessionRollbackPoint, SessionRollbackPreview } from "@ax-code/sdk/v2"
 import { axCodeClient } from "@/lib/ax-code/client"
 import { normalizeProjectPath } from "@/lib/projectResolution"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
@@ -34,6 +34,11 @@ interface SessionRollbackStore {
   getError: (sessionId: string, options?: Pick<RefreshRollbackOptions, "directory" | "tool">) => string | null
   isLoading: (sessionId: string, options?: Pick<RefreshRollbackOptions, "directory" | "tool">) => boolean
   refreshPoints: (sessionId: string, options?: RefreshRollbackOptions) => Promise<SessionRollbackPoint[]>
+  previewRollback: (
+    sessionId: string,
+    input: SessionRollbackApplyInput,
+    options?: Pick<RefreshRollbackOptions, "directory">,
+  ) => Promise<SessionRollbackPreview>
   clearSession: (sessionId: string, directory?: string | null) => void
 }
 
@@ -120,6 +125,22 @@ export const useSessionRollbackStore = create<SessionRollbackStore>()(
           rollbackRefreshRequestIds.delete(reqKey)
         }
       }
+    },
+
+    previewRollback: async (sessionId, input, options) => {
+      const directory = normalizeDirectory(options?.directory ?? useDirectoryStore.getState().currentDirectory)
+      const result = await getRollbackClient(directory).session.rollbackPreview(
+        {
+          sessionID: sessionId,
+          directory: directory ?? undefined,
+          sessionRollbackApplyInput: input,
+        },
+        { throwOnError: true },
+      )
+      if (!result.data) {
+        throw new Error("Failed to preview rollback point")
+      }
+      return result.data
     },
 
     clearSession: (sessionId, directory) => {

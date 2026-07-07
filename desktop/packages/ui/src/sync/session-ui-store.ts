@@ -13,7 +13,7 @@
  */
 
 import { create } from "zustand"
-import type { FilePartInput, Session, Part, Message, TextPart } from "@ax-code/sdk/v2/client"
+import type { FilePartInput, Session, Part, Message, TextPart, SessionRollbackApplyInput } from "@ax-code/sdk/v2/client"
 import type { AttachedFile, SessionContextUsage, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import type { WorktreeMetadata } from "@/types/worktree"
 import { axCodeClient } from "@/lib/ax-code/client"
@@ -48,6 +48,7 @@ import {
   refetchSessionMessages,
   revertToMessage as revertToMessageAction,
   unrevertSession,
+  applyRollbackPoint as applyRollbackPointAction,
   forkFromMessage as forkFromMessageAction,
 } from "./session-actions"
 import { useInputStore, type SyntheticContextPart } from "./input-store"
@@ -312,6 +313,7 @@ export type SessionUIState = {
   shareSession: (sessionId: string) => Promise<Session | null>
   unshareSession: (sessionId: string) => Promise<Session | null>
   revertToMessage: (sessionId: string, messageId: string, options?: { skipRedoPush?: boolean }) => Promise<void>
+  applyRollbackPoint: (sessionId: string, input: SessionRollbackApplyInput) => Promise<void>
   forkFromMessage: (sessionId: string, messageId: string) => Promise<void>
   handleSlashUndo: (sessionId: string) => Promise<void>
   handleSlashRedo: (sessionId: string, options?: { fullUnrevert?: boolean }) => Promise<void>
@@ -1070,6 +1072,12 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     // marker. Reverted UI is derived from session.revert + stored messages.
     await refetchSessionMessages(sessionId)
     await revertToMessageAction(sessionId, messageId)
+  },
+
+  applyRollbackPoint: async (sessionId, input) => {
+    await applyRollbackPointAction(sessionId, input)
+    const { dictionary } = useI18nStore.getState()
+    toast.success(formatMessage(dictionary, "chat.timeline.rollback.toast.applied"))
   },
 
   // ---------------------------------------------------------------------------

@@ -99,6 +99,17 @@ const mockScopedClient = {
         },
       })
     }),
+    rollback: vi.fn((params: Record<string, unknown>) => {
+      sessionCalls.push({ method: "session.rollback", params })
+      return Promise.resolve({
+        data: {
+          id: params.sessionID,
+          directory: params.directory,
+          revert: { messageID: "msg-kept" },
+          time: { created: 1, updated: 4 },
+        },
+      })
+    }),
   },
   question: {
     reply: vi.fn((params: Record<string, unknown>) => {
@@ -244,6 +255,7 @@ function createChildStores(entries: Array<[string, StoreApi<DirectoryStore>]>) {
 // prompt leaks in and the grace-window watchdog re-arms unboundedly (OOM).
 beforeEach(() => {
   vi.resetModules()
+  resetScopedMessagesResult()
   sessionCalls.length = 0
   inputCalls.length = 0
   setCurrentSessionMock.mockClear()
@@ -482,6 +494,73 @@ describe("rollback and fork actions use the session directory", () => {
     })
     expect(setCurrentSessionMock).toHaveBeenCalledWith("session-b-fork", "/other/project")
     expect(inputStoreState.pendingInputText).toBe("try an alternate path")
+  })
+
+  test("applyRollbackPoint uses the mapped session directory and replaces stale local messages", async () => {
+    const store = createStore({})
+    store.setState({
+      session: [
+        {
+          id: "session-b",
+          directory: "/other/project",
+          time: { created: 1, updated: 1 },
+        } as unknown as Session,
+      ],
+      message: {
+        "session-b": [
+          {
+            id: "msg-kept",
+            sessionID: "session-b",
+            role: "user",
+            time: { created: 1 },
+          } as unknown as Message,
+          {
+            id: "msg-stale",
+            sessionID: "session-b",
+            role: "assistant",
+            time: { created: 2 },
+          } as unknown as Message,
+        ],
+      },
+      part: {
+        "msg-kept": [{ id: "prt-kept-old", type: "text", messageID: "msg-kept", text: "old" } as unknown as Part],
+        "msg-stale": [{ id: "prt-stale", type: "text", messageID: "msg-stale", text: "stale" } as unknown as Part],
+      },
+    })
+    scopedMessagesResult = {
+      data: [
+        {
+          info: {
+            id: "msg-kept",
+            sessionID: "session-b",
+            role: "user",
+            time: { created: 1 },
+          } as unknown as Message,
+          parts: [{ id: "prt-kept-new", type: "text", messageID: "msg-kept", text: "new" } as unknown as Part],
+        },
+      ],
+    }
+
+    const { applyRollbackPoint, setActionRefs } = await import("./session-actions")
+    setActionRefs(
+      mockSdk as unknown as AxCodeClient,
+      createChildStores([["/other/project", store]]),
+      () => "/test/project",
+    )
+
+    await applyRollbackPoint("session-b", { step: 2 })
+
+    expect(sessionCalls).toContainEqual({
+      method: "session.rollback",
+      params: {
+        sessionID: "session-b",
+        directory: "/other/project",
+        sessionRollbackApplyInput: { step: 2 },
+      },
+    })
+    expect(store.getState().message["session-b"].map((message) => message.id)).toEqual(["msg-kept"])
+    expect(store.getState().part["msg-kept"]?.map((part) => part.id)).toEqual(["prt-kept-new"])
+    expect(store.getState().part["msg-stale"]).toBeUndefined()
   })
 })
 

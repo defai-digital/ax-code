@@ -278,6 +278,23 @@ Validation:
 - `pnpm --dir packages/sdk/js exec tsc --build --force`
 - `pnpm run check:openapi`
 
+### Phase 2.5: Preview-Gated Desktop Rollback Apply
+
+Status: Implemented
+
+Scope:
+
+- Add rollback preview and apply actions to Desktop stores.
+- Show preview and confirmation inline in the Desktop timeline rollback points strip.
+- Only enable apply after the selected rollback point preview succeeds.
+- After apply, replace stale local session messages with the server message list, refresh rollback points, and request git status refresh.
+
+Validation:
+
+- `pnpm --dir desktop/packages/ui test -- src/sync/session-actions.test.ts src/stores/useSessionRollbackStore.test.ts src/components/chat/TimelineDialog.test.ts`
+- `pnpm --dir desktop/packages/ui type-check`
+- `pnpm run check:desktop-boundaries:strict`
+
 Scope:
 
 - Add rollback point listing, preview, confirmation, apply, and recovery UI.

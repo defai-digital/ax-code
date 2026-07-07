@@ -6,7 +6,7 @@ import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSessionMessageRecords } from "@/sync/sync-context"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/icon/Icon"
-import type { Part, SessionRollbackPoint } from "@ax-code/sdk/v2"
+import type { Part, SessionRollbackPoint, SessionRollbackPreview } from "@ax-code/sdk/v2"
 import { useI18n } from "@/lib/i18n"
 import { useDeviceInfo } from "@/lib/device"
 import { cn } from "@/lib/utils"
@@ -35,6 +35,7 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
   const messages = useSessionMessageRecords(currentSessionId ?? "")
   const revertToMessage = useSessionUIStore((state) => state.revertToMessage)
   const forkFromMessage = useSessionUIStore((state) => state.forkFromMessage)
+  const applyRollbackPoint = useSessionUIStore((state) => state.applyRollbackPoint)
   const rollbackPoints = useSessionRollbackStore((state) =>
     currentSessionId ? state.getPoints(currentSessionId, { directory: currentSessionDirectory }) : [],
   )
@@ -45,10 +46,15 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
     currentSessionId ? state.getError(currentSessionId, { directory: currentSessionDirectory }) : null,
   )
   const refreshRollbackPoints = useSessionRollbackStore((state) => state.refreshPoints)
+  const previewRollback = useSessionRollbackStore((state) => state.previewRollback)
   const { isMobile, isTablet } = useDeviceInfo()
   const alwaysShowActions = isMobile || isTablet
 
   const [forkingMessageId, setForkingMessageId] = React.useState<string | null>(null)
+  const [rollbackPreview, setRollbackPreview] = React.useState<SessionRollbackPreview | null>(null)
+  const [rollbackActionError, setRollbackActionError] = React.useState<string | null>(null)
+  const [previewingRollbackStep, setPreviewingRollbackStep] = React.useState<number | null>(null)
+  const [applyingRollbackStep, setApplyingRollbackStep] = React.useState<number | null>(null)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedIndex, setSelectedIndex] = React.useState(0)
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([])
@@ -116,6 +122,13 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
     })
   }, [currentSessionDirectory, currentSessionId, open, refreshRollbackPoints])
 
+  React.useEffect(() => {
+    setRollbackPreview(null)
+    setRollbackActionError(null)
+    setPreviewingRollbackStep(null)
+    setApplyingRollbackStep(null)
+  }, [currentSessionId, open])
+
   const navigateToMessage = React.useCallback(
     async (messageId: string) => {
       const didNavigate = await onScrollToMessage?.(messageId)
@@ -175,6 +188,44 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
     }
   }
 
+  const handlePreviewRollback = async (point: SessionRollbackPoint) => {
+    if (!currentSessionId) return
+    setRollbackActionError(null)
+    setPreviewingRollbackStep(point.step)
+    try {
+      const preview = await previewRollback(
+        currentSessionId,
+        { step: point.step },
+        { directory: currentSessionDirectory },
+      )
+      setRollbackPreview(preview)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("chat.timeline.rollback.previewFailed")
+      setRollbackActionError(message)
+      toast.error(t("chat.timeline.rollback.previewFailed"), { description: message })
+    } finally {
+      setPreviewingRollbackStep(null)
+    }
+  }
+
+  const handleApplyRollback = async (point: SessionRollbackPoint) => {
+    if (!currentSessionId) return
+    setRollbackActionError(null)
+    setApplyingRollbackStep(point.step)
+    try {
+      await applyRollbackPoint(currentSessionId, { step: point.step })
+      await refreshRollbackPoints(currentSessionId, { directory: currentSessionDirectory, silent: true })
+      setRollbackPreview(null)
+      onOpenChange(false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("chat.timeline.rollback.applyFailed")
+      setRollbackActionError(message)
+      toast.error(t("chat.timeline.rollback.applyFailed"), { description: message })
+    } finally {
+      setApplyingRollbackStep(null)
+    }
+  }
+
   if (!currentSessionId) return null
 
   return (
@@ -205,6 +256,12 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
           isLoading={isLoadingRollbackPoints}
           error={rollbackError}
           onRefresh={() => refreshRollbackPoints(currentSessionId, { directory: currentSessionDirectory })}
+          preview={rollbackPreview}
+          actionError={rollbackActionError}
+          previewingStep={previewingRollbackStep}
+          applyingStep={applyingRollbackStep}
+          onPreview={handlePreviewRollback}
+          onApply={handleApplyRollback}
           t={t}
         />
 
@@ -368,12 +425,24 @@ function RollbackPointsStrip({
   isLoading,
   error,
   onRefresh,
+  preview,
+  actionError,
+  previewingStep,
+  applyingStep,
+  onPreview,
+  onApply,
   t,
 }: {
   points: SessionRollbackPoint[]
   isLoading: boolean
   error: string | null
   onRefresh: () => Promise<unknown>
+  preview: SessionRollbackPreview | null
+  actionError: string | null
+  previewingStep: number | null
+  applyingStep: number | null
+  onPreview: (point: SessionRollbackPoint) => Promise<void>
+  onApply: (point: SessionRollbackPoint) => Promise<void>
   t: TimelineTranslation
 }) {
   if (!isLoading && !error && points.length === 0) return null
@@ -416,23 +485,119 @@ function RollbackPointsStrip({
       ) : visiblePoints.length === 0 ? (
         <div className="typography-meta text-muted-foreground">{t("chat.timeline.rollback.loading")}</div>
       ) : (
+        <div className="grid gap-1.5">
+          {visiblePoints.map((point) => {
+            const isPreviewing = previewingStep === point.step
+            const isApplying = applyingStep === point.step
+            const isSelected = preview?.point.step === point.step
+            return (
+              <div
+                key={`${point.messageID}:${point.partID}:${point.step}`}
+                className="rounded bg-background/45 px-2 py-1"
+              >
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="typography-meta flex-shrink-0 font-medium text-foreground">
+                      {t("chat.timeline.rollback.step", { step: point.step })}
+                    </span>
+                    <span className="typography-meta ml-2 text-muted-foreground">{formatRollbackPointMeta(point)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex h-6 flex-shrink-0 items-center gap-1 rounded border border-border px-2 typography-meta text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground disabled:opacity-50"
+                    disabled={Boolean(isPreviewing || isApplying)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void onPreview(point)
+                    }}
+                  >
+                    {isPreviewing ? (
+                      <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Icon name="eye" className="h-3.5 w-3.5" />
+                    )}
+                    {t(isSelected ? "chat.timeline.rollback.previewed" : "chat.timeline.rollback.preview")}
+                  </button>
+                </div>
+                {isSelected ? (
+                  <RollbackPreviewPanel
+                    preview={preview}
+                    isApplying={isApplying}
+                    onApply={() => onApply(point)}
+                    t={t}
+                  />
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {actionError ? <div className="mt-2 typography-meta text-status-error">{actionError}</div> : null}
+    </section>
+  )
+}
+
+function RollbackPreviewPanel({
+  preview,
+  isApplying,
+  onApply,
+  t,
+}: {
+  preview: SessionRollbackPreview
+  isApplying: boolean
+  onApply: () => Promise<void>
+  t: TimelineTranslation
+}) {
+  const files = preview.diffs.slice(0, 4)
+  const hiddenCount = Math.max(0, preview.diffs.length - files.length)
+
+  return (
+    <div className="mt-2 rounded border border-border/70 bg-background/70 p-2">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 typography-meta text-muted-foreground">
+        <span>{t("chat.timeline.rollback.previewSummary", preview.summary)}</span>
+        <span className="text-status-success">+{preview.summary.additions}</span>
+        <span className="text-status-error">-{preview.summary.deletions}</span>
+      </div>
+
+      {files.length === 0 ? (
+        <div className="typography-meta text-muted-foreground">{t("chat.timeline.rollback.noFileChanges")}</div>
+      ) : (
         <div className="grid gap-1">
-          {visiblePoints.map((point) => (
-            <div
-              key={`${point.messageID}:${point.partID}:${point.step}`}
-              className="flex min-w-0 items-center justify-between gap-3 rounded bg-background/45 px-2 py-1"
-            >
-              <span className="typography-meta flex-shrink-0 font-medium text-foreground">
-                {t("chat.timeline.rollback.step", { step: point.step })}
-              </span>
-              <span className="typography-meta min-w-0 truncate text-muted-foreground">
-                {formatRollbackPointMeta(point)}
+          {files.map((diff) => (
+            <div key={diff.file} className="flex min-w-0 items-center justify-between gap-2 typography-meta">
+              <span className="min-w-0 truncate text-foreground">{diff.file}</span>
+              <span className="flex-shrink-0 text-muted-foreground">
+                <span className="text-status-success">+{diff.additions}</span>
+                <span className="mx-1">/</span>
+                <span className="text-status-error">-{diff.deletions}</span>
               </span>
             </div>
           ))}
+          {hiddenCount > 0 ? (
+            <div className="typography-meta text-muted-foreground">
+              {t("chat.timeline.rollback.moreFiles", { count: hiddenCount })}
+            </div>
+          ) : null}
         </div>
       )}
-    </section>
+
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p className="typography-meta text-muted-foreground">{t("chat.timeline.rollback.confirmation")}</p>
+        <button
+          type="button"
+          className="inline-flex h-7 flex-shrink-0 items-center gap-1 rounded bg-status-error/10 px-2 typography-meta font-medium text-status-error transition-colors hover:bg-status-error/20 disabled:opacity-50"
+          disabled={isApplying}
+          onClick={(event) => {
+            event.stopPropagation()
+            void onApply()
+          }}
+        >
+          {isApplying ? <Icon name="loader-4" className="h-3.5 w-3.5 animate-spin" /> : null}
+          {t("chat.timeline.rollback.apply")}
+        </button>
+      </div>
+    </div>
   )
 }
 

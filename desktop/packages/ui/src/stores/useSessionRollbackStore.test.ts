@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import type { SessionRollbackPoint } from "@ax-code/sdk/v2"
+import type { SessionRollbackPoint, SessionRollbackPreview } from "@ax-code/sdk/v2"
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -26,6 +26,24 @@ const importStore = async () => {
   vi.resetModules()
 
   const rollbackRequests: Array<Deferred<{ data: SessionRollbackPoint[] }>> = []
+  const rollbackPreview = vi.fn(
+    async (): Promise<{ data: SessionRollbackPreview }> => ({
+      data: {
+        point: point(4, "edit"),
+        diffs: [
+          {
+            file: "src/app.ts",
+            before: "old",
+            after: "new",
+            additions: 1,
+            deletions: 1,
+            status: "modified",
+          },
+        ],
+        summary: { files: 1, additions: 1, deletions: 1 },
+      },
+    }),
+  )
   const apiClient = {
     session: {
       rollbackPoints: vi.fn(() => {
@@ -33,6 +51,7 @@ const importStore = async () => {
         rollbackRequests.push(request)
         return request.promise
       }),
+      rollbackPreview,
     },
   }
   const getScopedApiClient = vi.fn(() => apiClient)
@@ -55,6 +74,7 @@ const importStore = async () => {
     ...storeModule,
     getScopedApiClient,
     rollbackPoints: apiClient.session.rollbackPoints,
+    rollbackPreview,
     rollbackRequests,
   }
 }
@@ -97,5 +117,22 @@ describe("useSessionRollbackStore", () => {
     expect(useSessionRollbackStore.getState().getPoints("ses_1", { directory: "C:/Repo/" })).toEqual([
       point(3, "write"),
     ])
+  })
+
+  test("previews rollback points through the generated SDK route", async () => {
+    const { rollbackPreview, useSessionRollbackStore } = await importStore()
+    const result = await useSessionRollbackStore
+      .getState()
+      .previewRollback("ses_1", { step: 4 }, { directory: "/repo" })
+
+    expect(rollbackPreview).toHaveBeenCalledWith(
+      {
+        sessionID: "ses_1",
+        directory: "/repo",
+        sessionRollbackApplyInput: { step: 4 },
+      },
+      { throwOnError: true },
+    )
+    expect(result.summary.files).toBe(1)
   })
 })

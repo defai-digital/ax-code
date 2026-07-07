@@ -3,7 +3,14 @@
  * Replaces the action methods from the old useSessionStore.
  */
 
-import type { AxCodeClient, FilePartInput, Session, Message, Part } from "@ax-code/sdk/v2/client"
+import type {
+  AxCodeClient,
+  FilePartInput,
+  Session,
+  Message,
+  Part,
+  SessionRollbackApplyInput,
+} from "@ax-code/sdk/v2/client"
 import { Binary } from "./binary"
 import { useSessionUIStore } from "./session-ui-store"
 import { useInputStore } from "./input-store"
@@ -951,6 +958,34 @@ export async function refetchSessionMessages(sessionId: string): Promise<void> {
   })
 }
 
+async function replaceSessionMessagesFromServer(sessionId: string, directory: string | undefined): Promise<void> {
+  const store = getDirectoryStore(directory)
+  const result = await scopedClientForDirectory(directory).session.messages({
+    sessionID: sessionId,
+    directory,
+    limit: MESSAGE_REFETCH_LIMIT,
+  })
+  const records = (result.data ?? []).filter((record: { info?: { id?: string } }) => !!record?.info?.id)
+
+  store.setState((state) => {
+    const nextPart = { ...state.part }
+    for (const message of state.message[sessionId] ?? []) {
+      delete nextPart[message.id]
+    }
+    const nextMessage = { ...state.message, [sessionId]: [] }
+    const materialized = materializeSessionSnapshots(
+      { message: nextMessage, part: nextPart },
+      sessionId,
+      records.map((record: { info: Message; parts?: Part[] }) => ({
+        info: stripMessageDiffSnapshots(record.info),
+        parts: record.parts ?? [],
+      })),
+      { skipPartTypes: MESSAGE_REFETCH_SKIP_PARTS },
+    )
+    return { message: materialized.message, part: materialized.part }
+  })
+}
+
 /**
  * Unrevert — restore all previously reverted messages.
  * Restore all previously reverted messages. Aborts if busy, merges result.
@@ -987,6 +1022,43 @@ export async function unrevertSession(sessionId: string): Promise<void> {
     await refetchSessionMessages(sessionId)
     const nextMessageCount = store.getState().message[sessionId]?.length ?? 0
     if (nextMessageCount > previousMessageCount) return
+  }
+}
+
+export async function applyRollbackPoint(sessionId: string, input: SessionRollbackApplyInput): Promise<void> {
+  const directory = getSessionDirectory(sessionId)
+  const client = scopedClientForDirectory(directory)
+  const store = getDirectoryStore(directory)
+  const state = store.getState()
+
+  const status = state.session_status[sessionId]
+  if (status && status.type !== "idle") {
+    try {
+      await client.session.abort({ sessionID: sessionId, directory })
+    } catch {
+      // ignore abort errors; rollback route will still reject if the session remains busy
+    }
+  }
+
+  const result = await client.session.rollback({
+    sessionID: sessionId,
+    directory,
+    sessionRollbackApplyInput: input,
+  })
+  if (result.data) {
+    const current = store.getState()
+    const sessions = [...current.session]
+    const idx = Binary.findIndex(sessions, sessionId, (s) => s.id)
+    if (idx >= 0) {
+      sessions[idx] = result.data
+      store.setState({ session: sessions })
+    }
+    useGlobalSessionsStore.getState().upsertSession(result.data)
+  }
+
+  await replaceSessionMessagesFromServer(sessionId, directory)
+  if (directory) {
+    sessionEvents.requestGitRefresh({ directory })
   }
 }
 
