@@ -1456,3 +1456,48 @@ test("ask - abort should clear pending request", async () => {
     },
   })
 })
+
+test("ask - abort publishes a reject reply so prompts unmount", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const replied: unknown[] = []
+      const unsubscribe = Bus.subscribe(Permission.Event.Replied, async (event) => {
+        replied.push(event.properties)
+      })
+      try {
+        const ctl = new AbortController()
+        const ask = Permission.ask(
+          {
+            sessionID: SessionID.make("session_test"),
+            permission: "bash",
+            patterns: ["ls"],
+            metadata: {},
+            always: [],
+            ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
+          },
+          { signal: ctl.signal },
+        )
+
+        const pending = await waitForPending(1)
+        ctl.abort()
+        await ask.catch(() => {})
+        // publishDetached delivers asynchronously
+        const deadline = Date.now() + 5000
+        while (replied.length === 0 && Date.now() < deadline) {
+          await sleep(5)
+        }
+
+        expect(replied).toHaveLength(1)
+        expect(replied[0]).toMatchObject({
+          requestID: pending[0]!.id,
+          reply: "reject",
+        })
+      } finally {
+        unsubscribe()
+        await rejectAll()
+      }
+    },
+  })
+})

@@ -124,6 +124,10 @@ const collectPendingFromSyncStores = (): Array<{ id: string; sessionID: string }
   }
 }
 
+// Dedups session fetches across overlapping ancestor-chain walks; entries are
+// removed once settled so session data is never served stale.
+const sessionFetchInFlight = new Map<string, Promise<Session | null>>()
+
 const sessionBelongsToScope = async (
   sessionID: string,
   rootSessionID: string,
@@ -144,32 +148,50 @@ const sessionBelongsToScope = async (
     const known = knownById.get(id) ?? fetchedById.get(id)
     if (known) return known
 
-    for (const directory of directories) {
+    const inFlight = sessionFetchInFlight.get(id)
+    if (inFlight) {
+      const session = await inFlight
+      if (session) fetchedById.set(id, session)
+      return session
+    }
+
+    const task = (async () => {
+      for (const directory of directories) {
+        try {
+          const result = await axCodeClient.getScopedSdkClient(directory).session.get({
+            sessionID: id,
+            directory,
+          })
+          if (result.data) {
+            return result.data
+          }
+        } catch {
+          // Try the next known project directory.
+        }
+      }
+
       try {
-        const result = await axCodeClient.getScopedSdkClient(directory).session.get({
-          sessionID: id,
-          directory,
-        })
+        const result = await axCodeClient.getSdkClient().session.get({ sessionID: id })
         if (result.data) {
-          fetchedById.set(id, result.data)
           return result.data
         }
       } catch {
-        // Try the next known project directory.
+        // Missing session metadata means we cannot safely inherit the parent setting.
       }
-    }
 
+      return null
+    })()
+
+    sessionFetchInFlight.set(id, task)
     try {
-      const result = await axCodeClient.getSdkClient().session.get({ sessionID: id })
-      if (result.data) {
-        fetchedById.set(id, result.data)
-        return result.data
+      const session = await task
+      if (session) fetchedById.set(id, session)
+      return session
+    } finally {
+      if (sessionFetchInFlight.get(id) === task) {
+        sessionFetchInFlight.delete(id)
       }
-    } catch {
-      // Missing session metadata means we cannot safely inherit the parent setting.
     }
-
-    return null
   }
 
   const seen = new Set<string>()

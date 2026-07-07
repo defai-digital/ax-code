@@ -1,5 +1,5 @@
-import { createStore } from "solid-js/store"
-import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { createStore, produce } from "solid-js/store"
+import { createEffect, createMemo, For, Match, on, Show, Switch } from "solid-js"
 import { Portal, useKeyboard, useTerminalDimensions, type JSX } from "@ax-code/opentui-solid"
 import type { TextareaRenderable } from "@ax-code/opentui-core"
 import { useKeybind } from "../../context/keybind"
@@ -190,6 +190,37 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     submitting: false,
   })
 
+  // This component instance is reused when the next queued request becomes
+  // permissions()[0] without the list ever emptying (replied + asked events
+  // land in one batched flush). Re-arm the latch and stage per request or
+  // the previous reply's `submitting` swallows every input for the new one.
+  createEffect(
+    on(
+      () => props.request.id,
+      () => setStore({ submitting: false, stage: "permission" }),
+      { defer: true },
+    ),
+  )
+
+  // A reply the server accepts for an already-dead ask (the awaiting turn
+  // was aborted while the prompt was on screen) publishes no
+  // permission.replied event on old servers, so nothing would ever unmount
+  // this prompt. Remove the request locally once the reply succeeds; the
+  // event-driven removal is a no-op when it also arrives. See
+  // ax-internal/bugs BUG-005.
+  function removeRequestLocally(sessionID: string, id: string) {
+    sync.set(
+      "permission",
+      produce((draft: Record<string, PermissionRequest[]>) => {
+        const list = draft[sessionID]
+        if (!list) return
+        const index = list.findIndex((x) => x.id === id)
+        if (index >= 0) list.splice(index, 1)
+        if (list.length === 0) delete draft[sessionID]
+      }),
+    )
+  }
+
   const session = createMemo(() => sync.data.session.find((s) => s.id === props.request.sessionID))
 
   const requestingAgent = createMemo(() => {
@@ -231,8 +262,14 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     // request is already in flight. See #241.
     if (store.submitting) return
     setStore("submitting", true)
+    // Capture the reply target now: by the time the reply resolves,
+    // props.request may already be the next queued request.
+    const { sessionID, id } = props.request
     void Promise.resolve()
       .then(run)
+      .then(() => {
+        removeRequestLocally(sessionID, id)
+      })
       .catch((error) => {
         // Reset the in-flight guard on failure so a transient API/network
         // error does not permanently wedge the prompt. The prompt stays

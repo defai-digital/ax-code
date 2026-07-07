@@ -2285,6 +2285,87 @@ describe("session.llm.streamIdleWatchdog", () => {
     expect(idleAbort.signal.aborted).toBe(false)
   })
 
+  test("does not abort while a local tool call is executing", async () => {
+    // tool-call arrives, then the stream goes silent past the idle window
+    // while the tool runs locally (long command, permission prompt), then
+    // tool-result lands. The watchdog must re-arm instead of aborting.
+    const chunks: Array<{ delay: number; value: IteratorResult<unknown> }> = [
+      { delay: 1, value: { done: false, value: { type: "tool-call", toolCallId: "c1" } } },
+      { delay: 90, value: { done: false, value: { type: "tool-result", toolCallId: "c1" } } },
+      { delay: 1, value: { done: true, value: undefined } },
+    ]
+    let index = 0
+    const iterator: AsyncIterator<unknown> = {
+      next: () =>
+        new Promise((resolve) => {
+          const chunk = chunks[index++]!
+          setTimeout(() => resolve(chunk.value), chunk.delay)
+        }),
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+      idleAbort,
+      idleTimeoutMs: 25,
+      providerID: "test",
+      modelID: "m",
+    })
+    const seen: unknown[] = []
+    for await (const chunk of guarded.fullStream) seen.push(chunk)
+    expect(seen).toHaveLength(2)
+    expect(idleAbort.signal.aborted).toBe(false)
+  })
+
+  test("aborts a post-tool stall once no tool call is executing", async () => {
+    const never = new Promise<IteratorResult<unknown>>(() => {})
+    const chunks: Array<Promise<IteratorResult<unknown>> | IteratorResult<unknown>> = [
+      { done: false, value: { type: "tool-call", toolCallId: "c1" } },
+      { done: false, value: { type: "tool-result", toolCallId: "c1" } },
+      never,
+    ]
+    let index = 0
+    const iterator: AsyncIterator<unknown> = {
+      next: () => Promise.resolve(chunks[index++]!),
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+      idleAbort,
+      idleTimeoutMs: 20,
+      providerID: "test",
+      modelID: "m",
+    })
+    await expect(async () => {
+      for await (const _ of guarded.fullStream) {
+        // consume until the stall
+      }
+    }).rejects.toThrow(/stream stalled/)
+    expect(idleAbort.signal.aborted).toBe(true)
+  })
+
+  test("provider-executed tool calls do not exempt a stall", async () => {
+    const never = new Promise<IteratorResult<unknown>>(() => {})
+    const chunks: Array<Promise<IteratorResult<unknown>> | IteratorResult<unknown>> = [
+      { done: false, value: { type: "tool-call", toolCallId: "c1", providerExecuted: true } },
+      never,
+    ]
+    let index = 0
+    const iterator: AsyncIterator<unknown> = {
+      next: () => Promise.resolve(chunks[index++]!),
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+      idleAbort,
+      idleTimeoutMs: 20,
+      providerID: "test",
+      modelID: "m",
+    })
+    await expect(async () => {
+      for await (const _ of guarded.fullStream) {
+        // consume until the stall
+      }
+    }).rejects.toThrow(/stream stalled/)
+    expect(idleAbort.signal.aborted).toBe(true)
+  })
+
   test("disabled when timeout is 0", () => {
     const idleAbort = new AbortController()
     const output = makeOutput({ next: async () => ({ done: true, value: undefined }) })

@@ -371,6 +371,16 @@ export namespace Permission {
 
     const onAbort = () => {
       if (!pending.delete(id)) return
+      // The ask died without a user decision (turn aborted, session
+      // cancelled). Publish a reject reply so subscribed prompts (TUI,
+      // desktop) unmount instead of lingering as an unanswerable dialog —
+      // replies to a deleted pending entry are silent no-ops. See
+      // ax-internal/bugs BUG-005.
+      Bus.publishDetached(Event.Replied, {
+        sessionID: info.sessionID,
+        requestID: id,
+        reply: "reject",
+      })
       if (signal) deferred.reject(abortError(signal))
     }
     signal?.addEventListener("abort", onAbort, { once: true })

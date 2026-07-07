@@ -587,34 +587,59 @@ export namespace LLM {
   ): T {
     if (options.idleTimeoutMs <= 0) return output
 
+    // Locally-executing tool calls observed on the stream: a `tool-call`
+    // chunk has arrived but its `tool-result`/`tool-error` has not. While
+    // this is > 0 the provider is not expected to send anything — the turn
+    // is blocked on local work (a long shell command, a permission or
+    // question prompt awaiting the user), so the watchdog re-arms instead
+    // of aborting. Provider-executed tools stay on the provider's clock and
+    // are not exempted. See ax-internal/bugs BUG-005.
+    let executingToolCalls = 0
+    const trackChunk = (chunk: unknown) => {
+      if (!chunk || typeof chunk !== "object") return
+      const value = chunk as { type?: unknown; providerExecuted?: unknown }
+      if (value.providerExecuted === true) return
+      if (value.type === "tool-call") executingToolCalls++
+      else if ((value.type === "tool-result" || value.type === "tool-error") && executingToolCalls > 0)
+        executingToolCalls--
+    }
+
     // Manual race (see util/timeout.ts): once the watchdog fires, the still-
     // pending inner next() must not become an unhandled rejection when the
     // aborted fetch later rejects it.
     const raceIdle = <R>(op: Promise<R>): Promise<R> =>
       new Promise<R>((resolve, reject) => {
         let settled = false
-        const timer = setTimeout(() => {
-          if (settled) return
-          settled = true
-          options.idleAbort.abort()
-          reject(
-            new Error(
-              `Model stream stalled — no data from ${options.providerID}/${options.modelID} for ${Math.round(options.idleTimeoutMs / 1000)}s; the request was aborted. This is usually a provider or network issue — retry, or raise AX_CODE_STREAM_IDLE_TIMEOUT_MS.`,
-            ),
-          )
-        }, options.idleTimeoutMs)
-        timer.unref?.()
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const arm = () => {
+          timer = setTimeout(() => {
+            if (settled) return
+            if (executingToolCalls > 0) {
+              arm()
+              return
+            }
+            settled = true
+            options.idleAbort.abort()
+            reject(
+              new Error(
+                `Model stream stalled — no data from ${options.providerID}/${options.modelID} for ${Math.round(options.idleTimeoutMs / 1000)}s; the request was aborted. This is usually a provider or network issue — retry, or raise AX_CODE_STREAM_IDLE_TIMEOUT_MS.`,
+              ),
+            )
+          }, options.idleTimeoutMs)
+          timer.unref?.()
+        }
+        arm()
         op.then(
           (value) => {
             if (settled) return
             settled = true
-            clearTimeout(timer)
+            if (timer) clearTimeout(timer)
             resolve(value)
           },
           (error) => {
             if (settled) return
             settled = true
-            clearTimeout(timer)
+            if (timer) clearTimeout(timer)
             reject(error)
           },
         )
@@ -624,7 +649,12 @@ export namespace LLM {
       [Symbol.asyncIterator]() {
         const inner = output.fullStream[Symbol.asyncIterator]()
         return {
-          next: () => raceIdle(inner.next()),
+          next: () =>
+            raceIdle(inner.next()).then((result) => {
+              const iteration = result as IteratorResult<unknown>
+              if (!iteration.done) trackChunk(iteration.value)
+              return result
+            }),
           return: (value?: unknown) =>
             inner.return ? inner.return(value) : Promise.resolve({ done: true as const, value }),
           throw: (error?: unknown) => (inner.throw ? inner.throw(error) : Promise.reject(error)),
