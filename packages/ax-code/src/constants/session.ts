@@ -7,6 +7,13 @@ export const MAX_CONSECUTIVE_ERRORS = 3
 // to bump the previous 200 default after the first dozen tasks (#179).
 export const GLOBAL_STEP_LIMIT = 500
 export const DOOM_LOOP_THRESHOLD = 3
+// Cumulative step ceiling for Super-Long runs, expressed as a multiple of the
+// per-continuation step limit. Super-Long lifts the continuation cap, so this
+// is the backstop that keeps a 72h run finite: 500 × 40 = 20,000 total steps
+// (~one step every 13s for the full 72h window) — far above any legitimate
+// supervised run, low enough that a stuck loop cannot burn tokens forever.
+// Overridable via `session.max_total_steps`.
+export const SUPER_LONG_TOTAL_STEP_HEADROOM = 40
 
 // Autonomous mode hardening (ADR-004 / PRD v4.2.0).
 // These bound a single autonomous session. Defaults are wide enough that

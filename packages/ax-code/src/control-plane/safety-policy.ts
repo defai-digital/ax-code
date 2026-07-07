@@ -1,5 +1,6 @@
 import z from "zod"
 
+import { AUTONOMOUS_BLOCKED_PATHS } from "../constants/session"
 import { classify as classifyPermissionRisk } from "../permission/risk-classes"
 import { AgentControl } from "./agent-control"
 
@@ -44,19 +45,18 @@ export namespace SafetyPolicy {
     blastRadius?: BlastRadius
   }
 
+  // Single source of truth: the blast-radius blocked-path list from
+  // constants/session.ts, plus directory-path variants for permission
+  // patterns that name the directory itself rather than a file inside it.
+  // Keeping the two enforcement layers on one list prevents the drift this
+  // duplication previously had (blast-radius blocked infra/terraform/CI
+  // workflows; this policy did not).
   const DEFAULT_PROTECTED_PATHS = [
-    ".env",
-    ".env.*",
-    "**/.env",
-    "**/.env.*",
+    ...AUTONOMOUS_BLOCKED_PATHS,
     "secrets",
     "**/secrets",
-    "secrets/**",
-    "**/secrets/**",
     ".git/hooks",
     "**/.git/hooks",
-    ".git/hooks/**",
-    "**/.git/hooks/**",
   ] as const
 
   export function decide(input: Input): Decision {

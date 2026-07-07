@@ -9,6 +9,7 @@ import {
   isEmptyModelTurn,
   isTruncatedModelTurn,
   modelTurnFinished,
+  totalStepLimitDecision,
   truncatedModelTurnDecision,
 } from "../../src/session/prompt-autonomous-decisions"
 
@@ -674,5 +675,43 @@ describe("autonomous continuation decisions", () => {
     })
     expect(decision.message).toContain("truncated model turn")
     expect(decision.message).toContain("should not be treated as complete")
+  })
+})
+
+describe("total step limit decision", () => {
+  test("ignores while cumulative steps remain under the ceiling", () => {
+    expect(totalStepLimitDecision({ totalSteps: 1999, totalStepLimit: 2000, continuations: 12 })).toEqual({
+      action: "ignore",
+    })
+  })
+
+  test("stops at the ceiling with no continue branch, regardless of continuations", () => {
+    const decision = totalStepLimitDecision({ totalSteps: 2000, totalStepLimit: 2000, continuations: 57 })
+    expect(decision).toMatchObject({
+      action: "stop",
+      reason: "step_limit",
+      errorCode: "TOTAL_STEP_LIMIT",
+    })
+    if (decision.action !== "stop") throw new Error("expected stop")
+    expect(decision.message).toContain("cumulative step ceiling")
+    expect(decision.message).toContain("2000 total steps")
+    expect(decision.message).toContain("57 auto-continuations")
+    expect(decision.message).toContain("session.max_total_steps")
+    expect(decision.message).toContain("should not be treated as complete")
+  })
+
+  test("ignores non-finite ceilings instead of stopping immediately", () => {
+    expect(
+      totalStepLimitDecision({ totalSteps: 10_000, totalStepLimit: Number.POSITIVE_INFINITY, continuations: 3 }),
+    ).toEqual({ action: "ignore" })
+    expect(totalStepLimitDecision({ totalSteps: 10_000, totalStepLimit: Number.NaN, continuations: 3 })).toEqual({
+      action: "ignore",
+    })
+  })
+
+  test("omits the continuation clause on a first-continuation run", () => {
+    const decision = totalStepLimitDecision({ totalSteps: 500, totalStepLimit: 500, continuations: 0 })
+    if (decision.action !== "stop") throw new Error("expected stop")
+    expect(decision.message).not.toContain("auto-continuations")
   })
 })

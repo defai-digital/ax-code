@@ -136,6 +136,15 @@ type GlobalStepLimitDecision =
       message: string
     }
 
+type TotalStepLimitDecision =
+  | { action: "ignore" }
+  | {
+      action: "stop"
+      reason: "step_limit"
+      errorCode: "TOTAL_STEP_LIMIT"
+      message: string
+    }
+
 type AgentStepLimitContinuationDecision =
   | { action: "ignore" }
   | {
@@ -205,6 +214,34 @@ export function globalStepLimitDecision(input: {
       }). ` +
       `To increase, set "session.max_steps" in ax-code.json. ` +
       `Try breaking the task into smaller parts or increase the limit for complex autonomous tasks.`,
+  }
+}
+
+// The cumulative ceiling across ALL continuations. Unlike the per-continuation
+// step limit, `totalSteps` is never reset by continueAutonomousLoop, so this
+// bound applies equally to plain autonomous continuations, active goals (which
+// have no continuation cap), and Super-Long runs (which lift the continuation
+// cap). There is deliberately no "continue" branch: hitting this limit always
+// stops the loop.
+export function totalStepLimitDecision(input: {
+  totalSteps: number
+  totalStepLimit: number
+  continuations: number
+}): TotalStepLimitDecision {
+  if (!Number.isFinite(input.totalStepLimit) || input.totalSteps < input.totalStepLimit) {
+    return { action: "ignore" }
+  }
+
+  return {
+    action: "stop",
+    reason: "step_limit",
+    errorCode: "TOTAL_STEP_LIMIT",
+    message:
+      `Session reached the cumulative step ceiling (${formatDecisionCount(input.totalStepLimit)} total steps` +
+      `${input.continuations > 0 ? ` across ${formatDecisionCount(input.continuations)} auto-continuations` : ""}). ` +
+      `This ceiling bounds every autonomous run, including active goals and Super-Long mode. ` +
+      `To raise it, set "session.max_total_steps" in ax-code.json. ` +
+      `The session is stopped; remaining work should not be treated as complete.`,
   }
 }
 

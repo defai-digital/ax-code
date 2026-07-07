@@ -39,6 +39,7 @@ import { beginPromptLoopRecording, finishPromptLoopRecording, type PromptLoopEnd
 import { resolvePromptLoopResult } from "./prompt-loop-result"
 import { markPromptLoopBusy } from "./prompt-loop-status"
 import { handlePromptLoopGlobalStepLimit } from "./prompt-loop-step-limit"
+import { handlePromptLoopTotalStepLimit } from "./prompt-loop-total-step-limit"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
 import { createStructuredOutputTurn } from "./prompt-structured-output"
 import { publishPromptFailure, createSyntheticFailureAssistant } from "./prompt-loop-failure"
@@ -198,6 +199,8 @@ export namespace SessionPrompt {
     const {
       sessionStepLimit,
       maxContinuations,
+      maxTotalSteps,
+      maxTotalStepsSuperLong,
       maxTodoRetries,
       maxCompletionGateRetries,
       maxEmptyModelTurnRetries,
@@ -240,13 +243,11 @@ export namespace SessionPrompt {
       event,
       logExtras = {},
       resetTodoDeadlineSignature = false,
-      resetTodoProgressTracking = false,
     }: {
       text: string
       event: string
       logExtras?: Record<string, unknown>
       resetTodoDeadlineSignature?: boolean
-      resetTodoProgressTracking?: boolean
     }) {
       continuations += 1
       step = 0
@@ -263,12 +264,11 @@ export namespace SessionPrompt {
       if (resetTodoDeadlineSignature) {
         lastTodoDeadlineSignature = undefined
       }
-      if (resetTodoProgressTracking) {
-        lastPendingTodoSignature = undefined
-        stagnantTodoRetries = 0
-        todoRetries = 0
-        lastTodoContextSignature = undefined
-      }
+      // Todo progress tracking (todoRetries / stagnantTodoRetries /
+      // lastPendingTodoSignature) deliberately survives continuation
+      // boundaries: pendingTodoContinuationDecision refreshes the budgets
+      // itself whenever the pending-todo content set actually changes, so a
+      // continuation must not hand a stalled model a fresh retry budget.
 
       log.info(event, {
         command: "session.prompt.loop",
@@ -304,7 +304,34 @@ export namespace SessionPrompt {
       const activeGoal = await SessionGoal.get(sessionID)
       const effectivelyAutonomous = autonomous
 
-      // Safety: prevent infinite loops
+      // Cumulative ceiling first: `totalSteps` is never reset by
+      // continueAutonomousLoop, so this is the one bound that active goals
+      // (no continuation cap) and Super-Long (continuation cap lifted)
+      // cannot bypass. The per-continuation limit below governs pacing;
+      // this governs the whole run.
+      const totalStepLimit = handlePromptLoopTotalStepLimit({
+        sessionID,
+        totalSteps,
+        totalStepLimit: superLongActive ? maxTotalStepsSuperLong : maxTotalSteps,
+        continuations,
+      })
+      if (totalStepLimit.action === "stop") {
+        const latestMessages = await Session.messages({ sessionID })
+        const lastUser = latestMessages.findLast((m) => m.info.role === "user")
+        if (lastUser && lastUser.info.role === "user") {
+          await createSyntheticFailureAssistant({
+            sessionID,
+            lastUser: lastUser.info,
+            message: totalStepLimit.message,
+          })
+        }
+        reason = totalStepLimit.reason
+        break
+      }
+
+      // Per-continuation pacing limit. NOTE: `step` resets to 0 on every
+      // continuation, so this alone does not bound the run — the cumulative
+      // check above does.
       const effectiveMaxContinuations = superLongActive ? Number.POSITIVE_INFINITY : maxContinuations
       const globalStepLimit = handlePromptLoopGlobalStepLimit({
         sessionID,
@@ -317,7 +344,6 @@ export namespace SessionPrompt {
       if (globalStepLimit.action === "continue_autonomous") {
         await continueAutonomousLoop({
           event: "autonomous auto-continue",
-          resetTodoProgressTracking: true,
           text: globalStepLimit.text,
         })
         continue
@@ -483,7 +509,6 @@ export namespace SessionPrompt {
         await continueAutonomousLoop({
           event: "autonomous agent step-limit auto-continue",
           resetTodoDeadlineSignature: true,
-          resetTodoProgressTracking: true,
           text: agentStepLimit.text,
           logExtras: agentStepLimit.logExtras,
         })
@@ -801,7 +826,6 @@ export namespace SessionPrompt {
         if (goalTransition.action === "continue") {
           await continueAutonomousLoop({
             event: goalTransition.event,
-            resetTodoProgressTracking: true,
             text: goalTransition.text,
           })
           continue

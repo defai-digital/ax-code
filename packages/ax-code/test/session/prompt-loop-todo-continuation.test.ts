@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { handlePromptLoopTodoContinuation } from "../../src/session/prompt-loop-todo-continuation"
-import { pendingTodoSignature, type PromptTodo } from "../../src/session/prompt-todo-continuation"
+import { pendingTodoProgressSignature, type PromptTodo } from "../../src/session/prompt-todo-continuation"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 function assistant(id = MessageID.ascending()) {
@@ -94,7 +94,7 @@ describe("prompt loop todo continuation", () => {
 
   test("returns retry state and continuation text for unfinished todos", async () => {
     const info: { message: string; fields: Record<string, unknown> }[] = []
-    const signature = pendingTodoSignature([todo])
+    const signature = pendingTodoProgressSignature([todo])
     const sessionID = SessionID.descending()
 
     const result = await handlePromptLoopTodoContinuation(
@@ -105,7 +105,7 @@ describe("prompt loop todo continuation", () => {
         todoRetries: 1,
         maxTodoRetries: 4,
         pendingTodos: [todo],
-        lastPendingTodoSignature: "old",
+        lastPendingTodoSignature: pendingTodoProgressSignature([{ content: "some completed task" }]),
         stagnantTodoRetries: 1,
         maxSteps: 10,
       },
@@ -118,7 +118,9 @@ describe("prompt loop todo continuation", () => {
 
     expect(result.action).toBe("continue")
     if (result.action !== "continue") throw new Error("expected continuation")
-    expect(result.todoRetries).toBe(2)
+    // The pending-content set changed since the last continuation, so the
+    // retry budget refreshes before incrementing.
+    expect(result.todoRetries).toBe(1)
     expect(result.lastPendingTodoSignature).toBe(signature)
     expect(result.stagnantTodoRetries).toBe(0)
     expect(result.text).toContain("finish task")
@@ -130,7 +132,7 @@ describe("prompt loop todo continuation", () => {
           status: "ok",
           sessionID,
           pendingCount: 1,
-          attempt: 2,
+          attempt: 1,
           maxAttempts: 4,
           stagnantAttempts: 0,
         },
@@ -140,7 +142,7 @@ describe("prompt loop todo continuation", () => {
 
   test("logs stagnant retries while continuing unfinished todos", async () => {
     const warnings: { message: string; fields: Record<string, unknown> }[] = []
-    const signature = pendingTodoSignature([todo])
+    const signature = pendingTodoProgressSignature([todo])
     const sessionID = SessionID.descending()
 
     const result = await handlePromptLoopTodoContinuation(

@@ -350,3 +350,31 @@ describe("SafetyPolicy", () => {
     })
   })
 })
+
+describe("SafetyPolicy unified protected paths", () => {
+  // These entries come from AUTONOMOUS_BLOCKED_PATHS (constants/session.ts),
+  // now the single source shared with blast-radius enforcement.
+  test("denies infrastructure surfaces inherited from the blast-radius list", () => {
+    for (const path of ["infra/main.tf", "terraform/prod/vpc.tf", ".github/workflows/deploy.yml"]) {
+      const decision = SafetyPolicy.decide({
+        mode: "autonomous",
+        permission: "edit",
+        path,
+      })
+      expect(decision.action).toBe("deny")
+      expect(decision.reason).toBe("protected_path")
+    }
+  })
+
+  test("still denies directory-form patterns kept as local additions", () => {
+    for (const path of ["secrets", "nested/secrets", ".git/hooks"]) {
+      const decision = SafetyPolicy.decide({
+        mode: "autonomous",
+        permission: "edit",
+        path,
+      })
+      expect(decision.action).toBe("deny")
+      expect(decision.reason).toBe("protected_path")
+    }
+  })
+})

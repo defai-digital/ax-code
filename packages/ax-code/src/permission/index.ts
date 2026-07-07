@@ -199,7 +199,7 @@ export namespace Permission {
   // and cannot be auto-approved by wildcard rules. This prevents agent
   // default rules like {permission:"*",action:"allow",pattern:"*"} from
   // silently bypassing critical safety checks.
-  const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation"])
+  const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation", "bash_destructive"])
 
   async function serializeAlwaysReply<T>(s: State, fn: () => Promise<T>) {
     const previous = s.alwaysReplyQueue
@@ -232,8 +232,15 @@ export namespace Permission {
     return error
   }
 
-  function emitShadowSafetyDecision(request: Omit<z.infer<typeof AskInput>, "ruleset" | "agent">) {
-    if (!Recorder.active(request.sessionID)) return
+  // Evaluates SafetyPolicy.decide for this request. Deny outcomes are
+  // ENFORCED in autonomous mode for non-safe permission classes: a mutating
+  // permission whose target matches a protected path throws before the
+  // ruleset is consulted, so a wildcard allow rule cannot bypass it. Read
+  // class permissions are exempt (denying reads of .env-shaped paths would
+  // break routine context gathering; the write-side block is what protects
+  // the secret). In normal (supervised) mode the decision remains advisory
+  // telemetry — the user is present and the ask path retains final say.
+  function enforceSafetyPolicy(request: Omit<z.infer<typeof AskInput>, "ruleset" | "agent">, agent?: string) {
     const tool = typeof request.metadata?.tool === "string" ? request.metadata.tool : undefined
     const decision = SafetyPolicy.decide({
       mode: Flag.AX_CODE_AUTONOMOUS ? "autonomous" : "normal",
@@ -242,29 +249,50 @@ export namespace Permission {
       path: request.patterns[0],
       paths: request.patterns,
     })
-    if (decision.action === "allow" && !decision.checkpointRequired) return
-    Recorder.emit(
-      AgentControlEvents.safetyDecided({
-        sessionID: request.sessionID,
-        messageID: request.tool?.messageID,
-        action: decision.action,
-        risk: decision.risk,
-        reason: decision.reason,
-        permission: request.permission,
-        tool,
-        path: request.patterns[0],
-        checkpointRequired: decision.checkpointRequired,
-        matchedRule: decision.matchedRule,
-        shadow: true,
-      }),
-    )
+    const enforced =
+      decision.action === "deny" && Flag.AX_CODE_AUTONOMOUS && classifyRisk(request.permission) !== "safe"
+    if (Recorder.active(request.sessionID) && (decision.action !== "allow" || decision.checkpointRequired)) {
+      Recorder.emit(
+        AgentControlEvents.safetyDecided({
+          sessionID: request.sessionID,
+          messageID: request.tool?.messageID,
+          action: decision.action,
+          risk: decision.risk,
+          reason: decision.reason,
+          permission: request.permission,
+          tool,
+          path: request.patterns[0],
+          checkpointRequired: decision.checkpointRequired,
+          matchedRule: decision.matchedRule,
+          shadow: !enforced,
+        }),
+      )
+    }
+    if (!enforced) return
+    log.warn("safety policy denied permission", {
+      permission: request.permission,
+      patterns: request.patterns,
+      reason: decision.reason,
+      matchedRule: decision.matchedRule,
+    })
+    throw new DeniedError({
+      ruleset: [
+        {
+          permission: request.permission,
+          action: "deny",
+          pattern: decision.matchedRule ?? "*",
+          reason: decision.reason,
+        },
+      ],
+      agent,
+    })
   }
 
   async function askPromise(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }): Promise<void> {
     const { approved, pending } = await state()
     const { ruleset, ...request } = input
     let needsAsk = false
-    emitShadowSafetyDecision(request)
+    enforceSafetyPolicy(request, input.agent)
 
     for (const pattern of request.patterns) {
       const rule = evaluate(request.permission, pattern, ruleset, approved)

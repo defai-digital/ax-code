@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   pendingTodoContinuationDecision,
+  pendingTodoProgressSignature,
   pendingTodoSignature,
   todoContextConvergenceDecision,
   todoDeadlineConvergenceDecision,
@@ -143,18 +144,19 @@ describe("session prompt todo continuation helpers", () => {
     expect(decision.message).toContain("remaining todos are not complete")
   })
 
-  test("increments continuation attempts and resets stagnation when pending todos change", () => {
+  test("resets retry and stagnation budgets when the pending todo content set changes", () => {
     const decision = pendingTodoContinuationDecision(
       pendingTodoDecisionInput({
-        lastPendingTodoSignature: "old",
+        todoRetries: 2,
+        lastPendingTodoSignature: pendingTodoProgressSignature([{ content: "some completed task" }]),
         stagnantTodoRetries: 2,
       }),
     )
 
     expect(decision).toEqual({
       action: "continue",
-      todoRetries: 2,
-      lastPendingTodoSignature: "pending\u0000high\u0000finish task",
+      todoRetries: 1,
+      lastPendingTodoSignature: pendingTodoProgressSignature([finishTaskTodo]),
       stagnantTodoRetries: 0,
       stagnant: false,
       maxStagnantAttempts: 2,
@@ -162,9 +164,9 @@ describe("session prompt todo continuation helpers", () => {
     })
   })
 
-  test("increments stagnant retries when the pending todo signature is unchanged", () => {
+  test("increments stagnant retries when the pending todo content set is unchanged", () => {
     const pendingTodos = [{ status: "pending", priority: "high", content: "finish task" }]
-    const signature = pendingTodoSignature(pendingTodos)
+    const signature = pendingTodoProgressSignature(pendingTodos)
 
     expect(
       pendingTodoContinuationDecision(
@@ -183,6 +185,60 @@ describe("session prompt todo continuation helpers", () => {
       maxStagnantAttempts: 2,
       includeReportClosureGuidance: false,
     })
+  })
+
+  test("status and priority flips do not count as progress", () => {
+    const previous = pendingTodoProgressSignature([finishTaskTodo])
+    const decision = pendingTodoContinuationDecision(
+      pendingTodoDecisionInput({
+        todoRetries: 2,
+        pendingTodos: [{ status: "in_progress", priority: "low", content: "finish task" }],
+        lastPendingTodoSignature: previous,
+        stagnantTodoRetries: 1,
+      }),
+    )
+
+    expect(decision).toMatchObject({
+      action: "continue",
+      todoRetries: 3,
+      stagnantTodoRetries: 2,
+      stagnant: true,
+    })
+  })
+
+  test("reordering todos does not count as progress", () => {
+    const todoA = { status: "pending", priority: "high", content: "task a" }
+    const todoB = { status: "pending", priority: "high", content: "task b" }
+    expect(pendingTodoProgressSignature([todoA, todoB])).toBe(pendingTodoProgressSignature([todoB, todoA]))
+  })
+
+  test("oscillating todo state exhausts the retry budget instead of resetting it", () => {
+    // Simulate a model flipping one todo pending->in_progress->pending forever.
+    let todoRetries = 0
+    let stagnantTodoRetries = 0
+    let lastPendingTodoSignature: string | undefined
+    let stopped = false
+    for (let turn = 0; turn < 20; turn += 1) {
+      const status = turn % 2 === 0 ? "pending" : "in_progress"
+      const decision = pendingTodoContinuationDecision(
+        pendingTodoDecisionInput({
+          todoRetries,
+          maxTodoRetries: 10,
+          pendingTodos: [{ status, priority: "high", content: "finish task" }],
+          lastPendingTodoSignature,
+          stagnantTodoRetries,
+        }),
+      )
+      if (decision.action === "stop_retry_budget") {
+        stopped = true
+        break
+      }
+      if (decision.action !== "continue") throw new Error(`unexpected action: ${decision.action}`)
+      todoRetries = decision.todoRetries
+      stagnantTodoRetries = decision.stagnantTodoRetries
+      lastPendingTodoSignature = decision.lastPendingTodoSignature
+    }
+    expect(stopped).toBe(true)
   })
 
   test("includes report closure guidance state in continuation decisions", () => {

@@ -29,6 +29,7 @@ import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
+import { classifyDestructiveCommand } from "./bash-destructive"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import {
   absolutePathLiterals,
@@ -304,6 +305,10 @@ export const BashTool = Tool.define("bash", async () => {
       const redirectWritePaths = new Set<string>()
       const patterns = new Set<string>()
       const always = new Set<string>()
+      // commandText → reason. Populated for both top-level commands and
+      // commands nested inside eval / shell -c strings; drives the
+      // interactive-only bash_destructive ask below.
+      const destructiveCommands = new Map<string, string>()
       let foundCommands = false
 
       const recordResolvedPath = async (raw: string) => {
@@ -437,6 +442,9 @@ export const BashTool = Tool.define("bash", async () => {
           command.push(child.text)
         }
 
+        const destructiveReason = classifyDestructiveCommand(command.map(stripShellQuotes))
+        if (destructiveReason) destructiveCommands.set(commandText, destructiveReason)
+
         // Commands that wrap or delegate to other commands.
         // For shell invocations with -c, and eval, we parse the inner
         // command string to extract paths. For source/., we resolve
@@ -480,6 +488,8 @@ export const BashTool = Tool.define("bash", async () => {
                     innerParts.push(c.text)
                   }
                 }
+                const innerDestructiveReason = classifyDestructiveCommand(innerParts.map(stripShellQuotes))
+                if (innerDestructiveReason) destructiveCommands.set(innerNode.text, innerDestructiveReason)
                 await recordInnerCommandPaths(innerParts)
               }
               // Inner-tree redirect targets: `bash -c "echo > /etc/x"` and
@@ -649,6 +659,22 @@ export const BashTool = Tool.define("bash", async () => {
       if (patterns.size === 0 && !foundCommands) {
         patterns.add(params.command)
         always.add(params.command)
+      }
+
+      // Destructive commands always require interactive confirmation:
+      // `bash_destructive` is in the permission layer's INTERACTIVE_ONLY set,
+      // so neither wildcard allow rules nor autonomous auto-approval can skip
+      // this ask. No `always` patterns are offered — approval is per call.
+      if (destructiveCommands.size > 0) {
+        await ctx.ask({
+          permission: "bash_destructive",
+          patterns: Array.from(destructiveCommands.keys()),
+          always: [],
+          metadata: {
+            tool: "bash",
+            reasons: Object.fromEntries(destructiveCommands),
+          },
+        })
       }
 
       if (patterns.size > 0) {

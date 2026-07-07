@@ -729,6 +729,12 @@ export const Info = z
         max_continuations: NonNegativeInteger.optional().describe(
           "In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)",
         ),
+        max_total_steps: SafeInteger.min(10)
+          .optional()
+          .describe(
+            "Hard ceiling on cumulative steps across ALL auto-continuations, including active goals and Super-Long runs " +
+              "(default: max_steps × (max_continuations + 1); Super-Long default: max_steps × 40)",
+          ),
         max_todo_retries: NonNegativeInteger.optional().describe(
           "In autonomous mode, how many times to auto-continue when todos remain pending after the model stops (default: 10, 0 to disable)",
         ),

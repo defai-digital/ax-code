@@ -37,6 +37,19 @@ export function pendingTodoSignature(todos: PromptTodo[]) {
   return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
 }
 
+// Progress signature for stagnation tracking: content-only and order-insensitive.
+// Status/priority flips (pending->in_progress->pending) and list reordering do
+// NOT count as progress -- only completing a todo (removing it from the pending
+// set) or taking on genuinely new work changes this signature. The
+// status-sensitive pendingTodoSignature above stays for convergence-nudge
+// dedup, where a status change legitimately warrants a fresh nudge.
+export function pendingTodoProgressSignature(todos: Array<Pick<PromptTodo, "content">>) {
+  return todos
+    .map((todo) => todo.content)
+    .sort()
+    .join("\u0001")
+}
+
 function todoDeadlineStepBuffer(pendingTodoCount: number) {
   return Math.min(TODO_DEADLINE_MAX_STEP_BUFFER, Math.max(TODO_DEADLINE_MIN_STEP_BUFFER, pendingTodoCount + 2))
 }
@@ -103,7 +116,17 @@ export function pendingTodoContinuationDecision(input: {
     }
   }
 
-  if (input.todoRetries >= input.maxTodoRetries) {
+  // Progress = the pending-content set changed since the last continuation
+  // (a todo completed, or genuinely new work appeared). On progress the retry
+  // and stagnation budgets refresh, so long legitimate runs are never starved;
+  // without progress both accumulate — across continuation boundaries too,
+  // since the caller no longer resets them — so a model oscillating todo
+  // statuses or reordering the list cannot evade the caps.
+  const signature = pendingTodoProgressSignature(input.pendingTodos)
+  const progressed = input.lastPendingTodoSignature !== undefined && signature !== input.lastPendingTodoSignature
+  const todoRetries = progressed ? 0 : input.todoRetries
+
+  if (todoRetries >= input.maxTodoRetries) {
     return {
       action: "stop_retry_budget",
       reason: "stalled",
@@ -116,16 +139,16 @@ export function pendingTodoContinuationDecision(input: {
           input.maxTodoRetries,
           "{} auto-continuation attempt",
           "{} auto-continuation attempts",
-        )}. ` + `The session is stopped, but the remaining todos are not complete.`,
+        )} without progress. ` + `The session is stopped, but the remaining todos are not complete.`,
     }
   }
 
-  const signature = pendingTodoSignature(input.pendingTodos)
-  const stagnantTodoRetries = signature === input.lastPendingTodoSignature ? input.stagnantTodoRetries + 1 : 0
+  const stagnantTodoRetries =
+    input.lastPendingTodoSignature !== undefined && !progressed ? input.stagnantTodoRetries + 1 : 0
 
   return {
     action: "continue",
-    todoRetries: input.todoRetries + 1,
+    todoRetries: todoRetries + 1,
     lastPendingTodoSignature: signature,
     stagnantTodoRetries,
     stagnant: stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES,
