@@ -238,12 +238,19 @@ export namespace SessionGoal {
     sessionID: SessionID
     message: MessageV2.Assistant
   }): Promise<Info | undefined> {
+    // Goal budgets measure NEW work: net input + output + reasoning.
+    // The reported `total` deliberately includes cache read/write tokens
+    // (see Session.getUsage), and goal auto-continuations re-send the whole
+    // conversation from cache — counting those would burn the budget on
+    // re-reading context rather than on work, at a rate proportional to
+    // context size. `total` is only a fallback for providers that report
+    // no per-component token counts at all.
     const componentTokens =
       nonnegativeFinite(input.message.tokens.input) +
       nonnegativeFinite(input.message.tokens.output) +
       nonnegativeFinite(input.message.tokens.reasoning)
     const reportedTotal = nonnegativeFinite(input.message.tokens.total)
-    const tokens = reportedTotal > 0 ? reportedTotal : componentTokens
+    const tokens = componentTokens > 0 ? componentTokens : reportedTotal
     const tokenDelta = nonnegativeFinite(tokens)
 
     const elapsedMs =

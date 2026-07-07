@@ -189,6 +189,13 @@ export namespace SessionPrompt {
 
     let step = 0
     let totalSteps = 0
+    // Bookkeeping for the durable Super-Long step counter: how many of
+    // `totalSteps` have already been reported to the runtime store, and the
+    // cumulative cross-invocation count it returned. The durable count is
+    // what the Super-Long ceiling checks, so a crash/restart cannot hand a
+    // long run a fresh step budget.
+    let reportedSuperLongSteps = 0
+    let durableSuperLongSteps = 0
     // IMPORTANT: every break path inside the loop MUST set `reason` first.
     // The default "error" is the correct catch-all for unexpected throws,
     // but a break without a prior assignment will misreport a completed session.
@@ -217,7 +224,6 @@ export namespace SessionPrompt {
       maxEmptyModelTurnRetries,
       maxTruncatedModelTurnRetries,
     } = promptLoopLimits(cfg)
-    const autonomous = Flag.AX_CODE_AUTONOMOUS
     let todoRetries = 0
     let completionGateRetries = 0
     let lastCompletionGateSignature: string | undefined
@@ -315,26 +321,81 @@ export namespace SessionPrompt {
       // Goal continuation is autonomous continuation. The goal stays active
       // when autonomous mode is off, but the next turn must be user-driven.
       const activeGoal = await SessionGoal.get(sessionID)
-      const effectivelyAutonomous = autonomous
+      // Re-read the flag every iteration: Super-Long state is already
+      // observed live (the routes flip env-backed state mid-run), so
+      // autonomous must be too — otherwise a mid-run "Manual" toggle has no
+      // effect on continuations while still silently retightening the
+      // Super-Long ceiling, an inconsistent half-applied state.
+      const effectivelyAutonomous = Flag.AX_CODE_AUTONOMOUS
+
+      // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
+      let msgs: MessageV2.WithParts[]
+      ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: cachedMsgs }))
+
+      let { lastUser, lastUserParts, lastAssistant, lastFinished, tasks } = scanLoopMessages(msgs)
+
+      if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      if (fallbackModelOverride) {
+        lastUser = {
+          ...lastUser,
+          model: fallbackModelOverride,
+        }
+      }
+      // Deadline check runs BEFORE the step-cap gates so `superLongActive`
+      // reflects THIS iteration when selecting the cumulative ceiling and
+      // continuation cap (it was previously one iteration stale).
+      const superLongDeadline = await enforceSuperLongDeadline({
+        sessionID,
+        lastUser,
+        lastAssistant,
+        autonomous: effectivelyAutonomous,
+        config: SuperLongPolicy.fromConfig(cfg.super_long),
+        stepsSinceLastCheck: totalSteps - reportedSuperLongSteps,
+      })
+      if (superLongDeadline.action === "stop") {
+        if (superLongDeadline.invalidatedMessages) cachedMsgs = undefined
+        // The deadline ends the long run, not the user's goal. Pause an
+        // active goal so it is explicitly resumable instead of being left
+        // "active" forever in a session that will not auto-continue.
+        if (activeGoal?.status === "active") {
+          await SessionGoal.pause(sessionID).catch((error) => {
+            log.warn("failed to pause goal after super-long deadline", { sessionID, error })
+          })
+          Session.publishError({
+            sessionID,
+            message:
+              `The session goal "${activeGoal.objective}" was paused because the Super-Long runtime ceiling was reached. ` +
+              `Resume it with /goal resume in a new supervised run.`,
+          })
+        }
+        reason = superLongDeadline.reason
+        break
+      }
+      superLongActive = superLongDeadline.enabled
+      if (superLongDeadline.durableTotalSteps !== undefined) {
+        reportedSuperLongSteps = totalSteps
+        durableSuperLongSteps = superLongDeadline.durableTotalSteps
+      }
 
       // Cumulative ceiling first: `totalSteps` is never reset by
       // continueAutonomousLoop, so this is the one bound that active goals
       // (no continuation cap) and Super-Long (continuation cap lifted)
-      // cannot bypass. The per-continuation limit below governs pacing;
-      // this governs the whole run.
+      // cannot bypass. For Super-Long the durable cross-invocation count is
+      // used, so a crash/restart cannot reset the budget. The
+      // per-continuation limit below governs pacing; this governs the run.
       const totalStepLimit = handlePromptLoopTotalStepLimit({
         sessionID,
-        totalSteps,
+        totalSteps: superLongActive ? Math.max(totalSteps, durableSuperLongSteps) : totalSteps,
         totalStepLimit: superLongActive ? maxTotalStepsSuperLong : maxTotalSteps,
         continuations,
       })
       if (totalStepLimit.action === "stop") {
         const latestMessages = await Session.messages({ sessionID })
-        const lastUser = latestMessages.findLast((m) => m.info.role === "user")
-        if (lastUser && lastUser.info.role === "user") {
+        const latestUser = latestMessages.findLast((m) => m.info.role === "user")
+        if (latestUser && latestUser.info.role === "user") {
           await createSyntheticFailureAssistant({
             sessionID,
-            lastUser: lastUser.info,
+            lastUser: latestUser.info,
             message: totalStepLimit.message,
           })
         }
@@ -365,43 +426,17 @@ export namespace SessionPrompt {
         // Create a synthetic failure message so the transcript ends with a
         // clear explanation rather than just a Bus event / toast.
         const latestMessages = await Session.messages({ sessionID })
-        const lastUser = latestMessages.findLast((m) => m.info.role === "user")
-        if (lastUser && lastUser.info.role === "user") {
+        const latestUser = latestMessages.findLast((m) => m.info.role === "user")
+        if (latestUser && latestUser.info.role === "user") {
           await createSyntheticFailureAssistant({
             sessionID,
-            lastUser: lastUser.info,
+            lastUser: latestUser.info,
             message: globalStepLimit.message,
           })
         }
         reason = globalStepLimit.reason
         break
       }
-      // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
-      let msgs: MessageV2.WithParts[]
-      ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: cachedMsgs }))
-
-      let { lastUser, lastUserParts, lastAssistant, lastFinished, tasks } = scanLoopMessages(msgs)
-
-      if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
-      if (fallbackModelOverride) {
-        lastUser = {
-          ...lastUser,
-          model: fallbackModelOverride,
-        }
-      }
-      const superLongDeadline = await enforceSuperLongDeadline({
-        sessionID,
-        lastUser,
-        lastAssistant,
-        autonomous: effectivelyAutonomous,
-        config: SuperLongPolicy.fromConfig(cfg.super_long),
-      })
-      if (superLongDeadline.action === "stop") {
-        if (superLongDeadline.invalidatedMessages) cachedMsgs = undefined
-        reason = superLongDeadline.reason
-        break
-      }
-      superLongActive = superLongDeadline.enabled
       const assistantExit = resolvePromptLoopAssistantExit({
         sessionID,
         lastUserID: lastUser.id,
@@ -860,7 +895,12 @@ export namespace SessionPrompt {
       // Goal auto-continuation runs only when autonomous mode is enabled.
       // Without autonomy, active goals persist for the next user-driven turn.
       if (effectivelyAutonomous && modelFinished && !processor.message.error) {
-        const goal = updatedGoal ?? activeGoal
+        // `updatedGoal` is undefined when the goal row no longer exists
+        // (cleared mid-turn) OR when the usage update transiently failed.
+        // Re-fetch rather than falling back to the loop-top snapshot, so a
+        // goal cleared during the turn cannot trigger one spurious
+        // continuation for an objective that no longer exists.
+        const goal = updatedGoal ?? (await SessionGoal.get(sessionID).catch(() => activeGoal))
         // A budget-limited goal whose wrap-up turn ended with a gate-approved,
         // todo-free completion is a successful stop — report "completed"
         // instead of converting it into the budget-stall error below.

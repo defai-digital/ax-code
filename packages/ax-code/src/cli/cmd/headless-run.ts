@@ -81,7 +81,8 @@ export const HeadlessRunCommand = cmd({
       })
       .option("idleTimeoutMs", {
         alias: ["idle-timeout-ms"],
-        describe: "abort if the headless session does not reach idle before this timeout; set 0 to disable",
+        describe:
+          "abort if the headless session emits no events for this long (inactivity timeout — a busy long run keeps resetting it); set 0 to disable",
         type: "number",
         default: 10 * 60 * 1000,
       })
@@ -185,14 +186,22 @@ export const HeadlessRunCommand = cmd({
           ? args.idleTimeoutMs
           : undefined
       let timedOut = false
-      let idleTimer: ReturnType<typeof setTimeout> | undefined = idleTimeoutMs
-        ? setTimeout(() => {
-            idleTimer = undefined
-            timedOut = true
-            abort.abort()
-          }, idleTimeoutMs)
-        : undefined
-      idleTimer?.unref?.()
+      let idleTimer: ReturnType<typeof setTimeout> | undefined
+      // Inactivity timer, re-armed on every event: a productive multi-hour
+      // run (Super-Long, goals) streams events continuously and must not be
+      // killed at a fixed deadline, while a genuinely hung session (e.g. a
+      // permission ask nobody can answer) goes silent and still aborts.
+      const armIdleTimer = () => {
+        if (!idleTimeoutMs) return
+        if (idleTimer) clearTimeout(idleTimer)
+        idleTimer = setTimeout(() => {
+          idleTimer = undefined
+          timedOut = true
+          abort.abort()
+        }, idleTimeoutMs)
+        idleTimer.unref?.()
+      }
+      armIdleTimer()
       const eventSinks: HeadlessEventSink[] = [
         createHeadlessJsonlEventSink((line) => {
           process.stdout.write(line)
@@ -217,6 +226,7 @@ export const HeadlessRunCommand = cmd({
           eventSink,
           autonomous: args.autonomous,
           onRawEvent(event) {
+            armIdleTimer()
             if (sessionID) sessionError = sessionError ?? headlessSessionErrorMessage(event, sessionID)
           },
           stopWhen({ event }) {
@@ -230,7 +240,7 @@ export const HeadlessRunCommand = cmd({
         }
         if (timedOut) {
           const target = args.transportSmoke || args.commandSmoke ? "server.connected" : "session idle"
-          process.stderr.write(`headless-run timed out after ${idleTimeoutMs}ms waiting for ${target}\n`)
+          process.stderr.write(`headless-run aborted: no events for ${idleTimeoutMs}ms while waiting for ${target}\n`)
           process.exitCode = 124
         } else if (sessionError) {
           process.exitCode = 1

@@ -28,6 +28,24 @@ async function withRuntimeStore<T>(
 }
 
 describe("SuperLongRuntime", () => {
+  test("accumulates durable total steps across prompt-loop resumes", async () => {
+    await withRuntimeStore(async (runtime) => {
+      // First invocation reports steps as it goes.
+      const first = await runtime.touchRun({ sessionID: "ses_steps", now: 1_000, stepsDelta: 3 })
+      expect(first.totalSteps).toBe(3)
+      const second = await runtime.touchRun({ sessionID: "ses_steps", now: 2_000, stepsDelta: 2 })
+      expect(second.totalSteps).toBe(5)
+      // A crash/restart re-enters with a fresh in-memory counter; the durable
+      // count must carry over so the cumulative ceiling cannot be reset.
+      const resumed = await runtime.touchRun({ sessionID: "ses_steps", now: 3_000, stepsDelta: 0 })
+      expect(resumed.totalSteps).toBe(5)
+      expect(resumed.startedAt).toBe(1_000)
+      // Non-finite and negative deltas are ignored rather than corrupting the count.
+      const garbage = await runtime.touchRun({ sessionID: "ses_steps", now: 4_000, stepsDelta: Number.NaN })
+      expect(garbage.totalSteps).toBe(5)
+    })
+  })
+
   test("keeps a durable session start across prompt-loop resumes", async () => {
     await withRuntimeStore(async (SuperLongRuntime) => {
       const first = await SuperLongRuntime.sessionStartedAt({ sessionID: "ses_qwen", now: 1_000 })

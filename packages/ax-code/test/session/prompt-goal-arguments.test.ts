@@ -81,4 +81,15 @@ describe("parseGoalArguments", () => {
     expect(parseGoalArguments("--budget=500")).toEqual({ action: "view" })
     expect(parseGoalArguments("--BUDGET 500")).toEqual({ action: "view" })
   })
+
+  test("negative, decimal, and non-numeric budgets error instead of leaking into the objective", () => {
+    // Previously these fell through to goal creation with the raw
+    // "--budget -5 ..." text as the objective and NO budget set.
+    for (const raw of ["--budget -5 fix the bug", "--budget 5.5 fix the bug", "--budget lots fix the bug"]) {
+      const decision = parseGoalArguments(raw)
+      expect(decision.action).toBe("error")
+      if (decision.action !== "error") throw new Error("expected error")
+      expect(decision.message).toContain("Invalid --budget value")
+    }
+  })
 })

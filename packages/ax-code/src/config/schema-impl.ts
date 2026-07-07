@@ -716,7 +716,10 @@ export const Info = z
         }),
       ])
       .optional()
-      .describe("Enable Super-Long supervised long-run mode (default: on for Qwen3.7-Max, off otherwise)"),
+      .describe(
+        "Enable Super-Long supervised long-run mode (default: on for models with a 64k+ context window, " +
+          "thinking, and prompt caching — e.g. Qwen 3.7 Max/Plus; off otherwise)",
+      ),
     isolation: Isolation.optional().describe("Execution isolation configuration"),
     tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
     session: z
@@ -725,7 +728,7 @@ export const Info = z
         auto_prune: z.boolean().optional().describe("Automatically prune expired sessions on startup (default: true)"),
         max_steps: SafeInteger.min(10)
           .optional()
-          .describe("Maximum agentic steps per session turn before stopping (default: 200)"),
+          .describe("Maximum agentic steps per session turn before stopping (default: 500)"),
         max_continuations: NonNegativeInteger.optional().describe(
           "In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)",
         ),

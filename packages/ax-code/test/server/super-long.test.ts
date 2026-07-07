@@ -384,7 +384,7 @@ describe("super-long route", () => {
     })
   })
 
-  test("disabling autonomous suppresses super-long; re-enabling restores config state", async () => {
+  test("disabling autonomous turns super-long off durably; re-enabling does not resurrect it", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
@@ -419,9 +419,10 @@ describe("super-long route", () => {
           expect(superLongWhileOff.status).toBe(200)
           expect(await superLongWhileOff.json()).toEqual({ enabled: false })
 
-          // Re-enabling autonomous restores the config-derived state.
-          // Since super_long: true was persisted in step 1, the GET
-          // now reports true — config is the authority.
+          // Disabling autonomous also PERSISTS super_long off, so
+          // re-enabling autonomous must NOT silently resurrect a
+          // Super-Long run the user never re-selected. Long-run mode
+          // requires an explicit new opt-in after any autonomous-off.
           const autonomousOn = await Server.Default().request(`/autonomous?${directoryQuery}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -432,7 +433,16 @@ describe("super-long route", () => {
 
           const superLong = await Server.Default().request(`/super-long?${directoryQuery}`)
           expect(superLong.status).toBe(200)
-          expect(await superLong.json()).toEqual({ enabled: true })
+          expect(await superLong.json()).toEqual({ enabled: false })
+
+          // An explicit re-enable still works.
+          const reEnable = await Server.Default().request(`/super-long?${directoryQuery}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: true }),
+          })
+          expect(reEnable.status).toBe(200)
+          expect(await reEnable.json()).toEqual({ enabled: true })
         },
       })
     })

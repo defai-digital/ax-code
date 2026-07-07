@@ -87,6 +87,10 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     return goalControlMessage(input, "Goal cleared for this session.")
   }
 
+  if (parsed.action === "error") {
+    return goalControlMessage(input, parsed.message)
+  }
+
   if (parsed.action !== "create") {
     throw new Error(`Unhandled goal action: ${parsed.action}`)
   }

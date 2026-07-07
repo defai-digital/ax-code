@@ -43,7 +43,11 @@ export namespace GoalVerification {
 
   // Commands that observe or wait but cannot verify a change. A bash call
   // counts as verification only if at least one pipeline segment starts
-  // with something outside this set.
+  // with something outside this set. Read-only observation commands (ls,
+  // cat, grep, git status, ...) are listed too: after editing files, a model
+  // could otherwise satisfy the gate by merely LOOKING at its edits instead
+  // of exercising them — verification means running a build/test/typecheck
+  // or the changed program, not re-reading the diff.
   const TRIVIAL_COMMANDS: ReadonlySet<string> = new Set([
     "echo",
     "printf",
@@ -54,6 +58,56 @@ export namespace GoalVerification {
     "cd",
     "touch",
     "exit",
+    // Read-only file/dir observation
+    "ls",
+    "cat",
+    "head",
+    "tail",
+    "less",
+    "more",
+    "tree",
+    "find",
+    "fd",
+    "stat",
+    "file",
+    "wc",
+    "du",
+    "df",
+    "realpath",
+    "readlink",
+    "dirname",
+    "basename",
+    "which",
+    "whereis",
+    "type",
+    // Text search / transforms that inspect rather than exercise a change
+    "grep",
+    "egrep",
+    "fgrep",
+    "rg",
+    "ag",
+    "sed",
+    "awk",
+    "cut",
+    "sort",
+    "uniq",
+    "tr",
+    "diff",
+    "cmp",
+    "jq",
+    "yq",
+    // Environment/system observation
+    "env",
+    "printenv",
+    "whoami",
+    "hostname",
+    "uname",
+    "date",
+    "ps",
+    // Version-control observation: git status/diff/log inspect state; they
+    // do not run the changed code. (This also excludes git commit/push from
+    // counting as verification — committing is not testing.)
+    "git",
   ])
 
   function firstWord(segment: string) {

@@ -10,7 +10,7 @@ import { SuperLongRuntime } from "./super-long-runtime"
 const log = Log.create({ service: "session.prompt" })
 
 export type PromptSuperLongDeadlineResult =
-  | { action: "continue"; enabled: boolean }
+  | { action: "continue"; enabled: boolean; durableTotalSteps?: number }
   | { action: "stop"; reason: "step_limit"; invalidatedMessages: boolean }
 
 export async function enforceSuperLongDeadline(input: {
@@ -19,10 +19,14 @@ export async function enforceSuperLongDeadline(input: {
   lastAssistant?: MessageV2.Assistant
   autonomous: boolean
   config?: SuperLongPolicy.RuntimeConfig
+  // Steps taken in the calling loop since the previous deadline check, so
+  // the durable run record can accumulate a crash/restart-proof total.
+  stepsSinceLastCheck?: number
   now?: number
 }): Promise<PromptSuperLongDeadlineResult> {
   const state = SuperLongPolicy.runtimeState({
     modelID: input.lastUser.model.modelID,
+    providerID: input.lastUser.model.providerID,
     config: input.config,
   })
   const enabled = input.autonomous && state.enabled
@@ -30,13 +34,18 @@ export async function enforceSuperLongDeadline(input: {
   // sessions that never opted into Super-Long.
   if (!enabled) return { action: "continue", enabled: false }
   const now = input.now ?? Date.now()
-  const startedAt = await SuperLongRuntime.sessionStartedAt({ sessionID: input.sessionID, now }).catch((error) => {
+  const run = await SuperLongRuntime.touchRun({
+    sessionID: input.sessionID,
+    now,
+    stepsDelta: input.stepsSinceLastCheck,
+  }).catch((error): { startedAt: number; totalSteps: number | undefined } => {
     log.warn("failed to load durable super-long session start; using current loop start", {
       sessionID: input.sessionID,
       error,
     })
-    return now
+    return { startedAt: now, totalSteps: undefined }
   })
+  const startedAt = run.startedAt
   const deadline = SuperLongPolicy.deadline({
     enabled,
     startedAt,
@@ -47,7 +56,23 @@ export async function enforceSuperLongDeadline(input: {
     deadline,
     source: state.source,
   })
-  if (stop.action === "continue") return { action: "continue", enabled: true }
+  if (stop.action === "continue") return { action: "continue", enabled: true, durableTotalSteps: run.totalSteps }
+
+  // A user prompt issued AFTER the window expired is a fresh supervised
+  // interaction, not the tail of the long run. Degrade to a normal
+  // (non-Super-Long) turn instead of stopping — otherwise the session is
+  // permanently bricked: while Super-Long stays enabled, every new prompt
+  // would re-emit the deadline stop before any work could happen.
+  if (deadline.ok && deadline.expired && input.lastUser.time.created > startedAt + deadline.durationMs) {
+    log.info("super-long window expired before this prompt; continuing without super-long", {
+      command: "session.prompt.loop",
+      status: "ok",
+      sessionID: input.sessionID,
+      startedAt,
+      durationMs: deadline.durationMs,
+    })
+    return { action: "continue", enabled: false }
+  }
 
   log.warn(stop.logMessage, {
     command: "session.prompt.loop",

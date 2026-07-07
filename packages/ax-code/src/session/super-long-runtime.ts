@@ -10,6 +10,11 @@ const log = Log.create({ service: "super-long-runtime" })
 type RunState = {
   startedAt: number
   lastSeenAt: number
+  // Cumulative steps taken across ALL prompt-loop invocations of this
+  // session while Super-Long was active. The in-memory totalSteps counter
+  // resets on every prompt() invocation, so without this a crash/restart
+  // would hand a Super-Long run a fresh cumulative-step budget.
+  totalSteps?: number
 }
 
 type Store = {
@@ -32,18 +37,38 @@ export namespace SuperLongRuntime {
   const LOCK_STALE_MS = 30_000
 
   export async function sessionStartedAt(input: { sessionID: string; now: number }): Promise<number> {
+    const run = await touchRun(input)
+    return run.startedAt
+  }
+
+  /**
+   * Touches (or creates) the durable run record: refreshes lastSeenAt,
+   * accumulates `stepsDelta` into the cross-invocation step counter, and
+   * returns both the durable start anchor and the cumulative step count.
+   */
+  export async function touchRun(input: {
+    sessionID: string
+    now: number
+    stepsDelta?: number
+  }): Promise<{ startedAt: number; totalSteps: number }> {
+    const delta =
+      input.stepsDelta !== undefined && Number.isFinite(input.stepsDelta) && input.stepsDelta > 0
+        ? Math.floor(input.stepsDelta)
+        : 0
     return updateStore((store) => {
       const runs = (store.runs ??= {})
       const existing = runs[input.sessionID]
       if (existing) {
         existing.lastSeenAt = input.now
-        return existing.startedAt
+        existing.totalSteps = (Number.isFinite(existing.totalSteps) ? existing.totalSteps! : 0) + delta
+        return { startedAt: existing.startedAt, totalSteps: existing.totalSteps }
       }
       runs[input.sessionID] = {
         startedAt: input.now,
         lastSeenAt: input.now,
+        totalSteps: delta,
       }
-      return input.now
+      return { startedAt: input.now, totalSteps: delta }
     }, input.now)
   }
 

@@ -117,6 +117,25 @@ describe("GoalVerification.decide", () => {
     }
   })
 
+  test("read-only observation commands do not count as verification", () => {
+    // Looking at the edits is not exercising them: ls/cat/grep/git status
+    // after an edit must not satisfy the completion gate.
+    for (const command of [
+      "ls -la src",
+      "cat src/index.ts",
+      "grep -rn TODO src",
+      "git status && git diff",
+      "rg pattern | head -5",
+      "find . -name '*.ts' | wc -l",
+    ]) {
+      const decision = GoalVerification.decide({
+        messages: [assistant(toolPart("edit")), assistant(bashPart(command, 0))],
+        pendingTodos: [],
+      })
+      expect(decision.ok).toBe(false)
+    }
+  })
+
   test("a passing real command counts as verification", () => {
     for (const command of [
       "bun test",

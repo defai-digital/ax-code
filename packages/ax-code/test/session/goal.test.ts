@@ -316,6 +316,56 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("prefers component tokens over a cache-inflated reported total", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({
+          sessionID: session.id,
+          objective: "budget measures work, not cache reads",
+          tokenBudget: 1_000,
+        })
+
+        // Goal continuations re-send the whole conversation from cache; the
+        // reported total includes those cache reads. Only new work (net
+        // input + output + reasoning) may burn the budget.
+        await SessionGoal.addUsage({
+          sessionID: session.id,
+          message: {
+            id: "message_goal_cache_total" as any,
+            sessionID: session.id,
+            parentID: "message_parent" as any,
+            role: "assistant",
+            time: { created: 1_000, completed: 2_000 },
+            modelID: "test-model" as any,
+            providerID: "test" as any,
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              // 500k cache-read-inflated total would exhaust the budget in
+              // one turn; component sum is 60.
+              total: 500_000,
+              input: 10,
+              output: 40,
+              reasoning: 10,
+              cache: { read: 499_940, write: 0 },
+            },
+          },
+        })
+
+        const updated = await SessionGoal.get(session.id)
+        expect(updated?.tokensUsed).toBe(60)
+        expect(updated?.status).toBe("active")
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("ignores non-finite assistant token usage", async () => {
     await using tmp = await tmpdir({ git: true })
 

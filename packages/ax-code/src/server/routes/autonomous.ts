@@ -79,6 +79,17 @@ export const AutonomousRoutes = lazy(() =>
           enabled,
           update: (config) => {
             config.autonomous = enabled
+            // When autonomous is disabled, super-long must also come off —
+            // and PERSISTED off, not just env-suppressed. Leaving
+            // `super_long: true` in ax-code.json meant a later re-enable of
+            // autonomous silently resurrected Super-Long the user never
+            // re-selected (the TUI pairs an explicit /super-long PUT, but
+            // direct API consumers hit this route alone).
+            if (!enabled && config.super_long !== undefined) {
+              // Preserve a configured duration_hours; only flip enablement.
+              config.super_long =
+                typeof config.super_long === "object" ? { ...config.super_long, enabled: false } : false
+            }
           },
         })
         if ("error" in state) return c.json(state, 500)

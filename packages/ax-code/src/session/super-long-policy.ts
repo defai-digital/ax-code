@@ -51,7 +51,7 @@ export namespace SuperLongPolicy {
         message: string
         logMessage: string
         status: "error" | "stopped"
-        errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING" | "SUPER_LONG_DEADLINE_REACHED"
+        errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING" | "SUPER_LONG_DEADLINE_REACHED" | "SUPER_LONG_INVALID_DURATION"
         details:
           | { requestedDurationMs: number; maxDurationMs: number }
           | { elapsedMs: number; durationMs: number; source: StateDecision["source"] }
@@ -223,7 +223,10 @@ export namespace SuperLongPolicy {
               `Reduce the requested duration and resume the session.`,
         logMessage: "super-long deadline rejected",
         status: "error",
-        errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING",
+        errorCode:
+          input.deadline.reason === "invalid_duration"
+            ? "SUPER_LONG_INVALID_DURATION"
+            : "SUPER_LONG_DURATION_EXCEEDS_CEILING",
         details:
           input.deadline.reason === "invalid_duration"
             ? {
