@@ -267,6 +267,73 @@ describe("SessionGoal", () => {
         expect(limited?.tokensUsed).toBe(100)
         expect(limited?.timeUsedSeconds).toBe(6)
 
+        // budget_limited goals still accrue (the wrap-up turn is goal work).
+        await SessionGoal.addUsage({
+          sessionID: session.id,
+          message: message("message_goal_usage_d", 10, 10_000, 11_000),
+        })
+        expect((await SessionGoal.get(session.id))?.tokensUsed).toBe(110)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("paused and terminal goals do not accrue usage from unrelated turns", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({
+          sessionID: session.id,
+          objective: "paused goal must keep its budget",
+          tokenBudget: 100,
+        })
+
+        const message = (id: string, total: number) => ({
+          id: id as any,
+          sessionID: session.id,
+          parentID: "message_parent" as any,
+          role: "assistant" as const,
+          time: { created: 1_000, completed: 3_000 },
+          modelID: "test-model" as any,
+          providerID: "test" as any,
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            total,
+            input: 0,
+            output: total,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        })
+
+        await SessionGoal.addUsage({ sessionID: session.id, message: message("message_paused_a", 40) })
+        await SessionGoal.pause(session.id)
+
+        // Unrelated work in the same session while the goal is paused: the
+        // paused goal must not be charged, or it would drift past its budget
+        // and become permanently un-resumable.
+        await SessionGoal.addUsage({ sessionID: session.id, message: message("message_paused_b", 80) })
+        const paused = await SessionGoal.get(session.id)
+        expect(paused?.status).toBe("paused")
+        expect(paused?.tokensUsed).toBe(40)
+        expect(paused?.timeUsedSeconds).toBe(2)
+
+        const resumed = await SessionGoal.resume(session.id)
+        expect(resumed.status).toBe("active")
+
+        // Terminal states are frozen too: completed goals report final usage.
+        await SessionGoal.setStatus({ sessionID: session.id, status: "complete" })
+        await SessionGoal.addUsage({ sessionID: session.id, message: message("message_paused_c", 25) })
+        const completed = await SessionGoal.get(session.id)
+        expect(completed?.status).toBe("complete")
+        expect(completed?.tokensUsed).toBe(40)
+
         await Session.remove(session.id)
       },
     })

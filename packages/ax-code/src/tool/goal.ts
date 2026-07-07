@@ -34,7 +34,7 @@ export const GetGoalTool = Tool.define("get_goal", {
 
 export const CreateGoalTool = Tool.define("create_goal", {
   description:
-    "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks. Set tokenBudget only when an explicit token budget is requested. Fails if an active goal already exists.",
+    "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks. Set tokenBudget only when an explicit token budget is requested. Fails while an active or paused goal exists; only completed, blocked, or budget-limited goals are replaced.",
   parameters: z.object({
     objective: z.string().min(1).describe("The concrete objective to start pursuing."),
     tokenBudget: ToolNumber(z.number().int().positive())
@@ -72,9 +72,14 @@ export const UpdateGoalTool = Tool.define("update_goal", {
       // with no verification run). Throwing a regular Error surfaces the
       // requirement to the model so it can recover by finishing todos or
       // running its tests, then calling update_goal again.
+      // The scan is scoped to messages created after the goal so that edits
+      // from earlier goal-less conversation (or history inherited by a fork)
+      // cannot block a goal that never modified a file.
+      const currentGoal = await SessionGoal.get(ctx.sessionID)
       const decision = GoalVerification.decide({
         messages: await Session.messages({ sessionID: ctx.sessionID }),
         pendingTodos: Todo.active(ctx.sessionID),
+        since: currentGoal?.time.created,
       })
       if (!decision.ok) throw new Error(decision.message)
     }

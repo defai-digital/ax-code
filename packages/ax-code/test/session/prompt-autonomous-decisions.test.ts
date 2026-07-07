@@ -136,7 +136,7 @@ describe("autonomous continuation decisions", () => {
         timeUsedSeconds: 2,
       },
       continuations: 0,
-      budgetLimitContinuationSent: false,
+      budgetWrapUp: "none",
     })
     expect(goalDecision.action).toBe("continue_active")
   })
@@ -241,7 +241,7 @@ describe("autonomous continuation decisions", () => {
           timeUsedSeconds: 2,
         },
         continuations: 1,
-        budgetLimitContinuationSent: false,
+        budgetWrapUp: "none",
       }),
     ).toEqual({
       action: "continue_active",
@@ -258,7 +258,7 @@ describe("autonomous continuation decisions", () => {
           timeUsedSeconds: 2,
         },
         continuations: 3,
-        budgetLimitContinuationSent: false,
+        budgetWrapUp: "none",
       }),
     ).toEqual({
       action: "continue_active",
@@ -278,7 +278,7 @@ describe("autonomous continuation decisions", () => {
           timeUsedSeconds: 9,
         },
         continuations: 0,
-        budgetLimitContinuationSent: false,
+        budgetWrapUp: "none",
       }),
     ).toEqual({
       action: "continue_budget_wrapup",
@@ -294,7 +294,26 @@ describe("autonomous continuation decisions", () => {
       goalContinuationDecision({
         goal: undefined,
         continuations: 0,
-        budgetLimitContinuationSent: false,
+        budgetWrapUp: "none",
+      }),
+    ).toEqual({ action: "ignore" })
+  })
+
+  test("ignores a budget-limited goal whose wrap-up concluded in an earlier run", () => {
+    // The wrap-up ran in a previous prompt() invocation (seeded "concluded"
+    // from the durable status). A fresh user prompt in the same session must
+    // not re-fire the wrap-up turn or the budget-stop error.
+    expect(
+      goalContinuationDecision({
+        goal: {
+          objective: "finish refactor",
+          status: "budget_limited",
+          tokenBudget: 100,
+          tokensUsed: 120,
+          timeUsedSeconds: 9,
+        },
+        continuations: 0,
+        budgetWrapUp: "concluded",
       }),
     ).toEqual({ action: "ignore" })
   })
@@ -309,7 +328,7 @@ describe("autonomous continuation decisions", () => {
         timeUsedSeconds: 9,
       },
       continuations: 0,
-      budgetLimitContinuationSent: true,
+      budgetWrapUp: "sent",
     })
 
     expect(decision).toMatchObject({ action: "stop_budget_limit", reason: "stalled" })
@@ -328,7 +347,7 @@ describe("autonomous continuation decisions", () => {
         timeUsedSeconds: 9,
       },
       continuations: 0,
-      budgetLimitContinuationSent: true,
+      budgetWrapUp: "sent",
     })
 
     expect(decision).toMatchObject({ action: "stop_budget_limit" })
@@ -339,7 +358,7 @@ describe("autonomous continuation decisions", () => {
   test("issues the budget wrap-up even when continuations has exceeded maxContinuations", () => {
     // A long-running active goal deliberately runs past maxContinuations, so by
     // the time it exhausts its token budget `continuations` is already over the
-    // cap. The single guaranteed wrap-up turn (bounded by budgetLimitContinuationSent)
+    // cap. The single guaranteed wrap-up turn (bounded by budgetWrapUp)
     // must still fire instead of being denied as "continuation limit reached".
     const decision = goalContinuationDecision({
       goal: {
@@ -350,7 +369,7 @@ describe("autonomous continuation decisions", () => {
         timeUsedSeconds: 9,
       },
       continuations: 25,
-      budgetLimitContinuationSent: false,
+      budgetWrapUp: "none",
     })
 
     expect(decision).toEqual({

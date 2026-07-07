@@ -296,8 +296,17 @@ export function processorLoopDecision(input: {
 
 export function assistantRespondedAfterUser(input: AssistantTurnCursor): input is RespondedAssistantTurnCursor {
   if (!input.lastAssistant?.finish) return false
-  // Prefer wall-clock timestamps to avoid ID-space ordering bugs across clients
-  if (input.lastUserCreatedAt !== undefined && input.lastAssistant.time?.created !== undefined) {
+  // Prefer wall-clock timestamps to avoid ID-space ordering bugs across
+  // clients. On an exact tie (both records created in the same millisecond,
+  // realistic for autonomous continuations where the assistant record is
+  // created immediately after the injected user message) fall back to the ID
+  // compare — treating a tie as "not responded" re-ran the model on an
+  // already-answered prompt, producing a duplicate turn.
+  if (
+    input.lastUserCreatedAt !== undefined &&
+    input.lastAssistant.time?.created !== undefined &&
+    input.lastUserCreatedAt !== input.lastAssistant.time.created
+  ) {
     return input.lastUserCreatedAt < input.lastAssistant.time.created
   }
   return input.lastUserID < input.lastAssistant.id
@@ -306,6 +315,14 @@ export function assistantRespondedAfterUser(input: AssistantTurnCursor): input i
 export function assistantLoopExitDecision(
   input: AssistantTurnCursor & {
     hasPendingSubtask: boolean
+    // True when the session has autonomous work outstanding (pending todos or
+    // an active goal in an autonomous session). An unknown-finish turn must
+    // not end such a session as "completed": the provider merely omitted a
+    // finish reason, and stopping here would mark unfinished todos done and
+    // leave an active goal stranded. Returning "continue" is bounded — the
+    // tool-only-turn circuit breaker and the step ceilings still stop a model
+    // that keeps producing unknown finishes.
+    hasPendingAutonomousWork?: boolean
   },
 ): AssistantLoopExitDecision {
   if (!assistantRespondedAfterUser(input)) return { action: "continue" }
@@ -315,7 +332,7 @@ export function assistantLoopExitDecision(
     return { action: "complete" }
   }
 
-  if (finish === "unknown" && !input.hasPendingSubtask) {
+  if (finish === "unknown" && !input.hasPendingSubtask && !input.hasPendingAutonomousWork) {
     return {
       action: "complete_unknown_finish",
       logMessage: "model returned unknown finish with no actionable output",

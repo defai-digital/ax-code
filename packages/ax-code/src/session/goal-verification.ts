@@ -11,10 +11,12 @@ import { asRecordOrUndefined } from "../util/record"
  * todo completion gate provides:
  *
  *   1. A goal cannot complete while todos are still pending.
- *   2. If the session modified files, at least one command (bash) must
- *      have completed AFTER the last file mutation — i.e. the model has
- *      to run its tests/build before claiming success. Goals that never
- *      modified files (research/review goals) are not affected.
+ *   2. If the session modified files SINCE THE GOAL WAS CREATED, at least
+ *      one command (bash) must have completed AFTER the last file mutation
+ *      — i.e. the model has to run its tests/build before claiming
+ *      success. Goals that never modified files (research/review goals)
+ *      are not affected, and edits from before the goal (earlier
+ *      conversation, forked-session history) do not count.
  *
  * A bash run only counts as verification when it exited 0 and was not a
  * purely trivial command (`echo done`, `true`, `sleep` …) — otherwise the
@@ -29,7 +31,7 @@ export namespace GoalVerification {
   export type Todo = { status?: unknown }
 
   export type Message = {
-    info?: { role?: string }
+    info?: { role?: string; time?: { created?: number } }
     parts?: readonly unknown[]
   }
 
@@ -147,7 +149,16 @@ export namespace GoalVerification {
     return true
   }
 
-  export function decide(input: { messages: readonly Message[]; pendingTodos: readonly Todo[] }): Decision {
+  export function decide(input: {
+    messages: readonly Message[]
+    pendingTodos: readonly Todo[]
+    // Only messages created at/after this timestamp count toward the
+    // mutation/verification scan — pass the goal's creation time so edits
+    // from BEFORE the goal (earlier conversation, or history inherited by a
+    // forked session) cannot block a goal that never touched a file.
+    // Messages without a timestamp are still scanned (conservative).
+    since?: number
+  }): Decision {
     const pending = input.pendingTodos.filter(isActiveTodo)
     if (pending.length > 0) {
       return {
@@ -163,6 +174,8 @@ export namespace GoalVerification {
     let verifiedAfterMutation = true
     for (const message of input.messages) {
       if (message.info?.role !== "assistant") continue
+      const created = message.info?.time?.created
+      if (input.since !== undefined && typeof created === "number" && created < input.since) continue
       for (const part of message.parts ?? []) {
         const record = asRecordOrUndefined(part)
         if (!record || record["type"] !== "tool") continue

@@ -87,6 +87,38 @@ describe("AutonomousCompletionGate", () => {
     expect(decision).toEqual({ status: "allow" })
   })
 
+  test("a completed tool call after the pseudo tool text clears the block", () => {
+    // One bad text part must not poison the session forever: once a real
+    // tool call completed AFTER the offending text, "no action actually ran"
+    // is no longer true and later productive turns must be allowed to finish.
+    const pseudoToolText = {
+      info: { role: "assistant" },
+      parts: [{ type: "text", text: "<tool_call><function=write_file></tool_call>" }],
+    }
+    const laterRealWork = {
+      info: { role: "assistant" },
+      parts: [
+        { type: "tool", tool: "write", state: { status: "completed" } },
+        { type: "text", text: "Wrote the file." },
+      ],
+    }
+    expect(
+      AutonomousCompletionGate.evaluate({
+        pendingTodos: [],
+        messages: [pseudoToolText, laterRealWork],
+      }),
+    ).toEqual({ status: "allow" })
+
+    // Reversed order still blocks: the pseudo call is the latest action-like
+    // output, so nothing actually ran after it.
+    expect(
+      AutonomousCompletionGate.evaluate({
+        pendingTodos: [],
+        messages: [laterRealWork, pseudoToolText],
+      }),
+    ).toMatchObject({ status: "blocked", reason: "unexecutable_tool_text" })
+  })
+
   test("ignores synthetic text when checking for unexecutable tool text", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

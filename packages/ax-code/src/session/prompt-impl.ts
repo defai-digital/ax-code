@@ -8,6 +8,7 @@ import { providerModelKey } from "../provider/model-key"
 import { Provider } from "../provider/provider"
 import { ProviderID } from "../provider/schema"
 import { SessionCompaction } from "./compaction"
+import { BlastRadius } from "./blast-radius"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
 import { defer } from "../util/defer"
@@ -53,6 +54,7 @@ import {
   isTruncatedModelTurn,
   modelTurnFinished,
   toolOnlyTurnDecision,
+  type GoalBudgetWrapUp,
 } from "./prompt-autonomous-decisions"
 import { toErrorMessage } from "../util/error-message"
 import { insertReminders } from "./prompt-reminders"
@@ -202,7 +204,13 @@ export namespace SessionPrompt {
     let reason: PromptLoopEndReason = "error"
     let consecutiveErrors = 0
     let continuations = 0
-    let goalBudgetLimitContinuationSent = false
+    // Budget wrap-up state for the session goal. Seeded from the DURABLE
+    // goal status below (after the session loads): a goal that was already
+    // budget_limited when this run started had its single wrap-up turn in an
+    // earlier run — without the seed, every new user prompt in the session
+    // (and the first prompt of a forked session) would re-fire the wrap-up
+    // turn and then stop with a spurious budget error.
+    let goalBudgetWrapUp: GoalBudgetWrapUp = "none"
     // Whether Super-Long mode was active (enabled and unexpired) as of the
     // most recent deadline check. While active, the continuation cap is
     // lifted — the Super-Long deadline, doom-loop detection, and
@@ -214,6 +222,11 @@ export namespace SessionPrompt {
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
+    // Seed the budget wrap-up state from the durable goal status (see the
+    // declaration comment). A transient read failure seeds "none", which at
+    // worst repeats one wrap-up turn — never silently drops a goal.
+    const initialGoal = await SessionGoal.get(sessionID).catch(() => undefined)
+    if (initialGoal?.status === "budget_limited") goalBudgetWrapUp = "concluded"
     const {
       sessionStepLimit,
       maxContinuations,
@@ -271,6 +284,14 @@ export namespace SessionPrompt {
       continuations += 1
       step = 0
       consecutiveErrors = 0
+      // Re-base the blast-radius step counter alongside the loop's own step
+      // counter: both budgets are per continuation. Without this, the
+      // continuation's first tool call threw AutonomousLimitExceededError
+      // once cumulative tool calls passed caps.steps — killing goal and
+      // Super-Long runs at a small fraction of their advertised step
+      // budgets, via consecutive-error churn instead of a clean stop.
+      // Files/lines caps intentionally stay cumulative.
+      BlastRadius.resetSteps(sessionID)
       consecutiveToolOnlyTurns = 0
       toolOnlyNudges = 0
       fallbackModelOverride = undefined
@@ -443,6 +464,12 @@ export namespace SessionPrompt {
         lastUserCreatedAt: lastUser.time.created,
         lastAssistant,
         hasPendingSubtask: tasks.some((t) => t.type === "subtask"),
+        // An unknown-finish turn must not end an autonomous session that
+        // still has pending todos or an active goal as "completed" — the
+        // loop continues instead, bounded by the tool-only-turn breaker and
+        // the step ceilings.
+        hasPendingAutonomousWork:
+          effectivelyAutonomous && (activeGoal?.status === "active" || Todo.active(sessionID).length > 0),
       })
       if (assistantExit.action === "stop") {
         reason = assistantExit.reason
@@ -542,6 +569,7 @@ export namespace SessionPrompt {
       cachedAgent = resolvedAgent.cache
       const maxSteps = agent.steps ?? Infinity
       const agentStepLimit = handlePromptLoopAgentStepLimit({
+        sessionID,
         agentName: agent.name,
         step,
         maxSteps,
@@ -550,6 +578,18 @@ export namespace SessionPrompt {
         maxContinuations: superLongActive ? Number.POSITIVE_INFINITY : maxContinuations,
       })
       if (agentStepLimit.action === "stop") {
+        // End the transcript with an explicit explanation, mirroring the
+        // global step-limit stop — a bare break left no trace of why the
+        // session ended.
+        const latestMessages = await Session.messages({ sessionID })
+        const latestUser = latestMessages.findLast((m) => m.info.role === "user")
+        if (latestUser && latestUser.info.role === "user") {
+          await createSyntheticFailureAssistant({
+            sessionID,
+            lastUser: latestUser.info,
+            message: agentStepLimit.message,
+          })
+        }
         reason = agentStepLimit.reason
         break
       }
@@ -719,8 +759,16 @@ export namespace SessionPrompt {
           messages: latestMessages,
           pendingTodos,
         })
+        // Gated on modelFinished like the sibling gate paths (unexecutable
+        // text, todo continuation): retries are consumed only when the model
+        // actually tries to end its turn. Without the guard, a model that
+        // reacted to an empty subagent result by taking over the work itself
+        // (tool-call turns, no completion claim) burned the small retry
+        // budget mid-work and was stopped as "stalled" while making
+        // progress. The telemetry emit below still fires every step for
+        // empty subagent results — only recovery/stop is completion-scoped.
         const shouldRecoverEmptySubagentResult =
-          completionGate.status === "blocked" && completionGate.reason === "empty_subagent_result"
+          modelFinished && completionGate.status === "blocked" && completionGate.reason === "empty_subagent_result"
 
         emitPromptLoopCompletionGateDecision({
           sessionID,
@@ -904,7 +952,7 @@ export namespace SessionPrompt {
         // A budget-limited goal whose wrap-up turn ended with a gate-approved,
         // todo-free completion is a successful stop — report "completed"
         // instead of converting it into the budget-stall error below.
-        if (goal?.status === "budget_limited" && goalBudgetLimitContinuationSent && completionGateAllowedComplete) {
+        if (goal?.status === "budget_limited" && goalBudgetWrapUp !== "none" && completionGateAllowedComplete) {
           reason = "completed"
           break
         }
@@ -912,9 +960,9 @@ export namespace SessionPrompt {
           sessionID,
           goal,
           continuations,
-          budgetLimitContinuationSent: goalBudgetLimitContinuationSent,
+          budgetWrapUp: goalBudgetWrapUp,
         })
-        goalBudgetLimitContinuationSent = goalTransition.budgetLimitContinuationSent
+        goalBudgetWrapUp = goalTransition.budgetWrapUp
 
         if (goalTransition.action === "continue") {
           await continueAutonomousLoop({

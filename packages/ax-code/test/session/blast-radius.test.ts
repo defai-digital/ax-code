@@ -109,6 +109,27 @@ describe("BlastRadius", () => {
     expect(result?.limit).toBe(2)
   })
 
+  test("resetSteps re-bases the step counter but keeps files/lines cumulative", () => {
+    // Autonomous continuation boundary: the loop's per-continuation step
+    // budget renews, so the blast-radius step counter must renew with it —
+    // otherwise a continuation's first tool call trips the cap far below
+    // the loop's cumulative budgets. Change-footprint caps stay cumulative.
+    BlastRadius.get(SID, { steps: 2, files: 1, lines: 1000 })
+    BlastRadius.incrementStep(SID)
+    BlastRadius.incrementStep(SID)
+    BlastRadius.incrementStep(SID)
+    expect(BlastRadius.checkAfterIncrement(SID)?.kind).toBe("steps")
+
+    BlastRadius.resetSteps(SID)
+    expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
+    expect(BlastRadius.incrementStep(SID)).toBe(1)
+
+    BlastRadius.recordWrite(SID, "/a", 1)
+    BlastRadius.recordWrite(SID, "/b", 1)
+    BlastRadius.resetSteps(SID)
+    expect(BlastRadius.checkAfterIncrement(SID)?.kind).toBe("files")
+  })
+
   test("checkAfterIncrement reports lines overage", () => {
     BlastRadius.get(SID, { steps: 100, files: 100, lines: 10 })
     BlastRadius.recordWrite(SID, "/a", 11)

@@ -99,4 +99,34 @@ describe("prompt loop assistant exit", () => {
 
     expect(result).toEqual({ action: "continue" })
   })
+
+  test("keeps unknown finish active while autonomous work is pending", () => {
+    // Provider omitted a finish reason while todos/an active goal remain:
+    // completing here would mark unfinished work done and strand the goal.
+    const result = resolvePromptLoopAssistantExit({
+      sessionID: SessionID.descending(),
+      lastUserID: "msg_1",
+      lastAssistant: { id: MessageID.make("msg_2"), finish: "unknown" },
+      hasPendingSubtask: false,
+      hasPendingAutonomousWork: true,
+    })
+
+    expect(result).toEqual({ action: "continue" })
+  })
+
+  test("a same-millisecond user/assistant pair still counts as responded", () => {
+    // Autonomous continuations create the assistant record immediately after
+    // the injected user message, so identical timestamps are realistic. A tie
+    // must fall back to ID order — treating it as "not responded" re-ran the
+    // model on an already-answered prompt.
+    const result = resolvePromptLoopAssistantExit({
+      sessionID: SessionID.descending(),
+      lastUserID: "msg_1",
+      lastUserCreatedAt: 1_000,
+      lastAssistant: { id: MessageID.make("msg_2"), finish: "stop", time: { created: 1_000 } },
+      hasPendingSubtask: false,
+    })
+
+    expect(result).toEqual({ action: "stop", reason: "completed" })
+  })
 })

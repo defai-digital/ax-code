@@ -1,6 +1,6 @@
 import { Session } from "."
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
-import { goalContinuationDecision } from "./prompt-autonomous-decisions"
+import { goalContinuationDecision, type GoalBudgetWrapUp } from "./prompt-autonomous-decisions"
 import type { SessionID } from "./schema"
 
 type GoalContinuationInfo = {
@@ -12,14 +12,14 @@ type GoalContinuationInfo = {
 }
 
 type PromptLoopGoalTransition =
-  | { action: "ignore"; budgetLimitContinuationSent: boolean }
+  | { action: "ignore"; budgetWrapUp: GoalBudgetWrapUp }
   | {
       action: "continue"
       event: "goal auto-continuation" | "goal budget-limit wrap-up"
       text: string
-      budgetLimitContinuationSent: boolean
+      budgetWrapUp: GoalBudgetWrapUp
     }
-  | { action: "stop"; reason: "stalled"; budgetLimitContinuationSent: boolean }
+  | { action: "stop"; reason: "stalled"; budgetWrapUp: GoalBudgetWrapUp }
 
 type PromptLoopGoalDeps = {
   publishError?: (input: { sessionID: SessionID; message: string }) => void
@@ -30,14 +30,14 @@ export function handlePromptLoopGoalContinuation(
     sessionID: SessionID
     goal: GoalContinuationInfo | undefined
     continuations: number
-    budgetLimitContinuationSent: boolean
+    budgetWrapUp: GoalBudgetWrapUp
   },
   deps: PromptLoopGoalDeps = {},
 ): PromptLoopGoalTransition {
   const decision = goalContinuationDecision({
     goal: input.goal,
     continuations: input.continuations,
-    budgetLimitContinuationSent: input.budgetLimitContinuationSent,
+    budgetWrapUp: input.budgetWrapUp,
   })
 
   if (decision.action === "continue_active") {
@@ -49,8 +49,8 @@ export function handlePromptLoopGoalContinuation(
         continuation: decision.continuation,
       }),
       // An active goal means we're in a fresh budget cycle (new or resumed goal),
-      // so clear any stale wrap-up flag from a previous goal in this session.
-      budgetLimitContinuationSent: false,
+      // so clear any stale wrap-up state from a previous goal in this session.
+      budgetWrapUp: "none",
     }
   }
 
@@ -64,7 +64,7 @@ export function handlePromptLoopGoalContinuation(
         tokenBudget: decision.tokenBudget,
         timeUsedSeconds: decision.timeUsedSeconds,
       }),
-      budgetLimitContinuationSent: true,
+      budgetWrapUp: "sent",
     }
   }
 
@@ -76,9 +76,9 @@ export function handlePromptLoopGoalContinuation(
     return {
       action: "stop",
       reason: decision.reason,
-      budgetLimitContinuationSent: input.budgetLimitContinuationSent,
+      budgetWrapUp: input.budgetWrapUp,
     }
   }
 
-  return { action: "ignore", budgetLimitContinuationSent: input.budgetLimitContinuationSent }
+  return { action: "ignore", budgetWrapUp: input.budgetWrapUp }
 }

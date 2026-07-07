@@ -106,6 +106,15 @@ export namespace AutonomousCompletionGate {
       for (const part of message.parts ?? []) {
         const record = asRecord(part)
         if (!record) continue
+        // A completed tool call AFTER the offending text clears the block:
+        // the stop message claims "no file, shell, or task action actually
+        // ran", which is only true while the pseudo-call is the most recent
+        // action-like output. Without this, one bad text part poisoned the
+        // session forever — every later turn, however productive, re-blocked.
+        if (record["type"] === "tool" && asRecord(record["state"])?.["status"] === "completed") {
+          latest = undefined
+          continue
+        }
         if (record["type"] !== "text" || typeof record["text"] !== "string") continue
         if (record["synthetic"] === true || record["ignored"] === true) continue
         if (looksLikeUnexecutableToolText(record["text"])) latest = record["text"]

@@ -82,6 +82,19 @@ type GoalForContinuationDecision = {
   timeUsedSeconds: number
 }
 
+// Budget wrap-up lifecycle for a goal that hit its token budget:
+//   "none"      — no wrap-up owed or sent yet (goal not budget_limited, or it
+//                 became budget_limited during this run and the wrap-up turn
+//                 has not been injected).
+//   "sent"      — the single wrap-up continuation was injected during THIS
+//                 prompt-loop run; when the wrap-up turn ends the loop stops
+//                 with an explicit budget message.
+//   "concluded" — the wrap-up already ran in an EARLIER run (the goal was
+//                 already budget_limited when this run started, including on
+//                 forked sessions). The goal is inert: no wrap-up re-fires and
+//                 no budget error hijacks unrelated new prompts.
+export type GoalBudgetWrapUp = "none" | "sent" | "concluded"
+
 type GoalContinuationDecision =
   | { action: "ignore" }
   | {
@@ -385,7 +398,7 @@ export function completionGateRetryDecision(input: {
 export function goalContinuationDecision(input: {
   goal: GoalForContinuationDecision | undefined
   continuations: number
-  budgetLimitContinuationSent: boolean
+  budgetWrapUp: GoalBudgetWrapUp
 }): GoalContinuationDecision {
   if (!input.goal) return { action: "ignore" }
 
@@ -398,41 +411,45 @@ export function goalContinuationDecision(input: {
     }
   }
 
-  // After the single wrap-up turn has run, a goal still sitting at
-  // budget_limited must stop the loop explicitly. Previously this fell
-  // through to "ignore", leaving termination to unrelated completion paths —
-  // a wrap-up turn that kept tool-calling could keep the loop running with
-  // no goal driver and no budget stop ever surfacing to the user.
-  if (input.goal.status === "budget_limited" && input.budgetLimitContinuationSent) {
-    const budget = input.goal.tokenBudget
-    return {
-      action: "stop_budget_limit",
-      reason: "stalled",
-      message:
-        `Goal "${input.goal.objective}" reached its token budget` +
-        (budget !== undefined ? ` (${input.goal.tokensUsed} of ${budget} tokens used)` : "") +
-        `. The wrap-up turn has already run, so the session is stopped. ` +
-        `Review the wrap-up summary, then resume with a new prompt or raise the budget and reactivate the goal.`,
-    }
-  }
+  if (input.goal.status === "budget_limited") {
+    // The wrap-up ran in a previous prompt-loop run (the goal was already
+    // budget_limited when this run started). The goal is inert: injecting
+    // another wrap-up or publishing the budget error again would hijack
+    // every later user prompt in this session with a spurious goal turn.
+    if (input.budgetWrapUp === "concluded") return { action: "ignore" }
 
-  if (
-    input.goal.status === "budget_limited" &&
-    input.goal.tokenBudget !== undefined &&
-    !input.budgetLimitContinuationSent
-  ) {
-    // The single budget wrap-up turn is guaranteed once per budget cycle
-    // (bounded by budgetLimitContinuationSent), independent of the continuation
-    // cap. Active goals deliberately run past maxContinuations, so by the time a
-    // long active goal exhausts its budget, `continuations` is almost always
-    // already past the cap — gating the wrap-up on it denied the wrap-up turn
-    // and surfaced a spurious "continuation limit reached" stop instead.
-    return {
-      action: "continue_budget_wrapup",
-      objective: input.goal.objective,
-      tokensUsed: input.goal.tokensUsed,
-      tokenBudget: input.goal.tokenBudget,
-      timeUsedSeconds: input.goal.timeUsedSeconds,
+    // After the single wrap-up turn has run, a goal still sitting at
+    // budget_limited must stop the loop explicitly. Previously this fell
+    // through to "ignore", leaving termination to unrelated completion paths —
+    // a wrap-up turn that kept tool-calling could keep the loop running with
+    // no goal driver and no budget stop ever surfacing to the user.
+    if (input.budgetWrapUp === "sent") {
+      const budget = input.goal.tokenBudget
+      return {
+        action: "stop_budget_limit",
+        reason: "stalled",
+        message:
+          `Goal "${input.goal.objective}" reached its token budget` +
+          (budget !== undefined ? ` (${input.goal.tokensUsed} of ${budget} tokens used)` : "") +
+          `. The wrap-up turn has already run, so the session is stopped. ` +
+          `Review the wrap-up summary, then resume with a new prompt or start a new goal with a larger budget.`,
+      }
+    }
+
+    if (input.goal.tokenBudget !== undefined) {
+      // The single budget wrap-up turn is guaranteed once per budget cycle
+      // (bounded by budgetWrapUp), independent of the continuation cap.
+      // Active goals deliberately run past maxContinuations, so by the time a
+      // long active goal exhausts its budget, `continuations` is almost always
+      // already past the cap — gating the wrap-up on it denied the wrap-up turn
+      // and surfaced a spurious "continuation limit reached" stop instead.
+      return {
+        action: "continue_budget_wrapup",
+        objective: input.goal.objective,
+        tokensUsed: input.goal.tokensUsed,
+        tokenBudget: input.goal.tokenBudget,
+        timeUsedSeconds: input.goal.timeUsedSeconds,
+      }
     }
   }
 

@@ -88,8 +88,11 @@ export namespace SessionGoal {
     })
   }
 
+  // NOTE: creation is blocked by active AND paused goals (a paused goal is
+  // resumable and must not be silently discarded), so the recovery advice
+  // must not include "pause" — only terminal states unblock creation.
   const ACTIVE_GOAL_ERROR =
-    "session already has an active goal; pause, complete, block, or clear it before creating another goal"
+    "session already has an active goal; complete, block, or clear it before creating another goal (a paused goal also blocks creation — resume it or clear it)"
 
   function canReplaceWithoutExplicitReplace(row: typeof SessionGoalTable.$inferSelect) {
     return row.status === "complete" || row.status === "blocked" || row.status === "budget_limited"
@@ -267,6 +270,13 @@ export namespace SessionGoal {
     const updated = Database.transaction((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) return undefined
+      // Only goals doing work accrue usage: active goals and the single
+      // budget_limited wrap-up turn. Paused and terminal goals must not be
+      // charged for unrelated turns in the same session — a paused goal
+      // drifting past its budget becomes permanently un-resumable
+      // (assertCanSetStatus), and a completed goal would report
+      // ever-growing final usage.
+      if (row.status !== "active" && row.status !== "budget_limited") return fromRow(row)
       if (!shouldUpdate) return fromRow(row)
 
       db.update(SessionGoalTable)

@@ -11,7 +11,7 @@ describe("prompt loop goal continuation", () => {
         sessionID: SessionID.descending(),
         goal: undefined,
         continuations: 0,
-        budgetLimitContinuationSent: true,
+        budgetWrapUp: "sent",
       },
       {
         publishError(input) {
@@ -20,7 +20,7 @@ describe("prompt loop goal continuation", () => {
       },
     )
 
-    expect(result).toEqual({ action: "ignore", budgetLimitContinuationSent: true })
+    expect(result).toEqual({ action: "ignore", budgetWrapUp: "sent" })
     expect(published).toEqual([])
   })
 
@@ -34,13 +34,13 @@ describe("prompt loop goal continuation", () => {
         timeUsedSeconds: 2,
       },
       continuations: 1,
-      budgetLimitContinuationSent: false,
+      budgetWrapUp: "none",
     })
 
     expect(result.action).toBe("continue")
     if (result.action !== "continue") throw new Error("expected continuation")
     expect(result.event).toBe("goal auto-continuation")
-    expect(result.budgetLimitContinuationSent).toBe(false)
+    expect(result.budgetWrapUp).toBe("none")
     expect(result.text).toContain("finish refactor")
     expect(result.text).toContain("continuation 2")
   })
@@ -56,13 +56,13 @@ describe("prompt loop goal continuation", () => {
         timeUsedSeconds: 9,
       },
       continuations: 0,
-      budgetLimitContinuationSent: false,
+      budgetWrapUp: "none",
     })
 
     expect(result.action).toBe("continue")
     if (result.action !== "continue") throw new Error("expected continuation")
     expect(result.event).toBe("goal budget-limit wrap-up")
-    expect(result.budgetLimitContinuationSent).toBe(true)
+    expect(result.budgetWrapUp).toBe("sent")
     expect(result.text).toContain("wrap up refactor")
     expect(result.text).toContain("Tokens used: 120")
     expect(result.text).toContain("Token budget: 100")
@@ -78,12 +78,12 @@ describe("prompt loop goal continuation", () => {
         timeUsedSeconds: 0,
       },
       continuations: 0,
-      budgetLimitContinuationSent: true, // stale from a prior goal in this session
+      budgetWrapUp: "sent", // stale from a prior goal in this session
     })
 
     expect(result.action).toBe("continue")
     if (result.action !== "continue") throw new Error("expected continuation")
-    expect(result.budgetLimitContinuationSent).toBe(false)
+    expect(result.budgetWrapUp).toBe("none")
   })
 
   test("continues active goals beyond maxContinuations until model marks complete", () => {
@@ -96,7 +96,7 @@ describe("prompt loop goal continuation", () => {
         timeUsedSeconds: 2,
       },
       continuations: 3,
-      budgetLimitContinuationSent: false,
+      budgetWrapUp: "none",
     })
 
     expect(result.action).toBe("continue")
@@ -104,6 +104,33 @@ describe("prompt loop goal continuation", () => {
     expect(result.event).toBe("goal auto-continuation")
     expect(result.text).toContain("finish refactor")
     expect(result.text).toContain("continuation 4")
+  })
+
+  test("ignores a concluded budget-limited goal without publishing an error", () => {
+    const published: unknown[] = []
+
+    const result = handlePromptLoopGoalContinuation(
+      {
+        sessionID: SessionID.descending(),
+        goal: {
+          objective: "wrap up refactor",
+          status: "budget_limited",
+          tokenBudget: 100,
+          tokensUsed: 120,
+          timeUsedSeconds: 9,
+        },
+        continuations: 0,
+        budgetWrapUp: "concluded",
+      },
+      {
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "ignore", budgetWrapUp: "concluded" })
+    expect(published).toEqual([])
   })
 
   test("publishes an error and stops after the budget wrap-up turn has been sent", () => {
@@ -120,7 +147,7 @@ describe("prompt loop goal continuation", () => {
           timeUsedSeconds: 9,
         },
         continuations: 2,
-        budgetLimitContinuationSent: true,
+        budgetWrapUp: "sent",
       },
       {
         publishError(input) {
@@ -129,7 +156,7 @@ describe("prompt loop goal continuation", () => {
       },
     )
 
-    expect(result).toEqual({ action: "stop", reason: "stalled", budgetLimitContinuationSent: true })
+    expect(result).toEqual({ action: "stop", reason: "stalled", budgetWrapUp: "sent" })
     expect(published).toHaveLength(1)
     expect(published[0]?.message).toContain("token budget")
   })

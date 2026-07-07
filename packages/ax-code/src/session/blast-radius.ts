@@ -140,6 +140,23 @@ export namespace BlastRadius {
     state.lastTripToolName = undefined
   }
 
+  /**
+   * Re-base the step (tool-call) counter at autonomous continuation
+   * boundaries. The prompt loop budgets its steps PER CONTINUATION
+   * (`session.max_steps` per cycle, bounded overall by
+   * `session.max_total_steps` / the Super-Long ceiling), but this counter
+   * was only cleared at loop end — so a run that legitimately continued
+   * past `caps.steps` cumulative tool calls hard-failed at the first tool
+   * call of the next continuation, far below the advertised budgets.
+   * Files/lines stay cumulative: they measure total change footprint, not
+   * work volume, and continuations must not renew them.
+   */
+  export function resetSteps(sessionID: SessionID) {
+    const state = sessions.get(sessionID)
+    if (!state) return
+    state.steps = 0
+  }
+
   /** Increment step count and return the new value. */
   export function incrementStep(sessionID: SessionID): number {
     const state = get(sessionID)

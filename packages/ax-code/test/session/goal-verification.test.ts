@@ -160,4 +160,50 @@ describe("GoalVerification.decide", () => {
       }),
     ).toEqual({ ok: true })
   })
+
+  test("mutations from before the goal was created do not require verification", () => {
+    const preGoalEdit: GoalVerification.Message = {
+      info: { role: "assistant", time: { created: 50 } },
+      parts: [toolPart("edit")],
+    }
+    // Scoped scan: the edit predates `since` (goal creation), so a goal that
+    // never touched a file completes without an artificial verification run.
+    expect(
+      GoalVerification.decide({
+        messages: [preGoalEdit],
+        pendingTodos: [],
+        since: 100,
+      }),
+    ).toEqual({ ok: true })
+    // Without `since`, the same history still blocks (conservative default).
+    const unscoped = GoalVerification.decide({
+      messages: [preGoalEdit],
+      pendingTodos: [],
+    })
+    expect(unscoped.ok).toBe(false)
+  })
+
+  test("mutations after the goal was created still require verification", () => {
+    const postGoalEdit: GoalVerification.Message = {
+      info: { role: "assistant", time: { created: 150 } },
+      parts: [toolPart("edit")],
+    }
+    const decision = GoalVerification.decide({
+      messages: [postGoalEdit],
+      pendingTodos: [],
+      since: 100,
+    })
+    expect(decision.ok).toBe(false)
+    if (decision.ok) throw new Error("expected rejection")
+    expect(decision.reason).toBe("unverified_changes")
+  })
+
+  test("messages without timestamps are scanned even when since is set", () => {
+    const decision = GoalVerification.decide({
+      messages: [assistant(toolPart("write"))],
+      pendingTodos: [],
+      since: 100,
+    })
+    expect(decision.ok).toBe(false)
+  })
 })
