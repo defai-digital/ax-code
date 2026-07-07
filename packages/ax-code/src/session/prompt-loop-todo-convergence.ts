@@ -46,7 +46,8 @@ export function handlePromptLoopTodoConvergence(
   })
   if (!input.modelFinished && contextConvergence.converge) {
     const signature = pendingTodoSignature(input.pendingTodos)
-    if (signature !== input.lastTodoContextSignature) {
+    const finalAgentStep = Number.isFinite(input.remainingAgentSteps) && input.remainingAgentSteps <= 1
+    if (signature !== input.lastTodoContextSignature || finalAgentStep) {
       ;(deps.info ?? log.info)("autonomous todo context convergence", {
         command: "session.prompt.loop",
         status: "ok",
