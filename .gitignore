@@ -66,6 +66,7 @@ auth.json
 .claude/
 CLAUDE.md
 AGENTS.md
+GEMINI.md
 
 # Internal project docs (not for public)
 ax-internal/
