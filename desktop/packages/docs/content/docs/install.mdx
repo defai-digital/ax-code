@@ -35,12 +35,15 @@ Homebrew is the recommended macOS path. Install the CLI runtime and Desktop app 
 ```bash
 brew tap defai-digital/ax-code
 brew tap defai-digital/ax-code-desktop
-brew install ax-code          # CLI/runtime
-brew install --cask ax-code   # Desktop app
+brew install ax-code                  # CLI/runtime
+brew install --cask ax-code-desktop   # Desktop app
 ```
 
-If the CLI is already installed, only run the cask command. The old `ax-code-desktop` cask remains as a
-deprecated compatibility alias; use `ax-code` for new installs.
+If the CLI is already installed, only run the cask command. The Desktop cask token is `ax-code-desktop` —
+it intentionally differs from the `ax-code` CLI formula, because Homebrew refuses to link a formula while an
+installed cask shares its token (which used to leave the `ax-code` command missing after upgrades). Installs
+of the short-lived `ax-code` cask token migrate to `ax-code-desktop` automatically on their next
+`brew upgrade`.
 
 You can also download the latest macOS DMG from the [GitHub releases page](https://github.com/defai-digital/ax-code/releases). Open it, drag **AX Code** into **Applications**, and launch it from Applications.
 

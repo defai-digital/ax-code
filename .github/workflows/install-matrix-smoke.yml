@@ -109,6 +109,24 @@ jobs:
           echo "$OUTPUT"
           echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "homebrew" doctor
 
+      - name: Desktop cask coexistence - formula stays linked
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          # Regression guard for issue #342: a Desktop cask sharing the CLI
+          # formula's token makes Homebrew skip linking the formula, leaving
+          # no ax-code command after upgrades. The cask must install under a
+          # distinct token and the CLI must stay resolvable next to it.
+          brew tap defai-digital/ax-code-desktop 2>&1 || true
+          brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
+          if brew list --cask ax-code >/dev/null 2>&1; then
+            echo "FAIL: a cask named ax-code is installed; it collides with the CLI formula token"
+            exit 1
+          fi
+          command -v ax-code
+          ax-code --version
+
       - name: Smoke - installed backend stdio handshake
         if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: bash

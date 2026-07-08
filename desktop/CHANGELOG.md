@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Homebrew**: the Desktop cask is published as `ax-code-desktop` again. The `ax-code` cask token (introduced 2026-06-21) collided with the `ax-code` CLI formula: Homebrew refuses to link a formula while an installed cask shares its token, so CLI formula upgrades removed the `ax-code` command from PATH entirely (#342). Existing installs of the `ax-code` cask migrate to `ax-code-desktop` automatically on their next `brew upgrade` via the tap's `cask_renames.json`.
+
 ## [6.10.2] - 2026-07-08
 
 ### Fixed

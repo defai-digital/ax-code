@@ -168,6 +168,27 @@ class AxCode < Formula
     system "gunzip", "--", gz
   end
 
+  # Homebrew refuses to link any formula while an installed cask shares its
+  # token, and upgrade cleanup then removes the previously linked keg — the
+  # ax-code command silently vanishes from PATH. The Desktop cask now ships as
+  # "ax-code-desktop", but installs of its short-lived "ax-code" token still
+  # trigger the skip; give those users the exact recovery commands.
+  def caveats
+    return unless (HOMEBREW_PREFIX/"Caskroom/ax-code").directory?
+
+    <<~EOS
+      The deprecated "ax-code" Desktop cask is installed, so Homebrew skips
+      linking this formula and the ax-code command may be missing from PATH.
+
+      Restore the CLI with:
+        brew link ax-code
+        hash -r
+
+      Then move the Desktop app to its renamed cask:
+        brew upgrade --cask ax-code
+    EOS
+  end
+
   test do
     assert_match version.to_s, shell_output("#{bin}/ax-code --version")
   end

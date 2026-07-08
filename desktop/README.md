@@ -22,18 +22,20 @@ The recommended way to install on macOS is via Homebrew:
 ```bash
 brew tap defai-digital/ax-code
 brew tap defai-digital/ax-code-desktop
-brew install ax-code          # CLI/runtime
-brew install --cask ax-code   # Desktop app
+brew install ax-code                  # CLI/runtime
+brew install --cask ax-code-desktop   # Desktop app
 ```
 
-The Desktop cask token is `ax-code`. The old `ax-code-desktop` cask remains as a deprecated compatibility
-alias only.
+The Desktop cask token is `ax-code-desktop`. It must differ from the `ax-code` CLI formula name: Homebrew
+refuses to link a formula while an installed cask shares its token, so the short-lived `ax-code` cask token
+left the CLI missing from PATH after formula upgrades. Installs of the old token are migrated to
+`ax-code-desktop` automatically on their next `brew upgrade`.
 
 To update:
 
 ```bash
 brew upgrade ax-code
-brew upgrade --cask ax-code
+brew upgrade --cask ax-code-desktop
 ```
 
 ### Manual DMG (alternative)
@@ -111,7 +113,7 @@ The app can run local AX Code sessions, connect to existing AX Code servers, and
 **macOS (Homebrew):**
 
 ```bash
-brew upgrade --cask ax-code
+brew upgrade --cask ax-code-desktop
 ```
 
 **Windows / manual installs:** Download the latest installer or archive from the [Releases page](https://github.com/defai-digital/ax-code/releases). When auto-update metadata is available, the app can also check GitHub releases for updates automatically.

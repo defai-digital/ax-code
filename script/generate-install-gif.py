@@ -52,7 +52,7 @@ lines: list[tuple[str, str]] = [
     ("prompt", "alex@MacBook-Pro ~ % brew trust defai-digital/ax-code"),
     ("prompt", "alex@MacBook-Pro ~ % brew trust defai-digital/ax-code-desktop"),
     ("prompt", "alex@MacBook-Pro ~ % brew install defai-digital/ax-code/ax-code"),
-    ("prompt", "alex@MacBook-Pro ~ % brew install --cask defai-digital/ax-code-desktop/ax-code"),
+    ("prompt", "alex@MacBook-Pro ~ % brew install --cask defai-digital/ax-code-desktop/ax-code-desktop"),
     ("success", "AX Code is installed. Run ax-code to start the terminal UI."),
 ]
 

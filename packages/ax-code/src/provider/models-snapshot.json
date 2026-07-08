@@ -30474,6 +30474,41 @@
           "output": 16384
         }
       },
+      "aion-labs-aion-3-0-mini": {
+        "id": "aion-labs-aion-3-0-mini",
+        "name": "Aion 3.0 Mini",
+        "description": "Efficient model for low-latency assistance, extraction, and routine automation",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-07-08",
+        "last_updated": "2026-07-08",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 128000,
+          "output": 32768
+        }
+      },
       "claude-opus-4-8-fast": {
         "id": "claude-opus-4-8-fast",
         "name": "Claude Opus 4.8 Fast",
@@ -31511,6 +31546,41 @@
         "open_weights": true,
         "limit": {
           "context": 256000,
+          "output": 32768
+        }
+      },
+      "aion-labs-aion-3-0": {
+        "id": "aion-labs-aion-3-0",
+        "name": "Aion 3.0",
+        "description": "Reasoning model for deliberate analysis, multi-step problem solving, and tool use",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-07-08",
+        "last_updated": "2026-07-08",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 128000,
           "output": 32768
         }
       },
@@ -52104,34 +52174,6 @@
         "limit": {
           "context": 1000000,
           "output": 128000
-        }
-      },
-      "qwen3-max-2026-01-23": {
-        "id": "qwen3-max-2026-01-23",
-        "name": "Qwen3 Max (2026-01-23)",
-        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
-        "family": "qwen",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-01-23",
-        "last_updated": "2026-01-23",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "output": 32800
         }
       },
       "gpt-5.3-chat-latest": {

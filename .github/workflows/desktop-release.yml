@@ -618,12 +618,19 @@ jobs:
           const version = process.env.VERSION;
           const tag = process.env.TAG;
           const sha256 = process.env.DMG_SHA256;
-          const sharedLines = [
+          // The Desktop cask token must not collide with the `ax-code` CLI
+          // formula: Homebrew skips linking a formula whenever an installed
+          // cask shares its token, so formula upgrades left `ax-code` missing
+          // from PATH entirely (issue #342). The cask ships as
+          // "ax-code-desktop"; cask_renames.json migrates installs of the
+          // short-lived "ax-code" cask token on their next brew upgrade.
+          const cask = [
+            'cask "ax-code-desktop" do',
             `  version "${version}"`,
             `  sha256 "${sha256}"`,
             '',
             `  url "https://github.com/defai-digital/ax-code/releases/download/${tag}/AX-Code-#{version}-mac-arm64.dmg"`,
-            '  name "AX Code"',
+            '  name "AX Code Desktop"',
             '  desc "AI coding assistant desktop app powered by AX Code"',
             '  homepage "https://github.com/defai-digital/ax-code"',
             '',
@@ -642,25 +649,15 @@ jobs:
             '  ]',
             'end',
             '',
-          ];
-          const canonicalCask = [
-            'cask "ax-code" do',
-            ...sharedLines,
-          ].join('\n');
-          const compatibilityCask = [
-            'cask "ax-code-desktop" do',
-            ...sharedLines.slice(0, 8),
-            '  deprecate! date: "2026-06-21", because: "has been renamed to ax-code", replacement_cask: "ax-code"',
-            '',
-            ...sharedLines.slice(8),
           ].join('\n');
           fs.mkdirSync('Casks', { recursive: true });
-          fs.writeFileSync('Casks/ax-code.rb', canonicalCask);
-          fs.writeFileSync('Casks/ax-code-desktop.rb', compatibilityCask);
+          fs.writeFileSync('Casks/ax-code-desktop.rb', cask);
+          fs.rmSync('Casks/ax-code.rb', { force: true });
+          fs.writeFileSync('cask_renames.json', JSON.stringify({ "ax-code": "ax-code-desktop" }, null, 2) + '\n');
           NODE
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/ax-code.rb Casks/ax-code-desktop.rb
+          git add -A Casks cask_renames.json
           git diff --cached --quiet && echo "No cask changes to commit." && exit 0
-          git commit -m "Update ax-code desktop casks to ${VERSION}"
+          git commit -m "Update ax-code desktop cask to ${VERSION}"
           git push

@@ -86,6 +86,14 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain('bin.install "ax-code"')
     expect(text).not.toContain('depends_on "bun"')
     expect(text).not.toContain("bundle/index.js")
+    // Homebrew skips linking the formula while a cask named "ax-code" (the
+    // deprecated Desktop cask token) is installed, which can leave the CLI
+    // missing from PATH after upgrades (issue #342). The formula must warn
+    // those installs with the exact recovery commands.
+    expect(text).toContain("def caveats")
+    expect(text).toContain('Caskroom/ax-code"')
+    expect(text).toContain("brew link ax-code")
+    expect(text).toContain("hash -r")
   })
 
   test("default homebrew update separates release-read and tap-write tokens", async () => {
@@ -253,6 +261,12 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
     expect(text).toContain("brew install defai-digital/ax-code/ax-code")
+    // Regression guard for issue #342: installing the Desktop cask next to
+    // the CLI formula must not unlink the ax-code command. The cask installs
+    // under its own token; a cask named plain "ax-code" is a failure.
+    expect(text).toContain("brew install --cask defai-digital/ax-code-desktop/ax-code-desktop")
+    expect(text).toContain("brew list --cask ax-code >/dev/null")
+    expect(text).toContain("command -v ax-code")
     expect(text).toContain("Invoke-RestMethod -Uri")
     expect(text).toContain("& $Installer -Version $Version")
     expect(text).not.toContain("& $Installer -Version $Version -NoModifyPath")

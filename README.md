@@ -48,7 +48,7 @@ brew tap defai-digital/ax-code-desktop
 brew trust defai-digital/ax-code
 brew trust defai-digital/ax-code-desktop
 brew install defai-digital/ax-code/ax-code
-brew install --cask defai-digital/ax-code-desktop/ax-code
+brew install --cask defai-digital/ax-code-desktop/ax-code-desktop
 ```
 
 Already have Homebrew? Start from step 2. The `brew trust` commands support Homebrew setups that require
@@ -110,7 +110,15 @@ ax-code upgrade
 
 ```bash
 brew upgrade defai-digital/ax-code/ax-code
-brew upgrade --cask defai-digital/ax-code-desktop/ax-code
+brew upgrade --cask defai-digital/ax-code-desktop/ax-code-desktop
+```
+
+If `ax-code` is missing after a Homebrew upgrade (older setups installed the Desktop cask under the
+conflicting `ax-code` token, which makes Homebrew skip linking the CLI formula), restore it with:
+
+```bash
+brew link ax-code
+hash -r
 ```
 
 **Windows**

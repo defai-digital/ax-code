@@ -25,6 +25,22 @@ function formatShadowedLauncherWarning(target: string, check: Installation.Launc
   return lines.join("\n")
 }
 
+function formatMissingLauncherWarning(target: string, method: Installation.Method): string {
+  const lines = [`Upgraded to v${target}, but no \`ax-code\` launcher was found on PATH.`]
+  if (method === "brew") {
+    lines.push(
+      `Homebrew skips linking the ax-code formula while a cask named "ax-code" is installed, and the upgrade removes the previously linked keg — leaving no ax-code command.`,
+      "",
+      "Restore it with:",
+      "  brew link ax-code",
+      "  hash -r",
+    )
+  } else {
+    lines.push("", "Restart your shell, or check that the install directory is still on PATH.")
+  }
+  return lines.join("\n")
+}
+
 export const UpgradeCommand = {
   command: "upgrade [target]",
   describe: "upgrade ax-code to the latest or a specific version",
@@ -105,8 +121,12 @@ export const UpgradeCommand = {
     prompts.log.success(`v${Installation.VERSION} → v${target}`)
 
     const launcherCheck = await Installation.verifyActiveLauncher(target).catch(() => undefined)
-    if (launcherCheck && !launcherCheck.ok && launcherCheck.activePath) {
-      prompts.log.warn(formatShadowedLauncherWarning(target, launcherCheck))
+    if (launcherCheck && !launcherCheck.ok) {
+      if (launcherCheck.activePath) {
+        prompts.log.warn(formatShadowedLauncherWarning(target, launcherCheck))
+      } else {
+        prompts.log.warn(formatMissingLauncherWarning(target, method))
+      }
     }
 
     prompts.outro("Done")

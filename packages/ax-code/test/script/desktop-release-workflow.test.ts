@@ -48,6 +48,22 @@ describe("desktop release workflow", () => {
     expect(cleanup).toBeGreaterThan(client)
   })
 
+  test("Desktop cask token does not collide with the ax-code CLI formula", async () => {
+    const text = await readFile(desktopReleaseWorkflow, "utf-8")
+
+    // Homebrew refuses to link a formula while an installed cask shares its
+    // token, so a cask published as "ax-code" removes the ax-code CLI from
+    // PATH on every formula upgrade (issue #342). The Desktop cask must ship
+    // as "ax-code-desktop", delete the colliding cask file, and provide a
+    // cask_renames.json entry so existing installs migrate on brew upgrade.
+    expect(text).toContain(`'cask "ax-code-desktop" do'`)
+    expect(text).not.toContain(`'cask "ax-code" do'`)
+    expect(text).not.toContain("replacement_cask")
+    expect(text).toContain("fs.rmSync('Casks/ax-code.rb', { force: true })")
+    expect(text).toContain(`JSON.stringify({ "ax-code": "ax-code-desktop" }, null, 2)`)
+    expect(text).toContain("cask_renames.json")
+  })
+
   test("signing job falls back to the shared minisign release secrets", async () => {
     const text = await readFile(desktopReleaseWorkflow, "utf-8")
     const job = text.match(/  sign-release-assets:[\s\S]*?(?=\n  finalize-release:|$)/)

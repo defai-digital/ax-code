@@ -140,10 +140,13 @@ describe("installation", () => {
   })
 
   describe("verifyActiveLauncher", () => {
-    test("is ok when no launcher is found on PATH", async () => {
+    test("flags a launcher missing from PATH entirely", async () => {
+      // The post-upgrade state of issue #342: Homebrew skipped linking the
+      // formula because a same-token cask was installed, cleanup removed the
+      // previously linked keg, and no ax-code resolves anywhere on PATH.
       const result = await withTestDependencies({ which: () => [] }, () => Installation.verifyActiveLauncher("2.0.0"))
 
-      expect(result).toEqual({ ok: true, launchers: [] })
+      expect(result).toEqual({ ok: false, launchers: [] })
     })
 
     test("is ok when the first PATH match reports the upgraded version", async () => {
@@ -237,6 +240,47 @@ describe("installation", () => {
       expect(calls).toContainEqual({ cmd: ["brew", "tap", "defai-digital/ax-code"], cwd: undefined })
       expect(calls).toContainEqual({ cmd: ["git", "pull", "--ff-only"], cwd: "/tmp/homebrew-ax-code" })
       expect(calls).toContainEqual({ cmd: ["brew", "upgrade", "defai-digital/ax-code/ax-code"], cwd: undefined })
+    })
+
+    test("relinks the formula when brew skips the link because a same-token cask is installed", async () => {
+      const calls: string[][] = []
+
+      await withTestDependencies(
+        {
+          run: (cmd) => {
+            calls.push(cmd)
+            if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
+            if (cmd[0] === "brew" && cmd[1] === "upgrade") {
+              return {
+                code: 0,
+                stdout: "==> ax-code cask is installed, skipping link.\n",
+                stderr: "",
+              }
+            }
+            return { code: 0, stdout: "", stderr: "" }
+          },
+        },
+        () => Installation.upgrade("brew", "5.3.0"),
+      )
+
+      expect(calls).toContainEqual(["brew", "link", "defai-digital/ax-code/ax-code"])
+    })
+
+    test("does not relink when brew linked the formula normally", async () => {
+      const calls: string[][] = []
+
+      await withTestDependencies(
+        {
+          run: (cmd) => {
+            calls.push(cmd)
+            if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
+            return { code: 0, stdout: "", stderr: "" }
+          },
+        },
+        () => Installation.upgrade("brew", "5.3.0"),
+      )
+
+      expect(calls.some((cmd) => cmd[0] === "brew" && cmd[1] === "link")).toBe(false)
     })
   })
 })

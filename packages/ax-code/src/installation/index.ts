@@ -316,6 +316,23 @@ export namespace Installation {
           }
         }
         result = await dependencies.run(["brew", "upgrade", formula], { env })
+        // Homebrew refuses to link a formula while an installed cask shares
+        // its token (the deprecated "ax-code" Desktop cask), and upgrade
+        // cleanup then removes the previously linked keg — leaving no ax-code
+        // on PATH at all. Relinking is the documented manual fix and is safe:
+        // brew link aborts on real file conflicts instead of overwriting.
+        if (result.code === 0 && (result.stdout + result.stderr).includes("cask is installed, skipping link")) {
+          const link = await dependencies.run(["brew", "link", formula], { env })
+          if (link.code === 0) {
+            log.info("relinked formula after cask-induced skip-link", { command: "brew link", status: "ok" })
+          } else {
+            log.warn("brew link failed after cask-induced skip-link", {
+              command: "brew link",
+              status: "error",
+              stderr: link.stderr,
+            })
+          }
+        }
         break
       }
       case "unknown":
@@ -342,7 +359,10 @@ export namespace Installation {
   export interface LauncherCheck {
     // False when a different "ax-code" earlier on PATH would run instead of
     // (or reports a different version than) the one just upgraded — e.g. a
-    // Homebrew upgrade succeeding while a stale ~/.local/bin/ax-code shadows it.
+    // Homebrew upgrade succeeding while a stale ~/.local/bin/ax-code shadows
+    // it — or when no launcher is resolvable at all (empty `launchers`), e.g.
+    // Homebrew skipping the formula link because a same-token cask is
+    // installed and cleanup removing the previously linked keg.
     ok: boolean
     launchers: string[]
     activePath?: string
@@ -352,7 +372,7 @@ export namespace Installation {
   export async function verifyActiveLauncher(target: string, binName = "ax-code"): Promise<LauncherCheck> {
     const launchers = dependencies.which(binName)
     const activePath = launchers[0]
-    if (!activePath) return { ok: true, launchers }
+    if (!activePath) return { ok: false, launchers }
     const activeVersion = (await text([activePath, "--version"])).trim() || undefined
     return { ok: activeVersion === target, launchers, activePath, activeVersion }
   }

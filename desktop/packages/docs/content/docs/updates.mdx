@@ -14,8 +14,11 @@ The desktop app checks for updates against GitHub releases. When one is availabl
 For Homebrew installs on macOS:
 
 ```bash
-brew upgrade --cask ax-code
+brew upgrade --cask ax-code-desktop
 ```
+
+If you installed the Desktop app while its cask was still named `ax-code`, the same command with the old
+token migrates it to `ax-code-desktop` automatically.
 
 If the AX Code CLI was installed through Homebrew too, update it separately with `brew upgrade ax-code`.
 
