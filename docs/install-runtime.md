@@ -5,11 +5,11 @@ Scope: current-state
 Last reviewed: 2026-07-04
 Owner: ax-code runtime
 
-The root [README](../README.md) keeps the primary install path. This page is the source of truth for supported installer channels, `ax-code doctor` runtime labels, and local launcher behavior.
+The root [README](../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
 
 ## Recommended Path
 
-Use a supported packaged installer unless you are developing from a checkout. Prefer Homebrew on macOS and the native PowerShell installer on Windows.
+Use a supported packaged installer unless you are developing from a checkout. Prefer Homebrew on macOS and the native PowerShell installer on Windows for the CLI.
 
 ```bash
 # Homebrew (macOS CLI)
@@ -37,13 +37,21 @@ ax-code doctor
 
 Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on both macOS Homebrew and Windows.
 
+Desktop is installed through separate platform-specific channels:
+
+- macOS: `brew install --cask defai-digital/ax-code-desktop/ax-code`
+- Windows x64: download and run `AX-Code-<version>-win-x64.exe` from GitHub Releases.
+- Windows ARM64: download and run `AX-Code-<version>-win-arm64.exe` from GitHub Releases.
+
+The Windows PowerShell `install.ps1` script installs the CLI only; it does not install the Desktop app.
+
 ## Channel Matrix
 
 | Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
 | Homebrew formula                     | `brew tap defai-digital/ax-code && brew install ax-code`                                                                                       | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
-| Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `node-bundled`         | Manual               | Manual validation or troubleshooting                               |
+| Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
 | Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                               | `source`               | Contributor          | Contributor-only source debugging                                  |
 | Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                                       | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
@@ -61,7 +69,8 @@ Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on b
 - Fully qualified Homebrew commands such as `brew install defai-digital/ax-code/ax-code` are supported one-line
   equivalents and are useful for CI, but user-facing docs should prefer the clearer `brew tap ...` plus
   `brew install ax-code` form.
-- Windows: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. The Bash installer is not the canonical Windows user experience.
+- Windows CLI: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. The Bash installer is not the canonical Windows user experience.
+- Windows Desktop: use the signed Electron installer from GitHub Releases, named `AX-Code-<version>-win-x64.exe` or `AX-Code-<version>-win-arm64.exe`. Do not describe `install.ps1` as a Desktop installer.
 - npm: not a supported install or upgrade channel.
 
 One-line remote execution is a convenience path, not the only path. Keep an inspectable installer flow in the docs, use pinned versions in CI, and document platform installers only with install-matrix coverage that verifies `ax-code --version` and verifies `ax-code doctor` reports the expected runtime mode for that platform.
@@ -75,6 +84,8 @@ ax-code upgrade
 brew upgrade ax-code
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
+
+On Windows this updates the CLI. Desktop updates through the app auto-updater or by running the latest Windows Desktop `.exe` installer from GitHub Releases.
 
 ## Contributor Launcher Behavior
 

@@ -27,7 +27,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 | --- | --- | --- |
 | macOS Apple Silicon | Active support | Homebrew CLI formula and Desktop cask |
 | Windows x64 | Active support | PowerShell CLI installer and Desktop release installer |
-| Windows ARM64 | CLI release target | PowerShell CLI installer; Desktop support depends on the latest release assets |
+| Windows ARM64 | Active support | PowerShell CLI installer and Desktop release installer |
 | Linux | Contributor/source only | Source builds only, without supported user installer expectations |
 
 **Recommended: AX Code Desktop**
@@ -58,13 +58,18 @@ explicit trust for third-party taps.
 
 **Windows**
 
-1. Install AX Code with PowerShell:
+1. Install the AX Code CLI with PowerShell:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-2. Download and run the latest AX Code Desktop installer from the [GitHub Releases](https://github.com/defai-digital/ax-code/releases) page.
+2. Install AX Code Desktop separately from the [GitHub Releases](https://github.com/defai-digital/ax-code/releases) page:
+
+- Intel/AMD Windows: download and run `AX-Code-<version>-win-x64.exe`.
+- Windows on Arm: download and run `AX-Code-<version>-win-arm64.exe`.
+
+The PowerShell `install.ps1` path installs the CLI only. It does not install the Desktop app.
 
 AX Code Desktop is the primary graphical workspace. It shares the AX Code runtime and provider setup, and its source lives in this monorepo under [`desktop/`](desktop/). The standalone Desktop source repository has been retired.
 
@@ -94,7 +99,7 @@ brew install defai-digital/ax-code/ax-code
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
+Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
 
 AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 
@@ -126,6 +131,8 @@ hash -r
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
+
+This updates the Windows CLI. AX Code Desktop updates through the Desktop auto-updater, or by downloading the latest `AX-Code-<version>-win-x64.exe` / `AX-Code-<version>-win-arm64.exe` installer from GitHub Releases.
 
 ### From Source (contributors)
 
