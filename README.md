@@ -10,7 +10,7 @@ AX Code runs coding agents against your actual repositories through AX Code Desk
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Release v6.10.2](https://img.shields.io/badge/Release-v6.10.2-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v6.10.2)
+[![Release v6.10.3](https://img.shields.io/badge/Release-v6.10.3-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v6.10.3)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows x64](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows ARM64 CLI](https://img.shields.io/badge/Windows%20ARM64-CLI-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
