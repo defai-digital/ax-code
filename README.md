@@ -64,10 +64,10 @@ explicit trust for third-party taps.
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-2. Install AX Code Desktop separately from the [GitHub Releases](https://github.com/defai-digital/ax-code/releases) page:
+2. Install AX Code Desktop separately from the [latest GitHub Release](https://github.com/defai-digital/ax-code/releases/latest):
 
-- Intel/AMD Windows: download and run `AX-Code-<version>-win-x64.exe`.
-- Windows on Arm: download and run `AX-Code-<version>-win-arm64.exe`.
+- Intel/AMD Windows: download and run the latest `AX-Code-<version>-win-x64.exe`.
+- Windows on Arm: download and run the latest `AX-Code-<version>-win-arm64.exe`.
 
 The PowerShell `install.ps1` path installs the CLI only. It does not install the Desktop app.
 

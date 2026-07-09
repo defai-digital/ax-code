@@ -40,8 +40,8 @@ Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on b
 Desktop is installed through separate platform-specific channels:
 
 - macOS: `brew install --cask defai-digital/ax-code-desktop/ax-code`
-- Windows x64: download and run `AX-Code-<version>-win-x64.exe` from GitHub Releases.
-- Windows ARM64: download and run `AX-Code-<version>-win-arm64.exe` from GitHub Releases.
+- Windows x64: download and run the latest `AX-Code-<version>-win-x64.exe` from GitHub Releases.
+- Windows ARM64: download and run the latest `AX-Code-<version>-win-arm64.exe` from GitHub Releases.
 
 The Windows PowerShell `install.ps1` script installs the CLI only; it does not install the Desktop app.
 
