@@ -860,6 +860,8 @@ export const dict = {
   "contextPanel.browser.addressAria": "Browser address",
   "contextPanel.browser.empty": "Web browser",
   "contextPanel.browser.emptyHint": "Enter an address above to start browsing the web",
+  "contextPanel.browser.cantEmbed": "This site can't be shown in the built-in browser",
+  "contextPanel.browser.cantEmbedHint": "Some sites block embedding. Open it in your browser instead.",
   "contextPanel.browser.inspectUnavailable": "This page cannot be inspected from the browser panel.",
   "contextPanel.browser.trustNotice":
     "Pages opened here run with full access to AX Code — needed for inspect and screenshots. Only open sites you trust: a malicious page could read your data or act on your behalf.",

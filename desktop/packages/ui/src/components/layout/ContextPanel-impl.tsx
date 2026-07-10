@@ -1422,7 +1422,11 @@ const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dire
     }
   }, [currentUrl, proxyState])
 
-  const iframeSrc = proxySrc || (proxyState.status === "error" ? currentUrl : "")
+  // Never fall back to loading the raw cross-origin URL directly: a site that
+  // needs the header-stripping proxy (X-Frame-Options / CSP frame-ancestors) will
+  // just render the browser's "refused to connect" page. On proxy failure we show
+  // a graceful "open in your browser" state instead (see the render below).
+  const iframeSrc = proxySrc
 
   const getCurrentUrlFromFrameUrl = React.useCallback(
     (frameUrl: string): string => {
@@ -1763,6 +1767,19 @@ const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dire
                 </div>
               </div>
             ) : null}
+          </div>
+        ) : proxyState.status === "error" && currentUrl ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-background p-6 text-center">
+            <Icon name="global" className="h-12 w-12 text-muted-foreground opacity-30" />
+            <span className="typography-ui-header text-muted-foreground">{t("contextPanel.browser.cantEmbed")}</span>
+            <span className="max-w-sm break-all typography-micro text-muted-foreground">{currentUrl}</span>
+            <span className="max-w-sm typography-micro text-muted-foreground">
+              {t("contextPanel.browser.cantEmbedHint")}
+            </span>
+            <Button type="button" variant="secondary" size="sm" onClick={() => void openExternalUrl(currentUrl)}>
+              <Icon name="external-link" className="mr-1.5 h-3.5 w-3.5" />
+              {t("contextPanel.preview.actions.openExternal")}
+            </Button>
           </div>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-background p-6 text-center">
