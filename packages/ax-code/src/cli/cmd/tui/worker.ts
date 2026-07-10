@@ -103,11 +103,23 @@ const eventStream = {
   status: undefined as StreamConnectionStatus | undefined,
   done: undefined as Promise<void> | undefined,
 }
+// Guards concurrent startEventStream calls (e.g. two setWorkspace RPCs
+// in quick succession): both would pass the teardown await below and
+// each install a stream, leaving one controller orphaned — it keeps
+// emitting events for the old workspace for the process lifetime and
+// survives shutdown's drain. Mirrors the sseGeneration guard the TUI
+// side uses in context/sdk.tsx.
+let streamGeneration = 0
 
 const startEventStream = async (input: { directory?: string }) => {
+  const generation = ++streamGeneration
   if (eventStream.abort) {
     eventStream.abort.abort()
     await eventStream.done?.catch(() => {})
+    // A newer startEventStream (or shutdown) ran while we awaited the
+    // old stream's teardown — it owns eventStream now; bail instead of
+    // installing a duplicate stream.
+    if (generation !== streamGeneration) return
     eventStream.abort = undefined
     eventStream.done = undefined
   }
@@ -264,6 +276,9 @@ export const rpc = {
       Log.Default.info("worker shutting down")
       removeSignalHandlers?.()
       removeSignalHandlers = undefined
+      // Invalidate any in-flight startEventStream so it bails after its
+      // teardown await instead of installing a fresh stream mid-shutdown.
+      streamGeneration++
       if (eventStream.abort) eventStream.abort.abort()
       await eventStream.done?.catch(() => {})
       eventStream.abort = undefined

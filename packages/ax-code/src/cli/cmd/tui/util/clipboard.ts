@@ -28,14 +28,15 @@ type ProcWithStdin = {
   stdin: NodeJS.WritableStream | null | undefined
 } & Process.Child
 
-function writeOsc52(text: string): void {
-  if (!process.stdout.isTTY) return
-  if (Buffer.byteLength(text, "utf8") > OSC52_MAX_BYTES) return
+function writeOsc52(text: string): boolean {
+  if (!process.stdout.isTTY) return false
+  if (Buffer.byteLength(text, "utf8") > OSC52_MAX_BYTES) return false
   const base64 = Buffer.from(text).toString("base64")
   const osc52 = `\x1b]52;c;${base64}\x07`
   const passthrough = pickFirstEnvValue({ env: process.env, names: ["TMUX", "STY"] })
   const sequence = passthrough ? `\x1bPtmux;\x1b${osc52}\x1b\\` : osc52
   process.stdout.write(sequence)
+  return true
 }
 
 function createTimeout(ms: number) {
@@ -53,10 +54,24 @@ function createTimeout(ms: number) {
 async function waitForExit(proc: ProcWithStdin) {
   const timeout = createTimeout(CLIPBOARD_PROC_TIMEOUT_MS)
   try {
-    const result = await Promise.race([proc.exited.then(() => "done" as const), timeout.promise]).catch(
-      () => "timeout" as const,
-    )
-    if (result === "timeout") await Process.killProcessTree(proc).catch(() => undefined)
+    const result = await Promise.race([
+      proc.exited.then(
+        (code) => ({ type: "done" as const, code }),
+        (error) => ({ type: "error" as const, error }),
+      ),
+      timeout.promise.then(() => ({ type: "timeout" as const })),
+    ])
+    if (result.type === "timeout") {
+      await Process.killProcessTree(proc).catch(() => undefined)
+      throw new Error("Timed out writing to clipboard")
+    }
+    if (result.type === "error") throw result.error
+    // A clipboard tool that exits non-zero (or times out above) did not
+    // copy anything; surface that so `copy()` can decide whether OSC52
+    // already covered the write instead of silently reporting success.
+    if (typeof result.code === "number" && result.code !== 0) {
+      throw new Error(`Clipboard tool exited with code ${result.code}`)
+    }
   } finally {
     timeout.clear()
   }
@@ -215,10 +230,15 @@ export namespace Clipboard {
   const getCopyMethod = lazy(() => {
     const os = platform()
 
-    if (os === "darwin" && which("osascript")) {
+    if (os === "darwin" && which("pbcopy")) {
       return async (text: string) => {
-        const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-        await Process.run(["osascript", "-e", `set the clipboard to "${escaped}"`], { nothrow: true })
+        // Feed the text through stdin like the wl-copy/xclip paths below.
+        // The previous osascript approach passed the whole text as a
+        // single argv element, so copies over ARG_MAX (~1 MiB) failed the
+        // spawn with E2BIG — silently, because the error was swallowed —
+        // while the UI still toasted "Copied to clipboard".
+        const proc = Process.spawn(["pbcopy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
+        await writeViaProcessStdin(proc, text)
       }
     }
 
@@ -254,14 +274,12 @@ export namespace Clipboard {
       // user (#178) — clipboardy's own internal probe failing, with no
       // actionable signal. Throw a clean, install-instruction error
       // instead. OSC52 was already attempted in `copy()` above, so users
-      // on a modern terminal still get clipboard support; this branch
-      // only fires when both system tools and the terminal escape are
-      // unavailable.
+      // on a modern terminal still get clipboard support; `copy()` only
+      // propagates this error when the OSC52 write did not happen.
       return async () => {
         throw new Error(
           "Clipboard unavailable on this Linux session. " +
-            "Install one of: `xclip` (X11), `wl-clipboard` (Wayland), or `xsel`. " +
-            "If your terminal supports OSC52 (most modern terminals do), the copy may already have succeeded.",
+            "Install one of: `xclip` (X11), `wl-clipboard` (Wayland), or `xsel`.",
         )
       }
     }
@@ -301,12 +319,16 @@ export namespace Clipboard {
     // install-instruction error from the fallback branch — propagating
     // that rejection to callers like `Selection.copy(.catch(toast.error))`
     // shows a "Failed to copy" toast even though OSC52 already did the
-    // copy successfully. Swallow the error here; the user already got
-    // the clipboard write through the terminal.
-    writeOsc52(text)
+    // copy successfully. Swallow the error in that case; the user
+    // already got the clipboard write through the terminal. But when
+    // OSC52 bailed (not a TTY, or the payload exceeded its 100KB limit)
+    // nothing reached the clipboard, so the failure must propagate
+    // instead of letting callers toast success on a lost copy.
+    const osc52Emitted = writeOsc52(text)
     try {
       await getCopyMethod()(text)
     } catch (err) {
+      if (!osc52Emitted) throw err
       log.warn("system clipboard tool failed; OSC52 may have handled it", {
         error: toErrorMessage(err),
       })
