@@ -14,7 +14,7 @@ import { formatDirectoryName, formatPathForDisplay } from "@/lib/utils"
 import type { ProjectSection, SessionGroup } from "./types"
 import type { SortableDragHandleProps } from "./sortableItems"
 import { SortableGroupItem, SortableProjectItem } from "./sortableItems"
-import { formatProjectLabel } from "./utils"
+import { formatProjectLabel, normalizePath } from "./utils"
 import { useI18n } from "@/lib/i18n"
 import type { MainTab } from "@/stores/useUIStore"
 
@@ -158,11 +158,14 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
               items={props.sectionsForRender.map((section) => section.project.id)}
               strategy={verticalListSortingStrategy}
             >
-              {props.sectionsForRender.map((section) => {
+              {props.sectionsForRender.map((section, index) => {
                 const project = section.project
                 const projectKey = project.id
+                const isHomeProject =
+                  Boolean(props.homeDirectory) && project.normalizedPath === normalizePath(props.homeDirectory)
                 const projectLabel = formatProjectLabel(
                   project.label?.trim() ||
+                    (isHomeProject ? t("sessions.sidebar.project.home") : "") ||
                     formatDirectoryName(project.normalizedPath, props.homeDirectory) ||
                     project.normalizedPath,
                 )
@@ -181,6 +184,8 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                     key={projectKey}
                     id={projectKey}
                     projectLabel={projectLabel}
+                    isHomeProject={isHomeProject}
+                    showTopDivider={index > 0}
                     projectDescription={projectDescription}
                     projectIcon={project.icon}
                     projectColor={project.color}
