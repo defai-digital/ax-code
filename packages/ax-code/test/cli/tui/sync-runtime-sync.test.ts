@@ -476,6 +476,47 @@ describe("tui sync runtime sync", () => {
     ])
     expect(applied).toEqual([{ mode: "workspace-write", network: true }])
   })
+
+  test("re-reads live client and directory accessors on every call (workspace switch)", async () => {
+    const clientA = createClient({ worktree: { list: async () => ({ data: ["repo-a"] }) } })
+    const clientB = createClient({ worktree: { list: async () => ({ data: ["repo-b"] }) } })
+    let current = clientA
+    let directory: string | undefined = "/repo-a"
+    const workspaces: string[][] = []
+    const isolationDirs: Array<string | undefined> = []
+
+    const actions = createRuntimeSyncActions({
+      url: "http://localhost",
+      directory: () => directory,
+      fetch: async (_url, init) => {
+        isolationDirs.push((init?.headers as Record<string, string> | undefined)?.["x-ax-code-directory"])
+        return okJson({ mode: "workspace-write", network: true })
+      },
+      client: () => current,
+      debugEngineEnabled: true,
+      applyWorkspaceList(value) {
+        workspaces.push(value)
+      },
+      applyMcp: () => undefined,
+      applyLsp: () => undefined,
+      applyDebugEngine: () => undefined,
+      applyAutonomous: () => undefined,
+      applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
+      applyIsolation: () => undefined,
+    })
+
+    await actions.syncWorkspaces()
+    await actions.syncIsolation()
+    // Simulate sdk.setWorkspace(): the client and directory both change.
+    current = clientB
+    directory = "/repo-b"
+    await actions.syncWorkspaces()
+    await actions.syncIsolation()
+
+    expect(workspaces).toEqual([["repo-a"], ["repo-b"]])
+    expect(isolationDirs).toEqual(["/repo-a", "/repo-b"])
+  })
 })
 
 function workflowRun(input: {

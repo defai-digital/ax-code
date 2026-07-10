@@ -74,9 +74,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncIsolation,
     } = createStoreBackedRuntimeSyncActions({
       url: sdk.url,
-      directory: sdk.directory,
+      // Live accessors: sdk.setWorkspace() swaps the client and directory when a
+      // session in a different workspace is opened. Reading them per request keeps
+      // runtime status (isolation, autonomous, MCP/LSP, etc.) scoped to the viewed
+      // session instead of the launch directory.
+      directory: () => sdk.directory,
       fetch: sdk.fetch,
-      client: sdk.client,
+      client: () => sdk.client,
       debugEngineEnabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       workflowRuntimeEnabled: Flag.AX_CODE_WORKFLOW_RUNTIME,
       setStore,
@@ -131,7 +135,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       setSessionLoaded: (loaded) => setStore("session_loaded", loaded),
       resetSessionSync: sessionSync.reset,
       wrap: withSyncTimeout,
-      client: sdk.client,
+      // Live accessor so a bootstrap re-run after a workspace switch (reconnect
+      // recovery) rebuilds its requests against the current workspace's client.
+      client: () => sdk.client,
       syncIsolation,
       syncAutonomous,
       syncWorkspaces,

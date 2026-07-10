@@ -48,11 +48,20 @@ export interface RuntimeSyncActions {
   syncIsolation: () => Promise<void>
 }
 
+// The active workspace can change at runtime: sdk.setWorkspace() swaps the
+// client and the directory it scopes requests to. Callers may therefore pass a
+// live accessor instead of a one-time snapshot, resolved on every request so
+// runtime status always reflects the session currently being viewed.
+export type RuntimeSyncLazy<T> = T | (() => T)
+function resolveRuntimeSyncLazy<T>(value: RuntimeSyncLazy<T>): T {
+  return typeof value === "function" ? (value as () => T)() : value
+}
+
 export function createRuntimeSyncActions(input: {
   url: string
-  directory?: string
+  directory?: RuntimeSyncLazy<string | undefined>
   fetch: (url: string, init?: RequestInit) => Promise<RuntimeSyncFetchResponse>
-  client: RuntimeSyncClient
+  client: RuntimeSyncLazy<RuntimeSyncClient>
   debugEngineEnabled: boolean
   workflowRuntimeEnabled?: boolean
   applyWorkspaceList: (value: string[]) => void
@@ -65,6 +74,9 @@ export function createRuntimeSyncActions(input: {
   applySuperLong: (value: boolean) => void
   applyIsolation: (value: ReturnType<typeof normalizeIsolationState>) => void
 }): RuntimeSyncActions {
+  const currentClient = () => resolveRuntimeSyncLazy(input.client)
+  const currentDirectory = () => resolveRuntimeSyncLazy(input.directory)
+
   function normalizeWorkspaceList(input: unknown) {
     if (!Array.isArray(input)) return []
     return input.flatMap((item: RuntimeSyncWorktree | null) => {
@@ -92,7 +104,7 @@ export function createRuntimeSyncActions(input: {
     // header the server reads its own cwd's ax-code.json.
     const body = await fetchOptionalRuntimeJson<RuntimeFlagPayload>(pathname, {
       headers: directoryRequestHeaders({
-        directory: input.directory,
+        directory: currentDirectory(),
         accept: "application/json",
       }),
     })
@@ -117,17 +129,17 @@ export function createRuntimeSyncActions(input: {
 
   return {
     async syncWorkspaces() {
-      const result = await input.client.worktree.list().catch(() => undefined)
+      const result = await currentClient().worktree.list().catch(() => undefined)
       if (!result?.data) return
       input.applyWorkspaceList(normalizeWorkspaceList(result.data))
     },
     async syncMcpStatus() {
-      const result = await input.client.mcp.status().catch(() => undefined)
+      const result = await currentClient().mcp.status().catch(() => undefined)
       if (!result?.data) return
       input.applyMcp(normalizeMcpStatusState(result.data) as Record<string, McpStatus>)
     },
     async syncLspStatus() {
-      const result = await input.client.lsp.status().catch(() => undefined)
+      const result = await currentClient().lsp.status().catch(() => undefined)
       if (!result?.data) return
       input.applyLsp(normalizeLspStatusState<LspStatus>(result.data))
     },
@@ -135,7 +147,7 @@ export function createRuntimeSyncActions(input: {
       if (!input.debugEngineEnabled) return
       const body = await fetchOptionalRuntimeJson<DebugEnginePayload>("/debug-engine/pending-plans", {
         headers: directoryRequestHeaders({
-          directory: input.directory,
+          directory: currentDirectory(),
           accept: "application/json",
         }),
       })
@@ -146,7 +158,7 @@ export function createRuntimeSyncActions(input: {
       if (!input.workflowRuntimeEnabled || !input.applyWorkflowDashboard) return
       const body = await fetchOptionalRuntimeJson<WorkflowDashboardPayload>(workflowDashboardPath(), {
         headers: directoryRequestHeaders({
-          directory: input.directory,
+          directory: currentDirectory(),
           accept: "application/json",
         }),
       })
@@ -159,7 +171,7 @@ export function createRuntimeSyncActions(input: {
     async syncIsolation() {
       const body = await fetchOptionalRuntimeJson<IsolationPayload>("/isolation", {
         headers: directoryRequestHeaders({
-          directory: input.directory,
+          directory: currentDirectory(),
           accept: "application/json",
         }),
       })
