@@ -38,18 +38,27 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
   const [isDeletePending, setIsDeletePending] = React.useState(false)
   const [openMenuSkill, setOpenMenuSkill] = React.useState<string | null>(null)
 
-  const { selectedSkillName, skills, setSelectedSkill, setSkillDraft, createSkill, deleteSkill, getSkillDetail } =
-    useSkillsStore(
-      useShallow((s) => ({
-        selectedSkillName: s.selectedSkillName,
-        skills: s.skills,
-        setSelectedSkill: s.setSelectedSkill,
-        setSkillDraft: s.setSkillDraft,
-        createSkill: s.createSkill,
-        deleteSkill: s.deleteSkill,
-        getSkillDetail: s.getSkillDetail,
-      })),
-    )
+  const {
+    selectedSkillName,
+    skills,
+    setSelectedSkill,
+    setSkillDraft,
+    createSkill,
+    deleteSkill,
+    getSkillDetail,
+    readSupportingFile,
+  } = useSkillsStore(
+    useShallow((s) => ({
+      selectedSkillName: s.selectedSkillName,
+      skills: s.skills,
+      setSelectedSkill: s.setSelectedSkill,
+      setSkillDraft: s.setSkillDraft,
+      createSkill: s.createSkill,
+      deleteSkill: s.deleteSkill,
+      getSkillDetail: s.getSkillDetail,
+      readSupportingFile: s.readSupportingFile,
+    })),
+  )
 
   // Skills are loaded by the Settings shell when this page is active.
 
@@ -125,13 +134,25 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       return
     }
 
-    // Set draft with prefilled values from source skill
+    // Prefill the draft with the source skill's real content so the duplicate is
+    // an actual copy, not a blank skill (description/instructions were always "").
+    const duplicateMd = detail.sources.md
+    const duplicatePendingFiles = (
+      await Promise.all(
+        (duplicateMd.supportingFiles ?? []).map(async (file) => {
+          const content = await readSupportingFile(skill.name, file.path)
+          return content === null ? null : { path: file.path, content }
+        }),
+      )
+    ).filter((file): file is { path: string; content: string } => file !== null)
+
     setSkillDraft({
       name: newName,
       scope: skill.scope || "user",
       source: skill.source || "ax-code",
-      description: detail.sources.md.fields.includes("description") ? "" : "", // Will be populated from page
-      instructions: "",
+      description: duplicateMd.description ?? skill.description ?? "",
+      instructions: duplicateMd.instructions ?? "",
+      ...(duplicatePendingFiles.length > 0 ? { pendingFiles: duplicatePendingFiles } : {}),
     })
     setSelectedSkill(newName)
   }
@@ -174,12 +195,27 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       return
     }
 
-    // Create new skill with new name
+    // Rename is create-new + delete-old, so copy the full skill content
+    // (description, instructions, and supporting files) before deleting the
+    // original — otherwise the renamed skill loses everything but its name.
+    const renameMd = detail.sources.md
+    const renameSupportingFiles = (
+      await Promise.all(
+        (renameMd.supportingFiles ?? []).map(async (file) => {
+          const content = await readSupportingFile(renameDialogSkill.name, file.path)
+          return content === null ? null : { path: file.path, content }
+        }),
+      )
+    ).filter((file): file is { path: string; content: string } => file !== null)
+
+    // Create new skill with new name, preserving the original content.
     const success = await createSkill({
       name: sanitizedName,
-      description: "Renamed skill", // Will need proper description
+      description: renameMd.description ?? renameDialogSkill.description ?? "",
+      instructions: renameMd.instructions ?? "",
       scope: renameDialogSkill.scope,
       source: renameDialogSkill.source,
+      ...(renameSupportingFiles.length > 0 ? { supportingFiles: renameSupportingFiles } : {}),
     })
 
     if (success) {
