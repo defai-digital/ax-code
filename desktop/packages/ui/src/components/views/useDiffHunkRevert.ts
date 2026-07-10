@@ -4,6 +4,7 @@ import { useGitStore } from "@/stores/useGitStore"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import { useI18n } from "@/lib/i18n"
 import { revertHunk } from "./diffHunkRevert"
+import { toViewAbsolutePath } from "./viewPathUtils"
 
 interface UseDiffHunkRevertOptions {
   directory: string | null
@@ -33,7 +34,11 @@ export function useDiffHunkRevert({ directory, filePath, diff }: UseDiffHunkReve
       setRevertingHunkIndex(hunkIndex)
       try {
         const reconstructed = revertHunk(diff.original, diff.modified, hunkIndex, filePath)
-        const result = await files.writeFile(filePath, reconstructed)
+        // Write back through the same endpoint as the editor's save action. The
+        // fs/write route resolves relative paths against the server process cwd
+        // (not the project dir), so a git-relative filePath lands "outside the
+        // active workspace" and 400s. Send an absolute path like the editor does.
+        const result = await files.writeFile(toViewAbsolutePath(directory, filePath), reconstructed)
         if (!result?.success) {
           throw new Error("write failed")
         }
