@@ -154,6 +154,17 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      // The Project/DRE Dashboard iframe loads the backend-served /dre-graph app
+      // (and its /graph assets). Without these the vite SPA fallback returns
+      // index.html, so the dashboard iframe recursively loads the app shell.
+      "/dre-graph": {
+        target: `http://127.0.0.1:${process.env.AX_CODE_DESKTOP_PORT || 3001}`,
+        changeOrigin: true,
+      },
+      "/graph": {
+        target: `http://127.0.0.1:${process.env.AX_CODE_DESKTOP_PORT || 3001}`,
+        changeOrigin: true,
+      },
     },
   },
   build: {
