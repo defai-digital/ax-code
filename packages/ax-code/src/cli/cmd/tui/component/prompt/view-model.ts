@@ -39,7 +39,10 @@ export function isUnmodifiedPromptSubmitKey(input: {
 export function sanitizePromptInput(input: string) {
   // SGR mouse residue: \x1b[<Cb;Cx;CyM/m can arrive as <digits;digits;digitsM
   // if the escape parser partially processes mouse input during focus changes.
-  return input.replace(/(?:<)?\d+;\d+;\d+[Mm]/g, "")
+  // The leading "<" is required: SGR mouse encoding always carries it, so anchoring
+  // to it avoids eating legitimate content the user typed/pasted such as ANSI color
+  // codes ("1;31;40m") or plain semicolon triples.
+  return input.replace(/<\d+;\d+;\d+[Mm]/g, "")
 }
 
 export function promptEscapeClearIntent(input: {

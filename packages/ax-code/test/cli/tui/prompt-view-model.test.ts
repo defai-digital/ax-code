@@ -105,8 +105,13 @@ describe("prompt view model", () => {
     ).toBeUndefined()
   })
 
-  test("strips SGR mouse residue from prompt input", () => {
-    expect(sanitizePromptInput("hello <0;12;34Mworld 35;46;57m")).toBe("hello world ")
+  test("strips SGR mouse residue (marked with <) from prompt input", () => {
+    expect(sanitizePromptInput("hello <0;12;34Mworld")).toBe("hello world")
+  })
+
+  test("preserves legitimate ANSI color codes and semicolon triples the user typed", () => {
+    // Bare digit;digit;digit + M/m without the SGR "<" marker is real content, not residue.
+    expect(sanitizePromptInput("color 35;46;57m and 1;31;40m stay")).toBe("color 35;46;57m and 1;31;40m stay")
   })
 
   test("preserves ordinary semicolon-separated prompt text", () => {
