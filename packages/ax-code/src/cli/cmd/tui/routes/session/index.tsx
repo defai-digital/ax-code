@@ -1,4 +1,16 @@
-import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  ErrorBoundary,
+  For,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
@@ -1745,6 +1757,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage }) {
   const ctx = use()
   const sync = useSync()
+  const { theme } = useTheme()
 
   // Hide tool if showDetails is false and tool completed successfully
   const shouldHide = createMemo(() => {
@@ -1778,7 +1791,16 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
 
   return (
     <Show when={!shouldHide()}>
-      <Dynamic component={toolRendererComponent(props.part.tool)} {...toolprops} />
+      <ErrorBoundary
+        fallback={
+          <box paddingLeft={3} flexDirection="row" gap={1}>
+            <text fg={theme.warning}>{"▲"}</text>
+            <text fg={theme.textMuted}>failed to render {props.part.tool} output</text>
+          </box>
+        }
+      >
+        <Dynamic component={toolRendererComponent(props.part.tool)} {...toolprops} />
+      </ErrorBoundary>
     </Show>
   )
 }
