@@ -159,18 +159,27 @@ const buildPermissionConfigWithGlobal = (
 export const AgentsPage: React.FC = () => {
   const { t } = useI18n()
   const { isMobile } = useDeviceInfo()
-  const { selectedAgentName, getAgentByName, createAgent, updateAgent, agents, agentDraft, setAgentDraft } =
-    useAgentsStore(
-      useShallow((s) => ({
-        selectedAgentName: s.selectedAgentName,
-        getAgentByName: s.getAgentByName,
-        createAgent: s.createAgent,
-        updateAgent: s.updateAgent,
-        agents: s.agents,
-        agentDraft: s.agentDraft,
-        setAgentDraft: s.setAgentDraft,
-      })),
-    )
+  const {
+    selectedAgentName,
+    getAgentByName,
+    createAgent,
+    updateAgent,
+    agents,
+    agentDraft,
+    setAgentDraft,
+    setSelectedAgent,
+  } = useAgentsStore(
+    useShallow((s) => ({
+      selectedAgentName: s.selectedAgentName,
+      getAgentByName: s.getAgentByName,
+      createAgent: s.createAgent,
+      updateAgent: s.updateAgent,
+      agents: s.agents,
+      agentDraft: s.agentDraft,
+      setAgentDraft: s.setAgentDraft,
+      setSelectedAgent: s.setSelectedAgent,
+    })),
+  )
 
   const selectedAgent = selectedAgentName ? getAgentByName(selectedAgentName) : null
   const isNewAgent = Boolean(agentDraft && agentDraft.name === selectedAgentName && !selectedAgent)
@@ -583,7 +592,11 @@ export const AgentsPage: React.FC = () => {
       if (isNewAgent) {
         success = await createAgent(config)
         if (success) {
-          setAgentDraft(null) // Clear draft after successful creation
+          // Select the actually-created agent so the editor stays bound to it;
+          // otherwise it renders a stale header with no backing record and a
+          // second save PATCHes the nonexistent default name and 404s.
+          setAgentDraft(null)
+          setSelectedAgent(agentName)
         }
       } else {
         success = await updateAgent(agentName, config)

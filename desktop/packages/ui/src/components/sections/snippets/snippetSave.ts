@@ -3,7 +3,7 @@ import type { SnippetScope } from "@/stores/useSnippetsStore"
 export type SaveSnippetResult =
   | { status: "name-required" }
   | { status: "content-required" }
-  | { status: "saved" }
+  | { status: "saved"; name: string }
   | { status: "failed" }
   | { status: "unexpected-error"; error: unknown }
 
@@ -60,7 +60,7 @@ export const saveSnippet = async ({
     const success = isNew
       ? await createSnippet(snippetName, content, { aliases: parsedAliases, description, scope })
       : await updateSnippet(snippetName, { content, aliases: parsedAliases, description })
-    return success ? { status: "saved" } : { status: "failed" }
+    return success ? { status: "saved", name: snippetName } : { status: "failed" }
   } catch (error) {
     return { status: "unexpected-error", error }
   }

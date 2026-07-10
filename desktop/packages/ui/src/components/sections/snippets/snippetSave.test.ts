@@ -18,7 +18,9 @@ describe("snippetSave", () => {
       updateSnippet,
     })
 
-    expect(result).toEqual({ status: "saved" })
+    // The resolved (normalized) name is returned so the page can select the
+    // newly created snippet instead of the stale draft default.
+    expect(result).toEqual({ status: "saved", name: "daily-note" })
     expect(createSnippet).toHaveBeenCalledWith("daily-note", "content", {
       aliases: ["today", "daily", "journal"],
       description: "Personal note template",
