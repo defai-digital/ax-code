@@ -1158,6 +1158,58 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
     }
   }
 
+  // Same as stripFrameBustingHeaders, but operates on the outgoing Express `res`.
+  // Required because http-proxy-middleware v3 copies the upstream headers onto
+  // `res` BEFORE the responseInterceptor callback runs, so mutating
+  // `proxyRes.headers` afterward is a no-op — the frame-busting headers were
+  // already queued on `res`. This is what actually lets a framed site load.
+  const stripFrameBustingHeadersOnRes = (res) => {
+    if (!res || typeof res.removeHeader !== "function" || typeof res.getHeader !== "function") {
+      return
+    }
+    res.removeHeader("x-frame-options")
+    for (const name of ["content-security-policy", "content-security-policy-report-only"]) {
+      const value = res.getHeader(name)
+      if (value == null) {
+        continue
+      }
+      const values = Array.isArray(value) ? value : [value]
+      const rewritten = values
+        .map((entry) => removeFrameAncestorsDirective(String(entry)))
+        .filter((entry) => typeof entry === "string" && entry.length > 0)
+      if (rewritten.length === 0) {
+        res.removeHeader(name)
+      } else {
+        res.setHeader(name, Array.isArray(value) ? rewritten : rewritten[0])
+      }
+    }
+  }
+
+  // Rewrite an upstream 3xx Location so the redirect stays inside the same-origin
+  // proxy instead of escaping to the raw cross-origin URL (which the browser
+  // would then frame-block). For a cross-origin hop (e.g. google.com ->
+  // www.google.com) we simply point the SAME target at the validated new origin
+  // — the router reads entry.origin per request, so the browsing context follows
+  // the redirect without changing the proxy base (which avoids nested
+  // proxy-path / address-bar confusion). Returns the rewritten location, or null
+  // to leave the original untouched (e.g. a blocked/invalid redirect origin).
+  const rewriteProxyRedirectLocation = (location, resolved) => {
+    try {
+      const currentOrigin = resolved.entry.origin
+      const abs = new URL(String(location), currentOrigin)
+      if (abs.origin !== currentOrigin) {
+        const normalized = normalizeProxyTargetUrl(abs.origin, { allowExternal: true })
+        if (!normalized.ok) {
+          return null
+        }
+        resolved.entry.origin = normalized.origin
+      }
+      return `/api/preview/proxy/${resolved.id}${abs.pathname}${abs.search}${abs.hash}`
+    } catch {
+      return null
+    }
+  }
+
   const attach = (app, { server, express, uiAuthController, isRequestOriginAllowed, rejectWebSocketUpgrade }) => {
     ensureSweeper()
 
@@ -1299,11 +1351,30 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
         proxyReqWs: (proxyReq) => {
           removeSensitivePreviewProxyHeaders(proxyReq)
         },
-        proxyRes: responseInterceptor(async (responseBuffer, proxyRes, req) => {
-          // Allow the dev server response to be framed inside OpenChamber even
-          // if it normally sets X-Frame-Options or a CSP frame-ancestors rule.
-          // The proxy is same-origin so embedding is otherwise safe.
+        proxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
+          // Allow the site to be framed inside OpenChamber even if it sets
+          // X-Frame-Options or a CSP frame-ancestors rule. The proxy is
+          // same-origin so embedding is otherwise safe. Strip on `res` (not
+          // proxyRes.headers) — see stripFrameBustingHeadersOnRes for why.
           stripFrameBustingHeaders(proxyRes.headers)
+          stripFrameBustingHeadersOnRes(res)
+
+          const resolved = resolveTargetFromRequest(req)
+
+          // Keep redirects inside the same-origin proxy so a cross-origin hop
+          // (e.g. google.com -> www.google.com) doesn't escape and get
+          // frame-blocked by the target's own X-Frame-Options.
+          const statusCode = proxyRes.statusCode || (res && res.statusCode) || 0
+          if (statusCode >= 300 && statusCode < 400) {
+            const location = proxyRes.headers?.location
+            if (location && resolved.ok && res && typeof res.setHeader === "function") {
+              const rewritten = rewriteProxyRedirectLocation(location, resolved)
+              if (rewritten) {
+                res.setHeader("location", rewritten)
+              }
+            }
+            return responseBuffer
+          }
 
           const contentType = String(proxyRes.headers?.["content-type"] || "").toLowerCase()
           const isHtml = contentType.includes("text/html")
@@ -1319,7 +1390,6 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
           delete proxyRes.headers.etag
           delete proxyRes.headers["last-modified"]
 
-          const resolved = resolveTargetFromRequest(req)
           if (!resolved.ok) {
             return responseBuffer
           }
