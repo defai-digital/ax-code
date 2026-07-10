@@ -26,6 +26,12 @@ import { useLocal } from "../context/local"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { isNonEmptyRecord } from "@/util/record"
 
+// --prompt must fire exactly once per process: Home remounts on every return
+// to the home route (/new, session deletion), so a per-mount flag would
+// re-inject and auto-resubmit the CLI prompt — spawning a fresh agent run —
+// on every Home visit.
+let startupPromptConsumed = false
+
 export function Home() {
   const sync = useSync()
   const { theme } = useTheme()
@@ -84,16 +90,15 @@ export function Home() {
   )
 
   let prompt: PromptRef
-  let once = false
   onMount(() => {
     recordTuiStartupOnce("tui.startup.homeMounted", { hasPrompt: !!args.prompt })
-    if (once) return
     if (route.initialPrompt) {
       prompt.set(route.initialPrompt)
-      once = true
-    } else if (args.prompt) {
+      // Consume-once: clear the prompt from the route so it isn't re-injected
+      // on the next Home mount or leaked into a later navigation.
+      nav.navigate({ type: "home", workspaceID: route.workspaceID })
+    } else if (args.prompt && !startupPromptConsumed) {
       prompt.set({ input: args.prompt, parts: [] })
-      once = true
     }
   })
 
@@ -104,8 +109,9 @@ export function Home() {
       (ready) => {
         if (!ready) return
         recordTuiStartupOnce("tui.startup.homePromptReady")
-        if (!args.prompt) return
+        if (!args.prompt || startupPromptConsumed) return
         if (prompt.current?.input !== args.prompt) return
+        startupPromptConsumed = true
         prompt.submit()
       },
     ),

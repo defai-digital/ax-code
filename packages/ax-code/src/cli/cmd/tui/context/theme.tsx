@@ -5,6 +5,7 @@ import { createSimpleContext } from "./helper"
 import { Glob } from "../../../../util/glob"
 import { DEFAULT_THEMES, type ThemeColors, type ThemeJson, type ColorValue } from "./theme-defaults"
 import { useKV } from "./kv"
+import { useToast } from "../ui/toast"
 import { useRenderer } from "@ax-code/opentui-solid"
 import { createStore, produce } from "solid-js/store"
 import { Global } from "@/global"
@@ -190,6 +191,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     const renderer = useRenderer()
     const config = useTuiConfig()
     const kv = useKV()
+    const toast = useToast()
     const pick = (value: unknown) => {
       if (value === "dark" || value === "light") return value
       return
@@ -324,8 +326,11 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     }
 
     function apply(mode: "dark" | "light") {
-      kv.set("theme_mode", mode)
+      // Persist only on an actual change: the terminal's THEME_MODE report
+      // fires at startup with the current mode, and writing kv here would be
+      // a redundant write racing the initial kv.json load.
       if (store.mode === mode) return
+      kv.set("theme_mode", mode)
       setStore("mode", mode)
       renderer.clearPaletteCache()
       if (!Flag.AX_CODE_TUI_ADVANCED_TERMINAL) {
@@ -357,8 +362,32 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       renderer.off(CliRenderEvents.THEME_MODE, handle)
     })
 
+    // A malformed theme (bad color reference, circular defs, missing mode
+    // variant) must not throw out of this memo — the root ErrorBoundary would
+    // replace the whole TUI, and with the selection persisted in kv.json the
+    // crash would repeat on every launch. Fall back to the built-in default
+    // and drop the persisted selection instead.
+    let themeErrorWarned: string | undefined
     const values = createMemo(() => {
-      return resolveTheme(store.themes[store.active] ?? store.themes.automatosx, store.mode)
+      const active = store.active
+      try {
+        return resolveTheme(store.themes[active] ?? store.themes.automatosx, store.mode)
+      } catch (error) {
+        log.warn("failed to resolve theme; falling back to default", { theme: active, error })
+        if (themeErrorWarned !== active) {
+          themeErrorWarned = active
+          // Defer side effects out of the memo computation.
+          queueMicrotask(() => {
+            toast.show({
+              variant: "warning",
+              message: `Theme "${active}" is invalid — using default theme`,
+              duration: 3000,
+            })
+            if (kv.get("theme") === active) kv.set("theme", "automatosx")
+          })
+        }
+        return resolveTheme(DEFAULT_THEMES.automatosx, store.mode)
+      }
     })
 
     createEffect(() => {
@@ -459,7 +488,21 @@ async function getCustomThemes() {
         })
         return undefined
       })
-      if (theme) result[name] = theme
+      if (!theme) continue
+      // Validate the theme resolves in both modes before letting it into the
+      // picker — a typo'd reference or missing mode variant would otherwise
+      // throw during live preview and take down the whole TUI.
+      try {
+        resolveTheme(theme, "dark")
+        resolveTheme(theme, "light")
+      } catch (error) {
+        log.warn("skipping invalid custom theme", {
+          path: item,
+          error,
+        })
+        continue
+      }
+      result[name] = theme
     }
   }
   return result

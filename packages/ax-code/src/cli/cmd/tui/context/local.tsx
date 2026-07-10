@@ -618,15 +618,25 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     })
 
     // Automatically update model when agent changes
+    let warnedAgentModel: string | undefined
     createEffect(() => {
       const value = agent.current()
       if (!value.model) return
+      // Agents can land before providers during bootstrap; validating against
+      // an empty provider list would toast a false "not valid" warning.
+      if (!sync.data.provider_loaded) return
       if (!isModelValid(value.model)) {
-        toast.show({
-          variant: "warning",
-          message: `Agent ${value.name}'s configured model ${value.model.providerID}/${value.model.modelID} is not valid`,
-          duration: 3000,
-        })
+        // Dedupe: the provider store rewrites re-run this effect; only warn
+        // once per agent+model combination.
+        const warnKey = `${value.name}:${value.model.providerID}/${value.model.modelID}`
+        if (warnedAgentModel !== warnKey) {
+          warnedAgentModel = warnKey
+          toast.show({
+            variant: "warning",
+            message: `Agent ${value.name}'s configured model ${value.model.providerID}/${value.model.modelID} is not valid`,
+            duration: 3000,
+          })
+        }
         return
       }
       // Only seed the per-agent slot when the user has no override yet.
