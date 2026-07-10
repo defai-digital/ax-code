@@ -2336,13 +2336,19 @@ export const useUIStore = create<UIStore>()(
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,
           sidebarWidth: state.sidebarWidth,
+          // Persist the "manually resized" flags alongside the widths. Without them the
+          // flags hydrate to false on restart and the first sidebar open/toggle resets the
+          // width back to the minimum, silently reverting the user's custom size.
+          hasManuallyResizedLeftSidebar: state.hasManuallyResizedLeftSidebar,
           isRightSidebarOpen: state.isRightSidebarOpen,
           rightSidebarWidth: state.rightSidebarWidth,
+          hasManuallyResizedRightSidebar: state.hasManuallyResizedRightSidebar,
           rightSidebarTab: state.rightSidebarTab,
           contextPanelByDirectory: state.contextPanelByDirectory,
           isBottomTerminalOpen: state.isBottomTerminalOpen,
           isBottomTerminalExpanded: state.isBottomTerminalExpanded,
           bottomTerminalHeight: state.bottomTerminalHeight,
+          hasManuallyResizedBottomTerminal: state.hasManuallyResizedBottomTerminal,
           notesPanelHeight: state.notesPanelHeight,
           todoPanelHeight: state.todoPanelHeight,
           isSessionSwitcherOpen: state.isSessionSwitcherOpen,
@@ -2378,6 +2384,7 @@ export const useUIStore = create<UIStore>()(
           recentAgents: state.recentAgents,
           recentEfforts: state.recentEfforts,
           diffLayoutPreference: state.diffLayoutPreference,
+          diffFileLayout: state.diffFileLayout,
           diffWrapLines: state.diffWrapLines,
           diffViewMode: state.diffViewMode,
           gitChangesViewMode: state.gitChangesViewMode,

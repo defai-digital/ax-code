@@ -71,6 +71,20 @@ export const BehaviorPage: React.FC = () => {
     custom: string
   } | null>(null)
   const responseStyleSaveSequenceRef = React.useRef(new BehaviorAutosaveSequence())
+  // Mirror the latest response-style values so the unmount-only flush below can read
+  // them without a stale closure.
+  const latestResponseStyleRef = React.useRef({
+    enabled: responseStyleEnabled,
+    preset: responseStylePreset,
+    custom: responseStyleCustomInstructions,
+  })
+  React.useEffect(() => {
+    latestResponseStyleRef.current = {
+      enabled: responseStyleEnabled,
+      preset: responseStylePreset,
+      custom: responseStyleCustomInstructions,
+    }
+  })
 
   React.useEffect(() => {
     const abort = new AbortController()
@@ -156,6 +170,33 @@ export const BehaviorPage: React.FC = () => {
       saveSequence.cancelActive()
     }
   }, [responseStyleEnabled, responseStylePreset, responseStyleCustomInstructions, isLoading, t])
+
+  // If the settings dialog is closed (or the page unloaded) within the 400ms autosave
+  // debounce, the timer above is cleared and the edit would be silently dropped. Flush
+  // the pending change on unmount. Guarded so it never runs before the initial load
+  // (which would PUT the defaults over the user's saved settings). keepalive lets it
+  // survive a real page unload too.
+  React.useEffect(() => {
+    return () => {
+      const last = lastSavedResponseStyleRef.current
+      const current = latestResponseStyleRef.current
+      if (!last) return
+      if (last.enabled === current.enabled && last.preset === current.preset && last.custom === current.custom) {
+        return
+      }
+      lastSavedResponseStyleRef.current = current
+      void fetch(API_ENDPOINTS.config.settings, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          responseStyleEnabled: current.enabled,
+          responseStylePreset: current.preset,
+          responseStyleCustomInstructions: current.custom,
+        }),
+        keepalive: true,
+      }).catch(() => {})
+    }
+  }, [])
 
   const responseStylePreview = getResponseStylePreview(responseStylePreset, responseStyleCustomInstructions)
   const isPromptDirty = prompt !== initialPrompt

@@ -1314,8 +1314,9 @@ export const useConfigStore = create<ConfigStore>()(
                   const settingsAgent = safeAgents.find((agent) => agent.name === openChamberDefaults.defaultAgent)
                   if (settingsAgent) {
                     resolvedAgent = settingsAgent
-                  } else {
-                    // Agent no longer exists - mark for clearing
+                  } else if (safeAgents.length > 0) {
+                    // Agent no longer exists in a loaded agent list - mark for clearing.
+                    // Never erase just because the list has not loaded yet (empty).
                     invalidSettings.defaultAgent = ""
                   }
                 }
@@ -1352,7 +1353,12 @@ export const useConfigStore = create<ConfigStore>()(
                     // Only clear settings for malformed or removed models. A
                     // memory-blocked local model may still be a valid user
                     // default on another machine, so do not erase it here.
-                    if (!parsed || !defaultModel) {
+                    // And never erase a valid saved default just because the provider
+                    // list has not loaded yet (empty) — findModel would spuriously
+                    // return undefined and silently wipe defaultModel from settings.json.
+                    if (!parsed) {
+                      invalidSettings.defaultModel = ""
+                    } else if (!defaultModel && providers.length > 0) {
                       invalidSettings.defaultModel = ""
                     }
                   }

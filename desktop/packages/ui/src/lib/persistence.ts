@@ -1140,6 +1140,10 @@ const _flushSettingsUpdate = async (): Promise<void> => {
           persistToLocalStorage(updated)
           applyDesktopUiPreferences(updated)
           dispatchSettingsSynced(updated)
+          // Keep the read cache coherent with the just-saved value (the fetch(PUT)
+          // branch below clears it). Otherwise a re-fetch within the cache TTL serves
+          // the pre-save snapshot and reverts the store to the old value.
+          _settingsCache = { value: updated, at: Date.now() }
         }
         resolveSettingsWaiters(waiters)
         return
@@ -1196,6 +1200,81 @@ export const updateDesktopSettings = (changes: Partial<DesktopSettings>): Promis
   void promise.catch(() => {})
   _settingsFlushTimer = setTimeout(() => void _flushSettingsUpdate(), SETTINGS_DEBOUNCE_MS)
   return promise
+}
+
+/**
+ * Flush any debounced settings write immediately (awaitable). Resolves once the
+ * pending changes have been persisted, or rejects if the write fails.
+ */
+export const flushDesktopSettings = async (): Promise<void> => {
+  if (typeof window === "undefined") {
+    return
+  }
+  if (_settingsFlushTimer) {
+    clearTimeout(_settingsFlushTimer)
+    _settingsFlushTimer = null
+  }
+  await _flushSettingsUpdate()
+}
+
+// A still-pending debounced write (the 200ms window) would be dropped when the app
+// is hidden/closed — and because the server settings file is authoritative on the
+// next load, the setting would then actively revert to its old value. Persist
+// synchronously via a keepalive request that survives the unloading document, so a
+// change made right before quitting/reloading actually sticks. Fire-and-forget: the
+// unload path cannot await promises.
+const _flushSettingsUpdateOnUnload = (): void => {
+  if (typeof window === "undefined") {
+    return
+  }
+  if (_settingsFlushTimer) {
+    clearTimeout(_settingsFlushTimer)
+    _settingsFlushTimer = null
+  }
+  const changes = _pendingSettingsChanges
+  const waiters = _pendingSettingsWaiters
+  _pendingSettingsChanges = null
+  _pendingSettingsWaiters = []
+  if (!changes || Object.keys(changes).length === 0) {
+    resolveSettingsWaiters(waiters)
+    return
+  }
+  try {
+    const runtimeSettings = getRuntimeSettingsAPI()
+    if (runtimeSettings) {
+      // Electron: best-effort IPC save; may not complete on a hard quit.
+      try {
+        void runtimeSettings.save(changes)
+      } catch {
+        /* ignore */
+      }
+    } else {
+      // Web: keepalive lets the PUT outlive the unloading document.
+      void fetch(API_ENDPOINTS.config.settings, {
+        method: HTTP_DEFAULTS.method.put,
+        headers: HTTP_DEFAULTS.headers.acceptAndContentTypeJson,
+        body: JSON.stringify(changes),
+        keepalive: true,
+      }).catch(() => {})
+    }
+    _settingsCache = null
+  } catch {
+    /* ignore — nothing more we can do while unloading */
+  }
+  resolveSettingsWaiters(waiters)
+}
+
+if (typeof document !== "undefined" && typeof window !== "undefined") {
+  // "hidden" typically precedes termination; flush then so the write has the best
+  // chance to land, and again on pagehide as a last resort for real unloads.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      _flushSettingsUpdateOnUnload()
+    }
+  })
+  window.addEventListener("pagehide", () => {
+    _flushSettingsUpdateOnUnload()
+  })
 }
 
 export const initializeAppearancePreferences = async (): Promise<void> => {
