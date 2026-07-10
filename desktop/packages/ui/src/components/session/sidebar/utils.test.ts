@@ -6,6 +6,7 @@ import {
   isSessionOwnedByProject,
   isSessionRelatedToProject,
   resolveArchivedFolderName,
+  resolveNestedRepoLabel,
   resolveOwningProjectRoot,
 } from "./utils"
 
@@ -126,5 +127,27 @@ describe("resolveOwningProjectRoot / isSessionOwnedByProject", () => {
   test("returns null when no registered root matches", () => {
     const s = session({ id: "s5", directory: "/tmp/elsewhere" })
     expect(resolveOwningProjectRoot(s, roots)).toBeNull()
+  })
+})
+
+describe("resolveNestedRepoLabel", () => {
+  test("returns the nested repo basename for a session under the project root", () => {
+    expect(
+      resolveNestedRepoLabel(session({ id: "s", directory: "/Users/alvinhu/projects/ax-code" }), "/Users/alvinhu"),
+    ).toBe("ax-code")
+  })
+
+  test("returns null for a session sitting at the project root", () => {
+    expect(resolveNestedRepoLabel(session({ id: "s", directory: "/Users/alvinhu" }), "/Users/alvinhu")).toBeNull()
+  })
+
+  test("returns null when the session is not under the project root", () => {
+    expect(resolveNestedRepoLabel(session({ id: "s", directory: "/tmp/x" }), "/Users/alvinhu")).toBeNull()
+  })
+
+  test("falls back to project.worktree when the session has no directory", () => {
+    expect(
+      resolveNestedRepoLabel(session({ id: "s", project: { worktree: "/Users/alvinhu/work/foo" } }), "/Users/alvinhu"),
+    ).toBe("foo")
   })
 })

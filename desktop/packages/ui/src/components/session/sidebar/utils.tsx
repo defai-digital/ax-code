@@ -170,6 +170,28 @@ export const resolveArchivedFolderName = (session: Session, projectRoot: string 
   return segments[segments.length - 1] ?? "unassigned"
 }
 
+/**
+ * Muted, path-basename tag for a session that lives in a directory nested under
+ * `projectRoot` but is neither the root itself nor a registered worktree (e.g. an
+ * unregistered nested repo like `~/projects/ax-code` under the home project).
+ * Returns the last path segment (`ax-code`), or `null` when the session sits at
+ * the project root (no tag needed).
+ */
+export const resolveNestedRepoLabel = (session: Session, projectRoot: string | null): string | null => {
+  const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null)
+  const projectWorktree = normalizePath(
+    (session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null,
+  )
+  const resolved = sessionDirectory ?? projectWorktree
+  const normalizedProjectRoot = normalizePath(projectRoot)
+  if (!resolved || !normalizedProjectRoot) return null
+  if (resolved === normalizedProjectRoot) return null
+  if (!projectPathMatchesRoot(resolved, normalizedProjectRoot)) return null
+  const relative = resolved.slice(normalizedProjectRoot.length + (normalizedProjectRoot.endsWith("/") ? 0 : 1))
+  const segments = relative.split("/").filter(Boolean)
+  return segments[segments.length - 1] ?? null
+}
+
 export const isSessionRelatedToProject = (
   session: Session,
   projectRoot: string,
