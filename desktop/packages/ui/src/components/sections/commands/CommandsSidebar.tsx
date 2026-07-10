@@ -163,6 +163,9 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       model: command.model,
     })
     setSelectedCommand(newName)
+    // Advance the mobile settings stage to the editor, like Create New and list
+    // selection do; without this, Duplicate is a no-op on mobile.
+    onItemSelect?.()
   }
 
   const handleOpenRenameDialog = (command: Command) => {

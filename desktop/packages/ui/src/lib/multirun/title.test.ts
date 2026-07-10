@@ -51,6 +51,34 @@ describe("multi-run titles", () => {
     })
   })
 
+  test("round-trips model ids that contain slashes (e.g. OpenRouter)", () => {
+    const duplicate = getMultiRunSessionTitle({
+      groupSlug: "bench",
+      runGroup: "g2",
+      providerID: "openrouter",
+      modelID: "anthropic/claude-3.5-sonnet",
+      index: 2,
+    })
+    expect(duplicate).toBe("bench/g2/openrouter/anthropic%2Fclaude-3.5-sonnet/2")
+    expect(parseMultiRunSessionTitle(duplicate)).toEqual({
+      groupSlug: "bench",
+      runGroup: "g2",
+      providerID: "openrouter",
+      modelID: "anthropic/claude-3.5-sonnet",
+      index: 2,
+      fusion: false,
+    })
+
+    const fusion = getFusionSessionTitle("bench", "openrouter", "anthropic/claude-3.5-sonnet")
+    expect(fusion).toBe("bench/openrouter/anthropic%2Fclaude-3.5-sonnet/fusion")
+    expect(parseMultiRunSessionTitle(fusion)).toEqual({
+      groupSlug: "bench",
+      providerID: "openrouter",
+      modelID: "anthropic/claude-3.5-sonnet",
+      fusion: true,
+    })
+  })
+
   test("builds duplicate titles without empty group segments", () => {
     expect(getMultiRunSessionTitle({ groupSlug: "bench", providerID: "anthropic", modelID: "claude", index: 1 })).toBe(
       "bench/anthropic/claude/1",

@@ -608,6 +608,17 @@ export const createUiAuth = ({
 
   const handleResetAuth = (req, res) => {
     try {
+      // Refuse before destroying anything. When the JWT secret is pinned via env,
+      // rotateJwtSecret() -> persistJwtSecret() throws a 400, but clearAllPasskeys()
+      // already persisted an empty store to disk — permanently deleting every
+      // passkey while the reset itself failed and sessions stayed valid. Guard the
+      // env-pinned case up front so no passkey is cleared unless the reset can
+      // actually complete. (persistJwtSecret keeps the same check as defense in depth.)
+      if (process.env.AX_CODE_JWT_SECRET || process.env.AX_CODE_DESKTOP_JWT_SECRET) {
+        const error = new Error("Global sign-out is unavailable while AX_CODE_JWT_SECRET is set")
+        error.statusCode = 400
+        throw error
+      }
       const passkeyResult = passkeyController.clearAllPasskeys()
       rotateJwtSecret()
       clearSessionCookie(req, res)

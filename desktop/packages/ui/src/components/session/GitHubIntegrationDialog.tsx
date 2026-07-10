@@ -295,7 +295,9 @@ export function GitHubIntegrationDialog({ open, onOpenChange, onSelect }: GitHub
   const isGitHubConnected = githubAuthChecked && githubAuthStatus?.connected === true
 
   const openGitHubSettings = () => {
-    setSettingsPage("github")
+    // "github" resolves to the Home settings page; the GitHub connect UI is on
+    // the "git" page.
+    setSettingsPage("git")
     setSettingsDialogOpen(true)
   }
 

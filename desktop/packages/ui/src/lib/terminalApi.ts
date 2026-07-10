@@ -185,14 +185,27 @@ class TerminalTransportManager {
     return () => {
       this.clearConnectionTimeout(subscription)
       this.subscriptions.delete(token)
-      if (this.activeSubscriptionToken === token) {
-        this.activeSubscriptionToken = null
-      }
-      if (this.boundSessionId === sessionId) {
+      // Another view may still be watching this same session over the shared
+      // socket; only drop the binding when nothing is left on it.
+      const sessionStillWatched = this.hasSubscriptionForSession(sessionId)
+      if (this.boundSessionId === sessionId && !sessionStillWatched) {
         this.boundSessionId = null
       }
-      if (this.requestedSessionId === sessionId) {
+      if (this.requestedSessionId === sessionId && !sessionStillWatched) {
         this.requestedSessionId = null
+      }
+      if (this.activeSubscriptionToken === token) {
+        this.activeSubscriptionToken = null
+        // Promote a surviving subscription to active so the shared socket keeps
+        // delivering (and owning reconnect) instead of freezing the remaining
+        // view. Rebind if the survivor wants a different session.
+        const next = this.subscriptions.values().next().value as StreamSubscription | undefined
+        if (next) {
+          this.activeSubscriptionToken = next.token
+          if (this.boundSessionId !== next.sessionId) {
+            this.bindActiveSession()
+          }
+        }
       }
       if (this.subscriptions.size === 0) {
         this.clearReconnectTimeout()
@@ -284,6 +297,33 @@ class TerminalTransportManager {
     }
 
     return this.subscriptions.get(this.activeSubscriptionToken) ?? null
+  }
+
+  // The socket serves one session at a time, but multiple views (e.g. the main
+  // terminal tab and the bottom dock) can watch that same session. Deliver each
+  // frame to every matching subscription so they all render live, not just the
+  // most recently subscribed "active" one.
+  private forEachSubscriptionForSession(
+    sessionId: string | null | undefined,
+    fn: (subscription: StreamSubscription) => void,
+  ): void {
+    if (!sessionId) {
+      return
+    }
+    for (const subscription of this.subscriptions.values()) {
+      if (subscription.sessionId === sessionId) {
+        fn(subscription)
+      }
+    }
+  }
+
+  private hasSubscriptionForSession(sessionId: string): boolean {
+    for (const subscription of this.subscriptions.values()) {
+      if (subscription.sessionId === sessionId) {
+        return true
+      }
+    }
+    return false
   }
 
   private startConnectionTimeout(subscription: StreamSubscription): void {
@@ -458,11 +498,13 @@ class TerminalTransportManager {
     }
 
     activeSubscription.retryCount = attempt
-    activeSubscription.connected = false
-    activeSubscription.onEvent({
-      type: "reconnecting",
-      attempt,
-      maxAttempts: maxRetries,
+    this.forEachSubscriptionForSession(activeSubscription.sessionId, (subscription) => {
+      subscription.connected = false
+      subscription.onEvent({
+        type: "reconnecting",
+        attempt,
+        maxAttempts: maxRetries,
+      })
     })
     this.startConnectionTimeout(activeSubscription)
 
@@ -532,12 +574,13 @@ class TerminalTransportManager {
       return
     }
 
-    const activeSubscription = this.getActiveSubscription()
-    if (!activeSubscription) {
-      return
-    }
-
-    activeSubscription.onEvent({ type: "data", data: text })
+    // Untagged text belongs to the currently-bound session; fan it out to every
+    // view of that session so all of them render live output, not just the
+    // most-recently-subscribed one.
+    const targetSession = this.boundSessionId ?? this.getActiveSubscription()?.sessionId ?? null
+    this.forEachSubscriptionForSession(targetSession, (subscription) => {
+      subscription.onEvent({ type: "data", data: text })
+    })
   }
 
   private handleControlMessage(bytes: Uint8Array): void {
@@ -563,7 +606,7 @@ class TerminalTransportManager {
         return
       case "d": {
         const sessionId = payload.s ?? this.boundSessionId ?? this.requestedSessionId
-        if (!activeSubscription || !sessionId || sessionId !== activeSubscription.sessionId) {
+        if (!sessionId) {
           return
         }
 
@@ -575,62 +618,71 @@ class TerminalTransportManager {
         }
 
         if (typeof payload.d === "string" && payload.d.length > 0) {
-          activeSubscription.onEvent({ type: "data", data: payload.d })
+          const data = payload.d
+          this.forEachSubscriptionForSession(sessionId, (subscription) => {
+            subscription.onEvent({ type: "data", data })
+          })
         }
         return
       }
       case "bok": {
         this.boundSessionId = payload.s ?? this.requestedSessionId
-        if (!activeSubscription) {
-          return
+        if (activeSubscription) {
+          activeSubscription.retryCount = 0
         }
-        activeSubscription.retryCount = 0
-        activeSubscription.connected = true
-        this.clearConnectionTimeout(activeSubscription)
-        activeSubscription.onEvent({
-          type: "connected",
-          runtime: payload.runtime,
-          ptyBackend: payload.ptyBackend,
+        // Clear the "connecting" state on every view of this session, not just
+        // the active one, so a second view of the same terminal also settles.
+        this.forEachSubscriptionForSession(this.boundSessionId, (subscription) => {
+          subscription.connected = true
+          this.clearConnectionTimeout(subscription)
+          subscription.onEvent({
+            type: "connected",
+            runtime: payload.runtime,
+            ptyBackend: payload.ptyBackend,
+          })
         })
         return
       }
       case "x": {
-        if (!activeSubscription) {
+        const sessionId = payload.s ?? this.boundSessionId ?? activeSubscription?.sessionId ?? null
+        if (!sessionId) {
           this.boundSessionId = null
           return
         }
-
-        if (payload.s && payload.s !== activeSubscription.sessionId) {
-          return
+        if (this.boundSessionId === sessionId) {
+          this.boundSessionId = null
         }
-
-        activeSubscription.connected = false
-        this.clearConnectionTimeout(activeSubscription)
-        this.boundSessionId = null
-        this.requestedSessionId = null
-        this.replayCursorBySession.delete(activeSubscription.sessionId)
-        activeSubscription.onEvent({
-          type: "exit",
-          exitCode: payload.exitCode,
-          signal: payload.signal ?? null,
+        if (this.requestedSessionId === sessionId) {
+          this.requestedSessionId = null
+        }
+        this.replayCursorBySession.delete(sessionId)
+        this.forEachSubscriptionForSession(sessionId, (subscription) => {
+          subscription.connected = false
+          this.clearConnectionTimeout(subscription)
+          subscription.onEvent({
+            type: "exit",
+            exitCode: payload.exitCode,
+            signal: payload.signal ?? null,
+          })
         })
         return
       }
       case "e": {
         const error = createTransportError(payload.c)
         const isFatal = payload.f === true || payload.c === "SESSION_NOT_FOUND"
+        const errorSession = this.boundSessionId ?? activeSubscription?.sessionId ?? null
 
         if (payload.c === "NOT_BOUND" || payload.c === "SESSION_NOT_FOUND") {
           this.boundSessionId = null
         }
 
-        if (activeSubscription) {
-          activeSubscription.connected = false
+        this.forEachSubscriptionForSession(errorSession, (subscription) => {
+          subscription.connected = false
           if (isFatal) {
-            this.clearConnectionTimeout(activeSubscription)
+            this.clearConnectionTimeout(subscription)
           }
-          activeSubscription.onError?.(error, isFatal)
-        }
+          subscription.onError?.(error, isFatal)
+        })
 
         if (payload.f === true) {
           this.handleSocketFailure(error)

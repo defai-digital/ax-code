@@ -28,6 +28,7 @@ import { useGitHubAuthStore } from "@/stores/useGitHubAuthStore"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import { ContextUsageDisplay } from "@/components/ui/ContextUsageDisplay"
 import { cn } from "@/lib/utils"
+import { ROUTE_PARAMS } from "@/lib/router"
 import { McpDropdownContent } from "@/components/mcp/McpDropdown"
 import { ProviderLogo } from "@/components/ui/ProviderLogo"
 import {
@@ -778,6 +779,19 @@ interface RateLimitGroup {
     familyLabel: string
     models: Array<[string, UsageWindow]>
   }>
+}
+
+// True when the URL explicitly asks for a main-area view via ?tab= / ?file=.
+// In that case the router owns activeMainTab, so the stale-tab guard below must
+// not fire and clobber the deep-link.
+function urlRequestsMainView(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    const params = new URLSearchParams(window.location.search)
+    return params.has(ROUTE_PARAMS.TAB) || params.has(ROUTE_PARAMS.FILE)
+  } catch {
+    return false
+  }
 }
 
 export const Header: React.FC = () => {
@@ -1662,7 +1676,18 @@ export const Header: React.FC = () => {
     [shortcutOverrides],
   )
 
+  // Don't restore a stale *persisted* non-chat main tab on a fresh load: if the
+  // last session left activeMainTab on git/diff/terminal/files/context, start on
+  // chat instead. This must run ONCE — the previous version had activeMainTab in
+  // its deps and so fired on every change, permanently vetoing those tabs and
+  // breaking live navigation (navigateToDiff, the commit nudge), ?tab=/?file=
+  // deep-links, and these views on mobile (where the main area is the only host).
+  // When the URL requests a view, the router owns the tab, so skip.
+  const didResetStaleMainTabRef = React.useRef(false)
   useEffect(() => {
+    if (didResetStaleMainTabRef.current) return
+    didResetStaleMainTabRef.current = true
+    if (urlRequestsMainView()) return
     if (
       activeMainTab === "git" ||
       activeMainTab === "terminal" ||

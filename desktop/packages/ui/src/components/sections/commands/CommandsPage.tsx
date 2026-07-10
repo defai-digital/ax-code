@@ -23,6 +23,7 @@ export const CommandsPage: React.FC = () => {
     commands,
     commandDraft,
     setCommandDraft,
+    setSelectedCommand,
   } = useCommandsStore(
     useShallow((s) => ({
       selectedCommandName: s.selectedCommandName,
@@ -32,6 +33,7 @@ export const CommandsPage: React.FC = () => {
       commands: s.commands,
       commandDraft: s.commandDraft,
       setCommandDraft: s.setCommandDraft,
+      setSelectedCommand: s.setSelectedCommand,
     })),
   )
 
@@ -153,7 +155,11 @@ export const CommandsPage: React.FC = () => {
       if (isNewCommand) {
         success = await createCommand(config)
         if (success) {
+          // Select the actually-created command so the editor stays bound to it;
+          // otherwise it renders a dead editor and a second save PATCHes the stale
+          // default name and 404s.
           setCommandDraft(null)
+          setSelectedCommand(commandName)
         }
       } else {
         success = await updateCommand(commandName, config)

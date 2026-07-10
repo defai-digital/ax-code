@@ -19,7 +19,8 @@ export const DoneNotCommittedNudge: React.FC = React.memo(() => {
   const gitStatus = useGitStore((s) =>
     currentDirectory ? (s.directories.get(currentDirectory)?.status ?? null) : null,
   )
-  const setActiveMainTab = useUIStore((s) => s.setActiveMainTab)
+  const setRightSidebarOpen = useUIStore((s) => s.setRightSidebarOpen)
+  const setRightSidebarTab = useUIStore((s) => s.setRightSidebarTab)
   const runEndedAt = useSessionRunEndedAt(currentSessionId ?? "")
   const dismissedAt = useNudgeDismissedAt(currentSessionId ?? "")
   const dismissNudge = useRunStateStore((s) => s.dismissNudge)
@@ -41,13 +42,17 @@ export const DoneNotCommittedNudge: React.FC = React.memo(() => {
 
   if (!visible || !currentSessionId) return null
 
-  const handleReview = () => {
-    setActiveMainTab("diff")
+  // The main content area is locked to chat/plan — Header resets any other
+  // activeMainTab back to "chat" — so git/diff moved into the right sidebar.
+  // Both actions open the git panel, which shows the changed-file diffs (review)
+  // and the commit UI (commit). Previously these set activeMainTab and did nothing.
+  const openGitPanel = () => {
+    setRightSidebarOpen(true)
+    setRightSidebarTab("git")
   }
 
-  const handleCommit = () => {
-    setActiveMainTab("git")
-  }
+  const handleReview = openGitPanel
+  const handleCommit = openGitPanel
 
   const handleDismiss = () => {
     dismissNudge(currentSessionId)

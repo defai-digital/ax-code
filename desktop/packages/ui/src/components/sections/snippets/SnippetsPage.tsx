@@ -13,17 +13,25 @@ import { saveSnippet } from "./snippetSave"
 
 export const SnippetsPage: React.FC = () => {
   const { t } = useI18n()
-  const { selectedSnippetName, snippets, snippetDraft, setSnippetDraft, updateSnippet, createSnippet } =
-    useSnippetsStore(
-      useShallow((s) => ({
-        selectedSnippetName: s.selectedSnippetName,
-        snippets: s.snippets,
-        snippetDraft: s.snippetDraft,
-        setSnippetDraft: s.setSnippetDraft,
-        updateSnippet: s.updateSnippet,
-        createSnippet: s.createSnippet,
-      })),
-    )
+  const {
+    selectedSnippetName,
+    snippets,
+    snippetDraft,
+    setSnippetDraft,
+    setSelectedSnippet,
+    updateSnippet,
+    createSnippet,
+  } = useSnippetsStore(
+    useShallow((s) => ({
+      selectedSnippetName: s.selectedSnippetName,
+      snippets: s.snippets,
+      snippetDraft: s.snippetDraft,
+      setSnippetDraft: s.setSnippetDraft,
+      setSelectedSnippet: s.setSelectedSnippet,
+      updateSnippet: s.updateSnippet,
+      createSnippet: s.createSnippet,
+    })),
+  )
 
   const selectedSnippet = React.useMemo(
     () =>
@@ -117,7 +125,13 @@ export const SnippetsPage: React.FC = () => {
           return
         case "saved":
           toast.success(t("settings.snippets.page.toast.saved"))
-          if (isNew) setSnippetDraft(null)
+          if (isNew) {
+            // Point the selection at the actually-created (normalized) name so the
+            // editor stays bound to the new record; otherwise it renders a dead
+            // editor and a second save PATCHes the stale default name and 404s.
+            setSnippetDraft(null)
+            setSelectedSnippet(result.name)
+          }
           return
       }
     } finally {
