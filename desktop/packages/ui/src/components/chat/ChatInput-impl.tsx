@@ -4044,9 +4044,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           {showDraftTargetSelectors && selectedDraftProject ? (
             <div className="mb-1.5 flex min-w-0 items-center gap-1.5 px-0.5">
               <Select value={selectedDraftProject.id} onValueChange={handleDraftProjectChange}>
+                {/* Keep the project switcher visually distinct from the adjacent worktree
+                    picker: a real border + hover + chevron so it reads as "switch project",
+                    not plain text. The worktree picker below stays borderless/secondary. */}
                 <SelectTrigger
                   size="sm"
-                  className="h-7 min-w-0 w-fit max-w-[42vw] sm:max-w-[18rem] border-transparent bg-transparent px-1.5 hover:bg-transparent data-[popup-open]:bg-transparent"
+                  className="h-7 min-w-0 w-fit max-w-[42vw] sm:max-w-[18rem] border-input px-1.5"
                 >
                   <SelectValue>{renderProjectLabelWithIcon(selectedDraftProject)}</SelectValue>
                 </SelectTrigger>
