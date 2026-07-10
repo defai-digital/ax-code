@@ -29,15 +29,23 @@ export function DialogConfirm(props: DialogConfirmProps) {
   })
 
   function runDialogConfirmAction(action: () => unknown, failureMessage: string) {
-    void Promise.resolve()
-      .then(action)
-      .catch((error) => {
-        log.warn("dialog confirm action failed", { error, title: props.title })
-        toast.show({
-          message: error instanceof Error ? error.message : failureMessage,
-          variant: "error",
-        })
+    const fail = (error: unknown) => {
+      log.warn("dialog confirm action failed", { error, title: props.title })
+      toast.show({
+        message: error instanceof Error ? error.message : failureMessage,
+        variant: "error",
       })
+    }
+    // Invoke the handler synchronously: the callers run dialog.clear() right
+    // after this, and clear() synchronously fires the item's onClose, so a
+    // deferred onConfirm/onCancel would lose the DialogConfirm.show race and
+    // the promise would always resolve undefined. Async follow-ups returned by
+    // the handler still surface failures via toast.
+    try {
+      void Promise.resolve(action()).catch(fail)
+    } catch (error) {
+      fail(error)
+    }
   }
 
   useKeyboard((evt) => {

@@ -67,6 +67,9 @@ export function dialogSelectVisibleHeight(rows: number, terminalHeight: number) 
 
 export function dialogSelectMoveIndex(current: number, direction: number, count: number) {
   if (count <= 0) return current
+  // Page-size jumps (|direction| > 1) clamp at the list edges; single steps
+  // keep the wrap-around behavior.
+  if (Math.abs(direction) > 1) return dialogSelectClampIndex(current + direction, count)
   let next = current + direction
   if (next < 0) next = count - 1
   if (next >= count) next = 0

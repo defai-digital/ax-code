@@ -151,6 +151,22 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   function move(direction: number) {
     const options = flat()
     if (options.length === 0) return
+    // Page jumps (|direction| > 1) clamp at the list edges instead of wrapping;
+    // when the landing row is disabled, single-step to the nearest enabled
+    // option (onward first, then back) rather than re-jumping by the page size.
+    if (Math.abs(direction) > 1) {
+      const landing = dialogSelectMoveIndex(store.selected, direction, options.length)
+      const onward = direction > 0 ? 1 : -1
+      for (const step of [onward, -onward]) {
+        for (let next = landing; next >= 0 && next < options.length; next += step) {
+          if (options[next]?.disabled !== true) {
+            if (next !== store.selected) moveTo(next, true)
+            return
+          }
+        }
+      }
+      return
+    }
     let next = store.selected
     for (let i = 0; i < options.length; i++) {
       next = dialogSelectMoveIndex(next, direction, options.length)
@@ -219,10 +235,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     }
     confirmInFlight = true
     void runDialogSelectAction(
-      () => {
-        if (option.onSelect) option.onSelect(dialog)
-        props.onSelect?.(option)
-      },
+      // Return the handlers' promises so the confirmInFlight latch spans the
+      // real async work (blocking double-fires) and rejections reach the
+      // catch/toast in runDialogSelectAction instead of floating unhandled.
+      () => Promise.all([option.onSelect?.(dialog), props.onSelect?.(option)]),
       "dialog select action failed",
       "Failed to complete the selected action",
     ).finally(() => {
@@ -373,14 +389,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                         }}
                         onMouseUp={() => {
                           if (option.disabled) return
-                          void runDialogSelectAction(
-                            () => {
-                              option.onSelect?.(dialog)
-                              props.onSelect?.(option)
-                            },
-                            "dialog select action failed",
-                            "Failed to complete the selected action",
-                          )
+                          // Route clicks through confirmSelected so the
+                          // confirmInFlight latch also guards the mouse path
+                          // against double-fires.
+                          const index = flat().findIndex((x) => isDeepEqual(x.value, option.value))
+                          if (index === -1) return
+                          if (index !== store.selected) moveTo(index)
+                          confirmSelected()
                         }}
                         onMouseOver={() => {
                           if (store.input !== "mouse") return

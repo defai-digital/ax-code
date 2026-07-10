@@ -59,6 +59,19 @@ describe("tui dialog select view model", () => {
     expect(dialogSelectClampIndex(5, 0)).toBe(0)
   })
 
+  test("clamps page jumps at the list edges while single steps keep wrapping", () => {
+    // PageDown/PageUp map to ±10: clamp instead of wrapping to the other end.
+    expect(dialogSelectMoveIndex(2, 10, 30)).toBe(12)
+    expect(dialogSelectMoveIndex(25, 10, 30)).toBe(29)
+    expect(dialogSelectMoveIndex(29, 10, 30)).toBe(29)
+    expect(dialogSelectMoveIndex(5, -10, 30)).toBe(0)
+    expect(dialogSelectMoveIndex(0, -10, 30)).toBe(0)
+    expect(dialogSelectMoveIndex(3, 10, 0)).toBe(3)
+    // Arrow keys (±1) still wrap around.
+    expect(dialogSelectMoveIndex(29, 1, 30)).toBe(0)
+    expect(dialogSelectMoveIndex(0, -1, 30)).toBe(29)
+  })
+
   test("resolves the option activated by Enter from the clamped selection", () => {
     const selectable = [options[0], options[1]]
 

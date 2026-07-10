@@ -607,7 +607,12 @@ export function createDialogProviderOptions() {
                       dialog,
                       prompts: method.prompts,
                     })
-                    if (!value) return
+                    if (!value) {
+                      // A dismissed prompt aborts the flow; say so instead of
+                      // silently dropping the connection attempt.
+                      toast.show({ variant: "info", message: `Canceled connecting ${provider.name}` })
+                      return
+                    }
                     inputs = value
                   }
 
@@ -877,7 +882,16 @@ async function PromptsMethod(props: PromptsMethodProps) {
     const value = await new Promise<string | null>((resolve) => {
       props.dialog.replace(
         () => (
-          <DialogPrompt title={prompt.message} placeholder={prompt.placeholder} onConfirm={(value) => resolve(value)} />
+          <DialogPrompt
+            title={prompt.message}
+            placeholder={prompt.placeholder}
+            // Keep the prompt open after confirm: the default deferred
+            // dialog.clear() would fire after the loop has already replace()d
+            // the next prompt, closing it and silently aborting the flow
+            // (mirrors CodeMethod/ApiMethod). See #257.
+            autoClose={false}
+            onConfirm={(value) => resolve(value)}
+          />
         ),
         () => resolve(null),
       )
