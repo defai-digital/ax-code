@@ -3,6 +3,11 @@ import { axCodeClient } from "@/lib/ax-code/client"
 import { toast } from "@/components/ui"
 import { useI18nStore, formatMessage } from "@/lib/i18n/store"
 import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
+import { withTimeout } from "@/lib/asyncTimeout"
+
+// Bound the flag read so a stalled request can't keep the Autonomous toggle
+// spinning + disabled forever; `pending` always clears and the control stays usable.
+const EXECUTION_MODE_REQUEST_TIMEOUT_MS = 12_000
 
 /**
  * The AX Code server exposes two layered execution settings, persisted to
@@ -117,13 +122,17 @@ export const useExecutionModeStore = create<ExecutionModeStore>()((set, get) => 
 
     let flags: { autonomous: boolean | null; superLong: boolean | null } = { autonomous: null, superLong: null }
     try {
-      flags = await axCodeClient.withDirectory(directory ?? null, async () => {
-        const [autonomous, superLong] = await Promise.all([
-          axCodeClient.getAutonomousEnabled(),
-          axCodeClient.getSuperLongEnabled(),
-        ])
-        return { autonomous, superLong }
-      })
+      flags = await withTimeout(
+        axCodeClient.withDirectory(directory ?? null, async () => {
+          const [autonomous, superLong] = await Promise.all([
+            axCodeClient.getAutonomousEnabled(),
+            axCodeClient.getSuperLongEnabled(),
+          ])
+          return { autonomous, superLong }
+        }),
+        EXECUTION_MODE_REQUEST_TIMEOUT_MS,
+        () => ({ autonomous: null, superLong: null }),
+      )
     } catch {
       flags = { autonomous: null, superLong: null }
     }
