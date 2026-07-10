@@ -1,11 +1,13 @@
-import { createStore } from "solid-js/store"
-import { createMemo, createSignal, For, Show } from "solid-js"
+import { createStore, produce } from "solid-js/store"
+import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js"
 import { useKeyboard } from "@ax-code/opentui-solid"
 import type { TextareaRenderable } from "@ax-code/opentui-core"
 import { useKeybind } from "../../context/keybind"
 import { selectedForeground, tint, useTheme } from "../../context/theme"
 import type { QuestionAnswer, QuestionRequest } from "@ax-code/sdk/v2"
 import { useSDK } from "../../context/sdk"
+import { useSync } from "../../context/sync"
+import { withTimeout } from "@/util/timeout"
 import { SplitBorder } from "../../component/border"
 import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
@@ -15,8 +17,13 @@ import { focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 
 const log = Log.create({ service: "tui.question" })
 
+// Bound so a dropped/stalled reply cannot latch `submitting` forever. Mirrors
+// permission.tsx (see #341).
+const QUESTION_REPLY_TIMEOUT_MS = 20_000
+
 export function QuestionPrompt(props: { request: QuestionRequest }) {
   const sdk = useSDK()
+  const sync = useSync()
   const { theme } = useTheme()
   const keybind = useKeybind()
   const bindings = useTextareaKeybindings()
@@ -36,6 +43,37 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     // duplicate replies for the same request. See #241.
     submitting: false,
   })
+
+  // This component instance is reused when the next queued request becomes
+  // questions()[0] without the list ever emptying (replied + asked events land
+  // in one batched flush). Re-arm the latch and reset the transient answer
+  // state per request, or the previous reply's `submitting` swallows every
+  // input for the new one (and stale answers show). Mirrors permission.tsx.
+  createEffect(
+    on(
+      () => props.request.id,
+      () => setStore({ tab: 0, answers: [], custom: [], selected: 0, editing: false, submitting: false }),
+      { defer: true },
+    ),
+  )
+
+  // A reply the server accepts for an already-dead ask (the awaiting turn was
+  // aborted while the prompt was on screen) publishes no question.replied
+  // event, so nothing would ever unmount this prompt. Remove the request
+  // locally once the reply succeeds; the event-driven removal is a no-op when
+  // it also arrives. Mirrors permission.tsx / BUG-005.
+  function removeRequestLocally(sessionID: string, id: string) {
+    sync.set(
+      "question",
+      produce((draft: Record<string, QuestionRequest[]>) => {
+        const list = draft[sessionID]
+        if (!list) return
+        const index = list.findIndex((x) => x.id === id)
+        if (index >= 0) list.splice(index, 1)
+        if (list.length === 0) delete draft[sessionID]
+      }),
+    )
+  }
 
   let textarea: TextareaRenderable | undefined
 
@@ -57,12 +95,21 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     // request is already in flight. See #241.
     if (store.submitting) return
     setStore("submitting", true)
+    // Capture the reply target now: by the time the reply resolves,
+    // props.request may already be the next queued request.
+    const { sessionID, id } = props.request
     void Promise.resolve()
-      .then(run)
+      .then(() =>
+        withTimeout(run(), QUESTION_REPLY_TIMEOUT_MS, "Question reply timed out — the server did not respond"),
+      )
+      .then(() => {
+        removeRequestLocally(sessionID, id)
+      })
       .catch((error) => {
-        // Reset the in-flight guard on failure so a transient API/network
-        // error does not permanently wedge the prompt. The prompt stays
-        // mounted on failure, so the user can retry. See #255.
+        // Reset the in-flight guard on failure (including the timeout above) so
+        // a transient API/network error does not permanently wedge the prompt.
+        // The prompt stays mounted on failure, so the user can retry. See
+        // #255, #341.
         setStore("submitting", false)
         log.warn(failureLabel, { error, requestID: props.request.id })
         toast.show({
