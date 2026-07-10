@@ -19,10 +19,10 @@ export const DiffCommentSummaryBar: React.FC<DiffCommentSummaryBarProps> = memo(
   const drafts = useInlineCommentDraftStore(
     React.useCallback((s) => (sessionKey ? (s.drafts[sessionKey] ?? EMPTY_DRAFTS) : EMPTY_DRAFTS), [sessionKey]),
   )
-  const consumeDrafts = useInlineCommentDraftStore((s) => s.consumeDrafts)
   const clearDrafts = useInlineCommentDraftStore((s) => s.clearDrafts)
   const currentSessionId = useSessionUIStore((s) => s.currentSessionId)
   const draftCount = drafts.length
+  const sendingRef = React.useRef(false)
 
   if (draftCount === 0) return null
 
@@ -31,24 +31,32 @@ export const DiffCommentSummaryBar: React.FC<DiffCommentSummaryBarProps> = memo(
       toast.error(t("diffView.comments.noSession"))
       return
     }
+    if (sendingRef.current) return
 
-    const consumed = consumeDrafts(sessionKey)
-    if (!consumed || consumed.length === 0) return
+    // Read the drafts without consuming them, so a failed send does not throw
+    // the user's comments away. Clear only after the send succeeds. The ref
+    // guards against a double-click re-sending while the first await is pending.
+    const pending = useInlineCommentDraftStore.getState().drafts[sessionKey] ?? EMPTY_DRAFTS
+    if (pending.length === 0) return
 
-    const formatted = formatInlineCommentDrafts(consumed)
+    const formatted = formatInlineCommentDrafts(pending)
     const config = useConfigStore.getState()
     const providerId = config.currentProviderId ?? ""
     const modelId = config.currentModelId ?? ""
 
+    sendingRef.current = true
     try {
       await useSessionUIStore
         .getState()
         .sendMessage(formatted, providerId, modelId, undefined, undefined, undefined, undefined, undefined, "normal", {
           sessionId: currentSessionId,
         })
+      clearDrafts(sessionKey)
       toast.success(t("diffView.comments.sent"))
     } catch {
       toast.error(t("diffView.comments.sendFailed"))
+    } finally {
+      sendingRef.current = false
     }
   }
 
