@@ -804,6 +804,8 @@ export const Header: React.FC = () => {
   const openContextOverview = useUIStore((state) => state.openContextOverview)
   const openContextPlan = useUIStore((state) => state.openContextPlan)
   const openContextBrowser = useUIStore((state) => state.openContextBrowser)
+  const browserPanel = useUIStore((state) => state.browserPanel)
+  const closeContextBrowser = useUIStore((state) => state.closeContextBrowser)
   const openContextDashboard = useUIStore((state) => state.openContextDashboard)
   const closeContextPanel = useUIStore((state) => state.closeContextPanel)
   const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory)
@@ -1472,19 +1474,13 @@ export const Header: React.FC = () => {
   }, [closeContextPanel, contextPanelByDirectory, openContextPlan, openDirectory])
 
   const handleOpenContextBrowser = React.useCallback(() => {
-    const directory = normalize(openDirectory || "")
-    if (!directory) {
+    // The browser is a single global panel — toggle it independent of the directory.
+    if (browserPanel.isOpen && browserPanel.focused) {
+      closeContextBrowser()
       return
     }
-
-    const panelState = contextPanelByDirectory[directory]
-    if (getActiveContextMode(panelState) === "browser") {
-      closeContextPanel(directory)
-      return
-    }
-
-    openContextBrowser(directory)
-  }, [closeContextPanel, contextPanelByDirectory, openContextBrowser, openDirectory])
+    openContextBrowser("")
+  }, [browserPanel.isOpen, browserPanel.focused, closeContextBrowser, openContextBrowser])
 
   const handleOpenContextDashboard = React.useCallback(() => {
     const directory = normalize(openDirectory || "")
@@ -1510,14 +1506,10 @@ export const Header: React.FC = () => {
     return getActiveContextMode(panelState) === "plan"
   }, [contextPanelByDirectory, openDirectory])
 
-  const isContextBrowserActive = React.useMemo(() => {
-    const directory = normalize(openDirectory || "")
-    if (!directory) {
-      return false
-    }
-    const panelState = contextPanelByDirectory[directory]
-    return getActiveContextMode(panelState) === "browser"
-  }, [contextPanelByDirectory, openDirectory])
+  const isContextBrowserActive = React.useMemo(
+    () => browserPanel.isOpen && browserPanel.focused,
+    [browserPanel.isOpen, browserPanel.focused],
+  )
 
   const isContextDashboardActive = React.useMemo(() => {
     const directory = normalize(openDirectory || "")

@@ -11,7 +11,7 @@ import { useEffectiveDirectory } from "@/hooks/useEffectiveDirectory"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { useFilesViewTabsStore } from "@/stores/useFilesViewTabsStore"
-import { isContextPanelMode, useUIStore, type ContextPanelMode } from "@/stores/useUIStore"
+import { GLOBAL_BROWSER_TAB_ID, isContextPanelMode, useUIStore, type ContextPanelMode } from "@/stores/useUIStore"
 import { buildInlineCommentSessionKey, useInlineCommentDraftStore } from "@/stores/useInlineCommentDraftStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useInputStore } from "@/sync/input-store"
@@ -1245,10 +1245,10 @@ const isElectronBrowserRuntime = (): boolean => {
   return typeof window !== "undefined" && Boolean(window.__AX_CODE_DESKTOP_ELECTRON__)
 }
 
-const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, directory, tabID }) => {
+const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, directory }) => {
   const { t } = useI18n()
   const iframeRef = React.useRef<HTMLIFrameElement | null>(null)
-  const setContextPanelTabTargetPath = useUIStore((state) => state.setContextPanelTabTargetPath)
+  const setContextBrowserUrl = useUIStore((state) => state.setContextBrowserUrl)
   const normalized = normalizeBrowserUrl(initialUrl)
   const startUrl = normalized !== "about:blank" ? normalized : ""
   const [urlInput, setUrlInput] = React.useState(startUrl)
@@ -1286,10 +1286,10 @@ const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dire
 
   const persistUrl = React.useCallback(
     (url: string) => {
-      if (!url || url === "about:blank" || !directory || !tabID) return
-      setContextPanelTabTargetPath(directory, tabID, url)
+      if (!url || url === "about:blank") return
+      setContextBrowserUrl(url)
     },
-    [directory, tabID, setContextPanelTabTargetPath],
+    [setContextBrowserUrl],
   )
 
   const applyUrl = React.useCallback(
@@ -1803,10 +1803,10 @@ const IframeBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dire
   )
 }
 
-const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, directory, tabID }) => {
+const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, directory }) => {
   const { t } = useI18n()
   const webviewRef = React.useRef<WebviewElement | null>(null)
-  const setContextPanelTabTargetPath = useUIStore((state) => state.setContextPanelTabTargetPath)
+  const setContextBrowserUrl = useUIStore((state) => state.setContextBrowserUrl)
   const normalized = normalizeBrowserUrl(initialUrl)
   const startUrl = normalized !== "about:blank" ? normalized : ""
   const [urlInput, setUrlInput] = React.useState(startUrl)
@@ -1818,10 +1818,10 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
 
   const persistUrl = React.useCallback(
     (url: string) => {
-      if (!url || url === "about:blank" || !directory || !tabID) return
-      setContextPanelTabTargetPath(directory, tabID, url)
+      if (!url || url === "about:blank") return
+      setContextBrowserUrl(url)
     },
-    [directory, tabID, setContextPanelTabTargetPath],
+    [setContextBrowserUrl],
   )
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId)
   const newSessionDraft = useSessionUIStore((state) => state.newSessionDraft)
@@ -1979,7 +1979,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
       try {
         const url = webview?.getURL?.()
         if (url && url !== "about:blank") {
-          setContextPanelTabTargetPath(directory, tabID, url)
+          setContextBrowserUrl(url)
         }
       } catch {
         /* webview not ready */
@@ -1990,7 +1990,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
         /* webview not ready */
       }
     }
-  }, [directory, tabID, setContextPanelTabTargetPath])
+  }, [setContextBrowserUrl])
 
   const handleInspect = React.useCallback(() => {
     const webview = webviewRef.current
@@ -2191,14 +2191,25 @@ export const ContextPanel: React.FC = () => {
   const reorderContextPanelTabs = useUIStore((state) => state.reorderContextPanelTabs)
   const setSelectedFilePath = useFilesViewTabsStore((state) => state.setSelectedPath)
   const openContextPreview = useUIStore((state) => state.openContextPreview)
+  const browserPanel = useUIStore((state) => state.browserPanel)
+  const focusContextBrowser = useUIStore((state) => state.focusContextBrowser)
+  const closeContextBrowser = useUIStore((state) => state.closeContextBrowser)
   const { themeMode, lightThemeId, darkThemeId, currentTheme } = useThemeSystem()
 
+  // The browser is a single global panel; only non-browser tabs are per-directory.
   const tabs = React.useMemo(
-    () => (panelState?.tabs ?? []).filter((tab) => isContextPanelMode(tab.mode)),
+    () => (panelState?.tabs ?? []).filter((tab) => isContextPanelMode(tab.mode) && tab.mode !== "browser"),
     [panelState?.tabs],
   )
-  const activeTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1] ?? null
-  const isOpen = Boolean(panelState?.isOpen && activeTab)
+  const browserOpen = Boolean(browserPanel?.isOpen)
+  const browserUrl = browserPanel?.url ?? ""
+  const perDirActiveTab = tabs.find((tab) => tab.id === panelState?.activeTabId) ?? tabs[tabs.length - 1] ?? null
+  const perDirOpen = Boolean(panelState?.isOpen)
+  // The global browser wins the view when it is explicitly focused, or when the
+  // current directory has nothing else to show — so it stays visible across projects.
+  const showBrowser = browserOpen && (Boolean(browserPanel?.focused) || !perDirOpen || !perDirActiveTab)
+  const activeTab = showBrowser ? null : perDirOpen ? perDirActiveTab : null
+  const isOpen = showBrowser || Boolean(perDirOpen && activeTab)
   const isExpanded = Boolean(isOpen && panelState?.expanded)
   const width = clampWidth(panelState?.width ?? CONTEXT_PANEL_DEFAULT_WIDTH)
 
@@ -2344,11 +2355,13 @@ export const ContextPanel: React.FC = () => {
   }, [isResizing])
 
   const handleClose = React.useCallback(() => {
-    if (!directoryKey) {
-      return
+    if (browserOpen) {
+      closeContextBrowser()
     }
-    closeContextPanel(directoryKey)
-  }, [closeContextPanel, directoryKey])
+    if (directoryKey) {
+      closeContextPanel(directoryKey)
+    }
+  }, [browserOpen, closeContextBrowser, closeContextPanel, directoryKey])
 
   const handleToggleExpanded = React.useCallback(() => {
     if (!directoryKey) {
@@ -2473,22 +2486,33 @@ export const ContextPanel: React.FC = () => {
     postEmbeddedVisibilityToChats()
   }, [darkThemeId, lightThemeId, postEmbeddedVisibilityToChats, postThemeSyncToEmbeddedChat, tabs, themeMode])
 
-  const tabItems = React.useMemo(
-    () =>
-      tabs.map((tab) => {
-        const rawLabel = getTabLabel(tab, t)
-        const label = truncateTabLabel(rawLabel, CONTEXT_TAB_LABEL_MAX_CHARS)
-        const tabPathLabel = getContextPanelRelativePathLabel(tab.targetPath, effectiveDirectory)
-        return {
-          id: tab.id,
-          label,
-          icon: getTabIcon(tab),
-          title: tabPathLabel ? `${rawLabel}: ${tabPathLabel}` : rawLabel,
-          closeLabel: t("contextPanel.tab.closeTabAria", { label }),
-        }
-      }),
-    [effectiveDirectory, t, tabs],
-  )
+  const tabItems = React.useMemo(() => {
+    const items = tabs.map((tab) => {
+      const rawLabel = getTabLabel(tab, t)
+      const label = truncateTabLabel(rawLabel, CONTEXT_TAB_LABEL_MAX_CHARS)
+      const tabPathLabel = getContextPanelRelativePathLabel(tab.targetPath, effectiveDirectory)
+      return {
+        id: tab.id,
+        label,
+        icon: getTabIcon(tab),
+        title: tabPathLabel ? `${rawLabel}: ${tabPathLabel}` : rawLabel,
+        closeLabel: t("contextPanel.tab.closeTabAria", { label }),
+      }
+    })
+    // The global browser renders as a chip in every directory's strip.
+    if (browserOpen) {
+      const browserRawLabel = t("contextPanel.mode.browser")
+      const browserLabel = truncateTabLabel(browserRawLabel, CONTEXT_TAB_LABEL_MAX_CHARS)
+      items.push({
+        id: GLOBAL_BROWSER_TAB_ID,
+        label: browserLabel,
+        icon: getTabIcon({ mode: "browser", targetPath: browserUrl || null }),
+        title: browserUrl ? `${browserRawLabel}: ${browserUrl}` : browserRawLabel,
+        closeLabel: t("contextPanel.tab.closeTabAria", { label: browserLabel }),
+      })
+    }
+    return items
+  }, [browserOpen, browserUrl, effectiveDirectory, t, tabs])
 
   const activeNonChatContent =
     activeTab?.mode === "diff" ? (
@@ -2528,7 +2552,6 @@ export const ContextPanel: React.FC = () => {
     )
 
   const chatTabs = React.useMemo(() => tabs.filter((tab) => tab.mode === "chat"), [tabs])
-  const browserTabs = React.useMemo(() => tabs.filter((tab) => tab.mode === "browser"), [tabs])
   const BrowserPane = isElectronBrowserRuntime() ? DesktopBrowserPane : IframeBrowserPane
   const hasFileTabs = React.useMemo(() => tabs.some((tab) => tab.mode === "file"), [tabs])
 
@@ -2538,14 +2561,22 @@ export const ContextPanel: React.FC = () => {
     <header className="flex h-10 items-stretch border-b border-transparent">
       <SortableTabsStrip
         items={tabItems}
-        activeId={activeTab?.id ?? null}
+        activeId={showBrowser ? GLOBAL_BROWSER_TAB_ID : (activeTab?.id ?? null)}
         onSelect={(tabID) => {
+          if (tabID === GLOBAL_BROWSER_TAB_ID) {
+            focusContextBrowser()
+            return
+          }
           if (!directoryKey) {
             return
           }
           setActiveContextPanelTab(directoryKey, tabID)
         }}
         onClose={(tabID) => {
+          if (tabID === GLOBAL_BROWSER_TAB_ID) {
+            closeContextBrowser()
+            return
+          }
           if (!directoryKey) {
             return
           }
@@ -2692,12 +2723,12 @@ export const ContextPanel: React.FC = () => {
             />
           )
         })}
-        {browserTabs.map((tab) => (
-          <div key={tab.id} className={cn("absolute inset-0", activeTab?.id !== tab.id && "hidden")}>
-            <BrowserPane initialUrl={tab.targetPath ?? ""} directory={directoryKey} tabID={tab.id} />
+        {browserOpen ? (
+          <div className={cn("absolute inset-0", !showBrowser && "hidden")}>
+            <BrowserPane initialUrl={browserUrl} directory={directoryKey} tabID={GLOBAL_BROWSER_TAB_ID} />
           </div>
-        ))}
-        {activeTab?.mode !== "chat" && !isFileTabActive && activeTab?.mode !== "browser" ? activeNonChatContent : null}
+        ) : null}
+        {activeTab?.mode !== "chat" && !isFileTabActive && !showBrowser ? activeNonChatContent : null}
       </div>
     </aside>
   )

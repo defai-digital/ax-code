@@ -503,6 +503,29 @@ const clampContextPanelRoots = (
   return next
 }
 
+// The browser lives in a single global panel (not per-directory) so it stays
+// open/consistent as the user switches projects. Its chip is rendered into the
+// per-directory context-panel strip via this sentinel id.
+export const GLOBAL_BROWSER_TAB_ID = "__ctx_global_browser__"
+
+export interface BrowserPanelState {
+  isOpen: boolean
+  url: string
+  focused: boolean
+}
+
+const normalizeBrowserPanelState = (value: unknown): BrowserPanelState => {
+  if (!value || typeof value !== "object") {
+    return { isOpen: false, url: "", focused: false }
+  }
+  const candidate = value as { isOpen?: unknown; url?: unknown; focused?: unknown }
+  return {
+    isOpen: candidate.isOpen === true,
+    url: typeof candidate.url === "string" ? candidate.url : "",
+    focused: candidate.focused === true,
+  }
+}
+
 interface UIStore {
   theme: "light" | "dark" | "system"
   isMultiRunLauncherOpen: boolean
@@ -515,6 +538,7 @@ interface UIStore {
   hasManuallyResizedRightSidebar: boolean
   rightSidebarTab: RightSidebarTab
   contextPanelByDirectory: Record<string, ContextPanelDirectoryState>
+  browserPanel: BrowserPanelState
   isBottomTerminalOpen: boolean
   isBottomTerminalExpanded: boolean
   bottomTerminalHeight: number
@@ -648,6 +672,9 @@ interface UIStore {
   openContextPlan: (directory: string) => void
   openContextPreview: (directory: string, url: string) => void
   openContextBrowser: (directory: string, url?: string) => void
+  closeContextBrowser: () => void
+  focusContextBrowser: () => void
+  setContextBrowserUrl: (url: string) => void
   openContextDashboard: (directory: string) => void
   setContextPanelTabTargetPath: (directory: string, tabID: string, targetPath: string) => void
   setActiveContextPanelTab: (directory: string, tabID: string) => void
@@ -794,6 +821,7 @@ export const useUIStore = create<UIStore>()(
         hasManuallyResizedRightSidebar: false,
         rightSidebarTab: "git",
         contextPanelByDirectory: {},
+        browserPanel: { isOpen: false, url: "", focused: false },
         isBottomTerminalOpen: false,
         isBottomTerminalExpanded: false,
         bottomTerminalHeight: 300,
@@ -1102,16 +1130,38 @@ export const useUIStore = create<UIStore>()(
             label,
           })
         },
-        openContextBrowser: (directory, url = "") => {
-          const normalizedDirectory = normalizeDirectoryPath((directory || "").trim())
-          if (!normalizedDirectory) return
+        // The browser is a single global panel, not tied to any directory, so it
+        // stays open as the user switches projects. `focused` means it is the
+        // currently-shown view; opening always focuses it.
+        openContextBrowser: (_directory, url = "") => {
           const targetUrl = typeof url === "string" && url.trim().length > 0 ? url.trim() : ""
-          get().openContextPanelTab(normalizedDirectory, {
-            mode: "browser",
-            targetPath: targetUrl,
-            dedupeKey: "desktop-browser",
-            label: "Browser",
-          })
+          set((state) => ({
+            browserPanel: {
+              isOpen: true,
+              focused: true,
+              url: targetUrl || state.browserPanel.url || "",
+            },
+          }))
+        },
+        closeContextBrowser: () => {
+          set((state) =>
+            state.browserPanel.isOpen || state.browserPanel.focused
+              ? { browserPanel: { ...state.browserPanel, isOpen: false, focused: false } }
+              : state,
+          )
+        },
+        focusContextBrowser: () => {
+          set((state) =>
+            state.browserPanel.isOpen && state.browserPanel.focused
+              ? state
+              : { browserPanel: { ...state.browserPanel, isOpen: true, focused: true } },
+          )
+        },
+        setContextBrowserUrl: (url) => {
+          const nextUrl = typeof url === "string" ? url.trim() : ""
+          set((state) =>
+            state.browserPanel.url === nextUrl ? state : { browserPanel: { ...state.browserPanel, url: nextUrl } },
+          )
         },
 
         openContextDashboard: (directory) => {
@@ -1154,8 +1204,13 @@ export const useUIStore = create<UIStore>()(
               return state
             }
 
+            // Selecting a real per-directory tab takes focus away from the global browser.
+            const browserPatch = state.browserPanel.focused
+              ? { browserPanel: { ...state.browserPanel, focused: false } }
+              : null
+
             if (current.activeTabId === normalizedTabID && current.isOpen) {
-              return state
+              return browserPatch ?? state
             }
 
             const byDirectory = {
@@ -1169,7 +1224,7 @@ export const useUIStore = create<UIStore>()(
               },
             }
 
-            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) }
+            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20), ...(browserPatch ?? {}) }
           })
         },
 
@@ -2065,7 +2120,7 @@ export const useUIStore = create<UIStore>()(
       {
         name: "ui-store",
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 10,
+        version: 11,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== "object") {
             return persistedState
@@ -2159,6 +2214,39 @@ export const useUIStore = create<UIStore>()(
             state.contextPanelByDirectory = sanitizeContextPanelByDirectory(state.contextPanelByDirectory)
           }
 
+          // v10 -> v11: the browser moved from a per-directory context-panel tab to a
+          // single global panel. Drain the most recently touched per-directory browser
+          // tab's URL into the new global slice, then strip browser tabs everywhere.
+          if (version < 11) {
+            const byDirectory = state.contextPanelByDirectory
+            let drainedUrl = ""
+            let drainedTouchedAt = -Infinity
+            if (byDirectory && typeof byDirectory === "object") {
+              for (const dirState of Object.values(byDirectory as Record<string, ContextPanelDirectoryState>)) {
+                const tabs = Array.isArray(dirState?.tabs) ? dirState.tabs : []
+                for (const tab of tabs) {
+                  if (tab?.mode === "browser") {
+                    const touched = typeof tab.touchedAt === "number" ? tab.touchedAt : 0
+                    if (touched >= drainedTouchedAt) {
+                      drainedTouchedAt = touched
+                      drainedUrl = typeof tab.targetPath === "string" ? tab.targetPath : ""
+                    }
+                  }
+                }
+                if (Array.isArray(dirState?.tabs)) {
+                  dirState.tabs = dirState.tabs.filter((tab) => tab?.mode !== "browser")
+                  if (dirState.activeTabId && !dirState.tabs.some((tab) => tab.id === dirState.activeTabId)) {
+                    dirState.activeTabId = dirState.tabs[dirState.tabs.length - 1]?.id ?? null
+                  }
+                }
+              }
+            }
+            state.browserPanel = { isOpen: false, url: drainedUrl, focused: false }
+            state.contextPanelByDirectory = sanitizeContextPanelByDirectory(state.contextPanelByDirectory)
+          }
+
+          state.browserPanel = normalizeBrowserPanelState(state.browserPanel)
+
           return state
         },
         partialize: (state) => ({
@@ -2169,6 +2257,7 @@ export const useUIStore = create<UIStore>()(
           rightSidebarWidth: state.rightSidebarWidth,
           rightSidebarTab: state.rightSidebarTab,
           contextPanelByDirectory: state.contextPanelByDirectory,
+          browserPanel: state.browserPanel,
           isBottomTerminalOpen: state.isBottomTerminalOpen,
           isBottomTerminalExpanded: state.isBottomTerminalExpanded,
           bottomTerminalHeight: state.bottomTerminalHeight,
