@@ -16,6 +16,33 @@ import {
   resolveTerminalDimensions,
 } from "./index.js"
 
+export const observeTerminalShellStartup = (ptyProcess, graceMs) =>
+  new Promise((resolve) => {
+    let settled = false
+    let timer = null
+    let earlyOutput = ""
+    let dataDisposable = null
+    let exitDisposable = null
+    const finish = (outcome) => {
+      if (settled) return
+      settled = true
+      if (timer) clearTimeout(timer)
+      try {
+        dataDisposable?.dispose()
+      } catch {}
+      try {
+        exitDisposable?.dispose()
+      } catch {}
+      resolve({ ...outcome, earlyOutput })
+    }
+
+    dataDisposable = ptyProcess.onData((chunk) => {
+      earlyOutput += typeof chunk === "string" ? chunk : String(chunk)
+    })
+    exitDisposable = ptyProcess.onExit(({ exitCode, signal }) => finish({ crashed: true, exitCode, signal }))
+    timer = setTimeout(() => finish({ crashed: false }), graceMs)
+  })
+
 export function createTerminalRuntime({
   app,
   server,
@@ -101,7 +128,14 @@ export function createTerminalRuntime({
   const utf8LocaleFallback = process.platform === "darwin" ? "en_US.UTF-8" : "C.UTF-8"
   const lcCtypeFallback = process.platform === "darwin" ? "UTF-8" : "C.UTF-8"
 
-  const spawnTerminalPtyWithFallback = (pty, { cols, rows, cwd, env }) => {
+  // A shell that spawns fine but exits within this window is treated as a
+  // startup crash (e.g. a ~/.bashrc that segfaults an old bash) and we fall back
+  // to the next candidate. Keep observing even after the first output: a shell
+  // can print a banner and exit before it becomes a usable interactive session.
+  // Startup output is buffered so the prompt isn't lost.
+  const TERMINAL_SHELL_STARTUP_GRACE_MS = 500
+
+  const spawnTerminalPtyWithFallback = async (pty, { cols, rows, cwd, env }) => {
     const shellCandidates = getTerminalShellCandidates()
     if (shellCandidates.length === 0) {
       throw new Error("No executable shell found for terminal session")
@@ -109,6 +143,7 @@ export function createTerminalRuntime({
 
     let lastError = null
     for (const shell of shellCandidates) {
+      let ptyProcess
       try {
         const ptyOptions = {
           name: "xterm-256color",
@@ -128,13 +163,30 @@ export function createTerminalRuntime({
           ptyOptions.useConpty = true
         }
 
-        const ptyProcess = pty.spawn(shell, [], ptyOptions)
-
-        return { ptyProcess, shell }
+        ptyProcess = pty.spawn(shell, [], ptyOptions)
       } catch (error) {
         lastError = error
         console.warn(`Failed to spawn PTY using shell ${shell}:`, error && error.message ? error.message : error)
+        continue
       }
+
+      // pty.spawn returns synchronously even when the shell crashes on startup
+      // (the exit arrives asynchronously), so watch briefly and fall back on an
+      // immediate exit. Buffer any startup output to seed the replay buffer.
+      const outcome = await observeTerminalShellStartup(ptyProcess, TERMINAL_SHELL_STARTUP_GRACE_MS)
+
+      if (outcome.crashed) {
+        lastError = new Error(
+          `shell ${shell} exited on startup (code ${outcome.exitCode}, signal ${outcome.signal})`,
+        )
+        console.warn(`Terminal shell ${shell} crashed on startup; trying next candidate: ${lastError.message}`)
+        try {
+          ptyProcess.kill()
+        } catch {}
+        continue
+      }
+
+      return { ptyProcess, shell, earlyOutput: outcome.earlyOutput }
     }
 
     const baseMessage = lastError && lastError.message ? lastError.message : "PTY spawn failed"
@@ -526,7 +578,7 @@ export function createTerminalRuntime({
       const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath })
 
       const pty = await getPtyProvider()
-      const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
+      const { ptyProcess, shell, earlyOutput } = await spawnTerminalPtyWithFallback(pty, {
         cols: terminalSize.cols,
         rows: terminalSize.rows,
         cwd,
@@ -543,6 +595,9 @@ export function createTerminalRuntime({
       }
 
       terminalSessions.set(sessionId, session)
+      if (earlyOutput) {
+        appendTerminalOutputReplayChunk(session.outputReplayBuffer, earlyOutput, TERMINAL_OUTPUT_REPLAY_MAX_BYTES)
+      }
       wireTerminalSession(sessionId, session)
 
       console.log(`Created terminal session: ${sessionId} in ${cwd} using shell ${shell}`)
@@ -782,7 +837,7 @@ export function createTerminalRuntime({
       const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath })
 
       const pty = await getPtyProvider()
-      const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
+      const { ptyProcess, shell, earlyOutput } = await spawnTerminalPtyWithFallback(pty, {
         cols: terminalSize.cols,
         rows: terminalSize.rows,
         cwd,
@@ -799,6 +854,9 @@ export function createTerminalRuntime({
       }
 
       terminalSessions.set(newSessionId, session)
+      if (earlyOutput) {
+        appendTerminalOutputReplayChunk(session.outputReplayBuffer, earlyOutput, TERMINAL_OUTPUT_REPLAY_MAX_BYTES)
+      }
       wireTerminalSession(newSessionId, session)
 
       console.log(`Restarted terminal session: ${sessionId} -> ${newSessionId} in ${cwd} using shell ${shell}`)

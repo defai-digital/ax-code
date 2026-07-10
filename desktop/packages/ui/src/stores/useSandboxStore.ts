@@ -3,6 +3,11 @@ import { axCodeClient } from "@/lib/ax-code/client"
 import { toast } from "@/components/ui"
 import { useI18nStore, formatMessage } from "@/lib/i18n/store"
 import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
+import { withTimeout } from "@/lib/asyncTimeout"
+
+// Never let a stalled request keep the toggle spinning + disabled forever: bound
+// the isolation read/write so `pending` always clears and the control stays usable.
+const SANDBOX_REQUEST_TIMEOUT_MS = 12_000
 
 /**
  * Sandbox (isolation) mode toggle for the desktop UI. The AX Code server
@@ -52,9 +57,13 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
 
     let isolation: Awaited<ReturnType<typeof axCodeClient.getIsolation>> | null = null
     try {
-      isolation = await axCodeClient.withDirectory(directory ?? null, async () => {
-        return axCodeClient.getIsolation()
-      })
+      isolation = await withTimeout(
+        axCodeClient.withDirectory(directory ?? null, async () => {
+          return axCodeClient.getIsolation()
+        }),
+        SANDBOX_REQUEST_TIMEOUT_MS,
+        () => null,
+      )
     } catch {
       isolation = null
     }
@@ -90,9 +99,13 @@ export const useSandboxStore = create<SandboxStore>()((set, get) => ({
     const mode = enabled ? (get().restrictedModeByDirectory[key] ?? "workspace-write") : "full-access"
     let result: Awaited<ReturnType<typeof axCodeClient.setIsolation>> | null = null
     try {
-      result = await axCodeClient.withDirectory(directory ?? null, async () => {
-        return axCodeClient.setIsolation(mode)
-      })
+      result = await withTimeout(
+        axCodeClient.withDirectory(directory ?? null, async () => {
+          return axCodeClient.setIsolation(mode)
+        }),
+        SANDBOX_REQUEST_TIMEOUT_MS,
+        () => null,
+      )
     } catch {
       result = null
     }

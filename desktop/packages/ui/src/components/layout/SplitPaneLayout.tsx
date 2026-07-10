@@ -74,8 +74,12 @@ export const SplitPaneLayout: React.FC<SplitPaneLayoutProps> = ({ children, righ
 
   return (
     <div ref={containerRef} className="flex h-full w-full overflow-hidden">
-      {/* Left pane */}
-      <div className="relative h-full min-w-0 overflow-hidden" style={{ width: leftPercent }}>
+      {/* Left pane. Must be a flex column: `children` is a `flex flex-1` element
+          that only fills its height when its parent is a flex container (the
+          non-split path renders it into MainLayout's `flex flex-col` wrapper).
+          Without `flex flex-col` here the chat pane collapses to content height
+          and crams into the top-left. */}
+      <div className="relative flex flex-col h-full min-w-0 overflow-hidden" style={{ width: leftPercent }}>
         {children}
       </div>
 
