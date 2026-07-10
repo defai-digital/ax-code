@@ -1753,6 +1753,7 @@ export const dict = {
   "chat.chatInput.branch": "Branch",
   "chat.chatInput.worktrees": "Worktrees",
   "chat.chatInput.worktreeNew": "+ New",
+  "chat.chatInput.addProject": "Add project…",
   "chat.chatInput.drop.insertMention": "Drop to insert as mention",
   "chat.chatInput.drop.attachFiles": "Drop files here to attach",
   "chat.chatInput.fileFallback": "file",

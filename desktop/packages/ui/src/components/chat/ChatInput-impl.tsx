@@ -70,6 +70,7 @@ import { useProjectsStore } from "@/stores/useProjectsStore"
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, getProjectIconImageUrl } from "@/lib/projectMeta"
 import { useGitBranches, useGitStore, useIsGitRepo } from "@/stores/useGitStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
+import { sessionEvents } from "@/lib/sessionEvents"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { useCommandsStore } from "@/stores/useCommandsStore"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
@@ -880,6 +881,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   ).current
   const currentSessionId = useSessionUIStore((s) => s.currentSessionId)
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory)
+  const homeDirectory = useDirectoryStore((s) => s.homeDirectory)
   const projectKnowledge = useProjectKnowledge(currentDirectory)
   const currentSessionDirectoryForSync = useSessionUIStore(
     React.useCallback(
@@ -3681,6 +3683,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
       )
       const projectIconName = project.icon ? PROJECT_ICON_MAP[project.icon] : null
       const iconColor = getProjectIconColor(project.color)
+      // The home ("~") project is an ordinary registered project whose path is
+      // the home dir; label it "Home (~)" with a house icon so it stops looking
+      // like a normal project named after the home folder (e.g. "alvinhu").
+      const normalizedHome = normalizePath(homeDirectory)
+      const isHomeProject =
+        Boolean(normalizedHome) && normalizePath(project.path) === normalizedHome && !project.label?.trim()
 
       return (
         <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -3699,16 +3707,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             />
           ) : (
             <Icon
-              name="folder"
+              name={isHomeProject ? "home" : "folder"}
               className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80"
               style={iconColor ? { color: iconColor } : undefined}
             />
           )}
-          <span className="truncate">{getProjectDisplayLabel(project)}</span>
+          <span className="truncate">
+            {isHomeProject ? `${t("sessions.sidebar.project.home")} (~)` : getProjectDisplayLabel(project)}
+          </span>
         </span>
       )
     },
-    [currentTheme.colors.surface.foreground, currentTheme.metadata.variant],
+    [currentTheme.colors.surface.foreground, currentTheme.metadata.variant, homeDirectory, t],
   )
 
   React.useEffect(() => {
@@ -4059,6 +4069,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                       {renderProjectLabelWithIcon(project)}
                     </SelectItem>
                   ))}
+                  <SelectSeparator />
+                  <button
+                    type="button"
+                    className="flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left typography-ui-label text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      sessionEvents.requestDirectoryDialog()
+                    }}
+                  >
+                    <Icon name="add" className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{t("chat.chatInput.addProject")}</span>
+                  </button>
                 </SelectContent>
               </Select>
 
