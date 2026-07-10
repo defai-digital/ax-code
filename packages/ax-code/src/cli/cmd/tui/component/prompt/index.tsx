@@ -1044,6 +1044,13 @@ export function Prompt(props: PromptProps) {
     }
     const promptInput = syncPromptInputFromRenderable()
     if (!promptInput) {
+      // Honor the "press Enter to connect" placeholder: with no model configured,
+      // an empty Enter should open the provider dialog rather than silently
+      // no-op. promptModelWarning() opens the provider dialog (or a "still
+      // loading"/"failed" toast) exactly like the no-model submit path below.
+      if (!local.model.current()) {
+        promptModelWarning()
+      }
       log.info("tui.prompt.submit: empty prompt input")
       return
     }
