@@ -7,7 +7,7 @@
 // terminal fails at runtime with "posix_spawnp failed" (EACCES on a
 // non-executable helper) even though node-pty itself loads fine. This makes the
 // bit deterministic. Idempotent; a no-op on Windows (no spawn-helper there).
-import { chmodSync, existsSync, readdirSync, statSync } from "node:fs"
+import { chmodSync, readdirSync, statSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 

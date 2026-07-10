@@ -1,6 +1,6 @@
 import React from "react"
 import type { Session } from "@ax-code/sdk/v2"
-import { dedupeSessionsById, isSessionOwnedByProject, normalizePath } from "../utils"
+import { dedupeSessionsById, normalizePath, resolveOwningProjectRoot } from "../utils"
 import type { WorktreeMeta } from "../types"
 
 type Args = {
@@ -32,6 +32,19 @@ export const useProjectSessionLists = (args: Args) => {
     })
     return next
   }, [sessions])
+
+  // Archived sections are built once per project. Resolve ownership once for
+  // each session instead of scanning every project root for every section.
+  const ownerProjectRootBySessionId = React.useMemo(() => {
+    const owners = new Map<string, string | null>()
+    for (const session of [...sessions, ...archivedSessions]) {
+      owners.set(
+        session.id,
+        resolveOwningProjectRoot(session, allProjectRoots, availableWorktreesByProject),
+      )
+    }
+    return owners
+  }, [allProjectRoots, archivedSessions, availableWorktreesByProject, sessions])
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
@@ -65,7 +78,7 @@ export const useProjectSessionLists = (args: Args) => {
   const getArchivedSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
       const ownsSession = (session: Session): boolean =>
-        isSessionOwnedByProject(session, project.normalizedPath, allProjectRoots, availableWorktreesByProject)
+        ownerProjectRootBySessionId.get(session.id) === project.normalizedPath
 
       const archived = archivedSessions.filter(ownsSession)
       const unassignedLive = sessions.filter((session) => {
@@ -87,7 +100,7 @@ export const useProjectSessionLists = (args: Args) => {
 
       return dedupeSessionsById([...archived, ...unassignedLive])
     },
-    [archivedSessions, allProjectRoots, availableWorktreesByProject, sessions],
+    [archivedSessions, ownerProjectRootBySessionId, sessions],
   )
 
   return {

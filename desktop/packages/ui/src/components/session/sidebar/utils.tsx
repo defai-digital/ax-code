@@ -221,11 +221,13 @@ export const isSessionRelatedToProject = (
 
 /**
  * Resolve the single project a session belongs to: the most-specific
- * (longest-matching) registered project root — or worktree — that contains the
- * session's directory. Unlike {@link isSessionRelatedToProject}, which returns
- * true for a root *and every ancestor of it*, this picks one owner, so a broad
- * ancestor project (e.g. the home `~` project) no longer claims sessions that
- * live inside a more specific registered project nested beneath it.
+ * (longest-matching) registered project root that contains the session's
+ * directory. Registered worktrees participate in match strength, but the
+ * returned value is always the owning project root. Unlike
+ * {@link isSessionRelatedToProject}, which returns true for a root *and every
+ * ancestor of it*, this picks one owner, so a broad ancestor project (e.g. the
+ * home `~` project) no longer claims sessions that live inside a more specific
+ * registered project nested beneath it.
  */
 export const resolveOwningProjectRoot = (
   session: Session,
