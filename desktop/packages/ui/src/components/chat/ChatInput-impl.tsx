@@ -76,6 +76,7 @@ import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, getProjectIconImageUrl } from "@/l
 import { useGitBranches, useGitStore, useIsGitRepo } from "@/stores/useGitStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { sessionEvents } from "@/lib/sessionEvents"
+import { ProjectSwitcher } from "@/components/chat/ProjectSwitcher"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { useCommandsStore } from "@/stores/useCommandsStore"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
@@ -3742,6 +3743,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     [currentTheme.colors.surface.foreground, currentTheme.metadata.variant, homeDirectory, t],
   )
 
+  // Search text for the project switcher — match on the visible label (incl. the
+  // "Home (~)" alias) and the path so typing a folder name finds it too.
+  const getProjectSearchText = React.useCallback(
+    (project: { label?: string; path: string }) => {
+      const normalizedHome = normalizePath(homeDirectory)
+      const isHomeProject =
+        Boolean(normalizedHome) && normalizePath(project.path) === normalizedHome && !project.label?.trim()
+      const label = isHomeProject ? `${t("sessions.sidebar.project.home")} (~)` : getProjectDisplayLabel(project)
+      return `${label} ${project.path}`
+    },
+    [homeDirectory, t],
+  )
+
+  const handleAddProject = React.useCallback(() => {
+    sessionEvents.requestDirectoryDialog()
+  }, [])
+
   React.useEffect(() => {
     if (!showDraftTargetSelectors || !selectedDraftProject || !selectedDraftDirectory) {
       return
@@ -4087,40 +4105,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           ) : null}
           {showDraftTargetSelectors && selectedDraftProject ? (
             <div className="mb-1.5 flex min-w-0 items-center gap-1.5 px-0.5">
-              <Select value={selectedDraftProject.id} onValueChange={handleDraftProjectChange}>
-                {/* Keep the project switcher visually distinct from the adjacent worktree
-                    picker: a real border + hover + chevron so it reads as "switch project",
-                    not plain text. The worktree picker below stays borderless/secondary. */}
-                <SelectTrigger
-                  size="sm"
-                  className="h-7 min-w-0 w-fit max-w-[42vw] sm:max-w-[18rem] border-input px-1.5"
-                >
-                  <SelectValue>{renderProjectLabelWithIcon(selectedDraftProject)}</SelectValue>
-                </SelectTrigger>
-                <SelectContent fitContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id} className="max-w-[24rem] truncate">
-                      {renderProjectLabelWithIcon(project)}
-                    </SelectItem>
-                  ))}
-                  <SelectSeparator />
-                  <button
-                    type="button"
-                    className="flex w-full cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-left typography-ui-label text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
-                    onPointerDown={(e) => {
-                      e.stopPropagation()
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      sessionEvents.requestDirectoryDialog()
-                    }}
-                  >
-                    <Icon name="add" className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{t("chat.chatInput.addProject")}</span>
-                  </button>
-                </SelectContent>
-              </Select>
+              {/* Searchable project switcher: a bordered chip that opens a popover with
+                  a search box, the project list (folder/home icon + a check on the active
+                  one) and a "+ Add project…" action. The worktree picker beside it stays
+                  borderless/secondary so this reads as the primary "switch project" control. */}
+              <ProjectSwitcher
+                projects={projects}
+                selectedProjectId={selectedDraftProject.id}
+                renderLabel={renderProjectLabelWithIcon}
+                getSearchText={getProjectSearchText}
+                onSelect={handleDraftProjectChange}
+                onAddProject={handleAddProject}
+              />
 
               {shouldShowDraftBranchSelector ? (
                 <Select
