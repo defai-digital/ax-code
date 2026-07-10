@@ -1,7 +1,7 @@
 import React from "react"
 import type { Session } from "@ax-code/sdk/v2"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
-import { dedupeSessionsById, getArchivedScopeKey, isSessionRelatedToProject, normalizePath } from "../utils"
+import { dedupeSessionsById, getArchivedScopeKey, isSessionOwnedByProject, normalizePath } from "../utils"
 import type { WorktreeMeta } from "../types"
 
 type NormalizedProject = {
@@ -47,15 +47,11 @@ export const useSessionFolderCleanup = (args: Args): void => {
       idsByScope.set(directory, new Set([session.id]))
     })
 
+    const allProjectRoots = normalizedProjects.map((project) => project.normalizedPath)
     normalizedProjects.forEach((project) => {
       const scopeKey = getArchivedScopeKey(project.normalizedPath)
-      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? []
-      const validDirectories = new Set<string>([
-        project.normalizedPath,
-        ...worktreesForProject
-          .map((meta) => normalizePath(meta.path) ?? meta.path)
-          .filter((value): value is string => Boolean(value)),
-      ])
+      const ownsSession = (session: Session): boolean =>
+        isSessionOwnedByProject(session, project.normalizedPath, allProjectRoots, availableWorktreesByProject)
 
       const archivedForProject = dedupeSessionsById([
         ...archivedSessions,
@@ -67,9 +63,9 @@ export const useSessionFolderCleanup = (args: Args): void => {
           if (sessionDirectory) {
             return false
           }
-          return isSessionRelatedToProject(session, project.normalizedPath, validDirectories)
+          return ownsSession(session)
         }),
-      ]).filter((session) => isSessionRelatedToProject(session, project.normalizedPath, validDirectories))
+      ]).filter(ownsSession)
 
       idsByScope.set(scopeKey, new Set(archivedForProject.map((session) => session.id)))
     })

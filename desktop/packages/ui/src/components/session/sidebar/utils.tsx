@@ -197,6 +197,72 @@ export const isSessionRelatedToProject = (
   return projectPathMatchesRoot(sessionDirectory, normalizedProjectRoot)
 }
 
+/**
+ * Resolve the single project a session belongs to: the most-specific
+ * (longest-matching) registered project root — or worktree — that contains the
+ * session's directory. Unlike {@link isSessionRelatedToProject}, which returns
+ * true for a root *and every ancestor of it*, this picks one owner, so a broad
+ * ancestor project (e.g. the home `~` project) no longer claims sessions that
+ * live inside a more specific registered project nested beneath it.
+ */
+export const resolveOwningProjectRoot = (
+  session: Session,
+  projectRoots: readonly string[],
+  availableWorktreesByProject?: Map<string, ReadonlyArray<{ path?: string | null }>>,
+): string | null => {
+  const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null)
+  const projectWorktree = normalizePath(
+    (session as Session & { project?: { worktree?: string | null } | null }).project?.worktree ?? null,
+  )
+  const directory = sessionDirectory ?? projectWorktree
+  if (!directory) {
+    return null
+  }
+
+  let bestRoot: string | null = null
+  let bestMatchLength = -1
+  for (const rawRoot of projectRoots) {
+    const root = normalizePath(rawRoot)
+    if (!root) {
+      continue
+    }
+    // A worktree path is more specific than the project root, so consider both
+    // and keep the longest matching path as this project's match strength.
+    let matchLength = projectPathMatchesRoot(directory, root) ? root.length : -1
+    const worktrees = availableWorktreesByProject?.get(rawRoot) ?? availableWorktreesByProject?.get(root) ?? []
+    for (const worktree of worktrees) {
+      const worktreePath = normalizePath(worktree?.path ?? null)
+      if (worktreePath && worktreePath.length > matchLength && projectPathMatchesRoot(directory, worktreePath)) {
+        matchLength = worktreePath.length
+      }
+    }
+    if (matchLength > bestMatchLength) {
+      bestMatchLength = matchLength
+      bestRoot = root
+    }
+  }
+  return bestRoot
+}
+
+/**
+ * True when `projectRoot` is the most-specific project owning the session
+ * (see {@link resolveOwningProjectRoot}). Use this — not
+ * {@link isSessionRelatedToProject} — when assigning a session to exactly one
+ * project bucket, so a session is never listed under several ancestor projects.
+ */
+export const isSessionOwnedByProject = (
+  session: Session,
+  projectRoot: string,
+  allProjectRoots: readonly string[],
+  availableWorktreesByProject?: Map<string, ReadonlyArray<{ path?: string | null }>>,
+): boolean => {
+  const normalizedProjectRoot = normalizePath(projectRoot)
+  if (!normalizedProjectRoot) {
+    return false
+  }
+  return resolveOwningProjectRoot(session, allProjectRoots, availableWorktreesByProject) === normalizedProjectRoot
+}
+
 const parseSummaryCount = (value: number | string | null | undefined): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value

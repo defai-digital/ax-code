@@ -4,7 +4,7 @@ import type { WorktreeMetadata } from "@/types/worktree"
 import {
   dedupeSessionsById,
   getArchivedScopeKey,
-  isSessionRelatedToProject,
+  isSessionOwnedByProject,
   normalizePath,
   resolveArchivedFolderName,
 } from "../utils"
@@ -33,20 +33,14 @@ type Args = {
 
 const getArchivedSessionsForProject = (
   project: ProjectForArchivedFolders,
-  params: Pick<Args, "sessions" | "archivedSessions" | "availableWorktreesByProject">,
+  params: Pick<Args, "sessions" | "archivedSessions" | "availableWorktreesByProject"> & {
+    allProjectRoots: string[]
+  },
 ): Session[] => {
-  const worktreesForProject = params.availableWorktreesByProject.get(project.normalizedPath) ?? []
-  const validDirectories = new Set<string>([
-    project.normalizedPath,
-    ...worktreesForProject
-      .map((meta) => normalizePath(meta.path) ?? meta.path)
-      .filter((value): value is string => Boolean(value)),
-  ])
+  const ownsSession = (session: Session): boolean =>
+    isSessionOwnedByProject(session, project.normalizedPath, params.allProjectRoots, params.availableWorktreesByProject)
 
-  const collect = (input: Session[]): Session[] =>
-    input.filter((session) => isSessionRelatedToProject(session, project.normalizedPath, validDirectories))
-
-  const archived = collect(params.archivedSessions)
+  const archived = params.archivedSessions.filter(ownsSession)
   const unassignedLive = params.sessions.filter((session) => {
     if (session.time?.archived) {
       return false
@@ -55,7 +49,7 @@ const getArchivedSessionsForProject = (
     if (sessionDirectory) {
       return false
     }
-    return isSessionRelatedToProject(session, project.normalizedPath, validDirectories)
+    return ownsSession(session)
   })
 
   return dedupeSessionsById([...archived, ...unassignedLive])
@@ -79,12 +73,14 @@ export const useArchivedAutoFolders = (args: Args): void => {
       return
     }
 
+    const allProjectRoots = normalizedProjects.map((project) => project.normalizedPath)
     normalizedProjects.forEach((project) => {
       const scopeKey = getArchivedScopeKey(project.normalizedPath)
       const projectArchivedSessions = getArchivedSessionsForProject(project, {
         sessions,
         archivedSessions,
         availableWorktreesByProject,
+        allProjectRoots,
       })
       const sessionIds = new Set(projectArchivedSessions.map((session) => session.id))
 
