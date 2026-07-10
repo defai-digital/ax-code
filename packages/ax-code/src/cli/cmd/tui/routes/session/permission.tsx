@@ -728,10 +728,18 @@ function Prompt<const T extends Record<string, string>>(props: {
   const { theme } = useTheme()
   const keybind = useKeybind()
   const dimensions = useTerminalDimensions()
-  const keys = Object.keys(props.options) as (keyof T)[]
+  // Reactive so a reused Prompt (queued requests flushed together) tracks the
+  // current request's option set instead of freezing to the first one's.
+  const keys = createMemo(() => Object.keys(props.options) as (keyof T)[])
   const [store, setStore] = createStore({
-    selected: keys[0],
+    selected: keys()[0],
     expanded: false,
+  })
+  // Clamp the selection back into range whenever the option set changes, so it
+  // never points at an option the new request removed.
+  createEffect(() => {
+    const current = keys()
+    if (!current.includes(store.selected)) setStore("selected", current[0])
   })
   const diffKey = Keybind.parse("ctrl+f")[0]
   const narrow = createMemo(() => dimensions().width < 80)
@@ -742,15 +750,17 @@ function Prompt<const T extends Record<string, string>>(props: {
 
     if (evt.name === "left" || evt.name == "h") {
       evt.preventDefault()
-      const idx = keys.indexOf(store.selected)
-      const next = keys[(idx - 1 + keys.length) % keys.length]
+      const current = keys()
+      const idx = current.indexOf(store.selected)
+      const next = current[(idx - 1 + current.length) % current.length]
       setStore("selected", next)
     }
 
     if (evt.name === "right" || evt.name == "l") {
       evt.preventDefault()
-      const idx = keys.indexOf(store.selected)
-      const next = keys[(idx + 1) % keys.length]
+      const current = keys()
+      const idx = current.indexOf(store.selected)
+      const next = current[(idx + 1) % current.length]
       setStore("selected", next)
     }
 
@@ -819,7 +829,7 @@ function Prompt<const T extends Record<string, string>>(props: {
         alignItems={narrow() ? "flex-start" : "center"}
       >
         <box flexDirection="row" gap={1} flexShrink={0}>
-          <For each={keys}>
+          <For each={keys()}>
             {(option) => (
               <box
                 paddingLeft={1}
