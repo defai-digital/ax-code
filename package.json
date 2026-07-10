@@ -43,7 +43,7 @@
     "publish:github": "tsx script/publish-github-release.ts",
     "sign:release": "tsx script/sign-release-assets.ts",
     "prepare": "husky",
-    "postinstall": "node scripts/fix-node-pty-permissions.mjs",
+    "postinstall": "node desktop/scripts/fix-node-pty-permissions.mjs",
     "test:scripts": "vitest run",
     "test": "echo 'do not run tests from root (use test:scripts for root script suites)' && exit 1"
   },
