@@ -306,4 +306,77 @@ describe("preview proxy upstream request hygiene", () => {
 
     expect(removed).toEqual(["cookie", "authorization", "x-openchamber-ui-session"])
   })
+
+  it("keeps the original target stable when a proxied resource redirects cross-origin", async () => {
+    let targetRoute = null
+    let proxyOptions = null
+    let randomCounter = 0
+    const app = {
+      post: (_path, ...handlers) => {
+        targetRoute = handlers.at(-1)
+      },
+      use() {},
+    }
+    const runtime = createPreviewProxyRuntime({
+      crypto: {
+        randomBytes: () => Buffer.from(String(++randomCounter).padStart(32, "0"), "hex"),
+      },
+      URL,
+      createProxyMiddleware: (options) => {
+        proxyOptions = options
+        const middleware = vi.fn()
+        middleware.upgrade = vi.fn()
+        return middleware
+      },
+      responseInterceptor: (handler) => handler,
+    })
+    runtime.attach(app, {
+      server: { on: vi.fn() },
+      express: { json: vi.fn(() => vi.fn()) },
+      uiAuthController: null,
+      isRequestOriginAllowed: vi.fn(),
+      rejectWebSocketUpgrade: vi.fn(),
+    })
+
+    const headers = new Map()
+    const targetResponse = {
+      setHeader: (name, value) => headers.set(name.toLowerCase(), value),
+      json: vi.fn(),
+    }
+    await targetRoute({ body: { url: "http://127.0.0.1:3000" }, secure: false }, targetResponse)
+
+    const [sourceCookie] = String(headers.get("set-cookie")).split(";", 1)
+    const target = targetResponse.json.mock.calls[0][0]
+    const request = {
+      originalUrl: `${target.proxyBasePath}/style.css`,
+      headers: { cookie: sourceCookie },
+      secure: false,
+    }
+    const redirectHeaders = new Map()
+    const redirectResponse = {
+      statusCode: 302,
+      removeHeader: vi.fn(),
+      getHeader: (name) => redirectHeaders.get(name.toLowerCase()),
+      setHeader: (name, value) => redirectHeaders.set(name.toLowerCase(), value),
+    }
+
+    await proxyOptions.on.proxyRes(
+      Buffer.alloc(0),
+      { statusCode: 302, headers: { location: "https://example.com/assets/style.css" } },
+      request,
+      redirectResponse,
+    )
+
+    expect(proxyOptions.router(request)).toBe("http://127.0.0.1:3000")
+    const redirectedLocation = redirectHeaders.get("location")
+    expect(redirectedLocation).toMatch(/^\/api\/preview\/proxy\/[a-f0-9]{32}\/assets\/style\.css$/)
+    expect(redirectedLocation).not.toContain(target.id)
+
+    const redirectedCookie = redirectHeaders.get("set-cookie")[0].split(";", 1)[0]
+    const redirectedRequest = {
+      originalUrl: redirectedLocation,
+      headers: { cookie: `${sourceCookie}; ${redirectedCookie}` },
+    }
+    expect(proxyOptions.router(redirectedRequest)).toBe("https://example.com")
+  })
 })

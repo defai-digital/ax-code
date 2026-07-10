@@ -16,6 +16,33 @@ import {
   resolveTerminalDimensions,
 } from "./index.js"
 
+export const observeTerminalShellStartup = (ptyProcess, graceMs) =>
+  new Promise((resolve) => {
+    let settled = false
+    let timer = null
+    let earlyOutput = ""
+    let dataDisposable = null
+    let exitDisposable = null
+    const finish = (outcome) => {
+      if (settled) return
+      settled = true
+      if (timer) clearTimeout(timer)
+      try {
+        dataDisposable?.dispose()
+      } catch {}
+      try {
+        exitDisposable?.dispose()
+      } catch {}
+      resolve({ ...outcome, earlyOutput })
+    }
+
+    dataDisposable = ptyProcess.onData((chunk) => {
+      earlyOutput += typeof chunk === "string" ? chunk : String(chunk)
+    })
+    exitDisposable = ptyProcess.onExit(({ exitCode, signal }) => finish({ crashed: true, exitCode, signal }))
+    timer = setTimeout(() => finish({ crashed: false }), graceMs)
+  })
+
 export function createTerminalRuntime({
   app,
   server,
@@ -103,9 +130,9 @@ export function createTerminalRuntime({
 
   // A shell that spawns fine but exits within this window is treated as a
   // startup crash (e.g. a ~/.bashrc that segfaults an old bash) and we fall back
-  // to the next candidate. A healthy shell resolves as soon as it emits output,
-  // so this window only adds latency for a silent shell. Startup output is
-  // buffered so the prompt isn't lost.
+  // to the next candidate. Keep observing even after the first output: a shell
+  // can print a banner and exit before it becomes a usable interactive session.
+  // Startup output is buffered so the prompt isn't lost.
   const TERMINAL_SHELL_STARTUP_GRACE_MS = 500
 
   const spawnTerminalPtyWithFallback = async (pty, { cols, rows, cwd, env }) => {
@@ -146,31 +173,7 @@ export function createTerminalRuntime({
       // pty.spawn returns synchronously even when the shell crashes on startup
       // (the exit arrives asynchronously), so watch briefly and fall back on an
       // immediate exit. Buffer any startup output to seed the replay buffer.
-      let earlyOutput = ""
-      const outcome = await new Promise((resolve) => {
-        let settled = false
-        const finish = (value) => {
-          if (settled) return
-          settled = true
-          clearTimeout(timer)
-          try {
-            dataDisposable.dispose()
-          } catch {}
-          try {
-            exitDisposable.dispose()
-          } catch {}
-          resolve(value)
-        }
-        const dataDisposable = ptyProcess.onData((chunk) => {
-          earlyOutput += typeof chunk === "string" ? chunk : String(chunk)
-          // Output means the shell started successfully — accept it immediately
-          // instead of waiting out the full grace window (no latency for healthy
-          // shells). Only a silent shell waits for the timeout/exit.
-          finish({ crashed: false })
-        })
-        const exitDisposable = ptyProcess.onExit(({ exitCode, signal }) => finish({ crashed: true, exitCode, signal }))
-        const timer = setTimeout(() => finish({ crashed: false }), TERMINAL_SHELL_STARTUP_GRACE_MS)
-      })
+      const outcome = await observeTerminalShellStartup(ptyProcess, TERMINAL_SHELL_STARTUP_GRACE_MS)
 
       if (outcome.crashed) {
         lastError = new Error(
@@ -183,7 +186,7 @@ export function createTerminalRuntime({
         continue
       }
 
-      return { ptyProcess, shell, earlyOutput }
+      return { ptyProcess, shell, earlyOutput: outcome.earlyOutput }
     }
 
     const baseMessage = lastError && lastError.message ? lastError.message : "PTY spawn failed"

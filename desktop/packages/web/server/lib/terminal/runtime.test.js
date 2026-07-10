@@ -3,7 +3,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 
-import { createTerminalRuntime } from "./runtime.js"
+import { createTerminalRuntime, observeTerminalShellStartup } from "./runtime.js"
 import { createMockResponse, createRouteRegistry } from "../../test-helpers/route-harness.js"
 
 function createRuntime(server, overrides = {}) {
@@ -33,6 +33,32 @@ function createRuntime(server, overrides = {}) {
 }
 
 describe("terminal runtime", () => {
+  it("rejects a shell that emits output and then exits during startup", async () => {
+    let onData = null
+    let onExit = null
+    const ptyProcess = {
+      onData(callback) {
+        onData = callback
+        return { dispose() {} }
+      },
+      onExit(callback) {
+        onExit = callback
+        return { dispose() {} }
+      },
+    }
+
+    const outcomePromise = observeTerminalShellStartup(ptyProcess, 50)
+    onData("startup banner\\r\\n")
+    setTimeout(() => onExit({ exitCode: 139, signal: 11 }), 1)
+
+    await expect(outcomePromise).resolves.toEqual({
+      crashed: true,
+      exitCode: 139,
+      signal: 11,
+      earlyOutput: "startup banner\\r\\n",
+    })
+  })
+
   it("rejects terminal working directories that are not approved", async () => {
     const { app, getRoute } = createRouteRegistry()
     const server = new EventEmitter()

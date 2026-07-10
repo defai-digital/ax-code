@@ -111,14 +111,14 @@ export const API_ENDPOINTS = {
     session: `${API_PATHS.auth}/session`,
     passkeys: {
       authenticate: {
-        options: `${API_PATHS.auth}/passkey/authenticate/options`,
-        verify: `${API_PATHS.auth}/passkey/authenticate/verify`,
+        options: "/auth/passkey/authenticate/options",
+        verify: "/auth/passkey/authenticate/verify",
       },
       register: {
-        options: `${API_PATHS.auth}/passkey/register/options`,
-        verify: `${API_PATHS.auth}/passkey/register/verify`,
+        options: "/auth/passkey/register/options",
+        verify: "/auth/passkey/register/verify",
       },
-      status: `${API_PATHS.auth}/passkey/status`,
+      status: "/auth/passkey/status",
     },
   },
   github: {

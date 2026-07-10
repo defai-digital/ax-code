@@ -1172,7 +1172,7 @@ const _flushSettingsUpdate = async (): Promise<void> => {
     resolveSettingsWaiters(waiters)
   } catch (error) {
     console.warn("Failed to update shared settings via API:", error)
-    resolveSettingsWaiters(waiters)
+    rejectSettingsWaiters(waiters, error)
   }
 }
 
@@ -1189,6 +1189,11 @@ export const updateDesktopSettings = (changes: Partial<DesktopSettings>): Promis
   const promise = new Promise<void>((resolve, reject) => {
     _pendingSettingsWaiters.push({ resolve, reject })
   })
+  // Some preference controls intentionally fire-and-forget this shared save.
+  // Observe the internal promise so a failed background persistence write does
+  // not become an unhandled browser rejection; callers that await `promise`
+  // still receive the rejection and can show an explicit save failure.
+  void promise.catch(() => {})
   _settingsFlushTimer = setTimeout(() => void _flushSettingsUpdate(), SETTINGS_DEBOUNCE_MS)
   return promise
 }

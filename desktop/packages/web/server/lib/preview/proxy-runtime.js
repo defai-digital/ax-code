@@ -1066,11 +1066,13 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
     sweepTimer.unref?.()
   }
 
-  const createTarget = (origin, ttlMs) => {
+  const createTarget = (origin, ttlMs, { token: inheritedToken, expiresAt: inheritedExpiresAt } = {}) => {
     const id = crypto.randomBytes(16).toString("hex")
-    const token = crypto.randomBytes(16).toString("hex")
+    const token = inheritedToken || crypto.randomBytes(16).toString("hex")
     const createdAt = now()
-    const expiresAt = createdAt + (Number.isFinite(ttlMs) ? Math.max(15_000, Math.trunc(ttlMs)) : DEFAULT_TARGET_TTL_MS)
+    const expiresAt = Number.isFinite(inheritedExpiresAt)
+      ? inheritedExpiresAt
+      : createdAt + (Number.isFinite(ttlMs) ? Math.max(15_000, Math.trunc(ttlMs)) : DEFAULT_TARGET_TTL_MS)
     targets.set(id, {
       id,
       origin,
@@ -1187,24 +1189,30 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
 
   // Rewrite an upstream 3xx Location so the redirect stays inside the same-origin
   // proxy instead of escaping to the raw cross-origin URL (which the browser
-  // would then frame-block). For a cross-origin hop (e.g. google.com ->
-  // www.google.com) we simply point the SAME target at the validated new origin
-  // — the router reads entry.origin per request, so the browsing context follows
-  // the redirect without changing the proxy base (which avoids nested
-  // proxy-path / address-bar confusion). Returns the rewritten location, or null
-  // to leave the original untouched (e.g. a blocked/invalid redirect origin).
+  // would then frame-block). Cross-origin redirects must receive a new target:
+  // mutating `resolved.entry.origin` would let a redirected subresource retarget
+  // the page's shared proxy entry and break all subsequent requests.
   const rewriteProxyRedirectLocation = (location, resolved) => {
     try {
       const currentOrigin = resolved.entry.origin
       const abs = new URL(String(location), currentOrigin)
+      let targetId = resolved.id
+      let redirectTarget = null
       if (abs.origin !== currentOrigin) {
         const normalized = normalizeProxyTargetUrl(abs.origin, { allowExternal: true })
         if (!normalized.ok) {
           return null
         }
-        resolved.entry.origin = normalized.origin
+        redirectTarget = createTarget(normalized.origin, resolved.entry.expiresAt - now(), {
+          token: resolved.entry.token,
+          expiresAt: resolved.entry.expiresAt,
+        })
+        targetId = redirectTarget.id
       }
-      return `/api/preview/proxy/${resolved.id}${abs.pathname}${abs.search}${abs.hash}`
+      return {
+        location: `/api/preview/proxy/${targetId}${abs.pathname}${abs.search}${abs.hash}`,
+        redirectTarget,
+      }
     } catch {
       return null
     }
@@ -1370,7 +1378,19 @@ export const createPreviewProxyRuntime = ({ crypto, URL, createProxyMiddleware, 
             if (location && resolved.ok && res && typeof res.setHeader === "function") {
               const rewritten = rewriteProxyRedirectLocation(location, resolved)
               if (rewritten) {
-                res.setHeader("location", rewritten)
+                res.setHeader("location", rewritten.location)
+                if (rewritten.redirectTarget) {
+                  const cookie = buildCookie({
+                    name: TOKEN_COOKIE_NAME,
+                    value: rewritten.redirectTarget.token,
+                    path: `/api/preview/proxy/${rewritten.redirectTarget.id}`,
+                    maxAgeSeconds: Math.max(0, Math.round((rewritten.redirectTarget.expiresAt - now()) / 1000)),
+                    secure: Boolean(req.secure),
+                  })
+                  const existing = res.getHeader?.("set-cookie")
+                  const values = existing == null ? [] : Array.isArray(existing) ? existing : [existing]
+                  res.setHeader("set-cookie", [...values, cookie])
+                }
               }
             }
             return responseBuffer

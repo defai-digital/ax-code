@@ -68,7 +68,7 @@ describe("updateDesktopSettings", () => {
     expect(secondResolved).toBe(true)
   })
 
-  test("resolves when the server settings fallback is unavailable", async () => {
+  test("rejects when the server settings fallback is unavailable", async () => {
     vi.doMock("@/contexts/runtimeAPIRegistry", () => ({
       getRegisteredRuntimeAPIs: () => null,
     }))
@@ -78,9 +78,10 @@ describe("updateDesktopSettings", () => {
 
     const { updateDesktopSettings } = await import("./persistence")
     const update = updateDesktopSettings({ themeId: "dark" })
+    const rejection = expect(update).rejects.toThrow("Failed to parse URL from /api/config/settings")
 
     await vi.advanceTimersByTimeAsync(200)
-    await expect(update).resolves.toBeUndefined()
+    await rejection
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 })
