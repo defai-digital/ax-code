@@ -9,6 +9,7 @@ import { DialogActivity } from "./dialog-activity"
 import {
   findSessionQualityAction,
   renderSessionQualityBrief,
+  sessionQualityActions,
   sessionQualityDetailItems,
   sessionQualityOverviewItems,
   sessionQualityWorkflowLabel,
@@ -77,14 +78,22 @@ export function DialogQualityDetail(props: {
     dialog.setSize("large")
   })
 
-  const action = createMemo(() =>
-    findSessionQualityAction({
-      sessionID: props.sessionID,
-      workflow: props.workflow,
-      kind: props.kind,
-      quality: sync.session.risk(props.sessionID)?.quality,
-    }),
-  )
+  const action = createMemo(() => {
+    const quality = sync.session.risk(props.sessionID)?.quality
+    return (
+      findSessionQualityAction({
+        sessionID: props.sessionID,
+        workflow: props.workflow,
+        kind: props.kind,
+        quality,
+      }) ??
+      // Readiness transitions change the workflow's single derived action
+      // kind, so the creation-time `kind` prop stops matching after a
+      // refresh or live update. Fall back to the workflow's current action;
+      // "unavailable" remains only when the workflow summary itself is gone.
+      sessionQualityActions({ sessionID: props.sessionID, quality }).find((a) => a.workflow === props.workflow)
+    )
+  })
 
   const options = createMemo((): DialogSelectOption<string>[] => {
     const current = action()

@@ -56,7 +56,11 @@ export function displayCommands(input: {
     url: string
     client: {
       session: {
-        summarize: (input: { sessionID: string; modelID: string; providerID: string }) => unknown
+        summarize: (input: {
+          sessionID: string
+          modelID: string
+          providerID: string
+        }) => Promise<{ error?: unknown }>
       }
     }
   }
@@ -260,7 +264,17 @@ export function displayCommands(input: {
               providerID: model.providerID,
             }),
           )
-          .then(() => {
+          .then((result) => {
+            // The v2 SDK client resolves `{error}` instead of rejecting, so
+            // a failed summarize must be checked here — the .catch below
+            // never fires for HTTP errors.
+            if (result?.error) {
+              input.toast.show({
+                message: sdkErrorMessage(result.error, "Failed to summarize session"),
+                variant: "error",
+              })
+              return
+            }
             dialog.clear()
           })
           .catch((error) => {
@@ -580,4 +594,16 @@ export function displayCommands(input: {
       },
     },
   ]
+}
+
+// The v2 SDK client resolves `{error}` instead of rejecting; extract a
+// human-readable message from whatever shape the server returned.
+function sdkErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string" && error) return error
+  if (typeof error === "object" && error) {
+    const candidate = error as { data?: { message?: string }; message?: string }
+    return candidate.data?.message ?? candidate.message ?? fallback
+  }
+  return fallback
 }
