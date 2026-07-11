@@ -5,6 +5,7 @@ import {
   type RuntimeSyncActions,
   type RuntimeSyncClient,
   type RuntimeSyncFetchResponse,
+  type RuntimeSyncLazy,
 } from "./sync-runtime-sync"
 import { type SyncStoreState } from "./sync-state"
 
@@ -23,9 +24,9 @@ type RuntimeStoreState = Pick<
 
 export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreState>(input: {
   url: string
-  directory?: string
+  directory?: RuntimeSyncLazy<string | undefined>
   fetch: (url: string, init?: RequestInit) => Promise<RuntimeSyncFetchResponse>
-  client: RuntimeSyncClient
+  client: RuntimeSyncLazy<RuntimeSyncClient>
   debugEngineEnabled: boolean
   workflowRuntimeEnabled?: boolean
   setStore: SetStoreFunction<TStore>

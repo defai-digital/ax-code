@@ -28,6 +28,18 @@ import {
   type WorkflowRunDetail,
 } from "./workflow-dashboard"
 
+// Closing or navigating away from a dialog aborts its in-flight fetch; the
+// v2 SDK client resolves that as `{error: AbortError}` instead of rejecting,
+// so the fetchers below must recognize aborts to avoid toasting "The
+// operation was aborted." after a deliberate user action.
+// (util/abortable-resource.ts has the same predicate but does not export it.)
+function isAbortError(error: unknown) {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  )
+}
+
 export function DialogWorkflow() {
   const dialog = useDialog()
   const toast = useToast()
@@ -44,11 +56,13 @@ export function DialogWorkflow() {
       try {
         const result = await sdk.client.workflowRun.dashboard({ limit: 30, now: Date.now() }, { signal })
         if (result.error) {
+          if (signal.aborted || isAbortError(result.error)) return info.value ?? []
           toast.show({ message: workflowErrorMessage(result.error, "Failed to load workflow runs"), variant: "error" })
           return info.value ?? []
         }
         return normalizeWorkflowDashboardRuns(result.data)
       } catch (error) {
+        if (signal.aborted || isAbortError(error)) return info.value ?? []
         toast.show({
           message: error instanceof Error ? error.message : "Failed to load workflow runs",
           variant: "error",
@@ -105,11 +119,13 @@ function DialogWorkflowDetail(props: { runID: string }) {
       try {
         const result = await sdk.client.workflowRun.get({ runID: props.runID }, { signal })
         if (result.error) {
+          if (signal.aborted || isAbortError(result.error)) return info.value
           toast.show({ message: workflowErrorMessage(result.error, "Failed to load workflow run"), variant: "error" })
           return info.value
         }
         return result.data
       } catch (error) {
+        if (signal.aborted || isAbortError(error)) return info.value
         toast.show({
           message: error instanceof Error ? error.message : "Failed to load workflow run",
           variant: "error",
@@ -270,6 +286,7 @@ function DialogWorkflowEvalSummary(props: { runID: string }) {
       try {
         const result = await sdk.client.workflowRun.evalSummary({ runID: props.runID, now: Date.now() }, { signal })
         if (result.error) {
+          if (signal.aborted || isAbortError(result.error)) return info.value
           toast.show({
             message: workflowErrorMessage(result.error, "Failed to load workflow eval summary"),
             variant: "error",
@@ -278,6 +295,7 @@ function DialogWorkflowEvalSummary(props: { runID: string }) {
         }
         return result.data
       } catch (error) {
+        if (signal.aborted || isAbortError(error)) return info.value
         toast.show({
           message: error instanceof Error ? error.message : "Failed to load workflow eval summary",
           variant: "error",
@@ -346,6 +364,7 @@ function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
       try {
         const result = await sdk.client.workflowRun.artifacts({ runID: props.runID, includePayload: true }, { signal })
         if (result.error) {
+          if (signal.aborted || isAbortError(result.error)) return info.value ?? []
           toast.show({
             message: workflowErrorMessage(result.error, "Failed to load workflow artifact"),
             variant: "error",
@@ -354,6 +373,7 @@ function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {
         }
         return normalizeWorkflowRunArtifacts(result.data)
       } catch (error) {
+        if (signal.aborted || isAbortError(error)) return info.value ?? []
         toast.show({
           message: error instanceof Error ? error.message : "Failed to load workflow artifact",
           variant: "error",

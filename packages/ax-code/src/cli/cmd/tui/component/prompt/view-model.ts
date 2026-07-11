@@ -1,4 +1,5 @@
 import type { PromptInfo } from "./history"
+import { stringIndexFromDisplayOffset } from "./prompt-helpers"
 
 export type PromptExtmark = {
   id: number
@@ -39,7 +40,10 @@ export function isUnmodifiedPromptSubmitKey(input: {
 export function sanitizePromptInput(input: string) {
   // SGR mouse residue: \x1b[<Cb;Cx;CyM/m can arrive as <digits;digits;digitsM
   // if the escape parser partially processes mouse input during focus changes.
-  return input.replace(/(?:<)?\d+;\d+;\d+[Mm]/g, "")
+  // The leading "<" is required: SGR mouse encoding always carries it, so anchoring
+  // to it avoids eating legitimate content the user typed/pasted such as ANSI color
+  // codes ("1;31;40m") or plain semicolon triples.
+  return input.replace(/<\d+;\d+;\d+[Mm]/g, "")
 }
 
 export function promptEscapeClearIntent(input: {
@@ -120,8 +124,11 @@ export function promptSubmissionView(input: {
     if (partIndex === undefined) continue
     const part = input.parts[partIndex]
     if (part?.type !== "text" || !part.text) continue
-    const start = Math.max(0, Math.min(extmark.start, input.text.length))
-    const end = Math.max(start, Math.min(extmark.end, input.text.length))
+    // Extmark ranges are display-width offsets; convert to UTF-16 indices
+    // before slicing so wide (CJK/emoji) characters before a placeholder
+    // don't shift the replaced range and corrupt the submitted text.
+    const start = stringIndexFromDisplayOffset(input.text, extmark.start)
+    const end = Math.max(start, stringIndexFromDisplayOffset(input.text, extmark.end))
 
     // extmarks are expected to be non-overlapping. If they do overlap, keep
     // the first span and skip later conflicting replacements instead of

@@ -8,6 +8,7 @@ import { Log } from "@/util/log"
 import { useSDK } from "@tui/context/sdk"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { parsePromptInfoList, type PromptInfo } from "./prompt-info"
+import { promptHistoryNavigationAllowed } from "./prompt-helpers"
 
 export type { PromptInfo } from "./prompt-info"
 
@@ -105,9 +106,9 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
     return {
       move(direction: 1 | -1, input: string) {
         if (!store.history.length) return undefined
-        const current = store.history.at(store.index)
-        if (!current) return undefined
-        if (current.input !== input && input.length) return
+        // Index 0 is the live-draft position — history.at(0) would be the
+        // *oldest* entry, so the guard must not compare the draft against it.
+        if (!promptHistoryNavigationAllowed({ index: store.index, draft: input, history: store.history })) return
         let nextIndex = store.index
         setStore(
           produce((draft) => {

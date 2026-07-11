@@ -437,8 +437,11 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(collapsed).toContain("enabled: !!undoMessageID(messages(), session()?.revert?.messageID),")
     expect(collapsed).toContain('log.warn("session rollback abort failed"')
+    // The v2 SDK client resolves `{error}` instead of rejecting, so the
+    // rollback abort guard surfaces failures from the resolved result (the
+    // thrown Error is toasted by DialogRollback, keeping the dialog open).
     expect(collapsed).toContain(
-      'message: error instanceof Error ? error.message : "Failed to stop the running session before rollback"',
+      'sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback")',
     )
     expect(collapsed).toContain('log.warn("session undo abort failed"')
     expect(collapsed).toContain(
@@ -593,7 +596,11 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(theme).toContain('const log = Log.create({ service: "tui.theme" })')
     expect(theme).toContain("Filesystem.readJson<ThemeJson>(item).catch")
     expect(theme).toContain('log.warn("failed to load custom theme"')
-    expect(theme).toContain("if (theme) result[name] = theme")
+    expect(theme).toContain("if (!theme) continue")
+    // Themes must also resolve in both modes before entering the picker, so a
+    // typo'd color reference can't crash the TUI during live preview.
+    expect(theme).toContain('log.warn("skipping invalid custom theme"')
+    expect(theme).toContain("result[name] = theme")
     expect(theme).not.toContain("result[name] = await Filesystem.readJson(item)")
   })
 
@@ -1119,7 +1126,11 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(dialogConfirm).toContain("function runDialogConfirmAction(")
     expect(dialogConfirm).toContain('log.warn("dialog confirm action failed"')
-    expect(dialogConfirm).toContain("void Promise.resolve()")
+    // The handler must run synchronously (before the callers' dialog.clear()
+    // fires the item's onClose) so DialogConfirm.show resolves true/false, not
+    // undefined; async follow-ups still route rejections to the toast.
+    expect(dialogConfirm).toContain("void Promise.resolve(action()).catch(fail)")
+    expect(dialogConfirm).not.toContain("void Promise.resolve()\n      .then(action)")
   })
 
   test("keeps dialog confirm cancel actions clickable when inactive", async () => {
@@ -1176,10 +1187,12 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(promptHelpers).toContain("function stringIndexFromDisplayOffset(")
     expect(promptHelpers).toContain("export function expandPromptTextParts(")
     expect(prompt).toContain("const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)")
-    // stringWidth is now imported from @/bun/node-compat (Bun→Node migration),
-    // so the guard checks the imported helper rather than the Bun global.
-    expect(prompt).toContain("input.cursorOffset === stringWidth(input.plainText)")
-    expect(prompt).toContain("input.cursorOffset = stringWidth(input.plainText)")
+    // End-of-buffer cursor checks go through endDisplayOffset: the native
+    // buffer counts "\n" as 1 while stringWidth counts it as 0, so a raw
+    // stringWidth comparison breaks history navigation on multi-line prompts.
+    expect(prompt).toContain("input.cursorOffset === endDisplayOffset(input.plainText)")
+    expect(prompt).toContain("input.cursorOffset = endDisplayOffset(input.plainText)")
+    expect(prompt).not.toContain("stringWidth(input.plainText)")
     expect(prompt).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
     expect(prompt).toContain("if (!sessionChanged && msg.model) local.model.set(msg.model)")
     expect(prompt).toContain("sanitizePromptInput(raw)")

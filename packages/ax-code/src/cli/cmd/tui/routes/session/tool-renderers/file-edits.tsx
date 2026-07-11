@@ -122,10 +122,11 @@ export function Edit(props: ToolProps<typeof EditTool>) {
   const rawDiff = createMemo(() => props.metadata.diff ?? "")
   const diffLines = createMemo(() => rawDiff().split("\n"))
   const overflow = createMemo(() => diffLines().length > 30)
-  const diffContent = createMemo(() => {
-    if (expanded() || !overflow()) return rawDiff()
-    return diffLines().slice(0, 30).join("\n") + "\n…"
-  })
+  // Never truncate the patch string itself — slicing mid-hunk makes the
+  // diff parser throw and render its error view. Collapse by clipping the
+  // rendered preview height instead (as the Bash renderer constrains its
+  // collapsed output), with the "…" indicator outside the diff content.
+  const collapsed = createMemo(() => overflow() && !expanded())
   const summary = createMemo(() => diffSummary(rawDiff()))
 
   return (
@@ -145,9 +146,13 @@ export function Edit(props: ToolProps<typeof EditTool>) {
               </text>
             )}
           </Show>
-          <box paddingLeft={1}>
+          <box
+            paddingLeft={1}
+            maxHeight={collapsed() ? 30 : undefined}
+            overflow={collapsed() ? "hidden" : undefined}
+          >
             <SessionDiffRenderer
-              diff={diffContent()}
+              diff={rawDiff()}
               display={view()}
               syntaxStyle={syntax()}
               colors={{
@@ -164,6 +169,11 @@ export function Edit(props: ToolProps<typeof EditTool>) {
               }}
             />
           </box>
+          <Show when={collapsed()}>
+            <text paddingLeft={1} fg={theme.textMuted}>
+              …
+            </text>
+          </Show>
           <Show when={overflow()}>
             <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
           </Show>

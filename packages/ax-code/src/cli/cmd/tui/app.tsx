@@ -1078,12 +1078,22 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
       value: "app.heap_snapshot",
       onSelect: async (dialog) => {
-        const files = await props.onSnapshot?.()
-        toast.show({
-          variant: "info",
-          message: `Heap snapshot written to ${files?.join(", ")}`,
-          duration: 5000,
-        })
+        // Defense in depth: a failed snapshot must never float an unhandled
+        // rejection (the global handler exits the TUI); toast instead.
+        try {
+          const files = await props.onSnapshot?.()
+          toast.show({
+            variant: "info",
+            message: `Heap snapshot written to ${files?.join(", ")}`,
+            duration: 5000,
+          })
+        } catch (error) {
+          toast.show({
+            variant: "error",
+            message: error instanceof Error ? error.message : "Failed to write heap snapshot",
+            duration: 5000,
+          })
+        }
         dialog.clear()
       },
     },

@@ -1,4 +1,4 @@
-import { createStore } from "solid-js/store"
+import { createStore, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { pickFirstEnvValue } from "../util/env"
 import { parseInitialRoutePayload, type Route } from "./route-util"
@@ -21,7 +21,10 @@ export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
         return store
       },
       navigate(route: Route) {
-        setStore(route)
+        // Replace the route object instead of shallow-merging: a plain
+        // setStore(route) keeps keys absent from the new route (e.g. a stale
+        // initialPrompt from a fork), leaking them into every later navigation.
+        setStore(reconcile(route))
       },
     }
   },

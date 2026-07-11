@@ -1,4 +1,16 @@
-import { createEffect, createMemo, createSignal, For, Match, on, onCleanup, onMount, Show, Switch } from "solid-js"
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  ErrorBoundary,
+  For,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
@@ -61,7 +73,7 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
-import { coalesceParts } from "./coalesce"
+import { coalesceParts, type DisplayPart } from "./coalesce"
 import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
@@ -596,38 +608,34 @@ export function Session() {
             sessionID={route.sessionID}
             messages={messagesWithParts()}
             onSelect={async (point) => {
+              // The v2 SDK client resolves `{error}` instead of rejecting, so
+              // both calls must check the result — a failed abort or revert
+              // would otherwise fall through to the success path and clobber
+              // the typed prompt while the server never reverted. Thrown
+              // errors are toasted by DialogRollback, which keeps the dialog
+              // open for retry.
               const status = sync.data.session_status?.[route.sessionID]
               if (status?.type !== "idle") {
-                try {
-                  await sdk.client.session.abort({ sessionID: route.sessionID })
-                } catch (error) {
-                  log.warn("session rollback abort failed", { error, sessionID: route.sessionID })
-                  toast.show({
-                    message:
-                      error instanceof Error ? error.message : "Failed to stop the running session before rollback",
-                    variant: "error",
-                  })
-                  return
+                const aborted = await sdk.client.session.abort({ sessionID: route.sessionID })
+                if (aborted.error) {
+                  log.warn("session rollback abort failed", { error: aborted.error, sessionID: route.sessionID })
+                  throw new Error(
+                    sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback"),
+                  )
                 }
               }
-              return sdk.client.session
-                .revert({
-                  sessionID: route.sessionID,
-                  messageID: point.messageID,
-                  partID: point.partID,
-                })
-                .then(() => {
-                  const messageID = SessionRollbackView.promptID(messagesWithParts(), point)
-                  if (messageID) prompt.set(promptState(sync.data.part[messageID] ?? []))
-                  toBottom()
-                })
-                .catch((error) => {
-                  toast.show({
-                    message: error instanceof Error ? error.message : "Failed to rollback to selected step",
-                    variant: "error",
-                  })
-                  throw error
-                })
+              const result = await sdk.client.session.revert({
+                sessionID: route.sessionID,
+                messageID: point.messageID,
+                partID: point.partID,
+              })
+              if (result.error) {
+                log.warn("session rollback revert failed", { error: result.error, sessionID: route.sessionID })
+                throw new Error(sdkErrorMessage(result.error, "Failed to rollback to selected step"))
+              }
+              const messageID = SessionRollbackView.promptID(messagesWithParts(), point)
+              if (messageID) prompt.set(promptState(sync.data.part[messageID] ?? []))
+              toBottom()
             }}
           />
         )),
@@ -1003,6 +1011,28 @@ export function Session() {
 
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
+
+  // Apply route.initialPrompt (fork, /new with a draft) on session→session
+  // navigation. The Prompt ref callback below only runs on first mount, so
+  // when the target session is already in the sync store (e.g. the SSE
+  // session.created beat the fork response) the pre-filled prompt would be
+  // dropped without this effect. Consume-once: clear it after applying so a
+  // stale prompt can't leak into later navigations — route.navigate() merges
+  // shallowly and never clears keys on its own.
+  createEffect(
+    on(
+      () => route.sessionID,
+      (sessionID) => {
+        const initial = route.initialPrompt
+        if (!initial) return
+        // Prompt not mounted yet (session record still loading) — leave the
+        // value for the ref callback to consume on first mount instead.
+        if (!prompt) return
+        prompt.set(initial)
+        navigate({ type: "session", sessionID, initialPrompt: undefined })
+      },
+    ),
+  )
 
   return (
     <context.Provider
@@ -1478,11 +1508,30 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
 
   const hasParts = createMemo(() => props.parts.length > 0)
   const isThinking = createMemo(() => !props.message.error && !hasParts() && !final() && props.last)
-  const displayParts = createMemo(() => coalesceParts(props.parts))
-  // Coalesced-group expand state lives at message scope because coalesceParts()
-  // returns fresh entries on every change; per-row state inside CoalescedTool
-  // would reset every time a new tool call streamed in. Keyed by the run's
-  // first callID so a growing run keeps its expanded/collapsed state.
+  // coalesceParts() fabricates new wrapper objects every run and <For> keys
+  // rows by identity, so without caching every streamed part would recreate
+  // ALL rows — resetting per-row expanded signals on single-part rows
+  // mid-turn. Reuse the previous wrapper whenever its inputs are unchanged
+  // (part store proxies are identity-stable unless the part itself was
+  // replaced) so only genuinely-updated rows are recreated.
+  let displayPartCache = new Map<string, DisplayPart>()
+  const displayParts = createMemo(() => {
+    const cache = new Map<string, DisplayPart>()
+    const result = coalesceParts(props.parts).map((entry) => {
+      const key = entry.kind === "single" ? `single:${entry.part.id}` : `coalesced:${entry.key}`
+      const cached = displayPartCache.get(key)
+      const stable = cached && sameDisplayPart(cached, entry) ? cached : entry
+      cache.set(key, stable)
+      return stable
+    })
+    displayPartCache = cache
+    return result
+  })
+  // Coalesced-group expand state lives at message scope because a growing
+  // run replaces its wrapper (the parts array changes); per-row state inside
+  // CoalescedTool would reset every time a new tool call streamed in. Keyed
+  // by the run's first callID so a growing run keeps its expanded/collapsed
+  // state.
   const [expandedGroups, setExpandedGroups] = createSignal<Set<string>>(new Set())
   const toggleGroup = (key: string, next: boolean) => {
     const current = expandedGroups()
@@ -1745,6 +1794,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage }) {
   const ctx = use()
   const sync = useSync()
+  const { theme } = useTheme()
 
   // Hide tool if showDetails is false and tool completed successfully
   const shouldHide = createMemo(() => {
@@ -1778,7 +1828,16 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
 
   return (
     <Show when={!shouldHide()}>
-      <Dynamic component={toolRendererComponent(props.part.tool)} {...toolprops} />
+      <ErrorBoundary
+        fallback={
+          <box paddingLeft={3} flexDirection="row" gap={1}>
+            <text fg={theme.warning}>{"▲"}</text>
+            <text fg={theme.textMuted}>failed to render {props.part.tool} output</text>
+          </box>
+        }
+      >
+        <Dynamic component={toolRendererComponent(props.part.tool)} {...toolprops} />
+      </ErrorBoundary>
     </Show>
   )
 }
@@ -1816,4 +1875,27 @@ function CoalescedTool(props: {
       </box>
     </Show>
   )
+}
+
+// Two DisplayPart wrappers are interchangeable when they reference the exact
+// same part objects — store proxies keep their identity unless the underlying
+// part was replaced by a sync event, so this only misses when the part (or a
+// coalesced run's membership) actually changed.
+function sameDisplayPart(a: DisplayPart, b: DisplayPart): boolean {
+  if (a.kind === "single" && b.kind === "single") return a.part === b.part
+  if (a.kind === "coalesced" && b.kind === "coalesced")
+    return a.key === b.key && a.parts.length === b.parts.length && a.parts.every((part, i) => part === b.parts[i])
+  return false
+}
+
+// The v2 SDK client resolves `{error}` instead of rejecting; extract a
+// human-readable message from whatever shape the server returned.
+function sdkErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string" && error) return error
+  if (typeof error === "object" && error) {
+    const candidate = error as { data?: { message?: string }; message?: string }
+    return candidate.data?.message ?? candidate.message ?? fallback
+  }
+  return fallback
 }

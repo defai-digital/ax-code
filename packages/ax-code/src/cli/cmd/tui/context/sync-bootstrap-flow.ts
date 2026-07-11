@@ -100,7 +100,10 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   setSessionLoaded: (loaded: boolean) => void
   resetSessionSync: () => void
   wrap: BootstrapRequestWrap
-  client: TClient
+  // May be a live accessor: sdk.setWorkspace() swaps the client, and run() can
+  // fire again (reconnect recovery) after a workspace switch, so resolve it at
+  // request-build time rather than freezing the launch-directory client.
+  client: TClient | (() => TClient)
   syncAutonomous: () => Promise<unknown>
   syncDebugEngine: () => Promise<unknown>
   syncIsolation: () => Promise<unknown>
@@ -141,6 +144,8 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   }) => BootstrapPhaseSequenceStep[]
 }) {
   const now = input.now ?? Date.now
+  const resolveClient = () =>
+    typeof input.client === "function" ? (input.client as () => TClient)() : input.client
   const createPhaseSequence = input.createPhaseSequence ?? createSyncBootstrapPhaseSequence
   const scheduleBackground = createLatestBootstrapBackgroundScheduler({
     onCoalesced() {
@@ -175,7 +180,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
 
             const requests = createSyncBootstrapRequests({
               wrap: input.wrap,
-              client: input.client,
+              client: resolveClient(),
               sessionListStart: now() - BOOTSTRAP_SESSION_LIST_WINDOW_MS,
               onSessionListSettled() {
                 input.setSessionLoaded(true)

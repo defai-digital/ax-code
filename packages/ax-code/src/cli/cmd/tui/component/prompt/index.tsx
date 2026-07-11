@@ -23,7 +23,6 @@ import {
 } from "solid-js"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
-import { stringWidth } from "@/bun/node-compat"
 import { providerModelKey } from "@/provider/model-key"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
@@ -43,7 +42,7 @@ import {
   reconcileFollowUpDrain,
   removeQueuedFollowUp,
 } from "./follow-up-queue-store"
-import { createStore, produce } from "solid-js/store"
+import { createStore, produce, unwrap } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
 import { assign } from "./part"
@@ -104,6 +103,7 @@ import { footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-vie
 import { parsePastedFilePath } from "./prompt-filepath"
 import { responseErrorMessage } from "@tui/util/error-message"
 import {
+  endDisplayOffset,
   expandPromptTextParts,
   hasUnfinishedTodosInPromptParts,
   promptPartExtmarkView,
@@ -117,6 +117,9 @@ export type { PromptProps, PromptRef } from "./prompt-types"
 
 const log = Log.create({ service: "tui.prompt" })
 const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
+// Upper bound for parts kept around after their extmark disappears (undo);
+// enough for any realistic undo depth without letting the map grow unbounded.
+const MAX_ORPHANED_PROMPT_PARTS = 50
 
 export function Prompt(props: PromptProps) {
   let input: TextareaRenderable
@@ -268,6 +271,7 @@ export function Prompt(props: PromptProps) {
   function clearPromptDraft() {
     input.clear()
     input.extmarks.clear()
+    orphanedExtmarkParts.clear()
     setStore("prompt", {
       input: "",
       parts: [],
@@ -768,7 +772,7 @@ export function Prompt(props: PromptProps) {
             parts: updatedNonTextParts,
           })
           restoreExtmarksFromParts(updatedNonTextParts)
-          input.cursorOffset = stringWidth(content)
+          input.cursorOffset = endDisplayOffset(content)
         },
       },
       {
@@ -837,6 +841,7 @@ export function Prompt(props: PromptProps) {
     reset() {
       input.clear()
       input.extmarks.clear()
+      orphanedExtmarkParts.clear()
       setStore("prompt", {
         input: "",
         parts: [],
@@ -856,6 +861,7 @@ export function Prompt(props: PromptProps) {
 
   function restoreExtmarksFromParts(parts: PromptInfo["parts"]) {
     input.extmarks.clear()
+    orphanedExtmarkParts.clear()
     setStore("extmarkToPartIndex", new Map())
 
     parts.forEach((part, partIndex) => {
@@ -878,6 +884,13 @@ export function Prompt(props: PromptProps) {
     })
   }
 
+  // Parts whose extmark vanished mid-edit (undo) are stashed here instead of
+  // discarded, so the same extmark id reappearing (redo) re-links the part —
+  // otherwise submit would send the literal "[Pasted ~N lines]" placeholder
+  // with no part attached. Cleared whenever the composer content is replaced
+  // wholesale (reset, draft clear, restoreExtmarksFromParts).
+  const orphanedExtmarkParts = new Map<number, PromptInfo["parts"][number]>()
+
   function syncExtmarksWithPromptParts() {
     const allExtmarks = input.extmarks.getAllForTypeId(promptPartTypeId)
     setStore(
@@ -894,7 +907,29 @@ export function Prompt(props: PromptProps) {
               newMap.set(extmark.id, newParts.length)
               newParts.push(part)
             }
+            continue
           }
+          // An unmapped extmark id we orphaned earlier means undo removed it
+          // and redo brought it back — re-link the stashed part.
+          const orphan = orphanedExtmarkParts.get(extmark.id)
+          if (orphan) {
+            orphanedExtmarkParts.delete(extmark.id)
+            setPromptPartSourceRange(orphan, extmark.start, extmark.end)
+            newMap.set(extmark.id, newParts.length)
+            newParts.push(orphan)
+          }
+        }
+
+        for (const [extmarkId, partIndex] of draft.extmarkToPartIndex) {
+          if (newMap.has(extmarkId)) continue
+          const part = draft.prompt.parts[partIndex]
+          if (!part) continue
+          orphanedExtmarkParts.set(extmarkId, unwrap(part))
+        }
+        while (orphanedExtmarkParts.size > MAX_ORPHANED_PROMPT_PARTS) {
+          const oldest = orphanedExtmarkParts.keys().next().value
+          if (oldest === undefined) break
+          orphanedExtmarkParts.delete(oldest)
         }
 
         draft.extmarkToPartIndex = newMap
@@ -1044,6 +1079,13 @@ export function Prompt(props: PromptProps) {
     }
     const promptInput = syncPromptInputFromRenderable()
     if (!promptInput) {
+      // Honor the "press Enter to connect" placeholder: with no model configured,
+      // an empty Enter should open the provider dialog rather than silently
+      // no-op. promptModelWarning() opens the provider dialog (or a "still
+      // loading"/"failed" toast) exactly like the no-model submit path below.
+      if (!local.model.current()) {
+        promptModelWarning()
+      }
       log.info("tui.prompt.submit: empty prompt input")
       return
     }
@@ -1796,7 +1838,7 @@ export function Prompt(props: PromptProps) {
                 if (!autocomplete?.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
-                    (keybind.match("history_next", e) && input.cursorOffset === stringWidth(input.plainText))
+                    (keybind.match("history_next", e) && input.cursorOffset === endDisplayOffset(input.plainText))
                   ) {
                     const direction = keybind.match("history_previous", e) ? -1 : 1
                     const item = history.move(direction, input.plainText)
@@ -1808,14 +1850,14 @@ export function Prompt(props: PromptProps) {
                       restoreExtmarksFromParts(item.parts)
                       e.preventDefault()
                       if (direction === -1) input.cursorOffset = 0
-                      if (direction === 1) input.cursorOffset = stringWidth(input.plainText)
+                      if (direction === 1) input.cursorOffset = endDisplayOffset(input.plainText)
                     }
                     return
                   }
 
                   if (keybind.match("history_previous", e) && input.visualCursor.visualRow === 0) input.cursorOffset = 0
                   if (keybind.match("history_next", e) && input.visualCursor.visualRow === input.height - 1)
-                    input.cursorOffset = stringWidth(input.plainText)
+                    input.cursorOffset = endDisplayOffset(input.plainText)
                 }
               }}
               onPaste={handleTerminalPaste}

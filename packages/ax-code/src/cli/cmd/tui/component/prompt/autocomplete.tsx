@@ -27,6 +27,7 @@ import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
 import { stringWidth } from "@/bun/node-compat"
+import { displayOffsetFromStringIndex, stringIndexFromDisplayOffset } from "./prompt-helpers"
 
 export type AutocompleteGroupEntry =
   | { type: "header"; label: string }
@@ -151,14 +152,20 @@ export function shouldHideAutocompleteOnInput(input: {
 }): boolean {
   const { mode, value, triggerIndex, cursorOffset } = input
 
+  // triggerIndex/cursorOffset are display-width offsets (buffer units);
+  // convert before indexing the UTF-16 string so preceding wide (CJK/emoji)
+  // characters don't shift the inspected range.
+  const triggerStringIndex = stringIndexFromDisplayOffset(value, triggerIndex)
+
   if (cursorOffset <= triggerIndex) {
     // Textarea cursor state can lag the text mutation by one tick after
     // typing the trigger key. Keep the dropdown open if the trigger is now
     // present at the expected index; a later cursor refresh will settle it.
-    return !(cursorOffset === triggerIndex && value.at(triggerIndex) === mode)
+    return !(cursorOffset === triggerIndex && value.at(triggerStringIndex) === mode)
   }
 
-  if (value.slice(triggerIndex, cursorOffset).match(/\s/)) return true
+  const cursorStringIndex = stringIndexFromDisplayOffset(value, cursorOffset)
+  if (value.slice(triggerStringIndex, cursorStringIndex).match(/\s/)) return true
   if (mode === "/" && value.match(/^\S+\s+\S+\s*$/)) return true
   return false
 }
@@ -684,16 +691,20 @@ export function Autocomplete(props: {
         // Check if autocomplete should reopen (e.g., after backspace deleted a space)
         const offset = props.input().cursorOffset
         if (offset === 0) return
+        // cursorOffset is a display-width offset; convert before slicing the
+        // UTF-16 string so preceding wide (CJK/emoji) characters don't shift
+        // the range.
+        const cursorStringIndex = stringIndexFromDisplayOffset(value, offset)
 
         // Check for "/" at position 0 - reopen slash commands
-        if (value.startsWith("/") && !value.slice(0, offset).match(/\s/)) {
+        if (value.startsWith("/") && !value.slice(0, cursorStringIndex).match(/\s/)) {
           show("/")
           setStore("index", 0)
           return
         }
 
         // Check for "@" trigger - find the nearest "@" before cursor with no whitespace between
-        const text = value.slice(0, offset)
+        const text = value.slice(0, cursorStringIndex)
         const idx = text.lastIndexOf("@")
         if (idx === -1) return
 
@@ -701,7 +712,9 @@ export function Autocomplete(props: {
         const before = idx === 0 ? undefined : value[idx - 1]
         if ((before === undefined || /\s/.test(before)) && !between.match(/\s/)) {
           show("@")
-          setStore("index", idx)
+          // store.index is consumed as a display-width offset (filter(),
+          // insertPart's deleteRange) — convert the UTF-16 index back.
+          setStore("index", displayOffsetFromStringIndex(value, idx))
         }
       },
       onKeyDown(e: KeyEvent) {

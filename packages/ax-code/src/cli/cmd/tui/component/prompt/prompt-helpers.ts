@@ -11,16 +11,58 @@ export type PromptPartExtmarkView = {
   styleId?: number
 }
 
-function stringIndexFromDisplayOffset(text: string, displayOffset: number) {
+// The native edit buffer addresses text in display-width units: wide
+// (CJK/emoji) characters count their rendered width, and "\n" counts as 1
+// (stringWidth would give it 0). Extmark ranges and cursorOffset use these
+// units, while JS string ops (slice/indexOf) use UTF-16 indices — always
+// convert through these helpers before mixing the two.
+function displayWidthOfChar(char: string) {
+  return char === "\n" ? 1 : stringWidth(char)
+}
+
+export function stringIndexFromDisplayOffset(text: string, displayOffset: number) {
   if (displayOffset <= 0) return 0
   let width = 0
   let index = 0
   for (const char of text) {
     if (width >= displayOffset) break
-    width += stringWidth(char)
+    width += displayWidthOfChar(char)
     index += char.length
   }
   return index
+}
+
+export function displayOffsetFromStringIndex(text: string, stringIndex: number) {
+  if (stringIndex <= 0) return 0
+  let width = 0
+  let index = 0
+  for (const char of text) {
+    if (index >= stringIndex) break
+    width += displayWidthOfChar(char)
+    index += char.length
+  }
+  return width
+}
+
+// Display offset of the end of the buffer — what cursorOffset must equal for
+// the cursor to sit at the very end. Not stringWidth(text): that drops the
+// newlines the buffer counts, leaving the cursor short on multi-line text.
+export function endDisplayOffset(text: string) {
+  return displayOffsetFromStringIndex(text, text.length)
+}
+
+// Guard for history.move(): index 0 is the live-draft position, while
+// history.at(0) is the *oldest* entry — never compare the draft against it,
+// or a draft that happens to match gets silently cleared/replaced.
+export function promptHistoryNavigationAllowed(input: {
+  index: number
+  draft: string
+  history: readonly { input: string }[]
+}) {
+  if (input.index === 0) return input.draft.length === 0
+  const current = input.history.at(input.index)
+  if (!current) return false
+  return !input.draft.length || current.input === input.draft
 }
 
 export function isPastedImagePart(part: PromptInfo["parts"][number]) {
@@ -87,9 +129,12 @@ export function relocatePromptPartAfterEditor(part: PromptPart, content: string)
   const virtualText = promptPartVirtualText(part)
   if (!virtualText) return part
 
-  const start = content.indexOf(virtualText)
-  if (start === -1) return null
-  const end = start + virtualText.length
+  const index = content.indexOf(virtualText)
+  if (index === -1) return null
+  // Source ranges feed extmarks.create, which expects display-width offsets —
+  // convert the UTF-16 indexOf result (and range end) before storing.
+  const start = displayOffsetFromStringIndex(content, index)
+  const end = displayOffsetFromStringIndex(content, index + virtualText.length)
 
   if (part.type === "file" && part.source?.text) {
     return {

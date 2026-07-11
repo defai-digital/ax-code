@@ -4,9 +4,25 @@ import {
   DOUBLE_ESCAPE_CLEAR_MS,
   isUnmodifiedPromptSubmitKey,
   promptEscapeClearIntent,
+  promptSubmissionView,
   sanitizePromptInput,
   windowsClipboardTextPaste,
 } from "../../../src/cli/cmd/tui/component/prompt/view-model"
+import type { PromptInfo } from "../../../src/cli/cmd/tui/component/prompt/prompt-info"
+
+function pastedTextPart(text: string, placeholder: string, start: number, end: number): PromptInfo["parts"][number] {
+  return {
+    type: "text",
+    text,
+    source: {
+      text: {
+        value: placeholder,
+        start,
+        end,
+      },
+    },
+  }
+}
 
 describe("prompt view model", () => {
   test("arms clear on the first escape when the prompt has draft text", () => {
@@ -105,8 +121,13 @@ describe("prompt view model", () => {
     ).toBeUndefined()
   })
 
-  test("strips SGR mouse residue from prompt input", () => {
-    expect(sanitizePromptInput("hello <0;12;34Mworld 35;46;57m")).toBe("hello world ")
+  test("strips SGR mouse residue (marked with <) from prompt input", () => {
+    expect(sanitizePromptInput("hello <0;12;34Mworld")).toBe("hello world")
+  })
+
+  test("preserves legitimate ANSI color codes and semicolon triples the user typed", () => {
+    // Bare digit;digit;digit + M/m without the SGR "<" marker is real content, not residue.
+    expect(sanitizePromptInput("color 35;46;57m and 1;31;40m stay")).toBe("color 35;46;57m and 1;31;40m stay")
   })
 
   test("preserves ordinary semicolon-separated prompt text", () => {
@@ -127,6 +148,68 @@ describe("prompt view model", () => {
 
   test("does not let raw CRLF override a non-submit key name", () => {
     expect(isUnmodifiedPromptSubmitKey({ name: "v", raw: "\r\n", sequence: "\r\n" })).toBe(false)
+  })
+
+  test("expands placeholders after CJK text using display offsets", () => {
+    // "你好 " is 3 UTF-16 units but 5 display columns; the extmark range is
+    // stored in display columns ([x] spans 5..8).
+    const result = promptSubmissionView({
+      text: "你好 [x] after",
+      parts: [pastedTextPart("PASTED", "[x]", 5, 8)],
+      extmarks: [{ id: 1, start: 5, end: 8 }],
+      extmarkToPartIndex: new Map([[1, 0]]),
+    })
+
+    expect(result.text).toBe("你好 PASTED after")
+    expect(result.parts).toEqual([])
+  })
+
+  test("expands placeholders after emoji and CJK mixes", () => {
+    // "🙂你好 " = 4 code points / 5 UTF-16 units, 7 display columns.
+    const result = promptSubmissionView({
+      text: "🙂你好 [x] end",
+      parts: [pastedTextPart("PASTED", "[x]", 7, 10)],
+      extmarks: [{ id: 1, start: 7, end: 10 }],
+      extmarkToPartIndex: new Map([[1, 0]]),
+    })
+
+    expect(result.text).toBe("🙂你好 PASTED end")
+  })
+
+  test("expands placeholders on later lines counting newlines as one column", () => {
+    // "line1\n" = 6 buffer units (newline counts as 1 like the edit buffer).
+    const result = promptSubmissionView({
+      text: "line1\n[x] end",
+      parts: [pastedTextPart("PASTED", "[x]", 6, 9)],
+      extmarks: [{ id: 1, start: 6, end: 9 }],
+      extmarkToPartIndex: new Map([[1, 0]]),
+    })
+
+    expect(result.text).toBe("line1\nPASTED end")
+  })
+
+  test("keeps non-text parts and skips unmapped extmarks on submit", () => {
+    const filePart: PromptInfo["parts"][number] = {
+      type: "file",
+      mime: "text/plain",
+      url: "file:///tmp/a.txt",
+      filename: "a.txt",
+      source: {
+        type: "file",
+        path: "/tmp/a.txt",
+        text: { value: "@a.txt", start: 0, end: 6 },
+      },
+    }
+
+    const result = promptSubmissionView({
+      text: "@a.txt hi",
+      parts: [filePart],
+      extmarks: [{ id: 1, start: 0, end: 6 }],
+      extmarkToPartIndex: new Map([[1, 0]]),
+    })
+
+    expect(result.text).toBe("@a.txt hi")
+    expect(result.parts).toEqual([filePart])
   })
 
   test("defers Enter submission until paste handling finishes", () => {
