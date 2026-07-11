@@ -93,6 +93,29 @@ export function applySessionSyncSnapshot<
   if (snapshot.goal !== undefined) store.session_goal[sessionID] = snapshot.goal
 }
 
+/**
+ * Patch sidebar enrichment only. Used after a progressive core transcript
+ * apply so the full snapshot cannot clobber live stream part deltas that
+ * landed between core paint and enrichment RPC completion.
+ */
+export function applySessionSyncEnrichment<TDiff, TRisk, TGoal>(
+  store: {
+    session_diff: Record<string, TDiff[]>
+    session_risk: Record<string, TRisk>
+    session_goal: Record<string, TGoal | null>
+  },
+  sessionID: string,
+  enrichment: {
+    diff?: TDiff[]
+    risk?: TRisk
+    goal?: TGoal | null
+  },
+) {
+  if (enrichment.diff !== undefined) store.session_diff[sessionID] = enrichment.diff
+  if (enrichment.risk !== undefined) store.session_risk[sessionID] = enrichment.risk
+  if (enrichment.goal !== undefined) store.session_goal[sessionID] = enrichment.goal
+}
+
 export function applySessionDeleteCleanup<
   TSession extends { id: string },
   TPermission,

@@ -283,4 +283,64 @@ describe("tui sync session sync", () => {
     expect(store.session).toEqual([{ id: "ses_race", title: "fresh" }])
     expect(store.message.ses_race).toEqual([{ id: "msg_2" }])
   })
+
+  test("progressive enrichment does not clobber live stream part deltas after core paint", async () => {
+    // Regression: store-backed applySnapshot must type/apply enrichment mode so
+    // late full snapshots cannot overwrite parts that arrived while diff/risk/goal RPCs ran.
+    const [store, setStore] = createState()
+    let releaseDiff: (() => void) | undefined
+    const diffGate = new Promise<void>((resolve) => {
+      releaseDiff = resolve
+    })
+
+    const controller = createStoreBackedSessionSyncController<
+      Session,
+      Todo,
+      Message,
+      Part,
+      Diff,
+      Risk,
+      Goal,
+      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk, Goal>
+    >({
+      timeoutMs: 10_000,
+      withTimeout: async (_label, promise) => promise,
+      setStore,
+      fetchSession: async (sessionID) => ({ data: { id: sessionID, title: "Session" } }),
+      fetchMessages: async () => ({
+        data: [{ info: { id: "msg_1" }, parts: [{ id: "part_core" }] }],
+      }),
+      fetchTodo: async () => ({ data: [{ id: "todo_1" }] }),
+      fetchDiff: async () => {
+        await diffGate
+        return { data: [{ path: "enriched.ts" }] }
+      },
+      fetchGoal: async () => ({ data: { objective: "ship" } }),
+    })
+
+    const flight = controller.sync("ses_prog")
+    // Wait until core transcript is painted (before enrichment resolves).
+    for (let i = 0; i < 50 && !store.message.ses_prog; i++) {
+      await Promise.resolve()
+    }
+    expect(store.message.ses_prog).toEqual([{ id: "msg_1" }])
+    expect(store.part.msg_1).toEqual([{ id: "part_core" }])
+    expect(store.session_diff.ses_prog).toEqual([])
+
+    // Live stream delta lands after core paint, before enrichment finishes.
+    setStore(
+      produce((draft) => {
+        draft.part.msg_1 = [{ id: "part_core" }, { id: "part_live" }]
+      }),
+    )
+
+    releaseDiff?.()
+    await flight
+
+    // Enrichment must patch sidebar only — live parts must survive.
+    expect(store.part.msg_1).toEqual([{ id: "part_core" }, { id: "part_live" }])
+    expect(store.message.ses_prog).toEqual([{ id: "msg_1" }])
+    expect(store.session_diff.ses_prog).toEqual([{ path: "enriched.ts" }])
+    expect(store.session_goal.ses_prog).toEqual({ objective: "ship" })
+  })
 })

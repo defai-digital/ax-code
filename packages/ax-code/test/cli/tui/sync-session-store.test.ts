@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   applySessionDeleteCleanup,
   applySessionLeavePrune,
+  applySessionSyncEnrichment,
   applySessionSyncSnapshot,
   createSessionSyncSnapshot,
 } from "../../../src/cli/cmd/tui/context/sync-session-store"
@@ -88,6 +89,29 @@ describe("tui sync session store", () => {
       risk: undefined,
       goal: undefined,
     })
+  })
+
+  test("enrichment apply patches sidebar fields without touching messages/parts", () => {
+    const store = {
+      session: [{ id: "ses_1", title: "current" }],
+      todo: { ses_1: [{ id: "todo_1" }] },
+      message: { ses_1: [{ id: "msg_1" }] },
+      part: { msg_1: [{ id: "part_1", text: "live delta" }] },
+      session_diff: { ses_1: [] as Array<{ path: string }> },
+      session_risk: {} as Record<string, { quality?: unknown }>,
+      session_goal: {} as Record<string, { objective: string } | null>,
+    }
+
+    applySessionSyncEnrichment(store, "ses_1", {
+      diff: [{ path: "enriched.ts" }],
+      risk: { quality: { review: null, debug: null } },
+      goal: { objective: "ship it" },
+    })
+
+    expect(store.part.msg_1).toEqual([{ id: "part_1", text: "live delta" }])
+    expect(store.message.ses_1).toEqual([{ id: "msg_1" }])
+    expect(store.session_diff.ses_1).toEqual([{ path: "enriched.ts" }])
+    expect(store.session_goal.ses_1).toEqual({ objective: "ship it" })
   })
 
   test("hydrates session state and removes stale part buckets on full sync", () => {

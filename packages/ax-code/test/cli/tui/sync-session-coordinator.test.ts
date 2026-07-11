@@ -52,11 +52,50 @@ describe("tui sync session coordinator", () => {
 
     const first = controller.sync("ses_2")
     const second = controller.sync("ses_2")
+    // Concurrent awaiters must not resolve before the shared flight applies.
+    let secondDone = false
+    void second.then(() => {
+      secondDone = true
+    })
+    await Promise.resolve()
+    expect(secondDone).toBe(false)
+    expect(applied).toEqual([])
+
     release?.()
     await Promise.all([first, second])
 
+    expect(secondDone).toBe(true)
     expect(fetches).toEqual(["ses_2"])
     expect(applied).toEqual(["ses_2"])
+  })
+
+  test("applies progressive core snapshots before enrichment completes", async () => {
+    const applied: Array<{ id: string; mode?: string }> = []
+    let release: (() => void) | undefined
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const controller = createSessionSyncController({
+      async fetchSnapshot(sessionID, options) {
+        options?.onCoreReady?.({ id: `${sessionID}:core` })
+        await pending
+        return { id: `${sessionID}:full` }
+      },
+      applySnapshot(_sessionID, snapshot, mode) {
+        applied.push({ id: (snapshot as { id: string }).id, mode })
+      },
+    })
+
+    const flight = controller.sync("ses_core")
+    await Promise.resolve()
+    expect(applied).toEqual([{ id: "ses_core:core", mode: "full" }])
+    release?.()
+    await flight
+    // Final pass is enrichment-only so live stream deltas are not clobbered.
+    expect(applied).toEqual([
+      { id: "ses_core:core", mode: "full" },
+      { id: "ses_core:full", mode: "enrichment" },
+    ])
   })
 
   test("warns on missing snapshots and does not mark the session as fully synced", async () => {

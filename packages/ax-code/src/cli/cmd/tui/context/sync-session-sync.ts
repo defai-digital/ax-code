@@ -1,7 +1,12 @@
 import { produce, type SetStoreFunction } from "solid-js/store"
 import { createSessionSyncController } from "./sync-session-coordinator"
 import { fetchSessionSyncSnapshot, type SessionSyncFetchResult } from "./sync-session-fetch"
-import { applySessionSyncSnapshot, type SyncedMessageParts } from "./sync-session-store"
+import {
+  applySessionSyncEnrichment,
+  applySessionSyncSnapshot,
+  createSessionSyncSnapshot,
+  type SyncedMessageParts,
+} from "./sync-session-store"
 
 export interface SessionSyncStoreState<
   TSession extends { id: string },
@@ -20,6 +25,16 @@ export interface SessionSyncStoreState<
   session_risk: Record<string, TRisk>
   session_goal: Record<string, TGoal | null>
 }
+
+type SessionSyncSnapshot<
+  TSession,
+  TTodo,
+  TMessage,
+  TPart,
+  TDiff,
+  TRisk,
+  TGoal,
+> = NonNullable<ReturnType<typeof createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal>>>
 
 export function createStoreBackedSessionSyncController<
   TSession extends { id: string },
@@ -46,9 +61,11 @@ export function createStoreBackedSessionSyncController<
     SessionSyncStoreState<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal>
   >
 
-  return createSessionSyncController({
-    async fetchSnapshot(sessionID) {
-      return fetchSessionSyncSnapshot({
+  type Snapshot = SessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal>
+
+  return createSessionSyncController<Snapshot>({
+    async fetchSnapshot(sessionID, options) {
+      return fetchSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal>({
         sessionID,
         timeoutMs: input.timeoutMs,
         withTimeout: input.withTimeout,
@@ -58,11 +75,20 @@ export function createStoreBackedSessionSyncController<
         fetchDiff: () => input.fetchDiff(sessionID),
         fetchRisk: input.fetchRisk ? () => input.fetchRisk!(sessionID) : undefined,
         fetchGoal: input.fetchGoal ? () => input.fetchGoal!(sessionID) : undefined,
+        onCoreReady: options?.onCoreReady,
       })
     },
-    applySnapshot(sessionID, snapshot) {
+    applySnapshot(sessionID, snapshot, mode = "full") {
       setStore(
         produce((draft) => {
+          if (mode === "enrichment") {
+            applySessionSyncEnrichment(draft, sessionID, {
+              diff: snapshot.diff,
+              risk: snapshot.risk,
+              goal: snapshot.goal,
+            })
+            return
+          }
           applySessionSyncSnapshot(draft, sessionID, snapshot)
         }),
       )
