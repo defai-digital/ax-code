@@ -30,6 +30,9 @@ files:
 extraResources:
   - from: resources/web-dist
     to: web-dist
+  # macOS menu-bar tray icons (template PNGs + status glyphs)
+  - from: resources/icons
+    to: icons
 
 # Unpack native .node files — they cannot be required() from inside an asar.
 asarUnpack:

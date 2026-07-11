@@ -15,6 +15,7 @@ import fs from "fs/promises"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, "../../..")
 const outDir = path.join(__dirname, "../dist")
+const packageRoot = path.join(__dirname, "..")
 
 await fs.mkdir(outDir, { recursive: true })
 await fs.rm(path.join(outDir, "server.js"), { force: true })
@@ -75,5 +76,17 @@ await build({
     "import.meta.url": "importMetaUrl",
   },
 })
+
+// Copy tray icons into dist/resources so unpackaged/dev runs that resolve
+// __dirname/resources still find them (packaged builds use extraResources).
+const traySrc = path.join(__dirname, "../resources/icons")
+const trayDest = path.join(outDir, "resources", "icons")
+try {
+  await fs.access(path.join(traySrc, "tray", "trayTemplate-idle.png"))
+  await fs.cp(traySrc, trayDest, { recursive: true })
+  console.log("[electron] copied tray icons → dist/resources/icons")
+} catch {
+  console.warn("[electron] tray icons missing under resources/icons/tray (tray will be skipped in dev)")
+}
 
 console.log("[electron] bundle → dist/{main,preload,server-process,server}.js + dist/desktop-cli.mjs")

@@ -1798,7 +1798,18 @@ const setupApplicationMenu = () => {
 
 // ── Tray (macOS only; no-ops cleanly if icon assets are absent) ────────────
 let trayController = null
-const resourceRoot = () => (app.isPackaged ? process.resourcesPath : path.join(__dirname, "resources"))
+// Packaged: extraResources land in process.resourcesPath (…/Resources/icons/tray).
+// Dev: prefer package resources/ next to dist/, then dist/resources/ (bundle-main copy).
+const resourceRoot = () => {
+  if (app.isPackaged) return process.resourcesPath
+  const candidates = [path.join(__dirname, "..", "resources"), path.join(__dirname, "resources")]
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, "icons", "tray", "trayTemplate-idle.png"))) {
+      return candidate
+    }
+  }
+  return candidates[0]
+}
 
 const trayIconAssets = () => {
   const dir = path.join(resourceRoot(), "icons", "tray")
