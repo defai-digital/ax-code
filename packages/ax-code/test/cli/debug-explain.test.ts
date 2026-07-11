@@ -473,6 +473,31 @@ describe("debug explain replay hang analysis", () => {
     expect(issue?.rootCause).toContain("2026-04-18T12:00:00.500Z")
   })
 
+  test("formatDuration carry: gap just under 2 minutes formats as 2m not 1m 60s", () => {
+    // Regression: Math.round on the minute remainder used to emit "1m 60s".
+    const lines = [
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:00:00.000Z",
+        eventType: "tui.threadStarted",
+        data: {},
+      }),
+      JSON.stringify({
+        kind: "process.event",
+        time: "2026-04-18T12:02:00.000Z",
+        eventType: "tui.worker.mainStalled",
+        data: { gapMs: 119_500, lastPingAt: "2026-04-18T12:00:00.500Z", thresholdMs: 2000 },
+      }),
+    ]
+
+    const records = parseProcessEventLines(lines)
+    const issues = classifyProcessIssues(records, Date.parse("2026-04-18T12:02:10.000Z"))
+    const issue = issues.find((i) => i.title.includes("main thread stalled (worker watchdog)"))
+    expect(issue).toBeTruthy()
+    expect(issue?.rootCause).toContain("2m")
+    expect(issue?.rootCause).not.toMatch(/1m 60s/)
+  })
+
   test("classifies opentui render loops", () => {
     const lines = [
       JSON.stringify({
