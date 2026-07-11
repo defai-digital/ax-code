@@ -25,6 +25,7 @@ import {
 import { useI18n } from "@/lib/i18n"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { setDirectoryShowHidden, useDirectoryShowHidden } from "@/lib/directoryShowHidden"
+import { toast } from "@/components/ui"
 
 interface Option<T extends string> {
   id: T
@@ -359,10 +360,17 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
 
   const handleWideChatLayoutChange = React.useCallback(
     (enabled: boolean) => {
+      const previous = wideChatLayoutEnabled
       setWideChatLayoutEnabled(enabled)
-      void updateDesktopSettings({ wideChatLayoutEnabled: enabled })
+      void updateDesktopSettings({ wideChatLayoutEnabled: enabled }).catch((error) => {
+        console.warn("Failed to save wide chat layout setting:", error)
+        if (useUIStore.getState().wideChatLayoutEnabled === enabled) {
+          setWideChatLayoutEnabled(previous)
+        }
+        toast.error("Failed to save settings", { id: "settings-save-failed" })
+      })
     },
-    [setWideChatLayoutEnabled],
+    [setWideChatLayoutEnabled, wideChatLayoutEnabled],
   )
 
   const handleShowSplitAssistantMessageActionsChange = React.useCallback(
@@ -439,10 +447,17 @@ export const AXCodeVisualSettings: React.FC<AXCodeVisualSettingsProps> = ({ visi
 
   const handleShowTurnChangedFilesChange = React.useCallback(
     (enabled: boolean) => {
+      const previous = showTurnChangedFiles
       setShowTurnChangedFiles(enabled)
-      void updateDesktopSettings({ showTurnChangedFiles: enabled })
+      void updateDesktopSettings({ showTurnChangedFiles: enabled }).catch((error) => {
+        console.warn("Failed to save changed-files setting:", error)
+        if (useUIStore.getState().showTurnChangedFiles === enabled) {
+          setShowTurnChangedFiles(previous)
+        }
+        toast.error("Failed to save settings", { id: "settings-save-failed" })
+      })
     },
-    [setShowTurnChangedFiles],
+    [setShowTurnChangedFiles, showTurnChangedFiles],
   )
 
   const handleTimeFormatPreferenceChange = React.useCallback(

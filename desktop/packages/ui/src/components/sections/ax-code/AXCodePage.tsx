@@ -10,55 +10,16 @@ import { GitHubSettings } from "./GitHubSettings"
 import { AxCodeCliSettings } from "./AxCodeCliSettings"
 import { DesktopNetworkSettings } from "./DesktopNetworkSettings"
 import { KeyboardShortcutsSettings } from "./KeyboardShortcutsSettings"
+import { CornerRadiusSettings } from "./CornerRadiusSettings"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
-import { useDeviceInfo } from "@/lib/device"
-import { isDesktopLocalOriginActive, isDesktopShell, isWebRuntime } from "@/lib/desktop"
+import { isDesktopLocalOriginActive, isDesktopShell } from "@/lib/desktop"
 import type { AXCodeSection } from "./types"
 
 interface AXCodePageProps {
-  /** Which section to display. If undefined, shows all sections. */
-  section?: AXCodeSection
+  section: AXCodeSection
 }
 
 export const AXCodePage: React.FC<AXCodePageProps> = ({ section }) => {
-  const { isMobile } = useDeviceInfo()
-  const showAbout = isMobile && isWebRuntime()
-  const showDesktopNetworkSettings = isDesktopShell() && isDesktopLocalOriginActive()
-
-  // If no section specified, show all sections.
-  if (!section) {
-    return (
-      <ScrollableOverlay outerClassName="h-full" className="w-full">
-        <div className="ax-code-page-body mx-auto max-w-3xl space-y-3 p-3 sm:space-y-6 sm:p-6 sm:pt-8">
-          <AXCodeVisualSettings />
-          <div className="border-t border-border/40 pt-6">
-            <DefaultsSettings />
-          </div>
-          {showDesktopNetworkSettings && (
-            <div className="border-t border-border/40 pt-6">
-              <DesktopNetworkSettings />
-            </div>
-          )}
-          <div className="border-t border-border/40 pt-6">
-            <AxCodeCliSettings />
-          </div>
-          <div className="border-t border-border/40 pt-6">
-            <SessionRetentionSettings />
-          </div>
-          <div className="border-t border-border/40 pt-6">
-            <PasskeySettings />
-          </div>
-          {showAbout && (
-            <div className="border-t border-border/40 pt-6">
-              <AboutSettings />
-            </div>
-          )}
-        </div>
-      </ScrollableOverlay>
-    )
-  }
-
-  // Show specific section content
   const renderSectionContent = () => {
     switch (section) {
       case "visual":
@@ -75,6 +36,8 @@ export const AXCodePage: React.FC<AXCodePageProps> = ({ section }) => {
         return <GitHubSectionContent />
       case "notifications":
         return <NotificationSectionContent />
+      case "about":
+        return <AboutSectionContent />
       default:
         return null
     }
@@ -94,18 +57,23 @@ const ShortcutsSectionContent: React.FC = () => {
 // Visual section: Theme Mode, Font Size, Spacing, Input Bar Offset, Nav Rail
 const VisualSectionContent: React.FC = () => {
   return (
-    <AXCodeVisualSettings
-      visibleSettings={[
-        "theme",
-        "timeFormat",
-        "weekStart",
-        "fontSize",
-        "terminalFontSize",
-        "spacing",
-        "inputBarOffset",
-        "terminalQuickKeys",
-      ]}
-    />
+    <div className="space-y-6">
+      <AXCodeVisualSettings
+        visibleSettings={[
+          "theme",
+          "timeFormat",
+          "weekStart",
+          "fontSize",
+          "terminalFontSize",
+          "spacing",
+          "inputBarOffset",
+          "terminalQuickKeys",
+        ]}
+      />
+      <div className="border-t border-border/40 pt-6">
+        <CornerRadiusSettings />
+      </div>
+    </div>
   )
 }
 
@@ -177,4 +145,8 @@ const GitHubSectionContent: React.FC = () => {
 // Notifications section: Native browser notifications
 const NotificationSectionContent: React.FC = () => {
   return <NotificationSettings />
+}
+
+const AboutSectionContent: React.FC = () => {
+  return <AboutSettings />
 }

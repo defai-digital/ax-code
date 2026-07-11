@@ -249,6 +249,9 @@ export const createSettingsHelpers = (dependencies) => {
       const normalizedDays = Math.max(1, Math.min(365, Math.round(candidate.autoDeleteAfterDays)))
       result.autoDeleteAfterDays = normalizedDays
     }
+    if (candidate.sessionRetentionAction === "archive" || candidate.sessionRetentionAction === "delete") {
+      result.sessionRetentionAction = candidate.sessionRetentionAction
+    }
     const typography = sanitizeTypographySizesPartial(candidate.typographySizes)
     if (typography) {
       result.typographySizes = typography
@@ -356,6 +359,12 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.stickyUserHeader === "boolean") {
       result.stickyUserHeader = candidate.stickyUserHeader
+    }
+    if (typeof candidate.wideChatLayoutEnabled === "boolean") {
+      result.wideChatLayoutEnabled = candidate.wideChatLayoutEnabled
+    }
+    if (typeof candidate.showTurnChangedFiles === "boolean") {
+      result.showTurnChangedFiles = candidate.showTurnChangedFiles
     }
     if (typeof candidate.showSplitAssistantMessageActions === "boolean") {
       result.showSplitAssistantMessageActions = candidate.showSplitAssistantMessageActions

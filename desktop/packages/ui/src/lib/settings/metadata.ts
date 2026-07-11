@@ -21,6 +21,7 @@ export type SettingsPageSlug =
   | "magic-prompts"
   | "snippets"
   | "notifications"
+  | "about"
 
 export type SettingsPageGroup = "appearance" | "projects" | "general" | "ax-code" | "git" | "skills" | "advanced"
 
@@ -184,8 +185,6 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
       "keyboard",
       "viewport",
       "terminal",
-      "install name",
-      "app shortcuts",
     ],
   },
   {
@@ -242,6 +241,14 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: "general",
     kind: "single",
     keywords: ["alerts", "native", "summary", "summarization"],
+  },
+  {
+    slug: "about",
+    title: "About AX Code",
+    group: "advanced",
+    kind: "single",
+    keywords: ["about", "version", "updates", "release"],
+    isAvailable: (ctx) => ctx.isDesktop && !ctx.isWeb,
   },
 ] as const
 

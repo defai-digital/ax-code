@@ -91,6 +91,34 @@ describe("settings helpers", () => {
     expect(helpers.sanitizeSettingsUpdate({ collapsibleThinkingBlocks: 1 })).toEqual({})
   })
 
+  it("accepts session retention and chat layout preferences", () => {
+    const helpers = createTestHelpers()
+
+    expect(
+      helpers.sanitizeSettingsUpdate({
+        sessionRetentionAction: "delete",
+        wideChatLayoutEnabled: true,
+        showTurnChangedFiles: false,
+      }),
+    ).toEqual({
+      sessionRetentionAction: "delete",
+      wideChatLayoutEnabled: true,
+      showTurnChangedFiles: false,
+    })
+  })
+
+  it("rejects invalid session retention and chat layout preferences", () => {
+    const helpers = createTestHelpers()
+
+    expect(
+      helpers.sanitizeSettingsUpdate({
+        sessionRetentionAction: "remove",
+        wideChatLayoutEnabled: "true",
+        showTurnChangedFiles: 0,
+      }),
+    ).toEqual({})
+  })
+
   it("includes collapsibleThinkingBlocks in formatSettingsResponse", () => {
     const helpers = createTestHelpers()
 

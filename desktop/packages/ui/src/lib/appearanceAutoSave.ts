@@ -2,6 +2,7 @@ import { useUIStore } from "@/stores/useUIStore"
 import { updateDesktopSettings } from "@/lib/persistence"
 import type { DesktopSettings } from "@/lib/desktop"
 import type { MonoFontOption, UiFontOption } from "@/lib/fontOptions"
+import { toast } from "@/components/ui"
 
 type AppearanceSlice = {
   showReasoningTraces: boolean
@@ -88,7 +89,10 @@ export const startAppearanceAutoSave = (): void => {
     pending = null
     timer = null
     if (payload && Object.keys(payload).length > 0) {
-      void updateDesktopSettings(payload)
+      void updateDesktopSettings(payload).catch((error) => {
+        console.warn("Failed to auto-save settings:", error)
+        toast.error("Failed to save settings", { id: "settings-auto-save-failed" })
+      })
     }
   }
 

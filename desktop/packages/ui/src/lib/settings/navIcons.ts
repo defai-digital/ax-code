@@ -46,6 +46,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
 
     case "git":
       return "git-branch"
+    case "about":
+      return "information"
 
     case "home":
       return null
