@@ -319,9 +319,11 @@
   --markdown-heading4-size: var(--text-markdown);
   --markdown-heading5-size: var(--text-markdown);
   --markdown-heading6-size: var(--text-markdown);
-  --font-sans: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace;
+  /* Product defaults: UI sans + code mono (matches DEFAULT_UI_FONT / DEFAULT_MONO_FONT).
+     User Appearance settings override these via useAppFontEffects. */
+  --font-sans: "IBM Plex Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-heading: var(--font-sans);
-  --font-mono: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", "Menlo", "Cascadia Mono", ui-monospace, monospace;
   --font-family-sans: var(--font-sans);
   --font-family-mono: var(--font-mono);
 }

@@ -503,17 +503,10 @@ export class CSSVariableGenerator {
 
     if (!config) return vars
 
-    if (config.fonts) {
-      if (config.fonts.sans) {
-        vars.push(`  --font-sans: ${config.fonts.sans};`)
-        vars.push(`  --font-family-sans: ${config.fonts.sans};`)
-      }
-      if (config.fonts.mono) {
-        vars.push(`  --font-mono: ${config.fonts.mono};`)
-        vars.push(`  --font-family-mono: ${config.fonts.mono};`)
-      }
-      if (config.fonts.heading) vars.push(`  --font-heading: ${config.fonts.heading};`)
-    }
+    // Typography is product/user controlled (Appearance → UI/code font + design-system
+    // defaults: IBM Plex Sans / IBM Plex Mono). Theme JSON may still list fonts for
+    // docs/export, but we intentionally do not emit them — color themes used to force
+    // mono for all UI chrome.
 
     if (config.transitions) {
       if (config.transitions.fast) vars.push(`  --transition-fast: ${config.transitions.fast};`)

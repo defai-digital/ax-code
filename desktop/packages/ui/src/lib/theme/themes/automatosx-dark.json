@@ -162,9 +162,9 @@
   },
   "config": {
     "fonts": {
-      "sans": "\"IBM Plex Mono\", monospace",
-      "mono": "\"IBM Plex Mono\", monospace",
-      "heading": "\"IBM Plex Mono\", monospace"
+      "sans": "\"IBM Plex Sans\", \"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "mono": "\"IBM Plex Mono\", \"SFMono-Regular\", \"Menlo\", monospace",
+      "heading": "\"IBM Plex Sans\", \"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif"
     },
     "transitions": {
       "fast": "150ms ease",

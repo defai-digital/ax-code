@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { DEFAULT_LIGHT_THEME_ID, getThemeById, themes } from "./index"
+import { CSSVariableGenerator } from "@/lib/theme/cssGenerator"
+import { DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID, getThemeById, themes } from "./index"
 
 describe("theme registry", () => {
   test("contains unique theme ids", () => {
@@ -19,5 +20,23 @@ describe("theme registry", () => {
     expect(light?.colors.surface.elevated).not.toBe(light?.colors.surface.background)
     expect(light?.colors.surface.muted).not.toBe(light?.colors.surface.background)
     expect(light?.colors.surface.subtle).not.toBe(light?.colors.surface.elevated)
+  })
+
+  test("default product themes document Plex Sans for UI, not mono-as-sans", () => {
+    for (const id of [DEFAULT_LIGHT_THEME_ID, DEFAULT_DARK_THEME_ID]) {
+      const theme = getThemeById(id)
+      expect(theme?.config?.fonts?.sans).toMatch(/IBM Plex Sans/)
+      expect(theme?.config?.fonts?.heading).toMatch(/IBM Plex Sans/)
+      expect(theme?.config?.fonts?.mono).toMatch(/IBM Plex Mono/)
+    }
+  })
+
+  test("theme CSS generation does not override UI/code font variables", () => {
+    const theme = getThemeById(DEFAULT_DARK_THEME_ID)
+    expect(theme).toBeDefined()
+    const css = new CSSVariableGenerator().generate(theme!)
+    expect(css).not.toMatch(/--font-sans\s*:/)
+    expect(css).not.toMatch(/--font-mono\s*:/)
+    expect(css).not.toMatch(/--font-heading\s*:/)
   })
 })
