@@ -27,4 +27,12 @@ describe("ContextPanel browser source guards", () => {
     expect(source).toContain("if (!isLoading || !currentUrl) return")
     expect(source).toContain("}, [currentUrl, isLoading])")
   })
+
+  test("desktop browser reports page failures without obscuring healthy pages", async () => {
+    const source = await readFile(sourcePath, "utf8")
+
+    expect(source).toContain('webview.addEventListener("did-fail-load", onFailLoad)')
+    expect(source).toContain('t("contextPanel.browser.loadFailed")')
+    expect(source).toContain('className="pointer-events-none absolute right-3 top-3')
+  })
 })

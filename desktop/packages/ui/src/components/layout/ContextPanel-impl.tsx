@@ -17,7 +17,7 @@ import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useInputStore } from "@/sync/input-store"
 import { ContextPanelContent } from "./ContextSidebarTab"
 import { getContextPanelRelativePathLabel } from "./contextPanelPathLabels"
-import { handleDesktopBrowserNewWindowEvent } from "./desktopBrowserEvents"
+import { handleDesktopBrowserNewWindowEvent, readDesktopBrowserLoadFailure } from "./desktopBrowserEvents"
 import { toast } from "@/components/ui"
 import { Icon } from "@/components/icon/Icon"
 import { AxCodeIcon } from "@/components/ui/AxCodeIcon"
@@ -1813,6 +1813,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
   const [currentUrl, setCurrentUrl] = React.useState(startUrl)
   const [isInspecting, setIsInspecting] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(Boolean(startUrl))
+  const [loadFailure, setLoadFailure] = React.useState<ReturnType<typeof readDesktopBrowserLoadFailure>>(null)
   const loadingTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const showLoading = isLoading && Boolean(currentUrl)
 
@@ -1854,6 +1855,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
       setCurrentUrl(visibleUrl)
       setUrlInput(visibleUrl)
       setIsLoading(Boolean(visibleUrl))
+      setLoadFailure(null)
       persistUrl(visibleUrl)
 
       const webview = webviewRef.current
@@ -1896,6 +1898,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
 
     const onStartLoading = () => {
       if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current)
+      setLoadFailure(null)
       loadingTimerRef.current = setTimeout(() => setIsLoading(true), 200)
     }
     const onStopLoading = () => {
@@ -1906,6 +1909,14 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
 
     const onNewWindow = (event: Event) => {
       handleDesktopBrowserNewWindowEvent(event, loadUrl)
+    }
+
+    const onFailLoad = (event: Event) => {
+      const failure = readDesktopBrowserLoadFailure(event)
+      if (!failure) return
+      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current)
+      setIsLoading(false)
+      setLoadFailure(failure)
     }
 
     const installSameWebviewNavigation = () => {
@@ -1921,6 +1932,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
     webview.addEventListener("did-start-loading", onStartLoading)
     webview.addEventListener("did-stop-loading", onStopLoading)
     webview.addEventListener("new-window", onNewWindow)
+    webview.addEventListener("did-fail-load", onFailLoad)
     webview.addEventListener("dom-ready", installSameWebviewNavigation)
 
     // Check current loading state imperatively — we may have missed the event
@@ -1941,6 +1953,7 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
       webview.removeEventListener("did-start-loading", onStartLoading)
       webview.removeEventListener("did-stop-loading", onStopLoading)
       webview.removeEventListener("new-window", onNewWindow)
+      webview.removeEventListener("did-fail-load", onFailLoad)
       webview.removeEventListener("dom-ready", installSameWebviewNavigation)
     }
   }, [loadUrl, persistUrl])
@@ -2161,14 +2174,40 @@ const DesktopBrowserPane: React.FC<DesktopBrowserPaneProps> = ({ initialUrl, dir
           allowpopups
           style={{ width: "100%", height: "100%", border: "none" }}
         />
-        {(!currentUrl || currentUrl === "about:blank") && !isLoading ? (
+        {loadFailure && currentUrl ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-background p-6 text-center">
+            <Icon name="global" className="h-12 w-12 text-muted-foreground opacity-30" />
+            <span className="typography-ui-header text-muted-foreground">{t("contextPanel.browser.loadFailed")}</span>
+            <span className="max-w-sm break-all typography-micro text-muted-foreground">
+              {loadFailure.url || currentUrl}
+            </span>
+            {loadFailure.description ? (
+              <span className="max-w-sm typography-micro text-muted-foreground">
+                {loadFailure.description} ({loadFailure.code})
+              </span>
+            ) : null}
+            <span className="max-w-sm typography-micro text-muted-foreground">
+              {t("contextPanel.browser.loadFailedHint")}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={() => loadUrl(currentUrl)}>
+                <Icon name="refresh" className="mr-1.5 h-3.5 w-3.5" />
+                {t("contextPanel.preview.actions.retry")}
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void openExternalUrl(currentUrl)}>
+                <Icon name="external-link" className="mr-1.5 h-3.5 w-3.5" />
+                {t("contextPanel.preview.actions.openExternal")}
+              </Button>
+            </div>
+          </div>
+        ) : (!currentUrl || currentUrl === "about:blank") && !isLoading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 bg-background p-6 text-center">
             <AxCodeIcon width={140} height={140} className="opacity-20" />
             <span className="typography-ui-header text-muted-foreground">{t("contextPanel.browser.empty")}</span>
           </div>
         ) : null}
         {showLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/70 typography-micro text-muted-foreground">
+          <div className="pointer-events-none absolute right-3 top-3 rounded-md border border-border/50 bg-[var(--surface-elevated)]/90 px-2 py-1 typography-micro text-muted-foreground shadow-sm">
             {t("common.loading")}
           </div>
         ) : null}

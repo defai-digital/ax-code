@@ -82,4 +82,27 @@ describe("useUIStore context panel", () => {
 
     expect(migrated.contextPanelByDirectory).toEqual({})
   })
+
+  test("migration clears browser navigation from a previous Desktop session", async () => {
+    const migrate = useUIStore.persist.getOptions().migrate
+
+    const migrated = (await migrate?.(
+      {
+        browserPanel: { isOpen: true, url: "https://example.com/private", focused: true },
+        contextPanelByDirectory: {},
+      },
+      11,
+    )) as { browserPanel?: unknown }
+
+    expect(migrated.browserPanel).toEqual({ isOpen: false, url: "", focused: false })
+  })
+
+  test("does not persist browser navigation between Desktop sessions", () => {
+    const partialize = useUIStore.persist.getOptions().partialize
+    expect(partialize).toBeTypeOf("function")
+
+    useUIStore.setState({ browserPanel: { isOpen: true, url: "https://example.com/private", focused: true } })
+
+    expect(partialize?.(useUIStore.getState())).not.toHaveProperty("browserPanel")
+  })
 })

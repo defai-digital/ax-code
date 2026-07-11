@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest"
 
-import { handleDesktopBrowserNewWindowEvent, readDesktopBrowserNewWindowNavigation } from "./desktopBrowserEvents"
+import {
+  handleDesktopBrowserNewWindowEvent,
+  readDesktopBrowserLoadFailure,
+  readDesktopBrowserNewWindowNavigation,
+} from "./desktopBrowserEvents"
 
 const webviewNewWindowEvent = (input: { url?: string; disposition?: string }): Event => {
   const event = new Event("new-window", { cancelable: true }) as Event & {
@@ -70,5 +74,43 @@ describe("handleDesktopBrowserNewWindowEvent", () => {
 
     expect(event.defaultPrevented).toBe(true)
     expect(loadedUrls).toEqual([])
+  })
+})
+
+describe("readDesktopBrowserLoadFailure", () => {
+  test("returns actionable main-frame load failures", () => {
+    const event = new Event("did-fail-load") as Event & {
+      errorCode?: number
+      errorDescription?: string
+      validatedURL?: string
+      isMainFrame?: boolean
+    }
+    event.errorCode = -105
+    event.errorDescription = "ERR_NAME_NOT_RESOLVED"
+    event.validatedURL = "https://missing.example/"
+    event.isMainFrame = true
+
+    expect(readDesktopBrowserLoadFailure(event)).toEqual({
+      code: -105,
+      description: "ERR_NAME_NOT_RESOLVED",
+      url: "https://missing.example/",
+    })
+  })
+
+  test("ignores aborted redirects and subframe failures", () => {
+    expect(
+      readDesktopBrowserLoadFailure(
+        new CustomEvent("did-fail-load", {
+          detail: { errorCode: -3, errorDescription: "ERR_ABORTED", isMainFrame: true },
+        }),
+      ),
+    ).toBeNull()
+    expect(
+      readDesktopBrowserLoadFailure(
+        new CustomEvent("did-fail-load", {
+          detail: { errorCode: -105, errorDescription: "ERR_NAME_NOT_RESOLVED", isMainFrame: false },
+        }),
+      ),
+    ).toBeNull()
   })
 })

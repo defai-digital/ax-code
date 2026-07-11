@@ -2120,7 +2120,7 @@ export const useUIStore = create<UIStore>()(
       {
         name: "ui-store",
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 11,
+        version: 12,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== "object") {
             return persistedState
@@ -2245,6 +2245,13 @@ export const useUIStore = create<UIStore>()(
             state.contextPanelByDirectory = sanitizeContextPanelByDirectory(state.contextPanelByDirectory)
           }
 
+          // Browser navigation is intentionally session-only. Restoring a URL
+          // when Desktop/project state is reopened is surprising and can revive
+          // expired authentication or sensitive pages from the previous run.
+          if (version < 12) {
+            state.browserPanel = { isOpen: false, url: "", focused: false }
+          }
+
           state.browserPanel = normalizeBrowserPanelState(state.browserPanel)
 
           return state
@@ -2257,7 +2264,6 @@ export const useUIStore = create<UIStore>()(
           rightSidebarWidth: state.rightSidebarWidth,
           rightSidebarTab: state.rightSidebarTab,
           contextPanelByDirectory: state.contextPanelByDirectory,
-          browserPanel: state.browserPanel,
           isBottomTerminalOpen: state.isBottomTerminalOpen,
           isBottomTerminalExpanded: state.isBottomTerminalExpanded,
           bottomTerminalHeight: state.bottomTerminalHeight,
