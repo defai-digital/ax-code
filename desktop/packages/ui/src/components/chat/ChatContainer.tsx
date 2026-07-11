@@ -1,5 +1,7 @@
 import React from "react"
 import type { Message, Part, Session } from "@ax-code/sdk/v2"
+import type { PermissionRequest } from "@/types/permission"
+import type { QuestionRequest } from "@/types/question"
 
 import { ChatInput } from "./ChatInput"
 import { DraftPresetChips } from "./DraftPresetChips"
@@ -24,12 +26,11 @@ import { useDeviceInfo } from "@/lib/device"
 import { Button } from "@/components/ui/button"
 import { OverlayScrollbar } from "@/components/ui/OverlayScrollbar"
 import { Icon } from "@/components/icon/Icon"
-import type { PermissionRequest } from "@/types/permission"
-import type { QuestionRequest } from "@/types/question"
 import type { SessionMessageRecord } from "@/types/sessionMessages"
 import { cn, formatDirectoryName } from "@/lib/utils"
 import { useProjectsStore } from "@/stores/useProjectsStore"
-import { collectVisibleSessionIdsForBlockingRequests, flattenBlockingRequests } from "./lib/blockingRequests"
+import { collectVisibleSessionIdsForBlockingRequests } from "./lib/blockingRequests"
+import { useScopedPermissions, useScopedQuestions } from "./hooks/useScopedBlockingRequests"
 
 // New sync system imports
 import { useSessionUIStore } from "@/sync/session-ui-store"
@@ -37,8 +38,8 @@ import { useStreamingStore } from "@/sync/streaming"
 import {
   useSessionMessageCount,
   useSessionMessageRecords,
-  useSessions,
   useDirectorySync,
+  useDirectoryStore,
   useSyncDirectory,
   useSessionStatus,
 } from "@/sync/sync-context"
@@ -51,8 +52,6 @@ import { useI18n } from "@/lib/i18n"
 import { useProjectKnowledge, projectKnowledgeFileLabel } from "@/hooks/useProjectKnowledge"
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = []
-const EMPTY_PERMISSIONS: PermissionRequest[] = []
-const EMPTY_QUESTIONS: QuestionRequest[] = []
 const IDLE_SESSION_STATUS = { type: "idle" as const }
 const CHAT_FORCE_SCROLL_BOTTOM_EVENT = "openchamber:chat-force-scroll-bottom"
 const DEFAULT_RETRY_MESSAGE = "Quota limit reached. Retrying automatically."
@@ -452,50 +451,35 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     React.useCallback(() => undefined, []),
   )
 
-  // Sessions from sync system
-  const sessions = useSessions()
-
   // Plan detection - watches messages for plan creation and signals store
   usePlanDetection(currentSessionId ?? "", sessionMessages)
 
   // Session status from sync system
   const sessionStatusForCurrent = useSessionStatus(currentSessionId ?? "") ?? IDLE_SESSION_STATUS
 
-  // Permissions & questions from sync system
-  const allPermissions = useDirectorySync(React.useCallback((s) => s.permission ?? {}, []))
-  const allQuestions = useDirectorySync(React.useCallback((s) => s.question ?? {}, []))
-
-  // Convert Record → Map for blockingRequests helpers
-  const permissionsMap = React.useMemo(() => {
-    const m = new Map<string, PermissionRequest[]>()
-    for (const [k, v] of Object.entries(allPermissions)) m.set(k, v as PermissionRequest[])
-    return m
-  }, [allPermissions])
-
-  const questionsMap = React.useMemo(() => {
-    const m = new Map<string, QuestionRequest[]>()
-    for (const [k, v] of Object.entries(allQuestions)) m.set(k, v as QuestionRequest[])
-    return m
-  }, [allQuestions])
-
-  const scopedSessionIds = React.useMemo(
-    () =>
-      collectVisibleSessionIdsForBlockingRequests(
-        sessions.map((session) => ({ id: session.id, parentID: session.parentID })),
-        currentSessionId,
-      ),
-    [sessions, currentSessionId],
+  // Parent/child links only (string key) — title/share updates must not re-render chat shell.
+  const sessionLinkKey = useDirectorySync(
+    React.useCallback(
+      (s) => s.session.map((session) => `${session.id}\t${session.parentID ?? ""}`).join("\n"),
+      [],
+    ),
   )
 
-  const sessionPermissions = React.useMemo(() => {
-    if (scopedSessionIds.length === 0) return EMPTY_PERMISSIONS
-    return flattenBlockingRequests(permissionsMap, scopedSessionIds)
-  }, [permissionsMap, scopedSessionIds])
+  const scopedSessionIds = React.useMemo(() => {
+    if (!currentSessionId) return [] as string[]
+    const links = sessionLinkKey
+      ? sessionLinkKey.split("\n").map((line) => {
+          const [id, parentID] = line.split("\t")
+          return { id, parentID: parentID || undefined }
+        })
+      : []
+    return collectVisibleSessionIdsForBlockingRequests(links, currentSessionId)
+  }, [sessionLinkKey, currentSessionId])
 
-  const sessionQuestions = React.useMemo(() => {
-    if (scopedSessionIds.length === 0) return EMPTY_QUESTIONS
-    return flattenBlockingRequests(questionsMap, scopedSessionIds)
-  }, [questionsMap, scopedSessionIds])
+  // Leaf subscriptions: only re-render when permission/question arrays for scoped sessions change.
+  const directoryStore = useDirectoryStore()
+  const sessionPermissions = useScopedPermissions(directoryStore, scopedSessionIds)
+  const sessionQuestions = useScopedQuestions(directoryStore, scopedSessionIds)
   const sessionIsWorking = React.useMemo(() => {
     if (!currentSessionId || sessionPermissions.length > 0 || sessionQuestions.length > 0) {
       return false
@@ -589,17 +573,28 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
     return project ? getProjectDisplayLabel(project) : null
   }, [activeProjectId, newSessionDraft?.selectedProjectId, projects])
 
-  const parentSession = React.useMemo(() => {
-    if (!currentSessionId) return null
-    const current = sessions.find((session) => session.id === currentSessionId)
-    const parentID = current?.parentID
-    if (!parentID) return null
-    return (
-      sessions.find((session) => session.id === parentID) ??
-      getAllSyncSessions().find((session) => session.id === parentID) ??
-      null
-    )
-  }, [currentSessionId, sessions])
+  const parentSessionId = React.useMemo(() => {
+    if (!currentSessionId || !sessionLinkKey) return null
+    for (const line of sessionLinkKey.split("\n")) {
+      const [id, parentID] = line.split("\t")
+      if (id === currentSessionId) return parentID || null
+    }
+    return null
+  }, [currentSessionId, sessionLinkKey])
+
+  const parentSession = useDirectorySync(
+    React.useCallback(
+      (state) => {
+        if (!parentSessionId) return null
+        return (
+          state.session.find((session) => session.id === parentSessionId) ??
+          getAllSyncSessions().find((session) => session.id === parentSessionId) ??
+          null
+        )
+      },
+      [parentSessionId],
+    ),
+  )
 
   const handleReturnToParentSession = React.useCallback(() => {
     if (!parentSession) return

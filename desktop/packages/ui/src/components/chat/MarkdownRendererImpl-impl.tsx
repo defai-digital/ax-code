@@ -392,7 +392,11 @@ const TableWrapper: React.FC<{ children?: React.ReactNode; className?: string }>
   )
 }
 
-const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii" }> = ({ source, mode }) => {
+const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii"; deferRender?: boolean }> = ({
+  source,
+  mode,
+  deferRender = false,
+}) => {
   const { t } = useI18n()
   const currentTheme = useCurrentMermaidTheme()
   const { isMobile, isTablet } = useDeviceInfo()
@@ -401,8 +405,9 @@ const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii" }> = ({ sou
   const copiedResetTimerRef = React.useRef<number | null>(null)
   const downloadedResetTimerRef = React.useRef<number | null>(null)
 
+  // Skip expensive mermaid layout while the assistant is still streaming incomplete fences.
   const svg = React.useMemo(() => {
-    if (mode !== "svg") return ""
+    if (deferRender || mode !== "svg") return ""
     try {
       return renderMermaidSVG(source, {
         bg: currentTheme.colors.surface.elevated,
@@ -418,16 +423,16 @@ const MermaidBlock: React.FC<{ source: string; mode: "svg" | "ascii" }> = ({ sou
     } catch {
       return ""
     }
-  }, [currentTheme, mode, source])
+  }, [currentTheme, deferRender, mode, source])
 
   const ascii = React.useMemo(() => {
-    if (mode !== "ascii") return ""
+    if (deferRender || mode !== "ascii") return ""
     try {
       return renderMermaidASCII(source)
     } catch {
       return ""
     }
-  }, [mode, source])
+  }, [deferRender, mode, source])
 
   const copyVisibilityClass = isMobile || isTablet ? "opacity-100" : "opacity-0 group-hover:opacity-100"
 
@@ -716,9 +721,11 @@ const MarkdownCodeBlock: React.FC<{
   code: string
   language: string
   syntaxTheme: { [key: string]: React.CSSProperties }
-}> = ({ code, language, syntaxTheme }) => {
+  /** When true, keep Prism off until the stream settles (parent isStreaming). */
+  deferHighlight?: boolean
+}> = ({ code, language, syntaxTheme, deferHighlight = false }) => {
   const [copied, setCopied] = React.useState(false)
-  const [highlight, setHighlight] = React.useState(true)
+  const [highlight, setHighlight] = React.useState(!deferHighlight)
   const [viewMode, setViewMode] = React.useState<"code" | "preview">("code")
   const prevCodeRef = React.useRef<string>(code)
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -734,10 +741,23 @@ const MarkdownCodeBlock: React.FC<{
     }
   }, [canPreview, viewMode])
 
-  // Defer Prism highlighting while code is actively streaming.
-  // Initial mount renders highlighted immediately (plays nice with finalized blocks).
+  // While the assistant is streaming, never run Prism. After stream ends (or for
+  // static blocks), re-enable after a short settle when code keeps changing.
   React.useEffect(() => {
-    if (prevCodeRef.current === code) return
+    if (deferHighlight) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+      setHighlight(false)
+      prevCodeRef.current = code
+      return
+    }
+
+    if (prevCodeRef.current === code) {
+      setHighlight(true)
+      return
+    }
     prevCodeRef.current = code
 
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -753,7 +773,7 @@ const MarkdownCodeBlock: React.FC<{
         timerRef.current = null
       }
     }
-  }, [code])
+  }, [code, deferHighlight])
 
   React.useEffect(() => {
     return () => {
@@ -870,11 +890,13 @@ const buildMarkdownComponents = ({
   onPreviewLoopback,
   previewLabel,
   previewTitle,
+  isStreaming = false,
 }: {
   syntaxTheme: { [key: string]: React.CSSProperties }
   onPreviewLoopback?: (url: string) => void
   previewLabel?: string
   previewTitle?: string
+  isStreaming?: boolean
 }): Components => ({
   table({ children, ...props }) {
     return <TableWrapper className={props.className}>{children}</TableWrapper>
@@ -1054,9 +1076,23 @@ const buildMarkdownComponents = ({
     const language = getCodeLanguage(className)
     const code = normalizeCodeBlockText(extractCodeText(child.props.children).replace(/\n$/, ""), language)
     if (language === "mermaid") {
-      return <MermaidBlock source={code} mode={useUIStore.getState().mermaidRenderingMode} />
+      return (
+        <MermaidBlock
+          source={code}
+          mode={useUIStore.getState().mermaidRenderingMode}
+          deferRender={isStreaming}
+        />
+      )
     }
-    return <MarkdownCodeBlock code={code} language={language} syntaxTheme={syntaxTheme} {...props} />
+    return (
+      <MarkdownCodeBlock
+        code={code}
+        language={language}
+        syntaxTheme={syntaxTheme}
+        deferHighlight={isStreaming}
+        {...props}
+      />
+    )
   },
   code({ className, children, ...props }) {
     return (
@@ -1780,7 +1816,10 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
   const { editor } = useRuntimeAPIs()
   const containerRef = React.useRef<HTMLDivElement>(null)
   const effectiveDirectory = useEffectiveDirectory() ?? ""
-  const mermaidBlocks = React.useMemo(() => extractMermaidBlocks(content), [content])
+  const mermaidBlocks = React.useMemo(
+    () => (isStreaming ? [] : extractMermaidBlocks(content)),
+    [content, isStreaming],
+  )
   useMermaidInlineInteractions({ containerRef, mermaidBlocks, onShowPopup })
   useFileReferenceInteractions({
     containerRef,
@@ -1809,8 +1848,9 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
         onPreviewLoopback: effectiveDirectory ? handlePreviewLoopback : undefined,
         previewLabel,
         previewTitle,
+        isStreaming,
       }),
-    [syntaxTheme, effectiveDirectory, handlePreviewLoopback, previewLabel, previewTitle],
+    [syntaxTheme, effectiveDirectory, handlePreviewLoopback, previewLabel, previewTitle, isStreaming],
   )
   const componentKey = `markdown-${part?.id ? `part-${part.id}` : `message-${messageId}`}`
   const markdownBlocks = useStableMarkdownBlocks(content, isStreaming && !disableStreamAnimation, componentKey)
