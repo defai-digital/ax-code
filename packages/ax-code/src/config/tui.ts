@@ -4,7 +4,7 @@ import { mergeDeep, unique } from "remeda"
 import { Config } from "./config"
 import { ConfigPaths } from "./paths"
 import { migrateTuiConfig } from "./migrate-tui-config"
-import { TuiInfo } from "./tui-schema"
+import { TuiInfo, TuiOptions } from "./tui-schema"
 import { Instance } from "@/project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
@@ -120,10 +120,46 @@ export namespace TuiConfig {
 
     const parsed = Info.safeParse(normalized)
     if (!parsed.success) {
-      log.warn("invalid tui config", { path: configFilepath, issues: parsed.error.issues })
-      return {}
+      // Strict validation fails as a unit, so a single bad entry (an
+      // unknown/typo'd keybind key, a non-string value, a legacy key) would
+      // otherwise discard the whole file — silently reverting the user's
+      // theme and every other keybind to defaults. Salvage the fields we can
+      // still validate individually instead of returning `{}`.
+      const salvaged = salvage(normalized)
+      log.warn("invalid tui config, salvaged valid fields", {
+        path: configFilepath,
+        issues: parsed.error.issues,
+        salvaged: Object.keys(salvaged),
+      })
+      return salvaged
     }
 
     return parsed.data
+  }
+
+  // Recover the individually-valid fields from a tui config that failed strict
+  // whole-object validation: theme, known tui options, and keybind entries with
+  // known keys and string values. Unknown/invalid entries are dropped.
+  function salvage(normalized: Record<string, unknown>): Info {
+    const result: Record<string, unknown> = {}
+
+    const theme = TuiInfo.shape.theme.safeParse(normalized.theme)
+    if (theme.success && theme.data !== undefined) result.theme = theme.data
+
+    for (const [key, field] of Object.entries(TuiOptions.shape)) {
+      const res = field.safeParse(normalized[key])
+      if (res.success && res.data !== undefined) result[key] = res.data
+    }
+
+    const rawKeybinds = normalized.keybinds
+    if (isRecord(rawKeybinds)) {
+      const keybinds: Record<string, string> = {}
+      for (const [key, value] of Object.entries(rawKeybinds)) {
+        if (key in Config.Keybinds.shape && typeof value === "string") keybinds[key] = value
+      }
+      if (Object.keys(keybinds).length > 0) result.keybinds = keybinds
+    }
+
+    return result as Info
   }
 }

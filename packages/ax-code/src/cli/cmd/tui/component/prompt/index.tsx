@@ -121,6 +121,11 @@ const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
 // enough for any realistic undo depth without letting the map grow unbounded.
 const MAX_ORPHANED_PROMPT_PARTS = 50
 
+// Shared copy for the "can't send a prompt yet" states, used by both the submit
+// toast and the input placeholder so the two never drift apart.
+const MSG_NO_MODEL = "No model available — check your provider configuration"
+const MSG_NO_PROVIDER = "No provider configured — connect a provider to send prompts"
+
 export function Prompt(props: PromptProps) {
   let input: TextareaRenderable
   let anchor: BoxRenderable
@@ -344,9 +349,7 @@ export function Prompt(props: PromptProps) {
     const hasProviders = sync.data.provider.length > 0
     toast.show({
       variant: "warning",
-      message: hasProviders
-        ? "No model available — check your provider configuration"
-        : "No provider configured — connect a provider to send prompts",
+      message: hasProviders ? MSG_NO_MODEL : MSG_NO_PROVIDER,
       duration: 5000,
     })
     // Open provider dialog so the user can configure or fix provider access.
@@ -371,6 +374,9 @@ export function Prompt(props: PromptProps) {
   const textareaKeybindings = useTextareaKeybindings({ submit: false, interceptEnter: true })
 
   function isPromptSubmitKey(event: KeyEvent) {
+    // Explicit newline binding wins over the built-in Enter->submit fallback so
+    // a user can rebind Enter to insert a newline instead of submitting.
+    if (keybind.match("input_newline", event)) return false
     if (keybind.match("input_submit", event)) return true
     return isUnmodifiedPromptSubmitKey(event)
   }
@@ -1267,7 +1273,10 @@ export function Prompt(props: PromptProps) {
         submitAction = "Session creation"
 
         const res = await withTimeout(
-          sdk.client.session.create({ id: sessionID }, { signal: nextSubmitAbort.signal }),
+          sdk.client.session.create(
+            { id: sessionID, directory: props.workspaceID ?? sdk.baseDirectory },
+            { signal: nextSubmitAbort.signal },
+          ),
           SUBMIT_ACCEPT_TIMEOUT_MS,
           `Session creation timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
         )
@@ -1599,9 +1608,7 @@ export function Prompt(props: PromptProps) {
       return "Providers are loading... please wait"
     }
     if (!local.model.current()) {
-      return sync.data.provider.length > 0
-        ? "No model available — check your provider setup"
-        : "No provider configured — press Enter to connect"
+      return sync.data.provider.length > 0 ? MSG_NO_MODEL : MSG_NO_PROVIDER
     }
     return `Ask anything... "${PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]}"`
   })

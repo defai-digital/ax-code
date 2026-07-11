@@ -4,6 +4,7 @@ import path from "path"
 import { type ParseError as JsoncParseError, applyEdits, modify, parse as parseJsonc } from "jsonc-parser"
 import { unique } from "remeda"
 import z from "zod"
+import { Config } from "./config"
 import { ConfigPaths } from "./paths"
 import { TuiInfo, TuiOptions } from "./tui-schema"
 import { Instance } from "@/project/instance"
@@ -55,7 +56,7 @@ export async function migrateTuiConfig(input: MigrateInput) {
     const legacyTui = LegacyRecord.safeParse("tui" in data ? data.tui : undefined)
     const extracted = {
       theme: theme.success ? theme.data : undefined,
-      keybinds: keybinds.success ? keybinds.data : undefined,
+      keybinds: keybinds.success ? filterKeybinds(keybinds.data) : undefined,
       tui: legacyTui.success ? legacyTui.data : undefined,
     }
     const tui = extracted.tui ? normalizeTui(extracted.tui) : undefined
@@ -87,6 +88,19 @@ export async function migrateTuiConfig(input: MigrateInput) {
     }
     log.info("migrated tui config", { from: file, to: target })
   }
+}
+
+// Keep only keybind entries with a known key and a string value so the
+// migrated tui.json passes strict validation. Without this, a single legacy /
+// typo'd key or non-string value would be written verbatim and later cause the
+// whole tui.json to be rejected on load (see TuiConfig.load salvage path).
+function filterKeybinds(data: Record<string, unknown> | undefined) {
+  if (!data) return undefined
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (key in Config.Keybinds.shape && typeof value === "string") result[key] = value
+  }
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 function normalizeTui(data: Record<string, unknown>) {
