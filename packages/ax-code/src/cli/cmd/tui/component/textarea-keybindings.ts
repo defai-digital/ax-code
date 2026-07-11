@@ -41,28 +41,6 @@ const TEXTAREA_ACTIONS = [
   "delete-word-backward",
 ] as const
 
-// Enter key aliases used both for the hardcoded submit bindings below and to
-// detect when the user has rebound bare Enter to newline.
-const ENTER_KEY_NAMES = new Set(["return", "enter", "linefeed", "kpenter"])
-
-// True when `input_newline` binds a bare (unmodified) Enter, i.e. the user wants
-// Enter to insert a newline instead of submitting. Modified combos like
-// `shift+return` (the default) don't count — they don't conflict with a bare
-// Enter->submit binding.
-function newlineMapsEnter(keybinds: Record<string, Keybind.Info[]>): boolean {
-  const bindings = keybinds["input_newline"]
-  if (!bindings) return false
-  return bindings.some(
-    (binding) =>
-      !binding.leader &&
-      !binding.ctrl &&
-      !binding.meta &&
-      !binding.shift &&
-      !binding.super &&
-      ENTER_KEY_NAMES.has(binding.name),
-  )
-}
-
 function mapTextareaKeybindings(
   keybinds: Record<string, Keybind.Info[]>,
   action: (typeof TEXTAREA_ACTIONS)[number],
@@ -70,29 +48,14 @@ function mapTextareaKeybindings(
   const configKey = `input_${action.replace(/-/g, "_")}`
   const bindings = keybinds[configKey]
   if (!bindings) return []
-  return bindings
-    // Leader-prefixed bindings can't reach a focused textarea (activating the
-    // leader blurs it), and opentui KeyBindings match name+modifiers only — so a
-    // leader combo would collapse to its bare key and fire the action
-    // destructively while typing. Drop them here.
-    .filter((binding) => !binding.leader)
-    .flatMap((binding): KeyBinding[] => {
-      const mapped: KeyBinding = {
-        name: binding.name,
-        ctrl: binding.ctrl || undefined,
-        meta: binding.meta || undefined,
-        shift: binding.shift || undefined,
-        super: binding.super || undefined,
-        action,
-      }
-      // Ctrl+- has no kitty keycode on the default (non-kitty) terminal path:
-      // raw mode emits 0x1F, which the parser reports as name "_". Emit an alias
-      // so the binding still fires there. (See the mirrored fix in keybind.tsx.)
-      if (binding.ctrl && binding.name === "-") {
-        return [mapped, { ...mapped, name: "_" }]
-      }
-      return [mapped]
-    })
+  return bindings.map((binding) => ({
+    name: binding.name,
+    ctrl: binding.ctrl || undefined,
+    meta: binding.meta || undefined,
+    shift: binding.shift || undefined,
+    super: binding.super || undefined,
+    action,
+  }))
 }
 
 export function useTextareaKeybindings(input: { submit?: boolean; interceptEnter?: boolean } = {}) {
@@ -107,12 +70,9 @@ export function textareaKeybindingsForConfig(
 ): KeyBinding[] {
   const submit = input.submit ?? true
   const interceptEnter = input.interceptEnter ?? false
-  // Don't force Enter->submit when the user has rebound bare Enter to newline;
-  // otherwise the config binding could never take effect.
-  const injectEnterSubmit = (submit || interceptEnter) && !newlineMapsEnter(keybinds)
 
   return [
-    ...(injectEnterSubmit
+    ...(submit || interceptEnter
       ? ([
           { name: "return", action: "submit" },
           { name: "enter", action: "submit" },

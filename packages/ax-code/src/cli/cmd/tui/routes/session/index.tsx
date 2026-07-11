@@ -4,7 +4,6 @@ import {
   createSignal,
   ErrorBoundary,
   For,
-  mapArray,
   Match,
   on,
   onCleanup,
@@ -86,7 +85,7 @@ import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
 import { EventQuery } from "@/replay/query"
-import { buildRouteInfoByMessage, routeEvent } from "./route"
+import { routeEvent } from "./route"
 import {
   assistantMessageDuration,
   assistantToolSummary,
@@ -178,15 +177,11 @@ export function Session() {
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
-  // Extract task parts per-message with mapArray so a single streamed part
-  // update only re-scans the one message whose parts changed, instead of
-  // rescanning every part of every message (which this memo is read 6+ times
-  // in the JSX). Each message gets its own inner memo keyed by message
-  // identity; the rollup below just concatenates the small per-message lists.
-  const taskPartsByMessage = mapArray(messages, (message) =>
-    createMemo(() => {
+  const subagentTasks = createMemo(() => {
+    const sessionMessages = sync.data.message[route.sessionID] ?? []
+    const tasks: SubagentRollupTask[] = []
+    for (const message of sessionMessages) {
       const parts = sync.data.part[message.id] ?? []
-      const out: SubagentRollupTask[] = []
       for (const part of parts) {
         if (part.type !== "tool" || (part as any).tool !== "task") continue
         const state = (part as any).state ?? {}
@@ -194,7 +189,7 @@ export function Session() {
         const input = state.input ?? {}
         const metadata = state.metadata ?? {}
         const sessionID = metadata.sessionId ?? metadata.sessionID ?? input.task_id
-        out.push({
+        tasks.push({
           id: part.id,
           sessionID: typeof sessionID === "string" ? sessionID : undefined,
           title: state.title ?? input.description,
@@ -204,11 +199,8 @@ export function Session() {
           lastActivityAt: state.time?.end ?? state.time?.start,
         })
       }
-      return out
-    }),
-  )
-  const subagentTasks = createMemo(() => {
-    const tasks = taskPartsByMessage().flatMap((tasksForMessage) => tasksForMessage())
+    }
+
     const parentID = session()?.parentID ?? route.sessionID
     return buildSubagentStatusView({
       tasks,
@@ -232,20 +224,6 @@ export function Session() {
       parts: sync.data.part[item.id] ?? [],
     })),
   )
-
-  // Resolve the per-message route indicator once for the whole route instead
-  // of once per rendered message. Previously each RouteIndicator loaded the
-  // full session log (up to 10k rows, MB payloads) to pull out its own
-  // agent.route row — ~50 synchronous SQLite loads on session open. This uses
-  // the indexed, agent.route-filtered query a single time and builds a
-  // Map<messageID, routeInfo>; RouteIndicator just does a Map.get. The
-  // primary-row selection matches the original per-message logic exactly.
-  const routeInfoByMessage = createMemo(() => {
-    void sync.data.message[route.sessionID] // re-evaluate when messages update
-    const sid = route.sessionID as Parameters<typeof EventQuery.bySessionAndTypeWithTimestamp>[0]
-    const rows = EventQuery.bySessionAndTypeWithTimestamp(sid, "agent.route")
-    return buildRouteInfoByMessage(rows, sync.data.agent)
-  })
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -893,17 +871,14 @@ export function Session() {
         name: "undo",
       },
       onSelect: async (dialog) => {
-        // The v2 SDK client resolves `{error}` instead of rejecting, so both
-        // calls must check the result — a failed abort or revert would
-        // otherwise fall through to the success path and clobber the typed
-        // prompt while the server never reverted.
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") {
-          const aborted = await sdk.client.session.abort({ sessionID: route.sessionID })
-          if (aborted.error) {
-            log.warn("session undo abort failed", { error: aborted.error, sessionID: route.sessionID })
+          try {
+            await sdk.client.session.abort({ sessionID: route.sessionID })
+          } catch (error) {
+            log.warn("session undo abort failed", { error, sessionID: route.sessionID })
             toast.show({
-              message: sdkErrorMessage(aborted.error, "Failed to stop the running session before undo"),
+              message: error instanceof Error ? error.message : "Failed to stop the running session before undo",
               variant: "error",
             })
             return
@@ -914,21 +889,23 @@ export function Session() {
           dialog.clear()
           return
         }
-        const result = await sdk.client.session.revert({
-          sessionID: route.sessionID,
-          messageID,
-        })
-        if (result.error) {
-          log.warn("session undo failed", { error: result.error, sessionID: route.sessionID, messageID })
-          toast.show({
-            message: sdkErrorMessage(result.error, "Failed to undo previous message"),
-            variant: "error",
+        await sdk.client.session
+          .revert({
+            sessionID: route.sessionID,
+            messageID,
           })
-          return
-        }
-        prompt.set(promptState(sync.data.part[messageID] ?? []))
-        toBottom()
-        dialog.clear()
+          .then(() => {
+            prompt.set(promptState(sync.data.part[messageID] ?? []))
+            toBottom()
+            dialog.clear()
+          })
+          .catch((error) => {
+            log.warn("session undo failed", { error, sessionID: route.sessionID, messageID })
+            toast.show({
+              message: error instanceof Error ? error.message : "Failed to undo previous message",
+              variant: "error",
+            })
+          })
       },
     },
     {
@@ -941,40 +918,37 @@ export function Session() {
         name: "redo",
       },
       onSelect: async (dialog) => {
-        // The v2 SDK client resolves `{error}` instead of rejecting, so both
-        // calls must check the result — a failed unrevert or revert would
-        // otherwise fall through to the success path and clear the typed
-        // prompt / close the dialog while the server never changed.
+        dialog.clear()
         const messageID = redoMessageID(messages(), session()?.revert?.messageID)
         if (!messageID) {
-          const result = await sdk.client.session.unrevert({
+          await sdk.client.session
+            .unrevert({
+              sessionID: route.sessionID,
+            })
+            .then(() => {
+              prompt.set({ input: "", parts: [] })
+            })
+            .catch((error) => {
+              log.warn("session redo failed", { error, sessionID: route.sessionID })
+              toast.show({
+                message: error instanceof Error ? error.message : "Failed to redo the previous message",
+                variant: "error",
+              })
+            })
+          return
+        }
+        await sdk.client.session
+          .revert({
             sessionID: route.sessionID,
+            messageID,
           })
-          if (result.error) {
-            log.warn("session redo failed", { error: result.error, sessionID: route.sessionID })
+          .catch((error) => {
+            log.warn("session redo failed", { error, sessionID: route.sessionID, messageID })
             toast.show({
-              message: sdkErrorMessage(result.error, "Failed to redo the previous message"),
+              message: error instanceof Error ? error.message : "Failed to redo the previous message",
               variant: "error",
             })
-            return
-          }
-          prompt.set({ input: "", parts: [] })
-          dialog.clear()
-          return
-        }
-        const result = await sdk.client.session.revert({
-          sessionID: route.sessionID,
-          messageID,
-        })
-        if (result.error) {
-          log.warn("session redo failed", { error: result.error, sessionID: route.sessionID, messageID })
-          toast.show({
-            message: sdkErrorMessage(result.error, "Failed to redo the previous message"),
-            variant: "error",
           })
-          return
-        }
-        dialog.clear()
       },
     },
     {
@@ -1216,7 +1190,7 @@ export function Session() {
                           })}
                           onDismissCompactionNotice={dismissCompactionNotice}
                         />
-                        <RouteIndicator messageID={message.id} routeInfoByMessage={routeInfoByMessage} />
+                        <RouteIndicator messageID={message.id} sessionID={route.sessionID} />
                       </>
                     </Match>
                     <Match when={message.role === "assistant"}>
@@ -1471,13 +1445,28 @@ function UserMessage(props: {
   )
 }
 
-function RouteIndicator(props: {
-  messageID: string
-  routeInfoByMessage: () => Map<string, NonNullable<ReturnType<typeof routeEvent>>>
-}) {
+function RouteIndicator(props: { messageID: string; sessionID: string }) {
   const { theme } = useTheme()
+  const sync = useSync()
 
-  const info = createMemo(() => props.routeInfoByMessage().get(props.messageID) ?? null)
+  const info = createMemo(() => {
+    void sync.data.message[props.sessionID] // reactive: re-evaluate when messages update
+    const sid = props.sessionID as Parameters<typeof EventQuery.bySessionWithTimestamp>[0]
+    const rows = EventQuery.bySessionWithTimestamp(sid)
+    const matches = rows.filter(
+      (r) => r.event_data.type === "agent.route" && r.event_data.messageID === props.messageID,
+    )
+    if (matches.length === 0) return null
+    // Prefer the switch event over a same-turn complexity event — the agent
+    // change is more visually informative than the fast-model indicator.
+    const primary =
+      matches.find((r) => {
+        const e = r.event_data
+        return e.type === "agent.route" && e.routeMode !== "complexity"
+      }) ?? matches[matches.length - 1]
+    if (!primary) return null
+    return routeEvent(primary, sync.data.agent)
+  })
 
   return (
     <Show when={info()}>

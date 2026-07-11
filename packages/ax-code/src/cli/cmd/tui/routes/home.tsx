@@ -19,7 +19,6 @@ import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useDirectory } from "../context/directory"
 import { useRoute, useRouteData } from "@tui/context/route"
-import { useSDK } from "@tui/context/sdk"
 import { useKeybind } from "../context/keybind"
 import { usePromptRef } from "../context/prompt"
 import { Installation } from "@/installation"
@@ -39,12 +38,6 @@ export function Home() {
   const nav = useRoute()
   const keybind = useKeybind()
   const route = useRouteData("home")
-  const sdk = useSDK()
-  // Reset the pinned workspace when landing on Home. A session route pins
-  // `sdk.setWorkspace(session.directory)`; without this, that pin would leak and
-  // a new session started from Home would be created in the previous session's
-  // workspace instead of the one Home is showing. Mirrors the session route.
-  createEffect(() => sdk.setWorkspace(route.workspaceID))
   const promptRef = usePromptRef()
   const args = useArgs()
   const local = useLocal()

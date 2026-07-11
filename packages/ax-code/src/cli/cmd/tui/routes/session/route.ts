@@ -67,43 +67,6 @@ export function routeEvent(row: { event_data: ReplayEvent; time_created: number 
   }
 }
 
-/**
- * Resolve the route indicator shown under each user message, keyed by message
- * ID, from a set of agent.route rows. Extracted so the session route can build
- * this map ONCE (from an indexed, agent.route-filtered query) instead of every
- * RouteIndicator re-loading the full session log. The per-message primary-row
- * selection matches the original inline logic exactly: prefer a non-complexity
- * (agent switch) event over a same-turn complexity (fast-model) event.
- */
-export function buildRouteInfoByMessage(
-  rows: { event_data: ReplayEvent; time_created: number }[],
-  agents?: AgentInfo[],
-): Map<string, NonNullable<ReturnType<typeof routeEvent>>> {
-  const matchesByMessage = new Map<string, { event_data: ReplayEvent; time_created: number }[]>()
-  for (const row of rows) {
-    const event = row.event_data
-    if (event.type !== "agent.route") continue
-    const messageID = event.messageID
-    if (!messageID) continue
-    const list = matchesByMessage.get(messageID)
-    if (list) list.push(row)
-    else matchesByMessage.set(messageID, [row])
-  }
-
-  const out = new Map<string, NonNullable<ReturnType<typeof routeEvent>>>()
-  for (const [messageID, matches] of matchesByMessage) {
-    const primary =
-      matches.find((r) => {
-        const e = r.event_data
-        return e.type === "agent.route" && e.routeMode !== "complexity"
-      }) ?? matches[matches.length - 1]
-    if (!primary) continue
-    const info = routeEvent(primary, agents)
-    if (info) out.set(messageID, info)
-  }
-  return out
-}
-
 export function messageRoute(
   msg: UserMessage,
   parts: Part[],

@@ -107,14 +107,8 @@ export namespace ExecutionGraph {
     }
   }
 
-  export function build(
-    sessionID: SessionID,
-    preloadedRows?: { event_data: ReplayEvent; time_created: number }[],
-  ): Graph {
-    // Callers that have already loaded the session log (e.g. the rollback
-    // view, which needs the same rows to resolve step points) can pass them
-    // in to avoid a second full-log SELECT.
-    const rows = preloadedRows ?? EventQuery.bySessionWithTimestamp(sessionID)
+  export function build(sessionID: SessionID): Graph {
+    const rows = EventQuery.bySessionWithTimestamp(sessionID)
     if (rows.length === 0) {
       return {
         sessionID,

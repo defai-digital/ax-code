@@ -46,17 +46,6 @@ type AxEngineTuiStatus = {
 function offlineProviderHint() {
   return "not running"
 }
-
-function sdkErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error) return error.message
-  if (typeof error === "string" && error) return error
-  if (typeof error === "object" && error) {
-    const candidate = error as { data?: { message?: string }; message?: string }
-    return candidate.data?.message ?? candidate.message ?? fallback
-  }
-  return fallback
-}
-
 const log = Log.create({ service: "tui.dialog-provider" })
 
 function normalizeOfflineProviderBaseURL(input: string) {
@@ -518,11 +507,7 @@ export function createDialogProviderOptions() {
                       toast.show({ variant: "success", message: `Using ${provider.name}` })
                       dialog.clear()
                     } else if (action === "disconnect") {
-                      const removed = await sdk.client.auth.remove({ providerID: provider.id })
-                      if (removed.error) {
-                        toast.show({ variant: "error", message: JSON.stringify(removed.error) })
-                        return
-                      }
+                      await sdk.client.auth.remove({ providerID: provider.id })
                       await sdk.client.instance.dispose()
                       await sync.bootstrap()
                       toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
@@ -530,14 +515,10 @@ export function createDialogProviderOptions() {
                     }
                   } else {
                     // Connect: store a marker in auth.json so provider persists as connected
-                    const stored = await sdk.client.auth.set({
+                    await sdk.client.auth.set({
                       providerID: provider.id,
                       auth: { type: "api", key: "cli" },
                     })
-                    if (stored.error) {
-                      toast.show({ variant: "error", message: JSON.stringify(stored.error) })
-                      return
-                    }
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     await selectDefaultModelForProvider(provider.id, provider.name)
@@ -583,11 +564,7 @@ export function createDialogProviderOptions() {
                     return
                   }
                   if (action === "remove") {
-                    const removed = await sdk.client.auth.remove({ providerID: provider.id })
-                    if (removed.error) {
-                      toast.show({ variant: "error", message: JSON.stringify(removed.error) })
-                      return
-                    }
+                    await sdk.client.auth.remove({ providerID: provider.id })
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: `Disconnected ${provider.name}` })
@@ -633,7 +610,7 @@ export function createDialogProviderOptions() {
                     if (!value) {
                       // A dismissed prompt aborts the flow; say so instead of
                       // silently dropping the connection attempt.
-                      toast.show({ variant: "info", message: `Cancelled connecting ${provider.name}` })
+                      toast.show({ variant: "info", message: `Canceled connecting ${provider.name}` })
                       return
                     }
                     inputs = value
@@ -729,21 +706,13 @@ function AutoMethod(props: AutoMethodProps) {
         providerID: props.providerID,
         method: props.index,
       })
+      if (cancelled) return
       if (result.error) {
-        // A failed device/auto flow resolves with an { error } payload rather
-        // than rejecting; surface it (mirroring the authorize step) unless the
-        // user already dismissed the dialog by pressing esc.
-        if (!cancelled) {
-          toast.show({ variant: "error", message: JSON.stringify(result.error) })
-          dialog.clear()
-        }
+        dialog.clear()
         return
       }
-      // Even if the user pressed esc while waiting, a late browser completion
-      // still stored credentials server-side. Dispose + bootstrap so the TUI
-      // reflects the now-connected provider; only skip advancing to the model
-      // picker (there is no server-side cancel to undo the auth).
       await sdk.client.instance.dispose()
+      if (cancelled) return
       await sync.bootstrap()
       if (cancelled) return
       dialog.replace(() => <DialogModel providerID={props.providerID} />)
@@ -793,7 +762,7 @@ function CodeMethod(props: CodeMethodProps) {
   const sdk = useSDK()
   const sync = useSync()
   const dialog = useDialog()
-  const [error, setError] = createSignal<string | null>(null)
+  const [error, setError] = createSignal(false)
 
   return (
     <DialogPrompt
@@ -801,27 +770,23 @@ function CodeMethod(props: CodeMethodProps) {
       placeholder="Authorization code"
       autoClose={false}
       onConfirm={async (value) => {
-        // Keep the prompt open until auth resolves. On failure, stay open and
-        // surface the inline error state instead of closing before the async
-        // result is known. See #257.
+        // Keep the prompt open until auth resolves. On an invalid code, stay
+        // open and surface the inline "Invalid code" state instead of closing
+        // before the async result is known. See #257.
         if (!value) {
-          setError("Invalid code")
+          setError(true)
           return
         }
-        const result = await sdk.client.provider.oauth.callback({
+        const { error } = await sdk.client.provider.oauth.callback({
           providerID: props.providerID,
           method: props.index,
           code: value,
         })
-        if (result.error) {
-          // The callback resolves with an { error } payload rather than
-          // rejecting. Surface the server-provided reason (e.g. an expired or
-          // network failure) and only fall back to the generic "Invalid code"
-          // when the payload carries no message of its own.
-          setError(sdkErrorMessage(result.error, "Invalid code"))
+        if (error) {
+          setError(true)
           return
         }
-        setError(null)
+        setError(false)
         await sdk.client.instance.dispose()
         await sync.bootstrap()
         dialog.replace(() => <DialogModel providerID={props.providerID} />)
@@ -830,7 +795,9 @@ function CodeMethod(props: CodeMethodProps) {
         <box gap={1}>
           <text fg={theme.textMuted}>{props.authorization.instructions}</text>
           <Link href={props.authorization.url} fg={theme.primary} />
-          <Show when={error()}>{(message) => <text fg={theme.error}>{message()}</text>}</Show>
+          <Show when={error()}>
+            <text fg={theme.error}>Invalid code</text>
+          </Show>
         </box>
       )}
     />
@@ -855,25 +822,19 @@ function ApiMethod(props: ApiMethodProps) {
       autoClose={false}
       onConfirm={async (value) => {
         // An empty key must not close the prompt or clear auth state; keep the
-        // dialog open and tell the user. A failed auth.set (which resolves with
-        // an { error } payload rather than rejecting) also keeps the dialog open
-        // (autoClose is false) and surfaces via toast instead of falsely
-        // advancing to the model picker. See #257.
+        // dialog open and tell the user. Async failures keep the dialog open
+        // (autoClose is false) and surface via toast. See #257.
         if (!value) {
           toast.show({ message: "API key is required", variant: "error" })
           return
         }
-        const stored = await sdk.client.auth.set({
+        await sdk.client.auth.set({
           providerID: props.providerID,
           auth: {
             type: "api",
             key: value,
           },
         })
-        if (stored.error) {
-          toast.show({ message: JSON.stringify(stored.error), variant: "error" })
-          return
-        }
         await sdk.client.instance.dispose()
         await sync.bootstrap()
         dialog.replace(() => <DialogModel providerID={props.providerID} />)

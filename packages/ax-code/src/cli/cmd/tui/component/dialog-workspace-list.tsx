@@ -40,9 +40,7 @@ async function openWorkspace(input: {
   const listed = input.forceCreate
     ? undefined
     : await client.session.list({ roots: true, limit: 1 }).catch(() => undefined)
-  // The v2 client resolves { error } instead of rejecting, so the .catch above is
-  // dead for HTTP/network failures; inspect listed.error to surface the failure.
-  if (!input.forceCreate && (!listed || listed.error)) {
+  if (!input.forceCreate && !listed) {
     input.toast.show({
       message: "Failed to open workspace",
       variant: "error",
@@ -75,8 +73,7 @@ async function openWorkspace(input: {
       await sleep(1000)
       continue
     }
-    // { error } resolutions leave data undefined; treat any error as a failure.
-    if (result.error || !result.data) {
+    if (!result.data) {
       input.toast.show({
         message: "Failed to open workspace",
         variant: "error",
@@ -228,15 +225,6 @@ export function DialogWorkspaceList() {
       })
       return
     }
-    // The v2 client resolves { error } rather than rejecting, so the catch above
-    // is dead for HTTP failures; check listed.error before treating it as empty.
-    if (listed?.error) {
-      toast.show({
-        message: "Failed to open workspace",
-        variant: "error",
-      })
-      return
-    }
     if (normalizeDialogSessions(listed?.data).length) {
       dialog.replace(() => <DialogSessionList workspaceID={workspaceID} />)
       return
@@ -278,9 +266,7 @@ export function DialogWorkspaceList() {
           directory: workspace,
         })
         const result = await client.session.list({ roots: true }).catch(() => undefined)
-        // { error } resolutions are truthy but carry no data; render the count as
-        // unavailable (null) on error instead of a misleading "0 sessions".
-        return [workspace, result && !result.error ? normalizeDialogSessions(result.data).length : null] as const
+        return [workspace, result ? normalizeDialogSessions(result.data).length : null] as const
       }),
     ).then((entries) => {
       if (run !== next) return

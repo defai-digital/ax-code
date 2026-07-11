@@ -130,60 +130,6 @@ export namespace EventQuery {
     return rows
   }
 
-  /**
-   * Timestamped variant filtered to a single event_type. Backed by
-   * event_log_session_type_sequence_idx, so this scans only the matching
-   * rows (e.g. the handful of "agent.route" events) instead of the whole
-   * session log. Used by the TUI RouteIndicator, which previously loaded
-   * the full log per message just to pull out agent.route rows.
-   */
-  export function bySessionAndTypeWithTimestamp(
-    sessionID: SessionID,
-    type: string,
-  ): { event_data: ReplayEvent; time_created: number }[] {
-    const rows = Database.use((db) =>
-      db
-        .select({
-          event_data: EventLogTable.event_data,
-          time_created: EventLogTable.time_created,
-        })
-        .from(EventLogTable)
-        .where(and(eq(EventLogTable.session_id, sessionID), eq(EventLogTable.event_type, type)))
-        .orderBy(EventLogTable.sequence)
-        .limit(BY_SESSION_LIMIT)
-        .all(),
-    )
-    warnIfTruncated(sessionID, rows.length)
-    return rows
-  }
-
-  /**
-   * Returns the most recent `limit` timestamped rows in ascending sequence
-   * order. Used by sidebar surfaces (e.g. the Activity list) that only ever
-   * display a small window of the newest events and must not pay for a full
-   * per-session load on every streamed update.
-   */
-  export function recentBySessionWithTimestamp(
-    sessionID: SessionID,
-    limit = 100,
-  ): { event_data: ReplayEvent; time_created: number }[] {
-    const normalizedLimit = normalizeRecentLimit(limit)
-    if (normalizedLimit === 0) return []
-    const rows = Database.use((db) =>
-      db
-        .select({
-          event_data: EventLogTable.event_data,
-          time_created: EventLogTable.time_created,
-        })
-        .from(EventLogTable)
-        .where(eq(EventLogTable.session_id, sessionID))
-        .orderBy(desc(EventLogTable.sequence))
-        .limit(normalizedLimit)
-        .all(),
-    )
-    return rows.reverse()
-  }
-
   export function bySessionLog(sessionID: SessionID): {
     id: EventLogID
     step_id: string | null

@@ -63,33 +63,28 @@ export function DialogMessage(props: {
               return
             }
 
-            // The v2 SDK client resolves `{error}` instead of rejecting, so
-            // the result must be checked — a failed revert would otherwise
-            // fall through to the success path and clobber the prompt / close
-            // the dialog while the server never reverted.
-            const result = await sdk.client.session.revert({
-              sessionID: props.sessionID,
-              messageID: msg.id,
-            })
-            // The v2 client resolves { error } at runtime even though the generated
-            // type doesn't surface it here; read it through a cast.
-            const revertError = (result as { error?: unknown }).error
-            if (revertError) {
-              log.warn("dialog message revert failed", {
-                error: revertError,
+            await sdk.client.session
+              .revert({
                 sessionID: props.sessionID,
                 messageID: msg.id,
               })
-              toast.show({
-                message: typeof revertError === "string" ? revertError : "Failed to revert message",
-                variant: "error",
+              .then(() => {
+                if (props.setPrompt) {
+                  props.setPrompt(promptState(sync.data.part[msg.id] ?? []))
+                }
+                dialog.clear()
               })
-              return
-            }
-            if (props.setPrompt) {
-              props.setPrompt(promptState(sync.data.part[msg.id] ?? []))
-            }
-            dialog.clear()
+              .catch((error) => {
+                log.warn("dialog message revert failed", {
+                  error,
+                  sessionID: props.sessionID,
+                  messageID: msg.id,
+                })
+                toast.show({
+                  message: error instanceof Error ? error.message : "Failed to revert message",
+                  variant: "error",
+                })
+              })
           },
         },
         {

@@ -19,16 +19,6 @@ import { normalizeDialogSessions } from "./session-list-data"
 
 const log = Log.create({ service: "tui.dialog-session-list" })
 
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error) return error.message
-  if (typeof error === "string" && error) return error
-  if (error && typeof error === "object") {
-    const candidate = error as { data?: { message?: string }; message?: string }
-    return candidate.data?.message ?? candidate.message ?? fallback
-  }
-  return fallback
-}
-
 export function DialogSessionList() {
   const dialog = useDialog()
   const route = useRoute()
@@ -48,16 +38,6 @@ export function DialogSessionList() {
       if (!query) return undefined
       try {
         const result = await sdk.client.session.list({ search: query, limit: 30 }, { signal })
-        if (result.error) {
-          if (!signal.aborted) {
-            log.warn("session list search failed", { error: result.error, query })
-            toast.show({
-              message: errorMessage(result.error, "Failed to search sessions"),
-              variant: "error",
-            })
-          }
-          return info.value
-        }
         return normalizeDialogSessions(result.data)
       } catch (error) {
         log.warn("session list search failed", { error, query })
@@ -151,7 +131,7 @@ export function DialogSessionList() {
                 .delete({
                   sessionID: option.value,
                 })
-                .then((result) => !result.error)
+                .then(() => true)
                 .catch(() => false)
               setToDelete(undefined)
               if (!deleted) {

@@ -24,7 +24,7 @@ import {
 } from "./autocomplete-scroll"
 import { commandAutocompleteSuffix } from "./autocomplete-command"
 import { useKV } from "@tui/context/kv"
-import { buildGlyphSet, detectNerdFontTerminal, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
+import { buildGlyphSet, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
 import { stringWidth } from "@/bun/node-compat"
 import { displayOffsetFromStringIndex, stringIndexFromDisplayOffset } from "./prompt-helpers"
@@ -193,11 +193,7 @@ export function Autocomplete(props: {
     buildGlyphSet(
       resolveNerdFontEnabled({
         env: Flag.AX_CODE_NERD_FONT_ENV,
-        kv: kv.get(NERD_FONT_KV_KEY),
-        detected: detectNerdFontTerminal({
-          termProgram: process.env["TERM_PROGRAM"],
-          term: process.env["TERM"],
-        }),
+        kv: kv.get(NERD_FONT_KV_KEY, false),
       }),
     ),
   )

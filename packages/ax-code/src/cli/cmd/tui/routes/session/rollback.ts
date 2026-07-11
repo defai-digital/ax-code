@@ -83,30 +83,10 @@ export namespace SessionRollbackView {
   }
 
   export function load(sessionID: Parameters<typeof EventQuery.bySession>[0], msgs: Message) {
-    // Load the session log once and reuse it for both step resolution and
-    // the execution graph, instead of two independent full-log SELECTs.
-    const rows = EventQuery.bySessionWithTimestamp(sessionID)
     return SessionRollbackCore.detail({
-      points: SessionRollbackCore.resolve(
-        msgs,
-        rows.map((row) => row.event_data),
-      ),
-      graph: ExecutionGraph.build(sessionID, rows),
+      points: SessionRollbackCore.resolve(msgs, EventQuery.bySession(sessionID)),
+      graph: ExecutionGraph.build(sessionID),
     })
-  }
-
-  /**
-   * Cheap step-point resolution for hot render paths (the sidebar) that only
-   * need the step count and step numbers — never the graph-derived tool
-   * detail. Skips the execution-graph build entirely and reads only the
-   * indexed "step.start" events instead of the full session log.
-   *
-   * The returned points carry empty `tools`/`kinds` and no duration/tokens,
-   * which is exactly the subset the sidebar renders (SessionRollbackView.summary
-   * reads only `length` and `step`). Use `load` when the full detail is needed.
-   */
-  export function points(sessionID: Parameters<typeof EventQuery.bySessionAndType>[0], msgs: Message): Point[] {
-    return SessionRollbackCore.resolve(msgs, EventQuery.bySessionAndType(sessionID, "step.start"))
   }
 
   export function tools(input: Point[]): Entry[] {

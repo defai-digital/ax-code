@@ -6,7 +6,6 @@ import { Instance } from "@/project/instance"
 import { existsSync } from "fs"
 import { buildAttachAuthHeaders } from "../../attach-auth"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
-import { createTuiCrashHandler, registerTuiCrashHandlers } from "./util/lifecycle"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
@@ -44,10 +43,6 @@ export const AttachCommand = cmd({
   handler: async (args) => {
     const unguard = win32InstallCtrlCGuard()
     const restoreInputMode = win32DisableProcessedInput()
-    // Restore the terminal out of raw / mouse-tracking / alt-screen mode if an
-    // uncaught exception escapes the attach session. Without this an unexpected
-    // crash inside `tui()` leaves the shell prompt wedged (mirrors thread.ts).
-    const unregisterCrashHandlers = registerTuiCrashHandlers(createTuiCrashHandler(), { namePrefix: "attach" })
     try {
       if (args.fork && !args.continue && !args.session) {
         UI.error("--fork requires --continue or --session")
@@ -83,7 +78,6 @@ export const AttachCommand = cmd({
         headers,
       })
     } finally {
-      unregisterCrashHandlers()
       restoreInputMode?.()
       unguard?.()
     }

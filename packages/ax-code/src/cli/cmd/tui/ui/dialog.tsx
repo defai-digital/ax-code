@@ -20,23 +20,18 @@ export function Dialog(
   const { theme } = useTheme()
   const renderer = useRenderer()
 
-  // Only arm dismissal when a press actually begins on the backdrop and no
-  // selection is in progress. A drag that starts inside the dialog never
-  // delivers a mousedown to the backdrop, so opentui routing the terminating
-  // mouseup here (to whatever is under the cursor at release) won't dismiss it.
-  let armed = false
+  let dismiss = false
 
   return (
     <box
       onMouseDown={() => {
-        armed = !renderer.getSelection()
+        dismiss = !!renderer.getSelection()
       }}
       onMouseUp={() => {
-        if (!armed) return
-        armed = false
-        // Re-check at release time like the keyboard-escape guard (line 83):
-        // don't dismiss if the press turned into a text selection.
-        if (renderer.getSelection()?.getSelectedText()) return
+        if (dismiss) {
+          dismiss = false
+          return
+        }
         props.onClose?.()
       }}
       width={dimensions().width}
@@ -50,11 +45,11 @@ export function Dialog(
     >
       <box
         onMouseDown={(e: MouseEvent) => {
-          armed = false
+          dismiss = false
           e.stopPropagation()
         }}
         onMouseUp={(e: MouseEvent) => {
-          armed = false
+          dismiss = false
           e.stopPropagation()
         }}
         width={props.size === "large" ? 80 : 60}

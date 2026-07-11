@@ -288,13 +288,8 @@ describe("tui OpenTUI stability guardrails", () => {
   test("handles dialog message revert failures without leaking stale prompt state", async () => {
     const dialogMessage = await fs.readFile(DIALOG_MESSAGE_SRC, "utf8")
 
-    // The v2 SDK client resolves `{error}` instead of rejecting, so the revert
-    // must check the resolved result rather than rely on a dead `.catch`; a
-    // failed revert returns early instead of clobbering the prompt / clearing.
-    expect(dialogMessage).toContain("const result = await sdk.client.session.revert({")
-    expect(dialogMessage).toContain("if (revertError) {")
     expect(dialogMessage).toContain('log.warn("dialog message revert failed"')
-    expect(dialogMessage).toContain('message: typeof revertError === "string" ? revertError : "Failed to revert message"')
+    expect(dialogMessage).toContain('message: error instanceof Error ? error.message : "Failed to revert message"')
     expect(dialogMessage).toContain("props.setPrompt(promptState(sync.data.part[msg.id] ?? []))")
     expect(dialogMessage).toContain('message: "Message is no longer available"')
     expect(dialogMessage).toContain("dialog.clear()")
@@ -381,7 +376,7 @@ describe("tui OpenTUI stability guardrails", () => {
     const workspaceListDialog = await fs.readFile(WORKSPACE_LIST_DIALOG_SRC, "utf8")
 
     expect(workspaceListDialog).toContain("await client.session.list({ roots: true, limit: 1 }).catch(() => undefined)")
-    expect(workspaceListDialog).toContain("if (!input.forceCreate && (!listed || listed.error)) {")
+    expect(workspaceListDialog).toContain("if (!input.forceCreate && !listed) {")
     expect(workspaceListDialog).toContain('message: "Failed to open workspace"')
     expect(workspaceListDialog).toContain("listed = await client.session.list({ roots: true, limit: 1 })")
     expect(workspaceListDialog).toContain(
@@ -449,16 +444,15 @@ describe("tui OpenTUI stability guardrails", () => {
       'sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback")',
     )
     expect(collapsed).toContain('log.warn("session undo abort failed"')
-    // The v2 SDK client resolves `{error}` instead of rejecting, so undo/redo
-    // check the resolved result (matching the rollback guard above) rather than
-    // relying on dead `.catch`/`try-catch` branches.
     expect(collapsed).toContain(
-      'sdkErrorMessage(aborted.error, "Failed to stop the running session before undo")',
+      'message: error instanceof Error ? error.message : "Failed to stop the running session before undo"',
     )
     expect(collapsed).toContain('log.warn("session undo failed"')
     expect(collapsed).toContain('log.warn("session redo failed"')
-    expect(collapsed).toContain('sdkErrorMessage(result.error, "Failed to undo previous message")')
-    expect(collapsed).toContain('sdkErrorMessage(result.error, "Failed to redo the previous message")')
+    expect(collapsed).toContain('message: error instanceof Error ? error.message : "Failed to undo previous message"')
+    expect(collapsed).toContain(
+      'message: error instanceof Error ? error.message : "Failed to redo the previous message"',
+    )
     expect(collapsed).toContain("prompt.set(promptState(sync.data.part[messageID] ?? []))")
     expect(collapsed).toContain("if (!messageID) {")
     expect(collapsed).toContain("dialog.clear()")
@@ -636,9 +630,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogProvider).toContain("autoClose={false}")
     // Empty API key keeps the dialog open with a message instead of closing.
     expect(dialogProvider).toContain('message: "API key is required"')
-    // Invalid oauth code stays in the dialog and shows the inline error state,
-    // surfacing the server's message rather than a generic "Invalid code".
-    expect(dialogProvider).toContain('setError(sdkErrorMessage(result.error, "Invalid code"))')
+    // Invalid oauth code stays in the dialog and shows the inline error state.
+    expect(dialogProvider).toContain("setError(true)")
   })
 
   test("refreshes provider-backed runtime state after connect and disconnect flows", async () => {
@@ -709,7 +702,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(app).toContain(
       "if (startupForkStarted || !sync.data.session_loaded || !args.sessionID || !args.fork) return",
     )
-    expect(app).toContain('forkSessionWithRetries({ sessionID, source: "continue" })')
+    expect(app).toContain('forkSessionWithRetries({ sessionID: match, source: "continue" })')
     expect(app).toContain('forkSessionWithRetries({ sessionID: args.sessionID, source: "startup" })')
   })
 
@@ -812,9 +805,6 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(lifecycle).toContain("target.removeEventListener(type, listener, input.options)")
     expect(lifecycle).toContain("process.on(event, handler)")
     expect(lifecycle).toContain("process.off(event, handler)")
-    // The shared crash-handler helper derives named handlers from the prefix.
-    expect(lifecycle).toContain("`${prefix}-uncaught-exception`")
-    expect(lifecycle).toContain("`${prefix}-unhandled-rejection`")
 
     expect(sdk).toContain("scheduleTuiTimeout(flush")
     expect(sdk).toContain('name: "sdk-event-batch-flush"')
@@ -827,9 +817,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(reconnect).toContain('name: "reconnect-recovery-stabilize"')
 
     expect(thread).toContain("registerTuiProcessHandler")
-    // uncaught/unhandled crash handlers moved into the shared registerTuiCrashHandlers
-    // helper (names derived from the "thread" prefix); thread keeps SIGUSR2 directly.
-    expect(thread).toContain('registerTuiCrashHandlers(error, { namePrefix: "thread" })')
+    expect(thread).toContain('name: "thread-uncaught-exception"')
+    expect(thread).toContain('name: "thread-unhandled-rejection"')
     expect(thread).toContain('name: "thread-sigusr2-reload"')
     expect(thread).not.toContain('process.on("uncaughtException"')
     expect(thread).not.toContain('process.off("uncaughtException"')
@@ -997,9 +986,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("cancelRouteHandoff = scheduleTuiTimeout(")
     expect(prompt).toContain('name: "prompt-route-handoff"')
     expect(prompt).toContain("if (submitRunID !== runID) return")
-    expect(prompt).toContain("sdk.client.session.create(")
-    // New sessions must be created in the intended workspace, not the pinned one.
-    expect(prompt).toContain("directory: props.workspaceID ?? sdk.baseDirectory")
+    expect(prompt).toContain("sdk.client.session.create({ id: sessionID }")
     expect(prompt).toContain("upsertSessionInStore(createdSession)")
     expect(prompt).toContain('setSubmitStage("dispatching")')
     expect(prompt.indexOf("upsertSessionInStore(createdSession)")).toBeLessThan(

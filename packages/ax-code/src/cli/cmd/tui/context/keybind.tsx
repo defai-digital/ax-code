@@ -59,12 +59,9 @@ export const { use: useKeybind, provider: KeybindProvider } = createSimpleContex
     }
 
     function parse(evt: ParsedKey): Keybind.Info {
-      // Ctrl+- on non-kitty terminals: raw mode emits 0x1F, which the parser
-      // reports as name "_" with ctrl. Normalize it back to "-" so `ctrl+-`
-      // bindings (e.g. the default input_undo) match. (Mirrored in
-      // textarea-keybindings.ts for the opentui textarea path.)
-      if (evt.ctrl && evt.name === "_") {
-        return Keybind.fromParsedKey({ ...evt, name: "-" }, store.leader)
+      // Handle special case for Ctrl+Underscore (represented as \x1F)
+      if (evt.name === "\x1F") {
+        return Keybind.fromParsedKey({ ...evt, name: "_", ctrl: true }, store.leader)
       }
       return Keybind.fromParsedKey(evt, store.leader)
     }
