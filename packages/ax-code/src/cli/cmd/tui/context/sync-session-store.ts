@@ -135,3 +135,31 @@ export function applySessionDeleteCleanup<
   delete store.todo[sessionID]
   delete store.message[sessionID]
 }
+
+/**
+ * Drop heavy transcript projection for a session the user just left, without
+ * removing the session list row or in-flight permission/question/status.
+ * Re-entry reloads heavy fields via the normal session sync path (ADR-047 D3).
+ */
+export function applySessionLeavePrune<TMessage extends { id: string }, TPart, TDiff, TRisk, TGoal, TTodo>(
+  store: {
+    session_risk: Record<string, TRisk>
+    session_goal: Record<string, TGoal | null>
+    session_diff: Record<string, TDiff[]>
+    todo: Record<string, TTodo[]>
+    message: Record<string, TMessage[]>
+    part: Record<string, TPart[]>
+  },
+  sessionID: string,
+) {
+  const removedMessages = store.message[sessionID] ?? []
+  for (const message of removedMessages) {
+    delete store.part[message.id]
+  }
+
+  delete store.session_risk[sessionID]
+  delete store.session_goal[sessionID]
+  delete store.session_diff[sessionID]
+  delete store.todo[sessionID]
+  delete store.message[sessionID]
+}

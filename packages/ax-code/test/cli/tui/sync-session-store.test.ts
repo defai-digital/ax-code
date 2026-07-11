@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   applySessionDeleteCleanup,
+  applySessionLeavePrune,
   applySessionSyncSnapshot,
   createSessionSyncSnapshot,
 } from "../../../src/cli/cmd/tui/context/sync-session-store"
@@ -380,6 +381,85 @@ describe("tui sync session store", () => {
       part: {
         msg_3: [{ id: "part_3" }],
       },
+    })
+  })
+
+  test("leave prune drops heavy transcript state but keeps list row and interactive maps", () => {
+    const store = {
+      session: [{ id: "ses_1" }, { id: "ses_2" }],
+      permission: {
+        ses_1: [{ id: "perm_1" }],
+        ses_2: [{ id: "perm_2" }],
+      },
+      question: {
+        ses_1: [{ id: "question_1" }],
+      },
+      session_status: {
+        ses_1: "busy",
+        ses_2: "idle",
+      },
+      session_risk: {
+        ses_1: { score: 1 },
+        ses_2: { score: 2 },
+      },
+      session_goal: {
+        ses_1: { objective: "leave" },
+        ses_2: { objective: "keep" },
+      },
+      session_diff: {
+        ses_1: [{ path: "leave.ts" }],
+        ses_2: [{ path: "keep.ts" }],
+      },
+      todo: {
+        ses_1: [{ id: "todo_1" }],
+        ses_2: [{ id: "todo_2" }],
+      },
+      message: {
+        ses_1: [{ id: "msg_1" }, { id: "msg_2" }],
+        ses_2: [{ id: "msg_3" }],
+      },
+      part: {
+        msg_1: [{ id: "part_1" }],
+        msg_2: [{ id: "part_2" }],
+        msg_3: [{ id: "part_3" }],
+      },
+    }
+
+    applySessionLeavePrune(store, "ses_1")
+
+    expect(store.session).toEqual([{ id: "ses_1" }, { id: "ses_2" }])
+    expect(store.permission.ses_1).toEqual([{ id: "perm_1" }])
+    expect(store.question.ses_1).toEqual([{ id: "question_1" }])
+    expect(store.session_status.ses_1).toBe("busy")
+    expect(store.message.ses_1).toBeUndefined()
+    expect(store.todo.ses_1).toBeUndefined()
+    expect(store.session_diff.ses_1).toBeUndefined()
+    expect(store.session_risk.ses_1).toBeUndefined()
+    expect(store.session_goal.ses_1).toBeUndefined()
+    expect(store.part.msg_1).toBeUndefined()
+    expect(store.part.msg_2).toBeUndefined()
+    expect(store.message.ses_2).toEqual([{ id: "msg_3" }])
+    expect(store.part.msg_3).toEqual([{ id: "part_3" }])
+  })
+
+  test("leave prune is a no-op for sessions with no heavy projection", () => {
+    const store = {
+      session_risk: {},
+      session_goal: {},
+      session_diff: {},
+      todo: {},
+      message: {},
+      part: {},
+    }
+
+    expect(() => applySessionLeavePrune(store, "ses_missing")).not.toThrow()
+    expect(store).toEqual({
+      session_risk: {},
+      session_goal: {},
+      session_diff: {},
+      todo: {},
+      message: {},
+      part: {},
     })
   })
 })

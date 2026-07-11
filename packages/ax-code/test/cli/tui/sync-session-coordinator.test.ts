@@ -135,4 +135,67 @@ describe("tui sync session coordinator", () => {
 
     expect(fetches).toEqual(["ses_5", "ses_6", "ses_5", "ses_6"])
   })
+
+  test("clear during in-flight fetch skips apply and does not mark fullSynced", async () => {
+    const applied: string[] = []
+    let release: (() => void) | undefined
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const controller = createSessionSyncController({
+      async fetchSnapshot(sessionID) {
+        await pending
+        return { id: sessionID }
+      },
+      applySnapshot(sessionID) {
+        applied.push(sessionID)
+      },
+    })
+
+    const flight = controller.sync("ses_leave")
+    controller.clear("ses_leave")
+    release?.()
+    await flight
+
+    expect(applied).toEqual([])
+    // Without force, a fresh sync must run again because clear dropped fullSynced.
+    await controller.sync("ses_leave")
+    expect(applied).toEqual(["ses_leave"])
+  })
+
+  test("clear during in-flight allows a concurrent re-enter sync to apply once", async () => {
+    const applied: string[] = []
+    const fetches: string[] = []
+    let releaseFirst: (() => void) | undefined
+    const firstPending = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    let firstFetch = true
+    const controller = createSessionSyncController({
+      async fetchSnapshot(sessionID) {
+        fetches.push(sessionID)
+        if (firstFetch) {
+          firstFetch = false
+          await firstPending
+          return { id: "stale" }
+        }
+        return { id: "fresh" }
+      },
+      applySnapshot(sessionID, snapshot) {
+        applied.push(`${sessionID}:${(snapshot as { id: string }).id}`)
+      },
+    })
+
+    const staleFlight = controller.sync("ses_reenter")
+    controller.clear("ses_reenter")
+    const reenter = controller.sync("ses_reenter")
+    releaseFirst?.()
+    await Promise.all([staleFlight, reenter])
+
+    expect(fetches).toEqual(["ses_reenter", "ses_reenter"])
+    expect(applied).toEqual(["ses_reenter:fresh"])
+    // Re-enter marked fullSynced; no force should not fetch again.
+    await controller.sync("ses_reenter")
+    expect(fetches).toEqual(["ses_reenter", "ses_reenter"])
+  })
 })
