@@ -104,7 +104,9 @@ export class CSSVariableGenerator {
       vars.push(`  --sidebar-base-rgb: ${sidebarBaseRgb} !important;`)
     }
     vars.push(`  --sidebar: var(--sidebar-base) !important;`)
-    vars.push(`  --sidebar-foreground: ${theme.colors.surface.mutedForeground} !important;`)
+    // Full surface foreground so primary sidebar chrome stays readable in light
+    // mode; secondary labels still use text-muted-foreground explicitly.
+    vars.push(`  --sidebar-foreground: ${theme.colors.surface.foreground} !important;`)
     vars.push(`  --sidebar-primary: ${theme.colors.primary.base} !important;`)
     vars.push(`  --sidebar-primary-foreground: ${theme.colors.primary.foreground} !important;`)
     vars.push(`  --sidebar-accent-base: ${theme.colors.surface.subtle} !important;`)

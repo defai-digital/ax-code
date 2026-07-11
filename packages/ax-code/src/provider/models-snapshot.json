@@ -58615,39 +58615,6 @@
           "output": 131072
         }
       },
-      "mimo-v2-omni": {
-        "id": "mimo-v2-omni",
-        "name": "MiMo-V2-Omni",
-        "description": "MiMo omni model for text, image, video, audio, and agents",
-        "family": "mimo",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "temperature": true,
-        "knowledge": "2024-12",
-        "release_date": "2026-03-18",
-        "last_updated": "2026-03-18",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "audio",
-            "video",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 131072
-        }
-      },
       "gpt-5.4-mini": {
         "id": "gpt-5.4-mini",
         "name": "GPT-5.4 mini",
@@ -59490,40 +59457,6 @@
         "limit": {
           "context": 131072,
           "output": 8192
-        }
-      },
-      "mimo-v2-pro": {
-        "id": "mimo-v2-pro",
-        "name": "MiMo-V2-Pro",
-        "description": "Earlier MiMo Pro model for multimodal agents, reasoning, and code tasks",
-        "family": "mimo",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "temperature": true,
-        "knowledge": "2024-12",
-        "release_date": "2026-03-18",
-        "last_updated": "2026-03-18",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 131072
         }
       },
       "gpt-4o-search-preview": {
@@ -85527,7 +85460,7 @@
             "max": 393216
           }
         ],
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-05",
@@ -85738,7 +85671,7 @@
         "attachment": false,
         "reasoning": true,
         "reasoning_options": [],
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-04",
@@ -85864,7 +85797,7 @@
             "max": 393216
           }
         ],
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-05",
@@ -85940,7 +85873,7 @@
         "attachment": false,
         "reasoning": true,
         "reasoning_options": [],
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-03-18",
@@ -86026,7 +85959,7 @@
         "family": "mimo",
         "attachment": true,
         "reasoning": false,
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
         "knowledge": "2024-12",
@@ -86452,7 +86385,7 @@
             "max": 393216
           }
         ],
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-04",
@@ -86484,7 +86417,7 @@
             "type": "toggle"
           }
         ],
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": true,
         "temperature": true,
         "knowledge": "2024-12",
@@ -126943,6 +126876,33 @@
         "limit": {
           "context": 262144,
           "output": 262144
+        }
+      },
+      "zai-org/GLM-5.2-FP8": {
+        "id": "zai-org/GLM-5.2-FP8",
+        "name": "GLM-5.2",
+        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 202752,
+          "output": 202752
         }
       }
     }

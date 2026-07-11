@@ -36,6 +36,10 @@ import { parseAgentMentions } from "@/lib/messages/agentMentions"
 import { StatusRow } from "./StatusRow"
 import { PendingChangesBar } from "./PendingChangesBar"
 import { DoneNotCommittedNudge } from "./DoneNotCommittedNudge"
+import { RecentPromptChips } from "./RecentPromptChips"
+import { recordRecentPrompt } from "@/lib/recentPrompts"
+import { useNudgeDismissedAt, useSessionRunEndedAt } from "@/sync/run-state-store"
+import { useGlobalSessionStatus, useSessionPermissions } from "@/sync/sync-context"
 import { useChatSurfaceMode } from "./useChatSurfaceMode"
 import { useCurrentSessionActivity } from "@/hooks/useSessionActivity"
 import { toast } from "@/components/ui"
@@ -893,6 +897,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   )
   const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft)
   const newSessionDraftOpen = Boolean(newSessionDraft?.open)
+  const turnRunEndedAt = useSessionRunEndedAt(currentSessionId ?? "")
+  const turnNudgeDismissedAt = useNudgeDismissedAt(currentSessionId ?? "")
+  const turnSessionStatus = useGlobalSessionStatus(currentSessionId ?? "")
+  const turnPermissions = useSessionPermissions(currentSessionId ?? "")
+  const showTurnNextSteps =
+    Boolean(currentSessionId) &&
+    turnRunEndedAt !== null &&
+    (turnSessionStatus?.type ?? "idle") === "idle" &&
+    turnPermissions.length === 0 &&
+    (turnNudgeDismissedAt === null || turnNudgeDismissedAt < turnRunEndedAt)
   const inlineCommentSessionKey = React.useMemo(
     () =>
       buildInlineCommentSessionKey({
@@ -2054,6 +2068,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
     void sendPromise
       .then(() => {
+        // Remember free-form prompts for the recent chips (skip slash commands).
+        if (primaryText.trim() && !primaryText.trimStart().startsWith("/")) {
+          recordRecentPrompt(primaryText)
+        }
         // Clear linked issue after successful message send
         if (linkedIssue) {
           setLinkedIssue(null)
@@ -4045,14 +4063,27 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             showAssistantStatus={false}
             showTodos
             leftAccessory={
-              newSessionDraftOpen || !hasPendingChanges ? null : (
-                <div className="flex flex-col gap-1">
-                  <PendingChangesBar />
-                  <DoneNotCommittedNudge />
-                </div>
-              )
+              newSessionDraftOpen
+                ? null
+                : hasPendingChanges || showTurnNextSteps
+                  ? (
+                      <div className="flex flex-col gap-1">
+                        {hasPendingChanges ? <PendingChangesBar /> : null}
+                        {showTurnNextSteps ? <DoneNotCommittedNudge /> : null}
+                      </div>
+                    )
+                  : null
             }
           />
+          {!message.trim() && !newSessionDraftOpen ? (
+            <RecentPromptChips
+              className="mb-1.5"
+              onSelect={(prompt) => {
+                useInputStore.getState().setPendingInputText(prompt, "replace")
+                textareaRef.current?.focus()
+              }}
+            />
+          ) : null}
           {showDraftTargetSelectors && selectedDraftProject ? (
             <div className="mb-1.5 flex min-w-0 items-center gap-1.5 px-0.5">
               <Select value={selectedDraftProject.id} onValueChange={handleDraftProjectChange}>

@@ -34,6 +34,8 @@ import { truncatePathMiddle } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import { sessionEvents } from "@/lib/sessionEvents"
 import { useProjectsStore } from "@/stores/useProjectsStore"
+import { useThemeSystem } from "@/contexts/useThemeSystem"
+import type { ThemeMode } from "@/types/theme"
 
 type CommandEntry = {
   id: string
@@ -72,9 +74,11 @@ export const CommandPalette: React.FC = () => {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const toggleRightSidebar = useUIStore((s) => s.toggleRightSidebar)
   const toggleBottomTerminal = useUIStore((s) => s.toggleBottomTerminal)
+  const setTimelineDialogOpen = useUIStore((s) => s.setTimelineDialogOpen)
   const openContextOverview = useUIStore((s) => s.openContextOverview)
   const openContextFile = useUIStore((s) => s.openContextFile)
   const shortcutOverrides = useUIStore((s) => s.shortcutOverrides)
+  const { setThemeMode } = useThemeSystem()
 
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft)
   const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession)
@@ -220,6 +224,44 @@ export const CommandPalette: React.FC = () => {
         searchText: t("commandPalette.item.openSettings"),
         onSelect: run(() => setSettingsDialogOpen(true)),
       },
+      {
+        id: "search-conversation",
+        title: t("commandPalette.item.searchConversation"),
+        icon: <Icon name="search" className="mr-2 h-4 w-4" />,
+        searchText: `${t("commandPalette.item.searchConversation")} timeline transcript find messages`,
+        onSelect: run(() => setTimelineDialogOpen(true)),
+      },
+      {
+        id: "theme-system",
+        title: t("commandPalette.item.themeModeSystem"),
+        icon: <Icon name="computer" className="mr-2 h-4 w-4" />,
+        searchText: `${t("commandPalette.item.themeModeSystem")} color mode appearance system`,
+        onSelect: run(() => setThemeMode("system" as ThemeMode)),
+      },
+      {
+        id: "theme-light",
+        title: t("commandPalette.item.themeModeLight"),
+        icon: <Icon name="lightbulb" className="mr-2 h-4 w-4" />,
+        searchText: `${t("commandPalette.item.themeModeLight")} color mode appearance light`,
+        onSelect: run(() => setThemeMode("light" as ThemeMode)),
+      },
+      {
+        id: "theme-dark",
+        title: t("commandPalette.item.themeModeDark"),
+        icon: <Icon name="palette" className="mr-2 h-4 w-4" />,
+        searchText: `${t("commandPalette.item.themeModeDark")} color mode appearance dark`,
+        onSelect: run(() => setThemeMode("dark" as ThemeMode)),
+      },
+      {
+        id: "open-appearance",
+        title: t("commandPalette.item.openAppearance"),
+        icon: <Icon name="palette" className="mr-2 h-4 w-4" />,
+        searchText: `${t("commandPalette.item.openAppearance")} theme fonts`,
+        onSelect: run(() => {
+          setSettingsPage("appearance")
+          setSettingsDialogOpen(true)
+        }),
+      },
     ]
     if (canUseLocalElectronDesktopIPC()) {
       list.splice(1, 0, {
@@ -252,6 +294,9 @@ export const CommandPalette: React.FC = () => {
     currentDirectory,
     openContextOverview,
     setSettingsDialogOpen,
+    setSettingsPage,
+    setTimelineDialogOpen,
+    setThemeMode,
     activeProject?.id,
     activeProject?.path,
   ])

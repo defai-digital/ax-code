@@ -78,28 +78,33 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
     [t],
   )
 
-  // Timeline actions are only valid for user messages.
+  // Default list is user turns (timeline actions apply there). Search covers
+  // every role so assistant/tool text is findable without leaving the chat.
   const userMessages = React.useMemo(() => {
     return messages
       .filter((message) => message.info.role === "user")
       .map((message, index) => ({
         message,
         messageNumber: index + 1,
+        role: "user" as const,
       }))
       .reverse()
   }, [messages])
 
-  // Filter by search query using all text parts in each user message.
   const filteredMessages = React.useMemo(() => {
     const trimmedQuery = searchQuery.trim()
     if (!trimmedQuery) return userMessages
 
     const query = trimmedQuery.toLowerCase()
-    return userMessages.filter(({ message }) => {
-      const fullText = getFullText(message.parts).toLowerCase()
-      return fullText.includes(query)
-    })
-  }, [userMessages, searchQuery])
+    return messages
+      .map((message, index) => ({
+        message,
+        messageNumber: index + 1,
+        role: message.info.role === "user" ? ("user" as const) : ("other" as const),
+      }))
+      .filter(({ message }) => getFullText(message.parts).toLowerCase().includes(query))
+      .reverse()
+  }, [messages, searchQuery, userMessages])
 
   React.useEffect(() => {
     setSelectedIndex(0)
@@ -272,13 +277,21 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
               {searchQuery ? t("chat.timeline.empty.search") : t("chat.timeline.empty.session")}
             </div>
           ) : (
-            filteredMessages.map(({ message, messageNumber }, index) => {
+            filteredMessages.map(({ message, messageNumber, role }, index) => {
               const preview = getMessagePreview(message.parts)
               const timestamp = message.info.time.created
               const relativeTime = formatRelativeTime(timestamp)
               const isSelected = index === selectedIndex
+              const isUserTurn = role === "user"
+              const showTurnActions = isUserTurn && Boolean(currentSessionId)
 
               const snippet = searchQuery.trim() ? getSearchSnippet(getFullText(message.parts), searchQuery) : null
+              const roleLabel =
+                message.info.role === "user"
+                  ? t("chat.timeline.role.user")
+                  : message.info.role === "assistant"
+                    ? t("chat.timeline.role.assistant")
+                    : t("chat.timeline.role.other")
 
               return (
                 <div
@@ -301,6 +314,18 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
                   >
                     {messageNumber}.
                   </span>
+                  {searchQuery.trim() ? (
+                    <span
+                      className={cn(
+                        "typography-micro shrink-0 rounded px-1 py-0.5",
+                        isSelected
+                          ? "bg-interactive-selection-foreground/10 text-interactive-selection-foreground/80"
+                          : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {roleLabel}
+                    </span>
+                  ) : null}
                   <p
                     className={cn(
                       "flex-1 min-w-0 typography-small truncate ml-0.5",
@@ -316,58 +341,60 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
                       className={cn(
                         "typography-meta whitespace-nowrap",
                         isSelected ? "text-interactive-selection-foreground/70" : "text-muted-foreground",
-                        alwaysShowActions ? "hidden" : "group-hover:hidden",
+                        alwaysShowActions && showTurnActions ? "hidden" : "group-hover:hidden",
                       )}
                     >
                       {relativeTime}
                     </span>
 
-                    <div className={cn("gap-1", alwaysShowActions ? "flex" : "hidden group-hover:flex")}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                            onClick={async (e) => {
-                              e.stopPropagation()
-                              try {
-                                await revertToMessage(currentSessionId, message.info.id)
-                                onOpenChange(false)
-                              } catch (error) {
-                                console.error("[TimelineDialog] Revert failed:", error)
-                                toast.error("Revert failed", {
-                                  description: error instanceof Error ? error.message : "Please try again",
-                                })
-                              }
-                            }}
-                          >
-                            <Icon name="arrow-go-back" className="h-4 w-4" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={6}>{t("chat.timeline.actions.revertFromHere")}</TooltipContent>
-                      </Tooltip>
+                    {showTurnActions ? (
+                      <div className={cn("gap-1", alwaysShowActions ? "flex" : "hidden group-hover:flex")}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                try {
+                                  await revertToMessage(currentSessionId, message.info.id)
+                                  onOpenChange(false)
+                                } catch (error) {
+                                  console.error("[TimelineDialog] Revert failed:", error)
+                                  toast.error("Revert failed", {
+                                    description: error instanceof Error ? error.message : "Please try again",
+                                  })
+                                }
+                              }}
+                            >
+                              <Icon name="arrow-go-back" className="h-4 w-4" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent sideOffset={6}>{t("chat.timeline.actions.revertFromHere")}</TooltipContent>
+                        </Tooltip>
 
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleFork(message.info.id)
-                            }}
-                            disabled={forkingMessageId === message.info.id}
-                          >
-                            {forkingMessageId === message.info.id ? (
-                              <Icon name="loader-4" className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Icon name="git-branch" className="h-4 w-4" />
-                            )}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={6}>{t("chat.timeline.actions.forkFromHere")}</TooltipContent>
-                      </Tooltip>
-                    </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleFork(message.info.id)
+                              }}
+                              disabled={forkingMessageId === message.info.id}
+                            >
+                              {forkingMessageId === message.info.id ? (
+                                <Icon name="loader-4" className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Icon name="git-branch" className="h-4 w-4" />
+                              )}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent sideOffset={6}>{t("chat.timeline.actions.forkFromHere")}</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               )

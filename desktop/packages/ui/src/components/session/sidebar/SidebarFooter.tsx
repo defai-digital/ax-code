@@ -2,6 +2,7 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Icon } from "@/components/icon/Icon"
+import { ThemeModeToggle } from "@/components/layout/ThemeModeToggle"
 import { useI18n } from "@/lib/i18n"
 
 type Props = {
@@ -14,7 +15,7 @@ type Props = {
 }
 
 const footerButtonClassName =
-  "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+  "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
 
 export function SidebarFooter({
   onOpenSettings,
@@ -45,6 +46,7 @@ export function SidebarFooter({
               <p>{t("sessions.sidebar.footer.actions.settings")}</p>
             </TooltipContent>
           </Tooltip>
+          <ThemeModeToggle buttonClassName={footerButtonClassName} />
           <Tooltip>
             <TooltipTrigger asChild>
               <button
