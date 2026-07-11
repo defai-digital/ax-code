@@ -1,15 +1,27 @@
 import { spawn } from "child_process"
 import fs from "fs"
+import os from "os"
 import path from "path"
 import open from "open"
 import { toErrorMessage } from "@/util/error-message"
+import { which } from "@/util/which"
 
 export const DEFAULT_WEBUI_PORT = 3100
 
-type DesktopInvocation = {
+export type DesktopInvocation = {
   command: string
   args: string[]
   displayName: string
+  env?: NodeJS.ProcessEnv
+  installedAppPath?: string
+}
+
+type DesktopInvocationDeps = {
+  platform?: NodeJS.Platform
+  env?: NodeJS.ProcessEnv
+  homeDir?: string
+  existsSync?: (candidate: string) => boolean
+  findOnPath?: (command: string, env: NodeJS.ProcessEnv) => string | null
 }
 
 export type WebUiLaunchOptions = {
@@ -54,8 +66,58 @@ function findDesktopCliFromCheckout(startDir: string) {
   }
 }
 
-function resolveDesktopInvocation(cwd: string): DesktopInvocation {
-  const configured = process.env.AX_CODE_DESKTOP_BINARY?.trim()
+function macDesktopInvocation(input: {
+  env: NodeJS.ProcessEnv
+  homeDir: string
+  existsSync: (candidate: string) => boolean
+}): DesktopInvocation | undefined {
+  const configuredApp = input.env.AX_CODE_DESKTOP_APP?.trim()
+  const candidates = [
+    configuredApp,
+    "/Applications/AX Code.app",
+    path.join(input.homeDir, "Applications", "AX Code.app"),
+  ].filter((candidate): candidate is string => Boolean(candidate))
+  const appPath = candidates.find(input.existsSync)
+  if (!appPath) return undefined
+
+  const executable = path.join(appPath, "Contents", "MacOS", "AX Code")
+  const resources = path.join(appPath, "Contents", "Resources")
+  const cli = path.join(resources, "app.asar", "dist", "desktop-cli.mjs")
+  const server = path.join(resources, "app.asar", "dist", "server.js")
+  const webDist = path.join(resources, "web-dist")
+
+  if ([executable, cli, server, webDist].every(input.existsSync)) {
+    return {
+      command: executable,
+      args: [cli],
+      displayName: "AX Code.app web runtime",
+      installedAppPath: appPath,
+      env: {
+        ELECTRON_RUN_AS_NODE: "1",
+        AX_CODE_DESKTOP_SERVER_PATH: server,
+        AX_CODE_DESKTOP_DIST_DIR: webDist,
+      },
+    }
+  }
+
+  // Preserve the detected app path so an eventual ENOENT can distinguish an
+  // old/incomplete Desktop installation from a completely missing install.
+  return {
+    command: "ax-code-desktop",
+    args: [],
+    displayName: "ax-code-desktop",
+    installedAppPath: appPath,
+  }
+}
+
+export function resolveDesktopInvocation(cwd: string, deps: DesktopInvocationDeps = {}): DesktopInvocation {
+  const env = deps.env ?? process.env
+  const platform = deps.platform ?? process.platform
+  const homeDir = deps.homeDir ?? os.homedir()
+  const existsSync = deps.existsSync ?? fs.existsSync
+  const findOnPath = deps.findOnPath ?? ((command, targetEnv) => which(command, targetEnv))
+
+  const configured = env.AX_CODE_DESKTOP_BINARY?.trim()
   if (configured) {
     return { command: configured, args: [], displayName: configured }
   }
@@ -65,13 +127,26 @@ function resolveDesktopInvocation(cwd: string): DesktopInvocation {
     return { command: process.execPath, args: [checkoutCli], displayName: "local ax-code-desktop" }
   }
 
+  const pathCli = findOnPath("ax-code-desktop", env)
+  if (pathCli) return { command: pathCli, args: [], displayName: pathCli }
+
+  if (platform === "darwin") {
+    const app = macDesktopInvocation({ env, homeDir, existsSync })
+    if (app) return app
+  }
+
   return { command: "ax-code-desktop", args: [], displayName: "ax-code-desktop" }
 }
 
 function desktopCommandError(invocation: DesktopInvocation, error: unknown) {
   if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+    if (invocation.installedAppPath) {
+      return new Error(
+        `AX Code Desktop is installed at ${invocation.installedAppPath}, but this app version does not include the packaged web runtime. Upgrade AX Code Desktop, install the ax-code-desktop CLI shim, or set AX_CODE_DESKTOP_BINARY manually.`,
+      )
+    }
     return new Error(
-      `Could not find ${invocation.displayName}. Install AX Code Desktop, install the ax-code-desktop web runtime, or set AX_CODE_DESKTOP_BINARY to its executable path.`,
+      `Could not find ${invocation.displayName}. AX Code Desktop is not installed in a standard location and no ax-code-desktop runtime is on PATH. Install AX Code Desktop or set AX_CODE_DESKTOP_BINARY to its executable path.`,
     )
   }
   return error instanceof Error ? error : new Error(String(error))
@@ -81,7 +156,7 @@ async function runDesktopJson<T>(invocation: DesktopInvocation, args: string[], 
   const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(invocation.command, [...invocation.args, ...args], {
       cwd,
-      env: process.env,
+      env: { ...process.env, ...invocation.env },
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     })
@@ -173,7 +248,7 @@ export async function runWebUiDesktopCommand(action: "status" | "stop" | "logs",
   await new Promise<void>((resolve, reject) => {
     const child = spawn(invocation.command, [...invocation.args, ...args], {
       cwd,
-      env: process.env,
+      env: { ...process.env, ...invocation.env },
       stdio: "inherit",
       windowsHide: true,
     })
@@ -183,4 +258,8 @@ export async function runWebUiDesktopCommand(action: "status" | "stop" | "logs",
       else reject(new Error(`${invocation.displayName} ${action} exited with code ${code}`))
     })
   })
+}
+
+export const __internal = {
+  desktopCommandError,
 }

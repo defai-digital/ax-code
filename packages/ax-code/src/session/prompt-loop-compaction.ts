@@ -105,6 +105,40 @@ function isSyntheticContinuation(parts: MessageV2.Part[]) {
   return parts.length > 0 && parts.every((part) => (part as { synthetic?: boolean }).synthetic === true)
 }
 
+export type PreflightCompactionResult =
+  | { action: "continue" }
+  | { action: "compact" }
+  | {
+      action: "block"
+      message: string
+      fixedTokens: number
+      usableTokens: number
+      compactableHistoryTokens: number
+    }
+
+// Below this amount there is no meaningful history for compaction to shrink.
+// The current user turn and fixed system/tool payload survive compaction, so
+// compacting a greeting-sized session only creates a misleading summary and
+// retries the same oversized request (#344, #345).
+const MIN_COMPACTABLE_HISTORY_TOKENS = 512
+
+function fixedBudgetMessage(input: {
+  model: Provider.Model
+  fixedTokens: number
+  usableTokens: number
+  compactableHistoryTokens: number
+}) {
+  const detail =
+    input.fixedTokens >= input.usableTokens
+      ? `The fixed system prompt and tool schemas need about ${input.fixedTokens} tokens, but only ${input.usableTokens} input tokens are usable.`
+      : `The request exceeds the usable ${input.usableTokens}-token input budget and has only about ${input.compactableHistoryTokens} tokens of compactable history.`
+  return (
+    `This model cannot fit the current AX Code agent/tool setup. ${detail} ` +
+    `Automatic compaction cannot help this new or tiny session. Switch to a model with a larger context window, ` +
+    `or use an agent/turn with fewer tools enabled. Model: ${input.model.name} (${input.model.id}).`
+  )
+}
+
 export async function maybeSchedulePreflightCompaction(input: {
   sessionID: SessionID
   agent: string
@@ -116,9 +150,9 @@ export async function maybeSchedulePreflightCompaction(input: {
   requestMessages: ModelMessage[]
   tools?: Record<string, boolean>
   sessionPermission?: Permission.Ruleset
-}) {
+}): Promise<PreflightCompactionResult> {
   const tokenBudget = await SessionCompaction.budget(input.model)
-  if (!tokenBudget || isSyntheticContinuation(input.userParts)) return false
+  if (!tokenBudget || isSyntheticContinuation(input.userParts)) return { action: "continue" }
 
   // The turn about to be sent carries media; don't strip it via a proactive
   // pre-send compaction. The reactive overflow path still handles a real
@@ -127,10 +161,11 @@ export async function maybeSchedulePreflightCompaction(input: {
     log.info("skipping preflight compaction: user turn has unresolved media", {
       sessionID: input.sessionID,
     })
-    return false
+    return { action: "continue" }
   }
 
   const messageTokens = estimateRequestTokens({ system: input.system, messages: input.requestMessages })
+  const fixedSystemTokens = estimateRequestTokens({ system: input.system, messages: [] })
   const toolSchemaTokens = await estimateRegistryToolSchemaTokens({
     agent: input.agentInfo,
     model: input.model,
@@ -138,17 +173,39 @@ export async function maybeSchedulePreflightCompaction(input: {
     sessionPermission: input.sessionPermission,
   })
   const estimatedTokens = messageTokens + toolSchemaTokens
-  if (estimatedTokens < tokenBudget.usable) return false
+  if (estimatedTokens < tokenBudget.usable) return { action: "continue" }
 
-  // Compaction can only shrink message history, not the fixed tool schema
-  // overhead. Skip futile preflight compaction when that overhead cannot fit.
-  if (toolSchemaTokens >= tokenBudget.usable) {
-    log.info("skipping preflight compaction: tool schema overhead alone exceeds budget", {
+  const lastRequestMessage = input.requestMessages.at(-1)
+  const compactableMessages =
+    lastRequestMessage?.role === "user" ? input.requestMessages.slice(0, -1) : input.requestMessages
+  const compactableHistoryTokens = estimateRequestTokens({ system: [], messages: compactableMessages })
+  const fixedTokens = fixedSystemTokens + toolSchemaTokens
+
+  // Compaction can only shrink prior message history. It cannot reduce the
+  // system prompt, tool schemas, or current user turn. Block before the
+  // provider call when fixed overhead cannot fit or the conversation is too
+  // small for compaction to materially help.
+  if (fixedTokens >= tokenBudget.usable || compactableHistoryTokens < MIN_COMPACTABLE_HISTORY_TOKENS) {
+    log.info("blocking futile preflight compaction", {
       sessionID: input.sessionID,
+      fixedSystemTokens,
       toolSchemaTokens,
+      fixedTokens,
+      compactableHistoryTokens,
       usableTokens: tokenBudget.usable,
     })
-    return false
+    return {
+      action: "block",
+      message: fixedBudgetMessage({
+        model: input.model,
+        fixedTokens,
+        usableTokens: tokenBudget.usable,
+        compactableHistoryTokens,
+      }),
+      fixedTokens,
+      usableTokens: tokenBudget.usable,
+      compactableHistoryTokens,
+    }
   }
 
   log.info("prompt preflight scheduled compaction", {
@@ -169,5 +226,5 @@ export async function maybeSchedulePreflightCompaction(input: {
     auto: true,
     triggerReason: "prompt_preflight",
   })
-  return true
+  return { action: "compact" }
 }

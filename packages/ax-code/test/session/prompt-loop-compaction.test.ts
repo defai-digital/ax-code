@@ -92,10 +92,14 @@ describe("session.prompt preflight compaction", () => {
       model,
       userParts: [{ type: "text", text: "small request" } as any],
       system: ["small system"],
-      requestMessages: [{ role: "user", content: "x".repeat(10_000) }],
+      requestMessages: [
+        { role: "user", content: "x".repeat(5_000) },
+        { role: "assistant", content: "y".repeat(5_000) },
+        { role: "user", content: "small request" },
+      ],
     })
 
-    expect(scheduled).toBe(true)
+    expect(scheduled).toEqual({ action: "compact" })
     expect(createSpy).toHaveBeenCalledTimes(1)
     expect(createSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -104,7 +108,7 @@ describe("session.prompt preflight compaction", () => {
     )
   })
 
-  test("does not schedule preflight compaction when tool schema overhead alone already exceeds budget", async () => {
+  test("blocks a tiny first turn when fixed prompt/tool overhead cannot fit (#344, #345)", async () => {
     // Compaction only summarizes `messages` — it can never shrink the fixed
     // tool-schema overhead. If that overhead alone already meets/exceeds the
     // usable budget (as here: a lone huge tool schema vs. a tiny first
@@ -137,7 +141,13 @@ describe("session.prompt preflight compaction", () => {
       requestMessages: [{ role: "user", content: "small request" }],
     })
 
-    expect(scheduled).toBe(false)
+    expect(scheduled.action).toBe("block")
+    if (scheduled.action === "block") {
+      expect(scheduled.message).toContain("Automatic compaction cannot help this new or tiny session")
+      expect(scheduled.message).toContain("fewer tools enabled")
+      expect(scheduled.fixedTokens).toBeGreaterThanOrEqual(scheduled.usableTokens)
+      expect(scheduled.compactableHistoryTokens).toBeLessThan(512)
+    }
     expect(createSpy).not.toHaveBeenCalled()
   })
 
@@ -167,7 +177,7 @@ describe("session.prompt preflight compaction", () => {
       requestMessages: [{ role: "user", content: "explain this image" }],
     })
 
-    expect(scheduled).toBe(false)
+    expect(scheduled).toEqual({ action: "continue" })
     expect(createSpy).not.toHaveBeenCalled()
   })
 })

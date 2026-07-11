@@ -8,6 +8,7 @@ import { Icon } from "@/components/icon/Icon"
 import { API_ENDPOINTS } from "@/lib/http"
 import { useI18n } from "@/lib/i18n"
 import { getDesktopAppVersion } from "@/lib/desktopNative"
+import { aboutVersionRows } from "./aboutVersionRows"
 
 interface AboutDialogProps {
   open: boolean
@@ -139,6 +140,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) 
   }, [open, showDiagnostics])
 
   const displayVersion = version
+  const versionRows = aboutVersionRows(displayVersion, axCodeVersion)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -149,8 +151,9 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) 
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">AX Code</h2>
             <div className="space-y-0.5 typography-meta text-muted-foreground">
-              {displayVersion && <p>{t("aboutDialog.openChamberVersionLabel", { version: displayVersion })}</p>}
-              {axCodeVersion && <p>{t("aboutDialog.axCodeVersionLabel", { version: axCodeVersion })}</p>}
+              {versionRows.map((row) => (
+                <p key={row.key}>{t(row.label, { version: row.version })}</p>
+              ))}
             </div>
             <p className="typography-meta text-muted-foreground/70">
               Forked from{" "}

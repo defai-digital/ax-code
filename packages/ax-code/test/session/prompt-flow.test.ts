@@ -192,7 +192,7 @@ describe("session.prompt flow", () => {
     }
   })
 
-  test("preflights clearly over-budget prompt and compacts before normal provider call", async () => {
+  test("blocks a clearly over-budget first prompt before calling the provider", async () => {
     await using tmp = await tmpdir({ git: true })
     const tinyModel: Provider.Model = {
       ...model,
@@ -201,49 +201,37 @@ describe("session.prompt flow", () => {
         output: 20,
       },
     }
-    const agents: string[] = []
-
     modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(tinyModel)
     summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
-    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
-      agents.push(input.agent.name)
-      const text = input.agent.name === "compaction" ? "compact summary" : "after compact"
-      return {
-        fullStream: (async function* () {
-          yield { type: "start" }
-          yield { type: "start-step" }
-          yield { type: "text-start", id: `text_${agents.length}` }
-          yield { type: "text-delta", id: `text_${agents.length}`, text }
-          yield { type: "text-end", id: `text_${agents.length}` }
-          yield {
-            type: "finish-step",
-            finishReason: "stop",
-            usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
-          }
-          yield { type: "finish" }
-        })(),
-      } as any
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+      throw new Error("provider should not be called for a futile first-turn compaction")
     })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({ title: "Prompt Preflight Test" })
-        await SessionPrompt.prompt({
+        const message = await SessionPrompt.prompt({
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "x".repeat(PREFLIGHT_OVER_BUDGET_TEXT_CHARS) }],
         })
 
-        expect(agents[0]).toBe("compaction")
-        expect(agents).toContain("build")
+        expect(streamSpy).not.toHaveBeenCalled()
+        expect(
+          message.parts.some(
+            (part) =>
+              part.type === "text" && part.text.includes("Automatic compaction cannot help this new or tiny session"),
+          ),
+        ).toBe(true)
 
         const messages = await Session.messages({ sessionID: session.id })
         expect(
           messages.some(
-            (message) => message.info.role === "user" && message.parts.some((part) => part.type === "compaction"),
+            (entry) => entry.info.role === "user" && entry.parts.some((part) => part.type === "compaction"),
           ),
-        ).toBe(true)
+        ).toBe(false)
+        expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
         await Session.remove(session.id)
       },
     })
@@ -1130,7 +1118,12 @@ describe("session.prompt flow", () => {
           expect(
             assistant?.parts.some((part) => part.type === "text" && part.text.includes("<function=write_file")),
           ).toBe(true)
-          expect(await access(path.join(tmp.path, "coffee-shop/index.html")).then(() => true, () => false)).toBe(false)
+          expect(
+            await access(path.join(tmp.path, "coffee-shop/index.html")).then(
+              () => true,
+              () => false,
+            ),
+          ).toBe(false)
 
           await Session.remove(session.id)
         },

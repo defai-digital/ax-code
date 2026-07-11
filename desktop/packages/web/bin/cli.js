@@ -928,6 +928,17 @@ function resolveCliEntrypoint() {
   }
 }
 
+function resolveServerEntrypoint() {
+  const configured = process.env.AX_CODE_DESKTOP_SERVER_PATH?.trim()
+  if (configured) return path.resolve(configured)
+
+  // Packaged Electron builds bundle this CLI beside dist/server.js. Source
+  // and npm installs keep the server under ../server/index.js.
+  const packaged = path.join(__dirname, "server.js")
+  if (fs.existsSync(packaged)) return packaged
+  return path.join(__dirname, "..", "server", "index.js")
+}
+
 function buildStartupArgs(options = {}) {
   const args = [resolveCliEntrypoint(), "serve", "--foreground", "--port", String(options.port || DEFAULT_PORT)]
   if (typeof options.host === "string" && options.host.length > 0) {
@@ -1736,7 +1747,7 @@ const commands = {
     }
 
     const axCodeBinary = await checkAxCodeCLI(emitNotice)
-    const serverPath = path.join(__dirname, "..", "server", "index.js")
+    const serverPath = resolveServerEntrypoint()
     const runtimeBin = process.execPath
 
     ensureLogsDir()

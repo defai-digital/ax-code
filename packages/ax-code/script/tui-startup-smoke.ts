@@ -24,6 +24,17 @@ const TUI_STARTUP_FAILURE_EVENTS = new Set([
 ])
 const DEFAULT_TUI_STARTUP_WORKER_READY_TIMEOUT_MS = 15_000
 
+// The TUI can finish writing its final diagnostic file just after the process
+// tree exits. Node's recursive rm occasionally observes that directory between
+// writes and reports ENOTEMPTY on CI; bounded retries make smoke cleanup match
+// the test harness cleanup policy without hiding a persistent leak.
+export const TUI_STARTUP_TEMP_CLEANUP_OPTIONS = {
+  recursive: true,
+  force: true,
+  maxRetries: 5,
+  retryDelay: 100,
+} as const
+
 type ProcessEvent = {
   eventType?: string
   data?: unknown
@@ -460,7 +471,7 @@ async function main() {
     })
   } finally {
     if (!keepTemp && !requestedTempRoot) {
-      await fs.promises.rm(tempRoot, { recursive: true, force: true })
+      await fs.promises.rm(tempRoot, TUI_STARTUP_TEMP_CLEANUP_OPTIONS)
     }
   }
 }
