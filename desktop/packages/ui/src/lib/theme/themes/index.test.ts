@@ -39,4 +39,32 @@ describe("theme registry", () => {
     expect(css).not.toMatch(/--font-mono\s*:/)
     expect(css).not.toMatch(/--font-heading\s*:/)
   })
+
+  test("Ink calm themes register as a light/dark pair with distinct surface ladders", () => {
+    const dark = getThemeById("ink-dark")
+    const light = getThemeById("ink-light")
+
+    expect(dark?.metadata.name).toBe("Ink")
+    expect(light?.metadata.name).toBe("Ink")
+    expect(dark?.metadata.variant).toBe("dark")
+    expect(light?.metadata.variant).toBe("light")
+    expect(dark?.metadata.tags).toEqual(expect.arrayContaining(["japanese", "calm", "ma"]))
+    expect(light?.metadata.tags).toEqual(expect.arrayContaining(["japanese", "calm", "ma"]))
+
+    for (const theme of [dark, light]) {
+      expect(theme).toBeDefined()
+      expect(theme!.colors.surface.elevated).not.toBe(theme!.colors.surface.background)
+      expect(theme!.colors.surface.muted).not.toBe(theme!.colors.surface.background)
+      expect(theme!.colors.status.error).not.toBe(theme!.colors.primary.base)
+      expect(theme!.config?.fonts?.sans).toMatch(/IBM Plex Sans/)
+      expect(theme!.config?.fonts?.mono).toMatch(/IBM Plex Mono/)
+    }
+
+    const darkCss = new CSSVariableGenerator().generate(dark!)
+    const lightCss = new CSSVariableGenerator().generate(light!)
+    expect(darkCss).toContain("--background:")
+    expect(lightCss).toContain("--background:")
+    expect(darkCss).toContain(dark!.colors.primary.base)
+    expect(lightCss).toContain(light!.colors.primary.base)
+  })
 })

@@ -2,6 +2,18 @@
 
 AX Code Desktop supports user-defined themes. Drop a JSON file into the themes directory and reload — no app restart required.
 
+## Built-in calm option: Ink
+
+**Settings → Theme** includes **Ink** (light + dark): a Japanese-inspired calm palette (sumi / washi surfaces, moss accent, low chroma). It is opt-in and does not change the AutomatosX default.
+
+Design rules used for Ink (and recommended for custom calm themes):
+
+1. **Opt-in only** — never force a density or layout rewrite for aesthetics.
+2. **Readability first** — body text and status colors stay high-contrast; errors are never decorative greys.
+3. **One accent** — primary/moss for focus; surfaces stay warm neutrals.
+4. **Hairlines over elevation** — quiet borders; avoid heavy shadows and textures.
+5. **Ma on quiet surfaces** — empty chat and similar idle states may use more negative space; tool panes stay dense.
+
 ## Quick Start
 
 1. Create the themes directory:

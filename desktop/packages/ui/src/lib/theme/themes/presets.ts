@@ -35,6 +35,8 @@ import mono_plus_dark_Raw from "./mono-plus-dark.json"
 import mono_plus_light_Raw from "./mono-plus-light.json"
 import mono_dark_Raw from "./mono-dark.json"
 import mono_light_Raw from "./mono-light.json"
+import ink_dark_Raw from "./ink-dark.json"
+import ink_light_Raw from "./ink-light.json"
 import vitesse_dark_dark_Raw from "./vitesse-dark-dark.json"
 import vitesse_light_light_Raw from "./vitesse-light-light.json"
 
@@ -51,6 +53,8 @@ export const presetThemes: Theme[] = [
   dracula_light_Raw as Theme,
   gruvbox_dark_Raw as Theme,
   gruvbox_light_Raw as Theme,
+  ink_dark_Raw as Theme,
+  ink_light_Raw as Theme,
   jetbrains_dark_Raw as Theme,
   jetbrains_light_Raw as Theme,
   kanagawa_dark_Raw as Theme,

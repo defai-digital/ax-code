@@ -1,0 +1,180 @@
+{
+  "metadata": {
+    "id": "ink-light",
+    "name": "Ink",
+    "description": "Quiet Japanese-inspired surfaces — washi paper, sumi ink text, moss accent. Low chroma, high readability (Ma / restraint).",
+    "version": "1.0.0",
+    "variant": "light",
+    "tags": ["light", "japanese", "washi", "minimal", "calm", "ma"]
+  },
+  "colors": {
+    "primary": {
+      "base": "#3D6B52",
+      "hover": "#345C46",
+      "active": "#2B4D3A",
+      "foreground": "#FBF9F4",
+      "muted": "#3D6B5280",
+      "emphasis": "#2B4D3A"
+    },
+    "surface": {
+      "background": "#F5F2EB",
+      "foreground": "#1C1A17",
+      "muted": "#EBE7DF",
+      "mutedForeground": "#6B675C",
+      "elevated": "#FBF9F4",
+      "elevatedForeground": "#1C1A17",
+      "overlay": "#1C1A1740",
+      "subtle": "#E4E0D6"
+    },
+    "interactive": {
+      "border": "#D4CFC3",
+      "borderHover": "#C0BAAE",
+      "borderFocus": "#3D6B52",
+      "selection": "#3D6B5222",
+      "selectionForeground": "#1C1A17",
+      "focus": "#3D6B52",
+      "focusRing": "#3D6B5240",
+      "cursor": "#1C1A17",
+      "hover": "#1C1A170C",
+      "active": "#1C1A1714"
+    },
+    "status": {
+      "error": "#B54A42",
+      "errorForeground": "#FFFFFF",
+      "errorBackground": "#B54A4218",
+      "errorBorder": "#B54A4240",
+      "warning": "#A67C2E",
+      "warningForeground": "#1C1A17",
+      "warningBackground": "#A67C2E18",
+      "warningBorder": "#A67C2E40",
+      "success": "#3D6B52",
+      "successForeground": "#FFFFFF",
+      "successBackground": "#3D6B5218",
+      "successBorder": "#3D6B5240",
+      "info": "#3D5F7A",
+      "infoForeground": "#FFFFFF",
+      "infoBackground": "#3D5F7A18",
+      "infoBorder": "#3D5F7A40"
+    },
+    "pr": {
+      "open": "#3D6B52",
+      "draft": "#6B675C",
+      "blocked": "#A67C2E",
+      "merged": "#6B5B8A",
+      "closed": "#B54A42"
+    },
+    "syntax": {
+      "base": {
+        "background": "#FBF9F4",
+        "foreground": "#1C1A17",
+        "comment": "#8A8678",
+        "keyword": "#3D5F7A",
+        "string": "#3D6B52",
+        "number": "#8B6914",
+        "function": "#6B4F2A",
+        "variable": "#1C1A17",
+        "type": "#4A6B52",
+        "operator": "#B54A42"
+      },
+      "tokens": {
+        "commentDoc": "#A39E90",
+        "stringEscape": "#1C1A17",
+        "keywordImport": "#6B5B8A",
+        "storageModifier": "#3D5F7A",
+        "functionCall": "#6B4F2A",
+        "method": "#3D6B52",
+        "variableProperty": "#3D5F7A",
+        "variableOther": "#4A6B52",
+        "variableGlobal": "#9B4D6E",
+        "variableLocal": "#E4E0D6",
+        "parameter": "#1C1A17",
+        "constant": "#8B6914",
+        "class": "#6B4F2A",
+        "className": "#6B4F2A",
+        "interface": "#4A6B52",
+        "struct": "#6B4F2A",
+        "enum": "#6B4F2A",
+        "typeParameter": "#6B4F2A",
+        "namespace": "#4A6B52",
+        "module": "#B54A42",
+        "tag": "#3D5F7A",
+        "jsxTag": "#9B4D6E",
+        "tagAttribute": "#4A6B52",
+        "tagAttributeValue": "#3D6B52",
+        "boolean": "#8B6914",
+        "decorator": "#8B6914",
+        "label": "#9B4D6E",
+        "punctuation": "#8A8678",
+        "macro": "#3D5F7A",
+        "preprocessor": "#9B4D6E",
+        "regex": "#3D6B52",
+        "url": "#3D5F7A",
+        "key": "#6B4F2A",
+        "exception": "#9B4D6E"
+      },
+      "highlights": {
+        "diffAdded": "#3D6B52",
+        "diffAddedBackground": "#3D6B5218",
+        "diffRemoved": "#B54A42",
+        "diffRemovedBackground": "#B54A4218",
+        "diffModified": "#3D5F7A",
+        "diffModifiedBackground": "#3D5F7A18",
+        "lineNumber": "#C0BAAE",
+        "lineNumberActive": "#1C1A17"
+      }
+    },
+    "markdown": {
+      "heading1": "#1C1A17",
+      "heading2": "#1C1A17",
+      "heading3": "#3A3732",
+      "heading4": "#3A3732",
+      "link": "#3D5F7A",
+      "linkHover": "#2E4A60",
+      "inlineCode": "#3D6B52",
+      "inlineCodeBackground": "#EBE7DF",
+      "blockquote": "#6B675C",
+      "blockquoteBorder": "#D4CFC3",
+      "listMarker": "#8B691499"
+    },
+    "chat": {
+      "userMessage": "#1C1A17",
+      "userMessageBackground": "#E2EBE4",
+      "assistantMessage": "#1C1A17",
+      "assistantMessageBackground": "#FBF9F4",
+      "timestamp": "#6B675C",
+      "divider": "#D4CFC3"
+    },
+    "tools": {
+      "background": "#EBE7DF80",
+      "border": "#D4CFC39d",
+      "headerHover": "#E4E0D680",
+      "icon": "#6B675C",
+      "title": "#1C1A17",
+      "description": "#6B675C",
+      "edit": {
+        "added": "#3D6B52",
+        "addedBackground": "#3D6B5218",
+        "removed": "#B54A42",
+        "removedBackground": "#B54A4218",
+        "lineNumber": "#C0BAAE"
+      }
+    },
+    "emptyState": {
+      "iconOpacity": "0.32",
+      "title": "#1C1A17",
+      "description": "#6B675C"
+    }
+  },
+  "config": {
+    "fonts": {
+      "sans": "\"IBM Plex Sans\", \"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "mono": "\"IBM Plex Mono\", \"SFMono-Regular\", \"Menlo\", monospace",
+      "heading": "\"IBM Plex Sans\", \"SF Pro Text\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif"
+    },
+    "transitions": {
+      "fast": "120ms ease-out",
+      "normal": "200ms ease-out",
+      "slow": "320ms ease-out"
+    }
+  }
+}
