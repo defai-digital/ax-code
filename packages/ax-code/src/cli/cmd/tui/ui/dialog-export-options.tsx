@@ -91,6 +91,13 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
       if (store.active === "openWithoutSaving") setStore("openWithoutSaving", !store.openWithoutSaving)
       if (store.active !== "filename") evt.preventDefault()
     }
+    // The textarea keeps focus while a checkbox row is active, so any remaining
+    // printable keystroke would silently edit the filename. Swallow those keys
+    // when a checkbox is active, but leave escape/ctrl+c for the dialog's own
+    // close handling.
+    if (store.active !== "filename" && !evt.ctrl && !evt.meta && !evt.super && evt.name !== "escape") {
+      if (evt.sequence?.length === 1) evt.preventDefault()
+    }
   })
 
   onMount(() => {

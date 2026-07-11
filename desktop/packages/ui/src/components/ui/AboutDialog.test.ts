@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 
-import { aboutVersionRows, OPENCHAMBER_UPSTREAM_URL } from "./AboutDialog"
+import { OPENCHAMBER_UPSTREAM_URL } from "./AboutDialog"
+import { aboutVersionRows } from "./aboutVersionRows"
 
 describe("AboutDialog", () => {
   test("links upstream attribution to the NOTICE OpenChamber source", () => {

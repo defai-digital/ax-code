@@ -73,6 +73,6 @@ describe("tui dialog action dispatch", () => {
     // closes prompt N+1, resolving it null and silently aborting the flow.
     expect(promptsMethodBlock).toContain("autoClose={false}")
     // The abort is surfaced to the user instead of being silent.
-    expect(dialogProvider).toContain("Canceled connecting ${provider.name}")
+    expect(dialogProvider).toContain("Cancelled connecting ${provider.name}")
   })
 })
