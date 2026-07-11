@@ -601,7 +601,9 @@ const FocusModeButton = React.memo(function FocusModeButton(props: FocusModeButt
           className={cn(
             footerIconButtonClass,
             "rounded-md",
-            isExpandedInput ? "text-primary" : "text-foreground hover:bg-[var(--interactive-hover)]/40",
+            isExpandedInput
+              ? "text-primary hover:text-primary"
+              : "text-muted-foreground hover:text-foreground",
           )}
           onMouseDown={(event) => {
             event.preventDefault()

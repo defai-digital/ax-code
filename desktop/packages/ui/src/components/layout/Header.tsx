@@ -118,7 +118,8 @@ const HeaderIconActionButton = React.memo(function HeaderIconActionButton({
           aria-pressed={pressed}
           className={cn(
             className ?? DESKTOP_HEADER_ICON_BUTTON_CLASS,
-            pressed && "bg-interactive-selection text-interactive-selection-foreground",
+            pressed &&
+              "bg-interactive-selection text-interactive-selection-foreground hover:text-interactive-selection-foreground",
           )}
         >
           <Icon name={iconName} className={iconClassName ?? "h-[18px] w-[18px]"} />

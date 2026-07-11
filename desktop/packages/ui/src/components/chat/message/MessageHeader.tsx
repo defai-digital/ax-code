@@ -66,10 +66,10 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex min-w-0 items-center gap-1.5">
             <h3
               className={cn(
-                "font-medium typography-ui-label tracking-tight leading-none truncate",
+                "min-w-0 truncate font-medium typography-ui-label tracking-tight leading-none",
                 isUser ? "text-primary" : "text-foreground",
               )}
             >
@@ -78,7 +78,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({
             {!isUser && agentName && (
               <div
                 className={cn(
-                  "flex items-center gap-1 px-1.5 py-0 rounded cursor-default",
+                  "flex flex-shrink-0 items-center gap-1 px-1.5 py-0 rounded cursor-default",
                   "agent-badge typography-meta",
                   "hover:bg-[rgb(from_var(--agent-color-bg)_r_g_b_/_0.1)] hover:border-[rgb(from_var(--agent-color)_r_g_b_/_0.2)]",
                   getAgentColor(agentName).class,
@@ -91,7 +91,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({
             {!isUser && variant && (
               <div
                 className={cn(
-                  "flex items-center gap-1 px-1.5 py-0 rounded cursor-default",
+                  "flex flex-shrink-0 items-center gap-1 px-1.5 py-0 rounded cursor-default",
                   "agent-badge typography-meta",
                   "hover:bg-[rgb(from_var(--agent-color-bg)_r_g_b_/_0.1)] hover:border-[rgb(from_var(--agent-color)_r_g_b_/_0.2)]",
                   variant === "Default" ? undefined : "agent-info",

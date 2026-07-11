@@ -43,7 +43,8 @@ export const SandboxToggle: React.FC<SandboxToggleProps> = ({
     <button
       type="button"
       aria-label={label}
-      title={withTooltip ? undefined : label}
+      // Native title remains as a fallback when the tooltip cannot attach (e.g. disabled).
+      title={label}
       aria-pressed={isOn}
       disabled={disabled}
       onClick={() => {
@@ -51,7 +52,10 @@ export const SandboxToggle: React.FC<SandboxToggleProps> = ({
         void setSandbox(currentDirectory, !isOn)
       }}
       onMouseDown={(event) => {
-        event.preventDefault()
+        // Keep focus in the composer textarea when the control is interactive.
+        if (!disabled) {
+          event.preventDefault()
+        }
       }}
       className={cn(
         "flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors",
@@ -73,9 +77,19 @@ export const SandboxToggle: React.FC<SandboxToggleProps> = ({
     return button
   }
 
+  // Disabled buttons do not receive pointer events, so wrap them so the tooltip
+  // can still open and explain the current sandbox state while loading.
+  const trigger = disabled ? (
+    <span className="inline-flex" aria-disabled={true}>
+      {button}
+    </span>
+  ) : (
+    button
+  )
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
+    <Tooltip delayDuration={400}>
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
       <TooltipContent side="top" sideOffset={8}>
         {label}
       </TooltipContent>

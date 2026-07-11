@@ -76,12 +76,13 @@ export const ExecutionModeSelector: React.FC<ExecutionModeSelectorProps> = ({
 
   return (
     <DropdownMenu>
-      <Tooltip>
+      <Tooltip delayDuration={400}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
               aria-label={tooltipLabel}
+              title={tooltipLabel}
               className={cn(
                 "flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors",
                 "hover:bg-interactive-hover hover:text-foreground",
