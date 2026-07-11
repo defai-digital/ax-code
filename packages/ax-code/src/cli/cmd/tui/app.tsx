@@ -673,19 +673,55 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
 
   let continued = false
+  const continueWithSession = (sessionID: string) => {
+    continued = true
+    if (args.fork) {
+      forkSessionWithRetries({ sessionID, source: "continue" })
+    } else {
+      route.navigate({ type: "session", sessionID })
+    }
+  }
+  let continueFallbackStarted = false
   createEffect(() => {
     if (continued || !sync.data.session_loaded || !args.continue) return
     const match = sync.data.session
       .toSorted((a, b) => b.time.updated - a.time.updated)
       .find((x) => x.parentID === undefined)?.id
     if (match) {
-      continued = true
-      if (args.fork) {
-        forkSessionWithRetries({ sessionID: match, source: "continue" })
-      } else {
-        route.navigate({ type: "session", sessionID: match })
-      }
+      continueWithSession(match)
+      return
     }
+    // The bootstrap session list is bounded by a ~30-day window
+    // (sync-bootstrap-request.ts passes `start`), so a last session older than
+    // that leaves `sync.data.session` empty here and --continue silently
+    // no-ops. Fall back to a one-shot UNBOUNDED session.list before giving up;
+    // toast if there is genuinely nothing to continue. Runs at most once.
+    if (continueFallbackStarted) return
+    continueFallbackStarted = true
+    const notify = () => toast.show({ message: "No previous session to continue", variant: "info" })
+    sdk.client.session
+      .list({})
+      .then((result) => {
+        if (continued) return
+        if (result.error) {
+          Log.Default.warn("failed to list sessions for --continue", { error: result.error })
+          notify()
+          return
+        }
+        const fallback = (result.data ?? [])
+          .filter((x) => x.parentID === undefined)
+          .toSorted((a, b) => b.time.updated - a.time.updated)[0]?.id
+        if (fallback) {
+          continueWithSession(fallback)
+          return
+        }
+        notify()
+      })
+      .catch((error) => {
+        if (continued) return
+        Log.Default.warn("failed to list sessions for --continue", { error })
+        notify()
+      })
   })
 
   // Session-first launch (ADR-035): when no explicit --session/--continue/--prompt
