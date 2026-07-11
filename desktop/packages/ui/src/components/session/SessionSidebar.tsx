@@ -18,7 +18,6 @@ import { NewWorktreeDialog } from "./NewWorktreeDialog"
 import { ScheduledTasksDialog } from "./ScheduledTasksDialog"
 import { useSessionFoldersStore } from "@/stores/useSessionFoldersStore"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
-import { useArchivedAutoFolders } from "./sidebar/hooks/useArchivedAutoFolders"
 import { useSessionSidebarSections } from "./sidebar/hooks/useSessionSidebarSections"
 import { useProjectSessionSelection } from "./sidebar/hooks/useProjectSessionSelection"
 import { useGroupOrdering } from "./sidebar/hooks/useGroupOrdering"
@@ -773,18 +772,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     sessions,
     archivedSessions,
     availableWorktreesByProject,
-  })
-
-  useArchivedAutoFolders({
-    normalizedProjects,
-    sessions,
-    archivedSessions,
-    availableWorktreesByProject,
-    isSessionsLoading,
-    foldersMap,
-    createFolder,
-    addSessionToFolder,
-    cleanupSessions,
+    allProjectRoots: normalizedProjectPaths,
   })
 
   // Keep last-known repo status to avoid UI jiggling during project switch

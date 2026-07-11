@@ -1181,7 +1181,7 @@ export const TerminalView: React.FC = () => {
           </div>
         ) : null}
         {!isReconnectPending && connectionError && (
-          <div className="absolute inset-x-0 bottom-0 bg-[var(--status-error-background)] px-3 py-2 text-xs text-[var(--status-error-foreground)] flex items-center justify-between gap-2">
+          <div className="absolute inset-x-0 bottom-0 bg-[var(--status-error-background)] px-3 py-2 text-xs text-[var(--status-error)] flex items-center justify-between gap-2">
             <span>{connectionError}</span>
             {isFatalError && isMobile && (
               <Button

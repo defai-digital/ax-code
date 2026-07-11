@@ -1,16 +1,18 @@
 import React from "react"
 import type { Session } from "@ax-code/sdk/v2"
-import { dedupeSessionsById, isPathWithinProject, isSessionRelatedToProject, normalizePath } from "../utils"
+import { dedupeSessionsById, normalizePath, resolveOwningProjectRoot } from "../utils"
 import type { WorktreeMeta } from "../types"
 
 type Args = {
   sessions: Session[]
   archivedSessions: Session[]
   availableWorktreesByProject: Map<string, WorktreeMeta[]>
+  /** Every registered project root, so a session is assigned to only its most-specific owner. */
+  allProjectRoots: string[]
 }
 
 export const useProjectSessionLists = (args: Args) => {
-  const { sessions, archivedSessions, availableWorktreesByProject } = args
+  const { sessions, archivedSessions, availableWorktreesByProject, allProjectRoots } = args
 
   const sessionsByDirectory = React.useMemo(() => {
     const next = new Map<string, Session[]>()
@@ -30,6 +32,19 @@ export const useProjectSessionLists = (args: Args) => {
     })
     return next
   }, [sessions])
+
+  // Archived sections are built once per project. Resolve ownership once for
+  // each session instead of scanning every project root for every section.
+  const ownerProjectRootBySessionId = React.useMemo(() => {
+    const owners = new Map<string, string | null>()
+    for (const session of [...sessions, ...archivedSessions]) {
+      owners.set(
+        session.id,
+        resolveOwningProjectRoot(session, allProjectRoots, availableWorktreesByProject),
+      )
+    }
+    return owners
+  }, [allProjectRoots, archivedSessions, availableWorktreesByProject, sessions])
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
@@ -62,18 +77,10 @@ export const useProjectSessionLists = (args: Args) => {
 
   const getArchivedSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
-      const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? []
-      const validDirectories = new Set<string>([
-        project.normalizedPath,
-        ...worktreesForProject
-          .map((meta) => normalizePath(meta.path) ?? meta.path)
-          .filter((value): value is string => Boolean(value)),
-      ])
+      const ownsSession = (session: Session): boolean =>
+        ownerProjectRootBySessionId.get(session.id) === project.normalizedPath
 
-      const collect = (input: Session[]): Session[] =>
-        input.filter((session) => isSessionRelatedToProject(session, project.normalizedPath, validDirectories))
-
-      const archived = collect(archivedSessions)
+      const archived = archivedSessions.filter(ownsSession)
       const unassignedLive = sessions.filter((session) => {
         if (session.time?.archived) {
           return false
@@ -88,12 +95,12 @@ export const useProjectSessionLists = (args: Args) => {
         if (!projectWorktree) {
           return false
         }
-        return isPathWithinProject(projectWorktree, project.normalizedPath)
+        return ownsSession(session)
       })
 
       return dedupeSessionsById([...archived, ...unassignedLive])
     },
-    [archivedSessions, availableWorktreesByProject, sessions],
+    [archivedSessions, ownerProjectRootBySessionId, sessions],
   )
 
   return {

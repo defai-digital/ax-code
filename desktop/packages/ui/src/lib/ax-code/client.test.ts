@@ -149,3 +149,32 @@ describe("axCodeClient desktop file operations", () => {
     expect(listDirectory).toHaveBeenCalledTimes(2)
   })
 })
+
+describe("withDirectory queue resilience", () => {
+  test("a hung directory-scoped call does not block subsequent calls forever", async () => {
+    vi.useFakeTimers()
+    try {
+      // First call never settles (simulates a stalled request that previously
+      // poisoned the shared directory-context queue).
+      const hung = axCodeClient.withDirectory("/a", () => new Promise<string>(() => {}))
+      let secondRan = false
+      const second = axCodeClient.withDirectory("/b", async () => {
+        secondRan = true
+        return "second"
+      })
+
+      // Before the safety timeout the second call is still queued behind the hang.
+      await Promise.resolve()
+      expect(secondRan).toBe(false)
+
+      // The safety timeout (15s) releases the queue so the second call can run.
+      await vi.advanceTimersByTimeAsync(15_001)
+      await expect(second).resolves.toBe("second")
+      expect(secondRan).toBe(true)
+      void hung // intentionally left pending
+    } finally {
+      vi.useRealTimers()
+      axCodeClient.setDirectory(undefined)
+    }
+  })
+})

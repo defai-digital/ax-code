@@ -185,6 +185,9 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       disable: draftAgent.disable,
     })
     setSelectedAgent(newName)
+    // Advance the mobile settings stage to the editor, like Create New and list
+    // selection do; without this, Duplicate is a no-op on mobile.
+    onItemSelect?.()
   }
 
   const handleOpenRenameDialog = (agent: Agent) => {

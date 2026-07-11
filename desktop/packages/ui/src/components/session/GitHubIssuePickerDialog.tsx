@@ -235,7 +235,9 @@ export function GitHubIssuePickerDialog({
   const safeRepoUrl = repoUrl ? getSafeExternalUrl(repoUrl) : null
 
   const openGitHubSettings = React.useCallback(() => {
-    setSettingsPage("github")
+    // "github" resolves to the Home settings page; the GitHub connect UI is on
+    // the "git" page.
+    setSettingsPage("git")
     setSettingsDialogOpen(true)
   }, [setSettingsDialogOpen, setSettingsPage])
 

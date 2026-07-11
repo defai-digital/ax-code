@@ -12,6 +12,10 @@ import { useI18n } from "@/lib/i18n"
 export interface SidebarSortableProjectItemProps {
   id: string
   projectLabel: string
+  /** The home ("~") project: render a house icon and don't lowercase the label. */
+  isHomeProject?: boolean
+  /** Draw a hairline top divider + margin to separate this project from the one above. */
+  showTopDivider?: boolean
   projectDescription: string
   projectIcon?: string
   projectColor?: string
@@ -45,6 +49,8 @@ export type SortableDragHandleProps = {
 export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
   id,
   projectLabel,
+  isHomeProject,
+  showTopDivider,
   projectDescription,
   projectIcon,
   projectColor,
@@ -131,7 +137,11 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn("relative", isDragging && "opacity-30")}
+      className={cn(
+        "relative",
+        showTopDivider && "mt-2 border-t border-border/40 pt-2",
+        isDragging && "opacity-30",
+      )}
     >
       {!hideHeader ? (
         <>
@@ -213,7 +223,7 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
                         />
                       ) : (
                         <Icon
-                          name="folder"
+                          name={isHomeProject ? "home" : "folder"}
                           className={cn(
                             "h-3.5 w-3.5 text-muted-foreground/80",
                             alwaysShowActions
@@ -226,7 +236,7 @@ export const SortableProjectItem: React.FC<SidebarSortableProjectItemProps> = ({
                     </span>
                     <span
                       className={cn(
-                        "text-[14px] font-normal truncate lowercase",
+                        "text-[14px] font-normal truncate",
                         isActiveProject ? "text-foreground" : "text-foreground group-hover/project:text-foreground",
                       )}
                     >

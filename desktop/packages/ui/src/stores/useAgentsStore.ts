@@ -331,8 +331,12 @@ export const useAgentsStore = create<AgentsStore>()(
             if (config.mode !== undefined) agentConfig.mode = config.mode
             if (config.description !== undefined) agentConfig.description = config.description
             if (config.model !== undefined) agentConfig.model = config.model
-            if (config.temperature !== undefined) agentConfig.temperature = config.temperature
-            if (config.top_p !== undefined) agentConfig.top_p = config.top_p
+            // temperature/top_p are cleared by sending an explicit null (the server
+            // deletes a field only on null; a missing key is left as-is). The editor
+            // always includes both keys and sets them to undefined when cleared, so
+            // map present-but-undefined to null instead of dropping the key.
+            if ("temperature" in config) agentConfig.temperature = config.temperature ?? null
+            if ("top_p" in config) agentConfig.top_p = config.top_p ?? null
             if (config.prompt !== undefined) agentConfig.prompt = config.prompt
             if (config.permission !== undefined) agentConfig.permission = config.permission
             if (config.disable !== undefined) agentConfig.disable = config.disable

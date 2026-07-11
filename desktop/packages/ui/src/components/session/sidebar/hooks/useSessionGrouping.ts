@@ -141,7 +141,12 @@ export const useSessionGrouping = (args: Args) => {
         if (!normalizedDir) return archivedKey
         if (normalizedDir !== normalizedProjectRoot && worktreeByPath.has(normalizedDir)) return normalizedDir
         if (normalizedDir === normalizedProjectRoot) return normalizedProjectRoot ?? "__project_root__"
-        return archivedKey
+        // A live session in a directory owned by this project but neither the
+        // root nor a registered worktree (e.g. an unregistered nested repo like
+        // ~/projects/ax-code under the home project) belongs in the project's
+        // MAIN list — not buried in "archived". Only genuinely-archived sessions
+        // (guarded above) reach the archived bucket.
+        return normalizedProjectRoot ?? "__project_root__"
       }
 
       roots.forEach((session) => {

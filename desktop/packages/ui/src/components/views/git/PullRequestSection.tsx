@@ -311,7 +311,9 @@ export const PullRequestSection: React.FC<{
   const { isMobile, hasTouchInput } = useDeviceInfo()
 
   const openGitHubSettings = React.useCallback(() => {
-    setSettingsPage("github")
+    // "github" isn't a settings slug (only a keyword of the "git" page), so it
+    // resolved to Home; the GitHub connect UI lives on the "git" page.
+    setSettingsPage("git")
     setSettingsDialogOpen(true)
   }, [setSettingsDialogOpen, setSettingsPage])
 

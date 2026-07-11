@@ -224,6 +224,11 @@ const ChatViewport = React.memo(
             style={CHAT_SCROLL_STYLE}
             observeMutations={false}
             hideTopShadow={isMobile && stickyUserHeader}
+            // Drop the bottom scroll shadow: it drew a full-width line floating
+            // above the composer (which is already its own bordered box), reading
+            // as a weird separator. The scroll-to-bottom chevron already signals
+            // there's more content below.
+            hideBottomShadow
             tabIndex={0}
             onClick={focusScrollContainer}
             onScroll={handleHistoryScroll}

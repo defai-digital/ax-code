@@ -700,7 +700,13 @@ export const createScheduledTasksRuntime = (deps) => {
       }
     }
 
-    return runTask(projectID, taskID, "manual")
+    // Re-pump the queue on completion so tasks that queued while this manual run
+    // held the last concurrency slot get drained, mirroring the scheduled path's
+    // runTask(...).finally(pumpQueue). Without this a manual run that saturates
+    // the limit leaves queued tasks stuck until an unrelated timer fires.
+    return runTask(projectID, taskID, "manual").finally(() => {
+      pumpQueue()
+    })
   }
 
   const start = async () => {

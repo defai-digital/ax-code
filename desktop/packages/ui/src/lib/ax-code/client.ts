@@ -34,6 +34,14 @@ const getConfiguredBaseUrl = (): string | undefined => {
 
 const DEFAULT_BASE_URL = getConfiguredBaseUrl() || API_PATHS.base
 
+// Safety cap on how long the serialized directory-context queue will wait on a
+// single call before letting the next one run. Without this, one hung
+// directory-scoped request (never resolving nor rejecting) poisons the shared
+// queue and stalls every subsequent call — e.g. the sandbox/autonomous toggles
+// spinning forever. The hung caller still awaits its own real result; only the
+// queue's readiness for the NEXT call is bounded.
+const DIRECTORY_CONTEXT_QUEUE_TIMEOUT_MS = 15_000
+
 /**
  * Render an SDK error payload into a short string for Error messages.
  * The SDK returns `{data, error}` shape without throwing on non-2xx; methods
@@ -452,10 +460,18 @@ class AxCodeService {
     }
 
     const queuedRun = this.directoryContextQueue.then(runWithContext, runWithContext)
-    this.directoryContextQueue = queuedRun.then(
-      () => undefined,
-      () => undefined,
-    )
+    // Advance the shared queue when this run settles OR after a safety timeout,
+    // so a single hung call can't block every subsequent directory-scoped
+    // request forever. The caller still awaits `queuedRun` (its real result);
+    // only the queue's readiness for the next call is time-bounded.
+    this.directoryContextQueue = new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, DIRECTORY_CONTEXT_QUEUE_TIMEOUT_MS)
+      const advance = () => {
+        clearTimeout(timer)
+        resolve()
+      }
+      queuedRun.then(advance, advance)
+    })
 
     return queuedRun
   }
