@@ -22,6 +22,7 @@ files:
   # start in a production build.
   - dist/server-process.js
   - dist/server.js
+  - dist/desktop-cli.mjs
 
 # Web assets sit outside the asar so the Express server can serve them as
 # plain files at runtime (asar cannot exec native code and express.static

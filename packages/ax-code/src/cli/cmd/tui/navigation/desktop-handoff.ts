@@ -16,7 +16,7 @@ export type DesktopHandoffInput = {
 const SUPPORTED_PLATFORMS: NodeJS.Platform[] = ["darwin", "win32"]
 
 // Documentation URL for desktop installation
-const DESKTOP_DOCS_URL = "https://github.com/automatos-ai/ax-code#desktop"
+const DESKTOP_DOCS_URL = "https://github.com/defai-digital/ax-code#desktop"
 
 /**
  * Resolve the desktop handoff result.

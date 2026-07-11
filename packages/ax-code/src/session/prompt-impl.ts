@@ -639,22 +639,41 @@ export namespace SessionPrompt {
         structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
       })
       msgs = request.messages
-      if (
-        await maybeSchedulePreflightCompaction({
-          sessionID,
-          agent: lastUser.agent,
-          agentInfo: agent,
-          userModel: lastUser.model,
-          model,
-          userParts: lastUserParts ?? [],
-          system: request.system,
-          requestMessages: request.requestMessages,
-          tools: lastUser.tools,
-          sessionPermission: session.permission,
-        })
-      ) {
+      const preflightCompaction = await maybeSchedulePreflightCompaction({
+        sessionID,
+        agent: lastUser.agent,
+        agentInfo: agent,
+        userModel: lastUser.model,
+        model,
+        userParts: lastUserParts ?? [],
+        system: request.system,
+        requestMessages: request.requestMessages,
+        tools: lastUser.tools,
+        sessionPermission: session.permission,
+      })
+      if (preflightCompaction.action === "compact") {
         cachedMsgs = undefined
         continue
+      }
+      if (preflightCompaction.action === "block") {
+        log.warn("prompt preflight blocked an unfit model/tool setup", {
+          command: "session.prompt.preflight",
+          status: "error",
+          errorCode: "FIXED_CONTEXT_BUDGET_EXCEEDED",
+          sessionID,
+          fixedTokens: preflightCompaction.fixedTokens,
+          usableTokens: preflightCompaction.usableTokens,
+          compactableHistoryTokens: preflightCompaction.compactableHistoryTokens,
+          modelID: model.id,
+          providerID: model.providerID,
+        })
+        await createSyntheticFailureAssistant({
+          sessionID,
+          lastUser,
+          message: preflightCompaction.message,
+        })
+        reason = "error"
+        break
       }
 
       const processor = await createPromptProcessor({
