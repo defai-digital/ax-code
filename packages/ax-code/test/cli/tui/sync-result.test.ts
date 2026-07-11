@@ -5,6 +5,10 @@ describe("tui sync result", () => {
   test("builds the sync facade around store state and injected actions", () => {
     const setStore = Symbol("setStore")
     const sessionSync = (sessionID: string) => sessionID
+    const cleared: string[] = []
+    const sessionClear = (sessionID: string) => {
+      cleared.push(sessionID)
+    }
     const workspaceSync = () => "workspace-sync"
     const bootstrap = () => "bootstrap"
 
@@ -39,6 +43,7 @@ describe("tui sync result", () => {
       store,
       setStore,
       sessionSync,
+      sessionClear,
       workspaceSync,
       bootstrap,
       runtime: {},
@@ -68,6 +73,8 @@ describe("tui sync result", () => {
     expect(result.workspace.get("repo-b")).toBe("repo-b")
     expect(result.workspace.get("repo-missing")).toBeUndefined()
     expect(result.session.sync).toBe(sessionSync)
+    result.session.clear("ses_1")
+    expect(cleared).toEqual(["ses_1"])
     expect(result.workspace.sync).toBe(workspaceSync)
     expect(result.bootstrap).toBe(bootstrap)
   })

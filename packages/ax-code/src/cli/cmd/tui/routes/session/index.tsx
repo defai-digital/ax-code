@@ -100,6 +100,8 @@ import { firstCompactionMessageID, shouldShowCompactionNotice } from "./compacti
 import { createReconnectRecoveryGate } from "../../util/reconnect-recovery"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { isMissingSessionSnapshotError } from "../../context/sync-session-coordinator"
+import { applySessionLeavePrune } from "../../context/sync-session-store"
+import { produce } from "solid-js/store"
 import {
   createSessionEntrySyncRetryState,
   nextSessionEntrySyncRetry,
@@ -390,6 +392,20 @@ export function Session() {
       (sessionID) => {
         const generation = ++sessionSyncGeneration
         runInitialSessionSync(sessionID, generation, createSessionEntrySyncRetryState())
+        // ADR-047 D3: when this sessionID effect re-runs or the session route
+        // unmounts, drop heavy transcript projection for the left session and
+        // clear the session-sync fullSynced mark so re-entry reloads without
+        // force. Permission/question/status and the session list row stay.
+        // clear() also bumps the coordinator epoch so an in-flight fetch for
+        // this session cannot re-apply after prune.
+        onCleanup(() => {
+          sync.session.clear(sessionID)
+          sync.set(
+            produce((draft) => {
+              applySessionLeavePrune(draft, sessionID)
+            }),
+          )
+        })
       },
     ),
   )

@@ -15,7 +15,7 @@ export interface SyncResultStoreState<
 export function createSyncContextValue<
   TStore extends SyncResultStoreState<any, any>,
   TSet,
-  TSessionSync extends (sessionID: string) => unknown,
+  TSessionSync extends (sessionID: string, options?: { force?: boolean; missing?: "ignore" | "throw" }) => unknown,
   TWorkspaceSync extends () => unknown,
   TBootstrap extends () => unknown,
   TRuntime extends object,
@@ -23,6 +23,8 @@ export function createSyncContextValue<
   store: TStore
   setStore: TSet
   sessionSync: TSessionSync
+  /** Drop fullSynced/in-flight marks so the next sync reloads heavy state (leave prune). */
+  sessionClear?: (sessionID: string) => void
   workspaceSync: TWorkspaceSync
   bootstrap: TBootstrap
   runtime: TRuntime
@@ -55,6 +57,9 @@ export function createSyncContextValue<
         )
       },
       sync: input.sessionSync,
+      clear(sessionID: string) {
+        input.sessionClear?.(sessionID)
+      },
     },
     workspace: {
       get(workspaceID: string) {

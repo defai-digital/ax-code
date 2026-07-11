@@ -1,9 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { createStore } from "solid-js/store"
+import { createStore, produce } from "solid-js/store"
 import {
   createStoreBackedSessionSyncController,
   type SessionSyncStoreState,
 } from "../../../src/cli/cmd/tui/context/sync-session-sync"
+import { applySessionLeavePrune } from "../../../src/cli/cmd/tui/context/sync-session-store"
 import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
 
 type Session = { id: string; title: string }
@@ -164,5 +165,122 @@ describe("tui sync session sync", () => {
       session_risk: {},
       session_goal: {},
     })
+  })
+
+  test("leave prune + clear then re-enter sync reloads heavy state without force", async () => {
+    // Integrated leave→re-enter path: mirrors session route onCleanup
+    // (clear + applySessionLeavePrune) then runInitialSessionSync without force.
+    const [store, setStore] = createState()
+    let messageFetch = 0
+
+    const controller = createStoreBackedSessionSyncController<
+      Session,
+      Todo,
+      Message,
+      Part,
+      Diff,
+      Risk,
+      Goal,
+      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk, Goal>
+    >({
+      timeoutMs: 10_000,
+      withTimeout: async (_label, promise) => promise,
+      setStore,
+      fetchSession: async (sessionID) => ({ data: { id: sessionID, title: "Session" } }),
+      fetchMessages: async () => {
+        messageFetch += 1
+        return {
+          data: [
+            {
+              info: { id: `msg_${messageFetch}` },
+              parts: [{ id: `part_${messageFetch}` }],
+            },
+          ],
+        }
+      },
+      fetchTodo: async () => ({ data: [{ id: `todo_${messageFetch || 1}` }] }),
+      fetchDiff: async () => ({ data: [{ path: `file_${messageFetch || 1}.ts` }] }),
+    })
+
+    await controller.sync("ses_leave")
+    expect(store.message.ses_leave).toEqual([{ id: "msg_1" }])
+    expect(store.part.msg_1).toEqual([{ id: "part_1" }])
+    expect(messageFetch).toBe(1)
+
+    // Without clear, a second sync would no-op (fullSynced). Leave path clears.
+    controller.clear("ses_leave")
+    setStore(
+      produce((draft) => {
+        applySessionLeavePrune(draft, "ses_leave")
+      }),
+    )
+
+    expect(store.session).toEqual([{ id: "ses_leave", title: "Session" }])
+    expect(store.message.ses_leave).toBeUndefined()
+    expect(store.part.msg_1).toBeUndefined()
+    expect(store.todo.ses_leave).toBeUndefined()
+    expect(store.session_diff.ses_leave).toBeUndefined()
+
+    // Re-enter: same as runInitialSessionSync without force.
+    await controller.sync("ses_leave")
+    expect(messageFetch).toBe(2)
+    expect(store.message.ses_leave).toEqual([{ id: "msg_2" }])
+    expect(store.part.msg_2).toEqual([{ id: "part_2" }])
+    expect(store.todo.ses_leave).toEqual([{ id: "todo_2" }])
+    expect(store.session_diff.ses_leave).toEqual([{ path: "file_2.ts" }])
+  })
+
+  test("leave clear during in-flight sync drops late apply so re-enter loads cleanly", async () => {
+    const [store, setStore] = createState()
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let fetches = 0
+
+    const controller = createStoreBackedSessionSyncController<
+      Session,
+      Todo,
+      Message,
+      Part,
+      Diff,
+      Risk,
+      Goal,
+      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk, Goal>
+    >({
+      timeoutMs: 10_000,
+      withTimeout: async (_label, promise) => promise,
+      setStore,
+      fetchSession: async (sessionID) => {
+        fetches += 1
+        if (fetches === 1) await gate
+        return { data: { id: sessionID, title: fetches === 1 ? "stale" : "fresh" } }
+      },
+      fetchMessages: async () => ({
+        data: [{ info: { id: `msg_${fetches}` }, parts: [{ id: `part_${fetches}` }] }],
+      }),
+      fetchTodo: async () => ({ data: [] }),
+      fetchDiff: async () => ({ data: [] }),
+    })
+
+    const first = controller.sync("ses_race")
+    // Leave while first fetch is still open.
+    controller.clear("ses_race")
+    setStore(
+      produce((draft) => {
+        applySessionLeavePrune(draft, "ses_race")
+      }),
+    )
+    release?.()
+    await first
+
+    // Stale flight must not have re-filled heavy state after prune.
+    expect(store.message.ses_race).toBeUndefined()
+    expect(store.session.find((s) => s.id === "ses_race")).toBeUndefined()
+
+    await controller.sync("ses_race")
+    expect(fetches).toBe(2)
+    expect(store.session).toEqual([{ id: "ses_race", title: "fresh" }])
+    expect(store.message.ses_race).toEqual([{ id: "msg_2" }])
   })
 })

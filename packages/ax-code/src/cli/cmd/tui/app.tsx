@@ -74,6 +74,7 @@ import { scheduleTuiTimeout } from "@tui/util/timer"
 import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { responseErrorMessage, unknownErrorMessage } from "@tui/util/error-message"
 import { registerTuiEventListener } from "@tui/util/lifecycle"
+import { createTerminalSuspendController } from "@tui/util/terminal-suspend"
 import { resolveSessionFirstRoute } from "./navigation/launch-policy"
 import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 import { launchWebUi } from "@/desktop/webui"
@@ -472,7 +473,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         options: { once: true },
       })
     }
-    const timer = setTimeout(() => ctrl.abort(), 10_000)
+    const cancelTimer = scheduleTuiTimeout(() => ctrl.abort(), {
+      name: "app-put-json-timeout",
+      delayMs: 10_000,
+      unref: true,
+    })
     try {
       const response = await sdk.fetch(`${sdk.url}${path}`, {
         method: "PUT",
@@ -487,7 +492,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         throw new Error(await responseErrorMessage(response))
       }
     } finally {
-      clearTimeout(timer)
+      cancelTimer()
       removeAbortListener?.()
     }
   }
@@ -591,6 +596,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     })
   }
 
+  const terminalSuspend = createTerminalSuspendController()
+
   onCleanup(() => {
     forkRetryDisposed = true
     for (const cancel of retryTimers) cancel()
@@ -598,6 +605,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     smartLlmToggle.dispose()
     runModeController?.abort()
     sandboxPutController?.abort()
+    terminalSuspend.dispose()
   })
 
   function scheduleRetry(fn: () => void, delay = RETRY_DELAY_MS) {
@@ -1140,13 +1148,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
       hidden: true,
       onSelect: () => {
-        process.once("SIGCONT", () => {
-          renderer.resume()
+        // Lifecycle-managed SIGCONT (ADR-047 D2). Disposed on App cleanup and
+        // replaced if suspend is invoked again before resume.
+        terminalSuspend.suspend({
+          suspend: () => renderer.suspend(),
+          resume: () => renderer.resume(),
         })
-
-        renderer.suspend()
-        // pid=0 means send the signal to all processes in the process group
-        process.kill(0, "SIGTSTP")
       },
     },
     {

@@ -815,7 +815,7 @@
       ]
     },
     "lifecycle_scan": {
-      "count": 187,
+      "count": 188,
       "findings": [
         {
           "fingerprint": "030c87b86efa17dba640e6927ec8a4ef6f9532dd4790bb566afbc3794cd0767c",
@@ -1642,49 +1642,57 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "09cd6615863006f4477e4942bc8d38a4ceb0bb349881e249c0bf20698fb106e3",
+          "fingerprint": "74ef7c74cfc3c484c01ec1335a9afcae71a92baf49dd89aca91b24e8a1f9b4b2",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 430,
+          "line": 403,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "d0bec5cd72a6a1d6cdcaf3b13bfa8c83f9befcc564f01b9833d50014bd7a3fc9",
+          "fingerprint": "dc639d2305cdd857f4996b9cafc7db1b30eac58e01a73996929fd5e35ca6aeb7",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 471,
+          "line": 446,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "a9c6d901b1c6bfa8c185a58ceaf944e755a38af5b7157958c45a0d346c7e137c",
+          "fingerprint": "a36bb7c68b107dbb0ee58bf381804a8d55865a513b9c1d237f0b5ec510cbf42c",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 594,
+          "line": 487,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "edea19da7d80f4aaed9718cc9944b55b04bb05bb8e6c9e60d4ccf3f6304ea69c",
+          "fingerprint": "724169ab08764af827ccc1d64dd782bd0382b7422898bb480632c1d7a2043701",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 1032,
+          "line": 610,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "39557aebb13f69838bf94ef9f381ba88c8815427a0db2114620d8d2b57f504ab",
+          "fingerprint": "cf2007bf1d67d4fe58ba6b7a99a18b5e832f4619abf215bcbd77bed5e7ab1587",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 1230,
+          "line": 1048,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "9117f221192e686613ce19b60d17355cff95eded7d65f708e142b56bdf3de114",
+          "fingerprint": "0f9e4efb5277b53256d1ff7178b957840764a1d54ae5c64cf69ae0ac20103606",
           "file": "src/cli/cmd/tui/routes/session/index.tsx",
-          "line": 1233,
+          "line": 1246,
+          "severity": "medium",
+          "kind": "map_growth:unbounded_growth",
+          "summary": "map_growth:unbounded_growth"
+        },
+        {
+          "fingerprint": "b1e03ad725d8d4a938e47451d33aa1b95922e8a4e8bdbcbd511d71df47c3e414",
+          "file": "src/cli/cmd/tui/routes/session/index.tsx",
+          "line": 1249,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
