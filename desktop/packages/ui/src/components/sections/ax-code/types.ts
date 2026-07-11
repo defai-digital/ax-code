@@ -1,1 +1,1 @@
-export type AXCodeSection = "visual" | "chat" | "shortcuts" | "sessions" | "git" | "github" | "notifications" | "about"
+export type AXCodeSection = "visual" | "chat" | "shortcuts" | "sessions" | "git" | "github" | "notifications"

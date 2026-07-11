@@ -923,14 +923,7 @@ export const Header: React.FC = () => {
   const [isUsageRefreshSpinning, setIsUsageRefreshSpinning] = React.useState(false)
   const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState("Local")
 
-  const [desktopServicesTab, setDesktopServicesTab] = React.useState<"instance" | "usage" | "mcp">(
-    isDesktopApp ? "instance" : "usage",
-  )
-  useEffect(() => {
-    if (!isDesktopApp && desktopServicesTab === "instance") {
-      setDesktopServicesTab("usage")
-    }
-  }, [desktopServicesTab, isDesktopApp])
+  const [desktopServicesTab, setDesktopServicesTab] = React.useState<"instance" | "usage" | "mcp">("mcp")
 
   const showDesktopHeaderContextUsage =
     activeMainTab === "chat" && !!stableDesktopContextUsage && stableDesktopContextUsage.totalTokens > 0
@@ -1662,16 +1655,8 @@ export const Header: React.FC = () => {
   }, [activeMainTab, setActiveMainTab])
 
   const servicesTabs = React.useMemo(() => {
-    const base: Array<{ value: "instance" | "usage" | "mcp"; label: string; icon: IconName }> = []
-    if (isDesktopApp) {
-      base.push({ value: "instance", label: t("layout.services.instance"), icon: "server" })
-    }
-    base.push(
-      { value: "usage", label: t("layout.services.usage"), icon: "timer" },
-      { value: "mcp", label: "MCP", icon: "plug-2" },
-    )
-    return base
-  }, [isDesktopApp, t])
+    return [{ value: "mcp" as const, label: "MCP", icon: "plug-2" as const }]
+  }, [])
 
   const servicesTabItems = React.useMemo(() => {
     return servicesTabs.map((tab) => ({

@@ -95,7 +95,6 @@ const pageOrder: SettingsPageSlug[] = [
   "providers",
   "skills.installed",
   "skills.catalog",
-  "about",
 ]
 
 function buildRuntimeContext(isDesktop: boolean): SettingsRuntimeContext {
@@ -242,6 +241,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
 
   const visiblePages = React.useMemo(() => {
     return SETTINGS_PAGE_METADATA.filter((page) => page.slug !== "home")
+      .filter((page) => !page.hideFromNavigation)
       .filter((page) => isPageAvailable(page, runtimeCtx))
       .filter((page) => !(isMobile && page.slug === "shortcuts"))
   }, [runtimeCtx, isMobile])
@@ -374,7 +374,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
       shortcuts: "shortcuts",
       sessions: "sessions",
       notifications: "notifications",
-      about: "about",
     }),
     [],
   )
@@ -420,8 +419,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
           return t("settings.page.snippets.title")
         case "notifications":
           return t("settings.page.notifications.title")
-        case "about":
-          return t("settings.openchamber.about.title")
         case "home":
         default:
           return t("settings.view.home.title")
@@ -521,8 +518,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
         case "chat":
         case "shortcuts":
         case "sessions":
-        case "notifications":
-        case "about": {
+        case "notifications": {
           const section = axCodeSectionBySlug[slug] ?? "visual"
           return <AXCodePage section={section} />
         }

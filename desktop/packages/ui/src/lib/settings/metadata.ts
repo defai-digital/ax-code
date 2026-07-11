@@ -21,7 +21,6 @@ export type SettingsPageSlug =
   | "magic-prompts"
   | "snippets"
   | "notifications"
-  | "about"
 
 export type SettingsPageGroup = "appearance" | "projects" | "general" | "ax-code" | "git" | "skills" | "advanced"
 
@@ -37,6 +36,7 @@ export interface SettingsPageMeta {
   kind: "single" | "split"
   description?: string
   keywords?: string[]
+  hideFromNavigation?: boolean
   isAvailable?: (ctx: SettingsRuntimeContext) => boolean
 }
 
@@ -79,6 +79,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: "projects",
     kind: "split",
     keywords: ["ssh", "remote", "instances", "forwarding", "connection"],
+    hideFromNavigation: true,
     isAvailable: (ctx) => ctx.isDesktop && !ctx.isWeb,
   },
   {
@@ -241,14 +242,6 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: "general",
     kind: "single",
     keywords: ["alerts", "native", "summary", "summarization"],
-  },
-  {
-    slug: "about",
-    title: "About AX Code",
-    group: "advanced",
-    kind: "single",
-    keywords: ["about", "version", "updates", "release"],
-    isAvailable: (ctx) => ctx.isDesktop && !ctx.isWeb,
   },
 ] as const
 

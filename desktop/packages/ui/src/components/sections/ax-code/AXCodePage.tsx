@@ -1,6 +1,5 @@
 import React from "react"
 import { AXCodeVisualSettings } from "./AXCodeVisualSettings"
-import { AboutSettings } from "./AboutSettings"
 import { SessionRetentionSettings } from "./SessionRetentionSettings"
 import { PasskeySettings } from "./PasskeySettings"
 import { DefaultsSettings } from "./DefaultsSettings"
@@ -36,8 +35,6 @@ export const AXCodePage: React.FC<AXCodePageProps> = ({ section }) => {
         return <GitHubSectionContent />
       case "notifications":
         return <NotificationSectionContent />
-      case "about":
-        return <AboutSectionContent />
       default:
         return null
     }
@@ -145,8 +142,4 @@ const GitHubSectionContent: React.FC = () => {
 // Notifications section: Native browser notifications
 const NotificationSectionContent: React.FC = () => {
   return <NotificationSettings />
-}
-
-const AboutSectionContent: React.FC = () => {
-  return <AboutSettings />
 }

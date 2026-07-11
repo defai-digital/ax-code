@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { getSettingsNavIcon } from "./navIcons"
-import { SETTINGS_PAGE_METADATA, getSettingsPageMeta, resolveSettingsSlug } from "./metadata"
+import { SETTINGS_PAGE_METADATA } from "./metadata"
 
 describe("settings metadata", () => {
   it("exposes every visible settings page with a navigation icon", () => {
@@ -12,11 +12,9 @@ describe("settings metadata", () => {
     expect(missingIcons).toEqual([])
   })
 
-  it("makes About available in the desktop runtime only", () => {
-    const about = getSettingsPageMeta("about")
+  it("keeps Remote Instances routable but hidden from navigation", () => {
+    const remoteInstances = SETTINGS_PAGE_METADATA.find((page) => page.slug === "remote-instances")
 
-    expect(about?.isAvailable?.({ isDesktop: true, isWeb: false })).toBe(true)
-    expect(about?.isAvailable?.({ isDesktop: false, isWeb: true })).toBe(false)
-    expect(resolveSettingsSlug("about")).toBe("about")
+    expect(remoteInstances?.hideFromNavigation).toBe(true)
   })
 })
