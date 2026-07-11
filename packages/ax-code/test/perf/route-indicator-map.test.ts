@@ -25,8 +25,28 @@ describe("buildRouteInfoByMessage", () => {
 
   test("prefers a non-complexity (switch) event over a same-turn complexity event", () => {
     const map = buildRouteInfoByMessage([
-      row({ type: "agent.route", messageID: "m1", routeMode: "complexity", fromAgent: "build", toAgent: "build", confidence: 0.5 }, 100),
-      row({ type: "agent.route", messageID: "m1", routeMode: "switch", fromAgent: "build", toAgent: "review", confidence: 0.9 }, 110),
+      row(
+        {
+          type: "agent.route",
+          messageID: "m1",
+          routeMode: "complexity",
+          fromAgent: "build",
+          toAgent: "build",
+          confidence: 0.5,
+        },
+        100,
+      ),
+      row(
+        {
+          type: "agent.route",
+          messageID: "m1",
+          routeMode: "switch",
+          fromAgent: "build",
+          toAgent: "review",
+          confidence: 0.9,
+        },
+        110,
+      ),
     ])
     // The switch event wins even though the complexity event came first.
     expect(map.get("m1")?.title).toBe("Switched to Review")
@@ -34,8 +54,28 @@ describe("buildRouteInfoByMessage", () => {
 
   test("falls back to the last match when all are complexity events", () => {
     const map = buildRouteInfoByMessage([
-      row({ type: "agent.route", messageID: "m1", routeMode: "complexity", fromAgent: "a", toAgent: "a", confidence: 0.5 }, 100),
-      row({ type: "agent.route", messageID: "m1", routeMode: "complexity", fromAgent: "b", toAgent: "b", confidence: 0.5 }, 110),
+      row(
+        {
+          type: "agent.route",
+          messageID: "m1",
+          routeMode: "complexity",
+          fromAgent: "a",
+          toAgent: "a",
+          confidence: 0.5,
+        },
+        100,
+      ),
+      row(
+        {
+          type: "agent.route",
+          messageID: "m1",
+          routeMode: "complexity",
+          fromAgent: "b",
+          toAgent: "b",
+          confidence: 0.5,
+        },
+        110,
+      ),
     ])
     expect(map.get("m1")?.title).toBe("Fast model")
     // Last match's fromAgent drives the detail line.

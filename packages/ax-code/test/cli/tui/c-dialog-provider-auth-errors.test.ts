@@ -63,7 +63,7 @@ describe("tui provider dialog SDK-error handling", () => {
     const block = sliceFrom(src, "let cancelled = false", 1100)
     // Failure surfaces a toast (mirrors the authorize step) instead of a silent clear.
     expect(block).toContain("if (result.error)")
-    expect(block).toContain("toast.show({ variant: \"error\", message: JSON.stringify(result.error) })")
+    expect(block).toContain('toast.show({ variant: "error", message: JSON.stringify(result.error) })')
     // On a late success after cancellation, dispose + bootstrap still run; only
     // the DialogModel replace is skipped by the trailing `if (cancelled) return`.
     const dispose = block.indexOf("sdk.client.instance.dispose")
@@ -78,9 +78,9 @@ describe("tui provider dialog SDK-error handling", () => {
 
   test("CodeMethod derives the inline error from the payload, not a static string", async () => {
     const src = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
-    const block = sliceFrom(src, "placeholder=\"Authorization code\"", 1400)
+    const block = sliceFrom(src, 'placeholder="Authorization code"', 1400)
     expect(block).toContain("const result = await sdk.client.provider.oauth.callback(")
-    expect(block).toContain("setError(sdkErrorMessage(result.error, \"Invalid code\"))")
+    expect(block).toContain('setError(sdkErrorMessage(result.error, "Invalid code"))')
     // The signal now carries a message string, rendered in the description.
     expect(src).toContain("const [error, setError] = createSignal<string | null>(null)")
   })

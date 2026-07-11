@@ -1245,8 +1245,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         if (previousMode === "read-only" || previousMode === "workspace-write") {
           lastRestrictedIsolationMode = previousMode
         }
-        const next =
-          previousMode === "full-access" ? (lastRestrictedIsolationMode ?? "workspace-write") : "full-access"
+        const next = previousMode === "full-access" ? (lastRestrictedIsolationMode ?? "workspace-write") : "full-access"
         sandboxPutController?.abort()
         const controller = new AbortController()
         sandboxPutController = controller

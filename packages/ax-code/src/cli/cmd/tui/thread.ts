@@ -520,11 +520,13 @@ function stdinIsRegularFile(fd = 0): boolean {
 // startup before anything rendered. For pipes we collect whatever is buffered
 // and resolve after a short quiet window with no further data, then pause the
 // stream so the still-open fd doesn't keep feeding the renderer's own stdin.
-export function readNonTtyStdin(input: {
-  stdin?: StdinLike
-  isRegularFile?: boolean
-  quietWindowMs?: number
-} = {}): Promise<string> {
+export function readNonTtyStdin(
+  input: {
+    stdin?: StdinLike
+    isRegularFile?: boolean
+    quietWindowMs?: number
+  } = {},
+): Promise<string> {
   const stdin = input.stdin ?? (process.stdin as unknown as StdinLike)
   const isRegularFile = input.isRegularFile ?? stdinIsRegularFile()
   const quietWindowMs = input.quietWindowMs ?? DEFAULT_TUI_STDIN_PIPE_QUIET_WINDOW_MS

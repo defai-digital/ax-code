@@ -58,9 +58,7 @@ export function computeDiffLines(
         const prevRow = row - width
         for (let j = 1; j <= midN; j++) {
           dp[row + j] =
-            bLine === afterLines[start + j - 1]
-              ? dp[prevRow + j - 1] + 1
-              : Math.max(dp[prevRow + j], dp[row + j - 1])
+            bLine === afterLines[start + j - 1] ? dp[prevRow + j - 1] + 1 : Math.max(dp[prevRow + j], dp[row + j - 1])
         }
       }
 

@@ -70,29 +70,31 @@ function mapTextareaKeybindings(
   const configKey = `input_${action.replace(/-/g, "_")}`
   const bindings = keybinds[configKey]
   if (!bindings) return []
-  return bindings
-    // Leader-prefixed bindings can't reach a focused textarea (activating the
-    // leader blurs it), and opentui KeyBindings match name+modifiers only — so a
-    // leader combo would collapse to its bare key and fire the action
-    // destructively while typing. Drop them here.
-    .filter((binding) => !binding.leader)
-    .flatMap((binding): KeyBinding[] => {
-      const mapped: KeyBinding = {
-        name: binding.name,
-        ctrl: binding.ctrl || undefined,
-        meta: binding.meta || undefined,
-        shift: binding.shift || undefined,
-        super: binding.super || undefined,
-        action,
-      }
-      // Ctrl+- has no kitty keycode on the default (non-kitty) terminal path:
-      // raw mode emits 0x1F, which the parser reports as name "_". Emit an alias
-      // so the binding still fires there. (See the mirrored fix in keybind.tsx.)
-      if (binding.ctrl && binding.name === "-") {
-        return [mapped, { ...mapped, name: "_" }]
-      }
-      return [mapped]
-    })
+  return (
+    bindings
+      // Leader-prefixed bindings can't reach a focused textarea (activating the
+      // leader blurs it), and opentui KeyBindings match name+modifiers only — so a
+      // leader combo would collapse to its bare key and fire the action
+      // destructively while typing. Drop them here.
+      .filter((binding) => !binding.leader)
+      .flatMap((binding): KeyBinding[] => {
+        const mapped: KeyBinding = {
+          name: binding.name,
+          ctrl: binding.ctrl || undefined,
+          meta: binding.meta || undefined,
+          shift: binding.shift || undefined,
+          super: binding.super || undefined,
+          action,
+        }
+        // Ctrl+- has no kitty keycode on the default (non-kitty) terminal path:
+        // raw mode emits 0x1F, which the parser reports as name "_". Emit an alias
+        // so the binding still fires there. (See the mirrored fix in keybind.tsx.)
+        if (binding.ctrl && binding.name === "-") {
+          return [mapped, { ...mapped, name: "_" }]
+        }
+        return [mapped]
+      })
+  )
 }
 
 export function useTextareaKeybindings(input: { submit?: boolean; interceptEnter?: boolean } = {}) {

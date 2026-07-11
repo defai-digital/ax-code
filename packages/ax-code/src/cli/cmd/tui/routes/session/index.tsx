@@ -657,9 +657,7 @@ export function Session() {
                 const aborted = await sdk.client.session.abort({ sessionID: route.sessionID })
                 if (aborted.error) {
                   log.warn("session rollback abort failed", { error: aborted.error, sessionID: route.sessionID })
-                  throw new Error(
-                    sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback"),
-                  )
+                  throw new Error(sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback"))
                 }
               }
               const result = await sdk.client.session.revert({

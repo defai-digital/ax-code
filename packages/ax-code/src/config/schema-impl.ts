@@ -36,11 +36,9 @@ const McpRemoteUrl = z.string().refine(
   { message: "Remote MCP URL must be a valid HTTP(S) URL" },
 )
 
-const McpTimeout = PositiveInteger
-  .optional()
-  .describe(
-    `Timeout in ms for MCP server requests. Defaults to ${MCP_TIMEOUT_MS} (${MCP_TIMEOUT_SECONDS} seconds) if not specified.`,
-  )
+const McpTimeout = PositiveInteger.optional().describe(
+  `Timeout in ms for MCP server requests. Defaults to ${MCP_TIMEOUT_MS} (${MCP_TIMEOUT_SECONDS} seconds) if not specified.`,
+)
 
 export const McpLocal = z
   .object({
@@ -261,7 +259,9 @@ export const Agent = z
       ])
       .optional()
       .describe("Hex color code (e.g., #FF5733) or theme color (e.g., primary)"),
-    steps: PositiveInteger.optional().describe("Maximum number of agentic iterations before forcing text-only response"),
+    steps: PositiveInteger.optional().describe(
+      "Maximum number of agentic iterations before forcing text-only response",
+    ),
     maxSteps: PositiveInteger.optional().describe("@deprecated Use 'steps' field instead."),
     permission: Permission.optional(),
   })
@@ -820,7 +820,9 @@ export const Info = z
           .optional()
           .describe("Tools that should only be available to primary agents."),
         continue_loop_on_deny: z.boolean().optional().describe("Continue the agent loop when a tool call is denied"),
-        mcp_timeout: PositiveInteger.optional().describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+        mcp_timeout: PositiveInteger.optional().describe(
+          "Timeout in milliseconds for model context protocol (MCP) requests",
+        ),
         autonomous_escalate_low_confidence: z
           .boolean()
           .optional()

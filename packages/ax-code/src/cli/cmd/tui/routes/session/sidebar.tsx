@@ -933,8 +933,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               {(metrics) => (
                 <box gap={0}>
                   <text fg={theme.text}>
-                    <b>Local inference</b>{" "}
-                    <span style={{ fg: theme.textMuted }}>{metrics().modelID}</span>
+                    <b>Local inference</b> <span style={{ fg: theme.textMuted }}>{metrics().modelID}</span>
                   </text>
                   <text fg={theme.textMuted} wrapMode="none">
                     prefill {metrics().prefillRate ?? "--"} · decode {metrics().decodeRate ?? "--"}

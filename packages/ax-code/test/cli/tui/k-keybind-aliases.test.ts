@@ -9,9 +9,7 @@ import { Keybind } from "../../../src/util/keybind"
 // hint, which `toString` prints but `parse` could not read back.
 describe("Keybind.parse aliases", () => {
   test("aliases enter -> return", () => {
-    expect(Keybind.parse("enter")).toEqual([
-      { ctrl: false, meta: false, shift: false, leader: false, name: "return" },
-    ])
+    expect(Keybind.parse("enter")).toEqual([{ ctrl: false, meta: false, shift: false, leader: false, name: "return" }])
   })
 
   test("aliases del -> delete (round-trips toString output)", () => {
@@ -23,9 +21,7 @@ describe("Keybind.parse aliases", () => {
   })
 
   test("aliases esc -> escape (unchanged behavior)", () => {
-    expect(Keybind.parse("esc")).toEqual([
-      { ctrl: false, meta: false, shift: false, leader: false, name: "escape" },
-    ])
+    expect(Keybind.parse("esc")).toEqual([{ ctrl: false, meta: false, shift: false, leader: false, name: "escape" }])
   })
 
   test("aliases kpenter -> return", () => {
@@ -48,11 +44,7 @@ describe("Keybind.parse aliases", () => {
   })
 
   test("non-aliased names are untouched", () => {
-    expect(Keybind.parse("return")).toEqual([
-      { ctrl: false, meta: false, shift: false, leader: false, name: "return" },
-    ])
-    expect(Keybind.parse("home")).toEqual([
-      { ctrl: false, meta: false, shift: false, leader: false, name: "home" },
-    ])
+    expect(Keybind.parse("return")).toEqual([{ ctrl: false, meta: false, shift: false, leader: false, name: "return" }])
+    expect(Keybind.parse("home")).toEqual([{ ctrl: false, meta: false, shift: false, leader: false, name: "home" }])
   })
 })

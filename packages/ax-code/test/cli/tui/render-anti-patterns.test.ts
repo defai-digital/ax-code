@@ -294,7 +294,9 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogMessage).toContain("const result = await sdk.client.session.revert({")
     expect(dialogMessage).toContain("if (revertError) {")
     expect(dialogMessage).toContain('log.warn("dialog message revert failed"')
-    expect(dialogMessage).toContain('message: typeof revertError === "string" ? revertError : "Failed to revert message"')
+    expect(dialogMessage).toContain(
+      'message: typeof revertError === "string" ? revertError : "Failed to revert message"',
+    )
     expect(dialogMessage).toContain("props.setPrompt(promptState(sync.data.part[msg.id] ?? []))")
     expect(dialogMessage).toContain('message: "Message is no longer available"')
     expect(dialogMessage).toContain("dialog.clear()")
@@ -445,16 +447,12 @@ describe("tui OpenTUI stability guardrails", () => {
     // The v2 SDK client resolves `{error}` instead of rejecting, so the
     // rollback abort guard surfaces failures from the resolved result (the
     // thrown Error is toasted by DialogRollback, keeping the dialog open).
-    expect(collapsed).toContain(
-      'sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback")',
-    )
+    expect(collapsed).toContain('sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback")')
     expect(collapsed).toContain('log.warn("session undo abort failed"')
     // The v2 SDK client resolves `{error}` instead of rejecting, so undo/redo
     // check the resolved result (matching the rollback guard above) rather than
     // relying on dead `.catch`/`try-catch` branches.
-    expect(collapsed).toContain(
-      'sdkErrorMessage(aborted.error, "Failed to stop the running session before undo")',
-    )
+    expect(collapsed).toContain('sdkErrorMessage(aborted.error, "Failed to stop the running session before undo")')
     expect(collapsed).toContain('log.warn("session undo failed"')
     expect(collapsed).toContain('log.warn("session redo failed"')
     expect(collapsed).toContain('sdkErrorMessage(result.error, "Failed to undo previous message")')
