@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   isNodePtyDebugFallbackNoise,
   rendererProfileFromStartupEvents,
+  TUI_STARTUP_TEMP_CLEANUP_OPTIONS,
   tuiStartupWorkerReadyTimeoutMs,
 } from "../../script/tui-startup-smoke"
 
@@ -53,5 +54,14 @@ describe("tui startup smoke", () => {
     expect(tuiStartupWorkerReadyTimeoutMs(8_000, {})).toBe("8000")
     expect(tuiStartupWorkerReadyTimeoutMs(20_000, { AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: "30000" })).toBe("30000")
     expect(tuiStartupWorkerReadyTimeoutMs(20_000, { AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: "0" })).toBe("15000")
+  })
+
+  test("retries transient ENOTEMPTY failures while removing smoke artifacts", () => {
+    expect(TUI_STARTUP_TEMP_CLEANUP_OPTIONS).toEqual({
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    })
   })
 })
