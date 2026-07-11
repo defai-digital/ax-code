@@ -24,11 +24,13 @@ describe("tui stability phase wiring (ADR-047)", () => {
     expect(app).toContain("scheduleTuiTimeout(() => ctrl.abort()")
   })
 
-  test("session route prunes heavy projection on leave", async () => {
+  test("session route prunes heavy projection on leave and clears session sync", async () => {
     const session = await fs.readFile(path.join(TUI_ROOT, "routes/session/index.tsx"), "utf8")
 
     expect(session).toContain("applySessionLeavePrune")
     expect(session).toContain("applySessionLeavePrune(draft, sessionID)")
+    // Without clear(), fullSyncedSessions keeps re-entry from reloading.
+    expect(session).toContain("sync.session.clear(sessionID)")
   })
 
   test("leave prune helper keeps permission/question/status fields", async () => {
