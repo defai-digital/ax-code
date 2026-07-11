@@ -3,27 +3,27 @@ export const SEMANTIC_TYPOGRAPHY = {
   code: "0.8125rem",
   uiHeader: "0.9375rem",
   uiLabel: "0.8750rem",
-  meta: "0.875rem",
-  micro: "0.875rem",
+  meta: "0.8125rem",
+  micro: "0.75rem",
 } as const
 
 export const FONT_SIZE_SCALES = {
   small: {
     markdown: "0.875rem",
-    code: "0.8125rem",
+    code: "0.75rem",
     uiHeader: "0.875rem",
     uiLabel: "0.8125rem",
-    meta: "0.8125rem",
-    micro: "0.75rem",
+    meta: "0.75rem",
+    micro: "0.6875rem",
   },
   medium: SEMANTIC_TYPOGRAPHY,
   large: {
     markdown: "1rem",
-    code: "0.9375rem",
+    code: "0.875rem",
     uiHeader: "1rem",
     uiLabel: "0.9375rem",
-    meta: "0.9375rem",
-    micro: "0.9375rem",
+    meta: "0.875rem",
+    micro: "0.8125rem",
   },
 } as const
 

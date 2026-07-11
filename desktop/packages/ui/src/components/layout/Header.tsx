@@ -79,7 +79,9 @@ import type { Session } from "@ax-code/sdk/v2/client"
 import type { IconName } from "@/components/icon/icons"
 
 const DESKTOP_HEADER_ICON_BUTTON_CLASS =
-  "app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover transition-colors"
+  "app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover hover:text-foreground transition-colors"
+
+const HEADER_ACTION_SEPARATOR_CLASS = "mx-0.5 h-4 w-px flex-shrink-0 bg-border/50"
 
 type HeaderIconActionButtonProps = {
   visible?: boolean
@@ -344,7 +346,6 @@ const DesktopGitHubControl = React.memo(function DesktopGitHubControl({
 type DesktopServicesMenuProps = {
   isDesktopApp: boolean
   currentInstanceLabel: string
-  compactCurrentInstanceLabel: string
   isDesktopServicesOpen: boolean
   setIsDesktopServicesOpen: React.Dispatch<React.SetStateAction<boolean>>
   refreshCurrentInstanceLabel: () => Promise<void>
@@ -374,7 +375,6 @@ type DesktopServicesMenuProps = {
 const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
   isDesktopApp,
   currentInstanceLabel,
-  compactCurrentInstanceLabel,
   isDesktopServicesOpen,
   setIsDesktopServicesOpen,
   refreshCurrentInstanceLabel,
@@ -429,17 +429,9 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
                   ? t("header.services.openWithCurrent", { current: currentInstanceLabel })
                   : t("header.services.open")
               }
-              className={cn(
-                DESKTOP_HEADER_ICON_BUTTON_CLASS,
-                isDesktopApp ? "w-auto max-w-[14rem] justify-start gap-1.5 px-2.5" : "h-8 w-8",
-              )}
+              className={cn(DESKTOP_HEADER_ICON_BUTTON_CLASS, "h-8 w-8")}
             >
               <Icon name="stack" className="h-[18px] w-[18px]" />
-              {isDesktopApp ? (
-                <span className="truncate typography-ui-label font-medium text-foreground">
-                  {compactCurrentInstanceLabel}
-                </span>
-              ) : null}
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -720,26 +712,6 @@ const isSameContextUsage = (a: SessionContextUsage | null, b: SessionContextUsag
   )
 }
 
-const formatCompactHeaderLabel = (value: string): string => {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return ""
-  }
-
-  const words = trimmed.split(/\s+/).filter(Boolean)
-  if (words.length >= 2) {
-    const first = words[0]
-    const second = words[1].slice(0, 3)
-    const shortTwoWord = `${first} ${second}`.trim()
-    if (words.length > 2 || shortTwoWord.length < trimmed.length) {
-      return `${shortTwoWord}...`
-    }
-    return shortTwoWord
-  }
-
-  return trimmed.length > 12 ? `${trimmed.slice(0, 9).trimEnd()}...` : trimmed
-}
-
 const normalize = (value: string): string => {
   if (!value) return ""
   const replaced = value.replace(/\\/g, "/")
@@ -949,10 +921,7 @@ export const Header: React.FC = () => {
   const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false)
   const [isUsageRefreshSpinning, setIsUsageRefreshSpinning] = React.useState(false)
   const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState("Local")
-  const compactCurrentInstanceLabel = React.useMemo(
-    () => formatCompactHeaderLabel(currentInstanceLabel),
-    [currentInstanceLabel],
-  )
+
   const [desktopServicesTab, setDesktopServicesTab] = React.useState<"instance" | "usage" | "mcp">(
     isDesktopApp ? "instance" : "usage",
   )
@@ -1859,7 +1828,6 @@ export const Header: React.FC = () => {
       <DesktopServicesMenu
         isDesktopApp={isDesktopApp}
         currentInstanceLabel={currentInstanceLabel}
-        compactCurrentInstanceLabel={compactCurrentInstanceLabel}
         isDesktopServicesOpen={isDesktopServicesOpen}
         setIsDesktopServicesOpen={setIsDesktopServicesOpen}
         refreshCurrentInstanceLabel={refreshCurrentInstanceLabel}
@@ -1893,6 +1861,7 @@ export const Header: React.FC = () => {
         Icon={"notification-3"}
       />
       <NotificationCenter />
+      <div className={HEADER_ACTION_SEPARATOR_CLASS} aria-hidden />
       <HeaderIconActionButton
         title={t("header.actions.terminalPanelWithShortcut", { shortcut: shortcutLabel("toggle_terminal") })}
         ariaLabel={t("header.actions.toggleTerminalPanelAria")}
@@ -1926,6 +1895,7 @@ export const Header: React.FC = () => {
         onClick={toggleRightSidebar}
         Icon={"layout-right"}
       />
+      <div className={HEADER_ACTION_SEPARATOR_CLASS} aria-hidden />
       <DesktopGitHubControl
         githubAuthStatus={githubAuthStatus}
         githubAccounts={githubAccounts}
@@ -1988,7 +1958,7 @@ export const Header: React.FC = () => {
             {activeProjectLabel ||
             currentBranchLabel ||
             (!isNewSessionDraftOpen && (hasNonZeroSessionChanges || worktreeBadgeKind)) ? (
-              <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">
+              <span className="flex min-w-0 max-w-full items-center gap-1.5 truncate typography-micro font-normal leading-tight text-muted-foreground/75">
                 {activeProjectLabel ? <span className="truncate">{activeProjectLabel}</span> : null}
                 {currentBranchLabel ? (
                   <span className="inline-flex min-w-0 items-center gap-0.5">

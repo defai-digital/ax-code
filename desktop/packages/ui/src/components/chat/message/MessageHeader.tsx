@@ -36,16 +36,16 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({
   const { src: logoSrc, onError: handleLogoError, hasLogo } = useProviderLogo(providerID)
 
   return (
-    <div className={cn("mb-2")}>
+    <div className={cn("mb-1.5")}>
       <div className={cn("flex items-center justify-between gap-2")}>
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="flex-shrink-0">
             {isUser ? (
-              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Icon name="user-3" className="h-4 w-4 text-primary" />
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+                <Icon name="user-3" className="h-3.5 w-3.5 text-primary" />
               </div>
             ) : (
-              <div className="flex items-center justify-center">
+              <div className="flex h-5 w-5 items-center justify-center">
                 {hasLogo && logoSrc ? (
                   <img
                     src={logoSrc}
@@ -66,10 +66,10 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
             <h3
               className={cn(
-                "font-bold typography-ui-header tracking-tight leading-none",
+                "font-medium typography-ui-label tracking-tight leading-none truncate",
                 isUser ? "text-primary" : "text-foreground",
               )}
             >
@@ -114,7 +114,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({
           </div>
         </div>
         {formattedTimestamp && (
-          <span className="shrink-0 text-xs text-muted-foreground/50 tabular-nums select-none">
+          <span className="shrink-0 typography-micro text-muted-foreground/40 tabular-nums select-none">
             {formattedTimestamp}
           </span>
         )}

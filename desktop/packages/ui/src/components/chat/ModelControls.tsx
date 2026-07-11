@@ -459,7 +459,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     return getCurrentAgent?.()
   }, [agents, getCurrentAgent, uiAgentName])
 
-  const buttonHeight = "h-8"
+  const buttonHeight = "h-7"
   const controlIconSize = "size-4"
   const controlTextSize = "typography-meta"
   const inlineGapClass = "gap-x-3"

@@ -3752,13 +3752,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   ])
 
   const footerPaddingClass = isMobile ? "px-1.5 py-1.5" : "px-2.5 py-1.5"
-  const buttonSizeClass = isMobile ? "h-8 w-8" : "h-6 w-6"
+  const buttonSizeClass = isMobile ? "h-8 w-8" : "h-7 w-7"
   const sendIconSizeClass = "h-4 w-4"
   const stopIconSizeClass = isMobile ? "h-6 w-6" : "h-5 w-5"
   const iconSizeClass = isMobile ? "h-[18px] w-[18px]" : "h-[18px] w-[18px]"
 
   const iconButtonBaseClass =
-    "flex cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed"
+    "flex cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] flex-shrink-0 disabled:cursor-not-allowed"
   const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass)
   const permissionScopeSessionId = currentSessionId ?? currentManagementSessionId
   const permissionAutoAcceptEnabled = usePermissionStore((state) => {
@@ -4164,7 +4164,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             )}
             style={{
               borderRadius: chatInputRadius,
-              backgroundColor: currentTheme?.colors?.surface?.subtle,
+              backgroundColor:
+                currentTheme?.colors?.surface?.elevated ?? "var(--surface-elevated)",
             }}
             ref={dropZoneRef}
             onDropCapture={handleDropCapture}
@@ -4443,6 +4444,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                       handlePermissionAutoAcceptToggle={handlePermissionAutoAcceptToggle}
                       withTooltip
                     />
+                    <div className="mx-0.5 h-3.5 w-px flex-shrink-0 bg-border/40" aria-hidden />
                     <ExecutionModeSelector iconSizeClass={iconSizeClass} />
                     <SandboxToggle iconSizeClass={iconSizeClass} />
                   </div>

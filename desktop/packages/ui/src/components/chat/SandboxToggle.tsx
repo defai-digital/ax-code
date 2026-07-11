@@ -5,13 +5,20 @@ import { useI18n } from "@/lib/i18n"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSandboxStore } from "@/stores/useSandboxStore"
 import { normalizeDirectoryKey } from "@/stores/utils/directoryKey"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 interface SandboxToggleProps {
   className?: string
   iconSizeClass?: string
+  /** When true, wraps the control in a tooltip (composer footer). */
+  withTooltip?: boolean
 }
 
-export const SandboxToggle: React.FC<SandboxToggleProps> = ({ className, iconSizeClass = "h-3.5 w-3.5" }) => {
+export const SandboxToggle: React.FC<SandboxToggleProps> = ({
+  className,
+  iconSizeClass = "h-[18px] w-[18px]",
+  withTooltip = true,
+}) => {
   const { t } = useI18n()
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory)
   // Must match the key the store writes under (normalizeDirectoryKey), not a
@@ -30,20 +37,28 @@ export const SandboxToggle: React.FC<SandboxToggleProps> = ({ className, iconSiz
 
   const isOn = sandbox === true
   const label = isOn ? t("chat.chatInput.sandbox.on") : t("chat.chatInput.sandbox.off")
+  const disabled = pending || sandbox === undefined
 
-  return (
+  const button = (
     <button
       type="button"
       aria-label={label}
-      title={label}
+      title={withTooltip ? undefined : label}
       aria-pressed={isOn}
-      disabled={pending || sandbox === undefined}
+      disabled={disabled}
       onClick={() => {
-        if (pending || sandbox === undefined) return
+        if (disabled) return
         void setSandbox(currentDirectory, !isOn)
       }}
+      onMouseDown={(event) => {
+        event.preventDefault()
+      }}
       className={cn(
-        "flex h-7 items-center gap-1.5 rounded-md border border-border/40 px-2 typography-meta text-foreground outline-none hover:bg-interactive-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+        "flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors",
+        "hover:bg-interactive-hover hover:text-foreground",
+        "focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        isOn && "bg-interactive-selection text-[var(--status-info)] hover:text-[var(--status-info)]",
         className,
       )}
     >
@@ -51,7 +66,19 @@ export const SandboxToggle: React.FC<SandboxToggleProps> = ({ className, iconSiz
         name={pending ? "loader-4" : isOn ? "shield-check" : "lock-unlock"}
         className={cn(iconSizeClass, "flex-shrink-0", pending && "animate-spin")}
       />
-      <span className="truncate">{t("chat.chatInput.sandbox.title")}</span>
     </button>
+  )
+
+  if (!withTooltip) {
+    return button
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={8}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

@@ -22,8 +22,8 @@
     --text-code: 0.8125rem;
     --text-ui-header: 0.9375rem;
     --text-ui-label: 0.875rem;
-    --text-meta: 0.875rem;
-    --text-micro: 0.875rem;
+    --text-meta: 0.8125rem;
+    --text-micro: 0.75rem;
 
     /* Default Light Theme */
     --background: oklch(0.97 0.02 85); /* Warm sand background */
@@ -99,21 +99,12 @@
     --sidebar-stuck-bg: var(--sidebar); /* Desktop sidebar sticky header background (match sidebar) */
   }
 
-  * {
-    border-color: hsl(var(--border));
-  }
-
   :root * {
     border-color: rgba(194, 151, 77, 0.2); /* Warm golden sand borders for light mode */
   }
 
   .dark * {
     border-color: rgba(57, 56, 54, 0.5); /* #393836 at 50% opacity */
-  }
-
-  body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
   }
 
   * {
@@ -182,19 +173,14 @@
     display: list-item !important;
   }
 
-  /* Remove focus rings globally (except inputs/textareas/dropdowns/selects) */
-  *:focus:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not(
-      [data-slot="dropdown-menu-sub-content"]
-    ):not([data-slot="select-content"]) {
-    outline: none !important;
-    box-shadow: none !important;
+  /* Mouse/programmatic focus: no chrome. Keyboard focus-visible keeps box-shadow so
+     Tailwind ring utilities (button, switch, header icons, etc.) can paint. */
+  *:focus:not(:focus-visible) {
+    outline: none;
   }
 
-  *:focus-visible:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not(
-      [data-slot="dropdown-menu-sub-content"]
-    ):not([data-slot="select-content"]) {
-    outline: none !important;
-    box-shadow: none !important;
+  *:focus-visible {
+    outline: none;
   }
 }
 
