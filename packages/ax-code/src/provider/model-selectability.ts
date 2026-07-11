@@ -28,7 +28,7 @@ export function modelMemoryBlockReason(
   const minMemoryBytes = model?.options?.minMemoryBytes
   if (typeof minMemoryBytes !== "number" || minMemoryBytes <= 0) return undefined
   if (memoryBytes >= minMemoryBytes) return undefined
-  return "requires 64GB unified memory"
+  return `requires ${Math.ceil(minMemoryBytes / 1024 ** 3)}GB unified memory`
 }
 
 export function providerModelSelectable(input: { providerID: string; toolcall?: boolean }) {

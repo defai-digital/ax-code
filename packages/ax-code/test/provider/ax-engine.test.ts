@@ -6,14 +6,21 @@ import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Provider } from "../../src/provider/provider"
 import { ModelsDev } from "../../src/provider/models"
-import { ProviderID } from "../../src/provider/schema"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Instance } from "../../src/project/instance"
+import { Agent } from "../../src/agent/agent"
+import { SystemPrompt } from "../../src/session/system"
+import { estimateRequestTokens } from "../../src/session/prompt-request"
+import { estimateRegistryToolSchemaTokens } from "../../src/session/prompt-tools"
+import { maybeSchedulePreflightCompaction } from "../../src/session/prompt-loop-compaction"
+import { ToolRegistry } from "../../src/tool/registry"
 import { getAxEngineDoctorCheck } from "../../src/cli/cmd/doctor"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
   AX_ENGINE_ERROR,
   AX_ENGINE_QWEN36_27B_API_MODEL_ID,
   AX_ENGINE_QWEN36_27B_MODEL_ID,
+  AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
   AX_ENGINE_PROVIDER_ID,
   AX_ENGINE_QWEN36_35B_MODEL_ID,
   AX_ENGINE_GEMMA4_12B_MODEL_ID,
@@ -22,6 +29,7 @@ import {
   AX_ENGINE_GLM47_FLASH_API_MODEL_ID,
   AX_ENGINE_GLM47_FLASH_MODEL_ID,
   AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+  AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
   axEngineLoader,
   axEngineServerLaunchArgs,
   evaluateDiskStatus,
@@ -45,6 +53,7 @@ import {
   parseMacosMajor,
   prepareAxEngine,
   resolveDownloadDestination,
+  resolveAxEngineApiKey,
   selectCurrentAxEngineModelJobs,
   type AxEngineModelJobSummary,
 } from "../../src/provider/ax-engine"
@@ -52,6 +61,15 @@ import { modelMemoryBlockReason } from "../../src/provider/model-selectability"
 import { AxEnginePaths } from "../../src/provider/ax-engine/paths"
 
 const originalFetch = globalThis.fetch
+
+function liveCard(id: string, input: Record<string, unknown> = {}) {
+  return {
+    id,
+    capabilities: { toolcall: true, temperature: true },
+    limit: { context: 32_768, output: 2_048 },
+    ...input,
+  }
+}
 
 afterEach(async () => {
   globalThis.fetch = originalFetch
@@ -646,6 +664,38 @@ describe("ax-engine server lifecycle", () => {
     })
   })
 
+  test("ensureServer passes the configured API key through the server environment", async () => {
+    await using tmp = await tmpdir()
+    const binary = path.join(tmp.path, "ax-engine")
+    const captured = path.join(tmp.path, "api-key.txt")
+    await fs.writeFile(
+      binary,
+      [
+        "#!/usr/bin/env node",
+        `require("node:fs").writeFileSync(${JSON.stringify(captured)}, process.env.AX_ENGINE_API_KEY ?? "")`,
+        "process.exit(7)",
+        "",
+      ].join("\n"),
+    )
+    await fs.chmod(binary, 0o755)
+
+    await withServerPaths(tmp.path, async () => {
+      await expect(
+        ensureServer({
+          binaryPath: binary,
+          modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
+          apiModelID: AX_ENGINE_QWEN36_27B_API_MODEL_ID,
+          modelPath: "/models/qwen",
+          preferredPort: 38192,
+          apiKey: "configured-secret",
+          readyTimeoutMs: 1500,
+        }),
+      ).rejects.toThrow("exited before becoming ready")
+    })
+
+    expect(await fs.readFile(captured, "utf8")).toBe("configured-secret")
+  })
+
   test("ensureServer terminates a live-but-not-ready recorded server instead of spawning a duplicate", async () => {
     await using tmp = await tmpdir()
     const oldBinary = path.join(tmp.path, "ax-engine")
@@ -662,7 +712,12 @@ describe("ax-engine server lifecycle", () => {
         await fs.writeFile(
           AxEnginePaths.serverState,
           JSON.stringify(
-            fakeServerState({ pid: oldServer.pid, binaryPath: oldBinary, port: 38195, baseURL: "http://127.0.0.1:38195/v1" }),
+            fakeServerState({
+              pid: oldServer.pid,
+              binaryPath: oldBinary,
+              port: 38195,
+              baseURL: "http://127.0.0.1:38195/v1",
+            }),
           ),
         )
 
@@ -708,6 +763,8 @@ describe("ax-engine server launch args", () => {
       AX_ENGINE_QWEN36_27B_API_MODEL_ID,
       "--speculation-profile",
       "agentic",
+      "--max-batch-tokens",
+      "2048",
       "--mlx-mtp-disable-ngram-stacking",
     ])
   })
@@ -720,6 +777,8 @@ describe("ax-engine server launch args", () => {
       "qwen3",
       "--speculation-profile",
       "agentic",
+      "--max-batch-tokens",
+      "2048",
       "--mlx-mtp-disable-ngram-stacking",
       "--block-size-tokens",
       "16",
@@ -734,6 +793,8 @@ describe("ax-engine server launch args", () => {
       "qwen3",
       "--speculation-profile",
       "agentic",
+      "--max-batch-tokens",
+      "2048",
       "--mlx-mtp-disable-ngram-stacking",
       "--block-size-tokens",
       "16",
@@ -950,11 +1011,24 @@ describe("ax-engine prepare lifecycle", () => {
 })
 
 describe("ax-engine provider integration", () => {
+  test("uses configured and environment API keys instead of hardcoding local", () => {
+    const previous = process.env.AX_ENGINE_API_KEY
+    process.env.AX_ENGINE_API_KEY = "environment-secret"
+    try {
+      expect(resolveAxEngineApiKey()).toBe("environment-secret")
+      expect(resolveAxEngineApiKey({ apiKey: "configured-secret" })).toBe("configured-secret")
+    } finally {
+      if (previous === undefined) delete process.env.AX_ENGINE_API_KEY
+      else process.env.AX_ENGINE_API_KEY = previous
+    }
+  })
+
   test("built-in models declare all ax-engine models as experimental local models", async () => {
     const provider = (await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]
     expect(provider).toBeDefined()
     expect(Object.keys(provider.models)).toEqual([
       AX_ENGINE_QWEN36_27B_MODEL_ID,
+      AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
       AX_ENGINE_QWEN36_35B_MODEL_ID,
       AX_ENGINE_GEMMA4_12B_MODEL_ID,
       AX_ENGINE_GEMMA4_26B_MODEL_ID,
@@ -962,12 +1036,12 @@ describe("ax-engine provider integration", () => {
       AX_ENGINE_GLM47_FLASH_MODEL_ID,
     ])
     expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([
-      65_536, 32_768, 32_768, 32_768, 32_768, 32_768,
+      65_536, 16_384, 32_768, 32_768, 32_768, 32_768, 32_768,
     ])
     expect(provider.models[AX_ENGINE_QWEN36_27B_MODEL_ID]).toMatchObject({
       name: "Qwen3.6-27B 6-bit (Local MLX MTP)",
       tool_call: true,
-      limit: { context: 65_536, output: 16_384 },
+      limit: { context: 65_536, input: 63_488, output: 2_048 },
       options: {
         modelID: AX_ENGINE_QWEN36_27B_MODEL_ID,
         quantization: "mlx6bit",
@@ -976,10 +1050,22 @@ describe("ax-engine provider integration", () => {
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
+    expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID]).toMatchObject({
+      name: "Qwen3-Coder-Next 6-bit (Local MLX)",
+      tool_call: true,
+      limit: { context: 16_384, input: 14_336, output: 2_048 },
+      options: {
+        modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+        quantization: "mlx6bit",
+        minMemoryBytes: AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
+      },
+      status: "beta",
+      experimental: { localRuntime: "ax-engine" },
+    })
     expect(provider.models[AX_ENGINE_QWEN36_35B_MODEL_ID]).toMatchObject({
       name: "Qwen3.6-35B-A3B 6-bit (Local MLX MTP)",
       tool_call: true,
-      limit: { context: 32_768, output: 16_384 },
+      limit: { context: 32_768, input: 30_720, output: 2_048 },
       status: "beta",
       options: {
         modelID: AX_ENGINE_QWEN36_35B_MODEL_ID,
@@ -991,7 +1077,7 @@ describe("ax-engine provider integration", () => {
     expect(provider.models[AX_ENGINE_GEMMA4_12B_MODEL_ID]).toMatchObject({
       name: "Gemma 4 12B 6-bit (Local MLX MTP)",
       tool_call: true,
-      limit: { context: 32_768, output: 8_192 },
+      limit: { context: 32_768, input: 30_720, output: 2_048 },
       options: {
         modelID: AX_ENGINE_GEMMA4_12B_MODEL_ID,
         quantization: "mlx6bit",
@@ -1003,7 +1089,7 @@ describe("ax-engine provider integration", () => {
     expect(provider.models[AX_ENGINE_GEMMA4_26B_MODEL_ID]).toMatchObject({
       name: "Gemma 4 26B 6-bit (Local MLX MTP)",
       tool_call: true,
-      limit: { context: 32_768, output: 8_192 },
+      limit: { context: 32_768, input: 30_720, output: 2_048 },
       options: {
         modelID: AX_ENGINE_GEMMA4_26B_MODEL_ID,
         quantization: "mlx6bit",
@@ -1015,7 +1101,7 @@ describe("ax-engine provider integration", () => {
     expect(provider.models[AX_ENGINE_GLM47_FLASH_MODEL_ID]).toMatchObject({
       name: "GLM 4.7 Flash 6-bit (Local MLX MTP)",
       tool_call: true,
-      limit: { context: 32_768, output: 8_192 },
+      limit: { context: 32_768, input: 30_720, output: 2_048 },
       options: {
         modelID: AX_ENGINE_GLM47_FLASH_MODEL_ID,
         quantization: "mlx6bit",
@@ -1034,6 +1120,13 @@ describe("ax-engine provider integration", () => {
     expect(
       modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_QWEN36_35B_MODEL_ID], 32 * 1024 ** 3),
     ).toBe("requires 64GB unified memory")
+    expect(
+      modelMemoryBlockReason(
+        AX_ENGINE_PROVIDER_ID,
+        provider.models[AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID],
+        64 * 1024 ** 3,
+      ),
+    ).toBe("requires 96GB unified memory")
     expect(
       modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, provider.models[AX_ENGINE_GEMMA4_26B_MODEL_ID], 32 * 1024 ** 3),
     ).toBe("requires 64GB unified memory")
@@ -1183,7 +1276,7 @@ describe("ax-engine provider integration", () => {
 
   test("maps the public Qwen3.6-27B model id to the ax-engine runtime id", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ data: [{ id: AX_ENGINE_QWEN36_27B_API_MODEL_ID }] }), {
+      new Response(JSON.stringify({ data: [liveCard(AX_ENGINE_QWEN36_27B_API_MODEL_ID)] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })) as unknown as typeof fetch
@@ -1214,7 +1307,7 @@ describe("ax-engine provider integration", () => {
 
   test("maps Qwen3.6 35B to the ax-engine Qwen3.6 runtime id", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ data: [{ id: "qwen3.6-35b" }] }), {
+      new Response(JSON.stringify({ data: [liveCard("qwen3.6-35b")] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })) as unknown as typeof fetch
@@ -1246,7 +1339,7 @@ describe("ax-engine provider integration", () => {
 
   test("discovered Qwen3.6 model preserves the public model id for loader resolution", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ data: [{ id: "qwen3.6-35b" }] }), {
+      new Response(JSON.stringify({ data: [liveCard("qwen3.6-35b")] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })) as unknown as typeof fetch
@@ -1263,7 +1356,7 @@ describe("ax-engine provider integration", () => {
     const discovered = await loader.discoverModels!({} as any)
     const qwen36 = discovered[AX_ENGINE_QWEN36_35B_MODEL_ID]
     expect(qwen36.capabilities.toolcall).toBe(true)
-    expect(qwen36.limit).toEqual({ context: 32_768, output: 16_384 })
+    expect(qwen36.limit).toEqual({ context: 32_768, input: 30_720, output: 2_048 })
     expect(qwen36.options).toMatchObject({
       modelID: AX_ENGINE_QWEN36_35B_MODEL_ID,
       quantization: "mlx6bit",
@@ -1287,7 +1380,7 @@ describe("ax-engine provider integration", () => {
 
   test("maps GLM 4.7 Flash to the ax-engine GLM 4.7 Flash runtime id", async () => {
     globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ data: [{ id: AX_ENGINE_GLM47_FLASH_API_MODEL_ID }] }), {
+      new Response(JSON.stringify({ data: [liveCard(AX_ENGINE_GLM47_FLASH_API_MODEL_ID)] }), {
         status: 200,
         headers: { "content-type": "application/json" },
       })) as unknown as typeof fetch
@@ -1324,6 +1417,160 @@ describe("ax-engine provider integration", () => {
 
     expect(model).toEqual({ id: AX_ENGINE_GLM47_FLASH_API_MODEL_ID })
     expect(requested).toEqual([AX_ENGINE_GLM47_FLASH_API_MODEL_ID])
+  })
+
+  test("discovers and uses an external ax-engine model with a non-catalog model id", async () => {
+    const endpoint = "http://127.0.0.1:18181/v1"
+    const provider = {
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: { baseURL: endpoint },
+      models: {},
+    } as any
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            liveCard("qwen3", {
+              limit: { context: 16_384, output: 512 },
+              ax_engine: { primary_use: "coding", coding_supported: true },
+            }),
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch
+
+    const loader = await axEngineLoader()(provider)
+    const discovered = await loader.discoverModels!(provider)
+    expect(Object.keys(discovered)).toEqual(["qwen3"])
+    expect(discovered.qwen3).toMatchObject({
+      api: { id: "qwen3", url: endpoint },
+      capabilities: { toolcall: true },
+      limit: { context: 16_384, input: 15_872, output: 512 },
+      options: { apiModelID: "qwen3", external: true, livePrimaryUse: "coding" },
+    })
+
+    const requested: string[] = []
+    await loader.getModel!(
+      {
+        languageModel(id: string) {
+          requested.push(id)
+          return { id }
+        },
+      },
+      "qwen3",
+      discovered.qwen3.options,
+    )
+    expect(requested).toEqual(["qwen3"])
+  })
+
+  test("fails closed when a live ax-engine backend does not support tool calling", async () => {
+    const provider = {
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      models: {},
+    } as any
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          data: [liveCard("qwen3", { capabilities: { toolcall: false }, limit: { context: 16_384, output: 512 } })],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch
+
+    const loader = await axEngineLoader()(provider)
+    await expect(
+      loader.getModel!({ languageModel: (id: string) => ({ id }) }, "qwen3", { external: true }),
+    ).rejects.toThrow("AX_ENGINE_TOOLCALL_UNSUPPORTED")
+  })
+
+  test("accepts Gemma and GLM tool calling when coding_supported is advisory false", async () => {
+    const provider = {
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      models: {},
+    } as any
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            liveCard(AX_ENGINE_GLM47_FLASH_API_MODEL_ID, {
+              ax_engine: { openai_tool_calling_supported: true, coding_supported: false },
+            }),
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      )) as unknown as typeof fetch
+
+    const loader = await axEngineLoader()(provider)
+    const model = await loader.getModel!({ languageModel: (id: string) => ({ id }) }, AX_ENGINE_GLM47_FLASH_MODEL_ID, {
+      modelID: AX_ENGINE_GLM47_FLASH_MODEL_ID,
+    })
+    expect(model).toEqual({ id: AX_ENGINE_GLM47_FLASH_API_MODEL_ID })
+  })
+
+  test("real AX Engine build-agent payload fits every managed model input limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const provider = {
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "custom",
+      env: [],
+      options: {},
+      models: {},
+    } as any
+    const loader = await axEngineLoader()(provider)
+    const models = await loader.discoverModels!(provider)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const agent = await Agent.get("build")
+        const first = models[AX_ENGINE_QWEN36_27B_MODEL_ID]
+        const providerPrompt = SystemPrompt.provider(first).join("\n")
+        expect(providerPrompt).toContain("local software-engineering agent")
+        expect(providerPrompt).not.toContain("debug_propose_hypothesis")
+        const tools = await ToolRegistry.tools(
+          { modelID: ModelID.make(first.api.id), providerID: first.providerID },
+          agent,
+        )
+        const ids = tools.map((tool) => tool.id)
+        expect(ids).toEqual(expect.arrayContaining(["bash", "read", "grep", "edit", "write", "skill"]))
+        for (const excluded of ["task", "todowrite", "register_finding", "debug_propose_hypothesis"]) {
+          expect(ids).not.toContain(excluded)
+        }
+
+        for (const model of Object.values(models)) {
+          const dynamicSystem = await SystemPrompt.environment(model)
+          const system = SystemPrompt.request({ agent, model, system: dynamicSystem })
+          const fixedTokens =
+            estimateRequestTokens({ system, messages: [] }) + (await estimateRegistryToolSchemaTokens({ agent, model }))
+          expect(model.limit.input).toBeDefined()
+          expect(fixedTokens).toBeLessThan(model.limit.input!)
+          expect(fixedTokens + model.limit.output).toBeLessThan(model.limit.context)
+
+          const preflight = await maybeSchedulePreflightCompaction({
+            sessionID: "ses_ax_engine_contract" as any,
+            agent: "build",
+            agentInfo: agent,
+            userModel: { providerID: model.providerID, modelID: model.id },
+            model,
+            userParts: [{ type: "text", text: "hello" } as any],
+            system: dynamicSystem,
+            requestMessages: [{ role: "user", content: "hello" }],
+          })
+          expect(preflight).toEqual({ action: "continue" })
+        }
+      },
+    })
   })
 
   test("loader throws actionable ModelNotPrepared error when model is not downloaded", async () => {
@@ -1412,6 +1659,7 @@ describe("ax-engine doctor status", () => {
       evaluateAxEngineCapabilityFromModels({
         data: [
           {
+            id: "qwen3.6-27b",
             capabilities: { toolcall: false, attachment: false },
             ax_engine: { openai_tool_calling_supported: true },
           },
@@ -1421,7 +1669,7 @@ describe("ax-engine doctor status", () => {
 
     expect(
       evaluateAxEngineCapabilityFromModels({
-        data: [{ capabilities: { toolcall: false, attachment: false } }],
+        data: [{ id: "qwen3.6-27b", capabilities: { toolcall: false, attachment: false } }],
       }),
     ).toMatchObject({ toolcall: false, attachment: false })
   })

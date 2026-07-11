@@ -5,6 +5,7 @@ import { Instance } from "../project/instance"
 
 import PROMPT_ANTHROPIC from "./prompt/anthropic.txt"
 import PROMPT_DEFAULT from "./prompt/default.txt"
+import PROMPT_AX_ENGINE from "./prompt/ax-engine.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
 
@@ -28,6 +29,7 @@ export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
 
   export function provider(model: Provider.Model) {
+    if (model.providerID === "ax-engine") return [PROMPT_AX_ENGINE]
     if (
       model.api.id.includes("gpt-4") ||
       model.api.id.includes("o1") ||
@@ -39,6 +41,19 @@ export namespace SystemPrompt {
     if (model.api.id.includes("claude")) return [PROMPT_ANTHROPIC]
     if (model.api.id.toLowerCase().includes("trinity")) return [PROMPT_TRINITY]
     return [PROMPT_DEFAULT]
+  }
+
+  export function request(input: {
+    agent: Pick<Agent.Info, "prompt">
+    model: Provider.Model
+    system: string[]
+    userSystem?: string
+  }) {
+    return [
+      ...(input.agent.prompt ? [input.agent.prompt] : provider(input.model)),
+      ...input.system,
+      ...(input.userSystem ? [input.userSystem] : []),
+    ].filter((item) => item.length > 0)
   }
 
   export async function environment(model: Provider.Model) {
@@ -149,7 +164,11 @@ export namespace SystemPrompt {
     ]
   }
 
-  export function assuranceWorkflow(agent: Pick<Agent.Info, "permission">): string | undefined {
+  export function assuranceWorkflow(
+    agent: Pick<Agent.Info, "permission">,
+    model?: Pick<Provider.Model, "providerID">,
+  ): string | undefined {
+    if (model?.providerID === "ax-engine") return undefined
     if (!agent.permission) return undefined
     const reviewTools = ["register_finding", "verify_project", "review_complete"]
     const disabled = Permission.disabled(reviewTools, agent.permission)

@@ -50,18 +50,23 @@ Run the vendor CLI login first when required, then run `ax-code providers login 
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes curated 6-bit MLX MTP models.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes curated 6-bit MLX models. Qwen3.6, Gemma 4, and GLM-4.7-Flash are prepared as AX MTP packages; Qwen3-Coder-Next uses direct decode.
 
-| Provider id | Model id           | Display name                          | Context | Output |
-| ----------- | ------------------ | ------------------------------------- | ------: | -----: |
-| `ax-engine` | `qwen3.6-27b-6bit` | Qwen3.6-27B 6-bit (Local MLX MTP)     |  32,768 | 16,384 |
-| `ax-engine` | `qwen3.6-35b-a3b`  | Qwen3.6-35B-A3B 6-bit (Local MLX MTP) |  32,768 | 16,384 |
-| `ax-engine` | `gemma-4-12b`      | Gemma 4 12B 6-bit (Local MLX MTP)     |  32,768 |  8,192 |
-| `ax-engine` | `gemma-4-26b`      | Gemma 4 26B 6-bit (Local MLX MTP)     |  32,768 |  8,192 |
-| `ax-engine` | `gemma-4-31b`      | Gemma 4 31B 6-bit (Local MLX MTP)     |  32,768 |  8,192 |
-| `ax-engine` | `glm-4.7-flash`    | GLM 4.7 Flash 6-bit (Local MLX MTP)   |  32,768 |  8,192 |
+| Provider id | Model id                | Display name                          | Context | Output |
+| ----------- | ----------------------- | ------------------------------------- | ------: | -----: |
+| `ax-engine` | `qwen3.6-27b-6bit`      | Qwen3.6-27B 6-bit (Local MLX MTP)     |  65,536 |  2,048 |
+| `ax-engine` | `qwen3-coder-next-6bit` | Qwen3-Coder-Next 6-bit (Local MLX)    |  16,384 |  2,048 |
+| `ax-engine` | `qwen3.6-35b-a3b`       | Qwen3.6-35B-A3B 6-bit (Local MLX MTP) |  32,768 |  2,048 |
+| `ax-engine` | `gemma-4-12b`           | Gemma 4 12B 6-bit (Local MLX MTP)     |  32,768 |  2,048 |
+| `ax-engine` | `gemma-4-26b`           | Gemma 4 26B 6-bit (Local MLX MTP)     |  32,768 |  2,048 |
+| `ax-engine` | `gemma-4-31b`           | Gemma 4 31B 6-bit (Local MLX MTP)     |  32,768 |  2,048 |
+| `ax-engine` | `glm-4.7-flash`         | GLM 4.7 Flash 6-bit (Local MLX MTP)   |  32,768 |  2,048 |
 
 The default local model is `qwen3.6-27b-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for ranking, memory, and disk guidance.
+
+For a configured local AX Engine server, `/v1/models` is authoritative: AX Code discovers the live model IDs, context/output limits, modalities, and structured tool-call support. A model that does not advertise structured tool calling is not used for coding-agent requests.
+
+AX Engine uses the compact `core` tool profile by default (`bash`, file discovery/read/edit/write, and skills). Set `provider.ax-engine.options.toolProfile` to `full` only for a custom deployment with enough context for the complete tool registry.
 
 ### Installing the engine
 
@@ -71,6 +76,8 @@ Local inference needs the `ax-engine` binary. On an eligible host AX Code can do
 2. the `AX_ENGINE_BIN` environment variable
 3. `ax-engine` on your `PATH`
 4. an AX Code-managed install (the fallback AX Code downloads and owns)
+
+AX Code requires AX Engine 6.7.1 or later. It first checks `--version` and falls back to the structured `doctor --json` install version used by the Python wrapper.
 
 If none of the first three is present, AX Code offers a managed install:
 

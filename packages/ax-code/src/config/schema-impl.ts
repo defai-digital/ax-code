@@ -536,6 +536,12 @@ export const Provider = ModelsDev.Provider.partial()
         chunkTimeout: PositiveInteger.optional().describe(
           "Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.",
         ),
+        toolProfile: z
+          .enum(["core", "full"])
+          .optional()
+          .describe(
+            'Tool surface for constrained local providers such as AX Engine. "core" keeps coding/file tools only; "full" exposes every enabled tool.',
+          ),
       })
       .catchall(z.any())
       .optional(),

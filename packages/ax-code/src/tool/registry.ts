@@ -183,6 +183,7 @@ export namespace ToolRegistry {
       Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE,
       Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT,
+      input.cfg.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.toolProfile ?? "core",
       experimental,
     ].join(":")
   }
@@ -190,6 +191,26 @@ export namespace ToolRegistry {
   async function all(custom: Tool.Info[], cfg?: ToolConfig, providerID?: ProviderID): Promise<Tool.Info[]> {
     cfg ??= await Config.get()
     const question = Flag.AX_CODE_CLIENT === "cli" || Flag.AX_CODE_ENABLE_QUESTION_TOOL
+    const axEngineToolProfile = cfg.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.toolProfile ?? "core"
+    if (providerID === AX_ENGINE_PROVIDER_ID && axEngineToolProfile !== "full") {
+      // Local coding models have materially smaller context budgets than the
+      // hosted models the full registry was designed for. Keep the first-turn
+      // schema focused on tools needed to inspect, edit, and verify code. The
+      // full profile remains an explicit escape hatch for large-context custom
+      // AX Engine deployments.
+      return [
+        InvalidTool,
+        ...(question ? [QuestionTool] : []),
+        BashTool,
+        ListTool,
+        ReadTool,
+        GlobTool,
+        GrepTool,
+        EditTool,
+        WriteTool,
+        SkillTool,
+      ]
+    }
     // Keep local ax-engine tool schemas focused; debug-engine tools are large,
     // experimental, and unnecessary for the normal local-model path.
     const debugEngineEnabled = Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE && providerID !== AX_ENGINE_PROVIDER_ID

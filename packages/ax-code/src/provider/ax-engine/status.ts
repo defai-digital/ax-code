@@ -3,8 +3,9 @@ import { AxEnginePlatformEligibility, getPlatformEligibility } from "./platform"
 import { AxEngineDependencyStatus, getDependencyStatus } from "./dependency"
 import { AxEngineDiskStatus, AxEngineModelStatus, getDiskStatus, getModelStatus } from "./model-cache"
 import { AxEngineServerRuntimeStatus, getServerStatus } from "./server"
-import { AX_ENGINE_API_KEY, AX_ENGINE_ERROR } from "./constants"
+import { AX_ENGINE_ERROR, resolveAxEngineApiKey } from "./constants"
 import { toErrorMessage } from "../../util/error-message"
+import { parseAxEngineModelContracts } from "./model-card"
 
 export const AxEngineCapabilityStatus = z.object({
   toolcall: z.boolean(),
@@ -30,35 +31,10 @@ export type AxEngineRuntimeOptions = {
   [key: string]: unknown
 }
 
-const AxEngineModelCard = z.object({
-  capabilities: z
-    .object({
-      toolcall: z.boolean().optional(),
-      attachment: z.boolean().optional(),
-    })
-    .optional(),
-  ax_engine: z
-    .object({
-      openai_tool_calling_supported: z.boolean().optional(),
-      native_multimodal_input_supported: z.boolean().optional(),
-      gemma4_unified_multimodal_input_supported: z.boolean().optional(),
-    })
-    .optional(),
-})
-
-const AxEngineModelsResponse = z.object({
-  data: z.array(AxEngineModelCard).default([]),
-})
-
 export function evaluateAxEngineCapabilityFromModels(payload: unknown): AxEngineCapabilityStatus {
-  const parsed = AxEngineModelsResponse.safeParse(payload)
-  const model = parsed.success ? parsed.data.data[0] : undefined
-  const toolcall = model?.ax_engine?.openai_tool_calling_supported ?? model?.capabilities?.toolcall ?? false
-  const attachment =
-    model?.ax_engine?.gemma4_unified_multimodal_input_supported ??
-    model?.ax_engine?.native_multimodal_input_supported ??
-    model?.capabilities?.attachment ??
-    false
+  const model = parseAxEngineModelContracts(payload)[0]
+  const toolcall = model?.toolcall ?? false
+  const attachment = model?.attachment ?? false
 
   return {
     toolcall,
@@ -73,7 +49,10 @@ export function formatAxEngineCapabilityInspectionFailureReason(error: unknown):
   return `${AX_ENGINE_ERROR.ToolcallUnsupported}: failed to inspect ax-engine /v1/models capability (${toErrorMessage(error)})`
 }
 
-async function getCapabilityStatus(server: AxEngineServerRuntimeStatus): Promise<AxEngineCapabilityStatus> {
+async function getCapabilityStatus(
+  server: AxEngineServerRuntimeStatus,
+  options: AxEngineRuntimeOptions,
+): Promise<AxEngineCapabilityStatus> {
   if (!server.ready || !server.state?.baseURL) {
     return {
       toolcall: false,
@@ -86,7 +65,7 @@ async function getCapabilityStatus(server: AxEngineServerRuntimeStatus): Promise
     const baseURL = server.state.baseURL.replace(/\/+$/, "")
     const response = await fetch(`${baseURL}/models`, {
       signal: AbortSignal.timeout(2000),
-      headers: { authorization: `Bearer ${AX_ENGINE_API_KEY}` },
+      headers: { authorization: `Bearer ${resolveAxEngineApiKey(options)}` },
     })
     if (!response.ok) {
       response.body?.cancel()
@@ -108,9 +87,9 @@ export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): P
     getDependencyStatus(options),
     getDiskStatus(options),
     getModelStatus(options),
-    getServerStatus(),
+    getServerStatus(resolveAxEngineApiKey(options)),
   ])
-  const capability = await getCapabilityStatus(server)
+  const capability = await getCapabilityStatus(server, options)
 
   return {
     eligibility,

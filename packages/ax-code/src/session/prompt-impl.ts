@@ -72,6 +72,7 @@ import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
+import { SystemPrompt } from "./system"
 import {
   TOOL_ONLY_TURN_NUDGE,
   TOOL_ONLY_TURN_FINAL_NUDGE,
@@ -646,7 +647,12 @@ export namespace SessionPrompt {
         userModel: lastUser.model,
         model,
         userParts: lastUserParts ?? [],
-        system: request.system,
+        system: SystemPrompt.request({
+          agent,
+          model,
+          system: request.system,
+          userSystem: lastUser.system,
+        }),
         requestMessages: request.requestMessages,
         tools: lastUser.tools,
         sessionPermission: session.permission,

@@ -1,10 +1,12 @@
 import fs from "fs/promises"
 import { constants } from "fs"
 import z from "zod"
+import semver from "semver"
 import { which } from "@/util/which"
 import { Process } from "@/util/process"
-import { AX_ENGINE_ERROR } from "./constants"
+import { AX_ENGINE_ERROR, AX_ENGINE_MIN_VERSION } from "./constants"
 import { getManagedBinary, isAxEngineInstallable } from "./install"
+import { parseJsonResult } from "@/util/json-value"
 
 export const AxEngineDependencyStatus = z.object({
   available: z.boolean(),
@@ -32,12 +34,31 @@ async function isExecutable(file: string) {
 }
 
 async function version(binaryPath: string) {
-  return Process.text([binaryPath, "--version"], { timeout: 3000, nothrow: true })
-    .then((out) => {
-      const text = out.text.trim() || out.stderr.toString().trim()
-      return out.code === 0 && text ? text : undefined
-    })
-    .catch(() => undefined)
+  const direct = await Process.text([binaryPath, "--version"], { timeout: 3000, nothrow: true }).catch(() => undefined)
+  if (direct?.code === 0) {
+    const text = direct.text.trim() || direct.stderr.toString().trim()
+    if (text) return text
+  }
+
+  // The Python-distributed AX Engine wrapper exposes its version through the
+  // structured doctor response rather than a top-level --version flag.
+  const doctor = await Process.text([binaryPath, "doctor", "--json"], { timeout: 10_000, nothrow: true }).catch(
+    () => undefined,
+  )
+  if (doctor?.code !== 0) return undefined
+  const parsed = parseJsonResult(doctor.text.trim())
+  if (!parsed.ok || !parsed.value || typeof parsed.value !== "object") return undefined
+  const install = (parsed.value as Record<string, unknown>).install
+  if (!install || typeof install !== "object") return undefined
+  const value = (install as Record<string, unknown>).version
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function unsupportedVersionBlocker(detected: string | undefined) {
+  if (!detected) return undefined
+  const parsed = semver.coerce(detected)
+  if (!parsed || semver.gte(parsed, AX_ENGINE_MIN_VERSION)) return undefined
+  return `${AX_ENGINE_ERROR.VersionUnsupported}: ax-engine ${parsed.version} is installed; ${AX_ENGINE_MIN_VERSION} or later is required`
 }
 
 export async function getDependencyStatus(options: AxEngineDependencyOptions = {}): Promise<AxEngineDependencyStatus> {
@@ -59,25 +80,29 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         blockers: [`${AX_ENGINE_ERROR.BinaryMissing}: configured ax-engine binary is not executable`],
       }
     }
+    const detectedVersion = await version(candidate)
+    const versionBlocker = unsupportedVersionBlocker(detectedVersion)
     return {
-      available: true,
+      available: !versionBlocker,
       mode: "configured",
       binaryPath: candidate,
-      version: await version(candidate),
+      version: detectedVersion,
       installable: false,
-      blockers: [],
+      blockers: versionBlocker ? [versionBlocker] : [],
     }
   }
 
   const found = which("ax-engine")
   if (found) {
+    const detectedVersion = await version(found)
+    const versionBlocker = unsupportedVersionBlocker(detectedVersion)
     return {
-      available: true,
+      available: !versionBlocker,
       mode: "path",
       binaryPath: found,
-      version: await version(found),
+      version: detectedVersion,
       installable: false,
-      blockers: [],
+      blockers: versionBlocker ? [versionBlocker] : [],
     }
   }
 

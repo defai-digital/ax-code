@@ -5,6 +5,7 @@ import { tmpdir } from "../../fixture/fixture"
 import { HfCache } from "../../../src/provider/ax-engine/hf-cache"
 import {
   downloadModel,
+  getDiskStatus,
   getModelStatus,
   markPrepared,
   reclaimManagedCopy,
@@ -15,10 +16,21 @@ import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
 
 const GEMMA = { modelID: "gemma-4-12b", quant: "mlx6bit", repo: "mlx-community/gemma-4-12B-it-6bit" } as const
+const GLM = { modelID: "glm-4.7-flash", quant: "mlx6bit", repo: "mlx-community/GLM-4.7-Flash-6bit" } as const
+const CODER = {
+  modelID: "qwen3-coder-next-6bit",
+  quant: "mlx6bit",
+  repo: "mlx-community/Qwen3-Coder-Next-6bit",
+} as const
 const COMMIT = "1111111111111111111111111111111111111111"
 const FALLBACK_COMMIT = "2222222222222222222222222222222222222222"
 
-async function makeHfSnapshot(hfRoot: string, repo: string, commit: string, opts: { manifest?: boolean } = {}) {
+async function makeHfSnapshot(
+  hfRoot: string,
+  repo: string,
+  commit: string,
+  opts: { manifest?: boolean; packageMarker?: boolean } = {},
+) {
   const base = path.join(hfRoot, `models--${repo.replace(/\//g, "--")}`)
   const snapshot = path.join(base, "snapshots", commit)
   await fs.mkdir(snapshot, { recursive: true })
@@ -27,6 +39,7 @@ async function makeHfSnapshot(hfRoot: string, repo: string, commit: string, opts
   await fs.writeFile(path.join(snapshot, "model-00001-of-00001.safetensors"), "weights")
   await fs.writeFile(path.join(snapshot, "config.json"), "{}")
   if (opts.manifest !== false) await fs.writeFile(path.join(snapshot, "model-manifest.json"), "{}")
+  if (opts.packageMarker !== false) await fs.writeFile(path.join(snapshot, "ax_gemma4_assistant_mtp.json"), "{}")
   return snapshot
 }
 
@@ -171,6 +184,19 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     ])
   })
 
+  test("getModelStatus rejects base weights without the required MTP package", async () => {
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { packageMarker: false })
+
+    const status = await getModelStatus({ modelID: GEMMA.modelID, quantization: GEMMA.quant })
+    expect(status.present).toBe(false)
+    expect(status.blockers).toEqual([
+      "AX_ENGINE_MODEL_MISSING: prepare Gemma 4 12B 6-bit (Local MLX MTP) before using ax-engine",
+    ])
+  })
+
   test("getModelStatus does not let prepared HF state bypass snapshot completeness checks", async () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
@@ -258,15 +284,129 @@ describe("ax-engine model storage uses the HF snapshot", () => {
       const binary = path.join(dir.path, "fake-ax-engine")
       await fs.writeFile(
         binary,
-        `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: COMMIT }))})\n`,
+        `#!/usr/bin/env node\nconsole.log(${JSON.stringify(
+          JSON.stringify({ output_dir: snapshot, download: { revision: COMMIT } }),
+        )})\n`,
       )
       await fs.chmod(binary, 0o755)
 
       const prepared = await downloadModel({ binaryPath: binary, modelID: GEMMA.modelID, quantization: GEMMA.quant })
       expect(prepared.path).toBe(snapshot)
+      expect(
+        spy.mock.calls.some(
+          ([cmd]) =>
+            Array.isArray(cmd) &&
+            cmd[0] === binary &&
+            cmd[1] === "download-mtp" &&
+            cmd[2] === GEMMA.modelID &&
+            cmd[3] === "--json",
+        ),
+      ).toBe(true)
     } finally {
       spy.mockRestore()
     }
+  })
+
+  test("downloadModel prepares GLM through its built-in MTP package path", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    const snapshot = await makeHfSnapshot(hfRoot, GLM.repo, COMMIT)
+    await fs.writeFile(path.join(snapshot, "ax_glm_mtp_manifest.json"), "{}")
+    const availableBlocks = (120 * 1024 ** 3) / 1024
+    const originalText = Process.text
+    const spy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
+      if (cmd[0] === "df") {
+        const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
+/dev/test 200000000 1000000 ${availableBlocks} 1% ${cmd.at(-1) ?? "/"}
+`)
+        return Promise.resolve({ code: 0, stdout, stderr: Buffer.alloc(0), text: stdout.toString() })
+      }
+      return originalText(cmd, opts)
+    })
+    try {
+      const binary = path.join(dir.path, "fake-ax-engine")
+      await fs.writeFile(
+        binary,
+        `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: COMMIT }))})\n`,
+      )
+      await fs.chmod(binary, 0o755)
+
+      await downloadModel({ binaryPath: binary, modelID: GLM.modelID, quantization: GLM.quant })
+      expect(
+        spy.mock.calls.some(
+          ([cmd]) =>
+            Array.isArray(cmd) &&
+            cmd[0] === binary &&
+            cmd[1] === "download-mtp" &&
+            cmd[2] === GLM.modelID &&
+            cmd[3] === "--json",
+        ),
+      ).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  test("downloadModel keeps Qwen3-Coder-Next on the direct download path", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    const snapshot = await makeHfSnapshot(hfRoot, CODER.repo, COMMIT)
+    const availableBlocks = (120 * 1024 ** 3) / 1024
+    const originalText = Process.text
+    const spy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
+      if (cmd[0] === "df") {
+        const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
+/dev/test 200000000 1000000 ${availableBlocks} 1% ${cmd.at(-1) ?? "/"}
+`)
+        return Promise.resolve({ code: 0, stdout, stderr: Buffer.alloc(0), text: stdout.toString() })
+      }
+      return originalText(cmd, opts)
+    })
+    try {
+      const binary = path.join(dir.path, "fake-ax-engine")
+      await fs.writeFile(
+        binary,
+        `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: COMMIT }))})\n`,
+      )
+      await fs.chmod(binary, 0o755)
+
+      await downloadModel({ binaryPath: binary, modelID: CODER.modelID, quantization: CODER.quant })
+      expect(
+        spy.mock.calls.some(
+          ([cmd]) =>
+            Array.isArray(cmd) &&
+            cmd[0] === binary &&
+            cmd[1] === "download" &&
+            cmd[2] === CODER.repo &&
+            cmd[3] === "--json",
+        ),
+      ).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  test("getDiskStatus returns a blocker for a dangling cache symlink instead of throwing", async () => {
+    if (process.platform === "win32") return
+    await using dir = await tmpdir()
+    const target = path.join(dir.path, "missing-volume", "huggingface")
+    const link = path.join(dir.path, "huggingface")
+    await fs.symlink(target, link)
+
+    const status = await getDiskStatus({
+      modelID: GEMMA.modelID,
+      quantization: GEMMA.quant,
+      downloadDir: link,
+    })
+    expect(status.ok).toBe(false)
+    expect(status.freeBytes).toBeUndefined()
+    expect(status.blockers.join(" ")).toContain("could not determine free disk space")
   })
 
   test("getModelStatus falls back to another complete HF snapshot when refs/main is incomplete", async () => {
@@ -313,6 +453,21 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
     await fs.mkdir(managed, { recursive: true })
     await fs.writeFile(path.join(managed, "model.safetensors"), "weights")
+
+    const result = await reclaimManagedCopy(GEMMA.modelID, GEMMA.quant)
+    expect(result).toBeUndefined()
+    expect(await Filesystem.exists(managed)).toBe(true)
+  })
+
+  test("reclaimManagedCopy keeps an MTP-ready copy when the HF snapshot lacks its sidecar package", async () => {
+    await using dir = await tmpdir()
+    hfRoot = path.join(dir.path, "hub")
+    process.env.HF_HUB_CACHE = hfRoot
+    await makeHfSnapshot(hfRoot, GEMMA.repo, COMMIT, { packageMarker: false })
+    const managed = AxEnginePaths.managedModelDir(GEMMA.modelID, GEMMA.quant)
+    await fs.mkdir(managed, { recursive: true })
+    await fs.writeFile(path.join(managed, "model.safetensors"), "weights")
+    await fs.writeFile(path.join(managed, "ax_gemma4_assistant_mtp.json"), "{}")
 
     const result = await reclaimManagedCopy(GEMMA.modelID, GEMMA.quant)
     expect(result).toBeUndefined()

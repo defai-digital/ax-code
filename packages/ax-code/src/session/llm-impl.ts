@@ -126,16 +126,12 @@ export namespace LLM {
     )
 
     const system: string[] = []
-    const joined = [
-      // use agent prompt otherwise provider prompt
-      ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
-      // any custom prompt passed into this call
-      ...input.system,
-      // any custom prompt from last user message
-      ...(input.user.system ? [input.user.system] : []),
-    ]
-      .filter((x) => x)
-      .join("\n")
+    const joined = SystemPrompt.request({
+      agent: input.agent,
+      model: input.model,
+      system: input.system,
+      userSystem: input.user.system,
+    }).join("\n")
     if (joined) system.push(joined)
     const reasoningPolicyDecision = ReasoningPolicy.decide({
       small: input.small,

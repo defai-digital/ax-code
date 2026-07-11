@@ -200,9 +200,17 @@ export async function getDiskStatus(options: AxEngineModelOptions = {}): Promise
   const quantization = normalizeQuantization(options.quantization, modelID)
   const target =
     typeof options.downloadDir === "string" && options.downloadDir.trim() ? options.downloadDir.trim() : HfCache.root()
-  await fs.mkdir(target, { recursive: true })
-  const result = await Process.text(["df", "-Pk", target], { nothrow: true })
-  const freeBytes = result.code === 0 ? parseDfPkAvailableBytes(result.text) : undefined
+  let freeBytes: number | undefined
+  try {
+    await fs.mkdir(target, { recursive: true })
+    const result = await Process.text(["df", "-Pk", target], { nothrow: true })
+    freeBytes = result.code === 0 ? parseDfPkAvailableBytes(result.text) : undefined
+  } catch (error) {
+    log.warn("failed to inspect ax-engine model cache disk", {
+      path: target,
+      error: toErrorMessage(error),
+    })
+  }
   return evaluateDiskStatus({
     path: target,
     modelID,
@@ -221,6 +229,17 @@ async function assertDiskSpace(options: AxEngineModelOptions = {}): Promise<AxEn
 
 async function hasManifest(dir: string) {
   return exists(path.join(dir, "model-manifest.json"))
+}
+
+function packageMarkerFor(modelID: AxEngineModelID, quantization: AxEngineQuantization) {
+  return AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
+    quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
+  ].packageMarker
+}
+
+async function hasRequiredPackageContract(dir: string, modelID: AxEngineModelID, quantization: AxEngineQuantization) {
+  const marker = packageMarkerFor(modelID, quantization)
+  return !marker || (await exists(path.join(dir, marker)))
 }
 
 async function readPrepareState(): Promise<{ state?: AxEnginePrepareState; error?: unknown }> {
@@ -301,7 +320,7 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
       const complete = HfCache.isInside(candidate)
         ? await HfCache.isCompleteSnapshot(candidate)
         : !!matchingMarker || (await hasManifest(candidate))
-      if (!complete) continue
+      if (!complete || !(await hasRequiredPackageContract(candidate, modelID, quantization))) continue
       return {
         present: true,
         modelID,
@@ -338,9 +357,23 @@ function parseDownloadJson(text: string): { dest?: string; revision?: string } {
   const parsed = parseJsonResult(text)
   if (!parsed.ok || !parsed.value || typeof parsed.value !== "object") return {}
   const record = parsed.value as Record<string, unknown>
+  const nestedDownload =
+    record.download && typeof record.download === "object" ? (record.download as Record<string, unknown>) : undefined
   return {
-    dest: typeof record.dest === "string" ? record.dest : typeof record.path === "string" ? record.path : undefined,
-    revision: typeof record.revision === "string" ? record.revision : undefined,
+    dest:
+      typeof record.output_dir === "string"
+        ? record.output_dir
+        : typeof record.dest === "string"
+          ? record.dest
+          : typeof record.path === "string"
+            ? record.path
+            : undefined,
+    revision:
+      typeof record.revision === "string"
+        ? record.revision
+        : typeof nestedDownload?.revision === "string"
+          ? nestedDownload.revision
+          : undefined,
   }
 }
 
@@ -351,6 +384,8 @@ export async function markPrepared(input: {
   revision?: string
 }): Promise<AxEnginePrepareState> {
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
+  const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
+  const quantization = input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization
   if (!(await exists(input.modelPath))) {
     throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path does not exist`)
   }
@@ -361,10 +396,14 @@ export async function markPrepared(input: {
   } else if (!(await hasManifest(input.modelPath))) {
     throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path is missing model-manifest.json`)
   }
-  const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
+  if (!(await hasRequiredPackageContract(input.modelPath, modelID, quantization))) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.ModelMissing}: model path is missing required ${packageMarkerFor(modelID, quantization)} package contract`,
+    )
+  }
   const state: AxEnginePrepareState = {
     modelID,
-    quantization: input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization,
+    quantization,
     path: input.modelPath,
     revision: input.revision,
     preparedAt: Date.now(),
@@ -405,6 +444,10 @@ export async function downloadModel(input: {
     AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
       quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
     ]?.hfRepo
+  const quantizationDefinition =
+    AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
+      quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
+    ]
   if (!repo) {
     throw new Error(
       `${AX_ENGINE_ERROR.DownloadFailed}: ${AX_ENGINE_MODEL_DEFINITIONS[modelID].name} does not support ${quantization}`,
@@ -415,8 +458,11 @@ export async function downloadModel(input: {
   // default) and returns that snapshot path, so the weights live in one
   // standard location instead of being copied into ax-code's own cache.
   const dest = input.dest ? resolveDownloadDestination(modelID, quantization, input.dest) : undefined
-  const cmd = [input.binaryPath, "download", repo, "--json"]
-  if (dest) cmd.push("--dest", dest)
+  const useMtpPackage = quantizationDefinition.downloadMode === "mtp"
+  const cmd = useMtpPackage
+    ? [input.binaryPath, "download-mtp", modelID, "--json"]
+    : [input.binaryPath, "download", repo, "--json"]
+  if (dest) cmd.push(useMtpPackage ? "--output" : "--dest", dest)
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
   await assertDiskSpace({ modelID, quantization, downloadDir: dest ?? HfCache.root() })
@@ -437,6 +483,11 @@ export async function downloadModel(input: {
     : await hasManifest(parsed.dest)
   if (!complete) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded model path is incomplete`)
+  }
+  if (!(await hasRequiredPackageContract(parsed.dest, modelID, quantization))) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.DownloadFailed}: downloaded model is missing required ${packageMarkerFor(modelID, quantization)} package contract`,
+    )
   }
   return markPreparedWithLockHeld({
     modelID,
@@ -471,8 +522,15 @@ export async function reclaimManagedCopy(
   const repo = hfRepoFor(modelID, quantization)
   const snapshotPath = repo ? await HfCache.completeSnapshotDir(repo) : undefined
   // Refuse to delete the managed copy unless an equivalent, complete snapshot
-  // exists in the HF cache — otherwise we would destroy the only copy.
-  if (!snapshotPath || !(await HfCache.isCompleteSnapshot(snapshotPath))) return undefined
+  // exists in the HF cache — otherwise we would destroy the only copy. MTP
+  // models additionally require the family-specific sidecar package contract;
+  // base weights alone cannot replace a model prepared by download-mtp.
+  if (
+    !snapshotPath ||
+    !(await HfCache.isCompleteSnapshot(snapshotPath)) ||
+    !(await hasRequiredPackageContract(snapshotPath, modelID, quantization))
+  )
+    return undefined
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
 

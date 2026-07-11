@@ -2,12 +2,13 @@ import type { Provider } from "../provider"
 import type { CustomLoader } from "../loaders"
 import { ProviderID, ModelID } from "../schema"
 import {
-  AX_ENGINE_API_KEY,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_ERROR,
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_PROVIDER_ID,
+  isAxEngineModelID,
+  resolveAxEngineApiKey,
 } from "./constants"
 import { requirePlatformEligibility } from "./platform"
 import { getDependencyStatus } from "./dependency"
@@ -21,6 +22,7 @@ import {
 } from "./model-cache"
 import { ensureServer } from "./server"
 import { isLocalHostname } from "@/util/local-host"
+import { fetchAxEngineModelContracts, type AxEngineLiveModelContract } from "./model-card"
 
 // Reclaim legacy managed copies once per process. The loader runs whenever the
 // provider list is resolved; the guard keeps the (potentially large) directory
@@ -68,35 +70,57 @@ function configuredBaseURL(provider: Provider.Info) {
   return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`
 }
 
-async function serverAdvertisesModel(baseURL: string, apiModelID: string, signal?: AbortSignal) {
-  try {
-    const response = await fetch(`${baseURL.replace(/\/+$/, "")}/models`, {
-      signal: signal ?? AbortSignal.timeout(2000),
-      headers: { authorization: `Bearer ${AX_ENGINE_API_KEY}` },
-    })
-    if (!response.ok) {
-      response.body?.cancel()
-      return false
-    }
-    const data = (await response.json()) as { data?: Array<{ id?: unknown }> }
-    return data.data?.some((model) => model.id === apiModelID) ?? false
-  } catch {
-    return false
+function inputLimit(context: number, output: number) {
+  return Math.max(1, context - Math.min(context, output))
+}
+
+function applyLiveContract(model: Provider.Model, contract: AxEngineLiveModelContract) {
+  const context = contract.context ?? model.limit.context
+  const output = contract.output ?? model.limit.output
+  model.limit = {
+    context,
+    output,
+    input: inputLimit(context, output),
+  }
+  model.capabilities = {
+    ...model.capabilities,
+    temperature: contract.capabilities.temperature ?? model.capabilities.temperature,
+    reasoning: contract.capabilities.reasoning ?? model.capabilities.reasoning,
+    toolcall: contract.toolcall,
+    attachment: contract.attachment,
+    input: contract.capabilities.input ?? model.capabilities.input,
+    output: contract.capabilities.output ?? model.capabilities.output,
+    interleaved: contract.capabilities.interleaved ?? model.capabilities.interleaved,
+  }
+  model.options = {
+    ...model.options,
+    apiModelID: contract.id,
+    livePrimaryUse: contract.primaryUse,
+    liveChatDefault: contract.chatDefault,
+    liveCodingSupported: contract.codingSupported,
+    liveCodingOnly: contract.codingOnly,
   }
 }
 
-async function ensureReady(provider: Provider.Info, options: AxEngineModelOptions = {}, signal?: AbortSignal) {
+function requireCodingContract(contracts: AxEngineLiveModelContract[], apiModelID: string) {
+  const contract = contracts.find((item) => item.id === apiModelID)
+  if (!contract) throw new Error(`ax-engine server does not advertise model ${apiModelID}`)
+  // AX Engine's coding_supported flag is advisory and currently true only for
+  // its Qwen chat template. Gemma and GLM can still be valid coding agents when
+  // the live card advertises structured OpenAI tool calling, which is the
+  // compatibility contract AX Code actually requires.
+  if (!contract.toolcall) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.ToolcallUnsupported}: ax-engine model ${apiModelID} does not advertise OpenAI structured tool calling`,
+    )
+  }
+  return contract
+}
+
+async function ensureManagedReady(provider: Provider.Info, options: AxEngineModelOptions = {}, signal?: AbortSignal) {
   const modelID = normalizeModelID(options.modelID)
   const quantization = normalizeQuantization(options.quantization, modelID)
   const apiModelID = AX_ENGINE_MODEL_DEFINITIONS[modelID].apiModelID
-  const baseURL = configuredBaseURL(provider)
-  if (baseURL) {
-    if (await serverAdvertisesModel(baseURL, apiModelID, signal)) {
-      noteActiveAxEngineServer(baseURL)
-      return
-    }
-    throw new Error(`ax-engine server at ${baseURL} does not advertise model ${apiModelID}`)
-  }
 
   await requirePlatformEligibility()
 
@@ -121,70 +145,195 @@ async function ensureReady(provider: Provider.Info, options: AxEngineModelOption
   const state = await ensureServer({
     binaryPath: dependency.binaryPath,
     modelID,
-    apiModelID: AX_ENGINE_MODEL_DEFINITIONS[modelID].apiModelID,
+    apiModelID,
     modelPath: model.path,
     modelRevision: model.revision,
     preferredPort: AX_ENGINE_DEFAULT_PORT,
     contextTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].contextTokens,
-    baseURL,
+    apiKey: resolveAxEngineApiKey(provider.options),
     signal,
   })
   noteActiveAxEngineServer(state.baseURL)
+  const contracts = await fetchAxEngineModelContracts({
+    baseURL: state.baseURL,
+    apiKey: resolveAxEngineApiKey(provider.options),
+    signal,
+  })
+  return requireCodingContract(contracts, apiModelID)
 }
 
 export function axEngineLoader(): CustomLoader {
   return async (provider) => {
     reclaimManagedCopiesOnce()
+    let runtimeProvider = provider
     const baseURL = configuredBaseURL(provider) ?? `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`
+    const apiKey = resolveAxEngineApiKey(provider.options)
+    const modelRefs = new Map<string, Provider.Model>()
+
+    function remember(model: Provider.Model) {
+      modelRefs.set(model.api.id, model)
+      return model
+    }
+
+    function modelFromDefinition(
+      modelID: (typeof AX_ENGINE_MODEL_IDS)[number],
+      live?: AxEngineLiveModelContract,
+      modelBaseURL = baseURL,
+    ) {
+      const def = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+      const id = ModelID.make(modelID)
+      const model: Provider.Model = {
+        id,
+        providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID),
+        name: def.name,
+        family: modelID,
+        api: { id: def.apiModelID, url: modelBaseURL, npm: "@ai-sdk/openai-compatible" },
+        capabilities: {
+          temperature: true,
+          reasoning: false,
+          attachment: false,
+          toolcall: def.toolcall,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        limit: {
+          context: def.contextTokens,
+          input: inputLimit(def.contextTokens, def.outputTokens),
+          output: def.outputTokens,
+        },
+        status: "active",
+        options: {
+          modelID,
+          apiModelID: def.apiModelID,
+          quantization: def.defaultQuantization,
+        },
+        headers: {},
+        release_date: "",
+        variants: {},
+      }
+      if (live) applyLiveContract(model, live)
+      return remember(model)
+    }
+
+    function modelFromExternalContract(contract: AxEngineLiveModelContract, modelBaseURL: string) {
+      const definitionID = AX_ENGINE_MODEL_IDS.find(
+        (candidate) => AX_ENGINE_MODEL_DEFINITIONS[candidate].apiModelID === contract.id,
+      )
+      if (definitionID) return modelFromDefinition(definitionID, contract, modelBaseURL)
+      const context = contract.context ?? 16_384
+      const output = contract.output ?? 2_048
+      return remember({
+        id: ModelID.make(contract.id),
+        providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID),
+        name: contract.id,
+        family: contract.id,
+        api: { id: contract.id, url: modelBaseURL, npm: "@ai-sdk/openai-compatible" },
+        capabilities: {
+          temperature: contract.capabilities.temperature ?? true,
+          reasoning: contract.capabilities.reasoning ?? false,
+          attachment: contract.attachment,
+          toolcall: contract.toolcall,
+          input: contract.capabilities.input ?? {
+            text: true,
+            audio: false,
+            image: false,
+            video: false,
+            pdf: false,
+          },
+          output: contract.capabilities.output ?? {
+            text: true,
+            audio: false,
+            image: false,
+            video: false,
+            pdf: false,
+          },
+          interleaved: contract.capabilities.interleaved ?? false,
+        },
+        limit: { context, input: inputLimit(context, output), output },
+        status: "active",
+        options: {
+          apiModelID: contract.id,
+          external: true,
+          livePrimaryUse: contract.primaryUse,
+          liveChatDefault: contract.chatDefault,
+          liveCodingSupported: contract.codingSupported,
+          liveCodingOnly: contract.codingOnly,
+        },
+        headers: {},
+        release_date: "",
+        variants: {},
+      })
+    }
+
     return {
       autoload: false,
       options: {
         baseURL,
-        apiKey: AX_ENGINE_API_KEY,
+        apiKey,
         includeUsage: false,
         fetch: async (input: string | Request | URL, init?: RequestInit) => {
           return fetch(rewriteToActiveAxEngineServer(input, baseURL), init)
         },
       },
-      async discoverModels() {
+      async discoverModels(currentProvider) {
+        if (currentProvider?.options) runtimeProvider = currentProvider
         const models: Record<string, Provider.Model> = {}
-        for (const modelID of AX_ENGINE_MODEL_IDS) {
-          const def = AX_ENGINE_MODEL_DEFINITIONS[modelID]
-          const id = ModelID.make(modelID)
-          models[id] = {
-            id,
-            providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID),
-            name: def.name,
-            api: { id: def.apiModelID, url: baseURL, npm: "@ai-sdk/openai-compatible" },
-            capabilities: {
-              temperature: true,
-              reasoning: false,
-              attachment: false,
-              toolcall: def.toolcall,
-              input: { text: true, audio: false, image: false, video: false, pdf: false },
-              output: { text: true, audio: false, image: false, video: false, pdf: false },
-              interleaved: false,
-            },
-            limit: { context: def.contextTokens, output: def.outputTokens },
-            status: "active",
-            options: {
-              modelID,
-              quantization: def.defaultQuantization,
-            },
-            headers: {},
-            release_date: "",
-            variants: {},
+        const externalBaseURL = configuredBaseURL(runtimeProvider)
+        if (externalBaseURL) {
+          const contracts = await fetchAxEngineModelContracts({
+            baseURL: externalBaseURL,
+            apiKey: resolveAxEngineApiKey(runtimeProvider.options),
+            signal: AbortSignal.timeout(2_000),
+          }).catch(() => [])
+          if (contracts.length > 0) {
+            for (const contract of contracts) {
+              const model = modelFromExternalContract(contract, externalBaseURL)
+              models[model.id] = model
+            }
+            return models
           }
+        }
+
+        for (const modelID of AX_ENGINE_MODEL_IDS) {
+          const model = modelFromDefinition(modelID)
+          models[model.id] = model
         }
         return models
       },
       async getModel(sdk: any, modelID: string, options?: Record<string, any>) {
+        const externalBaseURL = configuredBaseURL(runtimeProvider)
+        if (externalBaseURL) {
+          const requestedModelID =
+            typeof options?.apiModelID === "string" && options.apiModelID.trim()
+              ? options.apiModelID.trim()
+              : typeof options?.modelID === "string" && options.modelID.trim()
+                ? options.modelID.trim()
+                : modelID
+          const apiModelID = isAxEngineModelID(requestedModelID)
+            ? AX_ENGINE_MODEL_DEFINITIONS[requestedModelID].apiModelID
+            : requestedModelID
+          const contracts = await fetchAxEngineModelContracts({
+            baseURL: externalBaseURL,
+            apiKey: resolveAxEngineApiKey(runtimeProvider.options),
+            signal: undefined,
+          })
+          const contract = requireCodingContract(contracts, apiModelID)
+          const ref = modelRefs.get(apiModelID)
+          if (ref) applyLiveContract(ref, contract)
+          noteActiveAxEngineServer(externalBaseURL)
+          return sdk.languageModel(apiModelID)
+        }
+
         const selectedOptions = {
           ...options,
           modelID: normalizeModelID(options?.modelID ?? modelID),
         }
-        await ensureReady(provider, selectedOptions)
-        return sdk.languageModel(AX_ENGINE_MODEL_DEFINITIONS[selectedOptions.modelID].apiModelID)
+        const contract = await ensureManagedReady(runtimeProvider, selectedOptions)
+        const apiModelID = AX_ENGINE_MODEL_DEFINITIONS[selectedOptions.modelID].apiModelID
+        const ref = modelRefs.get(apiModelID)
+        if (ref) applyLiveContract(ref, contract)
+        return sdk.languageModel(apiModelID)
       },
     }
   }

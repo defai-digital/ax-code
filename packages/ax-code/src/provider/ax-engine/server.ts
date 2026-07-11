@@ -5,12 +5,13 @@ import { FileLock } from "@/util/filelock"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
 import {
-  AX_ENGINE_API_KEY,
+  AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_ERROR,
   AX_ENGINE_MTP_MODE,
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_SPECULATION_PROFILE,
+  resolveAxEngineApiKey,
 } from "./constants"
 import type { AxEngineModelID } from "./constants"
 import { AxEnginePaths } from "./paths"
@@ -58,6 +59,7 @@ export type AxEngineServerOptions = {
   contextTokens?: number
   speculationProfile?: string
   mtpMode?: string
+  apiKey?: string
   signal?: AbortSignal
   /** Override for the readiness wait (default 240s); primarily a test seam. */
   readyTimeoutMs?: number
@@ -77,11 +79,13 @@ const AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS = 16
 export function axEngineServerLaunchArgs(input: {
   apiModelID: string
   contextTokens?: number
+  maxOutputTokens?: number
   speculationProfile?: string
   mtpMode?: string
 }): string[] {
   const args = ["--model-id", input.apiModelID]
   args.push("--speculation-profile", input.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE)
+  args.push("--max-batch-tokens", String(input.maxOutputTokens ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS))
   if ((input.mtpMode ?? AX_ENGINE_MTP_MODE) === "pure") {
     args.push("--mlx-mtp-disable-ngram-stacking")
   }
@@ -188,14 +192,14 @@ type WaitForReadyResult =
 
 type SpawnedServerProcess = Pick<ReturnType<typeof Process.spawn>, "pid" | "exitCode" | "signalCode">
 
-export async function isServerReady(baseURL: string, signal?: AbortSignal) {
+export async function isServerReady(baseURL: string, signal?: AbortSignal, apiKey = resolveAxEngineApiKey()) {
   // Every probe gets its own 2s timeout even when a caller signal is provided;
   // otherwise a wedged accept loop can hang a single fetch indefinitely —
   // waitForReady's deadline is only checked between polls.
   const probeSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(2000)]) : AbortSignal.timeout(2000)
   return fetch(`${baseURL.replace(/\/+$/, "")}/models`, {
     signal: probeSignal,
-    headers: { authorization: `Bearer ${AX_ENGINE_API_KEY}` },
+    headers: { authorization: `Bearer ${apiKey}` },
   })
     .then((res) => {
       const ok = res.ok
@@ -218,6 +222,7 @@ async function waitForReady(
     signal?: AbortSignal
     process?: SpawnedServerProcess
     timeoutMs?: number
+    apiKey?: string
   } = {},
 ): Promise<WaitForReadyResult> {
   // Cold-loading a local model (mmap + weight load + first-token warmup for a
@@ -230,7 +235,7 @@ async function waitForReady(
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ready: false, reason: "aborted" }
     if (processHasExited(options.process)) return { ready: false, reason: "process-exited" }
-    if (await isServerReady(baseURL, options.signal)) return { ready: true }
+    if (await isServerReady(baseURL, options.signal, options.apiKey)) return { ready: true }
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return { ready: false, reason: "timeout" }
@@ -319,13 +324,14 @@ async function loadServerModel(input: {
   baseURL: string
   apiModelID: string
   modelPath: string
+  apiKey?: string
   signal?: AbortSignal
 }) {
   const response = await fetch(`${input.baseURL.replace(/\/+$/, "")}/model/load`, {
     method: "POST",
     signal: input.signal ?? AbortSignal.timeout(120_000),
     headers: {
-      authorization: `Bearer ${AX_ENGINE_API_KEY}`,
+      authorization: `Bearer ${input.apiKey ?? resolveAxEngineApiKey()}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
@@ -342,7 +348,7 @@ async function loadServerModel(input: {
   }
 }
 
-export async function getServerStatus(): Promise<AxEngineServerRuntimeStatus> {
+export async function getServerStatus(apiKey = resolveAxEngineApiKey()): Promise<AxEngineServerRuntimeStatus> {
   const stateResult = await readServerState()
   if (stateResult.error) {
     return {
@@ -358,7 +364,7 @@ export async function getServerStatus(): Promise<AxEngineServerRuntimeStatus> {
     await removeServerState()
     return { running: false, ready: false, blockers: [] }
   }
-  const ready = running && (await isServerReady(state.baseURL))
+  const ready = running && (await isServerReady(state.baseURL, undefined, apiKey))
   const nextState = ready ? { ...state, lastHealthAt: Date.now() } : state
   if (ready) await writeServerState(nextState).catch(() => undefined)
   return {
@@ -388,6 +394,7 @@ function ensureServerKey(options: AxEngineServerOptions): string {
     options.speculationProfile ?? "",
     options.mtpMode ?? "",
     options.baseURL ?? "",
+    options.apiKey ?? "",
   ].join("::")
 }
 
@@ -430,7 +437,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const mtpModeMatches = existing?.mtpMode === mtpMode
   if (existing) {
     const alive = await serverProcessAlive(existing)
-    if (alive && (await isServerReady(existing.baseURL, options.signal))) {
+    if (alive && (await isServerReady(existing.baseURL, options.signal, options.apiKey))) {
       if (contextMatches && speculationMatches && mtpModeMatches) {
         if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
         try {
@@ -438,6 +445,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             baseURL: existing.baseURL,
             apiModelID: options.apiModelID,
             modelPath: options.modelPath,
+            apiKey: options.apiKey,
             signal: options.signal,
           })
           const nextState: AxEngineServerState = {
@@ -486,6 +494,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const serverArgs = axEngineServerLaunchArgs({
     apiModelID: options.apiModelID,
     contextTokens: options.contextTokens,
+    maxOutputTokens: AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
     speculationProfile,
     mtpMode,
   })
@@ -498,6 +507,13 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         stderr: logFile.fd,
         detached: true,
         abort: options.signal,
+        // The native server reads AX_ENGINE_API_KEY when --api-key is omitted.
+        // Inject the resolved provider value so configured credentials and
+        // client probes always agree without exposing the secret in `ps`.
+        env: {
+          ...process.env,
+          AX_ENGINE_API_KEY: options.apiKey ?? resolveAxEngineApiKey(),
+        },
       },
     )
   } finally {
@@ -530,6 +546,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     signal: options.signal,
     process: proc,
     timeoutMs: options.readyTimeoutMs,
+    apiKey: options.apiKey,
   })
   if (!ready.ready) {
     await Process.killProcessTree(proc).catch(() => undefined)

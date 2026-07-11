@@ -5,7 +5,7 @@ import { AX_ENGINE_ERROR } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
 import { HfCache } from "./hf-cache"
-import { clearPreparedStateForPath, getModelStatus } from "./model-cache"
+import { clearPreparedStateForPath, getModelStatus, hfRepoFor } from "./model-cache"
 import { getServerStatus } from "./server"
 
 export type AxEngineDeleteModelResponse = {
@@ -124,12 +124,31 @@ function isEligibleDeleteTarget(target: string) {
   return resolved.split(path.sep).includes("snapshots")
 }
 
+async function fallbackDeleteTarget(modelID: AxEngineModelID, quantization: AxEngineQuantization) {
+  // Readiness is intentionally stricter than deletion: an interrupted direct
+  // download or an old base-only MTP snapshot is not servable, but users must
+  // still be able to remove it. Restrict the fallback to paths derived from
+  // the model catalog so arbitrary configured paths never become deletable.
+  const repo = hfRepoFor(modelID, quantization)
+  const snapshot = repo ? await HfCache.snapshotDir(repo) : undefined
+  if (snapshot) return snapshot
+
+  const managed = AxEnginePaths.managedModelDir(modelID, quantization)
+  const managedExists = await fs
+    .stat(managed)
+    .then((stat) => stat.isDirectory())
+    .catch(() => false)
+  return managedExists ? managed : undefined
+}
+
 export async function deleteAxEngineModel(input: {
   modelID: AxEngineModelID
   quantization: AxEngineQuantization
 }): Promise<AxEngineDeleteModelResponse> {
   const status = await getModelStatus({ modelID: input.modelID, quantization: input.quantization })
-  if (!status.present || !status.path) {
+  const resolvedTarget =
+    status.present && status.path ? status.path : await fallbackDeleteTarget(input.modelID, input.quantization)
+  if (!resolvedTarget) {
     return {
       deleted: false,
       modelID: input.modelID,
@@ -138,7 +157,7 @@ export async function deleteAxEngineModel(input: {
     }
   }
 
-  const target = path.resolve(status.path)
+  const target = path.resolve(resolvedTarget)
   if (!isEligibleDeleteTarget(target)) {
     throw new Error(`${AX_ENGINE_ERROR.ModelNotPrepared}: resolved model path is not managed by AX Code`)
   }

@@ -64,8 +64,16 @@ export namespace SessionCompaction {
     // is smaller than limit.context; otherwise context is the cap. Use `||`
     // so a stray `limit.input: 0` falls through to context — `??` would
     // treat 0 as a valid cap and never compact.
-    const cap = model.limit.input || context
-    const reserved = config.compaction?.reserved ?? Math.ceil(cap * DEFAULT_RESERVED_FRACTION)
+    const declaredInput = model.limit.input
+    const cap = declaredInput || context
+    // AX Engine rejects prompt + requested output above context. New model
+    // cards expose an explicit input cap, but retain a safe fallback for older
+    // config overrides that only declare context/output.
+    const defaultReserved =
+      model.providerID === "ax-engine" && !declaredInput
+        ? Math.max(Math.ceil(cap * DEFAULT_RESERVED_FRACTION), model.limit.output)
+        : Math.ceil(cap * DEFAULT_RESERVED_FRACTION)
+    const reserved = config.compaction?.reserved ?? defaultReserved
     // Clamp tiny usable budgets off: if reserved nearly consumes the cap,
     // any realistic compacted message still overflows and compaction fires
     // on every step.

@@ -210,6 +210,7 @@ describe("provider routes", () => {
         const body = (await response.json()) as { models: Array<{ id: string }> }
         expect(body.models.map((model) => model.id)).toEqual([
           "qwen3.6-27b-6bit",
+          "qwen3-coder-next-6bit",
           "qwen3.6-35b-a3b",
           "gemma-4-12b",
           "gemma-4-26b",
@@ -253,6 +254,7 @@ describe("provider routes", () => {
           preparedAt: Date.now(),
         }
         await fs.mkdir(modelPath, { recursive: true })
+        await fs.writeFile(path.join(modelPath, "ax_mtp_sidecar_manifest.json"), "{}")
         await fs.mkdir(path.dirname(AxEnginePaths.prepareState), { recursive: true })
         await fs.writeFile(AxEnginePaths.prepareState, JSON.stringify(marker))
         await fs.writeFile(AxEnginePaths.completionMarker(modelPath), JSON.stringify(marker))

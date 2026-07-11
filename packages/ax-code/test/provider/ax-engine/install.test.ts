@@ -204,6 +204,42 @@ describe("dependency resolution picks up the managed binary", () => {
     expect(status.managedVersion).toBe(RELEASE.version)
     expect(status.binaryPath).toBe(AxEnginePaths.managedBinary(RELEASE.version))
   })
+
+  test("falls back to doctor JSON when the Python wrapper has no --version command", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "axe-version-"))
+    try {
+      const binary = path.join(dir, "ax-engine")
+      await fs.writeFile(
+        binary,
+        [
+          "#!/bin/sh",
+          'if [ "$1" = "--version" ]; then exit 2; fi',
+          'if [ "$1" = "doctor" ]; then echo \'{"install":{"version":"6.8.0"}}\'; exit 0; fi',
+          "exit 1",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      const status = await getDependencyStatus({ binaryPath: binary })
+      expect(status).toMatchObject({ available: true, mode: "configured", version: "6.8.0", blockers: [] })
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("blocks configured AX Engine versions older than the supported contract", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "axe-version-"))
+    try {
+      const binary = path.join(dir, "ax-engine")
+      await fs.writeFile(binary, "#!/bin/sh\necho 'ax-engine 6.6.0'\n", { mode: 0o755 })
+      const status = await getDependencyStatus({ binaryPath: binary })
+      expect(status.available).toBe(false)
+      expect(status.version).toContain("6.6.0")
+      expect(status.blockers.join(" ")).toContain("AX_ENGINE_VERSION_UNSUPPORTED")
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
 })
 
 // Exercise the real download → sha256-verify → extract → chmod → marker path

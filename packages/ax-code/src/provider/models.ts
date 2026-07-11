@@ -108,7 +108,11 @@ export namespace ModelsDev {
       temperature: true,
       tool_call: definition.toolcall,
       modalities: { input: ["text"], output: ["text"] },
-      limit: { context: definition.contextTokens, output: definition.outputTokens },
+      limit: {
+        context: definition.contextTokens,
+        input: Math.max(1, definition.contextTokens - definition.outputTokens),
+        output: definition.outputTokens,
+      },
       status: "beta",
       options: {
         modelID,
