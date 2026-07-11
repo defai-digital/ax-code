@@ -4,6 +4,7 @@ import {
   createSignal,
   ErrorBoundary,
   For,
+  mapArray,
   Match,
   on,
   onCleanup,
@@ -85,7 +86,7 @@ import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { userRoute } from "../../util/transcript"
 import { EventQuery } from "@/replay/query"
-import { routeEvent } from "./route"
+import { buildRouteInfoByMessage, routeEvent } from "./route"
 import {
   assistantMessageDuration,
   assistantToolSummary,
@@ -175,11 +176,15 @@ export function Session() {
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
-  const subagentTasks = createMemo(() => {
-    const sessionMessages = sync.data.message[route.sessionID] ?? []
-    const tasks: SubagentRollupTask[] = []
-    for (const message of sessionMessages) {
+  // Extract task parts per-message with mapArray so a single streamed part
+  // update only re-scans the one message whose parts changed, instead of
+  // rescanning every part of every message (which this memo is read 6+ times
+  // in the JSX). Each message gets its own inner memo keyed by message
+  // identity; the rollup below just concatenates the small per-message lists.
+  const taskPartsByMessage = mapArray(messages, (message) =>
+    createMemo(() => {
       const parts = sync.data.part[message.id] ?? []
+      const out: SubagentRollupTask[] = []
       for (const part of parts) {
         if (part.type !== "tool" || (part as any).tool !== "task") continue
         const state = (part as any).state ?? {}
@@ -187,7 +192,7 @@ export function Session() {
         const input = state.input ?? {}
         const metadata = state.metadata ?? {}
         const sessionID = metadata.sessionId ?? metadata.sessionID ?? input.task_id
-        tasks.push({
+        out.push({
           id: part.id,
           sessionID: typeof sessionID === "string" ? sessionID : undefined,
           title: state.title ?? input.description,
@@ -197,8 +202,11 @@ export function Session() {
           lastActivityAt: state.time?.end ?? state.time?.start,
         })
       }
-    }
-
+      return out
+    }),
+  )
+  const subagentTasks = createMemo(() => {
+    const tasks = taskPartsByMessage().flatMap((tasksForMessage) => tasksForMessage())
     const parentID = session()?.parentID ?? route.sessionID
     return buildSubagentStatusView({
       tasks,
@@ -222,6 +230,20 @@ export function Session() {
       parts: sync.data.part[item.id] ?? [],
     })),
   )
+
+  // Resolve the per-message route indicator once for the whole route instead
+  // of once per rendered message. Previously each RouteIndicator loaded the
+  // full session log (up to 10k rows, MB payloads) to pull out its own
+  // agent.route row — ~50 synchronous SQLite loads on session open. This uses
+  // the indexed, agent.route-filtered query a single time and builds a
+  // Map<messageID, routeInfo>; RouteIndicator just does a Map.get. The
+  // primary-row selection matches the original per-message logic exactly.
+  const routeInfoByMessage = createMemo(() => {
+    void sync.data.message[route.sessionID] // re-evaluate when messages update
+    const sid = route.sessionID as Parameters<typeof EventQuery.bySessionAndTypeWithTimestamp>[0]
+    const rows = EventQuery.bySessionAndTypeWithTimestamp(sid, "agent.route")
+    return buildRouteInfoByMessage(rows, sync.data.agent)
+  })
 
   const pending = createMemo(() => {
     return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
@@ -1178,7 +1200,7 @@ export function Session() {
                           })}
                           onDismissCompactionNotice={dismissCompactionNotice}
                         />
-                        <RouteIndicator messageID={message.id} sessionID={route.sessionID} />
+                        <RouteIndicator messageID={message.id} routeInfoByMessage={routeInfoByMessage} />
                       </>
                     </Match>
                     <Match when={message.role === "assistant"}>
@@ -1433,28 +1455,13 @@ function UserMessage(props: {
   )
 }
 
-function RouteIndicator(props: { messageID: string; sessionID: string }) {
+function RouteIndicator(props: {
+  messageID: string
+  routeInfoByMessage: () => Map<string, NonNullable<ReturnType<typeof routeEvent>>>
+}) {
   const { theme } = useTheme()
-  const sync = useSync()
 
-  const info = createMemo(() => {
-    void sync.data.message[props.sessionID] // reactive: re-evaluate when messages update
-    const sid = props.sessionID as Parameters<typeof EventQuery.bySessionWithTimestamp>[0]
-    const rows = EventQuery.bySessionWithTimestamp(sid)
-    const matches = rows.filter(
-      (r) => r.event_data.type === "agent.route" && r.event_data.messageID === props.messageID,
-    )
-    if (matches.length === 0) return null
-    // Prefer the switch event over a same-turn complexity event — the agent
-    // change is more visually informative than the fast-model indicator.
-    const primary =
-      matches.find((r) => {
-        const e = r.event_data
-        return e.type === "agent.route" && e.routeMode !== "complexity"
-      }) ?? matches[matches.length - 1]
-    if (!primary) return null
-    return routeEvent(primary, sync.data.agent)
-  })
+  const info = createMemo(() => props.routeInfoByMessage().get(props.messageID) ?? null)
 
   return (
     <Show when={info()}>
