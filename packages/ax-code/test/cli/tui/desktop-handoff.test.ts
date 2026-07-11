@@ -89,4 +89,9 @@ describe("resolveDesktopHandoff", () => {
   test("docs URL is a valid URL", () => {
     expect(__internal.DESKTOP_DOCS_URL).toMatch(/^https?:\/\//)
   })
+
+  test("docs URL points to the active repository (#354)", () => {
+    expect(__internal.DESKTOP_DOCS_URL).toBe("https://github.com/defai-digital/ax-code#desktop")
+    expect(__internal.DESKTOP_DOCS_URL).not.toContain("automatos-ai")
+  })
 })

@@ -48,6 +48,17 @@ await build({
   external: [...nativeExternals, "./server.js"],
 })
 
+// Bundle the web runtime CLI into the app so the ax-code CLI can invoke an
+// installed AX Code.app even when no global `ax-code-desktop` shim is on PATH.
+// ELECTRON_RUN_AS_NODE runs this entry through the packaged Electron binary;
+// it launches the sibling bundled server.js for daemon mode.
+await build({
+  ...shared,
+  format: "esm",
+  entryPoints: [path.join(root, "packages/web/bin/cli.js")],
+  outfile: path.join(outDir, "desktop-cli.mjs"),
+})
+
 // Server bundle stays CJS so bundled CommonJS dependencies can require built-ins.
 // `import.meta.url` is rewritten to a CJS-compatible URL before esbuild lowers
 // the bundle, avoiding the empty import_meta shim warning and runtime breakage.
@@ -65,4 +76,4 @@ await build({
   },
 })
 
-console.log("[electron] bundle → dist/{main,preload,server-process,server}.js")
+console.log("[electron] bundle → dist/{main,preload,server-process,server}.js + dist/desktop-cli.mjs")

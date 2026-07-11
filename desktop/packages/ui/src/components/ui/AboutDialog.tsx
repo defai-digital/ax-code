@@ -16,6 +16,24 @@ interface AboutDialogProps {
 
 export const OPENCHAMBER_UPSTREAM_URL = "https://github.com/btriapitsyn/openchamber"
 
+export type AboutVersionRow = {
+  key: "version" | "desktop" | "cli"
+  label: "aboutDialog.versionLabel" | "aboutDialog.openChamberVersionLabel" | "aboutDialog.axCodeVersionLabel"
+  version: string
+}
+
+export function aboutVersionRows(desktopVersion: string | null, cliVersion: string | null): AboutVersionRow[] {
+  const desktop = desktopVersion?.trim() || null
+  const cli = cliVersion?.trim() || null
+  if (desktop && cli && desktop === cli) {
+    return [{ key: "version", label: "aboutDialog.versionLabel", version: desktop }]
+  }
+  return [
+    ...(desktop ? ([{ key: "desktop", label: "aboutDialog.openChamberVersionLabel", version: desktop }] as const) : []),
+    ...(cli ? ([{ key: "cli", label: "aboutDialog.axCodeVersionLabel", version: cli }] as const) : []),
+  ]
+}
+
 export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) => {
   const { t } = useI18n()
   const showDiagnostics = import.meta.env.DEV
@@ -139,6 +157,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) 
   }, [open, showDiagnostics])
 
   const displayVersion = version
+  const versionRows = aboutVersionRows(displayVersion, axCodeVersion)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -149,8 +168,9 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ open, onOpenChange }) 
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">AX Code</h2>
             <div className="space-y-0.5 typography-meta text-muted-foreground">
-              {displayVersion && <p>{t("aboutDialog.openChamberVersionLabel", { version: displayVersion })}</p>}
-              {axCodeVersion && <p>{t("aboutDialog.axCodeVersionLabel", { version: axCodeVersion })}</p>}
+              {versionRows.map((row) => (
+                <p key={row.key}>{t(row.label, { version: row.version })}</p>
+              ))}
             </div>
             <p className="typography-meta text-muted-foreground/70">
               Forked from{" "}
