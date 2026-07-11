@@ -1,4 +1,5 @@
 import { createMemo, createSignal, Show } from "solid-js"
+import stripAnsi from "strip-ansi"
 import { useTheme } from "@tui/context/theme"
 import { detail } from "../format"
 import { useSessionRouteContext } from "../context"
@@ -7,7 +8,7 @@ import { BlockTool, InlineTool, type ToolProps } from "./primitives"
 export function GenericTool(props: ToolProps<any>) {
   const { theme } = useTheme()
   const ctx = useSessionRouteContext()
-  const output = createMemo(() => props.output?.trim() ?? "")
+  const output = createMemo(() => stripAnsi(props.output?.trim() ?? ""))
   const [expanded, setExpanded] = createSignal(false)
   const lines = createMemo(() => output().split("\n"))
   const maxLines = 3

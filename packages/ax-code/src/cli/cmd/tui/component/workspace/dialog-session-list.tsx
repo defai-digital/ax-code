@@ -18,6 +18,16 @@ import { normalizeDialogSessions } from "../session-list-data"
 
 const log = Log.create({ service: "tui.workspace-dialog-session-list" })
 
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message
+  if (typeof error === "string" && error) return error
+  if (error && typeof error === "object") {
+    const candidate = error as { data?: { message?: string }; message?: string }
+    return candidate.data?.message ?? candidate.message ?? fallback
+  }
+  return fallback
+}
+
 export function DialogSessionList(props: { workspaceID?: string; localOnly?: boolean } = {}) {
   const dialog = useDialog()
   const route = useRoute()
@@ -36,6 +46,16 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
         if (!workspaceID) return undefined
         try {
           const result = await sdk.client.session.list({ directory: workspaceID, roots: true }, { signal })
+          if (result.error) {
+            if (!signal.aborted) {
+              log.warn("workspace session list load failed", { error: result.error, workspaceID })
+              toast.show({
+                message: errorMessage(result.error, "Failed to load workspace sessions"),
+                variant: "error",
+              })
+            }
+            return info.value
+          }
           return normalizeDialogSessions(result.data)
         } catch (error) {
           log.warn("workspace session list load failed", { error, workspaceID })
@@ -63,6 +83,20 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
           },
           { signal },
         )
+        if (result.error) {
+          if (!signal.aborted) {
+            log.warn("workspace session list search failed", {
+              error: result.error,
+              query,
+              workspaceID: props.workspaceID,
+            })
+            toast.show({
+              message: errorMessage(result.error, "Failed to search sessions"),
+              variant: "error",
+            })
+          }
+          return info.value
+        }
         return normalizeDialogSessions(result.data)
       } catch (error) {
         log.warn("workspace session list search failed", {
@@ -152,7 +186,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
                 .delete({
                   sessionID: option.value,
                 })
-                .then(() => true)
+                .then((result) => !result.error)
                 .catch(() => false)
               setToDelete(undefined)
               if (!deleted) {

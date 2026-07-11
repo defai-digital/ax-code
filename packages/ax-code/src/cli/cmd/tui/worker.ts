@@ -23,6 +23,7 @@ import { registerShutdownSignals } from "@/util/signals"
 import { toErrorMessage } from "@/util/error-message"
 import { stopServer as stopAxEngineServer } from "@/provider/ax-engine"
 import { registerTuiProcessHandler } from "./util/lifecycle"
+import { startShellEnvLoad } from "@/runtime/shell-env"
 
 type GlobalEvent = {
   directory?: string
@@ -345,6 +346,15 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
     return
   }
   Rpc.listen(rpc)
+  // Worker transport runs OUTSIDE the CLI bootstrap: a `new Worker(worker.ts)`
+  // never executes boot.ts, so the background shell-profile env recovery that
+  // `init()` kicks off for every other entrypoint (including the process
+  // backend, which re-runs boot.ts) never happens here. Run it explicitly for
+  // parity so login-rc provider API keys reach the provider loader — otherwise
+  // env-provided keys were the only ones available and login-rc keys were never
+  // recovered in worker mode (see finding #7). Best-effort + non-blocking, like
+  // init(); `provider-impl` awaits `ensureShellEnv()` before reading keys.
+  startShellEnvLoad(process.env)
   // Worker transport: same intent, in case the runtime forwards a
   // signal before `worker.terminate()` lands. Idempotent against the
   // explicit `shutdown` RPC the thread normally invokes first. SIGHUP

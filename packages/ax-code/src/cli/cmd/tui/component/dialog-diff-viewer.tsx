@@ -6,52 +6,100 @@ import { useTheme } from "@tui/context/theme"
 import type { Snapshot } from "@/snapshot"
 import path from "path"
 
-function computeDiffLines(before: string, after: string): Array<{ type: "add" | "remove" | "context"; text: string }> {
+// An O(m*n) LCS over full-file line counts would allocate a giant matrix and
+// block the UI thread — a ~20k-line file (e.g. a lockfile) OOM-crashes the TUI
+// and even a few thousand lines freezes input. Cap the work the LCS can do.
+const LCS_CELL_BUDGET = 1_000_000
+
+export function computeDiffLines(
+  before: string,
+  after: string,
+): Array<{ type: "add" | "remove" | "context"; text: string }> {
   const beforeLines = before ? before.split("\n") : []
   const afterLines = after ? after.split("\n") : []
 
-  // Simple LCS diff
   const m = beforeLines.length
   const n = afterLines.length
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = beforeLines[i - 1] === afterLines[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1])
-
-  const ops: Array<"=" | "+" | "-"> = []
-  let i = m
-  let j = n
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && beforeLines[i - 1] === afterLines[j - 1]) {
-      ops.push("=")
-      i--
-      j--
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      ops.push("+")
-      j--
-    } else {
-      ops.push("-")
-      i--
-    }
-  }
-  ops.reverse()
 
   const result: Array<{ type: "add" | "remove" | "context"; text: string }> = []
-  let bi = 0
-  let ai = 0
-  for (const op of ops) {
-    if (op === "=") {
-      result.push({ type: "context", text: "  " + beforeLines[bi] })
-      bi++
-      ai++
-    } else if (op === "-") {
-      result.push({ type: "remove", text: "- " + beforeLines[bi] })
-      bi++
+
+  // Trim the common leading/trailing identical lines and only diff the changed
+  // middle. Localized edits in a huge file collapse to a tiny middle window, so
+  // the LCS stays cheap even when the file itself is enormous.
+  let start = 0
+  while (start < m && start < n && beforeLines[start] === afterLines[start]) start++
+  let endB = m
+  let endA = n
+  while (endB > start && endA > start && beforeLines[endB - 1] === afterLines[endA - 1]) {
+    endB--
+    endA--
+  }
+
+  for (let k = 0; k < start; k++) result.push({ type: "context", text: "  " + beforeLines[k] })
+
+  const midM = endB - start
+  const midN = endA - start
+
+  if (midM > 0 || midN > 0) {
+    if (midM * midN > LCS_CELL_BUDGET) {
+      // The changed window is still too large to diff on the UI thread. Fall
+      // back to a degenerate diff (all removals, then all additions) — correct,
+      // O(m+n), and never allocates the LCS matrix.
+      for (let k = start; k < endB; k++) result.push({ type: "remove", text: "- " + beforeLines[k] })
+      for (let k = start; k < endA; k++) result.push({ type: "add", text: "+ " + afterLines[k] })
     } else {
-      result.push({ type: "add", text: "+ " + afterLines[ai] })
-      ai++
+      // LCS over the changed middle only. Use a flat Int32Array matrix instead
+      // of number[][] to keep the allocation compact (<=~4MB at the budget cap).
+      const width = midN + 1
+      const dp = new Int32Array((midM + 1) * width)
+      for (let i = 1; i <= midM; i++) {
+        const bLine = beforeLines[start + i - 1]
+        const row = i * width
+        const prevRow = row - width
+        for (let j = 1; j <= midN; j++) {
+          dp[row + j] =
+            bLine === afterLines[start + j - 1] ? dp[prevRow + j - 1] + 1 : Math.max(dp[prevRow + j], dp[row + j - 1])
+        }
+      }
+
+      const ops: Array<"=" | "+" | "-"> = []
+      let i = midM
+      let j = midN
+      while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && beforeLines[start + i - 1] === afterLines[start + j - 1]) {
+          ops.push("=")
+          i--
+          j--
+        } else if (j > 0 && (i === 0 || dp[i * width + (j - 1)] >= dp[(i - 1) * width + j])) {
+          ops.push("+")
+          j--
+        } else {
+          ops.push("-")
+          i--
+        }
+      }
+      ops.reverse()
+
+      let bi = start
+      let ai = start
+      for (const op of ops) {
+        if (op === "=") {
+          result.push({ type: "context", text: "  " + beforeLines[bi] })
+          bi++
+          ai++
+        } else if (op === "-") {
+          result.push({ type: "remove", text: "- " + beforeLines[bi] })
+          bi++
+        } else {
+          result.push({ type: "add", text: "+ " + afterLines[ai] })
+          ai++
+        }
+      }
     }
   }
+
+  for (let k = endB; k < m; k++) result.push({ type: "context", text: "  " + beforeLines[k] })
+
   return result
 }
 

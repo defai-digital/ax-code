@@ -13,9 +13,21 @@ import { useTextareaKeybindings } from "../../component/textarea-keybindings"
 import { useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
+import { errorPayloadMessage } from "../../util/error-message"
 import { focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 
 const log = Log.create({ service: "tui.question" })
+
+// The v2 SDK client resolves { error } instead of rejecting when throwOnError
+// is unset (the default here), so a reply/reject's HTTP/network failure lands
+// in the success `.then`, not `.catch`. Turn a resolved error into a throw
+// carrying the best available message so the existing `.catch` path (reset
+// guard, log, toast, keep prompt mounted for retry) handles it.
+function replyError(error: unknown, fallback: string): Error {
+  if (error instanceof Error) return error
+  const message = errorPayloadMessage(error) ?? (typeof error === "string" && error ? error : undefined)
+  return new Error(message ?? fallback)
+}
 
 // Bound so a dropped/stalled reply cannot latch `submitting` forever. Mirrors
 // permission.tsx (see #341).
@@ -102,7 +114,13 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
       .then(() =>
         withTimeout(run(), QUESTION_REPLY_TIMEOUT_MS, "Question reply timed out — the server did not respond"),
       )
-      .then(() => {
+      .then((result) => {
+        // The reply resolves to { error } rather than rejecting on
+        // HTTP/network failure (see replyError). Running the success path
+        // below would splice the request out and unmount the prompt while the
+        // server-side ask stays pending. Route real failures into `.catch`.
+        const error = (result as { error?: unknown } | undefined)?.error
+        if (error) throw replyError(error, failureMessage)
         removeRequestLocally(sessionID, id)
       })
       .catch((error) => {

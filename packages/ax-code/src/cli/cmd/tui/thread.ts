@@ -3,11 +3,11 @@ import { cliBooleanFlagValue } from "@/cli/boolean-flag"
 import { Rpc } from "@/util/rpc"
 import { type rpc } from "./worker"
 import { createRequire } from "module"
+import { fstatSync } from "node:fs"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { UI } from "@/cli/ui"
 import { Log } from "@/util/log"
-import { Env } from "@/util/env"
 import { withTimeout } from "@/util/timeout"
 import { withNetworkOptions, resolveNetworkOptions } from "@/cli/network"
 import { Filesystem } from "@/util/filesystem"
@@ -30,7 +30,7 @@ import { parseIntegerEnv } from "./util/env"
 import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
 import { hasExplicitNetworkBindFlag } from "./util/network-flags"
-import { registerTuiProcessHandler } from "./util/lifecycle"
+import { registerTuiCrashHandlers, registerTuiProcessHandler } from "./util/lifecycle"
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
@@ -493,15 +493,90 @@ async function target() {
   return new URL("./worker.ts", import.meta.url)
 }
 
+export const DEFAULT_TUI_STDIN_PIPE_QUIET_WINDOW_MS = 300
+
+type StdinLike = {
+  on(event: "data", listener: (chunk: Buffer) => void): unknown
+  on(event: "end", listener: () => void): unknown
+  on(event: "error", listener: (error: Error) => void): unknown
+  off(event: string, listener: (...args: any[]) => void): unknown
+  pause?: () => unknown
+}
+
+function stdinIsRegularFile(fd = 0): boolean {
+  try {
+    return fstatSync(fd).isFile()
+  } catch {
+    // fstat can fail for exotic descriptors; treat as "not a regular file"
+    // so the pipe quiet-window fallback applies and startup never hangs.
+    return false
+  }
+}
+
+// Read piped (non-TTY) stdin without hanging the TUI on an open producer.
+// A regular file (`ax-code < file`) reliably delivers `end`, so we read it
+// fully. A pipe/FIFO (`tail -f x | ax-code`, `ax-code < fifo`) may stay open
+// forever and never emit `end`; awaiting it (the previous behavior) blocked
+// startup before anything rendered. For pipes we collect whatever is buffered
+// and resolve after a short quiet window with no further data, then pause the
+// stream so the still-open fd doesn't keep feeding the renderer's own stdin.
+export function readNonTtyStdin(
+  input: {
+    stdin?: StdinLike
+    isRegularFile?: boolean
+    quietWindowMs?: number
+  } = {},
+): Promise<string> {
+  const stdin = input.stdin ?? (process.stdin as unknown as StdinLike)
+  const isRegularFile = input.isRegularFile ?? stdinIsRegularFile()
+  const quietWindowMs = input.quietWindowMs ?? DEFAULT_TUI_STDIN_PIPE_QUIET_WINDOW_MS
+  return new Promise<string>((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let settled = false
+    let quietTimer: ReturnType<typeof setTimeout> | undefined
+    const cleanup = () => {
+      if (quietTimer) clearTimeout(quietTimer)
+      stdin.off("data", onData)
+      stdin.off("end", onEnd)
+      stdin.off("error", onError)
+    }
+    const finish = (pause: boolean) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      if (pause) stdin.pause?.()
+      resolve(Buffer.concat(chunks).toString("utf8"))
+    }
+    const armQuietTimer = () => {
+      if (isRegularFile) return
+      if (quietTimer) clearTimeout(quietTimer)
+      quietTimer = setTimeout(() => finish(true), quietWindowMs)
+      quietTimer.unref?.()
+    }
+    const onData = (chunk: Buffer) => {
+      chunks.push(chunk)
+      // Regular files EOF on their own; only pipes need the quiet-window reset.
+      armQuietTimer()
+    }
+    const onEnd = () => finish(false)
+    const onError = (error: Error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    stdin.on("data", onData)
+    stdin.on("end", onEnd)
+    stdin.on("error", onError)
+    // A pipe that is open but idle (e.g. `ax-code < fifo` with no writer yet)
+    // emits neither `data` nor `end`; arm the quiet window up front so startup
+    // still proceeds. Regular files are left to their `end`/`error` events.
+    armQuietTimer()
+  })
+}
+
 async function input(value?: string) {
-  const piped = process.stdin.isTTY
-    ? undefined
-    : await new Promise<string>((resolve, reject) => {
-        const chunks: Buffer[] = []
-        process.stdin.on("data", (chunk: Buffer) => chunks.push(chunk))
-        process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
-        process.stdin.on("error", reject)
-      })
+  const piped = process.stdin.isTTY ? undefined : await readNonTtyStdin()
   if (!value) return piped
   if (!piped) return value
   return piped + "\n" + value
@@ -600,18 +675,32 @@ export const TuiThreadCommand = cmd({
         process.chdir(next)
       } catch {
         UI.error("Failed to change directory to " + next)
+        // Match the sibling failure paths (readiness handshake, thread error,
+        // app-import failure): a chdir failure is a hard startup error, so the
+        // process must exit non-zero rather than reporting success.
+        process.exitCode = 1
         return
       }
       const cwd = Filesystem.resolve(process.cwd())
 
-      const sanitized = Env.sanitize()
-      if (cliBooleanFlagValue(process.argv, "--print-logs") === true) sanitized.AX_CODE_PRINT_LOGS = "1"
+      // TRUST BOUNDARY: the TUI backend (worker/process) is a trusted peer that
+      // runs the same ax-code code as this thread — not model-controlled input —
+      // so it gets the FULL process env. Do NOT pass `Env.sanitize()` here: it
+      // strips /KEY|SECRET|TOKEN|.../ names, which silently dropped env-provided
+      // provider API keys (`ANTHROPIC_API_KEY=… ax-code`) from the backend's
+      // provider loader — always broken on Windows and never recovered in worker
+      // mode (see finding #7). Secrets are re-stripped via `Env.sanitize()` at
+      // every model-controlled spawn point *inside* the backend (tool/bash-impl.ts,
+      // pty/index.ts, mcp/impl.ts, session/prompt-shell-command.ts), so they never
+      // leak from the backend into an LLM-driven shell.
+      const backendEnv: Record<string, string | undefined> = { ...process.env }
+      if (cliBooleanFlagValue(process.argv, "--print-logs") === true) backendEnv.AX_CODE_PRINT_LOGS = "1"
       const backend = await createBackendRuntime({
         mode: backendTransport,
         workerTarget: file,
         processCommand,
         cwd,
-        env: Object.fromEntries(Object.entries(sanitized).filter((e): e is [string, string] => e[1] !== undefined)),
+        env: Object.fromEntries(Object.entries(backendEnv).filter((e): e is [string, string] => e[1] !== undefined)),
       })
       DiagnosticLog.recordProcess("tui.backendSpawned", {
         mode: backend.mode,
@@ -726,8 +815,7 @@ export const TuiThreadCommand = cmd({
         })
       }
       const unregisterProcessHandlers = [
-        registerTuiProcessHandler("uncaughtException", error, { name: "thread-uncaught-exception" }),
-        registerTuiProcessHandler("unhandledRejection", error, { name: "thread-unhandled-rejection" }),
+        registerTuiCrashHandlers(error, { namePrefix: "thread" }),
         registerTuiProcessHandler("SIGUSR2", reload, { name: "thread-sigusr2-reload" }),
       ]
 

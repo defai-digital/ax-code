@@ -1,6 +1,17 @@
 import { isDeepEqual } from "remeda"
 
 export namespace Keybind {
+  // Map user-facing key spellings to the event names the parser emits, so
+  // config strings round-trip with `toString` and actual key events. e.g.
+  // `toString` prints `del`, events are named `delete`; `enter`/`kpenter`
+  // are common spellings for the `return` key.
+  const KEY_ALIASES: Record<string, string> = {
+    esc: "escape",
+    enter: "return",
+    kpenter: "return",
+    del: "delete",
+  }
+
   export type Input = {
     name: string
     ctrl: boolean
@@ -100,11 +111,8 @@ export namespace Keybind {
           case "leader":
             info.leader = true
             break
-          case "esc":
-            info.name = "escape"
-            break
           default:
-            info.name = part
+            info.name = KEY_ALIASES[part] ?? part
             break
         }
       }

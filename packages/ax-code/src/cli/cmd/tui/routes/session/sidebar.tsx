@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, createEffect, type Accessor, For, Match, Show, Switch } from "solid-js"
+import { createMemo, createEffect, untrack, type Accessor, For, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@ax-code/opentui-solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
@@ -213,12 +213,37 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     }
   }
 
+  // Coarse refresh key for sidebar surfaces that read the session event log.
+  // Changes only when the message count grows or the session status type
+  // transitions (e.g. running -> idle), NOT on every streamed part update.
+  // This gates the expensive full-log SQLite loads behind a low-frequency
+  // signal while leaving the cheap in-memory derivations fully reactive.
+  const logRefreshKey = createMemo(() => `${messages().length}:${status().type}`)
+
+  // The event-log rows feeding the activity list are fetched behind the coarse
+  // key so a full SELECT no longer runs on every message.part.updated. The
+  // activity list only ever displays ~10 items, so a LIMITed recent query
+  // returns the same visible items as the previous full-log load. Parts stay
+  // reactive in the memo below so tool activity still updates live.
+  //
+  // The window (all event types, not just the route/agent-control rows the list
+  // consumes) is sized well above the largest realistic per-turn event burst so
+  // a sparse-but-recent routing/control event can't be evicted from the top-10
+  // by unrelated lifecycle events. Event-log rows are discrete lifecycle events
+  // (no streaming deltas), so this covers many dozens of steps; the only residual
+  // gap is a cosmetic missing/stale Activity row in a pathologically long turn,
+  // never a wrong rollback target. A type-filtered recent query would make this
+  // provably exact and is the natural follow-up.
+  const ACTIVITY_ROW_WINDOW = 400
+  const activityRows = createMemo(() => {
+    logRefreshKey()
+    const sid = props.sessionID as Parameters<typeof EventQuery.recentBySessionWithTimestamp>[0]
+    return EventQuery.recentBySessionWithTimestamp(sid, ACTIVITY_ROW_WINDOW)
+  })
   const activity = createMemo(() => {
     const msgs = messages()
     const parts = msgs.flatMap((msg) => sync.data.part[msg.id] ?? [])
-    const sid = props.sessionID as Parameters<typeof EventQuery.bySessionWithTimestamp>[0]
-    const rows = EventQuery.bySessionWithTimestamp(sid)
-    return items(parts, rows, sync.data.agent).slice(0, 10)
+    return items(parts, activityRows(), sync.data.agent).slice(0, 10)
   })
   const localInference = createMemo(() => {
     props.statusTick?.()
@@ -237,14 +262,23 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     return SessionDreView.load(sid)
   })
 
+  // The sidebar only renders the rollback step count and step numbers (via
+  // SessionRollbackView.summary + `.length`), never the graph-derived tool
+  // detail. Use the cheap points()-only path (indexed step.start query, no
+  // execution-graph build) and recompute on the coarse key instead of on
+  // every streamed part update — the previous load() ran two full 10k-row
+  // loads plus a graph build per assistant step. Message/part reads are
+  // untracked so the coarse key is the sole reactive trigger.
   const rollback = createMemo(() => {
-    messages()
-    return SessionRollbackView.load(
-      props.sessionID as Parameters<typeof SessionRollbackView.load>[0],
-      messages().map((item) => ({
-        info: item,
-        parts: sync.data.part[item.id] ?? [],
-      })),
+    logRefreshKey()
+    return untrack(() =>
+      SessionRollbackView.points(
+        props.sessionID as Parameters<typeof SessionRollbackView.points>[0],
+        messages().map((item) => ({
+          info: item,
+          parts: sync.data.part[item.id] ?? [],
+        })),
+      ),
     )
   })
 
@@ -899,8 +933,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               {(metrics) => (
                 <box gap={0}>
                   <text fg={theme.text}>
-                    <b>Local inference</b>{" "}
-                    <span style={{ fg: theme.textMuted }}>{metrics().modelID}</span>
+                    <b>Local inference</b> <span style={{ fg: theme.textMuted }}>{metrics().modelID}</span>
                   </text>
                   <text fg={theme.textMuted} wrapMode="none">
                     prefill {metrics().prefillRate ?? "--"} · decode {metrics().decodeRate ?? "--"}
