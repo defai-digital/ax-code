@@ -21,8 +21,20 @@ import { Log } from "@/util/log"
 import { normalize as normalizePathValue, diffSummary } from "./format"
 import { Global } from "@/global"
 import { withTimeout } from "@/util/timeout"
+import { errorPayloadMessage } from "../../util/error-message"
 
 const log = Log.create({ service: "tui.permission" })
+
+// The v2 SDK client resolves { error } instead of rejecting when throwOnError
+// is unset (the default here), so a reply's HTTP/network failure lands in the
+// success `.then`, not `.catch`. Turn a resolved error into a throw carrying
+// the best available message so the existing `.catch` path (reset guard, log,
+// toast, keep prompt mounted for retry) handles it.
+function replyError(error: unknown, fallback: string): Error {
+  if (error instanceof Error) return error
+  const message = errorPayloadMessage(error) ?? (typeof error === "string" && error ? error : undefined)
+  return new Error(message ?? fallback)
+}
 
 type PermissionStage = "permission" | "always" | "reject"
 const CONFIRM_KEYS = new Set(["return", "linefeed", "kpenter"])
@@ -277,7 +289,13 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       .then(() =>
         withTimeout(run(), PERMISSION_REPLY_TIMEOUT_MS, "Permission reply timed out — the server did not respond"),
       )
-      .then(() => {
+      .then((result) => {
+        // The reply resolves to { error } rather than rejecting on
+        // HTTP/network failure (see replyError). Running the success path
+        // below would splice the request out and unmount the prompt while the
+        // server-side ask stays pending. Route real failures into `.catch`.
+        const error = (result as { error?: unknown } | undefined)?.error
+        if (error) throw replyError(error, failureMessage)
         removeRequestLocally(sessionID, id)
       })
       .catch((error) => {

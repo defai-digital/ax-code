@@ -97,9 +97,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       withTimeout: withSyncTimeout,
       setStore,
       fetchSession: (sessionID) => sdk.client.session.get({ sessionID }, { throwOnError: true }),
-      fetchMessages: (sessionID) => sdk.client.session.messages({ sessionID, limit: 100 }),
-      fetchTodo: (sessionID) => sdk.client.session.todo({ sessionID }),
-      fetchDiff: (sessionID) => sdk.client.session.diff({ sessionID }),
+      fetchMessages: (sessionID) => sdk.client.session.messages({ sessionID, limit: 100 }, { throwOnError: true }),
+      fetchTodo: (sessionID) => sdk.client.session.todo({ sessionID }, { throwOnError: true }),
+      fetchDiff: (sessionID) => sdk.client.session.diff({ sessionID }, { throwOnError: true }),
       fetchRisk: async (sessionID) => {
         const response = await sdk.fetch(
           sessionRiskURL({
