@@ -1722,10 +1722,46 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const { theme, syntax } = useTheme()
   const kv = useKV()
   const [expanded, setExpanded] = createSignal(false)
-  const trimmed = createMemo(() => props.part.text.trim())
+  // Throttle rich markdown paint while streaming (~20–30 Hz). Store can update faster;
+  // re-parsing full markdown every delta dominates TUI main-thread cost.
+  const STREAM_PAINT_MS = 40
+  const [paintedText, setPaintedText] = createSignal(props.part.text)
+  let paintCancel: (() => void) | undefined
+  let lastPaintAt = 0
+  createEffect(() => {
+    const next = props.part.text
+    const final = !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish)
+    paintCancel?.()
+    paintCancel = undefined
+    if (final) {
+      lastPaintAt = Date.now()
+      setPaintedText(next)
+      return
+    }
+    const now = Date.now()
+    const remaining = Math.max(0, STREAM_PAINT_MS - (now - lastPaintAt))
+    if (remaining === 0) {
+      lastPaintAt = now
+      setPaintedText(next)
+      return
+    }
+    paintCancel = scheduleTuiTimeout(
+      () => {
+        paintCancel = undefined
+        lastPaintAt = Date.now()
+        setPaintedText(props.part.text)
+      },
+      { name: "session.text-part.stream-paint", delayMs: remaining, unref: true },
+    )
+  })
+  onCleanup(() => {
+    paintCancel?.()
+  })
+
+  const trimmed = createMemo(() => paintedText().trim())
   const lines = createMemo(() => trimmed().split("\n"))
   const isFinal = createMemo(() => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish))
-  // Only fold long completed text. Streaming text always renders in full.
+  // Only fold long completed text. Streaming text always renders in full (via throttle).
   const overflow = createMemo(() => isFinal() && lines().length > 50)
   const visibleText = createMemo(() => {
     if (expanded() || !overflow()) return trimmed()
