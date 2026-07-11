@@ -15,7 +15,7 @@ if (process.platform === "win32") {
   process.exit(0)
 }
 
-const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
+const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))))
 
 // Search only inside node-pty package trees to keep the walk cheap and bounded.
 const searchRoots = [
