@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.11.3] - 2026-07-12
+
+### Fixed
+
+- Release: raises the deterministic CLI test heap limit so signed release builds can complete on GitHub-hosted runners.
+
 ### Fixed
 
 - Desktop: prevents the integrated terminal's shared session from being closed during renderer lifecycle races and restores stale terminal tabs as fresh shells.

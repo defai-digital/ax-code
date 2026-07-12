@@ -6571,7 +6571,7 @@
         "id": "openai/gpt-5.6-luna",
         "name": "GPT 5.6 Luna",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -6696,7 +6696,7 @@
         "id": "openai/gpt-5.6-terra",
         "name": "GPT 5.6 Terra",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -7179,7 +7179,7 @@
         "id": "openai/gpt-5.6-sol",
         "name": "GPT 5.6 Sol",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -23155,7 +23155,7 @@
         "id": "gpt-5.6-luna",
         "name": "GPT 5.6 Luna",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -23198,7 +23198,7 @@
         "id": "gpt-5.6-terra",
         "name": "GPT 5.6 Terra",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -23415,7 +23415,7 @@
         "id": "gpt-5.6-sol",
         "name": "GPT 5.6 Sol",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -30175,7 +30175,7 @@
         "id": "openai-gpt-56-terra-pro",
         "name": "GPT-5.6 Terra Pro",
         "description": "Frontier GPT model for professional reasoning, coding, and multimodal work",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -30241,7 +30241,7 @@
         "id": "openai-gpt-56-sol-pro",
         "name": "GPT-5.6 Sol Pro",
         "description": "Frontier GPT model for professional reasoning, coding, and multimodal work",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -31011,7 +31011,7 @@
         "id": "openai-gpt-56-terra",
         "name": "GPT-5.6 Terra",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -31078,7 +31078,7 @@
         "id": "openai-gpt-56-luna",
         "name": "GPT-5.6 Luna",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -32158,7 +32158,7 @@
         "id": "openai-gpt-56-luna-pro",
         "name": "GPT-5.6 Luna Pro",
         "description": "Frontier GPT model for professional reasoning, coding, and multimodal work",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -32346,7 +32346,7 @@
         "id": "openai-gpt-56-sol",
         "name": "GPT-5.6 Sol",
         "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -37821,7 +37821,7 @@
         "id": "gpt-5.6",
         "name": "GPT-5.6",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -38596,7 +38596,7 @@
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -38741,7 +38741,7 @@
         "id": "gpt-5.6-terra",
         "name": "GPT-5.6 Terra",
         "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -39501,7 +39501,7 @@
         "id": "gpt-5.6-sol",
         "name": "GPT-5.6 Sol",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -58019,7 +58019,7 @@
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -58139,7 +58139,7 @@
         "id": "gpt-5.6-terra",
         "name": "GPT-5.6 Terra",
         "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -59911,7 +59911,7 @@
         "id": "gpt-5.6-sol",
         "name": "GPT-5.6 Sol",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -61420,7 +61420,7 @@
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
@@ -61477,7 +61477,7 @@
         "id": "gpt-5.6-terra",
         "name": "GPT-5.6 Terra",
         "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
@@ -62103,7 +62103,7 @@
         "id": "gpt-5.6-sol",
         "name": "GPT-5.6 Sol",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
@@ -67570,6 +67570,251 @@
         "limit": {
           "context": 196608,
           "output": 131072
+        }
+      }
+    }
+  },
+  "daoxe": {
+    "id": "daoxe",
+    "env": [
+      "DAOXE_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://daoxe.com/v1",
+    "name": "DaoXE",
+    "doc": "https://daoxe.com/pricing",
+    "models": {
+      "claude-haiku-4-5-20251001": {
+        "id": "claude-haiku-4-5-20251001",
+        "name": "Claude Haiku 4.5",
+        "description": "Fast Claude model for responsive assistance, classification, and lightweight agents",
+        "family": "claude-haiku",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-02-28",
+        "release_date": "2025-10-15",
+        "last_updated": "2025-10-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 64000
+        }
+      },
+      "grok-4.3": {
+        "id": "grok-4.3",
+        "name": "Grok 4.3",
+        "description": "xAI's default Grok for chat, coding, agentic tools, and lower hallucination risk",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-17",
+        "last_updated": "2026-04-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 30000
+        }
+      },
+      "claude-opus-4-8": {
+        "id": "claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "description": "Top Claude Opus tier for the hardest reasoning, coding, and long-horizon agents",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01",
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
+      "gpt-5.4": {
+        "id": "gpt-5.4",
+        "name": "GPT-5.4",
+        "description": "Agent-ready GPT for coding and computer-use workflows at a lower cost",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-03-05",
+        "last_updated": "2026-03-05",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        }
+      },
+      "gemini-3.1-pro-preview": {
+        "id": "gemini-3.1-pro-preview",
+        "name": "Gemini 3.1 Pro Preview",
+        "description": "Reasoning-first Gemini preview for agentic coding and complex problem solving",
+        "family": "gemini-pro",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-02-19",
+        "last_updated": "2026-02-19",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 65536
+        }
+      },
+      "claude-sonnet-4-6": {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "description": "Claude workhorse for coding agents, careful analysis, and production cost control",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-02-17",
+        "last_updated": "2026-03-13",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
         }
       }
     }
@@ -74776,7 +75021,7 @@
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -74901,7 +75146,7 @@
         "id": "gpt-5.6-terra",
         "name": "GPT-5.6 Terra",
         "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -75627,7 +75872,7 @@
         "id": "gpt-5.6-sol",
         "name": "GPT-5.6 Sol",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -84239,7 +84484,7 @@
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -84282,7 +84527,7 @@
         "id": "gpt-5.6-terra",
         "name": "GPT-5.6 Terra",
         "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -84367,7 +84612,7 @@
         "id": "gpt-5.6-sol",
         "name": "GPT-5.6 Sol",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -109049,6 +109294,74 @@
       }
     }
   },
+  "blueclaw": {
+    "id": "blueclaw",
+    "env": [
+      "BLUECLAW_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://openai.blueclaw.network/v1",
+    "name": "Blue Claw",
+    "doc": "https://blueclaw.network",
+    "models": {
+      "Qwen3.6-27B": {
+        "id": "Qwen3.6-27B",
+        "name": "Qwen3.6 27B",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 196608,
+          "output": 65536
+        },
+        "status": "beta"
+      },
+      "Qwen/Qwen3.6-35B-A3B-FP8": {
+        "id": "Qwen/Qwen3.6-35B-A3B-FP8",
+        "name": "Qwen3.6 35B A3B FP8",
+        "description": "Open multimodal Qwen MoE for local agents that need vision, audio, and code",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-17",
+        "last_updated": "2026-04-17",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 65536
+        },
+        "status": "beta"
+      }
+    }
+  },
   "meta": {
     "id": "meta",
     "env": [
@@ -109274,7 +109587,7 @@
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
@@ -109308,7 +109621,7 @@
         "id": "gpt-5.6-terra",
         "name": "GPT-5.6 Terra",
         "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
@@ -109463,7 +109776,7 @@
         "id": "gpt-5.6-sol",
         "name": "GPT-5.6 Sol",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
@@ -127709,7 +128022,7 @@
       "NEON_AI_GATEWAY_TOKEN"
     ],
     "npm": "@ai-sdk/openai-compatible",
-    "api": "${NEON_AI_GATEWAY_BASE_URL}/ai-gateway/mlflow/v1",
+    "api": "${NEON_AI_GATEWAY_BASE_URL}/v1",
     "name": "Neon",
     "doc": "https://neon.com/docs",
     "models": {
@@ -130694,7 +131007,7 @@
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
         "description": "Cost-efficient GPT-5.6 model for fast, high-volume workloads",
-        "family": "gpt-nano",
+        "family": "gpt-luna",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -130737,7 +131050,7 @@
         "id": "gpt-5.6-terra",
         "name": "GPT-5.6 Terra",
         "description": "Balanced GPT-5.6 model for capable, cost-efficient everyday work",
-        "family": "gpt-mini",
+        "family": "gpt-terra",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
@@ -131256,7 +131569,7 @@
         "id": "gpt-5.6-sol",
         "name": "GPT-5.6 Sol",
         "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt",
+        "family": "gpt-sol",
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [
