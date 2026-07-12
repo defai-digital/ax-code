@@ -106,6 +106,10 @@ async function run(group: string, files: string[], dir: string, run: number) {
   // The exact file set is passed through the config's `include` via AX_TEST_FILES
   // (vitest positional filters can't reliably target an exact set).
   const command = [vitestCli(), "run", "--reporter=junit", `--outputFile=${file}`]
+  const maxWorkers = process.env.AX_TEST_MAX_WORKERS
+  if (maxWorkers) {
+    command.push(`--maxWorkers=${maxWorkers}`, "--minWorkers=1")
+  }
   if (coverageDir) {
     command.push(
       "--coverage.enabled",
