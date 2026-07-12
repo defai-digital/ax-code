@@ -1,0 +1,83 @@
+# Template: run ax-code headless in CI for agent work.
+# Copy or call this workflow with secrets for your LLM provider.
+name: ax-code agent run
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Task for ax-code run"
+        required: true
+        type: string
+      sandbox:
+        description: "Isolation mode"
+        required: false
+        default: "workspace-write"
+        type: choice
+        options:
+          - read-only
+          - workspace-write
+          - full-access
+  pull_request:
+    types: [labeled]
+    # Only runs when label `ax-code-agent` is applied (opt-in)
+
+jobs:
+  agent:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ax-code-agent')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install ax-code CLI
+        # Prefer the release installer when assets are published for linux.
+        # Fallback: build from this monorepo for dogfood CI.
+        run: |
+          set -euo pipefail
+          if curl -fsI "https://github.com/defai-digital/ax-code/releases/latest" >/dev/null 2>&1; then
+            curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash || true
+          fi
+          if ! command -v ax-code >/dev/null 2>&1; then
+            corepack enable
+            pnpm install
+            pnpm run setup:cli
+            echo "$HOME/.local/share/ax-code/bin" >> "$GITHUB_PATH" || true
+            echo "$PWD/packages/ax-code/bin" >> "$GITHUB_PATH" || true
+            export PATH="$PATH:$(pwd)/node_modules/.bin"
+          fi
+          command -v ax-code || pnpm --dir packages/ax-code exec node --version
+          ax-code --version || pnpm run cli -- --version || true
+
+      - name: Headless agent task
+        env:
+          # Provide at least one provider key in repository secrets.
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          AX_CODE_AUTONOMOUS: "true"
+          AX_CODE_ISOLATION_MODE: ${{ github.event.inputs.sandbox || 'workspace-write' }}
+          AX_CODE_ISOLATION_BACKEND: auto
+        run: |
+          set -euo pipefail
+          PROMPT="${{ github.event.inputs.prompt }}"
+          if [ -z "$PROMPT" ]; then
+            PROMPT="Review this PR for obvious bugs; do not push."
+          fi
+          if command -v ax-code >/dev/null 2>&1; then
+            ax-code run --sandbox "${AX_CODE_ISOLATION_MODE}" "$PROMPT"
+          else
+            echo "ax-code binary not on PATH; run via monorepo CLI entry"
+            pnpm --dir packages/ax-code exec node ../../script/node-ffi-runner.mjs --import tsx --conditions=node src/index-node.ts run --sandbox "${AX_CODE_ISOLATION_MODE}" "$PROMPT" || {
+              echo "Headless run requires a built CLI and provider credentials."
+              exit 1
+            }
+          fi

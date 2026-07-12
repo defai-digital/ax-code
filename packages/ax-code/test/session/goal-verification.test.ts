@@ -152,6 +152,39 @@ describe("GoalVerification.decide", () => {
     }
   })
 
+  test("successful verify_project after mutation counts as verification", () => {
+    expect(
+      GoalVerification.decide({
+        messages: [
+          assistant(toolPart("edit")),
+          assistant({
+            type: "tool",
+            tool: "verify_project",
+            state: { status: "completed", metadata: { allPassed: true } },
+          }),
+        ],
+        pendingTodos: [],
+      }),
+    ).toEqual({ ok: true })
+  })
+
+  test("failed verify_project does not count as verification", () => {
+    const decision = GoalVerification.decide({
+      messages: [
+        assistant(toolPart("edit")),
+        assistant({
+          type: "tool",
+          tool: "verify_project",
+          state: { status: "completed", metadata: { allPassed: false } },
+        }),
+      ],
+      pendingTodos: [],
+    })
+    expect(decision.ok).toBe(false)
+    if (decision.ok) throw new Error("expected rejection")
+    expect(decision.reason).toBe("unverified_changes")
+  })
+
   test("legacy bash parts without exit metadata still count as verification", () => {
     expect(
       GoalVerification.decide({

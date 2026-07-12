@@ -28,7 +28,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 | macOS Apple Silicon | Active support          | Homebrew CLI formula and Desktop cask                             |
 | Windows x64         | Active support          | PowerShell CLI installer and Desktop release installer            |
 | Windows ARM64       | Active support          | PowerShell CLI installer and Desktop release installer            |
-| Linux               | Contributor/source only | Source builds only, without supported user installer expectations |
+| Linux x64 / arm64   | Active support          | Bash release installer (`install` script) for CLI                 |
 
 **Recommended: AX Code Desktop**
 
@@ -93,13 +93,21 @@ brew trust defai-digital/ax-code
 brew install defai-digital/ax-code/ax-code
 ```
 
+**Linux**
+
+```bash
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
+```
+
+Requires `curl`, `tar`, and `minisign` (or set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only if you intentionally accept an unverifiable download). Installs the node-bundled CLI under `~/.ax-code/bin`. Pin a version with `bash -s -- --version <release>`.
+
 **Windows**
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
 ```
 
-Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
+Supported CLI install paths are Homebrew (macOS), the Bash release installer (Linux), and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
 
 AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 

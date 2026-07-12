@@ -24,6 +24,7 @@ import type { SessionID } from "./schema"
 import { Log } from "@/util/log"
 import { Flag } from "../flag/flag"
 import { ScopedFlag } from "../flag/scoped"
+import { VerificationPolicy } from "./verification-policy"
 
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
@@ -106,11 +107,30 @@ export namespace SystemPrompt {
           `  For substantial multi-file, architectural, or product-visible changes, create or update a repo document when that matches the repository's documentation pattern.`,
           `  For trivial changes, keep the PRD/ADR frame lightweight in the plan instead of creating permanent docs.`,
           `  Prefer industry/common best practices and avoid over-engineering: choose the simplest change that solves the task, avoid new abstractions without 3+ concrete use cases, and verify before expanding scope.`,
+          `  Sandwich non-trivial work: plan → implement → verify (tests/build/verify_project) before claiming done.`,
+          `  For independent research digs, prefer task_parallel with explore agents; do not run concurrent writers.`,
           `  When autonomous mode makes choices for the user, record those choices in the final response.`,
           `  Before ending your turn, mark every todo as completed or cancelled — never leave todos in pending or in_progress state.`,
           `</autonomous_workflow>`,
         ]
       : []
+
+    let verificationProtocol: string[] = []
+    try {
+      const preferred = await VerificationPolicy.resolvePreferredCommands(Instance.directory)
+      verificationProtocol = [VerificationPolicy.renderVerificationProtocol(preferred)]
+    } catch (error) {
+      log.warn("verification protocol resolve failed", { error })
+      verificationProtocol = [
+        VerificationPolicy.renderVerificationProtocol({
+          ecosystem: "unknown",
+          typecheck: null,
+          lint: null,
+          test: null,
+          preferred: [],
+        }),
+      ]
+    }
     const isHtmlProject = (() => {
       try {
         const dir = Instance.directory
@@ -158,6 +178,7 @@ export namespace SystemPrompt {
         `</env>`,
         ...liveSearchBlock,
         ...autonomousWorkflow,
+        ...verificationProtocol,
         ...htmlDevWorkflow,
         ...debugEngineWorkflow,
       ].join("\n"),

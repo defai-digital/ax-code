@@ -31,6 +31,9 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | [Supported Providers and Models](supported-providers.md)  | Default Cloud API providers, CLI providers, and AX Engine local models                                   |
 | [Custom and Gateway Providers](custom-provider.md)        | Connect any OpenAI- or Anthropic-compatible endpoint or self-hosted gateway via custom provider config   |
 | [AX Engine Model Selection](ax-engine-model-selection.md) | Local AX Engine model ranking, memory guidance, and practical default choices                            |
+| [Lifecycle Hooks](hooks.md)                               | PreToolUse / PostToolUse / Stop hooks and official packs                                                 |
+| [ACP happy path](acp.md)                                  | Agent Client Protocol for IDE hosts (Zed, etc.)                                                          |
+| [Skill / plugin catalog](skills/CATALOG.md)               | Built-in skills, project skill locations, plugins, eval harness                                          |
 
 ## Architecture
 
@@ -49,7 +52,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 
 ## Policies
 
-Machine-readable examples live in [`policies/`](policies/).
+Machine-readable examples live in [`policies/`](policies/). See [policies/README.md](policies/README.md).
 
 ## Notes on Scope
 

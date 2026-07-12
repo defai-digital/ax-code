@@ -1,0 +1,14 @@
+{
+  "version": "1",
+  "name": "workspace-verify",
+  "description": "Workspace-write isolation with network off; suitable for autonomous implement-and-verify loops.",
+  "isolation": {
+    "mode": "workspace-write",
+    "network": false,
+    "backend": "auto"
+  },
+  "notes": [
+    "Pair with verify_project or package scripts after mutations.",
+    "Enable hooks packs block-force-push and require-tests-on-stop for extra safety."
+  ]
+}

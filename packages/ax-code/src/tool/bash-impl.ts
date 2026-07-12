@@ -27,6 +27,7 @@ import { NotificationEvent } from "@/notification/events"
 import { Truncate } from "./truncate"
 import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
+import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand } from "./bash-destructive"
@@ -637,6 +638,32 @@ export const BashTool = Tool.define("bash", async () => {
       Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
       Isolation.assertBashNetwork(ctx.extra?.isolation, commandNames)
 
+      // Opt-in OS sandbox wrap for bash (Seatbelt / bubblewrap). App-layer
+      // checks above always run; this adds kernel enforcement when available.
+      let osWrap: OsSandbox.WrapResult | undefined
+      if (Isolation.shouldUseOsSandbox(ctx.extra?.isolation)) {
+        const state = ctx.extra!.isolation!
+        osWrap = OsSandbox.wrapCommand({
+          command: params.command,
+          shell,
+          cwd,
+          workspaceRoot: Instance.directory,
+          worktree: Instance.worktree,
+          network: state.network,
+          protectedPaths: state.protected,
+        })
+        if (!osWrap.active && state.backend === "os") {
+          throw new Isolation.DeniedError(
+            "bash",
+            `OS isolation backend is required but unavailable: ${osWrap.reason}. ` +
+              `Set isolation.backend to "app" or "auto", or install platform sandbox tools.`,
+          )
+        }
+        if (!osWrap.active) {
+          log.info("os sandbox unavailable; using app-layer isolation only", { reason: osWrap.reason })
+        }
+      }
+
       if (directories.size > 0) {
         const globs = Array.from(directories).map((dir) => {
           // Preserve POSIX-looking paths with /s, even on Windows
@@ -699,26 +726,39 @@ export const BashTool = Tool.define("bash", async () => {
         ...process.env,
         ...shellEnv.env,
       })
-      const proc = useSetsidProcessGroup
-        ? spawn("setsid", [shell, "-c", params.command], {
-            cwd,
-            env: {
-              ...sanitizedEnv,
-            },
-            stdio: ["ignore", "pipe", "pipe"],
-            detached: false,
-            windowsHide: process.platform === "win32",
-          })
-        : spawn(params.command, {
-            shell,
-            cwd,
-            env: {
-              ...sanitizedEnv,
-            },
-            stdio: ["ignore", "pipe", "pipe"],
-            detached: process.platform !== "win32",
-            windowsHide: process.platform === "win32",
-          })
+      const proc =
+        osWrap?.active === true
+          ? spawn(osWrap.file, osWrap.args, {
+              cwd,
+              env: {
+                ...sanitizedEnv,
+              },
+              stdio: ["ignore", "pipe", "pipe"],
+              detached: false,
+              windowsHide: process.platform === "win32",
+            })
+          : useSetsidProcessGroup
+            ? spawn("setsid", [shell, "-c", params.command], {
+                cwd,
+                env: {
+                  ...sanitizedEnv,
+                },
+                stdio: ["ignore", "pipe", "pipe"],
+                detached: false,
+                windowsHide: process.platform === "win32",
+              })
+            : spawn(params.command, {
+                shell,
+                cwd,
+                env: {
+                  ...sanitizedEnv,
+                },
+                stdio: ["ignore", "pipe", "pipe"],
+                detached: process.platform !== "win32",
+                windowsHide: process.platform === "win32",
+              })
+      const seatbeltProfile = osWrap?.active === true ? osWrap.profilePath : undefined
+      const cleanupSeatbelt = () => OsSandbox.cleanupProfile(seatbeltProfile)
       if (proc.pid) {
         trackedPIDs.add(proc.pid)
       } else {
@@ -726,7 +766,10 @@ export const BashTool = Tool.define("bash", async () => {
           command: params.command,
           cwd,
         })
+        cleanupSeatbelt()
       }
+      proc.on("close", cleanupSeatbelt)
+      proc.on("error", cleanupSeatbelt)
 
       let output = ""
       // Hard cap on raw output to protect process memory against

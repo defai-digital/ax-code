@@ -104,7 +104,7 @@ export namespace Agent {
     const allowQuestion = Permission.fromConfig({
       question: "allow",
     })
-    const denySubagentFanout = Permission.fromConfig({ task: "deny" })
+    const denySubagentFanout = Permission.fromConfig({ task: "deny", task_parallel: "deny" })
     const denyAll = Permission.fromConfig({ "*": "deny" })
     const exploreReadOnlyWithWeb = Permission.fromConfig({
       "*": "deny",

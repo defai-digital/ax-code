@@ -106,6 +106,7 @@ export namespace Flag {
   export const AX_CODE_ENABLE_QUESTION_TOOL = truthy("AX_CODE_ENABLE_QUESTION_TOOL")
   export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
   export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
+  export declare const AX_CODE_ISOLATION_BACKEND: "app" | "os" | "auto" | undefined
 
   // Native Rust addons — default ON (opt-out with =0 or =false).
   // These dispatch CPU-bound operations to Rust native addons via NAPI-RS.
@@ -357,6 +358,17 @@ Object.defineProperty(Flag, "AX_CODE_ISOLATION_NETWORK", {
     const v = process.env["AX_CODE_ISOLATION_NETWORK"]?.toLowerCase()
     if (v === "true" || v === "1") return true
     if (v === "false" || v === "0") return false
+    return undefined
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_ISOLATION_BACKEND (app | os | auto)
+Object.defineProperty(Flag, "AX_CODE_ISOLATION_BACKEND", {
+  get() {
+    const v = process.env["AX_CODE_ISOLATION_BACKEND"]?.toLowerCase()
+    if (v === "app" || v === "os" || v === "auto") return v
     return undefined
   },
   enumerable: true,

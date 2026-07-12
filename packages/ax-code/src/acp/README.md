@@ -1,11 +1,11 @@
 # ACP (Agent Client Protocol) Implementation
 
-Status: Experimental / partial protocol surface
-Scope: current implementation notes, not a full compliance claim
-Last reviewed: 2026-04-13
+Status: Active happy path (session/new + prompt); partial advanced features
+Scope: current implementation notes
+Last reviewed: 2026-07-12
 Owner: ax-code runtime
 
-This directory contains ax-code's current [Agent Client Protocol](https://agentclientprotocol.com/) integration surface. It implements the core session/prompt flow and selected client capabilities, but some protocol areas remain stubs or partial implementations.
+This directory contains ax-code's [Agent Client Protocol](https://agentclientprotocol.com/) integration. The **documented happy path** is: `initialize` → `session/new` → `session/prompt` with a configured provider (see [docs/acp.md](../../../../docs/acp.md)). Advanced surfaces (streaming updates, full terminal bridge) remain partial.
 
 ## Architecture
 

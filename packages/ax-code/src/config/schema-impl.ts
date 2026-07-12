@@ -142,6 +142,11 @@ export const IsolationMode = z.enum(["read-only", "workspace-write", "full-acces
 })
 export type IsolationMode = z.infer<typeof IsolationMode>
 
+export const IsolationBackend = z.enum(["app", "os", "auto"]).meta({
+  ref: "IsolationBackend",
+})
+export type IsolationBackend = z.infer<typeof IsolationBackend>
+
 export const Isolation = z
   .object({
     mode: IsolationMode.default("workspace-write").describe(
@@ -157,6 +162,9 @@ export const Isolation = z
       .describe(
         "Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected",
       ),
+    backend: IsolationBackend.default("app").describe(
+      "Isolation enforcement backend: app (portable tool checks, default), os (kernel sandbox for bash when available), auto (prefer os with app fallback)",
+    ),
   })
   .strict()
   .meta({ ref: "IsolationConfig" })

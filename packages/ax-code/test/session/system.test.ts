@@ -84,9 +84,14 @@ describe("session.system", () => {
             providerID: "test-provider",
           } as any)
 
-          expect(result.join("\n")).toContain("<autonomous_workflow>")
-          expect(result.join("\n")).toContain("PRD/ADR-style")
-          expect(result.join("\n")).toContain("avoid over-engineering")
+          const text = result.join("\n")
+          expect(text).toContain("<autonomous_workflow>")
+          expect(text).toContain("PRD/ADR-style")
+          expect(text).toContain("avoid over-engineering")
+          expect(text).toContain("plan → implement → verify")
+          expect(text).toContain("task_parallel")
+          expect(text).toContain("<verification_protocol>")
+          expect(text).toContain("verify_project")
         },
       })
     } finally {

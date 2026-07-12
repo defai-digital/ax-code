@@ -132,13 +132,37 @@ To allow network while keeping write restrictions:
 }
 ```
 
+## Isolation backend (app vs OS)
+
+| Backend | Config / env | Behavior |
+| ------- | ------------ | -------- |
+| `app` (default) | `"backend": "app"` or unset | Portable tool-layer checks only |
+| `os` | `"backend": "os"` / `AX_CODE_ISOLATION_BACKEND=os` | App checks + kernel sandbox for bash; errors if OS tools missing |
+| `auto` | `"backend": "auto"` / `AX_CODE_ISOLATION_BACKEND=auto` | Prefer OS bash wrap; fall back to app-only |
+
+**macOS:** Seatbelt profiles via `sandbox-exec` (write limited to workspace/worktree, network denied when `network: false`).  
+**Linux:** bubblewrap (`bwrap`) when installed (`--unshare-net` when network disabled, workspace bind-mounted RW).  
+**Windows:** app-layer only today.
+
+```json
+{
+  "isolation": {
+    "mode": "workspace-write",
+    "network": false,
+    "backend": "auto"
+  }
+}
+```
+
+See [SECURITY.md](../SECURITY.md) for the threat model.
+
 ## How Enforcement Works
 
-Sandbox enforcement is application-layer, checked at each tool invocation:
+Sandbox enforcement is **always** application-layer, checked at each tool invocation. When `backend` is `os` or `auto` and the platform supports it, **bash** is additionally wrapped in a kernel sandbox.
 
 | Tool          | Check                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `bash`        | Working directory + all resolved paths must be inside workspace; network-only clients blocked when network is disabled |
+| `bash`        | Working directory + all resolved paths must be inside workspace; network-only clients blocked when network is disabled; optional OS wrap |
 | `edit`        | Target file must be inside workspace and not protected                                                                 |
 | `write`       | Target file must be inside workspace and not protected                                                                 |
 | `apply_patch` | All target files must be inside workspace and not protected                                                            |

@@ -318,6 +318,27 @@ export async function resolveTools(input: ResolveToolsInput) {
             args,
           },
         )
+        // User lifecycle hooks (PreToolUse) — official packs + .ax-code/hooks.json
+        try {
+          const { LifecycleHooks } = await import("@/hooks/lifecycle")
+          const pre = await LifecycleHooks.runForWorkspace({
+            event: "PreToolUse",
+            sessionID: ctx.sessionID,
+            tool: item.id,
+            args,
+            cwd: Instance.directory,
+          })
+          if (pre.blocked) {
+            const detail = pre.outputs
+              .filter((o) => o.exit !== 0)
+              .map((o) => o.stderr || o.stdout || `exit ${o.exit}`)
+              .join("\n")
+            throw new Error(`PreToolUse hook blocked tool ${item.id}: ${detail || "hook failed"}`)
+          }
+        } catch (error) {
+          if (error instanceof Error && error.message.startsWith("PreToolUse hook blocked")) throw error
+          // Hook load/run failures must not brick the agent loop.
+        }
         let result: Awaited<ReturnType<typeof item.execute>> | undefined
         // Per-path bypass: when the user approves an isolation_escalation
         // for one path inside a multi-path tool call (e.g. apply_patch
@@ -402,6 +423,18 @@ export async function resolveTools(input: ResolveToolsInput) {
           },
           output,
         )
+        try {
+          const { LifecycleHooks } = await import("@/hooks/lifecycle")
+          await LifecycleHooks.runForWorkspace({
+            event: "PostToolUse",
+            sessionID: ctx.sessionID,
+            tool: item.id,
+            args,
+            cwd: Instance.directory,
+          })
+        } catch {
+          // non-fatal
+        }
         return output
       },
     })

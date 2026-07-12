@@ -33,7 +33,7 @@ The runtime isolation default is `workspace-write` with network disabled. This i
 
 ### Execution Isolation Sandbox
 
-ax-code includes a built-in execution isolation sandbox that restricts what the AI agent can access at the tool level. Three modes are available:
+ax-code includes a built-in execution isolation sandbox that restricts what the AI agent can access. Three modes are available:
 
 | Mode                          | Behavior                                                                                                         |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -51,7 +51,27 @@ Key properties:
 - **CLI control** — `--sandbox read-only`, `--sandbox workspace-write`, `--sandbox full-access`
 - **Environment variable** — `AX_CODE_ISOLATION_MODE`
 
-The isolation sandbox operates at the application layer (tool permission checks), not at the OS process layer. If you need OS-level isolation, run ax-code inside a Docker container or VM.
+#### Isolation backends
+
+| Backend | Behavior |
+| ------- | -------- |
+| **app** (default) | Portable application-layer checks on every tool |
+| **os** | App checks **plus** kernel sandbox for bash (macOS Seatbelt via `sandbox-exec`, Linux bubblewrap when `bwrap` is installed). Fails closed if OS tools are missing |
+| **auto** | Prefer OS bash wrap when available; fall back to app-layer only |
+
+```json
+{
+  "isolation": {
+    "mode": "workspace-write",
+    "network": false,
+    "backend": "auto"
+  }
+}
+```
+
+Or set `AX_CODE_ISOLATION_BACKEND=os|auto|app`.
+
+OS isolation for bash denies writes outside the workspace roots and denies network when `network: false`. App-layer checks still always run. On platforms without Seatbelt/bubblewrap, use `backend: "app"` or a container/VM.
 
 ### Server Security
 

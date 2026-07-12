@@ -1,0 +1,16 @@
+Launch multiple specialized agents in parallel for independent research or exploration digs.
+
+Use this when several digs do not depend on each other (for example: explore auth, explore billing, and explore infra at the same time). Prefer explore / read-only agents.
+
+Do NOT use concurrent writers. If two or more agents can edit files or run bash mutations, this tool rejects the call. Run writers one at a time with the task tool, or use a single build agent.
+
+Available agent types:
+{agents}
+
+Limits:
+- 1–8 tasks per call
+- Each task is a separate subagent session with its own context
+- Nested task / task_parallel fan-out from children is denied
+- Same depth and timeout rules as the single task tool
+
+When the digs finish, summarize the combined evidence for the user. Each result includes a task_id you can resume later with the task tool.

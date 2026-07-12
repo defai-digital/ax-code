@@ -9,12 +9,15 @@ The root [README](../README.md) keeps the primary install path. This page is the
 
 ## Recommended Path
 
-Use a supported packaged installer unless you are developing from a checkout. Prefer Homebrew on macOS and the native PowerShell installer on Windows for the CLI.
+Use a supported packaged installer unless you are developing from a checkout. Prefer Homebrew on macOS, the Bash release installer on Linux, and the native PowerShell installer on Windows for the CLI.
 
 ```bash
 # Homebrew (macOS CLI)
 brew tap defai-digital/ax-code
 brew install ax-code
+
+# Bash release installer (Linux CLI)
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
 
 # GitHub release installer (Windows PowerShell)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
@@ -50,6 +53,7 @@ The Windows PowerShell `install.ps1` script installs the CLI only; it does not i
 | Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
 | Homebrew formula                     | `brew tap defai-digital/ax-code && brew install ax-code`                                                                                       | `node-bundled`         | Supported            | Normal macOS package-manager install path                          |
+| Linux Bash release installer         | `curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install \| bash`                                                  | `node-bundled`         | Supported on Linux   | Linux x64/arm64 user and CI CLI install path                       |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
@@ -69,6 +73,7 @@ The Windows PowerShell `install.ps1` script installs the CLI only; it does not i
 - Fully qualified Homebrew commands such as `brew install defai-digital/ax-code/ax-code` are supported one-line
   equivalents and are useful for CI, but user-facing docs should prefer the clearer `brew tap ...` plus
   `brew install ax-code` form.
+- Linux: use the Bash release installer (`install` script from GitHub Releases). It supports `linux-x64` and `linux-arm64` (including musl/baseline variants when detected). Requires `curl`, `tar`, and `minisign` for signature verification.
 - Windows CLI: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. The Bash installer is not the canonical Windows user experience.
 - Windows Desktop: use the signed Electron installer from GitHub Releases, named `AX-Code-<version>-win-x64.exe` or `AX-Code-<version>-win-arm64.exe`. Do not describe `install.ps1` as a Desktop installer.
 - npm: not a supported install or upgrade channel.

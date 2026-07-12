@@ -4,9 +4,11 @@ import { Filesystem } from "@/util/filesystem"
 import { uniqueStrings } from "@/util/string-list"
 import { Flag } from "@/flag/flag"
 import type { Isolation as IsolationConfig } from "@/config/schema"
+import { OsSandbox as OsSandboxModule } from "./os-sandbox"
 
 export namespace Isolation {
   export const DEFAULT_PROTECTED = [".git", ".ax-code"]
+  export const OsSandbox = OsSandboxModule
 
   // Command basenames whose sole purpose is to open a network connection.
   // When network access is disabled these are blocked at the bash layer so
@@ -32,11 +34,17 @@ export namespace Isolation {
   ])
 
   export type Mode = "read-only" | "workspace-write" | "full-access"
+  export type Backend = OsSandboxModule.Backend
 
   export interface State {
     mode: Mode
     network: boolean
     protected: string[]
+    /**
+     * Isolation backend for bash OS wrapping. App-layer checks always run;
+     * `os`/`auto` additionally wrap bash when the platform supports it.
+     */
+    backend: Backend
     /**
      * Paths the user has explicitly approved via `isolation_escalation`
      * for the current tool invocation. Scoped per-path so a single
@@ -47,6 +55,7 @@ export namespace Isolation {
   }
 
   export const DEFAULT_MODE: Mode = "workspace-write"
+  export const DEFAULT_BACKEND: Backend = "app"
 
   function resolvePath(filepath: string) {
     return Filesystem.resolve(filepath)
@@ -114,6 +123,10 @@ export namespace Isolation {
   export function resolve(config: IsolationConfig | undefined, directory: string, worktree = directory): State {
     const mode = Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? DEFAULT_MODE
     const network = Flag.AX_CODE_ISOLATION_NETWORK ?? config?.network
+    const backend = OsSandboxModule.resolveBackend({
+      configBackend: config?.backend as Backend | undefined,
+      envBackend: Flag.AX_CODE_ISOLATION_BACKEND,
+    })
     const protectedPaths = roots(directory, worktree).flatMap((root) =>
       DEFAULT_PROTECTED.map((item) => path.resolve(root, item)),
     )
@@ -126,7 +139,19 @@ export namespace Isolation {
       mode,
       network: mode === "full-access" ? true : (network ?? false),
       protected: uniqueStrings(protectedPaths.map(resolvePath)),
+      backend,
     }
+  }
+
+  /**
+   * Whether bash should attempt an OS-level sandbox wrap for this isolation state.
+   * App-layer assertBash still always runs first.
+   */
+  export function shouldUseOsSandbox(state: State | undefined): boolean {
+    if (!state) return false
+    if (state.mode === "full-access") return false
+    if (state.backend === "app") return false
+    return state.backend === "os" || state.backend === "auto"
   }
 
   export function isProtected(state: State, filepath: string): boolean {

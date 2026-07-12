@@ -8,6 +8,7 @@ import { SessionGoal } from "./goal"
 import type { SessionID } from "./schema"
 import { SystemPrompt } from "./system"
 import { Todo } from "./todo"
+import { IntelligenceNudge } from "./intelligence-nudge"
 
 type SystemCache = {
   environment?: string[]
@@ -79,6 +80,7 @@ export async function systemPrompt(input: {
   const memory = await memoryFn(input.agent, input.messages)
   const decisionHintsFn = input.decisionHints ?? SystemPrompt.decisionHints
   const decisionHints = await decisionHintsFn({ messages: input.messages, sessionID: input.sessionID })
+  const intelligenceNudge = IntelligenceNudge.evaluate(input.messages ?? [])
   const assuranceWorkflow = SystemPrompt.assuranceWorkflow(input.agent, input.model)
 
   const modelKey = providerModelKey({ providerID: input.model.providerID, modelID: input.model.api.id })
@@ -123,6 +125,7 @@ export async function systemPrompt(input: {
     ...(assuranceWorkflow ? [assuranceWorkflow] : []),
     ...(memory ? [memory] : []),
     ...(decisionHints ? [decisionHints] : []),
+    ...(intelligenceNudge.active ? [intelligenceNudge.text] : []),
     ...(goalSection ? [goalSection] : []),
     ...(pendingTodosSection ? [pendingTodosSection] : []),
     ...(skills ? [skills] : []),
