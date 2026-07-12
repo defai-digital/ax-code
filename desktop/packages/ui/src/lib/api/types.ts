@@ -70,6 +70,7 @@ export interface CreateTerminalOptions {
 export interface TerminalStreamOptions {
   retry?: Partial<RetryPolicy>
   connectionTimeoutMs?: number
+  consumerKey?: string
 }
 
 export interface ResizeTerminalPayload {

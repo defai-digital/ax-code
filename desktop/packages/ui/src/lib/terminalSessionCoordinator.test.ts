@@ -5,7 +5,7 @@ import {
   resetTerminalCreateLocksForTests,
   terminalCreateLockKey,
   withTerminalSessionCreate,
-} from "./terminalCreateLock"
+} from "./terminalSessionCoordinator"
 
 describe("withTerminalSessionCreate", () => {
   beforeEach(() => {
@@ -42,7 +42,7 @@ describe("withTerminalSessionCreate", () => {
     expect(create).toHaveBeenCalledTimes(2)
   })
 
-  test("claims a coalesced PTY before any renderer resumes", async () => {
+  test("claims a coalesced PTY before any caller resumes", async () => {
     let resolveCreate!: (value: string) => void
     let claimedSessionId: string | null = null
     const createSession = vi.fn(

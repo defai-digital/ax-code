@@ -23,12 +23,16 @@ describe("TerminalView source guards", () => {
     expect(source).toContain("ensureClaimedTerminalSession")
     expect(source).not.toContain("cleanupStaleCreatedTerminalSession")
     expect(source).toContain('splitPaneRightTab === "terminal"')
+    expect(source).toContain("terminalStreamConsumerKey(directory, tabId)")
+    expect(source).toContain("expectedSessionId: terminalId")
   })
 
   test("recovers from missing server sessions instead of locking the tab as exited", async () => {
     const source = await readFile(sourcePath, "utf8")
     expect(source).toContain("isMissingSession")
-    expect(source).toContain('setTabSessionId(directory, tabId, null, { lifecycle: "idle" })')
+    expect(source).toMatch(
+      /setTabSessionId\(directory, tabId, null, \{\s*lifecycle: "idle",\s*expectedSessionId: terminalId/,
+    )
     expect(source).toMatch(/session not found/i)
   })
 })

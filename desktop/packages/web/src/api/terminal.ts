@@ -25,6 +25,7 @@ const getRetryPolicy = (options?: TerminalStreamOptions) => {
     initialRetryDelay: retry?.initialDelayMs ?? HTTP_DEFAULTS.terminal.defaultInitialRetryDelayMs,
     maxRetryDelay: retry?.maxDelayMs ?? HTTP_DEFAULTS.terminal.defaultMaxRetryDelayMs,
     connectionTimeout: options?.connectionTimeoutMs ?? HTTP_DEFAULTS.terminal.defaultConnectionTimeoutMs,
+    consumerKey: options?.consumerKey,
   }
 }
 

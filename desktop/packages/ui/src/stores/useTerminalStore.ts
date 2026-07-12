@@ -63,12 +63,12 @@ interface TerminalStore {
     directory: string,
     tabId: string,
     sessionId: string | null,
-    options?: { lifecycle?: TerminalTabLifecycle },
+    options?: { lifecycle?: TerminalTabLifecycle; expectedSessionId?: string },
   ) => void
   setTabLifecycle: (directory: string, tabId: string, lifecycle: TerminalTabLifecycle) => void
   setConnecting: (directory: string, tabId: string, isConnecting: boolean) => void
-  appendToBuffer: (directory: string, tabId: string, chunk: string) => void
-  clearBuffer: (directory: string, tabId: string) => void
+  appendToBuffer: (directory: string, tabId: string, chunk: string, options?: { expectedSessionId?: string }) => boolean
+  clearBuffer: (directory: string, tabId: string, options?: { expectedSessionId?: string }) => void
   setTabPreviewUrl: (
     directory: string,
     tabId: string,
@@ -367,7 +367,7 @@ export const useTerminalStore = create<TerminalStore>()(
           directory: string,
           tabId: string,
           sessionId: string | null,
-          options?: { lifecycle?: TerminalTabLifecycle },
+          options?: { lifecycle?: TerminalTabLifecycle; expectedSessionId?: string },
         ) => {
           const key = normalizeDirectory(directory)
           set((state) => {
@@ -383,6 +383,9 @@ export const useTerminalStore = create<TerminalStore>()(
             }
 
             const tab = existing.tabs[idx]
+            if (options?.expectedSessionId !== undefined && tab.terminalSessionId !== options.expectedSessionId) {
+              return state
+            }
             const shouldResetBuffer = sessionId !== null && tab.terminalSessionId !== sessionId
 
             const nextLifecycle =
@@ -445,12 +448,13 @@ export const useTerminalStore = create<TerminalStore>()(
           })
         },
 
-        appendToBuffer: (directory: string, tabId: string, chunk: string) => {
+        appendToBuffer: (directory: string, tabId: string, chunk: string, options?: { expectedSessionId?: string }) => {
           if (!chunk) {
-            return
+            return false
           }
 
           const key = normalizeDirectory(directory)
+          let appended = false
           set((state) => {
             const newSessions = new Map(state.sessions)
             const existing = newSessions.get(key)
@@ -464,6 +468,9 @@ export const useTerminalStore = create<TerminalStore>()(
             }
 
             const tab = existing.tabs[idx]
+            if (options?.expectedSessionId !== undefined && tab.terminalSessionId !== options.expectedSessionId) {
+              return state
+            }
             const chunkId = state.nextChunkId
             const chunkEntry: TerminalChunk = { id: chunkId, data: chunk }
 
@@ -485,9 +492,11 @@ export const useTerminalStore = create<TerminalStore>()(
               bufferLength,
             }
             newSessions.set(key, { ...existing, tabs: nextTabs })
+            appended = true
 
             return { sessions: newSessions, nextChunkId: chunkId + 1 }
           })
+          return appended
         },
 
         setTabPreviewUrl: (directory: string, tabId: string, url: string | null, options = {}) => {
@@ -596,7 +605,7 @@ export const useTerminalStore = create<TerminalStore>()(
           })
         },
 
-        clearBuffer: (directory: string, tabId: string) => {
+        clearBuffer: (directory: string, tabId: string, options?: { expectedSessionId?: string }) => {
           const key = normalizeDirectory(directory)
           set((state) => {
             const newSessions = new Map(state.sessions)
@@ -607,6 +616,13 @@ export const useTerminalStore = create<TerminalStore>()(
 
             const idx = findTabIndex(existing, tabId)
             if (idx < 0) {
+              return state
+            }
+
+            if (
+              options?.expectedSessionId !== undefined &&
+              existing.tabs[idx]?.terminalSessionId !== options.expectedSessionId
+            ) {
               return state
             }
 

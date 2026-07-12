@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Desktop: prevents the integrated terminal's shared session from being closed during renderer lifecycle races and restores stale terminal tabs as fresh shells.
+- Desktop: isolates concurrent terminal transports, deduplicates multi-view and replayed output, and prevents stale action/session events from replacing live PTYs.
 
 ## [6.11.2] - 2026-07-12
 

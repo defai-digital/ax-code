@@ -25,7 +25,8 @@ import {
 } from "@/lib/projectActions"
 import { projectScopedEventMatchesProject } from "@/lib/projectScopedEvents"
 import { detectDevServerCommand, readPackageJsonScripts } from "@/lib/detectDevServer"
-import { connectTerminalStream } from "@/lib/terminalApi"
+import { connectTerminalStream, terminalStreamConsumerKey } from "@/lib/terminalApi"
+import { ensureClaimedTerminalSession } from "@/lib/terminalSessionCoordinator"
 import { isLoopbackHostname } from "@/lib/loopback"
 
 type UrlWatchEntry = {
@@ -477,10 +478,28 @@ export const ProjectActionsButton = ({
         if (!activeSessionId) {
           setConnecting(normalizedDirectory, tabId, true)
           try {
-            const created = await terminal.createSession({ cwd: normalizedDirectory })
-            activeSessionId = created.sessionId
-            createdSession = true
-            setTabSessionId(normalizedDirectory, tabId, activeSessionId)
+            activeSessionId = await ensureClaimedTerminalSession(normalizedDirectory, tabId, {
+              getClaimedSessionId: () =>
+                useTerminalStore
+                  .getState()
+                  .getDirectoryState(normalizedDirectory)
+                  ?.tabs.find((entry) => entry.id === tabId)?.terminalSessionId ?? null,
+              createSession: async () => {
+                const created = await terminal.createSession({ cwd: normalizedDirectory })
+                return created.sessionId
+              },
+              claimSession: (sessionId) => {
+                setTabSessionId(normalizedDirectory, tabId, sessionId)
+                return (
+                  useTerminalStore
+                    .getState()
+                    .getDirectoryState(normalizedDirectory)
+                    ?.tabs.find((entry) => entry.id === tabId)?.terminalSessionId === sessionId
+                )
+              },
+              closeSession: terminal.close,
+            })
+            createdSession = Boolean(activeSessionId)
           } finally {
             setConnecting(normalizedDirectory, tabId, false)
           }
@@ -489,6 +508,7 @@ export const ProjectActionsButton = ({
         if (!activeSessionId) {
           throw new Error(t("projectActions.error.failedToCreateTerminalSession"))
         }
+        const runningSessionId = activeSessionId
 
         if (createdSession) {
           await sleep(350)
@@ -498,13 +518,18 @@ export const ProjectActionsButton = ({
           streamCleanupByRunKeyRef.current[key]?.()
           setConnecting(normalizedDirectory, tabId, true)
           streamCleanupByRunKeyRef.current[key] = connectTerminalStream(
-            activeSessionId,
+            runningSessionId,
             (event) => {
               if (event.type === "data" && typeof event.data === "string" && event.data.length > 0) {
-                useTerminalStore.getState().appendToBuffer(normalizedDirectory, tabId, event.data)
+                useTerminalStore.getState().appendToBuffer(normalizedDirectory, tabId, event.data, {
+                  expectedSessionId: runningSessionId,
+                })
               }
               if (event.type === "exit") {
-                useTerminalStore.getState().setTabLifecycle(normalizedDirectory, tabId, "exited")
+                useTerminalStore.getState().setTabSessionId(normalizedDirectory, tabId, null, {
+                  lifecycle: "exited",
+                  expectedSessionId: runningSessionId,
+                })
                 useTerminalStore.getState().setConnecting(normalizedDirectory, tabId, false)
                 useTerminalStore.getState().removeProjectActionRun(key)
                 delete urlWatchByRunKeyRef.current[key]
@@ -514,10 +539,29 @@ export const ProjectActionsButton = ({
                 delete previewWaitTimeoutByRunKeyRef.current[key]
               }
             },
-            () => {
+            (_error, fatal) => {
               useTerminalStore.getState().setConnecting(normalizedDirectory, tabId, false)
+              if (!fatal) {
+                return
+              }
+              useTerminalStore.getState().setTabSessionId(normalizedDirectory, tabId, null, {
+                lifecycle: "exited",
+                expectedSessionId: runningSessionId,
+              })
+              useTerminalStore.getState().removeProjectActionRun(key)
+              delete urlWatchByRunKeyRef.current[key]
+              streamCleanupByRunKeyRef.current[key]?.()
+              delete streamCleanupByRunKeyRef.current[key]
+              window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[key])
+              delete previewWaitTimeoutByRunKeyRef.current[key]
             },
-            { maxRetries: 60, initialRetryDelay: 250, maxRetryDelay: 2000, connectionTimeout: 5000 },
+            {
+              maxRetries: 60,
+              initialRetryDelay: 250,
+              maxRetryDelay: 2000,
+              connectionTimeout: 5000,
+              consumerKey: terminalStreamConsumerKey(normalizedDirectory, tabId),
+            },
           )
         }
 
@@ -528,7 +572,7 @@ export const ProjectActionsButton = ({
           directory: normalizedDirectory,
           actionId: discovered.id,
           tabId,
-          sessionId: activeSessionId,
+          sessionId: runningSessionId,
           status: discovered.id === AUTO_DISCOVER_ACTION_ID && !manualOpenUrl ? "waiting-for-preview" : "running",
         })
         window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[key])
@@ -559,7 +603,7 @@ export const ProjectActionsButton = ({
         }
 
         const normalizedCommand = stripControlChars(discovered.command.trim().replace(/\r\n|\r/g, "\n"))
-        await terminal.sendInput(activeSessionId, `${normalizedCommand}\r`)
+        await terminal.sendInput(runningSessionId, `${normalizedCommand}\r`)
       } catch (error) {
         removeProjectActionRun(runKey)
         delete urlWatchByRunKeyRef.current[runKey]
@@ -629,7 +673,10 @@ export const ProjectActionsButton = ({
             // noop
           }
         }
-        setTabSessionId(activeRun.directory, activeRun.tabId, null)
+        setTabSessionId(activeRun.directory, activeRun.tabId, null, {
+          lifecycle: "exited",
+          expectedSessionId: activeRun.sessionId,
+        })
       }
 
       removeProjectActionRun(runKey)

@@ -118,4 +118,31 @@ describe("useTerminalStore", () => {
     expect(tab?.terminalSessionId).toBeNull()
     expect(tab?.lifecycle).toBe("idle")
   })
+
+  test("ignores late events from a replaced terminal session", () => {
+    const store = useTerminalStore.getState()
+    store.ensureDirectory("/repo")
+    const tabId = useTerminalStore.getState().getDirectoryState("/repo")?.tabs[0]?.id
+    expect(tabId).toBeTruthy()
+
+    store.setTabSessionId("/repo", tabId!, "old-session")
+    store.appendToBuffer("/repo", tabId!, "old output", { expectedSessionId: "old-session" })
+    store.setTabSessionId("/repo", tabId!, "replacement-session")
+
+    expect(
+      store.appendToBuffer("/repo", tabId!, "late output", {
+        expectedSessionId: "old-session",
+      }),
+    ).toBe(false)
+    store.clearBuffer("/repo", tabId!, { expectedSessionId: "old-session" })
+    store.setTabSessionId("/repo", tabId!, null, {
+      lifecycle: "exited",
+      expectedSessionId: "old-session",
+    })
+
+    const tab = useTerminalStore.getState().getDirectoryState("/repo")?.tabs[0]
+    expect(tab?.terminalSessionId).toBe("replacement-session")
+    expect(tab?.lifecycle).toBe("running")
+    expect(tab?.bufferChunks).toEqual([])
+  })
 })

@@ -16,7 +16,7 @@ import { SortableTabsStrip } from "@/components/ui/sortable-tabs-strip"
 import { Icon } from "@/components/icon/Icon"
 import { useDeviceInfo } from "@/lib/device"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
-import { primeTerminalInputTransport } from "@/lib/terminalApi"
+import { primeTerminalInputTransport, terminalStreamConsumerKey } from "@/lib/terminalApi"
 import {
   buildTerminalPreviewScanState,
   extractTerminalPreviewUrl,
@@ -24,7 +24,7 @@ import {
 } from "@/lib/terminalPreview"
 import { useI18n } from "@/lib/i18n"
 import { PROJECT_ACTION_ICON_MAP, type ProjectActionIconKey } from "@/lib/projectActions"
-import { ensureClaimedTerminalSession } from "./terminalCreateLock"
+import { ensureClaimedTerminalSession } from "@/lib/terminalSessionCoordinator"
 
 type Modifier = "ctrl" | "cmd"
 type MobileKey = "esc" | "tab" | "enter" | "arrow-up" | "arrow-down" | "arrow-left" | "arrow-right"
@@ -351,6 +351,15 @@ export const TerminalView: React.FC = () => {
               return
             }
 
+            const currentTab = useTerminalStore
+              .getState()
+              .getDirectoryState(directory)
+              ?.tabs.find((entry) => entry.id === tabId)
+            if (currentTab?.terminalSessionId !== terminalId) {
+              disconnectStream()
+              return
+            }
+
             switch (event.type) {
               case "connected": {
                 setConnecting(directory, tabId, false)
@@ -378,18 +387,18 @@ export const TerminalView: React.FC = () => {
               }
               case "data": {
                 if (event.data) {
-                  appendToBuffer(directory, tabId, event.data)
-                  scanTerminalPreviewOutput(directory, tabId, event.data)
+                  const appended = appendToBuffer(directory, tabId, event.data, {
+                    expectedSessionId: terminalId,
+                  })
+                  if (appended) {
+                    scanTerminalPreviewOutput(directory, tabId, event.data)
+                  }
                 }
                 break
               }
               case "exit": {
                 const exitCode = typeof event.exitCode === "number" ? event.exitCode : null
                 const signal = typeof event.signal === "number" ? event.signal : null
-                const currentTab = useTerminalStore
-                  .getState()
-                  .getDirectoryState(directory)
-                  ?.tabs.find((t) => t.id === tabId)
                 const isActionTab = Boolean(currentTab?.label?.startsWith("Action:"))
                 appendToBuffer(
                   directory,
@@ -399,8 +408,12 @@ export const TerminalView: React.FC = () => {
                       exitCode !== null ? t("terminalView.stream.processExitedWithCode", { exitCode }) : "",
                     signalSegment: signal !== null ? t("terminalView.stream.processExitedWithSignal", { signal }) : "",
                   }),
+                  { expectedSessionId: terminalId },
                 )
-                setTabSessionId(directory, tabId, null, { lifecycle: "exited" })
+                setTabSessionId(directory, tabId, null, {
+                  lifecycle: "exited",
+                  expectedSessionId: terminalId,
+                })
                 setConnecting(directory, tabId, false)
                 setConnectionError(isActionTab ? null : t("terminalView.error.sessionEnded"))
                 setIsFatalError(false)
@@ -415,6 +428,15 @@ export const TerminalView: React.FC = () => {
               return
             }
 
+            const currentSessionId = useTerminalStore
+              .getState()
+              .getDirectoryState(directory)
+              ?.tabs.find((entry) => entry.id === tabId)?.terminalSessionId
+            if (currentSessionId !== terminalId) {
+              disconnectStream()
+              return
+            }
+
             if (!fatal) {
               setConnectionError(null)
               setIsFatalError(false)
@@ -423,7 +445,7 @@ export const TerminalView: React.FC = () => {
 
             setIsReconnectPending(false)
             setConnecting(directory, tabId, false)
-            clearBuffer(directory, tabId)
+            clearBuffer(directory, tabId, { expectedSessionId: terminalId })
             disconnectStream()
 
             // Persisted session ids outlive the desktop server process. After an
@@ -435,16 +457,25 @@ export const TerminalView: React.FC = () => {
               rehydratedTerminalIdsRef.current.delete(terminalId)
               setConnectionError(null)
               setIsFatalError(false)
-              setTabSessionId(directory, tabId, null, { lifecycle: "idle" })
+              setTabSessionId(directory, tabId, null, {
+                lifecycle: "idle",
+                expectedSessionId: terminalId,
+              })
               return
             }
 
             setConnectionError(t("terminalView.error.connectionFailed", { message: error.message }))
             setIsFatalError(true)
-            setTabSessionId(directory, tabId, null, { lifecycle: "exited" })
+            setTabSessionId(directory, tabId, null, {
+              lifecycle: "exited",
+              expectedSessionId: terminalId,
+            })
           },
         },
-        streamOptions,
+        {
+          ...streamOptions,
+          consumerKey: terminalStreamConsumerKey(directory, tabId),
+        },
       )
 
       streamCleanupRef.current = () => {

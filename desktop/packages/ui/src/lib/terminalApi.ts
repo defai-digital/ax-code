@@ -21,6 +21,7 @@ export interface ConnectStreamOptions {
   initialRetryDelay?: number
   maxRetryDelay?: number
   connectionTimeout?: number
+  consumerKey?: string
 }
 
 type TerminalControlMessage = {
@@ -41,6 +42,7 @@ type TerminalControlMessage = {
 type StreamSubscription = {
   token: symbol
   sessionId: string
+  dataConsumerKey: string | symbol
   onEvent: (event: TerminalStreamEvent) => void
   onError?: (error: Error, fatal?: boolean) => void
   maxRetries: number
@@ -61,10 +63,13 @@ const WS_RECONNECT_JITTER_MS = 250
 const WS_KEEPALIVE_INTERVAL_MS = 20000
 const WS_CONNECT_TIMEOUT_MS = 5000
 const TERMINAL_CREATE_TIMEOUT_MS = 10000
-const GLOBAL_TERMINAL_TRANSPORT_STATE_KEY = "__openchamberTerminalTransportState"
+const GLOBAL_TERMINAL_TRANSPORT_STATE_KEY = "__openchamberTerminalTransportStateV3"
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
+
+export const terminalStreamConsumerKey = (directory: string, tabId: string): string =>
+  JSON.stringify([directory, tabId])
 
 const normalizeWebSocketPath = (pathValue: string): string => {
   if (/^wss?:\/\//i.test(pathValue)) {
@@ -132,9 +137,10 @@ class TerminalTransportManager {
   private closed = false
   private subscriptions = new Map<symbol, StreamSubscription>()
   private activeSubscriptionToken: symbol | null = null
-  private replayCursorBySession = new Map<string, number>()
   /** Last successful bind metadata, reused when a second view joins the same session. */
   private lastBoundMeta: { runtime?: "node" | "bun"; ptyBackend?: string } | null = null
+
+  constructor(private readonly replayCursorBySession: Map<string, number>) {}
 
   configure(socketUrl: string): void {
     if (!socketUrl) {
@@ -165,6 +171,7 @@ class TerminalTransportManager {
     const subscription: StreamSubscription = {
       token,
       sessionId,
+      dataConsumerKey: options?.consumerKey ?? token,
       onEvent,
       onError,
       maxRetries: options?.maxRetries ?? 3,
@@ -185,11 +192,7 @@ class TerminalTransportManager {
     // If we're already bound to that session on a live socket, join without
     // rebinding — a rebind replays history to every subscriber and duplicates
     // output in the shared tab buffer.
-    if (
-      this.boundSessionId === sessionId &&
-      this.socket &&
-      this.socket.readyState === WS_READY_STATE_OPEN
-    ) {
+    if (this.boundSessionId === sessionId && this.socket && this.socket.readyState === WS_READY_STATE_OPEN) {
       subscription.connected = true
       const meta = this.lastBoundMeta
       queueMicrotask(() => {
@@ -269,18 +272,6 @@ class TerminalTransportManager {
     }
   }
 
-  unbindSession(sessionId: string): void {
-    if (!sessionId) {
-      return
-    }
-    if (this.boundSessionId === sessionId) {
-      this.boundSessionId = null
-    }
-    if (this.requestedSessionId === sessionId) {
-      this.requestedSessionId = null
-    }
-  }
-
   close(): void {
     this.closed = true
     this.clearReconnectTimeout()
@@ -291,7 +282,6 @@ class TerminalTransportManager {
     this.socketUrl = ""
     this.subscriptions.clear()
     this.activeSubscriptionToken = null
-    this.replayCursorBySession.clear()
   }
 
   prime(): void {
@@ -344,6 +334,25 @@ class TerminalTransportManager {
       if (subscription.sessionId === sessionId) {
         fn(subscription)
       }
+    }
+  }
+
+  private forEachDataConsumerForSession(
+    sessionId: string | null | undefined,
+    fn: (subscription: StreamSubscription) => void,
+  ): void {
+    if (!sessionId) {
+      return
+    }
+
+    const deliveredConsumerKeys = new Set<string | symbol>()
+    const subscriptions = Array.from(this.subscriptions.values()).reverse()
+    for (const subscription of subscriptions) {
+      if (subscription.sessionId !== sessionId || deliveredConsumerKeys.has(subscription.dataConsumerKey)) {
+        continue
+      }
+      deliveredConsumerKeys.add(subscription.dataConsumerKey)
+      fn(subscription)
     }
   }
 
@@ -450,8 +459,8 @@ class TerminalTransportManager {
         }
 
         socket.onerror = () => {
-          if (!this.closed && !this.getActiveSubscription()) {
-            this.scheduleReconnect(new Error("Terminal websocket error"))
+          if (!this.closed && this.getActiveSubscription()) {
+            this.handleSocketFailure(new Error("Terminal websocket error"))
           }
         }
 
@@ -527,8 +536,11 @@ class TerminalTransportManager {
     const maxRetries = activeSubscription.maxRetries
 
     if (attempt > maxRetries) {
-      this.clearConnectionTimeout(activeSubscription)
-      activeSubscription.onError?.(error, true)
+      this.forEachSubscriptionForSession(activeSubscription.sessionId, (subscription) => {
+        subscription.connected = false
+        this.clearConnectionTimeout(subscription)
+        subscription.onError?.(error, true)
+      })
       return
     }
 
@@ -609,11 +621,8 @@ class TerminalTransportManager {
       return
     }
 
-    // Untagged text belongs to the currently-bound session; fan it out to every
-    // view of that session so all of them render live output, not just the
-    // most-recently-subscribed one.
     const targetSession = this.boundSessionId ?? this.getActiveSubscription()?.sessionId ?? null
-    this.forEachSubscriptionForSession(targetSession, (subscription) => {
+    this.forEachDataConsumerForSession(targetSession, (subscription) => {
       subscription.onEvent({ type: "data", data: text })
     })
   }
@@ -654,7 +663,7 @@ class TerminalTransportManager {
 
         if (typeof payload.d === "string" && payload.d.length > 0) {
           const data = payload.d
-          this.forEachSubscriptionForSession(sessionId, (subscription) => {
+          this.forEachDataConsumerForSession(sessionId, (subscription) => {
             subscription.onEvent({ type: "data", data })
           })
         }
@@ -713,6 +722,9 @@ class TerminalTransportManager {
 
         if (payload.c === "NOT_BOUND" || payload.c === "SESSION_NOT_FOUND") {
           this.boundSessionId = null
+        }
+        if (payload.c === "SESSION_NOT_FOUND" && errorSession) {
+          this.replayCursorBySession.delete(errorSession)
         }
 
         this.forEachSubscriptionForSession(errorSession, (subscription) => {
@@ -793,8 +805,7 @@ class TerminalTransportManager {
     return this.boundSessionId
   }
 
-  /** Test seam: number of active stream subscriptions. */
-  getSubscriptionCountForTests(): number {
+  getSubscriptionCount(): number {
     return this.subscriptions.size
   }
 }
@@ -802,7 +813,10 @@ class TerminalTransportManager {
 type TerminalTransportGlobalState = {
   inputCapability: TerminalTransportCapability | null
   streamCapability: TerminalTransportCapability | null
-  manager: TerminalTransportManager | null
+  managersBySession: Map<string, TerminalTransportManager>
+  primedManager: TerminalTransportManager | null
+  replayCursorBySession: Map<string, number>
+  socketUrl: string
 }
 
 const getTerminalTransportGlobalState = (): TerminalTransportGlobalState => {
@@ -814,19 +828,64 @@ const getTerminalTransportGlobalState = (): TerminalTransportGlobalState => {
     globalScope[GLOBAL_TERMINAL_TRANSPORT_STATE_KEY] = {
       inputCapability: null,
       streamCapability: null,
-      manager: null,
+      managersBySession: new Map(),
+      primedManager: null,
+      replayCursorBySession: new Map(),
+      socketUrl: "",
     }
   }
 
   return globalScope[GLOBAL_TERMINAL_TRANSPORT_STATE_KEY]
 }
 
-const ensureTerminalTransportManager = (): TerminalTransportManager => {
-  const globalState = getTerminalTransportGlobalState()
-  if (!globalState.manager) {
-    globalState.manager = new TerminalTransportManager()
+const closeAllTerminalTransportManagers = (globalState: TerminalTransportGlobalState): void => {
+  globalState.primedManager?.close()
+  globalState.primedManager = null
+  for (const manager of globalState.managersBySession.values()) {
+    manager.close()
   }
-  return globalState.manager
+  globalState.managersBySession.clear()
+}
+
+const ensureTerminalTransportManager = (sessionId: string): TerminalTransportManager => {
+  const globalState = getTerminalTransportGlobalState()
+  const existing = globalState.managersBySession.get(sessionId)
+  if (existing) {
+    return existing
+  }
+
+  const manager = globalState.primedManager ?? new TerminalTransportManager(globalState.replayCursorBySession)
+  globalState.primedManager = null
+
+  const socketUrl = globalState.socketUrl || normalizeWebSocketPath(getPreferredTerminalWsPath(globalState))
+  if (socketUrl) {
+    globalState.socketUrl = socketUrl
+    manager.configure(socketUrl)
+  }
+
+  globalState.managersBySession.set(sessionId, manager)
+  return manager
+}
+
+const releaseTerminalTransportManager = (sessionId: string, manager: TerminalTransportManager): void => {
+  const globalState = getTerminalTransportGlobalState()
+  if (manager.getSubscriptionCount() > 0 || globalState.managersBySession.get(sessionId) !== manager) {
+    return
+  }
+
+  globalState.managersBySession.delete(sessionId)
+  manager.close()
+}
+
+const closeTerminalTransportForSession = (sessionId: string): void => {
+  const globalState = getTerminalTransportGlobalState()
+  globalState.replayCursorBySession.delete(sessionId)
+  const manager = globalState.managersBySession.get(sessionId)
+  if (!manager) {
+    return
+  }
+  globalState.managersBySession.delete(sessionId)
+  manager.close()
 }
 
 const applyTerminalTransportCapabilities = (capabilities: TerminalSession["capabilities"] | undefined): void => {
@@ -835,8 +894,8 @@ const applyTerminalTransportCapabilities = (capabilities: TerminalSession["capab
   globalState.streamCapability = capabilities?.stream ?? null
 
   if (!isWsTransportSupported(globalState.inputCapability) && !isWsTransportSupported(globalState.streamCapability)) {
-    globalState.manager?.close()
-    globalState.manager = null
+    closeAllTerminalTransportManagers(globalState)
+    globalState.socketUrl = ""
     return
   }
 
@@ -845,8 +904,11 @@ const applyTerminalTransportCapabilities = (capabilities: TerminalSession["capab
     return
   }
 
-  const manager = ensureTerminalTransportManager()
-  manager.configure(socketUrl)
+  globalState.socketUrl = socketUrl
+  globalState.primedManager?.configure(socketUrl)
+  for (const manager of globalState.managersBySession.values()) {
+    manager.configure(socketUrl)
+  }
 }
 
 const sendTerminalInputHttp = async (sessionId: string, data: string): Promise<void> => {
@@ -1001,7 +1063,7 @@ const connectTerminalStreamViaSse = (
         const data = JSON.parse(event.data) as TerminalStreamEvent
 
         if (data.type === "exit") {
-          getTerminalTransportGlobalState().manager?.unbindSession(sessionId)
+          closeTerminalTransportForSession(sessionId)
           terminalExited = true
           cleanup()
         }
@@ -1039,19 +1101,24 @@ export function connectTerminalStream(
     return connectTerminalStreamViaSse(sessionId, onEvent, onError, options)
   }
 
-  const manager = ensureTerminalTransportManager()
+  const manager = ensureTerminalTransportManager(sessionId)
   const socketUrl = normalizeWebSocketPath(getPreferredTerminalWsPath(globalState))
   if (!socketUrl) {
     return connectTerminalStreamViaSse(sessionId, onEvent, onError, options)
   }
 
   manager.configure(socketUrl)
-  return manager.subscribe(sessionId, onEvent, onError, options)
+  const unsubscribe = manager.subscribe(sessionId, onEvent, onError, options)
+  return () => {
+    unsubscribe()
+    releaseTerminalTransportManager(sessionId, manager)
+  }
 }
 
 export async function sendTerminalInput(sessionId: string, data: string): Promise<void> {
   const globalState = getTerminalTransportGlobalState()
-  if (globalState.manager && (await globalState.manager.sendInput(sessionId, data))) {
+  const manager = globalState.managersBySession.get(sessionId)
+  if (manager && (await manager.sendInput(sessionId, data))) {
     return
   }
 
@@ -1072,7 +1139,7 @@ export async function resizeTerminal(sessionId: string, cols: number, rows: numb
 }
 
 export async function closeTerminal(sessionId: string): Promise<void> {
-  getTerminalTransportGlobalState().manager?.unbindSession(sessionId)
+  closeTerminalTransportForSession(sessionId)
 
   const response = await fetch(`${HTTP_DEFAULTS.apiPath.terminal}/${sessionId}`, {
     method: HTTP_DEFAULTS.method.delete,
@@ -1088,7 +1155,7 @@ export async function restartTerminalSession(
   currentSessionId: string,
   options: { cwd: string; cols?: number; rows?: number },
 ): Promise<TerminalSession> {
-  getTerminalTransportGlobalState().manager?.unbindSession(currentSessionId)
+  closeTerminalTransportForSession(currentSessionId)
 
   const response = await fetch(`${HTTP_DEFAULTS.apiPath.terminal}/${currentSessionId}/restart`, {
     method: HTTP_DEFAULTS.method.post,
@@ -1123,14 +1190,15 @@ export async function forceKillTerminal(options: { sessionId?: string; cwd?: str
   }
 
   if (options.sessionId) {
-    getTerminalTransportGlobalState().manager?.unbindSession(options.sessionId)
+    closeTerminalTransportForSession(options.sessionId)
   }
 }
 
 export function disposeTerminalInputTransport(): void {
   const globalState = getTerminalTransportGlobalState()
-  globalState.manager?.close()
-  globalState.manager = null
+  closeAllTerminalTransportManagers(globalState)
+  globalState.replayCursorBySession.clear()
+  globalState.socketUrl = ""
   globalState.inputCapability = null
   globalState.streamCapability = null
 }
@@ -1152,11 +1220,14 @@ export function primeTerminalInputTransport(): void {
     return
   }
 
-  const manager = ensureTerminalTransportManager()
-  if (manager.isConnectedOrConnecting(socketUrl)) {
+  globalState.socketUrl = socketUrl
+  if (globalState.primedManager?.isConnectedOrConnecting(socketUrl)) {
     return
   }
 
+  const manager = new TerminalTransportManager(globalState.replayCursorBySession)
+  globalState.primedManager?.close()
+  globalState.primedManager = manager
   manager.configure(socketUrl)
   manager.prime()
 }
@@ -1168,14 +1239,16 @@ export function applyTerminalTransportCapabilitiesForTests(
   applyTerminalTransportCapabilities(capabilities)
 }
 
-export function getTerminalTransportManagerForTests(): {
+export function getTerminalTransportManagerForTests(sessionId = "session-1"): {
   getBoundSessionId: () => string | null
   getSubscriptionCount: () => number
+  getManagerCount: () => number
 } {
-  const manager = ensureTerminalTransportManager()
+  const globalState = getTerminalTransportGlobalState()
   return {
-    getBoundSessionId: () => manager.getBoundSessionIdForTests(),
-    getSubscriptionCount: () => manager.getSubscriptionCountForTests(),
+    getBoundSessionId: () => globalState.managersBySession.get(sessionId)?.getBoundSessionIdForTests() ?? null,
+    getSubscriptionCount: () => globalState.managersBySession.get(sessionId)?.getSubscriptionCount() ?? 0,
+    getManagerCount: () => globalState.managersBySession.size,
   }
 }
 
@@ -1189,6 +1262,10 @@ const hotModule = (
 
 if (hotModule) {
   hotModule.dispose(() => {
-    disposeTerminalInputTransport()
+    const globalState = getTerminalTransportGlobalState()
+    closeAllTerminalTransportManagers(globalState)
+    globalState.socketUrl = ""
+    globalState.inputCapability = null
+    globalState.streamCapability = null
   })
 }
