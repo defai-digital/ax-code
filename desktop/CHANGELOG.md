@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.11.1] - 2026-07-12
+
+### Fixed
+
+- Desktop: stabilizes integrated terminal sessions and multi-view transport.
+
 ## [6.11.0] - 2026-07-12
 
 ### Added
