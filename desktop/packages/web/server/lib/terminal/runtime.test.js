@@ -59,6 +59,37 @@ describe("terminal runtime", () => {
     })
   })
 
+  it("keeps collecting startup output until release() after a healthy start", async () => {
+    let onData = null
+    let disposed = false
+    const ptyProcess = {
+      onData(callback) {
+        onData = callback
+        return {
+          dispose() {
+            disposed = true
+          },
+        }
+      },
+      onExit() {
+        return { dispose() {} }
+      },
+    }
+
+    const outcomePromise = observeTerminalShellStartup(ptyProcess, 20)
+    onData("prompt> ")
+    const outcome = await outcomePromise
+
+    expect(outcome.crashed).toBe(false)
+    expect(outcome.earlyOutput).toBe("prompt> ")
+    expect(disposed).toBe(false)
+    expect(typeof outcome.release).toBe("function")
+
+    onData("more")
+    expect(outcome.release()).toBe("prompt> more")
+    expect(disposed).toBe(true)
+  })
+
   it("rejects terminal working directories that are not approved", async () => {
     const { app, getRoute } = createRouteRegistry()
     const server = new EventEmitter()

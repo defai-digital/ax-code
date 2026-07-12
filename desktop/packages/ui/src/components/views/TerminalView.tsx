@@ -25,6 +25,7 @@ import {
 import { useI18n } from "@/lib/i18n"
 import { PROJECT_ACTION_ICON_MAP, type ProjectActionIconKey } from "@/lib/projectActions"
 import { cleanupStaleCreatedTerminalSession } from "./terminalCreateCleanup"
+import { withTerminalSessionCreate } from "./terminalCreateLock"
 
 type Modifier = "ctrl" | "cmd"
 type MobileKey = "esc" | "tab" | "enter" | "arrow-up" | "arrow-down" | "arrow-left" | "arrow-right"
@@ -166,7 +167,6 @@ export const TerminalView: React.FC = () => {
   const [isReconnectPending, setIsReconnectPending] = React.useState(false)
   const [activeModifier, setActiveModifier] = React.useState<Modifier | null>(null)
   const [isRestarting, setIsRestarting] = React.useState(false)
-  const [viewportSizeVersion, setViewportSizeVersion] = React.useState(0)
 
   const streamCleanupRef = React.useRef<(() => void) | null>(null)
   const activeTerminalIdRef = React.useRef<string | null>(null)
@@ -175,7 +175,8 @@ export const TerminalView: React.FC = () => {
   const directoryRef = React.useRef<string | null>(effectiveDirectory)
   const terminalControllerRef = React.useRef<TerminalController | null>(null)
   const lastViewportSizeRef = React.useRef<{ cols: number; rows: number } | null>(null)
-  const isTerminalVisibleRef = React.useRef(false)
+  // TerminalView is only mounted while its host surface is open, so treat mount as visible.
+  const isTerminalVisibleRef = React.useRef(true)
   const nudgeOnConnectTerminalIdRef = React.useRef<string | null>(null)
   const rehydratedTerminalIdsRef = React.useRef<Set<string>>(new Set())
   const rehydratedSnapshotTakenRef = React.useRef(false)
@@ -229,32 +230,32 @@ export const TerminalView: React.FC = () => {
 
   const activeMainTab = useUIStore((state) => state.activeMainTab)
   const isBottomTerminalOpen = useUIStore((state) => state.isBottomTerminalOpen)
+  const splitPaneEnabled = useUIStore((state) => state.splitPaneEnabled)
+  const splitPaneRightTab = useUIStore((state) => state.splitPaneRightTab)
   const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen)
   const setBottomTerminalExpanded = useUIStore((state) => state.setBottomTerminalExpanded)
   const isTerminalActive = activeMainTab === "terminal"
-  const isTerminalVisible = isTerminalActive || isBottomTerminalOpen
-  const [hasOpenedTerminalViewport, setHasOpenedTerminalViewport] = React.useState(isTerminalVisible)
+  // Host surfaces only mount this component when open, but keep an explicit
+  // visibility check so autofocus/fit still respect which surface is active.
+  const isTerminalVisible =
+    isTerminalActive || isBottomTerminalOpen || (splitPaneEnabled && splitPaneRightTab === "terminal")
 
   React.useEffect(() => {
-    if (!isTerminalVisible) {
-      return
-    }
-
     primeTerminalInputTransport()
-  }, [isTerminalVisible, runtime.platform])
-
-  React.useEffect(() => {
-    if (isTerminalVisible) {
-      setHasOpenedTerminalViewport(true)
-    }
-  }, [isTerminalVisible])
+  }, [runtime.platform])
 
   React.useEffect(() => {
     isTerminalVisibleRef.current = isTerminalVisible
   }, [isTerminalVisible])
 
   React.useEffect(() => {
-    terminalIdRef.current = terminalSessionId
+    // Prefer the store-backed session id; keep a local ref so keystrokes can
+    // route while a stream subscription is reconnecting.
+    if (terminalSessionId) {
+      terminalIdRef.current = terminalSessionId
+    } else {
+      terminalIdRef.current = null
+    }
   }, [terminalSessionId])
 
   React.useEffect(() => {
@@ -424,13 +425,28 @@ export const TerminalView: React.FC = () => {
             }
 
             setIsReconnectPending(false)
-            setConnectionError(t("terminalView.error.connectionFailed", { message: error.message }))
-            setIsFatalError(true)
             setConnecting(directory, tabId, false)
             clearBuffer(directory, tabId)
+            disconnectStream()
+
+            // Persisted session ids outlive the desktop server process. After an
+            // app restart the PTY is gone — treat "not found" as idle and let
+            // ensureSession create a fresh session instead of locking the tab
+            // in the exited state (which required a manual restart).
+            const isMissingSession = /session not found/i.test(error.message)
+            if (isMissingSession) {
+              rehydratedTerminalIdsRef.current.delete(terminalId)
+              setConnectionError(null)
+              setIsFatalError(false)
+              setTabLifecycle(directory, tabId, "idle")
+              setTabSessionId(directory, tabId, null)
+              return
+            }
+
+            setConnectionError(t("terminalView.error.connectionFailed", { message: error.message }))
+            setIsFatalError(true)
             setTabLifecycle(directory, tabId, "exited")
             setTabSessionId(directory, tabId, null)
-            disconnectStream()
           },
         },
         streamOptions,
@@ -458,7 +474,7 @@ export const TerminalView: React.FC = () => {
   React.useEffect(() => {
     let cancelled = false
 
-    if (!terminalHydrated || !hasOpenedTerminalViewport) {
+    if (!terminalHydrated) {
       return
     }
 
@@ -518,21 +534,42 @@ export const TerminalView: React.FC = () => {
         setIsReconnectPending(false)
         setConnecting(directory, tabId, true)
         try {
-          const session = await terminal.createSession({
-            cwd: directory,
-            cols: size?.cols,
-            rows: size?.rows,
+          // Coalesce concurrent creates from multiple mounted TerminalView hosts
+          // (main tab + bottom dock + split pane) so only one PTY is spawned.
+          terminalId = await withTerminalSessionCreate(directory, tabId, async () => {
+            const existingSessionId = useTerminalStore
+              .getState()
+              .getDirectoryState(directory)
+              ?.tabs.find((entry) => entry.id === tabId)?.terminalSessionId
+            if (existingSessionId) {
+              return existingSessionId
+            }
+
+            const session = await terminal.createSession({
+              cwd: directory,
+              cols: size?.cols,
+              rows: size?.rows,
+            })
+            return session.sessionId
           })
 
           const stillActive = !cancelled && directoryRef.current === directory && activeTabIdRef.current === tabId
 
           if (!stillActive) {
-            await cleanupStaleCreatedTerminalSession(terminal.close, setConnecting, directory, tabId, session.sessionId)
+            // Only close a session we just orphaned if nothing else claimed it.
+            const claimedByStore = useTerminalStore
+              .getState()
+              .getDirectoryState(directory)
+              ?.tabs.some((entry) => entry.terminalSessionId === terminalId)
+            if (!claimedByStore && terminalId) {
+              await cleanupStaleCreatedTerminalSession(terminal.close, setConnecting, directory, tabId, terminalId)
+            } else {
+              setConnecting(directory, tabId, false)
+            }
             return
           }
 
-          setTabSessionId(directory, tabId, session.sessionId)
-          terminalId = session.sessionId
+          setTabSessionId(directory, tabId, terminalId)
         } catch (error) {
           if (cancelled) {
             setConnecting(directory, tabId, false)
@@ -563,9 +600,12 @@ export const TerminalView: React.FC = () => {
     void ensureSession()
 
     return () => {
+      // Only cancel in-flight async work. Do not tear down an already-bound
+      // stream here — resize/layout re-renders and post-create store updates
+      // re-run this effect with the same session, and disconnecting caused
+      // input drops and rebind churn. startStream() disconnects when the
+      // session id actually changes; unmount cleanup handles full teardown.
       cancelled = true
-      terminalIdRef.current = null
-      disconnectStream()
     }
   }, [
     hasActiveContext,
@@ -573,8 +613,6 @@ export const TerminalView: React.FC = () => {
     terminalSessionId,
     terminalLifecycle,
     activeTabId,
-    hasOpenedTerminalViewport,
-    viewportSizeVersion,
     enableTabs,
     terminalHydrated,
     ensureDirectory,
@@ -732,19 +770,21 @@ export const TerminalView: React.FC = () => {
 
   const handleViewportResize = React.useCallback(
     (cols: number, rows: number) => {
+      // Only track size for future session creates and PTY resize. Do not
+      // reconnect the stream on every fit — that made the dock flaky (input
+      // drops, rebind storms) whenever the layout settled.
       const previous = lastViewportSizeRef.current
       if (!previous || previous.cols !== cols || previous.rows !== rows) {
         lastViewportSizeRef.current = { cols, rows }
-        setViewportSizeVersion((version) => version + 1)
       }
       if (!isTerminalVisibleRef.current) {
         return
       }
-      const terminalId = terminalIdRef.current
+      const terminalId = terminalIdRef.current ?? terminalSessionId
       if (!terminalId) return
       void terminal.resize({ sessionId: terminalId, cols, rows }).catch(() => {})
     },
-    [terminal],
+    [terminal, terminalSessionId],
   )
 
   const handleModifierToggle = React.useCallback(
@@ -946,7 +986,6 @@ export const TerminalView: React.FC = () => {
   }
 
   const quickKeysDisabled = !terminalSessionId || isConnecting || isRestarting || isReconnectPending
-  const shouldRenderViewport = hasOpenedTerminalViewport
   const showBottomDockControls = !isTouchTerminal && isBottomTerminalOpen && !isTerminalActive
   const quickKeysControls = (
     <>
@@ -1156,24 +1195,22 @@ export const TerminalView: React.FC = () => {
 
       <div className="relative flex-1 overflow-hidden border-t border-border/40" style={{ backgroundColor: xtermTheme.background }}>
         <div className="h-full w-full box-border pl-4 pr-1.5 pt-3 pb-4">
-          {shouldRenderViewport ? (
-            <TerminalViewport
-              key={terminalViewportKey}
-              ref={(controller) => {
-                terminalControllerRef.current = controller
-              }}
-              sessionKey={terminalViewportKey}
-              chunks={bufferChunks}
-              onInput={handleViewportInput}
-              onResize={handleViewportResize}
-              theme={xtermTheme}
-              fontFamily={resolvedFontStack}
-              fontSize={terminalFontSize}
-              enableTouchScroll={useTouchTerminalInput}
-              autoFocus={!useTouchTerminalInput && isTerminalVisible}
-              isVisible={isTerminalVisible}
-            />
-          ) : null}
+          <TerminalViewport
+            key={terminalViewportKey}
+            ref={(controller) => {
+              terminalControllerRef.current = controller
+            }}
+            sessionKey={terminalViewportKey}
+            chunks={bufferChunks}
+            onInput={handleViewportInput}
+            onResize={handleViewportResize}
+            theme={xtermTheme}
+            fontFamily={resolvedFontStack}
+            fontSize={terminalFontSize}
+            enableTouchScroll={useTouchTerminalInput}
+            autoFocus={!useTouchTerminalInput && isTerminalVisible}
+            isVisible={isTerminalVisible}
+          />
         </div>
         {isConnecting && bufferChunks.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--surface-background)]/80 typography-micro text-muted-foreground">

@@ -133,6 +133,8 @@ class TerminalTransportManager {
   private subscriptions = new Map<symbol, StreamSubscription>()
   private activeSubscriptionToken: symbol | null = null
   private replayCursorBySession = new Map<string, number>()
+  /** Last successful bind metadata, reused when a second view joins the same session. */
+  private lastBoundMeta: { runtime?: "node" | "bun"; ptyBackend?: string } | null = null
 
   configure(socketUrl: string): void {
     if (!socketUrl) {
@@ -176,11 +178,39 @@ class TerminalTransportManager {
 
     this.subscriptions.set(token, subscription)
     this.activeSubscriptionToken = token
-    this.boundSessionId = null
     this.requestedSessionId = sessionId
     this.ensureConnected()
-    this.startConnectionTimeout(subscription)
-    this.bindActiveSession()
+
+    // Multiple hosts can show the same session (main tab + bottom dock + split).
+    // If we're already bound to that session on a live socket, join without
+    // rebinding — a rebind replays history to every subscriber and duplicates
+    // output in the shared tab buffer.
+    if (
+      this.boundSessionId === sessionId &&
+      this.socket &&
+      this.socket.readyState === WS_READY_STATE_OPEN
+    ) {
+      subscription.connected = true
+      const meta = this.lastBoundMeta
+      queueMicrotask(() => {
+        if (!this.subscriptions.has(token)) {
+          return
+        }
+        subscription.onEvent({
+          type: "connected",
+          runtime: meta?.runtime,
+          ptyBackend: meta?.ptyBackend,
+        })
+      })
+    } else {
+      // Switching sessions (or first bind): clear only when the target differs
+      // so an in-flight bind for this same session is not cancelled.
+      if (this.boundSessionId !== sessionId) {
+        this.boundSessionId = null
+      }
+      this.startConnectionTimeout(subscription)
+      this.bindActiveSession()
+    }
 
     return () => {
       this.clearConnectionTimeout(subscription)
@@ -460,6 +490,11 @@ class TerminalTransportManager {
       return
     }
 
+    // Already bound to the session the active subscriber wants — no rebind.
+    if (this.boundSessionId === activeSubscription.sessionId) {
+      return
+    }
+
     this.requestedSessionId = activeSubscription.sessionId
 
     try {
@@ -627,6 +662,10 @@ class TerminalTransportManager {
       }
       case "bok": {
         this.boundSessionId = payload.s ?? this.requestedSessionId
+        this.lastBoundMeta = {
+          runtime: payload.runtime,
+          ptyBackend: payload.ptyBackend,
+        }
         if (activeSubscription) {
           activeSubscription.retryCount = 0
         }
@@ -746,6 +785,17 @@ class TerminalTransportManager {
       }
     }
     this.boundSessionId = null
+    this.lastBoundMeta = null
+  }
+
+  /** Test seam: whether the socket is currently bound to a session. */
+  getBoundSessionIdForTests(): string | null {
+    return this.boundSessionId
+  }
+
+  /** Test seam: number of active stream subscriptions. */
+  getSubscriptionCountForTests(): number {
+    return this.subscriptions.size
   }
 }
 
@@ -1109,6 +1159,24 @@ export function primeTerminalInputTransport(): void {
 
   manager.configure(socketUrl)
   manager.prime()
+}
+
+/** Configure transport capabilities without creating a PTY (tests / priming). */
+export function applyTerminalTransportCapabilitiesForTests(
+  capabilities: TerminalSession["capabilities"] | undefined,
+): void {
+  applyTerminalTransportCapabilities(capabilities)
+}
+
+export function getTerminalTransportManagerForTests(): {
+  getBoundSessionId: () => string | null
+  getSubscriptionCount: () => number
+} {
+  const manager = ensureTerminalTransportManager()
+  return {
+    getBoundSessionId: () => manager.getBoundSessionIdForTests(),
+    getSubscriptionCount: () => manager.getSubscriptionCountForTests(),
+  }
 }
 
 const hotModule = (

@@ -23,17 +23,38 @@ export const observeTerminalShellStartup = (ptyProcess, graceMs) =>
     let earlyOutput = ""
     let dataDisposable = null
     let exitDisposable = null
-    const finish = (outcome) => {
-      if (settled) return
-      settled = true
-      if (timer) clearTimeout(timer)
+    const disposeListeners = () => {
       try {
         dataDisposable?.dispose()
       } catch {}
       try {
         exitDisposable?.dispose()
       } catch {}
-      resolve({ ...outcome, earlyOutput })
+      dataDisposable = null
+      exitDisposable = null
+    }
+    const finish = (outcome) => {
+      if (settled) return
+      settled = true
+      if (timer) clearTimeout(timer)
+      // On a healthy start, keep collecting output until the caller wires the
+      // permanent onData handler — disposing here left a gap where the prompt
+      // (or other early output) could be lost before replay/live delivery.
+      if (outcome.crashed) {
+        disposeListeners()
+        resolve({ ...outcome, earlyOutput })
+        return
+      }
+      resolve({
+        ...outcome,
+        earlyOutput,
+        release: () => {
+          // Snapshot any bytes that arrived between resolve and wire, then detach.
+          const trailing = earlyOutput
+          disposeListeners()
+          return trailing
+        },
+      })
     }
 
     dataDisposable = ptyProcess.onData((chunk) => {
@@ -186,7 +207,14 @@ export function createTerminalRuntime({
         continue
       }
 
-      return { ptyProcess, shell, earlyOutput: outcome.earlyOutput }
+      return {
+        ptyProcess,
+        shell,
+        earlyOutput: outcome.earlyOutput,
+        // Caller must invoke release() after seeding the replay buffer / wiring
+        // permanent listeners so trailing startup output is not dropped.
+        releaseStartupObserver: typeof outcome.release === "function" ? outcome.release : () => outcome.earlyOutput,
+      }
     }
 
     const baseMessage = lastError && lastError.message ? lastError.message : "PTY spawn failed"
@@ -578,7 +606,7 @@ export function createTerminalRuntime({
       const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath })
 
       const pty = await getPtyProvider()
-      const { ptyProcess, shell, earlyOutput } = await spawnTerminalPtyWithFallback(pty, {
+      const { ptyProcess, shell, releaseStartupObserver } = await spawnTerminalPtyWithFallback(pty, {
         cols: terminalSize.cols,
         rows: terminalSize.rows,
         cwd,
@@ -595,8 +623,11 @@ export function createTerminalRuntime({
       }
 
       terminalSessions.set(sessionId, session)
-      if (earlyOutput) {
-        appendTerminalOutputReplayChunk(session.outputReplayBuffer, earlyOutput, TERMINAL_OUTPUT_REPLAY_MAX_BYTES)
+      // Capture every byte observed during startup (including any that arrived
+      // after the grace window resolved) before installing the live handlers.
+      const startupOutput = releaseStartupObserver()
+      if (startupOutput) {
+        appendTerminalOutputReplayChunk(session.outputReplayBuffer, startupOutput, TERMINAL_OUTPUT_REPLAY_MAX_BYTES)
       }
       wireTerminalSession(sessionId, session)
 
@@ -837,7 +868,7 @@ export function createTerminalRuntime({
       const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath })
 
       const pty = await getPtyProvider()
-      const { ptyProcess, shell, earlyOutput } = await spawnTerminalPtyWithFallback(pty, {
+      const { ptyProcess, shell, releaseStartupObserver } = await spawnTerminalPtyWithFallback(pty, {
         cols: terminalSize.cols,
         rows: terminalSize.rows,
         cwd,
@@ -854,8 +885,9 @@ export function createTerminalRuntime({
       }
 
       terminalSessions.set(newSessionId, session)
-      if (earlyOutput) {
-        appendTerminalOutputReplayChunk(session.outputReplayBuffer, earlyOutput, TERMINAL_OUTPUT_REPLAY_MAX_BYTES)
+      const startupOutput = releaseStartupObserver()
+      if (startupOutput) {
+        appendTerminalOutputReplayChunk(session.outputReplayBuffer, startupOutput, TERMINAL_OUTPUT_REPLAY_MAX_BYTES)
       }
       wireTerminalSession(newSessionId, session)
 
