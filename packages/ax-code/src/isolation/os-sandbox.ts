@@ -9,6 +9,10 @@
  * macOS: Seatbelt via sandbox-exec
  * Linux: bubblewrap when available (best-effort)
  * Other platforms: backend unavailable → app-layer only
+ *
+ * Paths used in Seatbelt `subpath` rules are canonicalized with
+ * `fs.realpathSync` so macOS symlinks (`/var` → `/private/var`,
+ * `/tmp` → `/private/tmp`) match the kernel-visible paths processes write to.
  */
 
 import { spawnSync } from "child_process"
@@ -98,10 +102,44 @@ export namespace OsSandbox {
   }
 
   /**
+   * Resolve a path for Seatbelt/bwrap rules.
+   * Prefer realpath so symlink roots (macOS /var → /private/var) match kernel paths.
+   * Falls back to path.resolve when the path does not exist yet.
+   */
+  export function canonicalPath(input: string): string {
+    const resolved = path.resolve(input)
+    try {
+      return fs.realpathSync(resolved)
+    } catch {
+      // Path may not exist yet (protected dir on fresh checkout). Realpath the
+      // longest existing prefix and rejoin the remainder.
+      try {
+        let current = resolved
+        const suffix: string[] = []
+        while (true) {
+          try {
+            const real = fs.realpathSync(current)
+            return path.join(real, ...suffix.reverse())
+          } catch {
+            const parent = path.dirname(current)
+            if (parent === current) return resolved
+            suffix.push(path.basename(current))
+            current = parent
+          }
+        }
+      } catch {
+        return resolved
+      }
+    }
+  }
+
+  /**
    * Build a Seatbelt (sandbox-exec) profile that:
    * - allows read of the whole filesystem (tools need system binaries)
-   * - allows write only under workspace/worktree
+   * - allows write only under workspace/worktree (+ temp dir for mktemp)
    * - denies network when network=false
+   *
+   * All write roots are canonicalized (realpath) so macOS symlink volumes match.
    */
   export function buildSeatbeltProfile(input: {
     workspaceRoot: string
@@ -109,10 +147,13 @@ export namespace OsSandbox {
     network: boolean
     protectedPaths?: string[]
   }): string {
-    const roots = uniqueRoots([input.workspaceRoot, input.worktree].filter(Boolean) as string[])
-    const protectedPaths = (input.protectedPaths ?? []).map((p) => path.resolve(p))
+    const roots = uniqueRoots(
+      [input.workspaceRoot, input.worktree].filter(Boolean).map((p) => canonicalPath(p as string)),
+    )
+    const protectedPaths = (input.protectedPaths ?? []).map((p) => canonicalPath(p))
+    const tmpRoots = uniqueRoots(tempWriteRoots())
 
-    const writeAllow = roots
+    const writeAllow = [...roots, ...tmpRoots]
       .map((root) => `(allow file-write* (subpath ${sbString(root)}))`)
       .join("\n  ")
 
@@ -137,11 +178,25 @@ export namespace OsSandbox {
 (allow file-write-data (regex #"^/dev/null$"))
 (allow file-write-data (regex #"^/dev/tty$"))
 (allow file-ioctl (regex #"^/dev/"))
-(allow file-write* (subpath ${sbString(os.tmpdir())}))
   ${writeAllow}
   ${writeDeny}
 ${networkRule}
 `
+  }
+
+  /** Temp directories processes commonly use (mktemp, TMPDIR), realpath'd. */
+  export function tempWriteRoots(): string[] {
+    const candidates = [
+      os.tmpdir(),
+      process.env.TMPDIR,
+      process.env.TMP,
+      process.env.TEMP,
+      "/tmp",
+      "/var/tmp",
+      "/private/tmp",
+      "/private/var/tmp",
+    ].filter((p): p is string => typeof p === "string" && p.length > 0)
+    return uniqueRoots(candidates.map(canonicalPath))
   }
 
   function sbString(value: string): string {
@@ -174,8 +229,11 @@ ${networkRule}
         network: input.network,
         protectedPaths: input.protectedPaths,
       })
+      // Write profile under realpath(tmpdir) so parent can always create it;
+      // child only needs to read it (file-read* is allowed).
+      const profileDir = canonicalPath(os.tmpdir())
       const profilePath = path.join(
-        os.tmpdir(),
+        profileDir,
         `ax-code-seatbelt-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.sb`,
       )
       try {
@@ -198,7 +256,9 @@ ${networkRule}
 
     // bubblewrap: unshare net when network disabled; bind workspace RW, rest RO
     const bwrap = which("bwrap") ?? "bwrap"
-    const roots = uniqueRoots([input.workspaceRoot, input.worktree, input.cwd].filter(Boolean) as string[])
+    const roots = uniqueRoots(
+      [input.workspaceRoot, input.worktree, input.cwd].filter(Boolean).map((p) => canonicalPath(p as string)),
+    )
     const args: string[] = [
       "--die-with-parent",
       "--proc",
@@ -217,7 +277,7 @@ ${networkRule}
     if (!input.network) {
       args.push("--unshare-net")
     }
-    args.push("--chdir", input.cwd, input.shell, "-c", input.command)
+    args.push("--chdir", canonicalPath(input.cwd), input.shell, "-c", input.command)
 
     return {
       active: true,

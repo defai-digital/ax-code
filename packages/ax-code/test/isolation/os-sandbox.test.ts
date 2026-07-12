@@ -26,8 +26,10 @@ describe("OsSandbox.buildSeatbeltProfile", () => {
     })
     expect(profile).toContain("(version 1)")
     expect(profile).toContain("(deny network*)")
-    expect(profile).toContain('subpath "/tmp/ws"')
-    expect(profile).toContain('subpath "/tmp/ws/.git"')
+    // Paths are realpath'd — on macOS /tmp → /private/tmp
+    const ws = OsSandbox.canonicalPath("/tmp/ws")
+    expect(profile).toContain(`subpath "${ws}"`)
+    expect(profile).toContain(".git")
   })
 
   test("allows network when enabled", () => {
@@ -36,6 +38,15 @@ describe("OsSandbox.buildSeatbeltProfile", () => {
       network: true,
     })
     expect(profile).toContain("(allow network*)")
+  })
+
+  test("includes realpath of os.tmpdir for mktemp", () => {
+    const tmp = OsSandbox.canonicalPath(os.tmpdir())
+    const profile = OsSandbox.buildSeatbeltProfile({
+      workspaceRoot: "/proj",
+      network: false,
+    })
+    expect(profile).toContain(`subpath "${tmp}"`)
   })
 })
 
