@@ -49,6 +49,7 @@ import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
 import {
+  effectiveContinuationCap,
   emptyModelTurnIncompleteMessage,
   isEmptyModelTurn,
   isTruncatedModelTurn,
@@ -440,8 +441,13 @@ export namespace SessionPrompt {
 
       // Per-continuation pacing limit. NOTE: `step` resets to 0 on every
       // continuation, so this alone does not bound the run — the cumulative
-      // check above does.
-      const effectiveMaxContinuations = superLongActive ? Number.POSITIVE_INFINITY : maxContinuations
+      // check above does. Active goals and Super-Long lift the ordinary
+      // continuation cap so they are not starved at this gate.
+      const effectiveMaxContinuations = effectiveContinuationCap({
+        maxContinuations,
+        superLongActive,
+        goalStatus: activeGoal?.status,
+      })
       const globalStepLimit = handlePromptLoopGlobalStepLimit({
         sessionID,
         step,
@@ -589,7 +595,7 @@ export namespace SessionPrompt {
         maxSteps,
         autonomous: effectivelyAutonomous,
         continuations,
-        maxContinuations: superLongActive ? Number.POSITIVE_INFINITY : maxContinuations,
+        maxContinuations: effectiveMaxContinuations,
       })
       if (agentStepLimit.action === "stop") {
         // End the transcript with an explicit explanation, mirroring the

@@ -57,7 +57,24 @@ describe("prompt loop global step limit", () => {
 
     expect(result.action).toBe("continue_autonomous")
     if (result.action !== "continue_autonomous") throw new Error("expected autonomous continuation")
-    expect(result.text).toContain("auto-continuation 251 (Super-Long mode: no continuation cap)")
+    expect(result.text).toContain("auto-continuation 251 (no continuation cap — active goal or Super-Long)")
+  })
+
+  test("keeps continuing past the configured cap when an active goal lifts it to Infinity", () => {
+    // Mirrors effectiveContinuationCap({ goalStatus: "active" }) wired into the
+    // prompt loop: active goals must not be starved at the step-limit gate.
+    const result = handlePromptLoopGlobalStepLimit({
+      sessionID: SessionID.descending(),
+      step: 10,
+      stepLimit: 10,
+      autonomous: true,
+      continuations: 12,
+      maxContinuations: Number.POSITIVE_INFINITY,
+    })
+
+    expect(result.action).toBe("continue_autonomous")
+    if (result.action !== "continue_autonomous") throw new Error("expected autonomous continuation")
+    expect(result.text).toContain("auto-continuation 13 (no continuation cap — active goal or Super-Long)")
   })
 
   test("logs and publishes a user-facing error when the global step limit stops the loop", () => {

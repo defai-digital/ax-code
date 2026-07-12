@@ -197,10 +197,15 @@ export namespace Permission {
   )
 
   // Permissions that must always require interactive user confirmation
-  // and cannot be auto-approved by wildcard rules. This prevents agent
-  // default rules like {permission:"*",action:"allow",pattern:"*"} from
-  // silently bypassing critical safety checks.
-  const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation", "bash_destructive"])
+  // and cannot be auto-approved by wildcard rules or headless autonomous
+  // auto-reply. This prevents agent default rules like
+  // {permission:"*",action:"allow",pattern:"*"} and headless projection
+  // from silently bypassing critical safety checks.
+  export const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation", "bash_destructive"])
+
+  export function isInteractiveOnly(permission: string): boolean {
+    return INTERACTIVE_ONLY.has(permission)
+  }
 
   async function serializeAlwaysReply<T>(s: State, fn: () => Promise<T>) {
     const previous = s.alwaysReplyQueue

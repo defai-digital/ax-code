@@ -1,5 +1,6 @@
 import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { Binary } from "@ax-code/util/binary"
+import { Permission } from "@/permission"
 import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event"
 
 const DEFAULT_MAX_SESSION_MESSAGES = 100
@@ -107,7 +108,10 @@ export function applyHeadlessProjectionEvent<
       return { handled: true, effects }
 
     case "permission.asked":
-      if (options.autonomous) {
+      // Isolation escalation and destructive bash always need a human decision
+      // — never auto-approve them in headless autonomous mode. Leave the
+      // request pending so a connected UI (or explicit reply) can answer.
+      if (options.autonomous && !Permission.isInteractiveOnly(event.properties.permission)) {
         effects.push({ type: "permission.auto_reply", requestID: event.properties.id })
         return { handled: true, effects }
       }

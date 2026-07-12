@@ -184,6 +184,25 @@ function nextAutonomousContinuation(input: {
   return nextContinuation(input)
 }
 
+/**
+ * Ordinary `session.max_continuations` bounds plain autonomous auto-continue.
+ * Active goals and Super-Long must not be starved by that cap — the cumulative
+ * total-step ceiling (and Super-Long deadline / goal budget) remain the hard
+ * bounds. Paused / complete / blocked / budget_limited goals do not lift the
+ * cap: budget wrap-up is scheduled by goalContinuationDecision after the model
+ * finishes a turn, not by the step-limit continuation path.
+ */
+export function effectiveContinuationCap(input: {
+  maxContinuations: number
+  superLongActive: boolean
+  goalStatus?: string
+}): number {
+  if (input.superLongActive || input.goalStatus === "active") {
+    return Number.POSITIVE_INFINITY
+  }
+  return input.maxContinuations
+}
+
 function retryBudgetExhausted(input: { attempts: number; maxAttempts: number }): boolean {
   return !(input.attempts < input.maxAttempts)
 }

@@ -3,6 +3,7 @@ import {
   agentStepLimitContinuationDecision,
   completionGateEventState,
   completionGateRetryDecision,
+  effectiveContinuationCap,
   emptyModelTurnDecision,
   globalStepLimitDecision,
   goalContinuationDecision,
@@ -36,6 +37,35 @@ function emptySubagentGate(signature = "empty-subagent:one") {
 }
 
 describe("autonomous continuation decisions", () => {
+  test("effectiveContinuationCap lifts the ordinary cap for active goals and Super-Long", () => {
+    expect(
+      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: undefined }),
+    ).toBe(3)
+    expect(
+      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "paused" }),
+    ).toBe(3)
+    expect(
+      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "complete" }),
+    ).toBe(3)
+    expect(
+      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "blocked" }),
+    ).toBe(3)
+    expect(
+      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "budget_limited" }),
+    ).toBe(3)
+    expect(
+      effectiveContinuationCap({ maxContinuations: 3, superLongActive: false, goalStatus: "active" }),
+    ).toBe(Number.POSITIVE_INFINITY)
+    expect(
+      effectiveContinuationCap({ maxContinuations: 3, superLongActive: true, goalStatus: undefined }),
+    ).toBe(Number.POSITIVE_INFINITY)
+    expect(
+      effectiveContinuationCap({ maxContinuations: 3, superLongActive: true, goalStatus: "active" }),
+    ).toBe(Number.POSITIVE_INFINITY)
+    // Explicit zero still means "no step-limit continuations" unless a lift applies.
+    expect(effectiveContinuationCap({ maxContinuations: 0, superLongActive: false })).toBe(0)
+  })
+
   test("classifies model turn finish reasons", () => {
     expect(modelTurnFinished(undefined)).toBe(false)
     expect(modelTurnFinished("tool-calls")).toBe(false)

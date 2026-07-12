@@ -77,6 +77,34 @@ describe("headless projection", () => {
     ])
   })
 
+  test("never auto-replies interactive-only permissions under autonomous mode", () => {
+    for (const permission of ["isolation_escalation", "bash_destructive"] as const) {
+      const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+      const request = {
+        id: `perm_${permission}`,
+        sessionID: "ses_1",
+        permission,
+        patterns: ["*"],
+        metadata: {},
+        always: [],
+      }
+
+      const result = applyHeadlessProjectionEvent(
+        state,
+        {
+          type: "permission.asked",
+          properties: request,
+        },
+        { autonomous: true },
+      )
+
+      // Isolation escalation / destructive bash must stay pending — never
+      // auto-approved, even in headless autonomous mode.
+      expect(result.effects).toEqual([])
+      expect(state.permission).toEqual({ ses_1: [request] })
+    }
+  })
+
   test("removes shifted message parts when session messages exceed the configured limit", () => {
     const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
 

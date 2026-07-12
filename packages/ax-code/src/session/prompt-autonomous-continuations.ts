@@ -31,13 +31,13 @@ function optionalReportTodoClosureGuidance(input: { include: boolean; mode: Repo
   return input.include ? reportTodoClosureGuidance(input.mode) : ""
 }
 
-// Super-Long mode lifts the continuation cap (maxContinuations becomes
-// Infinity); render the counter without the cap in that case so the model
-// is not shown a "1/Infinity" budget.
+// Active goals and Super-Long lift the continuation cap (maxContinuations
+// becomes Infinity); render the counter without the cap in that case so the
+// model is not shown a "1/Infinity" budget.
 function continuationCounter(continuation: number, maxContinuations: number) {
   return Number.isFinite(maxContinuations)
     ? `${continuation}/${maxContinuations}`
-    : `${continuation} (Super-Long mode: no continuation cap)`
+    : `${continuation} (no continuation cap — active goal or Super-Long)`
 }
 
 export namespace AutonomousContinuationPrompt {
