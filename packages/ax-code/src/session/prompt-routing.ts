@@ -3,8 +3,12 @@ import { classifyComplexity, route as routeAgent } from "../agent/router"
 import { Bus } from "../bus"
 import { NotificationEvent } from "@/notification/events"
 import { Config } from "../config/config"
+import { Hybrid } from "../mode/hybrid"
+import type { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
+import { modelSelectableForProvider } from "../provider/model-selectability"
 import { ModelID, ProviderID } from "../provider/schema"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { Recorder } from "../replay/recorder"
 import { Log } from "../util/log"
 import { MessageID, SessionID } from "./schema"
@@ -75,6 +79,7 @@ export async function resolveUserMessageRouting(input: {
   const messageComplexity = input.messageText ? (await classifyComplexity(input.messageText)).complexity : null
   const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
   let complexityModel: PromptRouteModel | undefined
+  let hybridModel: PromptRouteModel | undefined
 
   if (messageComplexity === "low" && !input.requestedModel && !agent.model) {
     const defaultM = await Provider.defaultModel().catch(() => undefined)
@@ -102,5 +107,52 @@ export async function resolveUserMessageRouting(input: {
     }
   }
 
-  return { agentName, agent, complexityModel }
+  // Hybrid placement (ADR-049): only when modes.default is explicitly "hybrid"
+  // and the user/agent did not pin a model. Does not override complexity small-model.
+  const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
+  if (modes?.default === "hybrid" && !input.requestedModel && !agent.model && !complexityModel) {
+    try {
+      await Provider.ready()
+      const providers = await Provider.list()
+      const localProviderID = ProviderID.make(modes.hybrid?.localProviderID ?? AX_ENGINE_PROVIDER_ID)
+      const localProvider = providers[localProviderID]
+      const localModels = localProvider
+        ? Provider.sort(
+            Object.values(localProvider.models).filter((m) => modelSelectableForProvider(localProviderID, m)),
+          )
+        : []
+      const localAvailable = localModels.length > 0
+      const place = Hybrid.recommendPlacement({
+        localAvailable,
+        complexity: messageComplexity,
+        preferLocalWhenAvailable: modes.hybrid?.preferLocalWhenAvailable,
+        escalateOnHighComplexity: modes.hybrid?.escalateOnHighComplexity,
+      })
+      if (place.placement === "local" && localModels[0]) {
+        hybridModel = { providerID: localProviderID, modelID: localModels[0].id }
+        log.info("hybrid-route", {
+          command: "session.prompt.hybrid",
+          status: "ok",
+          sessionID: input.sessionID,
+          placement: place.placement,
+          model: localModels[0].id,
+          reasons: place.reasons,
+        })
+        Recorder.emit({
+          type: "agent.route",
+          sessionID: input.sessionID,
+          messageID: input.messageID,
+          fromAgent: agentName,
+          toAgent: agentName,
+          confidence: 0,
+          routeMode: "hybrid",
+          complexity: messageComplexity ?? undefined,
+        })
+      }
+    } catch (error) {
+      log.warn("hybrid-route failed", { error })
+    }
+  }
+
+  return { agentName, agent, complexityModel, hybridModel }
 }

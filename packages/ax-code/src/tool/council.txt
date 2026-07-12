@@ -1,0 +1,15 @@
+Fan out a structured review or design question to multiple connected LLM providers, then aggregate agreement into consensus / majority / singleton findings.
+
+Use this for high-stakes architecture, security review, or design trade-offs where multiple independent perspectives increase confidence. Advisory only — does not edit files.
+
+Do not use for trivial one-line questions or as a substitute for running tests. Multi-model agreement on a patch is not proof of correctness.
+
+Prefer when:
+- The user asks for a multi-model / council / second-opinion review
+- Architecture or security decisions with lasting blast radius
+- You want calibrated confidence (all agree vs one outlier)
+
+Avoid when:
+- Only one provider is connected (report will be incomplete)
+- Privacy-sensitive context must not leave local inference
+- Latency-sensitive autocomplete-style work

@@ -887,6 +887,82 @@ export const Info = z
           .describe("Run the autonomous-mode diff critic at every phase boundary. Default: false."),
       })
       .optional(),
+    modes: z
+      .object({
+        default: z
+          .enum(["local", "cloud", "hybrid", "arena", "council"])
+          .optional()
+          .describe(
+            "Default execution mode. When unset: hybrid if local AX Engine is available, else cloud. Arena/council are typically invoked via tools rather than as the global default.",
+          ),
+        hybrid: z
+          .object({
+            preferLocalWhenAvailable: z
+              .boolean()
+              .optional()
+              .describe("Prefer local placement when AX Engine (or configured local) is available. Default: true."),
+            escalateOnHighComplexity: z
+              .boolean()
+              .optional()
+              .describe("Route high-complexity work to cloud when hybrid is active. Default: true."),
+            localProviderID: z
+              .string()
+              .optional()
+              .describe("Provider id treated as local for hybrid placement. Default: ax-engine."),
+          })
+          .optional()
+          .describe("Hybrid local/cloud placement policy"),
+        council: z
+          .object({
+            enabled: z
+              .boolean()
+              .optional()
+              .describe("Allow the council multi-provider advisory tool. Default: true."),
+            maxMembers: PositiveInteger.optional().describe(
+              "Maximum council members per invocation (default: 3, hard max: 6).",
+            ),
+            timeoutMs: PositiveInteger.optional().describe(
+              "Per-member timeout in ms for council fan-out (default: 60000).",
+            ),
+            debateRounds: NonNegativeInteger.optional().describe(
+              "Optional multi-round anonymous debate rounds (default: 0; Phase 3+).",
+            ),
+          })
+          .optional()
+          .describe("Multi-provider council (advisory review / design) settings"),
+        arena: z
+          .object({
+            enabled: z
+              .boolean()
+              .optional()
+              .describe("Enable arena multi-contestant mode tools. Default: false until Phase 2."),
+            maxContestants: PositiveInteger.optional().describe(
+              "Maximum arena contestants (default: 3, hard max: 5).",
+            ),
+            strategy: z
+              .enum(["verify_first", "diversity", "hybrid_score"])
+              .optional()
+              .describe(
+                "Ranking strategy for arena candidates. verify_first is the recommended default (never pure popularity).",
+              ),
+          })
+          .optional()
+          .describe("Arena best-of-N implementation comparison settings"),
+        budget: z
+          .object({
+            maxEstimatedUsd: z
+              .number()
+              .nonnegative()
+              .optional()
+              .describe("Soft estimated USD budget for ensemble fan-out (advisory in Phase 1)."),
+          })
+          .optional()
+          .describe("Ensemble cost budget controls"),
+      })
+      .optional()
+      .describe(
+        "Execution modes: local, cloud, hybrid placement, multi-provider council, and arena ensemble (ADR-049).",
+      ),
   })
   .strict()
   .meta({

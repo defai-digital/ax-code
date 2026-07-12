@@ -25,6 +25,10 @@ import { Log } from "@/util/log"
 import { Flag } from "../flag/flag"
 import { ScopedFlag } from "../flag/scoped"
 import { VerificationPolicy } from "./verification-policy"
+import { ModeProtocol } from "../mode/protocol"
+import { Config } from "../config/config"
+import type { ModePolicy } from "../mode/policy"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
@@ -165,6 +169,25 @@ export namespace SystemPrompt {
           `  Do not call DRE-only tools unless they are present in the active tool list; use read, grep, bash, edit/write/apply_patch, and verify_project instead.`,
           `</debug_engine_workflow>`,
         ]
+
+    let executionModesProtocol: string[] = []
+    try {
+      const cfg = await Config.get()
+      const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
+      const localProvider = modes?.hybrid?.localProviderID ?? AX_ENGINE_PROVIDER_ID
+      executionModesProtocol = [
+        ModeProtocol.renderExecutionModes({
+          defaultMode: modes?.default,
+          councilEnabled: modes?.council?.enabled !== false,
+          arenaEnabled: modes?.arena?.enabled === true,
+          localAvailable: model.providerID === localProvider,
+        }),
+      ]
+    } catch (error) {
+      log.warn("execution modes protocol resolve failed", { error })
+      executionModesProtocol = [ModeProtocol.renderExecutionModes()]
+    }
+
     return [
       [
         `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
@@ -179,6 +202,7 @@ export namespace SystemPrompt {
         ...liveSearchBlock,
         ...autonomousWorkflow,
         ...verificationProtocol,
+        ...executionModesProtocol,
         ...htmlDevWorkflow,
         ...debugEngineWorkflow,
       ].join("\n"),

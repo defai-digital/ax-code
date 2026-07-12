@@ -79,9 +79,13 @@ export async function createUserMessage(input: CreateUserMessageInput) {
   agentName = route.agentName
   const agent = route.agent
   const complexityModel = route.complexityModel
+  const hybridModel = route.hybridModel
 
-  const model = complexityModel ?? input.model ?? agent.model ?? (await lastModel(input.sessionID))
-  const variant = input.variant ?? (!input.model && !complexityModel && agent.variant ? agent.variant : undefined)
+  const model =
+    complexityModel ?? hybridModel ?? input.model ?? agent.model ?? (await lastModel(input.sessionID))
+  const variant =
+    input.variant ??
+    (!input.model && !complexityModel && !hybridModel && agent.variant ? agent.variant : undefined)
 
   const info: MessageV2.User = {
     id: messageID,

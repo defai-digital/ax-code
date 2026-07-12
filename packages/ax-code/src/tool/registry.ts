@@ -9,6 +9,8 @@ import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TaskParallelTool } from "./task_parallel"
+import { CouncilTool } from "./council"
+import { ArenaTool } from "./arena"
 import { TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
@@ -228,6 +230,8 @@ export namespace ToolRegistry {
       WriteTool,
       TaskTool,
       TaskParallelTool,
+      CouncilTool,
+      ArenaTool,
       WebFetchTool,
       TodoWriteTool,
       WebSearchTool,

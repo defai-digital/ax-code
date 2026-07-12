@@ -1,0 +1,7 @@
+Compare multiple model approaches for the same coding task (arena / best-of-N).
+
+Fans out a structured plan-or-approach proposal to diverse connected providers, then ranks candidates using verification-aware diversity scoring (never pure popularity). Advisory — does not apply patches or write files.
+
+Use for high-stakes ambiguous tasks where you want several independent approaches ranked. Prefer verify_project / tests before promoting any approach into implementation.
+
+Do not use for trivial edits or when only one provider is connected.

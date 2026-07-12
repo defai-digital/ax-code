@@ -29,7 +29,7 @@ export const AgentRouteEvent = Base.extend({
   fromAgent: z.string(),
   toAgent: z.string(),
   confidence: z.number(),
-  routeMode: z.enum(["delegate", "switch", "complexity"]).optional(),
+  routeMode: z.enum(["delegate", "switch", "complexity", "hybrid"]).optional(),
   matched: z.string().array().optional(),
   complexity: z.enum(["low", "medium", "high"]).optional(),
 })
