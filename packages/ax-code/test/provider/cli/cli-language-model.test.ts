@@ -206,6 +206,36 @@ describe("CliLanguageModel", () => {
     ).rejects.toThrow(/CLI exited with code 7: partial output/)
   })
 
+  test("doGenerate does not leak a rejected process promise as an unhandled rejection", async () => {
+    const failure = new Error("synthetic CLI spawn failure")
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => unhandled.push(reason)
+    const spawn = vi.spyOn(Process, "spawn").mockReturnValue({
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exited: Promise.reject(failure),
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 998,
+      stdin: null,
+    } as any)
+    process.on("unhandledRejection", onUnhandled)
+
+    try {
+      await expect(
+        makeModel().doGenerate({
+          prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        }),
+      ).rejects.toBe(failure)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off("unhandledRejection", onUnhandled)
+      spawn.mockRestore()
+    }
+  })
+
   test("doGenerate waits for CLI process kill before timing out", async () => {
     const originalSetTimeout = globalThis.setTimeout
     const setTimeoutSpy = (

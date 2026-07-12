@@ -153,7 +153,8 @@ export class CliLanguageModel implements LanguageModelV3 {
     }
 
     signal?.addEventListener("abort", onAbort, { once: true })
-    proc.exited.finally(() => signal?.removeEventListener("abort", onAbort))
+    const removeAbortListener = () => signal?.removeEventListener("abort", onAbort)
+    void proc.exited.then(removeAbortListener, removeAbortListener)
 
     return {
       get isAborted() {
