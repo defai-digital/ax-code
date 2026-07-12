@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.11.0] - 2026-07-12
+
+### Added
+
+- Desktop: adds a centered application-icon source and repeatable icon generator for macOS and Windows packaging.
+- Desktop: adds session-pulse and shared empty-surface UI components, with workspace-focus coverage.
+
+### Changed
+
+- TUI: coalesces high-frequency text stream deltas to reduce projection and RPC churn while preserving event ordering.
+
+### Fixed
+
+- Security: includes the latest local-only access hardening and regression fixes.
+
 ## [6.10.3] - 2026-07-08
 
 ### Changed

@@ -514,6 +514,15 @@ export interface BrowserPanelState {
   focused: boolean
 }
 
+type WorkspaceFocusSnapshot = {
+  isSidebarOpen: boolean
+  isRightSidebarOpen: boolean
+  isBottomTerminalOpen: boolean
+  splitPaneEnabled: boolean
+  isExpandedInput: boolean
+  activeMainTab: MainTab
+}
+
 const normalizeBrowserPanelState = (value: unknown): BrowserPanelState => {
   if (!value || typeof value !== "object") {
     return { isOpen: false, url: "", focused: false }
@@ -548,6 +557,8 @@ interface UIStore {
   isSessionSwitcherOpen: boolean
   isSessionDropdownOpen: boolean
   activeMainTab: MainTab
+  isWorkspaceFocus: boolean
+  workspaceFocusSnapshot: WorkspaceFocusSnapshot | null
   mainTabGuard: MainTabGuard | null
   sidebarOpenBeforeFullscreenTab: boolean | null
   pendingDiffFile: string | null
@@ -659,6 +670,9 @@ interface UIStore {
   setTheme: (theme: "light" | "dark" | "system") => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
+  enterWorkspaceFocus: () => void
+  exitWorkspaceFocus: (options?: { restore?: boolean }) => void
+  toggleWorkspaceFocus: () => void
   setSidebarWidth: (width: number) => void
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
@@ -831,6 +845,8 @@ export const useUIStore = create<UIStore>()(
         isSessionSwitcherOpen: false,
         isSessionDropdownOpen: false,
         activeMainTab: "chat",
+        isWorkspaceFocus: false,
+        workspaceFocusSnapshot: null,
         mainTabGuard: null,
         sidebarOpenBeforeFullscreenTab: null,
         pendingDiffFile: null,
@@ -953,6 +969,14 @@ export const useUIStore = create<UIStore>()(
 
         setSidebarOpen: (open) => {
           set((state) => {
+            if (open && state.isWorkspaceFocus) {
+              return {
+                isSidebarOpen: true,
+                sidebarWidth: state.hasManuallyResizedLeftSidebar ? state.sidebarWidth : LEFT_SIDEBAR_MIN_WIDTH,
+                isWorkspaceFocus: false,
+                workspaceFocusSnapshot: null,
+              }
+            }
             if (state.isSidebarOpen === open) {
               if (!open) {
                 return state
@@ -973,6 +997,54 @@ export const useUIStore = create<UIStore>()(
             }
             return { isSidebarOpen: open }
           })
+        },
+
+        enterWorkspaceFocus: () => {
+          const state = get()
+          if (state.isMobile || state.isWorkspaceFocus) {
+            return
+          }
+          set({
+            isWorkspaceFocus: true,
+            workspaceFocusSnapshot: {
+              isSidebarOpen: state.isSidebarOpen,
+              isRightSidebarOpen: state.isRightSidebarOpen,
+              isBottomTerminalOpen: state.isBottomTerminalOpen,
+              splitPaneEnabled: state.splitPaneEnabled,
+              isExpandedInput: state.isExpandedInput,
+              activeMainTab: state.activeMainTab,
+            },
+            isSidebarOpen: false,
+            isRightSidebarOpen: false,
+            isBottomTerminalOpen: false,
+            splitPaneEnabled: false,
+            isExpandedInput: true,
+            activeMainTab: "chat",
+          })
+        },
+
+        exitWorkspaceFocus: ({ restore = false } = {}) => {
+          set((state) => {
+            if (!state.isWorkspaceFocus && !state.workspaceFocusSnapshot) {
+              return state
+            }
+            if (restore && state.workspaceFocusSnapshot) {
+              return {
+                ...state.workspaceFocusSnapshot,
+                isWorkspaceFocus: false,
+                workspaceFocusSnapshot: null,
+              }
+            }
+            return { isWorkspaceFocus: false, workspaceFocusSnapshot: null }
+          })
+        },
+
+        toggleWorkspaceFocus: () => {
+          if (get().isWorkspaceFocus) {
+            get().exitWorkspaceFocus({ restore: true })
+            return
+          }
+          get().enterWorkspaceFocus()
         },
 
         setSidebarWidth: (width) => {
@@ -1444,7 +1516,11 @@ export const useUIStore = create<UIStore>()(
           if (guard && !guard(tab)) {
             return
           }
-          set({ activeMainTab: tab })
+          set((state) =>
+            tab !== "chat" && state.isWorkspaceFocus
+              ? { activeMainTab: tab, isWorkspaceFocus: false, workspaceFocusSnapshot: null }
+              : { activeMainTab: tab },
+          )
         },
 
         setPendingDiffFile: (filePath, staged = false) => {
