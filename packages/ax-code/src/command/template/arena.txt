@@ -1,0 +1,11 @@
+Run a multi-provider arena (best-of-N plan comparison). Use the arena tool.
+
+Task: $ARGUMENTS
+
+Instructions:
+1. Ensure modes.arena.enabled is true (config); if the tool reports disabled, tell the user how to enable it.
+2. Gather brief context (key files, constraints) if helpful.
+3. Call the arena tool with the task and context.
+4. Present the ranked approaches and recommend a winner.
+5. Implement only after user confirmation (or autonomous policy), then verify_project.
+6. Do not run concurrent writers on the main workspace; plan arena is advisory only.

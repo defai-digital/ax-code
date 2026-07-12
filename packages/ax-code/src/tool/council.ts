@@ -1,12 +1,15 @@
 /**
- * Multi-provider council tool (ADR-049 Phase 1).
+ * Multi-provider council tool (ADR-049 Phase 1 + Phase 3 debate/budget/memory).
  * Fans out structured reviews; aggregates via pure Council module.
  */
 
 import { generateObject } from "ai"
 import z from "zod"
 import { Config } from "../config/config"
+import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
+import { Debate } from "../mode/debate"
+import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
 import { modelSelectableForProvider } from "../provider/model-selectability"
@@ -42,6 +45,13 @@ const parameters = z.object({
     .optional()
     .describe("Optional code, diff, or design context to include for every member"),
   kind: z.enum(["review", "design"]).optional().describe("review (default) or design trade-off"),
+  debateRounds: z
+    .number()
+    .int()
+    .min(0)
+    .max(3)
+    .optional()
+    .describe("Optional anonymous debate rounds after the first fan-out (default from config, usually 0)"),
   providers: z
     .array(
       z.object({
@@ -70,14 +80,9 @@ Be concrete. Prefer fewer high-signal issues. Do not claim other models' opinion
 
 async function resolveMembers(
   cfg: Awaited<ReturnType<typeof Config.get>>,
-  explicit?: Array<{ providerID: string; modelID?: string }>,
+  explicit: Array<{ providerID: string; modelID?: string }> | undefined,
+  maxMembers: number,
 ): Promise<MemberSpec[]> {
-  const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
-  const maxMembers = Math.min(
-    HARD_MAX_MEMBERS,
-    Math.max(1, modes?.council?.maxMembers ?? DEFAULT_MAX_MEMBERS),
-  )
-
   await Provider.ready()
   const providers = await Provider.list()
 
@@ -106,24 +111,32 @@ async function resolveMembers(
     return out
   }
 
-  type Cand = { providerID: ProviderID; modelID: ModelID }
-  const candidates: Cand[] = []
+  type Cand = { providerID: string; modelID: ModelID }
+  let candidates: Cand[] = []
   for (const provider of Object.values(providers)) {
     const models = Provider.sort(
       Object.values(provider.models).filter((m) => modelSelectableForProvider(provider.id, m)),
     )
     const model = models[0]
     if (!model) continue
-    // Skip pure embedding-only if tagged (best-effort)
     const id = String(model.id).toLowerCase()
     if (id.includes("embed")) continue
-    candidates.push({ providerID: provider.id, modelID: model.id })
+    candidates.push({ providerID: String(provider.id), modelID: model.id })
   }
 
-  const diverse = Council.selectDiverseMembers(
-    candidates.map((c) => ({ ...c, providerID: String(c.providerID) })),
-    maxMembers,
-  )
+  // Soft bias by historical performance, then diversify families
+  try {
+    const store = await ModeMemory.load()
+    const stats = ModeMemory.aggregateStats(store.outcomes)
+    candidates = ModeMemory.biasByMemory(
+      candidates.map((c) => ({ ...c, modelID: String(c.modelID) })),
+      stats,
+    ).map((c) => ({ providerID: c.providerID, modelID: ModelID.make(String(c.modelID)) }))
+  } catch {
+    // memory is best-effort
+  }
+
+  const diverse = Council.selectDiverseMembers(candidates, maxMembers)
 
   return diverse.map((c) => ({
     providerID: ProviderID.make(c.providerID),
@@ -137,10 +150,11 @@ async function runMember(input: {
   kind: "review" | "design"
   question: string
   context?: string
+  debateContext?: string
   timeoutMs: number
   abort: AbortSignal
 }): Promise<Council.CouncilMemberResult> {
-  const { member, kind, question, context, timeoutMs, abort } = input
+  const { member, kind, question, context, debateContext, timeoutMs, abort } = input
   const started = Date.now()
   const localAbort = new AbortController()
   const onParentAbort = () => localAbort.abort()
@@ -154,6 +168,7 @@ async function runMember(input: {
       `Kind: ${kind}`,
       `Question: ${question}`,
       context ? `\nContext:\n${context.slice(0, 24_000)}` : "",
+      debateContext ? `\n${debateContext}` : "",
     ]
       .filter(Boolean)
       .join("\n")
@@ -223,6 +238,9 @@ type CouncilMetadata = {
   majorityCount?: number
   singletonCount?: number
   memberIds?: string[]
+  debateRoundsRun?: number
+  debateStopReason?: string
+  budgetReasons?: string[]
 }
 
 export const CouncilTool = Tool.define("council", async () => {
@@ -253,7 +271,36 @@ export const CouncilTool = Tool.define("council", async () => {
 
       const timeoutMs = modes?.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
       const kind = args.kind ?? "review"
-      const members = await resolveMembers(cfg, args.providers)
+      const maxMembers = Math.min(
+        HARD_MAX_MEMBERS,
+        Math.max(1, modes?.council?.maxMembers ?? DEFAULT_MAX_MEMBERS),
+      )
+      const maxRounds = args.debateRounds ?? modes?.council?.debateRounds ?? 0
+
+      const budgetCheck = Budget.check({
+        kind: "council",
+        requestedMembers: args.providers?.length ?? maxMembers,
+        budget: {
+          maxMembers,
+          maxContestants: modes?.arena?.maxContestants ?? 3,
+          timeoutMs,
+          maxEstimatedUsd: modes?.budget?.maxEstimatedUsd,
+          estimatedUsdPerMember: modes?.budget?.estimatedUsdPerMember,
+        },
+      })
+      if (!budgetCheck.ok) {
+        const metadata: CouncilMetadata = { status: "budget_rejected" }
+        return {
+          title: "Council budget rejected",
+          output: budgetCheck.message,
+          metadata,
+        }
+      }
+
+      let members = await resolveMembers(cfg, args.providers, budgetCheck.allowedMembers)
+      if (members.length > budgetCheck.allowedMembers) {
+        members = members.slice(0, budgetCheck.allowedMembers)
+      }
 
       if (members.length === 0) {
         const metadata: CouncilMetadata = { status: "no_members", totalMembers: 0, successfulMembers: 0 }
@@ -265,7 +312,7 @@ export const CouncilTool = Tool.define("council", async () => {
         }
       }
 
-      const results = await Promise.all(
+      let results = await Promise.all(
         members.map((member) =>
           runMember({
             member,
@@ -278,17 +325,73 @@ export const CouncilTool = Tool.define("council", async () => {
         ),
       )
 
-      const report = Council.aggregateCouncil(results)
-      const markdown = Council.renderReportMarkdown(report, args.question)
+      let report = Council.aggregateCouncil(results)
+      let debateRoundsRun = 0
+      let debateStopReason = maxRounds > 0 ? "not_started" : "debate_disabled"
+      const debateNotes: string[] = []
 
-      // Include brief overall notes from successful members
+      for (let round = 1; round <= maxRounds; round++) {
+        const decision = Debate.shouldContinueDebate({
+          round: round - 1,
+          maxRounds,
+          report,
+        })
+        if (!decision.continue && round > 1) {
+          debateStopReason = decision.reason
+          break
+        }
+        if (round === 1 && !decision.continue && decision.reason !== "continue:agreement=0.00") {
+          // Still allow first debate round if incomplete or disabled handled above
+          if (decision.reason === "incomplete_members" || decision.reason === "debate_disabled") {
+            debateStopReason = decision.reason
+            break
+          }
+        }
+
+        const summary = Debate.buildAnonymousSynthesis(report, round)
+        const synthesis = Debate.renderSynthesisPrompt(summary)
+        debateNotes.push(`### Debate round ${round}`, "", synthesis, "")
+
+        results = await Promise.all(
+          members.map((member) =>
+            runMember({
+              member,
+              kind,
+              question: args.question,
+              context: args.context,
+              debateContext: synthesis,
+              timeoutMs,
+              abort: ctx.abort,
+            }),
+          ),
+        )
+        report = Council.aggregateCouncil(results)
+        debateRoundsRun = round
+        debateStopReason = Debate.shouldContinueDebate({ round, maxRounds, report }).reason
+        if (!Debate.shouldContinueDebate({ round, maxRounds, report }).continue) break
+      }
+
+      const markdown = Council.renderReportMarkdown(report, args.question)
       const overallLines = results
         .filter((r) => !r.error && r.overall)
         .map((r) => `- **${r.memberId}:** ${r.overall}`)
-      const full =
-        overallLines.length > 0
-          ? `${markdown}\n\n## Member overall assessments\n${overallLines.join("\n")}`
-          : markdown
+
+      const parts = [markdown]
+      if (overallLines.length) {
+        parts.push("", "## Member overall assessments", ...overallLines)
+      }
+      if (debateRoundsRun > 0) {
+        parts.push("", `## Debate (${debateRoundsRun} round(s), stop: ${debateStopReason})`, ...debateNotes)
+      }
+      if (budgetCheck.reasons.length) {
+        parts.push("", `_Budget: ${budgetCheck.reasons.join(", ")}_`)
+      }
+
+      void ModeMemory.recordCouncilParticipation({
+        question: args.question,
+        memberIds: results.map((r) => r.memberId),
+        successfulIds: results.filter((r) => !r.error).map((r) => r.memberId),
+      }).catch(() => undefined)
 
       const metadata: CouncilMetadata = {
         status: report.incomplete ? "incomplete" : "ok",
@@ -299,13 +402,17 @@ export const CouncilTool = Tool.define("council", async () => {
         majorityCount: report.majority.length,
         singletonCount: report.singleton.length,
         memberIds: results.map((r) => r.memberId),
+        debateRoundsRun,
+        debateStopReason,
+        budgetReasons: budgetCheck.reasons,
       }
 
       return {
         title: report.incomplete
           ? `Council incomplete (${report.successfulMembers}/${report.totalMembers})`
-          : `Council ${report.consensus.length}c/${report.majority.length}m/${report.singleton.length}s`,
-        output: full,
+          : `Council ${report.consensus.length}c/${report.majority.length}m/${report.singleton.length}s` +
+            (debateRoundsRun ? ` d${debateRoundsRun}` : ""),
+        output: parts.join("\n"),
         metadata,
       }
     },

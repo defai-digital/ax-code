@@ -9,7 +9,9 @@ import { createHash } from "crypto"
 import z from "zod"
 import { Config } from "../config/config"
 import { Arena } from "../mode/arena"
+import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
+import { ModeMemory } from "../mode/memory"
 import type { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
 import { modelSelectableForProvider } from "../provider/model-selectability"
@@ -56,11 +58,9 @@ function fingerprint(text: string): string {
 
 async function resolveMembers(
   cfg: Awaited<ReturnType<typeof Config.get>>,
-  explicit?: Array<{ providerID: string; modelID?: string }>,
+  explicit: Array<{ providerID: string; modelID?: string }> | undefined,
+  maxMembers: number,
 ): Promise<MemberSpec[]> {
-  const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
-  const maxMembers = Math.min(HARD_MAX, Math.max(1, modes?.arena?.maxContestants ?? DEFAULT_MAX))
-
   await Provider.ready()
   const providers = await Provider.list()
 
@@ -84,7 +84,7 @@ async function resolveMembers(
     return out
   }
 
-  const candidates: Array<{ providerID: string; modelID: ModelID }> = []
+  let candidates: Array<{ providerID: string; modelID: ModelID }> = []
   for (const provider of Object.values(providers)) {
     const models = Provider.sort(
       Object.values(provider.models).filter((m) => modelSelectableForProvider(provider.id, m)),
@@ -93,6 +93,17 @@ async function resolveMembers(
     if (!model) continue
     if (String(model.id).toLowerCase().includes("embed")) continue
     candidates.push({ providerID: String(provider.id), modelID: model.id })
+  }
+
+  try {
+    const store = await ModeMemory.load()
+    const stats = ModeMemory.aggregateStats(store.outcomes, ModeMemory.classifyTask("implement"))
+    candidates = ModeMemory.biasByMemory(
+      candidates.map((c) => ({ ...c, modelID: String(c.modelID) })),
+      stats,
+    ).map((c) => ({ providerID: c.providerID, modelID: ModelID.make(String(c.modelID)) }))
+  } catch {
+    // best-effort
   }
 
   const diverse = Council.selectDiverseMembers(candidates, maxMembers)
@@ -174,6 +185,7 @@ type ArenaMetadata = {
   memberCount?: number
   rankedIds?: string[]
   errorCount?: number
+  budgetReasons?: string[]
 }
 
 export const ArenaTool = Tool.define("arena", async () => {
@@ -202,13 +214,39 @@ export const ArenaTool = Tool.define("arena", async () => {
 
       const strategy = args.strategy ?? modes.arena?.strategy ?? "diversity"
       const timeoutMs = modes.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
-      const members = await resolveMembers(cfg, args.providers)
+      const maxContestants = Math.min(HARD_MAX, Math.max(1, modes.arena?.maxContestants ?? DEFAULT_MAX))
+
+      const budgetCheck = Budget.check({
+        kind: "arena",
+        requestedMembers: args.providers?.length ?? maxContestants,
+        budget: {
+          maxMembers: modes.council?.maxMembers ?? 3,
+          maxContestants,
+          timeoutMs,
+          maxEstimatedUsd: modes.budget?.maxEstimatedUsd,
+          estimatedUsdPerMember: modes.budget?.estimatedUsdPerMember,
+        },
+      })
+      if (!budgetCheck.ok) {
+        const metadata: ArenaMetadata = { status: "budget_rejected", strategy }
+        return {
+          title: "Arena budget rejected",
+          output: budgetCheck.message,
+          metadata,
+        }
+      }
+
+      let members = await resolveMembers(cfg, args.providers, budgetCheck.allowedMembers)
+      if (members.length > budgetCheck.allowedMembers) {
+        members = members.slice(0, budgetCheck.allowedMembers)
+      }
 
       if (members.length < 2) {
         const metadata: ArenaMetadata = {
           status: "insufficient_members",
           memberCount: members.length,
           strategy,
+          budgetReasons: budgetCheck.reasons,
         }
         return {
           title: "Arena: need ≥2 providers",
@@ -233,10 +271,12 @@ export const ArenaTool = Tool.define("arena", async () => {
       const candidates: Arena.ArenaCandidate[] = []
       const proposalById = new Map<string, z.infer<typeof ProposalSchema>>()
       const errors: string[] = []
+      const failedIds: string[] = []
 
       for (const r of results) {
         if (r.error || !r.proposal) {
           errors.push(`${r.member.memberId}: ${r.error ?? "no proposal"}`)
+          failedIds.push(r.member.memberId)
           candidates.push({
             id: r.member.memberId,
             providerID: String(r.member.providerID),
@@ -277,10 +317,20 @@ export const ArenaTool = Tool.define("arena", async () => {
       if (errors.length) {
         detail.push("", "## Errors", ...errors.map((e) => `- ${e}`))
       }
+      if (budgetCheck.reasons.length) {
+        detail.push("", `_Budget: ${budgetCheck.reasons.join(", ")}_`)
+      }
       detail.push(
         "",
         "_Plans are not execution-verified. Implement the winner under sandbox and run verify_project before claiming done._",
+        "_Multi-writer implement arena requires worktree isolation (WorktreePolicy); this tool is plan-only._",
       )
+
+      void ModeMemory.recordArenaRanking({
+        task: args.task,
+        rankedIds: ranked.filter((r) => r.verification !== "fail").map((r) => r.id),
+        failedIds,
+      }).catch(() => undefined)
 
       const metadata: ArenaMetadata = {
         status: "ok",
@@ -288,6 +338,7 @@ export const ArenaTool = Tool.define("arena", async () => {
         memberCount: members.length,
         rankedIds: ranked.map((r) => r.id),
         errorCount: errors.length,
+        budgetReasons: budgetCheck.reasons,
       }
 
       return {

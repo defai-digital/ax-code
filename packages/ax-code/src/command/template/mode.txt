@@ -1,0 +1,16 @@
+Explain and apply AX Code execution modes for this session.
+
+User request: $ARGUMENTS
+
+Modes (ADR-049):
+- local: prefer AX Engine / local inference
+- cloud: prefer hosted/CLI frontier providers
+- hybrid: policy routes local vs cloud (complexity + privacy); set modes.default=hybrid in ax-code.json
+- council: multi-provider advisory review tool (consensus/majority/singleton; optional debate)
+- arena: multi-provider plan best-of-N (requires modes.arena.enabled=true)
+
+Instructions:
+1. If the user asks to switch mode, tell them the exact ax-code.json snippet (do not invent unsupported runtime toggles).
+2. If they want a review, use the council tool.
+3. If they want approach comparison, use the arena tool (when enabled).
+4. Remind: never treat multi-model agreement on a patch as proof — run verification.

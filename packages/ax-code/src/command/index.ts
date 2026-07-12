@@ -14,6 +14,9 @@ import PROMPT_REVIEW from "./template/review.txt"
 import PROMPT_ADR from "./template/adr.txt"
 import PROMPT_IMPACT from "./template/impact.txt"
 import PROMPT_PRD from "./template/prd.txt"
+import PROMPT_COUNCIL from "./template/council.txt"
+import PROMPT_ARENA from "./template/arena.txt"
+import PROMPT_MODE from "./template/mode.txt"
 
 export namespace Command {
   export const Event = {
@@ -103,6 +106,9 @@ export namespace Command {
     IMPACT: "impact",
     PRD: "prd",
     GOAL: "goal",
+    COUNCIL: "council",
+    ARENA: "arena",
+    MODE: "mode",
   } as const
 
   const state = Instance.state(async () => {
@@ -184,6 +190,39 @@ export namespace Command {
       scope: "builtin",
       template: "",
       hints: ["$ARGUMENTS"],
+    }
+    commands[Default.COUNCIL] = {
+      name: Default.COUNCIL,
+      description: "multi-provider council review (consensus / majority / singleton)",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_COUNCIL
+      },
+      hints: hints(PROMPT_COUNCIL),
+    }
+    commands[Default.ARENA] = {
+      name: Default.ARENA,
+      description: "multi-provider arena best-of-N plan comparison",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_ARENA
+      },
+      hints: hints(PROMPT_ARENA),
+    }
+    commands[Default.MODE] = {
+      name: Default.MODE,
+      description: "explain or configure local / cloud / hybrid / council / arena modes",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_MODE
+      },
+      hints: hints(PROMPT_MODE),
     }
 
     for (const [name, command] of Object.entries(cfg.command ?? {})) {

@@ -29,6 +29,7 @@ export namespace ModePolicy {
     }
     budget?: {
       maxEstimatedUsd?: number
+      estimatedUsdPerMember?: number
     }
   }
 

@@ -1,5 +1,7 @@
 Fan out a structured review or design question to multiple connected LLM providers, then aggregate agreement into consensus / majority / singleton findings.
 
+Optional anonymous debate rounds (debateRounds or modes.council.debateRounds) re-share Chatham-House synthesis without member identities.
+
 Use this for high-stakes architecture, security review, or design trade-offs where multiple independent perspectives increase confidence. Advisory only — does not edit files.
 
 Do not use for trivial one-line questions or as a substitute for running tests. Multi-model agreement on a patch is not proof of correctness.

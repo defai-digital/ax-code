@@ -954,7 +954,14 @@ export const Info = z
               .number()
               .nonnegative()
               .optional()
-              .describe("Soft estimated USD budget for ensemble fan-out (advisory in Phase 1)."),
+              .describe("Maximum estimated USD for an ensemble fan-out (fail-closed when exceeded)."),
+            estimatedUsdPerMember: z
+              .number()
+              .nonnegative()
+              .optional()
+              .describe(
+                "Rough USD cost per council/arena member call used with maxEstimatedUsd to cap fan-out size.",
+              ),
           })
           .optional()
           .describe("Ensemble cost budget controls"),

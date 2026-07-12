@@ -1,0 +1,10 @@
+Run a multi-provider council review (advisory). Use the council tool.
+
+Question / focus: $ARGUMENTS
+
+Instructions:
+1. Gather relevant code or design context with read/grep as needed.
+2. Call the council tool with kind=review (or design if this is an architecture trade-off).
+3. Optionally set debateRounds=1 or 2 for anonymous multi-round refinement when the stakes are high.
+4. Summarize consensus vs majority vs singleton findings for the user.
+5. Do not apply patches solely because models agreed — verify with tests when changing code.
