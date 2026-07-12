@@ -480,7 +480,28 @@ export const DoctorCommand: CommandModule = {
       // Best-effort
     }
 
-    // 13. Feature flags
+    // 13. TUI render backend (Zig is supported; native/yoga are experimental)
+    {
+      const { resolveEffectiveTuiRenderBackend, isExperimentalTuiRenderBackend } = await import(
+        "./tui/render-backend"
+      )
+      const backend = resolveEffectiveTuiRenderBackend()
+      if (isExperimentalTuiRenderBackend(backend)) {
+        checks.push({
+          name: "TUI render backend",
+          status: "warn",
+          detail: `Experimental \`${backend}\` active via AX_CODE_NATIVE_RENDER (supported production backend is zig). Unset the env var for stability.`,
+        })
+      } else {
+        checks.push({
+          name: "TUI render backend",
+          status: "ok",
+          detail: "zig (supported)",
+        })
+      }
+    }
+
+    // 14. Feature flags
     const flags: string[] = []
     if (Flag.AX_CODE_DISABLE_MODELS_FETCH) flags.push("DISABLE_MODELS_FETCH")
     if (Flag.AX_CODE_NATIVE_INDEX) flags.push("NATIVE_INDEX=on")

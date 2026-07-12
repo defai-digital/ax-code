@@ -14,7 +14,13 @@ import { Filesystem } from "@/util/filesystem"
 import type { Event } from "@ax-code/sdk/v2"
 import type { EventSource } from "./context/sdk"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
-import { TUI_MODE_CHOICES, applyTuiRenderBackendMode } from "./render-backend"
+import {
+  TUI_MODE_CHOICES,
+  applyTuiRenderBackendMode,
+  isExperimentalTuiRenderBackend,
+  resolveEffectiveTuiRenderBackend,
+} from "./render-backend"
+import { ensureShellEnv } from "@/runtime/shell-env"
 import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
 import { writeHeapSnapshot } from "v8"
@@ -642,12 +648,21 @@ export const TuiThreadCommand = cmd({
         process.exitCode = 1
         return
       }
+      // Shell env fills missing keys only. Await it before applying the
+      // render-backend override so a profile export of AX_CODE_NATIVE_RENDER*
+      // cannot win the race after we clear/set the flag (and so diagnostics
+      // reflect the same env the renderer will see).
+      await ensureShellEnv()
       // Must run before the renderer library is resolved (app import below)
       // and before the backend child inherits our env.
-      applyTuiRenderBackendMode(args["tui-mode"] as string | undefined)
+      const tuiModeFlag = args["tui-mode"] as string | undefined
+      const tuiMode = applyTuiRenderBackendMode(tuiModeFlag)
       DiagnosticLog.recordProcess("tui.threadStarted", {
         args: process.argv.slice(2),
-        tuiMode: (args["tui-mode"] as string | undefined) ?? "default(zig)",
+        tuiMode,
+        tuiModeFlag: tuiModeFlag ?? null,
+        tuiModeExperimental: isExperimentalTuiRenderBackend(tuiMode),
+        tuiModeResolved: resolveEffectiveTuiRenderBackend(),
       })
 
       // Resolve relative --project paths from the caller's original cwd, then

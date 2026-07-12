@@ -70,7 +70,10 @@ Switches (case-insensitive; **maintainer / CI only**):
 The TUI keeps a **hidden** `--tui-mode={zig,native,yoga}` escape hatch mapped
 onto those env switches in
 `packages/ax-code/src/cli/cmd/tui/render-backend.ts` before the renderer
-library is resolved. It does not appear in normal `--help`. Do not document
+library is resolved. The thread awaits `ensureShellEnv()` first so a
+shell-profile `AX_CODE_NATIVE_RENDER*` cannot race past the CLI override
+(and so `zig`/`native` blank `SCOPE` rather than delete it, blocking a late
+shell fill). The flag does not appear in normal `--help`. Do not document
 native/yoga as product choices until ADR-047 graduation criteria are met.
 
 The render families share a backend-specific handle registry, so they flip
