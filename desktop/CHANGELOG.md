@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [6.11.4] - 2026-07-12
+
+### Fixed
+
+- Release: bounds deterministic CLI test worker concurrency with a Vitest-supported option.
+
 ## [6.11.3] - 2026-07-12
 
 ### Fixed
