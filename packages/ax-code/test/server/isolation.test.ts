@@ -172,6 +172,45 @@ describe("isolation route", () => {
     })
   })
 
+  test("PUT preserves backend and protected when updating mode/network", async () => {
+    await withCleanIsolationEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await writeFile(
+        configPath,
+        JSON.stringify({
+          isolation: {
+            mode: "workspace-write",
+            network: false,
+            backend: "os",
+            protected: ["secrets"],
+          },
+        }),
+      )
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const put = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "read-only" }),
+          })
+          expect(put.status).toBe(200)
+          expect(await put.json()).toEqual({ mode: "read-only", network: false })
+
+          const updated = JSON.parse(await readFile(configPath, "utf-8"))
+          expect(updated.isolation).toEqual({
+            mode: "read-only",
+            network: false,
+            backend: "os",
+            protected: ["secrets"],
+          })
+        },
+      })
+    })
+  })
+
   test("PUT parses explicit network false string without enabling network", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })

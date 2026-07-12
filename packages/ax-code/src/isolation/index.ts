@@ -43,8 +43,10 @@ export namespace Isolation {
     /**
      * Isolation backend for bash OS wrapping. App-layer checks always run;
      * `os`/`auto` additionally wrap bash when the platform supports it.
+     * Optional on partial states; `shouldUseOsSandbox` treats missing as `"app"`.
+     * `resolve()` always sets an explicit value.
      */
-    backend: Backend
+    backend?: Backend
     /**
      * Paths the user has explicitly approved via `isolation_escalation`
      * for the current tool invocation. Scoped per-path so a single
@@ -150,8 +152,10 @@ export namespace Isolation {
   export function shouldUseOsSandbox(state: State | undefined): boolean {
     if (!state) return false
     if (state.mode === "full-access") return false
-    if (state.backend === "app") return false
-    return state.backend === "os" || state.backend === "auto"
+    // Missing backend means portable app-layer only (same as explicit "app").
+    const backend = state.backend ?? DEFAULT_BACKEND
+    if (backend === "app") return false
+    return backend === "os" || backend === "auto"
   }
 
   export function isProtected(state: State, filepath: string): boolean {

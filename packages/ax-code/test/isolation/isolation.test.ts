@@ -23,8 +23,17 @@ describe("isolation.resolve", () => {
     const state = Isolation.resolve(undefined, root)
     expect(state.mode).toBe("workspace-write")
     expect(state.network).toBe(false)
+    expect(state.backend).toBe("app")
     expect(state.protected).toContain(path.resolve(root, ".git"))
     expect(state.protected).toContain(path.resolve(root, ".ax-code"))
+  })
+
+  test("partial config without backend still resolves to app backend", () => {
+    // Routes and tests often write { mode, network } only; backend must not
+    // become a required field that breaks those call sites.
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    expect(state.backend).toBe("app")
+    expect(Isolation.shouldUseOsSandbox(state)).toBe(false)
   })
 
   test("applies config protected paths", () => {

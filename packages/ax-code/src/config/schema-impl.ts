@@ -162,13 +162,18 @@ export const Isolation = z
       .describe(
         "Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected",
       ),
-    backend: IsolationBackend.default("app").describe(
+    // Optional in config input; Isolation.resolve / OsSandbox.resolveBackend
+    // default to "app". Using .default() would make z.infer require backend on
+    // every hand-written config object (routes, tests, partial updates).
+    backend: IsolationBackend.optional().describe(
       "Isolation enforcement backend: app (portable tool checks, default), os (kernel sandbox for bash when available), auto (prefer os with app fallback)",
     ),
   })
   .strict()
   .meta({ ref: "IsolationConfig" })
-export type Isolation = z.infer<typeof Isolation>
+// Config objects are written partially; defaults apply at resolve/parse time.
+// z.input keeps mode/network/backend optional for callers that only set what they change.
+export type Isolation = z.input<typeof Isolation>
 
 export const Permission = z
   .preprocess(

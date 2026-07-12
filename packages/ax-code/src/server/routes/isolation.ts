@@ -105,7 +105,12 @@ export const IsolationRoutes = lazy(() =>
           featureValue: mode,
           responseState: { mode, network },
           update: (config) => {
-            config.isolation = { mode, network }
+            // Preserve backend / protected / other isolation fields. Replacing
+            // the whole object with { mode, network } dropped OS sandbox
+            // backend and custom protected paths on every UI mode toggle.
+            const prev =
+              config.isolation && typeof config.isolation === "object" ? { ...config.isolation } : {}
+            config.isolation = { ...prev, mode, network }
           },
         })
         if ("error" in persistedState) return c.json(persistedState, 500)

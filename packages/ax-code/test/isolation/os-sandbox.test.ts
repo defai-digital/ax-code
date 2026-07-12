@@ -109,4 +109,20 @@ describe("Isolation.shouldUseOsSandbox", () => {
     const auto = Isolation.resolve({ mode: "workspace-write", backend: "auto" }, path.join(os.tmpdir(), "x"))
     expect(Isolation.shouldUseOsSandbox(auto)).toBe(true)
   })
+
+  test("partial config without backend defaults to app (routes write mode/network only)", () => {
+    // Isolation routes and project config updates often set { mode, network }
+    // without backend. That must remain valid and resolve to portable app-layer.
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, os.tmpdir())
+    expect(state.backend).toBe("app")
+    expect(Isolation.shouldUseOsSandbox(state)).toBe(false)
+    // Explicit missing backend on a partial state is treated as app.
+    expect(
+      Isolation.shouldUseOsSandbox({
+        mode: "workspace-write",
+        network: false,
+        protected: [],
+      }),
+    ).toBe(false)
+  })
 })
