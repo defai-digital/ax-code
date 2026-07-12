@@ -7,6 +7,7 @@ import path from "path"
 import { spawn, spawnSync } from "child_process"
 import { fileURLToPath } from "url"
 import { isModuleCliExecution } from "./cli-entry.js"
+import { assertLocalOnlyHostname, isLoopbackHostname } from "../server/lib/security/local-only.js"
 import {
   intro as clackIntro,
   outro as clackOutro,
@@ -97,13 +98,7 @@ function resolveApiHost() {
     return "127.0.0.1"
   }
 
-  // Wildcard bind hosts are not valid destination hosts.
-  if (configured === "0.0.0.0") {
-    return "127.0.0.1"
-  }
-  if (configured === "::" || configured === "[::]") {
-    return "::1"
-  }
+  if (!isLoopbackHostname(configured)) return "127.0.0.1"
 
   // Strip brackets if user provided [::1]
   if (configured.startsWith("[") && configured.endsWith("]")) {
@@ -294,7 +289,11 @@ function parseArgs(argv = process.argv.slice(2)) {
         if (typeof value !== "string" || value.trim().length === 0) {
           throw new CliError("Missing value for --host.", EXIT_CODE.USAGE_ERROR)
         }
-        options.host = value.trim()
+        try {
+          options.host = assertLocalOnlyHostname(value, "--host")
+        } catch (error) {
+          throw new CliError(error instanceof Error ? error.message : String(error), EXIT_CODE.USAGE_ERROR)
+        }
         break
       }
       case "ui-password": {
@@ -460,7 +459,6 @@ COMMANDS:
   stop           Stop running instance(s)
   restart        Stop and start the server
   status         Show server status
-  tunnel         Manage a Cloudflare quick tunnel for browser access
   startup        Manage launch at system startup
   logs           Tail AX Code Desktop logs
   update         Check desktop runtime update status
@@ -475,51 +473,29 @@ OPTIONS:
   -v, --version           Show version
 
 ENVIRONMENT:
-  AX_CODE_DESKTOP_HOST             Bind address (e.g. 0.0.0.0 for all interfaces)
+  AX_CODE_DESKTOP_HOST             Loopback bind address only
   AX_CODE_DESKTOP_UI_PASSWORD      Alternative to --ui-password flag
   AX_CODE_DESKTOP_DATA_DIR         Override AX Code Desktop data directory
-  AX_CODE_HOST               External ax-code server base URL, e.g. http://hostname:4096
-  AX_CODE_PORT               Port of external ax-code server to connect to
-  AX_CODE_SKIP_START          Skip starting AX Code, use external server
-  AX_CODE_DESKTOP_AX_CODE_HOSTNAME  Bind hostname for managed ax-code server (default: 127.0.0.1)
+  AX_CODE_HOST               Existing loopback ax-code server URL
+  AX_CODE_PORT               Port of an existing loopback ax-code server
+  AX_CODE_SKIP_START          Skip starting AX Code; use an existing loopback server
+  AX_CODE_DESKTOP_AX_CODE_HOSTNAME  Loopback hostname for managed ax-code server
 
 EXAMPLES:
   ax-code-desktop                    # Start in daemon mode on default port 3100 (or next free port)
   ax-code-desktop --port 8080        # Start on port 8080 (daemon)
   ax-code-desktop serve --foreground # Start in foreground (for systemd Type=simple)
   ax-code-desktop startup enable     # Start AX Code Desktop at user login
-  ax-code-desktop tunnel start --ui-password secret
   ax-code-desktop logs               # Follow logs for latest running instance
 `)
 }
 
 function showTunnelHelp() {
   console.log(`
- AX Code Desktop Tunnel Commands
+ AX Code Desktop Tunnel
 
-USAGE:
-  ax-code-desktop tunnel <SUBCOMMAND> [OPTIONS]
-
-SUBCOMMANDS:
-  start       Start a Cloudflare quick tunnel for a running or new web UI
-  status      Show active tunnel state
-  stop        Stop active tunnel(s)
-  providers   Show supported tunnel providers
-
-OPTIONS:
-  -p, --port              Target AX Code Desktop web server port
-  --ui-password           Required when tunnel start needs to launch the web server
-  --provider              Tunnel provider (only cloudflare is supported)
-  --mode                  Tunnel mode (only quick is supported)
-  --force                 Replace an existing tunnel on the same port
-  --json                  Output machine-readable JSON
-  -q, --quiet             Suppress non-essential output
-
-EXAMPLES:
-  ax-code-desktop tunnel start --ui-password be-creative-here
-  ax-code-desktop tunnel start --port 3100 --force
-  ax-code-desktop tunnel status --json
-  ax-code-desktop tunnel stop --port 3100
+Cloudflare and other public tunnels are disabled by the local-only policy.
+The legacy \`tunnel stop\` command remains available only to terminate a tunnel created by an older build.
 `)
 }
 
@@ -695,22 +671,22 @@ async function isPortAvailable(port, host) {
   if (!Number.isFinite(port) || port <= 0) {
     return false
   }
+  const bindHost = assertLocalOnlyHostname(host || "127.0.0.1", "port-check host")
 
   return await new Promise((resolve) => {
     const server = net.createServer()
     server.unref()
     server.on("error", () => resolve(false))
-    server.listen({ port, host }, () => {
+    server.listen({ port, host: bindHost }, () => {
       server.close(() => resolve(true))
     })
   })
 }
 
 function resolvePortCheckHost(host) {
-  if (typeof host === "string" && host.trim().length > 0) return host.trim()
-  if (typeof process.env.AX_CODE_DESKTOP_HOST === "string" && process.env.AX_CODE_DESKTOP_HOST.trim().length > 0) {
-    return process.env.AX_CODE_DESKTOP_HOST.trim()
-  }
+  if (typeof host === "string" && host.trim().length > 0) return assertLocalOnlyHostname(host, "--host")
+  if (typeof process.env.AX_CODE_DESKTOP_HOST === "string" && process.env.AX_CODE_DESKTOP_HOST.trim().length > 0)
+    return assertLocalOnlyHostname(process.env.AX_CODE_DESKTOP_HOST, "AX_CODE_DESKTOP_HOST")
   return "127.0.0.1"
 }
 
@@ -2463,6 +2439,12 @@ const commands = {
     if (!["start", "status", "stop", "providers"].includes(normalizedAction)) {
       throw new CliError(
         `Unknown tunnel subcommand '${action}'. Use 'ax-code-desktop tunnel --help'.`,
+        EXIT_CODE.USAGE_ERROR,
+      )
+    }
+    if (normalizedAction !== "stop") {
+      throw new CliError(
+        "Cloudflare and other public tunnels are disabled by the local-only policy.",
         EXIT_CODE.USAGE_ERROR,
       )
     }

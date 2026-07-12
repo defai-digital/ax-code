@@ -782,8 +782,7 @@ export type AxCodeGrpcHttpBridgeOptions = HeadlessClientOptions & {
   baseUrl: string
   webSocketFactory?: (url: string) => AxCodeGrpcWebSocketLike
   /**
-   * The HTTP bridge is a desktop compatibility fallback, not the preferred privileged GUI boundary.
-   * Keep it loopback-only unless the caller explicitly owns and secures the remote server.
+   * @deprecated Remote HTTP bridges are disabled; retained for source compatibility only.
    */
   allowRemoteHttpBridge?: boolean
 }
@@ -2194,12 +2193,11 @@ async function loadBootstrap(
 async function* emptyAsyncIterable<T>(): AsyncIterable<T> {}
 
 function assertHttpBridgeBaseUrl(input: AxCodeGrpcHttpBridgeOptions) {
-  if (input.allowRemoteHttpBridge) return
   const url = new URL(input.baseUrl)
   if (!isLoopbackHttpUrl(url)) {
     throw new Error(
-      "AX Code gRPC HTTP bridge only accepts loopback HTTP base URLs by default. " +
-        "Use a native bridge for desktop hosts, or set allowRemoteHttpBridge: true only for a trusted remote server.",
+      "AX Code gRPC HTTP bridge only accepts loopback HTTP base URLs. " +
+        "Remote AX Code access is disabled by the local-only policy.",
     )
   }
 }

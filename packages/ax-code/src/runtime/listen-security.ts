@@ -1,10 +1,17 @@
-import { Flag } from "@/flag/flag"
-
 export function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase()
-  const host = normalized.startsWith("[") && normalized.endsWith("]") ? normalized.slice(1, -1) : normalized
+  const host = normalizeLoopbackHostname(hostname)
   if (host === "localhost" || host === "::1") return true
   return isIPv4Loopback(host)
+}
+
+export function normalizeLoopbackHostname(hostname: string): string {
+  const normalized = hostname.trim().toLowerCase()
+  return normalized.startsWith("[") && normalized.endsWith("]") ? normalized.slice(1, -1) : normalized
+}
+
+export function formatHostnameForUrl(hostname: string): string {
+  const normalized = normalizeLoopbackHostname(hostname)
+  return normalized.includes(":") ? `[${normalized}]` : normalized
 }
 
 function isIPv4Loopback(hostname: string): boolean {
@@ -19,9 +26,28 @@ function isIPv4Loopback(hostname: string): boolean {
 
 export function assertAuthenticatedNetworkBind(hostname: string): void {
   if (isLoopbackHostname(hostname)) return
-  if (Flag.AX_CODE_SERVER_PASSWORD) return
   throw new Error(
-    "AX_CODE_SERVER_PASSWORD is required when binding to a non-loopback address. " +
-      "Set the environment variable to secure the server.",
+    "AX Code is local-only and cannot bind to a non-loopback address. Use localhost, 127.0.0.0/8, or ::1.",
   )
+}
+
+export function assertLoopbackHttpUrl(raw: string, label = "AX Code server URL"): URL {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error(`${label} must be a valid loopback HTTP URL`)
+  }
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || !isLoopbackHostname(url.hostname)) {
+    throw new Error(`${label} must use a loopback address; remote AX Code access is disabled by the local-only policy`)
+  }
+  return url
+}
+
+export function normalizeLoopbackHttpOrigin(raw: string): string | null {
+  try {
+    return assertLoopbackHttpUrl(raw).origin
+  } catch {
+    return null
+  }
 }

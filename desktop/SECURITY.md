@@ -22,12 +22,14 @@ I'll acknowledge receipt within 48 hours and aim to provide a fix or mitigation 
 AX Code Desktop handles sensitive context including:
 
 - UI authentication (password-protected sessions, JWT tokens)
-- Cloudflare tunnel access (remote connectivity)
+- Loopback-only server and IPC boundaries
 - Terminal access (PTY sessions)
 - Git credentials and SSH keys
 - File system operations
 
 Security reports related to any of these areas are especially appreciated.
+
+AX Code Desktop is local-only. SSH instance access, remote host switching, LAN binding, reverse proxies, and public tunnels are unsupported and disabled at runtime.
 
 ## Supported Versions
 

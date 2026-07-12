@@ -32,4 +32,20 @@ describe("resolveAxCodeEnvConfig", () => {
     ).toBe("127.0.0.1")
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("empty after trimming"))
   })
+
+  it("ignores remote server URLs and non-loopback managed hostnames", () => {
+    const logger = { warn: vi.fn() }
+
+    expect(
+      resolveAxCodeEnvConfig({
+        env: { AX_CODE_HOST: "https://remote.example:4096", AX_CODE_HOSTNAME: "0.0.0.0" },
+        logger,
+      }),
+    ).toMatchObject({
+      configuredAxCodeHost: null,
+      effectivePort: null,
+      configuredAxCodeHostname: "127.0.0.1",
+    })
+    expect(logger.warn).toHaveBeenCalledTimes(2)
+  })
 })

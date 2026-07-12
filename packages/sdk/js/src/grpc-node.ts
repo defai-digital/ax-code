@@ -1,5 +1,6 @@
 import type * as Http2 from "node:http2"
 import { errorMessage } from "./internal/error.js"
+import { formatHostnameForUrl, isLoopbackHostname, normalizeLoopbackHostname } from "./internal/server-shared.js"
 import {
   type AxCodeGrpcBidirectionalStreamingMethod,
   type AxCodeGrpcMetadata,
@@ -218,7 +219,10 @@ export async function startAxCodeGrpcNodeHttp2Server(
   options: AxCodeGrpcNodeHttp2ServerOptions,
 ): Promise<AxCodeGrpcNodeHttp2ServerHandle> {
   const http2 = await import("node:http2")
-  const host = options.host ?? "127.0.0.1"
+  const host = normalizeLoopbackHostname(options.host ?? "127.0.0.1")
+  if (!isLoopbackHostname(host)) {
+    throw new Error("AX Code gRPC HTTP/2 server is local-only and requires a loopback host")
+  }
   const server = http2.createServer()
   bindAxCodeGrpcNodeHttp2Server(server, options.bridge)
   await new Promise<void>((resolve, reject) => {
@@ -238,7 +242,7 @@ export async function startAxCodeGrpcNodeHttp2Server(
   if (!address || typeof address === "string")
     throw new Error("AX Code gRPC HTTP/2 server did not expose a TCP address")
   return {
-    url: `http://${host}:${address.port}`,
+    url: `http://${formatHostnameForUrl(host)}:${address.port}`,
     server,
     close: () =>
       new Promise<void>((resolve, reject) => {

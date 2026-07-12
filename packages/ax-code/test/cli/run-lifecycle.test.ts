@@ -39,6 +39,7 @@ test("run command uses the requested directory for attached path display", async
   expect(src).toContain("pathDisplayRootContext.getStore() ?? process.cwd()")
   expect(src).toContain("path.relative(displayRoot, input)")
   expect(src).toContain("pathDisplayRootContext.run(pathDisplayRoot")
+  expect(src).toContain('assertLoopbackHttpUrl(args.attach, "--attach URL")')
 })
 
 test("run command restores cwd after a requested directory run", async () => {
@@ -131,6 +132,7 @@ test("headless-run attach mode rejects non-internal fetch targets", async () => 
 
   const attachBlock = src.slice(attachStart, attachEnd)
   expect(attachBlock).toContain("const attachUrl = new URL(args.attach)")
+  expect(attachBlock).toContain('assertLoopbackHttpUrl(args.attach, "--attach URL")')
   expect(attachBlock).toContain("assertInternalUrl(attachUrl)")
   expect(attachBlock).toContain("createInternalFetch((request) => fetch(request), headers)")
 })

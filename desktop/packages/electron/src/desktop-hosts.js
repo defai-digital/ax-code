@@ -25,13 +25,7 @@ const normalizeHostname = (hostname) =>
 
 const isLoopbackDesktopHostname = (hostname) => {
   const normalized = normalizeHostname(hostname)
-  return (
-    normalized === "localhost" ||
-    normalized === "0.0.0.0" ||
-    normalized === "::" ||
-    normalized === "::1" ||
-    /^127(?:\.\d{1,3}){3}$/.test(normalized)
-  )
+  return normalized === "localhost" || normalized === "::1" || /^127(?:\.\d{1,3}){3}$/.test(normalized)
 }
 
 const isLocalDesktopSenderUrl = (raw, { serverPort = 0, devRendererUrl = "" } = {}) => {

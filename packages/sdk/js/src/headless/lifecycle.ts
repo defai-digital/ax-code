@@ -5,7 +5,7 @@ import { access } from "node:fs/promises"
 import { createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { assertSdkHttpLoopbackBind, resolveSpawnCommand } from "../internal/server-shared.js"
+import { assertSdkHttpLoopbackBind, normalizeLoopbackHostname, resolveSpawnCommand } from "../internal/server-shared.js"
 import { withDirectoryHeaders } from "../protocol.js"
 import { createIpcTransport } from "./ipc-transport.js"
 
@@ -44,7 +44,7 @@ export type HeadlessBackendOptions = {
   ipcSocketPath?: string
   /**
    * HTTP headless backend helpers are desktop compatibility fallbacks.
-   * Network binds must be explicit so GUI apps do not accidentally expose the full HTTP API.
+   * @deprecated Network binds are disabled; this option is retained for source compatibility only.
    */
   allowNetworkBind?: boolean
   signal?: AbortSignal
@@ -108,7 +108,7 @@ export class HeadlessBackendStartupError extends Error {
 
 export async function startHeadlessBackend(options: HeadlessBackendOptions = {}): Promise<HeadlessBackendHandle> {
   const transport = options.transport ?? "http-sse"
-  const hostname = options.hostname ?? "127.0.0.1"
+  const hostname = normalizeLoopbackHostname(options.hostname ?? "127.0.0.1")
   assertSdkHttpLoopbackBind(hostname, options.allowNetworkBind, "startHeadlessBackend")
 
   const username = options.auth?.username ?? "ax-code"

@@ -17,6 +17,7 @@ const MONITOR_INITIAL_POLL_MS = 2000
 const MONITOR_STEADY_POLL_MS = 10000
 const MONITOR_STABILIZE_TICKS = 5
 const SSH_STATUS_EVENT = "openchamber:ssh-instance-status"
+const SSH_REMOTE_ACCESS_ENABLED = false
 const WINDOWS_HIDDEN_SPAWN_OPTIONS = process.platform === "win32" ? { windowsHide: true } : {}
 
 const nowMillis = () => Date.now()
@@ -1336,6 +1337,10 @@ export class ElectronSshManager {
   }
 
   async connect(id) {
+    if (!SSH_REMOTE_ACCESS_ENABLED) {
+      throw new Error("SSH access to AX Code is disabled by the local-only policy")
+    }
+
     const trimmed = String(id || "").trim()
     if (!trimmed || trimmed === LOCAL_HOST_ID) {
       throw new Error("SSH instance id is required")

@@ -80,7 +80,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     kind: "split",
     keywords: ["ssh", "remote", "instances", "forwarding", "connection"],
     hideFromNavigation: true,
-    isAvailable: (ctx) => ctx.isDesktop && !ctx.isWeb,
+    isAvailable: () => false,
   },
   {
     slug: "providers",
@@ -278,4 +278,14 @@ export function resolveSettingsSlug(value: string | null | undefined): SettingsP
   }
 
   return "home"
+}
+
+export function resolveAvailableSettingsSlug(
+  value: string | null | undefined,
+  context: SettingsRuntimeContext,
+): SettingsPageSlug {
+  const slug = resolveSettingsSlug(value)
+  const page = getSettingsPageMeta(slug)
+  if (!page || (page.isAvailable && !page.isAvailable(context))) return "home"
+  return slug
 }

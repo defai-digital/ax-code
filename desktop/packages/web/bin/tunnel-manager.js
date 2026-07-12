@@ -8,6 +8,7 @@ export const TUNNEL_MODE_QUICK = "quick"
 
 const DEFAULT_TUNNEL_READY_TIMEOUT_MS = 30000
 const CLOUDFLARE_QUICK_TUNNEL_URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com\b/i
+const PUBLIC_TUNNELS_ENABLED = false
 
 export function normalizeTunnelProvider(value) {
   const normalized =
@@ -175,6 +176,10 @@ export function createTunnelManager(dependencies) {
   }
 
   const startTunnel = async ({ port, originUrl, provider, mode, force = false, readyTimeoutMs } = {}) => {
+    if (!PUBLIC_TUNNELS_ENABLED) {
+      throw new Error("Cloudflare and other public tunnels are disabled by the local-only policy")
+    }
+
     if (!Number.isFinite(port) || port <= 0 || port > 65535) {
       throw new Error("A valid server port is required")
     }

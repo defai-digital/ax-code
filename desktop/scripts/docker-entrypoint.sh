@@ -58,8 +58,8 @@ if [ "${OH_MY_AX_CODE:-false}" = "true" ]; then
   fi
 fi
 
-# Docker containers need to listen on all interfaces for port mapping to work.
-AX_CODE_DESKTOP_HOST="${AX_CODE_DESKTOP_HOST:-0.0.0.0}"
+# AX Code is local-only, including containerized development runtimes.
+AX_CODE_DESKTOP_HOST="127.0.0.1"
 export AX_CODE_DESKTOP_HOST
 
 echo "[entrypoint] starting..."

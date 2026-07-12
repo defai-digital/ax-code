@@ -4,10 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { toast } from "@/components/ui"
-import { isDesktopShell } from "@/lib/desktop"
 import { syncDesktopSettings, initializeAppearancePreferences } from "@/lib/persistence"
 import { applyPersistedDirectoryPreferences } from "@/lib/directoryPersistence"
-import { DesktopHostSwitcherInline } from "@/components/desktop/DesktopHostSwitcher"
 import { AxCodeIcon } from "@/components/ui/AxCodeIcon"
 import { Icon } from "@/components/icon/Icon"
 import { useI18n } from "@/lib/i18n"
@@ -138,7 +136,6 @@ interface ErrorScreenProps {
 export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) => {
   const { t } = useI18n()
   const skipAuth = false
-  const showHostSwitcher = React.useMemo(() => isDesktopShell(), [])
   const [state, setState] = React.useState<GateState>("pending")
   const [password, setPassword] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -578,15 +575,6 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
               </p>
             )}
           </form>
-
-          {showHostSwitcher && (
-            <div className="w-full">
-              <DesktopHostSwitcherInline />
-              <p className="mt-1 text-center typography-micro text-muted-foreground">
-                {t("sessionAuth.locked.hostSwitcherHint")}
-              </p>
-            </div>
-          )}
         </div>
       </AuthShell>
     )

@@ -16,10 +16,8 @@ afterEach(async () => {
 Log.init({ print: false })
 
 describe("control-plane/workspace-server SSE", () => {
-  test("requires server password for non-loopback listen", () => {
-    expect(() => WorkspaceServer.Listen({ hostname: "0.0.0.0", port: 0 })).toThrow(
-      /AX_CODE_SERVER_PASSWORD is required/,
-    )
+  test("rejects non-loopback listen", () => {
+    expect(() => WorkspaceServer.Listen({ hostname: "0.0.0.0", port: 0 })).toThrow(/local-only/)
   })
 
   test("rejects missing workspace header", async () => {

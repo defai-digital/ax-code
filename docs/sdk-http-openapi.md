@@ -43,13 +43,12 @@ ax-code serve --hostname=127.0.0.1 --port=4096
 
 The `@ax-code/sdk/headless` lifecycle helper generates a one-time Basic Auth password and wires the returned client with
 the matching `Authorization` header automatically. Manual `ax-code serve` users should set `AX_CODE_SERVER_PASSWORD`
-explicitly and send the corresponding Basic Auth header. Live OpenAPI docs at `/doc` are loopback-only by default. If
-the server is bound to a non-loopback hostname for a trusted contract-generation workflow, set
-`AX_CODE_ENABLE_HTTP_DOCS=1` explicitly and keep `AX_CODE_SERVER_PASSWORD` configured.
+explicitly and send the corresponding Basic Auth header. Live OpenAPI docs at `/doc` and all server endpoints are
+loopback-only.
 
-SDK-managed backend helpers are loopback-only by default. `startHeadlessBackend()` refuses network hostnames such as
-`0.0.0.0` unless the caller passes `allowNetworkBind: true`. Use that escape hatch only for a deliberately secured
-service integration; first-party desktop GUI shells should prefer `@ax-code/sdk/grpc` or an in-process SDK boundary.
+SDK-managed backend helpers always reject network hostnames such as `0.0.0.0`. The legacy `allowNetworkBind` option is
+retained for source compatibility but no longer bypasses the local-only policy. Desktop GUI shells should prefer
+`@ax-code/sdk/grpc` or an in-process SDK boundary.
 
 HTTP runtime helpers are no longer public JavaScript SDK subpaths. The package still contains generated client internals
 because `@ax-code/sdk/headless`, the gRPC HTTP fallback, and legacy AX Code runtime code use them, but external

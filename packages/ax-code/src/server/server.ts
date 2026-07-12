@@ -45,7 +45,13 @@ import { RuntimeStatusRoutes } from "./routes/runtime-status"
 import { PROVIDER_ID_PARAM, withProviderID } from "./routes/route-params"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
-import { assertAuthenticatedNetworkBind, isLoopbackHostname } from "./listen-security"
+import {
+  assertAuthenticatedNetworkBind,
+  formatHostnameForUrl,
+  isLoopbackHostname,
+  normalizeLoopbackHostname,
+  normalizeLoopbackHttpOrigin,
+} from "./listen-security"
 import { toErrorMessage } from "../util/error-message"
 import { requestDirectory } from "./request-directory"
 import { createRateLimitMiddleware, createRequestLoggingMiddleware } from "./middleware"
@@ -95,6 +101,9 @@ export namespace Server {
 
   export const createApp = (opts: { port?: number; hostname?: string; cors?: string[] }): Hono => {
     const app = new Hono()
+    const allowedCors = (opts.cors ?? [])
+      .map(normalizeLoopbackHttpOrigin)
+      .filter((origin): origin is string => origin !== null)
     const openApiHandler = openAPIRouteHandler(app, {
       documentation: {
         info: {
@@ -134,7 +143,7 @@ export namespace Server {
           c.req.header("upgrade")?.toLowerCase() === "websocket"
         if (origin && browserPrivilegedRequest) {
           const request = new URL(c.req.url).origin
-          if (origin !== request && !opts?.cors?.includes(origin)) {
+          if (origin !== request && !allowedCors.includes(origin)) {
             return forbidden(c, { message: "Origin mismatch" })
           }
         }
@@ -157,7 +166,7 @@ export namespace Server {
             if (serverPort === undefined) return
             const serverOrigins = [`http://localhost:${serverPort}`, `http://127.0.0.1:${serverPort}`]
             if (serverOrigins.includes(input)) return input
-            if (opts?.cors?.includes(input)) return input
+            if (allowedCors.includes(input)) return input
 
             return
           },
@@ -311,40 +320,36 @@ export namespace Server {
     app?: Hono
   }) {
     const port = validateListenPort(opts.port)
-    assertAuthenticatedNetworkBind(opts.hostname)
+    const hostname = normalizeLoopbackHostname(opts.hostname)
+    assertAuthenticatedNetworkBind(hostname)
     // Warn loudly when Basic Auth is sent over plaintext to a non-loopback
     // bind. Credentials can be sniffed/replayed on a LAN or by a MITM. The
     // safe default is loopback; for network mode we recommend TLS or a
     // reverse proxy. See #250.
-    if (
-      !isLoopbackHostname(opts.hostname) &&
-      Flag.AX_CODE_SERVER_PASSWORD &&
-      !Flag.AX_CODE_ALLOW_INSECURE_NETWORK_AUTH
-    ) {
+    if (!isLoopbackHostname(hostname) && Flag.AX_CODE_SERVER_PASSWORD && !Flag.AX_CODE_ALLOW_INSECURE_NETWORK_AUTH) {
       log.warn(
-        `Server is binding to non-loopback address ${opts.hostname} using plaintext HTTP Basic Auth. ` +
+        `Server is binding to non-loopback address ${hostname} using plaintext HTTP Basic Auth. ` +
           "Credentials can be intercepted on the network. Use TLS / a reverse proxy, or set AX_CODE_ALLOW_INSECURE_NETWORK_AUTH=1 to acknowledge and suppress this warning.",
       )
     }
-    const app = opts.app ?? createApp(opts)
+    const app = opts.app ?? createApp({ ...opts, hostname })
     let lastServeError: unknown
     const tryServe = async (port: number): Promise<ServerHandle | undefined> => {
       try {
-        return await runtimeServe({ app, hostname: opts.hostname, port, idleTimeout: 0 })
+        return await runtimeServe({ app, hostname, port, idleTimeout: 0 })
       } catch (e) {
         lastServeError = e
         return undefined
       }
     }
-    const server =
-      port === 0 ? ((await tryServe(DEFAULT_SERVER_PORT)) ?? (await tryServe(0))) : await tryServe(port)
+    const server = port === 0 ? ((await tryServe(DEFAULT_SERVER_PORT)) ?? (await tryServe(0))) : await tryServe(port)
     if (!server) {
       const reason = toErrorMessage(lastServeError)
       throw new Error(`Failed to start server on port ${port}: ${reason}`)
     }
-    url = new URL(`http://${opts.hostname}:${server.port}`)
+    url = new URL(`http://${formatHostnameForUrl(hostname)}:${server.port}`)
 
-    const shouldPublishMDNS = opts.mdns && server.port && !isLoopbackHostname(opts.hostname)
+    const shouldPublishMDNS = opts.mdns && server.port && !isLoopbackHostname(hostname)
     if (shouldPublishMDNS) {
       MDNS.publish(server.port!, opts.mdnsDomain)
     } else if (opts.mdns) {

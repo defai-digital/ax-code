@@ -18,6 +18,19 @@ describe("gRPC Node HTTP/2 host", () => {
     handle = undefined
   })
 
+  test("rejects non-loopback hosts", async () => {
+    await expect(
+      startAxCodeGrpcNodeHttp2Server({
+        host: "0.0.0.0",
+        bridge: {
+          async unary() {
+            return { status: "SERVING" }
+          },
+        },
+      }),
+    ).rejects.toThrow("local-only")
+  })
+
   test("serves unary protobuf calls over HTTP/2", async () => {
     const calls: unknown[] = []
     handle = await startAxCodeGrpcNodeHttp2Server({

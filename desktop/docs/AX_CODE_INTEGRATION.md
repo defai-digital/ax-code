@@ -66,6 +66,7 @@ be deleted:
    so the app patches them to `null` to keep its liveness checks working.
 
 2. **Export the loopback-hostname guard.** The app mirrors the SDK's private
-   `isLoopbackHostname` to decide when to set `allowNetworkBind`; an exported
+   `isLoopbackHostname` to enforce local-only startup; the legacy `allowNetworkBind`
+   option must remain false, and an exported
    helper (or an SDK option that takes precedence) would remove the drift
    risk.

@@ -49,6 +49,11 @@ async function captureV2Headers(options: { directory: string; workspaceID?: stri
 }
 
 describe("createAxCodeClient", () => {
+  test("rejects remote AX Code base URLs in v1 and v2 clients", () => {
+    expect(() => createAxCodeClient({ baseUrl: "https://ax-code.example.com" })).toThrow("local-only")
+    expect(() => createAxCodeClientV2({ baseUrl: "https://ax-code.example.com" })).toThrow("local-only")
+  })
+
   test("keeps ASCII directory headers unencoded", async () => {
     const headers = await captureDirectoryHeaders("/Users/john/a+b/My Projects/app")
 

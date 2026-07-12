@@ -55,7 +55,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import type { UsageWindow } from "@/types"
 import type { GitHubAuthStatus } from "@/lib/api/types"
 import type { SessionContextUsage } from "@/stores/types/sessionTypes"
-import { DesktopHostSwitcherDialog } from "@/components/desktop/DesktopHostSwitcher"
 import { OpenInAppButton } from "@/components/desktop/OpenInAppButton"
 import { forceKillTerminal } from "@/lib/terminalApi"
 import { useTerminalStore } from "@/stores/useTerminalStore"
@@ -476,15 +475,6 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
           </div>
         </div>
 
-        {isDesktopApp && desktopServicesTab === "instance" ? (
-          <DesktopHostSwitcherDialog
-            embedded
-            open={isDesktopServicesOpen && desktopServicesTab === "instance"}
-            onOpenChange={() => {}}
-            onHostSwitched={() => setIsDesktopServicesOpen(false)}
-          />
-        ) : null}
-
         {desktopServicesTab === "mcp" ? (
           <McpDropdownContent active={isDesktopServicesOpen && desktopServicesTab === "mcp"} />
         ) : null}
@@ -737,8 +727,7 @@ const getActiveContextMode = (
     return null
   }
 
-  const activeTab =
-    validTabs.find((tab) => tab.id === panelState.activeTabId) ?? validTabs[validTabs.length - 1]
+  const activeTab = validTabs.find((tab) => tab.id === panelState.activeTabId) ?? validTabs[validTabs.length - 1]
   return activeTab?.mode ?? null
 }
 

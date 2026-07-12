@@ -100,14 +100,14 @@ describe("cli doctor", () => {
 
     expect(getServerExposureCheck({ hostname: "0.0.0.0" })).toMatchObject({
       name: "Server exposure",
-      status: "fail",
-      detail: expect.stringContaining("AX_CODE_SERVER_PASSWORD is not set"),
+      status: "ok",
+      detail: expect.stringContaining("local-only policy enforced"),
     })
 
     expect(getServerExposureCheck({ hostname: "0.0.0.0", password: "secret" })).toMatchObject({
       name: "Server exposure",
       status: "ok",
-      detail: expect.stringContaining("auth configured"),
+      detail: expect.stringContaining("effective hostname 127.0.0.1"),
     })
   })
 

@@ -167,7 +167,7 @@ describe("ax-code lifecycle", () => {
     expect(waitForReady).not.toHaveBeenCalled()
   })
 
-  it("sets allowNetworkBind when hostname is a non-loopback address", async () => {
+  it("never enables the legacy network-bind override", async () => {
     delete process.env.AX_CODE_BINARY
     startHeadlessBackendMock.mockResolvedValueOnce({
       url: "http://0.0.0.0:45678",
@@ -187,7 +187,7 @@ describe("ax-code lifecycle", () => {
     const server = await runtime.startAxCode()
     const options = startHeadlessBackendMock.mock.calls[0][0]
 
-    expect(options.allowNetworkBind).toBe(true)
+    expect(options.allowNetworkBind).toBe(false)
     expect(options.env.AX_CODE_SERVER_PASSWORD).toBeUndefined()
 
     await server.close()

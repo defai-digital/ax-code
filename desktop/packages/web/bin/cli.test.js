@@ -56,6 +56,10 @@ describe("cli args", () => {
     expect(parsed.options.force).toBe(true)
   })
 
+  it("rejects non-loopback bind hosts", () => {
+    expect(() => parseArgs(["serve", "--host", "0.0.0.0"])).toThrow("local-only")
+  })
+
   it("keeps tunnel auto-started server output silent even in json mode", () => {
     expect(
       buildTunnelServeOptions(
@@ -110,6 +114,10 @@ describe("port selection", () => {
 })
 
 describe("tunnel args", () => {
+  it("disables tunnel commands at runtime", async () => {
+    await expect(commands.tunnel({}, "start")).rejects.toThrow("local-only")
+  })
+
   it("supports only the Cloudflare quick tunnel MVP", () => {
     expect(normalizeTunnelProvider(undefined)).toBe("cloudflare")
     expect(normalizeTunnelProvider("Cloudflare")).toBe("cloudflare")
@@ -193,6 +201,19 @@ describe("tunnel args", () => {
       ok: true,
       path: "/opt/bin/cloudflared",
     })
+  })
+
+  it("blocks direct tunnel-manager startup", async () => {
+    const manager = createTunnelManager({
+      getRunDir: () => "/tmp/unused-run-dir",
+      getLogsDir: () => "/tmp/unused-log-dir",
+      searchPathFor: () => "/usr/bin/cloudflared",
+      isExecutable: () => true,
+      isProcessRunning: () => false,
+      terminateProcessTree: async () => true,
+    })
+
+    await expect(manager.startTunnel({ port: 3100 })).rejects.toThrow("local-only")
   })
 })
 

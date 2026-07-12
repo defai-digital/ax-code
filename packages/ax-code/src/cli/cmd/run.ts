@@ -32,6 +32,7 @@ import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
 import { extractRunFinalAssistantText, handleRunStructuredOutput, resolveRunOutputFile } from "./run-output"
+import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -339,7 +340,7 @@ export const RunCommand = cmd({
       })
       .option("dir", {
         type: "string",
-        describe: "directory to run in, path on remote server if attaching",
+        describe: "directory to run in, path on the attached local server if attaching",
       })
       .option("port", {
         type: "number",
@@ -809,6 +810,7 @@ export const RunCommand = cmd({
 
     try {
       if (args.attach) {
+        assertLoopbackHttpUrl(args.attach, "--attach URL")
         await pathDisplayRootContext.run(pathDisplayRoot, async () => {
           const headers = buildAttachAuthHeaders(args.password)
           const sdk = createAxCodeClient({ baseUrl: args.attach, directory, headers })

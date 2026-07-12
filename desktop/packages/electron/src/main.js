@@ -38,22 +38,12 @@ const {
   resolveServerRestartReloadUrl,
 } = require("./server-window-reload")
 const { attachDesktopBrowserWebviewPolicy, createDesktopRendererWebPreferences } = require("./webview-policy")
-const {
-  applyDesktopHostsConfigToRoot,
-  isAllowedDesktopHostTargetUrl,
-  isLocalDesktopSenderUrl,
-  normalizeHostUrl,
-  readDesktopHostsConfigFromRoot,
-  resolveStoredClientTokenForUrl,
-  sanitizeClientTokenForStorage,
-} = require("./desktop-hosts")
+const { isAllowedDesktopHostTargetUrl, isLocalDesktopSenderUrl, normalizeHostUrl } = require("./desktop-hosts")
 const { isTrustedRendererNavigationUrl, normalizeDevRendererUrl } = require("./renderer-navigation-policy")
 const { normalizeSafeExternalUrl } = require("./external-url")
 const { buildDesktopOpenDialogOptions, resolveDesktopDialogOwnerWindow } = require("./desktop-dialog")
-const { ElectronSshManager } = require("./ssh-manager.mjs")
 const { createTrayController } = require("./tray.mjs")
 const { isDesktopBrowserCaptureTargetForSender } = require("./desktop-browser-capture-policy")
-const { detectLanIPv4Address } = require("./desktop-lan-address")
 
 const execFileAsync = promisify(execFile)
 
@@ -448,17 +438,14 @@ autoUpdater.on("error", (err) => {
 })
 
 // ── Origin guard & registration helper ───────────────────────────────────────
-// The preload shim is injected into every webContents, including remote hosts
-// the user switches to via the host switcher. Filesystem, shell, installed-app
-// scans, ssh, dialogs, and hosts_set are gated to local senders; window/host
-// switcher operations are safe for any renderer.
+// The preload shim is only trusted on the active loopback server (or loopback
+// development renderer). Wildcard and network addresses are not local senders.
 const isLocalSender = (wc) => {
   const raw = typeof wc?.getURL === "function" ? wc.getURL() : ""
   return isLocalDesktopSenderUrl(raw, { serverPort, devRendererUrl: getDevRendererUrl() || "" })
 }
 
-// Registration helper: enforces the remote-origin guard (a remote main-*
-// window can only call commands flagged safeForRemote).
+// Registration helper: rejects privileged IPC from any untrusted renderer.
 const handleCommand = (name, fn, { safeForRemote = false } = {}) => {
   ipcMain.handle(name, async (event, args) => {
     if (!isLocalSender(event.sender) && !safeForRemote) {
@@ -511,9 +498,8 @@ handleCommand("desktop_download_and_install_update", async () => {
   await autoUpdater.downloadUpdate()
 })
 
-// Stop the web server AND tear down SSH control-masters/forwards, so quitting
-// the app doesn't orphan `ssh -M` processes and bound local ports.
-const stopBackgroundServices = () => Promise.allSettled([stopServer(), sshManager.shutdownAll().catch(() => {})])
+// Only the local web server is active; remote background services are disabled.
+const stopBackgroundServices = () => Promise.allSettled([stopServer()])
 
 async function shutdownForExit() {
   isQuitting = true
@@ -538,10 +524,7 @@ handleCommand("desktop_set_badge_count", async (args) => {
   return app.setBadgeCount(value)
 })
 
-handleCommand("desktop_get_lan_address", async () => {
-  const lanAddress = await detectLanIPv4Address()
-  return lanAddress ? `http://${lanAddress}:${serverPort}` : null
-})
+handleCommand("desktop_get_lan_address", async () => null)
 
 handleCommand("desktop_dialog_open", async (args, event) => {
   const options = args ?? {}
@@ -575,8 +558,7 @@ handleCommand("desktop_record_startup_event", async (args) => {
 // ── Ported handlers & features (from upstream OpenChamber main.mjs) ──────────
 // Adapted to our CJS shell and single utilityProcess server model. The upstream
 // shell ran the web server in-process and supported multiple remote "hosts";
-// here we keep OUR server lifecycle untouched and the host list is purely a
-// renderer-side switcher convenience persisted to settings.json.
+// AX Code keeps a single local utilityProcess server model.
 
 const LOCAL_HOST_ID = "local"
 const MIN_WINDOW_WIDTH = 800
@@ -781,28 +763,18 @@ const mutateSettingsRoot = (mutator) => {
   return next
 }
 
-// ── SSH manager ───────────────────────────────────────────────────────────
-const sshManager = new ElectronSshManager({
-  settingsFilePath: settingsFilePath(),
-  appVersion: app.getVersion(),
-  emit: (event, detail) => emitToAllWindows(event, detail),
-  mutateSettings: mutateSettingsRoot,
-})
-
-// ── Host list (renderer-side switcher; persisted to settings) ──────────────
-const readDesktopLocalClientToken = () =>
-  sanitizeClientTokenForStorage(readSettingsRoot().desktopLocalClientToken) || ""
-
-const readDesktopHostsConfig = (options) => readDesktopHostsConfigFromRoot(readSettingsRoot(), options)
-
-const writeDesktopHostsConfig = async (config) => {
-  await mutateSettingsRoot((root) => {
-    applyDesktopHostsConfigToRoot(root, config)
-  })
-}
-
-// Our local origin is always the loopback server in this single-server model.
+// AX Code Desktop is intentionally local-only. Remote host and SSH settings may
+// remain in an older settings file, but no runtime path reads or activates them.
 const localOriginUrl = () => `http://localhost:${serverPort}`
+const localOnlyHostConfig = () => ({
+  hosts: [],
+  defaultHostId: LOCAL_HOST_ID,
+  initialHostChoiceCompleted: true,
+  localOrigin: localOriginUrl(),
+})
+const remoteAccessDisabled = () => {
+  throw new Error("Remote AX Code access is disabled by the local-only policy")
+}
 
 // ── Host probe ─────────────────────────────────────────────────────────────
 const buildVersionUrl = (url) => {
@@ -1920,13 +1892,7 @@ const clearCacheAndReload = async () => {
 }
 
 const handleNewWindow = async () => {
-  const config = readDesktopHostsConfig()
-  let targetUrl = localOriginUrl()
-  if (config.defaultHostId && config.defaultHostId !== LOCAL_HOST_ID) {
-    const host = config.hosts.find((entry) => entry.id === config.defaultHostId)
-    if (host?.url) targetUrl = host.url
-  }
-  await createAdditionalWindow(targetUrl)
+  await createAdditionalWindow(localOriginUrl())
 }
 
 const applyWindowTheme = (browserWindow, args) => {
@@ -2276,47 +2242,19 @@ handleCommand("desktop_browser_capture_page", async (args, event) => {
   }
 })
 
-// Hosts (switcher list) — get/probe safe-for-remote, set local-only.
-handleCommand(
-  "desktop_hosts_get",
-  async () => ({
-    ...readDesktopHostsConfig({ includeSecrets: false }),
-    localOrigin: localOriginUrl(),
-  }),
-  { safeForRemote: true },
-)
+// Host switching remains in the IPC contract for compatibility, but only the
+// current local instance is exposed and accepted.
+handleCommand("desktop_hosts_get", async () => localOnlyHostConfig())
 
-handleCommand("desktop_hosts_set", async (args) => {
-  const nextConfigInput = args.input || args.config || {}
-  await writeDesktopHostsConfig(nextConfigInput)
-  return null
+handleCommand("desktop_hosts_set", async () => remoteAccessDisabled())
+
+handleCommand("desktop_host_probe", async (args) => {
+  const targetUrl = String(args.url || "")
+  if (!isAllowedDesktopHostTargetUrl(targetUrl, { localOrigin: localOriginUrl(), hosts: [] })) {
+    return remoteAccessDisabled()
+  }
+  return probeHostWithTimeout(targetUrl, 2_000, "")
 })
-
-handleCommand(
-  "desktop_host_probe",
-  async (args, event) => {
-    const targetUrl = String(args.url || "")
-    const hostConfig = readDesktopHostsConfig({ includeSecrets: true })
-    if (
-      !isLocalSender(event.sender) &&
-      !isAllowedDesktopHostTargetUrl(targetUrl, {
-        localOrigin: localOriginUrl(),
-        hosts: hostConfig.hosts,
-        includeApiUrls: true,
-      })
-    ) {
-      throw new Error("Host URL is not configured for this desktop session")
-    }
-    const explicitToken = sanitizeClientTokenForStorage(args.clientToken) || ""
-    const localToken = isAllowedDesktopHostTargetUrl(targetUrl, { localOrigin: localOriginUrl(), hosts: [] })
-      ? readDesktopLocalClientToken()
-      : ""
-    const storedToken =
-      explicitToken || localToken || resolveStoredClientTokenForUrl(targetUrl, { hosts: hostConfig.hosts })
-    return probeHostWithTimeout(targetUrl, 2_000, storedToken)
-  },
-  { safeForRemote: true },
-)
 
 // Window / UI
 handleCommand(
@@ -2344,59 +2282,30 @@ handleCommand("desktop_set_vibrancy", async (args) => {
   return { enabled, requiresRestart: true }
 })
 
-handleCommand(
-  "desktop_new_window",
-  async () => {
-    await handleNewWindow()
-    return null
-  },
-  { safeForRemote: true },
-)
+handleCommand("desktop_new_window", async () => {
+  await handleNewWindow()
+  return null
+})
 
-handleCommand(
-  "desktop_new_window_at_url",
-  async (args) => {
-    const targetUrl = normalizeHostUrl(String(args.url || ""))
-    if (!targetUrl) throw new Error("Invalid URL")
-    if (
-      !isAllowedDesktopHostTargetUrl(targetUrl, {
-        localOrigin: localOriginUrl(),
-        hosts: readDesktopHostsConfig().hosts,
-      })
-    ) {
-      throw new Error("Host URL is not configured for this desktop session")
-    }
-    await createAdditionalWindow(targetUrl)
-    return null
-  },
-  { safeForRemote: true },
-)
+handleCommand("desktop_new_window_at_url", async (args) => {
+  const targetUrl = normalizeHostUrl(String(args.url || ""))
+  if (!targetUrl) throw new Error("Invalid URL")
+  if (!isAllowedDesktopHostTargetUrl(targetUrl, { localOrigin: localOriginUrl(), hosts: [] })) {
+    return remoteAccessDisabled()
+  }
+  await createAdditionalWindow(targetUrl)
+  return null
+})
 
-// SSH (local-only) — mirror upstream's dispatch.
-handleCommand("desktop_ssh_instances_get", async () => sshManager.readInstances())
-handleCommand("desktop_ssh_instances_set", async (args) => {
-  await sshManager.setInstances(args.config || {})
-  return null
-})
-handleCommand("desktop_ssh_import_hosts", async () => sshManager.importHosts())
-handleCommand("desktop_ssh_connect", async (args) => {
-  await sshManager.connect(String(args.id || "").trim())
-  return null
-})
-handleCommand("desktop_ssh_disconnect", async (args) => {
-  await sshManager.disconnect(String(args.id || "").trim())
-  return null
-})
-handleCommand("desktop_ssh_status", async (args) =>
-  sshManager.statusesWithDefaults(String(args.id || "").trim() || undefined),
-)
-handleCommand("desktop_ssh_logs", async (args) =>
-  sshManager.logsForInstance(String(args.id || "").trim(), Number(args.limit) || 200),
-)
-handleCommand("desktop_ssh_logs_clear", async (args) => {
-  sshManager.clearLogsForInstance(String(args.id || "").trim())
-  return null
-})
+// SSH-to-AX-Code commands fail closed, even if invoked outside the hidden UI.
+handleCommand("desktop_ssh_instances_get", async () => ({ instances: [] }))
+handleCommand("desktop_ssh_instances_set", async () => remoteAccessDisabled())
+handleCommand("desktop_ssh_import_hosts", async () => remoteAccessDisabled())
+handleCommand("desktop_ssh_connect", async () => remoteAccessDisabled())
+handleCommand("desktop_ssh_disconnect", async () => remoteAccessDisabled())
+handleCommand("desktop_ssh_status", async () => ({}))
+handleCommand("desktop_ssh_logs", async () => [])
+handleCommand("desktop_ssh_logs_clear", async () => remoteAccessDisabled())
 
 // ── Window controls, app menu & mini-chat windows ──────────────────────────
 const senderWindow = (event) => (event ? BrowserWindow.fromWebContents(event.sender) : null)

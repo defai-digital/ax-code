@@ -90,4 +90,4 @@ Installing the engine does not download any model — pick and download a model 
 
 To point the installer at a specific build (for example a pre-release), set `AX_ENGINE_INSTALL_URL` (and, recommended, `AX_ENGINE_INSTALL_SHA256`) before starting AX Code. This overrides the built-in release without any code change.
 
-The engine ships for Apple Silicon macOS only. On other hosts, use a hosted provider or a remote AX Code server for inference.
+The engine ships for Apple Silicon macOS only. On other hosts, use a hosted provider or an OpenAI-compatible provider gateway; AX Code servers are local-only.

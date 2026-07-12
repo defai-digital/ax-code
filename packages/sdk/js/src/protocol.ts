@@ -3,6 +3,31 @@ export const AX_CODE_WORKSPACE_HEADER = "x-ax-code-workspace"
 export const LEGACY_OPENCODE_DIRECTORY_HEADER = "x-opencode-directory"
 export const LEGACY_OPENCODE_WORKSPACE_HEADER = "x-opencode-workspace"
 
+const isIpv4Loopback = (hostname: string) => {
+  const parts = hostname.split(".")
+  if (parts.length !== 4 || parts[0] !== "127") return false
+  return parts.every((part) => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+}
+
+export function assertLocalAxCodeBaseUrl(raw: string) {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error("AX Code client baseUrl must be a valid local HTTP URL")
+  }
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  const localHostname =
+    hostname === "localhost" ||
+    hostname === "::1" ||
+    hostname === "opencode.internal" ||
+    hostname === "opentui.internal" ||
+    isIpv4Loopback(hostname)
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || !localHostname) {
+    throw new Error("AX Code client baseUrl must be local; remote AX Code access is disabled by the local-only policy")
+  }
+}
+
 export function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
   if (!headers) return {}
   if (headers instanceof Headers) return Object.fromEntries(headers.entries())

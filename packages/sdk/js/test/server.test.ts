@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { createAxCodeServer } from "../src/server"
 import { createAxCodeServer as createAxCodeServerV2 } from "../src/v2/server"
+import { formatHostnameForUrl, resolveServerDefaults } from "../src/internal/server-shared"
 
 const originalPath = process.env.PATH
 const originalPidFile = process.env.AX_CODE_FAKE_PID_FILE
@@ -20,6 +21,11 @@ afterEach(() => {
 })
 
 describe("createAxCodeServer", () => {
+  test("normalizes bracketed IPv6 loopback for bind and URL forms", () => {
+    expect(resolveServerDefaults({ hostname: "[::1]" }).hostname).toBe("::1")
+    expect(formatHostnameForUrl("::1")).toBe("[::1]")
+  })
+
   test("kills the spawned server when startup times out", async () => {
     await using fake = await createFakeAxCode()
 
@@ -45,35 +51,22 @@ describe("createAxCodeServer", () => {
     await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
   })
 
-  test("refuses network HTTP binds unless explicitly allowed", async () => {
+  test("refuses network HTTP binds", async () => {
     await expect(createAxCodeServer({ hostname: "0.0.0.0" })).rejects.toThrow(
-      "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
+      "createAxCodeServer only binds the HTTP API to loopback hostnames",
     )
   })
 
   test("refuses malformed IPv4 loopback-looking hostnames", async () => {
     for (const hostname of ["127..0.1", "127.0.0.", "127.0.0.1."]) {
       await expect(createAxCodeServer({ hostname })).rejects.toThrow(
-        "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
+        "createAxCodeServer only binds the HTTP API to loopback hostnames",
       )
     }
   })
 
-  test("allows explicit network HTTP binds for secured service integrations", async () => {
-    await using fake = await createReadyFakeAxCode()
-
-    const server = await createAxCodeServer({
-      hostname: "0.0.0.0",
-      allowNetworkBind: true,
-      auth: { username: "app", password: "secret" },
-    })
-    try {
-      expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=0.0.0.0 --port=4096")
-    } finally {
-      server.close()
-    }
-
-    await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
+  test("does not allow the legacy network-bind override", async () => {
+    await expect(createAxCodeServer({ hostname: "0.0.0.0", allowNetworkBind: true })).rejects.toThrow("local-only")
   })
 
   test("v2 kills the spawned server when startup times out", async () => {
@@ -101,35 +94,22 @@ describe("createAxCodeServer", () => {
     await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
   })
 
-  test("v2 refuses network HTTP binds unless explicitly allowed", async () => {
+  test("v2 refuses network HTTP binds", async () => {
     await expect(createAxCodeServerV2({ hostname: "0.0.0.0" })).rejects.toThrow(
-      "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
+      "createAxCodeServer only binds the HTTP API to loopback hostnames",
     )
   })
 
   test("v2 refuses malformed IPv4 loopback-looking hostnames", async () => {
     for (const hostname of ["127..0.1", "127.0.0.", "127.0.0.1."]) {
       await expect(createAxCodeServerV2({ hostname })).rejects.toThrow(
-        "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
+        "createAxCodeServer only binds the HTTP API to loopback hostnames",
       )
     }
   })
 
-  test("v2 allows explicit network HTTP binds for secured service integrations", async () => {
-    await using fake = await createReadyFakeAxCode()
-
-    const server = await createAxCodeServerV2({
-      hostname: "0.0.0.0",
-      allowNetworkBind: true,
-      auth: { username: "app", password: "secret" },
-    })
-    try {
-      expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=0.0.0.0 --port=4096")
-    } finally {
-      server.close()
-    }
-
-    await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
+  test("v2 does not allow the legacy network-bind override", async () => {
+    await expect(createAxCodeServerV2({ hostname: "0.0.0.0", allowNetworkBind: true })).rejects.toThrow("local-only")
   })
 })
 

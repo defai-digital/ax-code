@@ -1,7 +1,6 @@
 import type { Argv, InferredOptionTypes } from "yargs"
 import { Config } from "../config/config"
-import { Flag } from "../flag/flag"
-import { isLoopbackHostname } from "../runtime/listen-security"
+import { isLoopbackHostname, normalizeLoopbackHostname, normalizeLoopbackHttpOrigin } from "../runtime/listen-security"
 
 const options = {
   port: {
@@ -16,7 +15,7 @@ const options = {
   },
   mdns: {
     type: "boolean" as const,
-    describe: "enable mDNS service discovery (defaults hostname to 0.0.0.0)",
+    describe: "mDNS discovery is unavailable in local-only builds",
     default: false,
   },
   "mdns-domain": {
@@ -27,7 +26,7 @@ const options = {
   cors: {
     type: "string" as const,
     array: true,
-    describe: "additional domains to allow for CORS",
+    describe: "additional loopback origins to allow for CORS",
     default: [] as string[],
   },
 }
@@ -59,20 +58,30 @@ export async function resolveNetworkOptions(
   const hostnameExplicitlySet = flagExplicitlySet("--hostname")
   const mdnsExplicitlySet = flagExplicitlySet("--mdns", { boolean: true })
   const mdnsDomainExplicitlySet = flagExplicitlySet("--mdns-domain")
+  const corsExplicitlySet = flagExplicitlySet("--cors")
 
-  const mdns = mdnsExplicitlySet ? args.mdns : (config?.server?.mdns ?? args.mdns)
+  const requestedMdns = mdnsExplicitlySet ? args.mdns : (config?.server?.mdns ?? args.mdns)
   const mdnsDomain = mdnsDomainExplicitlySet ? args["mdns-domain"] : (config?.server?.mdnsDomain ?? args["mdns-domain"])
   const port = portExplicitlySet ? args.port : (config?.server?.port ?? args.port)
-  const hostname = hostnameExplicitlySet
-    ? args.hostname
-    : mdns && !config?.server?.hostname
-      ? "0.0.0.0"
-      : (config?.server?.hostname ?? args.hostname)
+  const requestedHostname = hostnameExplicitlySet ? args.hostname : (config?.server?.hostname ?? args.hostname)
   const configCors = config?.server?.cors ?? []
   const argsCors = Array.isArray(args.cors) ? args.cors : args.cors ? [args.cors] : []
-  const cors = [...configCors, ...argsCors]
+  const requestedCors = [...configCors, ...argsCors]
 
-  return { hostname, port, mdns, mdnsDomain, cors }
+  if (mdnsExplicitlySet && requestedMdns) {
+    throw new Error("mDNS discovery is disabled by the local-only policy")
+  }
+  if (hostnameExplicitlySet && !isLoopbackHostname(requestedHostname)) {
+    throw new Error("--hostname must be a loopback address; remote AX Code access is disabled by the local-only policy")
+  }
+  const rejectedCors = requestedCors.filter((origin) => !normalizeLoopbackHttpOrigin(origin))
+  if (corsExplicitlySet && rejectedCors.length > 0) {
+    throw new Error(`--cors only accepts loopback origins; rejected ${rejectedCors.join(", ")}`)
+  }
+
+  const hostname = isLoopbackHostname(requestedHostname) ? normalizeLoopbackHostname(requestedHostname) : "127.0.0.1"
+  const cors = requestedCors.map(normalizeLoopbackHttpOrigin).filter((origin): origin is string => origin !== null)
+  return { hostname, port, mdns: false, mdnsDomain, cors }
 }
 
 export function isLocalhostOnly(hostname: string) {
@@ -81,13 +90,10 @@ export function isLocalhostOnly(hostname: string) {
 
 export function requireAuthForNetwork(hostname: string) {
   if (isLocalhostOnly(hostname)) return
-  if (Flag.AX_CODE_SERVER_PASSWORD) return
   console.error(
-    "Error: AX_CODE_SERVER_PASSWORD is required when binding to a network address.\n" +
+    "Error: AX Code is local-only and cannot bind to a network address.\n" +
       `  hostname: ${hostname}\n\n` +
-      "Set a password to secure the server:\n" +
-      "  export AX_CODE_SERVER_PASSWORD=your-secret\n\n" +
-      "Or bind to localhost only (default):\n" +
+      "Bind to localhost only (default):\n" +
       "  ax-code serve",
   )
   process.exit(1)

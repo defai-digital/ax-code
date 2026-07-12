@@ -54,12 +54,52 @@ describe("resolveNetworkOptions explicit-flag detection", () => {
     expect(result.mdns).toBe(false)
   })
 
-  test("equals form --hostname=X wins over a configured hostname", async () => {
+  test("rejects an explicit non-loopback hostname", async () => {
     configSpy = vi.spyOn(Config, "global").mockResolvedValue({ server: { hostname: "10.0.0.1" } } as any)
 
-    const result = await resolveNetworkOptions(defaults({ hostname: "0.0.0.0" }), ["serve", "--hostname=0.0.0.0"])
+    await expect(
+      resolveNetworkOptions(defaults({ hostname: "0.0.0.0" }), ["serve", "--hostname=0.0.0.0"]),
+    ).rejects.toThrow("local-only")
+  })
 
-    expect(result.hostname).toBe("0.0.0.0")
+  test("ignores persisted remote bind and mDNS settings", async () => {
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({ server: { hostname: "0.0.0.0", mdns: true } } as any)
+
+    const result = await resolveNetworkOptions(defaults(), ["serve"])
+
+    expect(result).toMatchObject({ hostname: "127.0.0.1", mdns: false })
+  })
+
+  test("rejects explicitly enabled mDNS", async () => {
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({} as any)
+
+    await expect(resolveNetworkOptions(defaults({ mdns: true }), ["serve", "--mdns"])).rejects.toThrow("local-only")
+  })
+
+  test("normalizes bracketed IPv6 loopback for socket binding", async () => {
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({} as any)
+
+    const result = await resolveNetworkOptions(defaults({ hostname: "[::1]" }), ["serve", "--hostname=[::1]"])
+
+    expect(result.hostname).toBe("::1")
+  })
+
+  test("keeps loopback CORS origins and ignores persisted remote origins", async () => {
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({
+      server: { cors: ["https://remote.example", "http://localhost:5173/"] },
+    } as any)
+
+    const result = await resolveNetworkOptions(defaults({ cors: ["http://127.0.0.1:4173"] }), ["serve"])
+
+    expect(result.cors).toEqual(["http://localhost:5173", "http://127.0.0.1:4173"])
+  })
+
+  test("rejects an explicitly configured remote CORS origin", async () => {
+    configSpy = vi.spyOn(Config, "global").mockResolvedValue({} as any)
+
+    await expect(
+      resolveNetworkOptions(defaults({ cors: ["https://remote.example"] }), ["serve", "--cors=https://remote.example"]),
+    ).rejects.toThrow("loopback origins")
   })
 
   test("uses raw argv attached by CLI middleware", async () => {

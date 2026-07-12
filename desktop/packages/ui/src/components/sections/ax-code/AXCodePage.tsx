@@ -7,11 +7,9 @@ import { GitSettings } from "./GitSettings"
 import { NotificationSettings } from "./NotificationSettings"
 import { GitHubSettings } from "./GitHubSettings"
 import { AxCodeCliSettings } from "./AxCodeCliSettings"
-import { DesktopNetworkSettings } from "./DesktopNetworkSettings"
 import { KeyboardShortcutsSettings } from "./KeyboardShortcutsSettings"
 import { CornerRadiusSettings } from "./CornerRadiusSettings"
 import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay"
-import { isDesktopLocalOriginActive, isDesktopShell } from "@/lib/desktop"
 import type { AXCodeSection } from "./types"
 
 interface AXCodePageProps {
@@ -103,15 +101,9 @@ const ChatSectionContent: React.FC = () => {
 
 // Sessions section: Default model & agent, Session retention
 const SessionsSectionContent: React.FC = () => {
-  const showDesktopNetworkSettings = isDesktopShell() && isDesktopLocalOriginActive()
   return (
     <div className="space-y-6">
       <DefaultsSettings />
-      {showDesktopNetworkSettings && (
-        <div className="border-t border-border/40 pt-6">
-          <DesktopNetworkSettings />
-        </div>
-      )}
       <div className="border-t border-border/40 pt-6">
         <AxCodeCliSettings />
       </div>

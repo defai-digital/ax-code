@@ -81,8 +81,8 @@ quantization is `mlx6bit`; lower-bit upstream deployments may have different mem
 - Use **GLM-4.7-Flash** when local memory pressure matters and you still need coding-agent behavior.
 - Use **Gemma 4 31B** when you want a strong dense Gemma alternative and have enough memory.
 - Use **Gemma 4 12B** when the machine is memory constrained or the task is a small edit/review.
-- Prefer hosted providers or a remote AX Code server on unsupported Macs, Windows, or machines that cannot keep
-  the selected model resident comfortably.
+- Prefer hosted providers or an OpenAI-compatible provider gateway on unsupported Macs, Windows, or machines that
+  cannot keep the selected model resident comfortably. AX Code servers are local-only.
 
 ## References
 

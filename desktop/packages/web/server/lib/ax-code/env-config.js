@@ -1,3 +1,5 @@
+import { isLoopbackHostname } from "../security/local-only.js"
+
 const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
 export const resolveAxCodeEnvConfig = (options = {}) => {
@@ -41,6 +43,10 @@ export const resolveAxCodeEnvConfig = (options = {}) => {
       warnInvalidHost("must not include path, query, or hash")
       return null
     }
+    if (!isLoopbackHostname(url.hostname)) {
+      warnInvalidHost("must use a loopback hostname; remote AX Code access is disabled")
+      return null
+    }
     return { origin: url.origin, port }
   })()
 
@@ -55,6 +61,12 @@ export const resolveAxCodeEnvConfig = (options = {}) => {
     const trimmed = asTrimmedString(raw)
     if (!trimmed) {
       logger.warn(`[config] Ignoring AX_CODE_HOSTNAME=${JSON.stringify(raw)}: empty after trimming`)
+      return "127.0.0.1"
+    }
+    if (!isLoopbackHostname(trimmed)) {
+      logger.warn(
+        `[config] Ignoring AX_CODE_HOSTNAME=${JSON.stringify(raw)}: must use a loopback hostname; remote AX Code access is disabled`,
+      )
       return "127.0.0.1"
     }
     return trimmed

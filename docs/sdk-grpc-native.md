@@ -21,7 +21,7 @@ Use gRPC/native transport as the preferred boundary for first-party desktop apps
 
 ## Why Not Remove HTTP
 
-Removing HTTP/OpenAPI from the runtime would remove the most inspectable and portable compatibility path. The JavaScript SDK should not expose HTTP client/server subpaths as first-party support surfaces, but the internal HTTP bridge remains useful for diagnostics, existing headless backend startup, and generated-client workflows. Current HTTP server controls already include loopback-first defaults, generated Basic Auth credentials in SDK-managed backend helpers, required password for non-loopback binds, Basic Auth enforcement, origin checks on mutating browser requests, directory validation, request rate limits, and loopback-only live OpenAPI docs by default.
+Removing HTTP/OpenAPI from the runtime would remove the most inspectable and portable compatibility path. The JavaScript SDK should not expose HTTP client/server subpaths as first-party support surfaces, but the internal HTTP bridge remains useful for diagnostics, existing headless backend startup, and generated-client workflows. Current HTTP server controls include enforced loopback-only binding, generated Basic Auth credentials in SDK-managed backend helpers, origin checks on mutating browser requests, directory validation, request rate limits, and loopback-only live OpenAPI docs.
 
 The transport is not the dominant latency source for normal agent turns. LLM calls, shell commands, file IO, indexing, LSP startup, and tool execution are usually more expensive than localhost JSON. gRPC is still useful for a desktop GUI because it provides a cleaner native API contract, deadlines, metadata, server streaming, and a path to Unix-socket or named-pipe transports without dragging a browser-oriented API into the app shell.
 
@@ -227,13 +227,11 @@ For desktop apps, prefer this order:
 1. In-process SDK when the GUI is TypeScript and can safely load the runtime.
 2. Local gRPC/native transport over loopback, Unix socket, or named pipe.
 3. HTTP/SSE headless bridge with generated one-time Basic Auth credentials.
-4. Network HTTP only when explicitly configured and protected by `AX_CODE_SERVER_PASSWORD`.
+4. Do not expose AX Code over network HTTP.
 
-The gRPC HTTP compatibility bridge accepts only literal loopback HTTP(S) base URLs by default. If network HTTP is
-unavoidable, pass `allowRemoteHttpBridge: true` only after the caller owns the remote server authentication and transport
-security. SDK-managed HTTP backend helpers also refuse network binds by default; pass `allowNetworkBind: true` only for
-a deliberately secured service integration. Keep `/doc` disabled unless actively generating or debugging client
-contracts on a trusted network. Set `AX_CODE_ENABLE_HTTP_DOCS=1` only for that explicit case.
+The gRPC HTTP compatibility bridge and SDK-managed HTTP backend helpers accept only literal loopback endpoints. Legacy
+`allowRemoteHttpBridge` and `allowNetworkBind` options are retained for source compatibility but do not bypass the
+local-only policy. Keep `/doc` limited to the loopback server.
 
 The HTTP compatibility bridge rejects cross-origin WebSocket upgrades by default. Add an origin to the explicit server CORS allowlist only when that browser origin is part of the trusted app shell.
 

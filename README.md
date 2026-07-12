@@ -23,12 +23,12 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ### Supported Install Targets
 
-| Platform | Status | Install path |
-| --- | --- | --- |
-| macOS Apple Silicon | Active support | Homebrew CLI formula and Desktop cask |
-| Windows x64 | Active support | PowerShell CLI installer and Desktop release installer |
-| Windows ARM64 | Active support | PowerShell CLI installer and Desktop release installer |
-| Linux | Contributor/source only | Source builds only, without supported user installer expectations |
+| Platform            | Status                  | Install path                                                      |
+| ------------------- | ----------------------- | ----------------------------------------------------------------- |
+| macOS Apple Silicon | Active support          | Homebrew CLI formula and Desktop cask                             |
+| Windows x64         | Active support          | PowerShell CLI installer and Desktop release installer            |
+| Windows ARM64       | Active support          | PowerShell CLI installer and Desktop release installer            |
+| Linux               | Contributor/source only | Source builds only, without supported user installer expectations |
 
 **Recommended: AX Code Desktop**
 
@@ -101,7 +101,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 
 Supported CLI install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. The Windows PowerShell installer is CLI-only; use the Windows `.exe` release asset for Desktop. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
 
-AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
+AX Engine local inference is available only on eligible Apple Silicon Macs. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; AX Code itself remains local-only and cannot be used as a remote server. For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `GOOGLE_GENERATIVE_AI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ZHIPU_API_KEY`, Alibaba plan keys, and `GITHUB_TOKEN`.
 
 ### Update
 

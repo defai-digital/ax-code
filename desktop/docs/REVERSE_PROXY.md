@@ -1,5 +1,9 @@
 # Reverse Proxy Setup
 
+> **Unsupported:** AX Code Desktop is local-only. Current builds reject LAN and wildcard binds, remote host switching,
+> reverse-proxy deployment, and public tunnels. The material below is retained only as historical design context and
+> must not be used as a deployment guide.
+
 Use this guide when running AX Code Desktop behind Nginx, Nginx Proxy Manager, Caddy, Cloudflare, or another reverse proxy.
 
 ## Before you proxy it

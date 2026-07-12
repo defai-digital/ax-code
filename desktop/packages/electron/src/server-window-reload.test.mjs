@@ -47,13 +47,13 @@ describe("resolveServerRestartReloadUrl", () => {
         oldPort: 3910,
         newPort: 3920,
       }),
-    ).toBe("http://0.0.0.0:3920/projects?tab=chat#bottom")
+    ).toBeNull()
     expect(
       resolveServerRestartReloadUrl("http://[::]:3910/projects?tab=chat#bottom", {
         oldPort: 3910,
         newPort: 3920,
       }),
-    ).toBe("http://[::]:3920/projects?tab=chat#bottom")
+    ).toBeNull()
   })
 
   test("does not rewrite remote hosts or unrelated localhost ports", () => {
@@ -96,19 +96,18 @@ describe("reloadLocalRendererWindowsAfterServerRestart", () => {
     )
 
     expect(result).toEqual({
-      attempted: 4,
+      attempted: 3,
       failed: 0,
       urls: [
         "http://localhost:3920/",
         "http://localhost:3920/mini-chat.html?mode=draft",
         "http://127.0.0.2:3920/session/alias",
-        "http://0.0.0.0:3920/session/host",
       ],
     })
     expect(main.loadedUrls).toEqual(["http://localhost:3920/"])
     expect(miniChat.loadedUrls).toEqual(["http://localhost:3920/mini-chat.html?mode=draft"])
     expect(loopbackAlias.loadedUrls).toEqual(["http://127.0.0.2:3920/session/alias"])
-    expect(unspecifiedAddress.loadedUrls).toEqual(["http://0.0.0.0:3920/session/host"])
+    expect(unspecifiedAddress.loadedUrls).toEqual([])
     expect(remote.loadedUrls).toEqual([])
     expect(destroyed.loadedUrls).toEqual([])
   })

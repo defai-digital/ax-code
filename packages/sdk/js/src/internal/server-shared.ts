@@ -51,7 +51,7 @@ export function resolveServerDefaults(options?: {
     { hostname: DEFAULT_HOSTNAME, port: DEFAULT_PORT, timeout: DEFAULT_TIMEOUT },
     options ?? {},
   )
-  const hostname = resolved.hostname ?? DEFAULT_HOSTNAME
+  const hostname = normalizeLoopbackHostname(resolved.hostname ?? DEFAULT_HOSTNAME)
   assertSdkHttpLoopbackBind(hostname, resolved.allowNetworkBind, "createAxCodeServer")
   return { ...resolved, hostname }
 }
@@ -180,18 +180,30 @@ export function waitForServerReady(proc: Proc, options: { timeout: number; signa
   })
 }
 
-export function assertSdkHttpLoopbackBind(hostname: string, allowNetworkBind: boolean | undefined, helper: string) {
-  if (allowNetworkBind || isLoopbackHostname(hostname)) return
+export function assertSdkHttpLoopbackBind(hostname: string, _allowNetworkBind: boolean | undefined, helper: string) {
+  if (isLoopbackHostname(hostname)) return
   throw new Error(
-    `${helper} only binds the HTTP API to loopback hostnames by default. ` +
+    `${helper} only binds the HTTP API to loopback hostnames. ` +
       `Refusing hostname ${hostname}. ` +
-      "Use @ax-code/sdk/grpc for desktop native transports, or pass allowNetworkBind: true only for an explicitly secured server.",
+      "Remote AX Code access is disabled by the local-only policy.",
   )
 }
 
 export function isLoopbackHostname(hostname: string) {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  const normalized = normalizeLoopbackHostname(hostname)
   return normalized === "localhost" || normalized === "::1" || isIpv4Loopback(normalized)
+}
+
+export function normalizeLoopbackHostname(hostname: string) {
+  return hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+}
+
+export function formatHostnameForUrl(hostname: string) {
+  const normalized = normalizeLoopbackHostname(hostname)
+  return normalized.includes(":") ? `[${normalized}]` : normalized
 }
 
 function isIpv4Loopback(hostname: string) {

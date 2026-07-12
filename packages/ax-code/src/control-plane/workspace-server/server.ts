@@ -7,7 +7,7 @@ import { AsyncQueue } from "@/util/queue"
 import { Flag } from "@/flag/flag"
 import { WorkspaceID } from "../schema"
 import { Log } from "@/util/log"
-import { assertAuthenticatedNetworkBind } from "@/runtime/listen-security"
+import { assertAuthenticatedNetworkBind, normalizeLoopbackHostname } from "@/runtime/listen-security"
 import { pushSseFrame } from "@/util/sse-queue"
 import { serve, type ServerHandle } from "@/server/runtime-adapter"
 import {
@@ -102,9 +102,10 @@ export namespace WorkspaceServer {
   // synchronously (a test asserts `expect(() => Listen(...)).toThrow()`).
   // The actual bind is async (Node), so we return the serve() promise.
   export function Listen(input: { hostname: string; port: number }): Promise<ServerHandle> {
-    assertAuthenticatedNetworkBind(input.hostname)
+    const hostname = normalizeLoopbackHostname(input.hostname)
+    assertAuthenticatedNetworkBind(hostname)
     const app = App()
     // SSE-only (no websockets): pass `fetch` so the adapter skips ws wiring.
-    return serve({ fetch: app.fetch, hostname: input.hostname, port: input.port })
+    return serve({ fetch: app.fetch, hostname, port: input.port })
   }
 }

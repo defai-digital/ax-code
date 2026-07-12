@@ -33,4 +33,13 @@ describe("parseServeCliOptions", () => {
       }).uiPassword,
     ).toBe("  keep spaces  ")
   })
+
+  it("rejects non-loopback bind hosts", () => {
+    expect(() =>
+      parseServeCliOptions({
+        argv: ["--host", "0.0.0.0"],
+        defaultPort: 3902,
+      }),
+    ).toThrow("loopback")
+  })
 })

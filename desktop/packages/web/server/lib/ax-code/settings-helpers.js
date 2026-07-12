@@ -22,9 +22,7 @@ export const createSettingsHelpers = (dependencies) => {
 
   const normalizePathStringArray = (values) =>
     normalizeStringArray(
-      nonEmptyStrings(
-        values.map((entry) => (typeof entry === "string" ? normalizePathForPersistence(entry) : entry)),
-      ),
+      nonEmptyStrings(values.map((entry) => (typeof entry === "string" ? normalizePathForPersistence(entry) : entry))),
     )
 
   const sanitizeProviderStringMap = (value) => {
@@ -110,12 +108,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.axCodeBinary === "string") {
       const normalized = normalizeDirectoryPath(candidate.axCodeBinary).trim()
       result.axCodeBinary = normalized
-    }
-    if (typeof candidate.desktopLanAccessEnabled === "boolean") {
-      result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled
-    }
-    if (typeof candidate.desktopUiPassword === "string") {
-      result.desktopUiPassword = candidate.desktopUiPassword.trim()
     }
     if (Array.isArray(candidate.projects)) {
       const projects = sanitizeProjects(candidate.projects)

@@ -7,6 +7,7 @@ import { existsSync } from "fs"
 import { buildAttachAuthHeaders } from "../../attach-auth"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import { createTuiCrashHandler, registerTuiCrashHandlers } from "./util/lifecycle"
+import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
@@ -42,6 +43,7 @@ export const AttachCommand = cmd({
         describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
       }),
   handler: async (args) => {
+    assertLoopbackHttpUrl(args.url, "attach URL")
     const unguard = win32InstallCtrlCGuard()
     const restoreInputMode = win32DisableProcessedInput()
     // Restore the terminal out of raw / mouse-tracking / alt-screen mode if an

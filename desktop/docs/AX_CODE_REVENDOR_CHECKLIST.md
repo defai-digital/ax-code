@@ -15,7 +15,7 @@ contracts change:
 
 2. **Re-verify the loopback guard mirror.** `isSdkLoopbackHostname` in
    `packages/web/server/lib/ax-code/lifecycle.js` mirrors the SDK's private
-   `isLoopbackHostname` so `allowNetworkBind` is only set for explicitly
+   `isLoopbackHostname` so the legacy `allowNetworkBind` option remains false for
    non-loopback hostnames. Compare the workspace SDK guard behavior against the
    mirror and the fixtures in `sdk-contract.test.js`.
 

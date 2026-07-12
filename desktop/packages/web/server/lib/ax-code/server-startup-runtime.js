@@ -1,9 +1,13 @@
+import { assertLocalOnlyHostname } from "../security/local-only.js"
+
 export const createServerStartupRuntime = (dependencies) => {
   const { process, server, gracefulShutdown, getSignalsAttached, setSignalsAttached, syncToHmrState } = dependencies
   const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
-  const resolveBindHost = (host) =>
-    host || asTrimmedString(process.env.AX_CODE_DESKTOP_HOST) || "127.0.0.1"
+  const resolveBindHost = (host) => {
+    const requested = host || asTrimmedString(process.env.AX_CODE_DESKTOP_HOST) || "127.0.0.1"
+    return assertLocalOnlyHostname(requested, "AX Code Desktop host")
+  }
 
   const startListening = async ({ port, bindHost }) => {
     let activePort = port

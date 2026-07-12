@@ -1352,22 +1352,19 @@ describe("gRPC SDK facade", () => {
     })
   })
 
-  test("HTTP bridge is loopback-only by default for desktop fallback safety", async () => {
+  test("HTTP bridge is loopback-only for desktop fallback safety", async () => {
     expect(() =>
       createAxCodeGrpcClientFromHttp({
         baseUrl: "https://ax-code.example.com",
       }),
-    ).toThrow("AX Code gRPC HTTP bridge only accepts loopback HTTP base URLs by default")
+    ).toThrow("AX Code gRPC HTTP bridge only accepts loopback HTTP base URLs")
 
-    const client = createAxCodeGrpcClientFromHttp({
-      baseUrl: "https://ax-code.example.com",
-      allowRemoteHttpBridge: true,
-      fetch: (async () => {
-        throw new Error("fetch should not be called")
-      }) as typeof fetch,
-    })
-
-    await expect(client.health()).resolves.toEqual({ status: "SERVING", transport: "http-bridge" })
+    expect(() =>
+      createAxCodeGrpcClientFromHttp({
+        baseUrl: "https://ax-code.example.com",
+        allowRemoteHttpBridge: true,
+      }),
+    ).toThrow("local-only")
   })
 
   test("HTTP bridge default allows literal loopback endpoints", async () => {

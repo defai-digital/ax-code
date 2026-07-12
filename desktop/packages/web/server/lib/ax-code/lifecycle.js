@@ -357,10 +357,9 @@ export const createAxCodeLifecycleRuntime = (deps) => {
           throw new Error("WSL executable not found while attempting to launch ax-code from WSL")
         }
         const wslAxCode = state.resolvedWslAxCodePath?.trim() || "ax-code"
-        const serveHost = hostname === "127.0.0.1" ? "0.0.0.0" : hostname
         binary = wslBinary
         args = buildWslExecArgs(
-          [wslAxCode, "serve", "--hostname", serveHost, "--port", String(port ?? 0)],
+          [wslAxCode, "serve", "--hostname", hostname, "--port", String(port ?? 0)],
           state.resolvedWslDistro,
         )
       } else {
@@ -457,7 +456,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
         args,
         timeout,
         auth: { username: "ax-code", password },
-        allowNetworkBind: !isSdkLoopbackHostname(hostname),
+        allowNetworkBind: false,
         signal,
         env: {
           ...sdkEnv,

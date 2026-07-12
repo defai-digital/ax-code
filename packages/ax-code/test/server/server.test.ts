@@ -90,6 +90,21 @@ test("websocket upgrades reject cross-origin browser requests", async () => {
   })
 })
 
+test("direct app creation ignores remote CORS allowlist entries", async () => {
+  const app = Server.createApp({ hostname: "127.0.0.1", port: 4096, cors: ["https://evil.example"] })
+  const response = await app.fetch(
+    new Request("http://127.0.0.1:4096/pty/pty_1/connect", {
+      headers: {
+        origin: "https://evil.example",
+        upgrade: "websocket",
+      },
+    }),
+  )
+
+  expect(response.status).toBe(403)
+  expect(await response.json()).toMatchObject({ message: "Origin mismatch" })
+})
+
 test("pty create rejects invalid cwd as a client error", async () => {
   await using tmp = await tmpdir({ git: true })
   const directory = encodeURIComponent(tmp.path)

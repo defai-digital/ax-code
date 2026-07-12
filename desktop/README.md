@@ -95,7 +95,7 @@ AX Code Desktop targets macOS and Windows first, but local model acceleration is
 | Hosted providers               | Supported                                | Supported     |
 | AX Engine local provider       | Supported on eligible Apple Silicon Macs | Not supported |
 
-AX Engine uses the local MLX/Apple Silicon path. It can be enabled on supported macOS hosts through AX Code provider setup. Windows Desktop users should use hosted providers, OpenAI-compatible gateways, or a remote AX Code server running on a supported Mac when AX Engine is required.
+AX Engine uses the local MLX/Apple Silicon path. It can be enabled on supported macOS hosts through AX Code provider setup. Windows Desktop users should use hosted providers or OpenAI-compatible provider gateways; remote AX Code servers are intentionally unsupported.
 
 ## First Run
 
@@ -106,7 +106,7 @@ On first launch:
 3. Start or select a chat session.
 4. Use the Git, Files, Diff, Terminal, and Plan views as needed.
 
-The app can run local AX Code sessions, connect to existing AX Code servers, and open focused mini-chat windows for active sessions.
+The app runs AX Code sessions on the current machine and can open focused mini-chat windows for active sessions.
 
 ## Updates
 
@@ -172,16 +172,7 @@ RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
 
 Windows SmartScreen may warn for unsigned or low-reputation builds. Release notes must state whether Windows artifacts are Authenticode-signed and what first-run warning users should expect. Detached minisign signatures verify release asset integrity, but they do not replace Windows SmartScreen reputation, Windows Authenticode signing, or macOS Gatekeeper/notarization trust.
 
-AX Code Desktop is intended for trusted desktop workstations. Do not expose the development web UI publicly.
-
-Temporary browser access from another trusted device is available through a guarded Cloudflare quick tunnel command. It requires UI password protection. For shared or longer-lived access, use a Cloudflare Access-protected hostname, SSO, VPN, or another identity gate instead of a public quick tunnel:
-
-```bash
-brew install cloudflared
-ax-code-desktop tunnel start --ui-password your-password
-ax-code-desktop tunnel status
-ax-code-desktop tunnel stop --port 3100
-```
+AX Code Desktop is intended for trusted office workstations and offline environments. Its UI, managed server, SDK HTTP helpers, and native bridge servers are restricted to loopback addresses. SSH instance access, remote host switching, LAN binding, mDNS discovery, reverse-proxy deployment, and Cloudflare or other public tunnels are unsupported and disabled at runtime.
 
 ## Development Web UI
 

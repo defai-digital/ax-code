@@ -25,8 +25,6 @@ import { SkillsSidebar } from "@/components/sections/skills/SkillsSidebar"
 import { SkillsPage } from "@/components/sections/skills/SkillsPage"
 import { ProjectsSidebar } from "@/components/sections/projects/ProjectsSidebar"
 import { ProjectsPage } from "@/components/sections/projects/ProjectsPage"
-import { RemoteInstancesSidebar } from "@/components/sections/remote-instances/RemoteInstancesSidebar"
-import { RemoteInstancesPage } from "@/components/sections/remote-instances/RemoteInstancesPage"
 import { ProvidersSidebar } from "@/components/sections/providers/ProvidersSidebar"
 import { ProvidersPage } from "@/components/sections/providers/ProvidersPage"
 import { LocalModelsPage } from "@/components/sections/models/LocalModelsPage"
@@ -46,6 +44,7 @@ import { reloadAxCodeConfiguration } from "@/stores/useAgentsStore"
 import {
   SETTINGS_PAGE_METADATA,
   getSettingsPageMeta,
+  resolveAvailableSettingsSlug,
   resolveSettingsSlug,
   type SettingsPageSlug,
   type SettingsRuntimeContext,
@@ -218,7 +217,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
   const settingsPageRaw = useUIStore((state) => state.settingsPage)
   const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen)
   const setSettingsPage = useUIStore((state) => state.setSettingsPage)
-  const settingsSlug = resolveSettingsSlug(settingsPageRaw)
 
   const [mobileStage, setMobileStage] = React.useState<MobileStage>("nav")
   const autoNavSlugRef = React.useRef<string | null>(null)
@@ -238,6 +236,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
   // keep platform check available for future window chrome tweaks
 
   const runtimeCtx = React.useMemo(() => buildRuntimeContext(isDesktopApp), [isDesktopApp])
+  const settingsSlug = resolveAvailableSettingsSlug(settingsPageRaw, runtimeCtx)
 
   const visiblePages = React.useMemo(() => {
     return SETTINGS_PAGE_METADATA.filter((page) => page.slug !== "home")
@@ -453,8 +452,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
     switch (slug) {
       case "projects":
         return <ProjectsSidebar onItemSelect={opts.onItemSelect} />
-      case "remote-instances":
-        return <RemoteInstancesSidebar onItemSelect={opts.onItemSelect} />
       case "agents":
         return <AgentsSidebar onItemSelect={opts.onItemSelect} />
       case "commands":
@@ -490,8 +487,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, isWindowed 
           return <LocalModelsPage />
         case "projects":
           return <ProjectsPage />
-        case "remote-instances":
-          return <RemoteInstancesPage />
         case "agents":
           return <AgentsPage />
         case "behavior":

@@ -28,7 +28,7 @@ const buildLoopbackProbeUrl = (rawUrl) => {
   }
 
   const host = url.hostname
-  if (host !== "localhost" && host !== "127.0.0.1" && host !== "::1" && host !== "0.0.0.0") {
+  if (host !== "localhost" && host !== "127.0.0.1" && host !== "::1") {
     return null
   }
 
@@ -138,7 +138,7 @@ export const registerServerStatusRoutes = (app, dependencies) => {
       return null
     }
     const host = url.hostname
-    if (host !== "localhost" && host !== "127.0.0.1" && host !== "::1" && host !== "0.0.0.0") {
+    if (host !== "localhost" && host !== "127.0.0.1" && host !== "::1") {
       return null
     }
     const port = url.port ? Number.parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80

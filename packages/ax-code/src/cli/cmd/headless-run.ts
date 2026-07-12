@@ -4,11 +4,9 @@ import { Filesystem } from "@/util/filesystem"
 import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { DEFAULT_SERVER_PORT } from "@/server/constants"
-import type {
-  HeadlessEventSink,
-  HeadlessRuntimeCommand,
-} from "@/runtime/headless"
+import type { HeadlessEventSink, HeadlessRuntimeCommand } from "@/runtime/headless"
 import path from "node:path"
+import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
 
 type FetchHandler = (request: Request) => Response | Promise<Response>
 
@@ -253,6 +251,7 @@ export const HeadlessRunCommand = cmd({
     }
 
     if (args.attach) {
+      assertLoopbackHttpUrl(args.attach, "--attach URL")
       const attachUrl = new URL(args.attach)
       assertInternalUrl(attachUrl)
       const headers = buildAttachAuthHeaders(args.password)

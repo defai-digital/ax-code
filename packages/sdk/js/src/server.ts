@@ -15,8 +15,7 @@ export type ServerOptions = {
   hostname?: string
   port?: number
   /**
-   * HTTP server helpers default to loopback-only. Set this only when the caller owns
-   * transport security and authentication for a network-visible server.
+   * @deprecated Network binds are disabled; retained for source compatibility only.
    */
   allowNetworkBind?: boolean
   signal?: AbortSignal

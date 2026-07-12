@@ -50,22 +50,16 @@ export function getRuntimeCheck(): DoctorCheck {
 }
 
 export function getServerExposureCheck(input: { hostname?: string; mdns?: boolean; password?: string }): DoctorCheck {
-  const hostname = input.hostname ?? (input.mdns ? "0.0.0.0" : "127.0.0.1")
-  const loopbackOnly = isLoopbackHostname(hostname)
+  const requestedHostname = input.hostname ?? (input.mdns ? "0.0.0.0" : "127.0.0.1")
+  const loopbackOnly = isLoopbackHostname(requestedHostname)
+  const hostname = loopbackOnly ? requestedHostname : "127.0.0.1"
   const authConfigured = !!input.password
-  if (!loopbackOnly && !authConfigured) {
-    return {
-      name: "Server exposure",
-      status: "fail",
-      detail: `hostname ${hostname} is network-accessible and AX_CODE_SERVER_PASSWORD is not set`,
-    }
-  }
   return {
     name: "Server exposure",
     status: "ok",
-    detail: `hostname ${hostname}; ${loopbackOnly ? "loopback-only" : "network-accessible"}; auth ${
-      authConfigured ? "configured" : "not configured"
-    }`,
+    detail: loopbackOnly
+      ? `hostname ${hostname}; loopback-only; auth ${authConfigured ? "configured" : "not configured"}`
+      : `requested hostname ${requestedHostname} and mDNS are ignored; effective hostname ${hostname}; local-only policy enforced`,
   }
 }
 
@@ -338,8 +332,7 @@ export const DoctorCommand: CommandModule = {
 
     // 8. Git
     const gitExists =
-      project.projectRoot !== project.callerCwd ||
-      (await exists(path.join(project.callerCwd, ".git", "HEAD")))
+      project.projectRoot !== project.callerCwd || (await exists(path.join(project.callerCwd, ".git", "HEAD")))
     checks.push({
       name: "Git repository",
       status: gitExists ? "ok" : "warn",

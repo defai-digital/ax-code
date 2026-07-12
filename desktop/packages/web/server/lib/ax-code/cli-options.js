@@ -1,3 +1,5 @@
+import { assertLocalOnlyHostname } from "../security/local-only.js"
+
 const asNonEmptyString = (value) => {
   const normalized = typeof value === "string" ? value.trim() : ""
   return normalized.length > 0 ? normalized : undefined
@@ -44,7 +46,7 @@ export const parseServeCliOptions = ({ argv = [], env = {}, defaultPort }) => {
     if (optionName === "host") {
       const { value, nextIndex } = consumeValue(i, inlineValue)
       i = nextIndex
-      options.host = asNonEmptyString(value)
+      options.host = assertLocalOnlyHostname(asNonEmptyString(value), "--host")
       continue
     }
 

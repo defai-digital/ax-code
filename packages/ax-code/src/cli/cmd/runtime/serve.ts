@@ -1,7 +1,7 @@
 import { Server } from "../../../server/server"
 import { listenIpc, resolveIpcSocketPath } from "../../../server/ipc-transport"
 import { cmd } from "../cmd"
-import { withNetworkOptions, resolveNetworkOptions, requireAuthForNetwork, isLocalhostOnly } from "../../network"
+import { withNetworkOptions, resolveNetworkOptions, requireAuthForNetwork } from "../../network"
 import { registerShutdownSignals } from "../../../util/signals"
 import { Instance } from "../../../project/instance"
 import { InstanceBootstrap } from "../../../project/bootstrap"
@@ -31,9 +31,6 @@ export const ServeCommand = cmd({
   handler: async (args) => {
     const opts = await resolveNetworkOptions(args)
     requireAuthForNetwork(opts.hostname)
-    if (!isLocalhostOnly(opts.hostname)) {
-      console.log("Server is network-accessible — protected by AX_CODE_SERVER_PASSWORD")
-    }
     const app = Server.createApp(opts)
     const server = await Server.listen({ ...opts, app })
 

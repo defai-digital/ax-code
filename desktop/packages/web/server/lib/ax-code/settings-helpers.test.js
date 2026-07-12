@@ -35,26 +35,11 @@ describe("settings helpers", () => {
     expect(helpers.sanitizeSettingsUpdate({ messageStreamTransport: "websocket" })).toEqual({})
   })
 
-  it("accepts desktopLanAccessEnabled as a persisted shared setting", () => {
+  it("rejects removed LAN access and UI password settings", () => {
     const helpers = createTestHelpers()
 
-    expect(helpers.sanitizeSettingsUpdate({ desktopLanAccessEnabled: true })).toEqual({
-      desktopLanAccessEnabled: true,
-    })
-    expect(helpers.sanitizeSettingsUpdate({ desktopLanAccessEnabled: false })).toEqual({
-      desktopLanAccessEnabled: false,
-    })
-  })
-
-  it("accepts desktopUiPassword as a persisted shared setting", () => {
-    const helpers = createTestHelpers()
-
-    expect(helpers.sanitizeSettingsUpdate({ desktopUiPassword: " secret " })).toEqual({
-      desktopUiPassword: "secret",
-    })
-    expect(helpers.sanitizeSettingsUpdate({ desktopUiPassword: "" })).toEqual({
-      desktopUiPassword: "",
-    })
+    expect(helpers.sanitizeSettingsUpdate({ desktopLanAccessEnabled: true })).toEqual({})
+    expect(helpers.sanitizeSettingsUpdate({ desktopUiPassword: "secret" })).toEqual({})
   })
 
   it("trims splash color settings and ignores blank values", () => {
