@@ -482,10 +482,10 @@ export const Keybinds = z
 export const Server = z
   .object({
     port: PositiveInteger.max(TCP_PORT_MAX).optional().describe("Port to listen on"),
-    hostname: z.string().optional().describe("Hostname to listen on"),
-    mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
-    mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: ax-code.local)"),
-    cors: z.array(z.string()).optional().describe("Additional domains to allow for CORS"),
+    hostname: z.string().optional().describe("Loopback hostname to listen on; network binds are disabled"),
+    mdns: z.boolean().optional().describe("Deprecated; mDNS discovery is disabled"),
+    mdnsDomain: z.string().optional().describe("Deprecated; mDNS discovery is disabled"),
+    cors: z.array(z.string()).optional().describe("Additional loopback origins to allow for CORS"),
   })
   .strict()
   .meta({

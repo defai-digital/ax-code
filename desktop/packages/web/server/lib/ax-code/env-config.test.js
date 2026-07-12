@@ -48,4 +48,16 @@ describe("resolveAxCodeEnvConfig", () => {
     })
     expect(logger.warn).toHaveBeenCalledTimes(2)
   })
+
+  it("normalizes bracketed IPv6 loopback before socket operations", () => {
+    const logger = { warn: vi.fn() }
+
+    expect(
+      resolveAxCodeEnvConfig({
+        env: { AX_CODE_HOSTNAME: " [::1] " },
+        logger,
+      }).configuredAxCodeHostname,
+    ).toBe("::1")
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
 })

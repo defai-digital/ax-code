@@ -1,6 +1,6 @@
 ---
 title: AX Code Server
-description: Connect AX Code Desktop to a local or remote AX Code server.
+description: Connect AX Code Desktop to an existing local AX Code server.
 ---
 
 # AX Code Server
@@ -12,7 +12,7 @@ AX Code Desktop runs on top of an AX Code server. By default it starts one for y
 When AX Code Desktop starts, it looks for a server in this order:
 
 1. reuse a server it already started
-2. connect to an external one if you told it to (see below)
+2. connect to an existing loopback server if you told it to (see below)
 3. auto-detect a server on the default port (`4096`)
 4. otherwise, start and manage its own
 
@@ -26,7 +26,7 @@ Set these before starting AX Code Desktop:
 AX_CODE_HOST=http://localhost:4096 AX_CODE_SKIP_START=true ax-code-desktop
 ```
 
-- `AX_CODE_HOST` — the full address of your AX Code server, including the port (a value like `http://localhost:4096`). It must not have a path at the end.
+- `AX_CODE_HOST` — the loopback address of your AX Code server, including the port (a value like `http://localhost:4096`). It must not have a path at the end; remote hosts are ignored.
 - `AX_CODE_SKIP_START=true` — tells AX Code Desktop not to start its own AX Code server.
 
 If you only need to change the port, set `AX_CODE_PORT` instead of `AX_CODE_HOST`.

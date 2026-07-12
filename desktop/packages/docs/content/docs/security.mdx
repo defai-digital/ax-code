@@ -1,11 +1,13 @@
 ---
-title: Security
-description: Protect the UI with a password and passkeys before exposing it.
+title: Local-only Security
+description: Understand AX Code Desktop's enforced localhost-only boundary.
 ---
 
 # Security
 
-AX Code Desktop gives access to your machine and your code, so lock it down before anyone but you can reach it. This page covers the UI password, passkeys, and what to know before exposing AX Code Desktop to a network.
+AX Code Desktop gives broad access to your machine and source code. It is therefore restricted to loopback addresses and is intended for office and offline workstations.
+
+Remote hosts, SSH instances, LAN binding, reverse proxies, mDNS discovery, and Cloudflare or other public tunnels are disabled. Legacy settings for these features are ignored and removed during startup.
 
 ## Set a UI password
 
@@ -17,7 +19,7 @@ ax-code-desktop --ui-password be-creative-here
 
 You can also set it with the `AX_CODE_DESKTOP_UI_PASSWORD` environment variable instead of putting it on the command line. After signing in, AX Code Desktop remembers the device for a while so you're not asked every time.
 
-Always set a password if the instance is reachable by anyone else, especially on a shared network or the public internet.
+A password remains useful on a shared workstation, but it does not enable network access.
 
 ## Passkeys
 
@@ -25,14 +27,11 @@ Once a password is set, you can add passkeys (Face ID, Touch ID, a security key)
 
 Passkeys are tied to the current password. If you change or remove the password, saved passkeys are cleared and you'll add them again.
 
-## Before you expose it
+## Network boundary
 
-- By default AX Code Desktop only listens on your own machine (`127.0.0.1`). It takes a deliberate change to listen more widely, and you should set a password first.
-- Prefer a private network, VPN, Cloudflare Access-protected tunnel, or tightly controlled reverse proxy over opening a port to the internet.
-- If you put AX Code Desktop behind your own HTTPS server, see [Reverse Proxy](/reverse-proxy/).
-- For temporary browser access from another trusted device, see [Cloudflare Tunnel](/cloudflare-tunnel/).
+- The Desktop web server and managed AX Code server accept only `localhost`, `127.0.0.0/8`, or `::1`.
+- Proxy forwarding headers are ignored and persisted public origins are not trusted.
+- SDK HTTP clients and server helpers reject remote AX Code URLs and network bind addresses.
+- Git remotes and hosted model providers remain available; the restriction applies to access to the AX Code service itself.
 
-## Related
-
-- [Cloudflare Tunnel](/cloudflare-tunnel/) — temporary trusted browser access
-- [Reverse Proxy](/reverse-proxy/) — run AX Code Desktop behind your own server
+Do not work around this boundary with an external proxy or tunnel. Use AX Code directly on the workstation that owns the code.

@@ -108,14 +108,10 @@
       ]
     },
     {
-      "label": "Remote access",
+      "label": "Security",
       "items": [
         {
-          "label": "Reverse Proxy",
-          "link": "/reverse-proxy/"
-        },
-        {
-          "label": "Security",
+          "label": "Local-only Security",
           "link": "/security/"
         }
       ]
@@ -141,10 +137,6 @@
       "label": "Desktop",
       "items": [
         {
-          "label": "Remote Instances",
-          "link": "/remote-instances/"
-        },
-        {
           "label": "Desktop Browser",
           "link": "/desktop-browser/"
         },
@@ -168,10 +160,6 @@
         {
           "label": "Worktrees & Git",
           "link": "/troubleshooting/worktrees-git/"
-        },
-        {
-          "label": "Remote Access",
-          "link": "/troubleshooting/remote-access/"
         }
       ]
     }

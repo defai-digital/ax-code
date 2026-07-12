@@ -38,7 +38,13 @@ const {
   resolveServerRestartReloadUrl,
 } = require("./server-window-reload")
 const { attachDesktopBrowserWebviewPolicy, createDesktopRendererWebPreferences } = require("./webview-policy")
-const { isAllowedDesktopHostTargetUrl, isLocalDesktopSenderUrl, normalizeHostUrl } = require("./desktop-hosts")
+const {
+  isAllowedDesktopHostTargetUrl,
+  isLocalDesktopSenderUrl,
+  isLocalOnlyDesktopHostsConfigInput,
+  normalizeHostUrl,
+  removeDisabledRemoteAccessSettingsFromRoot,
+} = require("./desktop-hosts")
 const { isTrustedRendererNavigationUrl, normalizeDevRendererUrl } = require("./renderer-navigation-policy")
 const { normalizeSafeExternalUrl } = require("./external-url")
 const { buildDesktopOpenDialogOptions, resolveDesktopDialogOwnerWindow } = require("./desktop-dialog")
@@ -774,6 +780,14 @@ const localOnlyHostConfig = () => ({
 })
 const remoteAccessDisabled = () => {
   throw new Error("Remote AX Code access is disabled by the local-only policy")
+}
+
+const purgeDisabledRemoteAccessSettings = async () => {
+  const current = readSettingsRoot()
+  if (!removeDisabledRemoteAccessSettingsFromRoot(current)) return
+  await mutateSettingsRoot((root) => {
+    removeDisabledRemoteAccessSettingsFromRoot(root)
+  })
 }
 
 // ── Host probe ─────────────────────────────────────────────────────────────
@@ -2246,7 +2260,13 @@ handleCommand("desktop_browser_capture_page", async (args, event) => {
 // current local instance is exposed and accepted.
 handleCommand("desktop_hosts_get", async () => localOnlyHostConfig())
 
-handleCommand("desktop_hosts_set", async () => remoteAccessDisabled())
+handleCommand("desktop_hosts_set", async (args) => {
+  const input = args.input || args.config || {}
+  if (!isLocalOnlyDesktopHostsConfigInput(input)) return remoteAccessDisabled()
+  // Compatibility no-op: older local onboarding code records the local host
+  // choice through this command. No remote host data is accepted or persisted.
+  return null
+})
 
 handleCommand("desktop_host_probe", async (args) => {
   const targetUrl = String(args.url || "")
@@ -2509,6 +2529,11 @@ app.whenReady().then(async () => {
   })
 
   try {
+    await purgeDisabledRemoteAccessSettings().catch((error) => {
+      // Runtime paths already ignore these values, so a read-only legacy
+      // settings file must not prevent the local app from starting.
+      console.warn("[electron] failed to purge disabled remote settings", error)
+    })
     await launchServer()
     await createWindow()
     // Best-effort update check — failures must not crash the app. With

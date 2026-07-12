@@ -1806,19 +1806,19 @@ export type ServerConfig = {
    */
   port?: number
   /**
-   * Hostname to listen on
+   * Loopback hostname to listen on; network binds are disabled
    */
   hostname?: string
   /**
-   * Enable mDNS service discovery
+   * Deprecated; mDNS discovery is disabled
    */
   mdns?: boolean
   /**
-   * Custom domain name for mDNS service (default: ax-code.local)
+   * Deprecated; mDNS discovery is disabled
    */
   mdnsDomain?: string
   /**
-   * Additional domains to allow for CORS
+   * Additional loopback origins to allow for CORS
    */
   cors?: Array<string>
 }

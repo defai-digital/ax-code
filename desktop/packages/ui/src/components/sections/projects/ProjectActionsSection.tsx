@@ -3,26 +3,18 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "@/components/ui"
 import { Icon } from "@/components/icon/Icon"
-import { useDesktopSshStore } from "@/stores/useDesktopSshStore"
-import { isDesktopShell } from "@/lib/desktop"
 import {
   getProjectActionsState,
   saveProjectActionsState,
   type OpenChamberProjectAction,
   type ProjectRef,
 } from "@/lib/openchamberConfig"
-import {
-  buildProjectActionDesktopForwardOptions,
-  PROJECT_ACTION_ICON_MAP,
-  PROJECT_ACTION_ICONS,
-  PROJECT_ACTIONS_UPDATED_EVENT,
-} from "@/lib/projectActions"
+import { PROJECT_ACTION_ICON_MAP, PROJECT_ACTION_ICONS, PROJECT_ACTIONS_UPDATED_EVENT } from "@/lib/projectActions"
 import { dispatchProjectScopedEvent } from "@/lib/projectScopedEvents"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -49,9 +41,6 @@ interface ProjectActionsSectionProps {
 
 export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ projectRef }) => {
   const { t } = useI18n()
-  const isDesktopShellApp = React.useMemo(() => isDesktopShell(), [])
-  const desktopSshInstances = useDesktopSshStore((state) => state.instances)
-  const loadDesktopSsh = useDesktopSshStore((state) => state.load)
 
   const [actions, setActions] = React.useState<EditableProjectAction[]>([])
   const [isLoading, setIsLoading] = React.useState(false)
@@ -60,16 +49,8 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
   const [expandedActions, setExpandedActions] = React.useState<Record<string, boolean>>({})
 
   React.useEffect(() => {
-    if (!isDesktopShellApp) {
-      return
-    }
-    void loadDesktopSsh().catch(() => undefined)
-  }, [isDesktopShellApp, loadDesktopSsh])
-
-  React.useEffect(() => {
     let cancelled = false
     setIsLoading(true)
-
     ;(async () => {
       try {
         const state = await getProjectActionsState(projectRef)
@@ -95,13 +76,6 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
       cancelled = true
     }
   }, [projectRef])
-
-  const desktopForwardOptions = React.useMemo(() => {
-    if (!isDesktopShellApp) {
-      return []
-    }
-    return buildProjectActionDesktopForwardOptions(desktopSshInstances)
-  }, [desktopSshInstances, isDesktopShellApp])
 
   const validationError = React.useMemo(() => {
     const hasIncomplete = actions.some((entry) => {
@@ -372,52 +346,6 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
                                 </TooltipContent>
                               </Tooltip>
                             </div>
-
-                            {isDesktopShellApp ? (
-                              <div className="mt-2">
-                                <p className="typography-meta mb-0.5 text-muted-foreground">
-                                  {t("settings.projects.actions.field.desktopSshForward")}
-                                </p>
-                                {desktopForwardOptions.length > 0 ? (
-                                  <Select
-                                    value={
-                                      action.desktopOpenSshForward &&
-                                      desktopForwardOptions.some((entry) => entry.id === action.desktopOpenSshForward)
-                                        ? action.desktopOpenSshForward
-                                        : "__none__"
-                                    }
-                                    onValueChange={(value) => {
-                                      updateAction(action.id, (current) => ({
-                                        ...current,
-                                        ...(value === "__none__"
-                                          ? { desktopOpenSshForward: undefined }
-                                          : { desktopOpenSshForward: value }),
-                                      }))
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-7 w-full max-w-[30rem]">
-                                      <SelectValue
-                                        placeholder={t("settings.projects.actions.field.useOutputManualUrl")}
-                                      />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="__none__">
-                                        {t("settings.projects.actions.field.useOutputManualUrl")}
-                                      </SelectItem>
-                                      {desktopForwardOptions.map((entry) => (
-                                        <SelectItem key={entry.id} value={entry.id}>
-                                          {entry.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                  <p className="typography-meta text-muted-foreground">
-                                    {t("settings.projects.actions.state.noDesktopSshForwards")}
-                                  </p>
-                                )}
-                              </div>
-                            ) : null}
                           </div>
                         ) : null}
                       </div>

@@ -54,6 +54,16 @@ describe("createAxCodeClient", () => {
     expect(() => createAxCodeClientV2({ baseUrl: "https://ax-code.example.com" })).toThrow("local-only")
   })
 
+  test("allows same-origin relative base URLs in browser clients", () => {
+    expect(() => createAxCodeClient({ baseUrl: "/api" })).not.toThrow()
+    expect(() => createAxCodeClientV2({ baseUrl: "./api" })).not.toThrow()
+  })
+
+  test("rejects protocol-relative remote base URLs", () => {
+    expect(() => createAxCodeClient({ baseUrl: "//ax-code.example.com/api" })).toThrow("same-origin")
+    expect(() => createAxCodeClientV2({ baseUrl: "//ax-code.example.com/api" })).toThrow("same-origin")
+  })
+
   test("keeps ASCII directory headers unencoded", async () => {
     const headers = await captureDirectoryHeaders("/Users/john/a+b/My Projects/app")
 

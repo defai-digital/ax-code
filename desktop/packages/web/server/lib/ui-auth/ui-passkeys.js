@@ -9,6 +9,7 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server"
 import { getRequestOrigin, getRequestRpId } from "../security/request-origin.js"
+import { isLoopbackHostname, normalizeLoopbackHttpOrigin } from "../security/local-only.js"
 
 const DEFAULT_STORE_VERSION = 1
 const DEFAULT_CHALLENGE_TTL_MS = 5 * 60 * 1000
@@ -43,7 +44,7 @@ const normalizeLabel = (value, fallback) => {
   return normalized ? normalized.slice(0, 120) : fallback
 }
 
-const isLocalRpId = (rpID) => rpID === "localhost" || rpID === "127.0.0.1" || rpID === "::1"
+const isLocalRpId = (rpID) => isLoopbackHostname(rpID)
 
 const parseStoredPasskey = (record) => {
   if (!record || typeof record !== "object") {
@@ -70,7 +71,6 @@ const parseStoredPasskey = (record) => {
 
 export const createUiPasskeys = ({
   passwordBinding,
-  readSettingsFromDiskMigrated,
   storeFile = PASSKEY_STORE_FILE,
   rpName = DEFAULT_RP_NAME,
   challengeTtlMs = DEFAULT_CHALLENGE_TTL_MS,
@@ -176,18 +176,10 @@ export const createUiPasskeys = ({
 
   const buildOriginCandidates = async (req) => {
     const origins = new Set()
-    const currentOrigin = getRequestOrigin(req)
+    const currentOrigin = normalizeLoopbackHttpOrigin(getRequestOrigin(req))
     if (currentOrigin) {
       origins.add(currentOrigin)
     }
-
-    try {
-      const settings = await readSettingsFromDiskMigrated?.()
-      const publicOrigin = asTrimmedString(settings?.publicOrigin)
-      if (publicOrigin) {
-        origins.add(new URL(publicOrigin).origin)
-      }
-    } catch {}
 
     return Array.from(origins)
   }
@@ -201,10 +193,14 @@ export const createUiPasskeys = ({
   }
 
   const getPasskeysForRpId = (store, rpID) => store.passkeys.filter((passkey) => passkey.rpID === rpID)
+  const getLocalRpId = (req) => {
+    const rpID = getRequestRpId(req)
+    return isLocalRpId(rpID) ? rpID : ""
+  }
 
   const getStatus = (req) => {
     const store = loadStore()
-    const rpID = getRequestRpId(req)
+    const rpID = getLocalRpId(req)
     return {
       enabled: Boolean(passwordBinding),
       hasPasskeys: Boolean(rpID) && getPasskeysForRpId(store, rpID).length > 0,
@@ -217,7 +213,7 @@ export const createUiPasskeys = ({
     assertEnabled()
 
     const store = loadStore()
-    const rpID = getRequestRpId(req)
+    const rpID = getLocalRpId(req)
     if (!rpID) {
       return []
     }
@@ -243,7 +239,7 @@ export const createUiPasskeys = ({
     }
 
     const store = loadStore()
-    const rpID = getRequestRpId(req)
+    const rpID = getLocalRpId(req)
     const existingPasskey = store.passkeys.find(
       (passkey) => passkey.id === normalizedPasskeyId && passkey.rpID === rpID,
     )
@@ -291,7 +287,7 @@ export const createUiPasskeys = ({
     assertEnabled()
     cleanupChallengeMap(registrationChallenges)
 
-    const rpID = getRequestRpId(req)
+    const rpID = getLocalRpId(req)
     if (!rpID) {
       const error = new Error("Unable to resolve a valid passkey host for this request")
       error.statusCode = 400
@@ -299,7 +295,7 @@ export const createUiPasskeys = ({
     }
 
     const currentOrigin = getRequestOrigin(req)
-    if (!currentOrigin) {
+    if (!normalizeLoopbackHttpOrigin(currentOrigin)) {
       const error = new Error("Unable to resolve a valid passkey origin for this request")
       error.statusCode = 400
       throw error
@@ -413,7 +409,7 @@ export const createUiPasskeys = ({
     cleanupChallengeMap(authenticationChallenges)
 
     const store = loadStore()
-    const rpID = getRequestRpId(req)
+    const rpID = getLocalRpId(req)
     const passkeys = getPasskeysForRpId(store, rpID)
 
     if (!rpID || passkeys.length === 0) {

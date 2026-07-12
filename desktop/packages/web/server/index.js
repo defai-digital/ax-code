@@ -10,6 +10,7 @@ import os from "os"
 import crypto from "crypto"
 import { createUiAuth } from "./lib/ui-auth/ui-auth.js"
 import { createRequestSecurityRuntime } from "./lib/security/request-security.js"
+import { assertNoActiveLegacyPublicTunnels } from "./lib/security/legacy-tunnel.js"
 import { applySecurityHeaders } from "./lib/security/response-headers.js"
 import { prepareNotificationLastMessage } from "./lib/notifications/index.js"
 import { createTerminalRuntime } from "./lib/terminal/runtime.js"
@@ -270,9 +271,7 @@ const readSettingsFromDisk = (...args) => settingsRuntime.readSettingsFromDisk(.
 const writeSettingsToDisk = (...args) => settingsRuntime.writeSettingsToDisk(...args)
 const persistSettings = (...args) => settingsRuntime.persistSettings(...args)
 
-const requestSecurityRuntime = createRequestSecurityRuntime({
-  readSettingsFromDiskMigrated,
-})
+const requestSecurityRuntime = createRequestSecurityRuntime()
 
 const getUiSessionTokenFromRequest = (...args) => requestSecurityRuntime.getUiSessionTokenFromRequest(...args)
 
@@ -1145,6 +1144,10 @@ async function main(options = {}) {
 
   console.log(`Starting AX Code Desktop on port ${port === 0 ? "auto" : port}`)
 
+  // An older release may have left cloudflared running. Binding the local
+  // server again would immediately make it public through that process.
+  assertNoActiveLegacyPublicTunnels({ dataDir: AX_CODE_DESKTOP_DATA_DIR })
+
   // Apply login shell environment asynchronously (non-blocking).
   // Must complete before ax-code is spawned so PATH and other env vars
   // are available for binary resolution and process launch.
@@ -1152,7 +1155,10 @@ async function main(options = {}) {
 
   const app = express()
   const serverStartedAt = new Date().toISOString()
-  app.set("trust proxy", "loopback, linklocal, uniquelocal")
+  // Reverse proxies are unsupported in the local-only build. Trusting forwarded
+  // headers from loopback clients would let any local webpage spoof its origin
+  // and client address.
+  app.set("trust proxy", false)
   // ── HTTP security headers (defense-in-depth for standalone/Docker deployments) ──
   app.use((req, res, next) => {
     applySecurityHeaders(req, res)
@@ -1240,7 +1246,6 @@ async function main(options = {}) {
         : { error: "Startup diagnostics are not available" },
     verboseRequestLogs: AX_CODE_DESKTOP_VERBOSE_REQUEST_LOGS,
     uiPassword,
-    readSettingsFromDiskMigrated,
     ensureGlobalWatcherStarted,
     getUiSessionTokenFromRequest,
     writeSettingsToDisk,

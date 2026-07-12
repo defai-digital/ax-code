@@ -12,10 +12,8 @@ import { Icon } from "@/components/icon/Icon"
 import { cn } from "@/lib/utils"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
 import { useDeviceInfo } from "@/lib/device"
-import { isDesktopShell } from "@/lib/desktop"
 import { useUIStore } from "@/stores/useUIStore"
 import { useTerminalStore } from "@/stores/useTerminalStore"
-import { useDesktopSshStore } from "@/stores/useDesktopSshStore"
 import { openExternalUrl } from "@/lib/url"
 import { useI18n } from "@/lib/i18n"
 import { getProjectActionsState, type OpenChamberProjectAction, type ProjectRef } from "@/lib/openchamberConfig"
@@ -23,7 +21,6 @@ import {
   normalizeProjectActionDirectory,
   PROJECT_ACTIONS_UPDATED_EVENT,
   PROJECT_ACTION_ICON_MAP,
-  resolveProjectActionDesktopForwardUrl,
   toProjectActionRunKey,
 } from "@/lib/projectActions"
 import { projectScopedEventMatchesProject } from "@/lib/projectScopedEvents"
@@ -148,9 +145,6 @@ export const ProjectActionsButton = ({
   const { t } = useI18n()
   const { terminal } = useRuntimeAPIs()
   const { isMobile } = useDeviceInfo()
-  const isDesktopShellApp = React.useMemo(() => isDesktopShell(), [])
-  const desktopSshInstances = useDesktopSshStore((state) => state.instances)
-  const loadDesktopSsh = useDesktopSshStore((state) => state.load)
 
   const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen)
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab)
@@ -190,13 +184,6 @@ export const ProjectActionsButton = ({
     }
     return { id: projectId, path: projectPath }
   }, [projectId, projectPath])
-
-  React.useEffect(() => {
-    if (!isDesktopShellApp) {
-      return
-    }
-    void loadDesktopSsh().catch(() => undefined)
-  }, [isDesktopShellApp, loadDesktopSsh])
 
   const openExternal = React.useCallback(async (url: string) => {
     await openExternalUrl(url)
@@ -534,15 +521,7 @@ export const ProjectActionsButton = ({
           )
         }
 
-        const hasDesktopForwardSelection =
-          discovered.autoOpenUrl === true &&
-          isDesktopShellApp &&
-          (discovered.desktopOpenSshForward || "").trim().length > 0
         const manualOpenUrl = discovered.autoOpenUrl ? normalizeManualOpenUrl(discovered.openUrl) : null
-        const desktopForwardUrl =
-          discovered.autoOpenUrl && isDesktopShellApp
-            ? resolveProjectActionDesktopForwardUrl(discovered.desktopOpenSshForward, desktopSshInstances)
-            : null
 
         setProjectActionRun({
           key,
@@ -561,27 +540,20 @@ export const ProjectActionsButton = ({
           }, AUTO_DISCOVER_PREVIEW_WAIT_TIMEOUT_MS)
         }
 
-        if (desktopForwardUrl) {
-          setTabPreviewUrl(normalizedDirectory, tabId, null, { locked: true })
-          void openExternal(desktopForwardUrl)
-          toast.success(t("projectActions.toast.openedForwardedUrl"))
-        } else if (manualOpenUrl) {
+        if (manualOpenUrl) {
           setTabPreviewUrl(normalizedDirectory, tabId, manualOpenUrl, { locked: true, autoOpened: true })
           openContextPreview(normalizedDirectory, manualOpenUrl)
           toast.success(t("projectActions.toast.openedActionUrl"))
         } else if (hasCustomOpenUrl) {
           setTabPreviewUrl(normalizedDirectory, tabId, null, { locked: true })
           toast.error(t("projectActions.error.invalidCustomUrlFormat"))
-        } else if (hasDesktopForwardSelection) {
-          setTabPreviewUrl(normalizedDirectory, tabId, null, { locked: true })
-          toast.error(t("projectActions.error.selectedDesktopSshForwardUnavailable"))
         } else {
           setTabPreviewUrl(normalizedDirectory, tabId, null, { locked: false, autoOpened: false })
         }
 
         urlWatchByRunKeyRef.current[key] = {
           lastSeenChunkId: null,
-          openedUrl: Boolean(desktopForwardUrl) || Boolean(manualOpenUrl) || hasCustomOpenUrl,
+          openedUrl: Boolean(manualOpenUrl) || hasCustomOpenUrl,
           tail: "",
           openInPreview: discovered.id === AUTO_DISCOVER_ACTION_ID,
         }
@@ -599,13 +571,10 @@ export const ProjectActionsButton = ({
       }
     },
     [
-      desktopSshInstances,
       getOrCreateActionTab,
       allowMobile,
       isMobile,
-      isDesktopShellApp,
       normalizedDirectory,
-      openExternal,
       openContextPreview,
       projectActionRuns,
       removeProjectActionRun,

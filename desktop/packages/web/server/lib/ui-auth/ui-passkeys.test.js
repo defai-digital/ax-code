@@ -51,7 +51,6 @@ describe("ui passkeys", () => {
     storeFile = path.join(tempRoot, "nested", "ui-passkeys.json")
     const passkeys = createUiPasskeys({
       passwordBinding: "password-binding",
-      readSettingsFromDiskMigrated: async () => ({}),
       storeFile,
     })
 
@@ -90,7 +89,6 @@ describe("ui passkeys", () => {
     })
     const passkeys = createUiPasskeys({
       passwordBinding: "password-binding",
-      readSettingsFromDiskMigrated: async () => ({}),
       storeFile,
     })
 
@@ -114,7 +112,6 @@ describe("ui passkeys", () => {
   it("normalizes request origins before WebAuthn verification", async () => {
     const passkeys = createUiPasskeys({
       passwordBinding: "password-binding",
-      readSettingsFromDiskMigrated: async () => ({}),
       storeFile,
     })
 
@@ -132,16 +129,15 @@ describe("ui passkeys", () => {
     )
   })
 
-  it("uses forwarded host and protocol for WebAuthn expectations", async () => {
+  it("ignores forwarded host and protocol for WebAuthn expectations", async () => {
     const passkeys = createUiPasskeys({
       passwordBinding: "password-binding",
-      readSettingsFromDiskMigrated: async () => ({}),
       storeFile,
     })
 
     const registration = await passkeys.beginRegistration(
       createMockRequest({
-        host: "internal.local:3902",
+        host: "localhost:3902",
         forwardedHost: "desktop.example.com",
         forwardedProto: "https",
       }),
@@ -153,16 +149,32 @@ describe("ui passkeys", () => {
 
     expect(simpleWebAuthn.verifyRegistrationResponse).toHaveBeenCalledWith(
       expect.objectContaining({
-        expectedOrigin: ["https://desktop.example.com"],
-        expectedRPID: ["desktop.example.com"],
+        expectedOrigin: ["http://localhost:3902"],
+        expectedRPID: ["localhost"],
       }),
     )
+  })
+
+  it("rejects non-loopback passkey hosts even when forwarded headers claim localhost", async () => {
+    const passkeys = createUiPasskeys({
+      passwordBinding: "password-binding",
+      storeFile,
+    })
+
+    await expect(
+      passkeys.beginRegistration(
+        createMockRequest({
+          host: "desktop.example.com",
+          forwardedHost: "localhost:3902",
+          forwardedProto: "http",
+        }),
+      ),
+    ).rejects.toThrow("valid passkey host")
   })
 
   it("trims passkey ids before revoking them", async () => {
     const passkeys = createUiPasskeys({
       passwordBinding: "password-binding",
-      readSettingsFromDiskMigrated: async () => ({}),
       storeFile,
     })
     const req = createMockRequest({ host: "localhost:3000" })

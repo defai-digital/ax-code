@@ -882,13 +882,7 @@ function App({ apis }: AppProps) {
         <ErrorBoundary>
           <div className="h-full text-foreground bg-transparent">
             <React.Suspense fallback={<div className="h-full" />}>
-              <OnboardingScreen
-                mode="first-launch"
-                onCliAvailable={handleDesktopBootDismiss}
-                onChooseRemote={() => {
-                  // Switch to remote tab - handled internally by OnboardingScreen
-                }}
-              />
+              <OnboardingScreen mode="first-launch" onCliAvailable={handleDesktopBootDismiss} />
             </React.Suspense>
           </div>
         </ErrorBoundary>
@@ -897,7 +891,6 @@ function App({ apis }: AppProps) {
 
     // Recovery screens
     const recoveryVariant = mapBootViewToRecoveryVariant(bootView)
-    const hostUrl = bootView.screen === "recovery" && "url" in bootView ? bootView.url : undefined
 
     return (
       <ErrorBoundary>
@@ -906,7 +899,6 @@ function App({ apis }: AppProps) {
             <OnboardingScreen
               mode="recovery"
               recoveryVariant={recoveryVariant}
-              recoveryHostUrl={hostUrl}
               recoveryHostLabel={undefined}
               onCliAvailable={handleDesktopBootDismiss}
             />

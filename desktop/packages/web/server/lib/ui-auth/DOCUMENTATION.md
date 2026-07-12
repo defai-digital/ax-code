@@ -11,7 +11,7 @@ This module owns AX Code Desktop UI authentication for browser access, including
 
 ## Public exports (ui-auth.js)
 
-- `createUiAuth({ password, cookieName, sessionTtlMs, readSettingsFromDiskMigrated })`: creates UI auth controller with methods:
+- `createUiAuth({ password, cookieName, sessionTtlMs })`: creates UI auth controller with methods:
   - `enabled`
   - `requireAuth(req, res, next)`
   - `handleSessionStatus(req, res)`
@@ -29,7 +29,7 @@ This module owns AX Code Desktop UI authentication for browser access, including
 
 ## Public exports (ui-passkeys.js)
 
-- `createUiPasskeys({ passwordBinding, readSettingsFromDiskMigrated, storeFile, rpName, challengeTtlMs })`: creates passkey runtime with methods:
+- `createUiPasskeys({ passwordBinding, storeFile, rpName, challengeTtlMs })`: creates a loopback-only passkey runtime with methods:
   - `enabled`
   - `getStatus(req)`
   - `listPasskeys(req)`

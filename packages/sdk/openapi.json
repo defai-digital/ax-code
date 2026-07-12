@@ -40172,19 +40172,19 @@
             "maximum": 65535
           },
           "hostname": {
-            "description": "Hostname to listen on",
+            "description": "Loopback hostname to listen on; network binds are disabled",
             "type": "string"
           },
           "mdns": {
-            "description": "Enable mDNS service discovery",
+            "description": "Deprecated; mDNS discovery is disabled",
             "type": "boolean"
           },
           "mdnsDomain": {
-            "description": "Custom domain name for mDNS service (default: ax-code.local)",
+            "description": "Deprecated; mDNS discovery is disabled",
             "type": "string"
           },
           "cors": {
-            "description": "Additional domains to allow for CORS",
+            "description": "Additional loopback origins to allow for CORS",
             "type": "array",
             "items": {
               "type": "string"

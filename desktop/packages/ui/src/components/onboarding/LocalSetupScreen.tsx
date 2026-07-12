@@ -21,10 +21,6 @@ type LocalSetupScreenProps = {
   onBack: () => void
   /** Callback when CLI becomes available */
   onCliAvailable?: () => void
-  /** Whether this screen was entered from recovery flow (shows "Connect to Remote" link) */
-  isFromRecovery?: boolean
-  /** Callback when user wants to switch to remote */
-  onSwitchToRemote?: () => void
 }
 
 function BashCommand({ onCopy, copyTitle }: { onCopy: () => void; copyTitle: string }) {
@@ -50,12 +46,7 @@ function BashCommand({ onCopy, copyTitle }: { onCopy: () => void; copyTitle: str
 
 const HINT_DELAY_MS = 30000
 
-export function LocalSetupScreen({
-  onBack,
-  onCliAvailable,
-  isFromRecovery = false,
-  onSwitchToRemote,
-}: LocalSetupScreenProps) {
+export function LocalSetupScreen({ onBack, onCliAvailable }: LocalSetupScreenProps) {
   const { t } = useI18n()
   const [copied, setCopied] = React.useState(false)
   const [showHint, setShowHint] = React.useState(false)
@@ -358,15 +349,6 @@ export function LocalSetupScreen({
             <div className="text-xs text-muted-foreground/70">{t("onboarding.localSetup.helper.saveAndReload")}</div>
           </div>
         </div>
-
-        {isFromRecovery && onSwitchToRemote && (
-          <div className="text-center pt-4">
-            <p className="text-sm text-muted-foreground mb-2">{t("onboarding.localSetup.remotePreference")}</p>
-            <Button variant="link" onClick={onSwitchToRemote}>
-              {t("onboarding.localSetup.actions.connectRemoteServer")}
-            </Button>
-          </div>
-        )}
       </div>
 
       {showHint && (

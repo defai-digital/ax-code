@@ -32,7 +32,6 @@ export const createBootstrapRuntime = (dependencies) => {
       getStartupDiagnosticsSnapshot,
       verboseRequestLogs,
       uiPassword,
-      readSettingsFromDiskMigrated,
       ensureGlobalWatcherStarted,
       getUiSessionTokenFromRequest,
       getUiNotificationClients,
@@ -45,10 +44,7 @@ export const createBootstrapRuntime = (dependencies) => {
       setAutoAcceptSession,
     } = options
 
-    const uiAuthController = createUiAuth({
-      password: uiPassword,
-      readSettingsFromDiskMigrated,
-    })
+    const uiAuthController = createUiAuth({ password: uiPassword })
     if (uiAuthController.enabled) {
       console.log("UI password protection enabled for browser sessions")
     }

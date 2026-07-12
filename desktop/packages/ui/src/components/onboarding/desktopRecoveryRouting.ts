@@ -1,15 +1,14 @@
 import type { RecoveryVariant } from "./desktopRecoveryConfig"
 
-export type RecoveryPrimaryAction = "use-local" | "use-remote"
+export type RecoveryPrimaryAction = "use-local"
 
-export type RecoveryNextStep = { kind: "local-setup" } | { kind: "switch-default-to-local" } | { kind: "remote-form" }
+export type RecoveryNextStep = { kind: "local-setup" } | { kind: "switch-default-to-local" }
 
 export function resolveRecoveryNextStep(variant: RecoveryVariant, action: RecoveryPrimaryAction): RecoveryNextStep {
-  if (action === "use-remote") {
-    return { kind: "remote-form" }
+  if (action !== "use-local") {
+    throw new Error(`Unsupported local-only recovery action: ${String(action)}`)
   }
 
-  // action === 'use-local'
   switch (variant) {
     case "local-unavailable":
       return { kind: "local-setup" }

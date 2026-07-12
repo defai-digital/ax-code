@@ -4,12 +4,11 @@ export const firstForwardedHeaderValue = (value) =>
   typeof value === "string" ? asTrimmedString(value.split(",")[0]) : ""
 
 export const getRequestProtocol = (req) => {
-  const forwardedProto = firstForwardedHeaderValue(req?.headers?.["x-forwarded-proto"]).toLowerCase()
-  return forwardedProto || (req?.socket?.encrypted ? "https" : "http")
+  return req?.socket?.encrypted ? "https" : "http"
 }
 
 export const getRequestHost = (req) => {
-  return firstForwardedHeaderValue(req?.headers?.["x-forwarded-host"]) || firstForwardedHeaderValue(req?.headers?.host)
+  return firstForwardedHeaderValue(req?.headers?.host)
 }
 
 export const getRequestOrigin = (req) => {

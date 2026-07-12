@@ -11,23 +11,18 @@ import type { RecoveryVariant } from "./desktopRecoveryConfig"
 const EXPECTED_ROUTING: Record<RecoveryVariant, Record<RecoveryPrimaryAction, RecoveryNextStep["kind"]>> = {
   "local-unavailable": {
     "use-local": "local-setup",
-    "use-remote": "remote-form",
   },
   "remote-unreachable": {
     "use-local": "switch-default-to-local",
-    "use-remote": "remote-form",
   },
   "remote-wrong-service": {
     "use-local": "switch-default-to-local",
-    "use-remote": "remote-form",
   },
   "remote-missing": {
     "use-local": "switch-default-to-local",
-    "use-remote": "remote-form",
   },
   "missing-default-host": {
     "use-local": "switch-default-to-local",
-    "use-remote": "remote-form",
   },
 }
 

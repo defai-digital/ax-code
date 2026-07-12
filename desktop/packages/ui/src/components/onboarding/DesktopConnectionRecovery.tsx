@@ -14,7 +14,6 @@ export type DesktopConnectionRecoveryProps = {
   hostUrl?: string
   onRetry?: () => void
   onUseLocal?: () => void
-  onUseRemote?: () => void
   isRetrying?: boolean
 }
 
@@ -34,7 +33,6 @@ export function DesktopConnectionRecovery({
   hostUrl,
   onRetry,
   onUseLocal,
-  onUseRemote,
   isRetrying = false,
 }: DesktopConnectionRecoveryProps) {
   const { t } = useI18n()
@@ -101,13 +99,6 @@ export function DesktopConnectionRecovery({
               <Button variant="outline" onClick={onUseLocal} disabled={isRetrying} className="flex-1">
                 <Icon name="macbook" className="h-4 w-4" />
                 {t(config.useLocalLabelKey as Parameters<typeof t>[0])}
-              </Button>
-            )}
-
-            {config.showUseRemote && onUseRemote && (
-              <Button variant="outline" onClick={onUseRemote} disabled={isRetrying} className="flex-1">
-                <Icon name="server" className="h-4 w-4" />
-                {t(config.useRemoteLabelKey as Parameters<typeof t>[0])}
               </Button>
             )}
           </div>

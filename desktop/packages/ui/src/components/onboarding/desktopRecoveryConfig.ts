@@ -18,13 +18,9 @@ export type DesktopRecoveryConfig = {
   retryLabel?: string
   retryLabelKey?: string
   showUseLocal: boolean
-  showUseRemote: boolean
   /** Label for the "use local" primary action button */
   useLocalLabel: string
   useLocalLabelKey: string
-  /** Label for the "use remote" primary action button */
-  useRemoteLabel: string
-  useRemoteLabelKey: string
 }
 
 function formatHostDisplay(hostLabel?: string, hostUrl?: string): string | undefined {
@@ -42,8 +38,7 @@ export function getDesktopRecoveryConfig(
     case "local-unavailable":
       return {
         title: "Local ax-code Unavailable",
-        description:
-          "AX Code CLI could not be started or is not installed. Install AX Code or connect to a remote server instead.",
+        description: "AX Code CLI could not be started or is not installed. Install AX Code to continue locally.",
         titleKey: "onboarding.desktopRecovery.localUnavailable.title",
         descriptionKey: "onboarding.desktopRecovery.localUnavailable.description",
         iconKey: "local",
@@ -51,11 +46,8 @@ export function getDesktopRecoveryConfig(
         retryLabel: "Retry Local",
         retryLabelKey: "onboarding.desktopRecovery.localUnavailable.retry",
         showUseLocal: true,
-        showUseRemote: true,
         useLocalLabel: "Set Up Local",
         useLocalLabelKey: "onboarding.desktopRecovery.localUnavailable.useLocal",
-        useRemoteLabel: "Use Remote",
-        useRemoteLabelKey: "onboarding.desktopRecovery.common.useRemote",
       }
 
     case "remote-missing":
@@ -67,11 +59,8 @@ export function getDesktopRecoveryConfig(
         iconKey: "local",
         showRetry: false,
         showUseLocal: true,
-        showUseRemote: true,
         useLocalLabel: "Use Local",
         useLocalLabelKey: "onboarding.desktopRecovery.common.useLocal",
-        useRemoteLabel: "Use Remote",
-        useRemoteLabelKey: "onboarding.desktopRecovery.common.useRemote",
       }
 
     case "remote-unreachable": {
@@ -83,15 +72,10 @@ export function getDesktopRecoveryConfig(
         descriptionKey: "onboarding.desktopRecovery.remoteUnreachable.description",
         descriptionParams: host ? { host } : undefined,
         iconKey: "remote",
-        showRetry: true,
-        retryLabel: "Retry Connection",
-        retryLabelKey: "onboarding.desktopRecovery.remoteUnreachable.retry",
+        showRetry: false,
         showUseLocal: true,
-        showUseRemote: true,
         useLocalLabel: "Use Local",
         useLocalLabelKey: "onboarding.desktopRecovery.common.useLocal",
-        useRemoteLabel: "Use Remote",
-        useRemoteLabelKey: "onboarding.desktopRecovery.common.useRemote",
       }
     }
 
@@ -106,11 +90,8 @@ export function getDesktopRecoveryConfig(
         iconKey: "remote",
         showRetry: false,
         showUseLocal: true,
-        showUseRemote: true,
         useLocalLabel: "Use Local",
         useLocalLabelKey: "onboarding.desktopRecovery.common.useLocal",
-        useRemoteLabel: "Use Remote",
-        useRemoteLabelKey: "onboarding.desktopRecovery.common.useRemote",
       }
     }
 
@@ -123,11 +104,8 @@ export function getDesktopRecoveryConfig(
         iconKey: "local",
         showRetry: false,
         showUseLocal: true,
-        showUseRemote: true,
         useLocalLabel: "Use Local",
         useLocalLabelKey: "onboarding.desktopRecovery.common.useLocal",
-        useRemoteLabel: "Use Remote",
-        useRemoteLabelKey: "onboarding.desktopRecovery.common.useRemote",
       }
 
     default: {

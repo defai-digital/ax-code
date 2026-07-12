@@ -1,7 +1,7 @@
 import { addLocalhostOriginAliases, getRequestOrigin } from "./request-origin.js"
+import { normalizeLoopbackHttpOrigin } from "./local-only.js"
 
-export const createRequestSecurityRuntime = (deps) => {
-  const { readSettingsFromDiskMigrated } = deps
+export const createRequestSecurityRuntime = () => {
   const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
   const getUiSessionTokenFromRequest = (req) => {
@@ -58,19 +58,11 @@ export const createRequestSecurityRuntime = (deps) => {
 
   const getRequestOriginCandidates = async (req) => {
     const origins = new Set()
-    const origin = getRequestOrigin(req)
+    const origin = normalizeLoopbackHttpOrigin(getRequestOrigin(req))
     if (origin) {
       origins.add(origin)
       addLocalhostOriginAliases(origins, origin)
     }
-
-    try {
-      const settings = await readSettingsFromDiskMigrated()
-      const publicOrigin = asTrimmedString(settings?.publicOrigin)
-      if (publicOrigin) {
-        origins.add(new URL(publicOrigin).origin)
-      }
-    } catch {}
 
     return origins
   }
@@ -81,12 +73,8 @@ export const createRequestSecurityRuntime = (deps) => {
       return false
     }
 
-    let normalizedOrigin = ""
-    try {
-      normalizedOrigin = new URL(originHeader).origin
-    } catch {
-      return false
-    }
+    const normalizedOrigin = normalizeLoopbackHttpOrigin(originHeader)
+    if (!normalizedOrigin) return false
 
     const allowedOrigins = await getRequestOriginCandidates(req)
     return allowedOrigins.has(normalizedOrigin)

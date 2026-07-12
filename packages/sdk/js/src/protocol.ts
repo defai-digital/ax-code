@@ -10,11 +10,24 @@ const isIpv4Loopback = (hostname: string) => {
 }
 
 export function assertLocalAxCodeBaseUrl(raw: string) {
+  const value = typeof raw === "string" ? raw.trim() : ""
+  if (!value) {
+    throw new Error("AX Code client baseUrl must be a valid local HTTP URL or same-origin path")
+  }
+
   let url: URL
   try {
-    url = new URL(raw)
+    url = new URL(value)
   } catch {
-    throw new Error("AX Code client baseUrl must be a valid local HTTP URL")
+    // Browser clients commonly use `/api`. Resolve relative values against a
+    // fixed loopback origin and require the result to remain on that origin;
+    // this rejects protocol-relative forms such as `//remote.example/api`.
+    const sameOriginBase = "http://localhost"
+    try {
+      const resolved = new URL(value, sameOriginBase)
+      if (resolved.origin === sameOriginBase) return
+    } catch {}
+    throw new Error("AX Code client baseUrl must be a valid local HTTP URL or same-origin path")
   }
   const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "")
   const localHostname =

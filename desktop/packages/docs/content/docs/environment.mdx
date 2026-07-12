@@ -15,11 +15,11 @@ legacy implementation detail, not the product name.
 
 ### `AX_CODE_DESKTOP_HOST`
 
-Bind address for the AX Code Desktop web server. Use `0.0.0.0` to allow access from other machines.
+Loopback bind address for the AX Code Desktop web server. Supported values include `127.0.0.1`, `localhost`, and `::1`; network and wildcard addresses are rejected.
 
 ### `AX_CODE_DESKTOP_UI_PASSWORD`
 
-Password for the browser UI. Use this when binding outside localhost or running behind a reverse proxy.
+Password for the local browser UI. This adds protection on a shared workstation but does not enable network access.
 
 ### `AX_CODE_DESKTOP_DATA_DIR`
 
@@ -41,11 +41,11 @@ Enables verbose HTTP request logs when set to `true` or `1`.
 
 ### `AX_CODE_HOST`
 
-Connects AX Code Desktop to an existing AX Code server. The value must be an `http` or `https` origin with an explicit port and no path, query, or hash. `AX_CODE_HOST` takes precedence over `AX_CODE_PORT`.
+Connects AX Code Desktop to an existing loopback AX Code server. The value must be a loopback `http` or `https` origin with an explicit port and no path, query, or hash. Remote values are ignored. `AX_CODE_HOST` takes precedence over `AX_CODE_PORT`.
 
 ### `AX_CODE_PORT`
 
-Sets the AX Code server port. With managed AX Code this requests the managed port; with `AX_CODE_SKIP_START=true` it connects to an external server on that port.
+Sets the AX Code server port. With managed AX Code this requests the managed port; with `AX_CODE_SKIP_START=true` it connects to an existing local server on that port.
 
 ### `AX_CODE_SKIP_START`
 
@@ -53,7 +53,7 @@ Prevents AX Code Desktop from starting its own AX Code server when set to `true`
 
 ### `AX_CODE_DESKTOP_AX_CODE_HOSTNAME`
 
-Bind hostname for the AX Code server managed by AX Code Desktop. The default is `127.0.0.1`.
+Loopback hostname for the AX Code server managed by AX Code Desktop. The default is `127.0.0.1`; network and wildcard addresses are ignored.
 
 ### `AX_CODE_BINARY`
 

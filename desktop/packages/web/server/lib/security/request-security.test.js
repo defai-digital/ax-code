@@ -61,19 +61,45 @@ describe("request security origin checks", () => {
     ).resolves.toBe(false)
   })
 
-  it("uses forwarded host and protocol for proxied requests", async () => {
+  it("rejects spoofed forwarded host and protocol headers", async () => {
     const runtime = createRuntime()
 
     await expect(
       runtime.isRequestOriginAllowed(
         createMockRequest({
-          host: "internal.local:3902",
+          host: "localhost:3902",
           origin: "https://desktop.example.com",
           protocol: "http",
           forwardedHost: "desktop.example.com",
           forwardedProto: "https",
         }),
       ),
-    ).resolves.toBe(true)
+    ).resolves.toBe(false)
+  })
+
+  it("rejects a stale public origin from pre-local-only settings", async () => {
+    const runtime = createRuntime({ publicOrigin: "https://desktop.example.com" })
+
+    await expect(
+      runtime.isRequestOriginAllowed(
+        createMockRequest({
+          host: "localhost:3902",
+          origin: "https://desktop.example.com",
+        }),
+      ),
+    ).resolves.toBe(false)
+  })
+
+  it("rejects matching non-loopback Host and Origin headers", async () => {
+    const runtime = createRuntime()
+
+    await expect(
+      runtime.isRequestOriginAllowed(
+        createMockRequest({
+          host: "desktop.example.com",
+          origin: "http://desktop.example.com",
+        }),
+      ),
+    ).resolves.toBe(false)
   })
 })

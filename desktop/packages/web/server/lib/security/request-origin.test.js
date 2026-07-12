@@ -17,4 +17,18 @@ describe("request origin helpers", () => {
     expect(getRequestRpId(req)).toBe("localhost")
     expect(getRequestOrigin(req)).toBe("")
   })
+
+  it("ignores proxy headers in the local-only runtime", () => {
+    const req = {
+      headers: {
+        host: "localhost:3902",
+        "x-forwarded-host": "desktop.example.com",
+        "x-forwarded-proto": "https",
+      },
+      socket: { encrypted: false },
+    }
+
+    expect(getRequestOrigin(req)).toBe("http://localhost:3902")
+    expect(getRequestRpId(req)).toBe("localhost")
+  })
 })

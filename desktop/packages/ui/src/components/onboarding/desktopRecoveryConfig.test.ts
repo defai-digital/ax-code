@@ -3,9 +3,9 @@ import { getDesktopRecoveryConfig } from "./desktopRecoveryConfig"
 
 describe("getDesktopRecoveryConfig", () => {
   // ---------------------------------------------------------------------------
-  // 1. local-unavailable: both actions visible + retry labeled "Retry Local"
+  // 1. local-unavailable: local setup + retry labeled "Retry Local"
   // ---------------------------------------------------------------------------
-  test("local-unavailable exposes both actions and Retry Local", () => {
+  test("local-unavailable exposes only local setup and Retry Local", () => {
     const config = getDesktopRecoveryConfig("local-unavailable")
 
     expect(config.title).toBe("Local ax-code Unavailable")
@@ -13,33 +13,29 @@ describe("getDesktopRecoveryConfig", () => {
     expect(config.showRetry).toBe(true)
     expect(config.retryLabel).toBe("Retry Local")
     expect(config.showUseLocal).toBe(true)
-    expect(config.showUseRemote).toBe(true)
-    // local-unavailable uses setup-oriented label since local needs installing
     expect(config.useLocalLabel).toBe("Set Up Local")
-    expect(config.useRemoteLabel).toBe("Use Remote")
+    expect(config).not.toHaveProperty("showUseRemote")
   })
 
   // ---------------------------------------------------------------------------
-  // 2. remote-unreachable: both actions + retry
+  // 2. legacy remote states offer only a return to local AX Code
   // ---------------------------------------------------------------------------
-  test("remote-unreachable exposes both actions + retry", () => {
+  test("remote-unreachable exposes only the local action", () => {
     const config = getDesktopRecoveryConfig("remote-unreachable", "My Server", "https://example.com:4096")
 
     expect(config.title).toBe("Remote Server Unreachable")
     expect(config.iconKey).toBe("remote")
-    expect(config.showRetry).toBe(true)
-    expect(config.retryLabel).toBe("Retry Connection")
+    expect(config.showRetry).toBe(false)
+    expect(config.retryLabel).toBe(undefined)
     expect(config.showUseLocal).toBe(true)
-    expect(config.showUseRemote).toBe(true)
-    // remote variants keep standard "Use Local"
     expect(config.useLocalLabel).toBe("Use Local")
-    expect(config.useRemoteLabel).toBe("Use Remote")
+    expect(config).not.toHaveProperty("showUseRemote")
   })
 
   // ---------------------------------------------------------------------------
   // 3. remote-wrong-service: both actions, NO retry
   // ---------------------------------------------------------------------------
-  test("remote-wrong-service exposes both actions and no retry", () => {
+  test("remote-wrong-service exposes only local recovery and no retry", () => {
     const config = getDesktopRecoveryConfig("remote-wrong-service", "Bad Host", "https://wrong.example.com")
 
     expect(config.title).toBe("Incompatible Server")
@@ -47,15 +43,14 @@ describe("getDesktopRecoveryConfig", () => {
     expect(config.showRetry).toBe(false)
     expect(config.retryLabel).toBe(undefined)
     expect(config.showUseLocal).toBe(true)
-    expect(config.showUseRemote).toBe(true)
     expect(config.useLocalLabel).toBe("Use Local")
-    expect(config.useRemoteLabel).toBe("Use Remote")
+    expect(config).not.toHaveProperty("showUseRemote")
   })
 
   // ---------------------------------------------------------------------------
   // 4. missing-default-host: chooser-with-context (both actions, no retry)
   // ---------------------------------------------------------------------------
-  test("missing-default-host behaves like chooser-with-context", () => {
+  test("missing-default-host returns to the local instance", () => {
     const config = getDesktopRecoveryConfig("missing-default-host")
 
     expect(config.title).toBe("No Default Connection")
@@ -63,9 +58,8 @@ describe("getDesktopRecoveryConfig", () => {
     expect(config.showRetry).toBe(false)
     expect(config.retryLabel).toBe(undefined)
     expect(config.showUseLocal).toBe(true)
-    expect(config.showUseRemote).toBe(true)
     expect(config.useLocalLabel).toBe("Use Local")
-    expect(config.useRemoteLabel).toBe("Use Remote")
+    expect(config).not.toHaveProperty("showUseRemote")
   })
 
   // ---------------------------------------------------------------------------

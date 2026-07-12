@@ -1,4 +1,4 @@
-import { isLoopbackHostname } from "../security/local-only.js"
+import { isLoopbackHostname, normalizeLoopbackHostname } from "../security/local-only.js"
 
 const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
 
@@ -69,7 +69,7 @@ export const resolveAxCodeEnvConfig = (options = {}) => {
       )
       return "127.0.0.1"
     }
-    return trimmed
+    return normalizeLoopbackHostname(trimmed)
   })()
 
   return {

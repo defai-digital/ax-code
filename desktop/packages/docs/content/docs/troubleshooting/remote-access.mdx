@@ -1,37 +1,12 @@
 ---
 title: Remote Access
-description: Fix remote instances and reaching AX Code Desktop from another trusted device.
+description: Remote AX Code access is intentionally unavailable.
 ---
 
 # Remote Access
 
-When you can't reach AX Code Desktop from another trusted workstation, the fix depends on how you're connecting.
+Remote AX Code access is intentionally unavailable. Remote hosts, SSH instances, LAN binding, reverse proxies, and public tunnels are rejected rather than diagnosed or retried.
 
-## Check the basics first
+If a legacy configuration points to a remote instance, restart AX Code Desktop. Startup migration removes the obsolete endpoint and stored credentials, then returns the app to its local instance. If startup reports an active legacy public tunnel, run `ax-code-desktop tunnel stop` first.
 
-- open `http://localhost:3000` on the same computer first — if that fails, it's not a remote problem; see [AX Code connection](/troubleshooting/ax-code-connection/)
-- confirm the server is running with `ax-code-desktop status`
-
-## Remote instance won't connect (desktop)
-
-When a [remote instance](/remote-instances/) stalls, AX Code Desktop names the step that failed:
-
-- **auth** — your SSH or UI password was rejected; re-enter it
-- **install / start** — AX Code Desktop couldn't set up or start the server on the remote machine; check that machine's requirements
-- **forwarding** — the connection is up but the port isn't reaching you; try a different local port
-
-## Behind your own server
-
-If you put AX Code Desktop behind a reverse proxy and it loads oddly or won't connect, see [Reverse Proxy](/reverse-proxy/).
-
-## Cloudflare tunnel does not start
-
-- confirm `cloudflared` is installed and on `PATH`
-- run `ax-code-desktop tunnel status` to check whether an old tunnel is still active
-- start or restart AX Code Desktop with `--ui-password`; unlocked instances cannot be exposed
-- use `--force` only when replacing a stale tunnel on the same port
-
-## Related
-
-- [Remote Instances](/remote-instances/) · [Cloudflare Tunnel](/cloudflare-tunnel/) · [Reverse Proxy](/reverse-proxy/)
-- [Security](/security/) — protect the UI before exposing it
+For local startup problems, see [AX Code Connection](/troubleshooting/ax-code-connection/) and [Local-only Security](/security/).

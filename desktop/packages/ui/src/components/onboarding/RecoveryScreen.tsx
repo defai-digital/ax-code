@@ -1,7 +1,6 @@
 import React from "react"
 import { isTauriShell, restartDesktopApp } from "@/lib/desktop"
 import { DesktopConnectionRecovery, type RecoveryVariant } from "./DesktopConnectionRecovery"
-import { RemoteConnectionForm } from "./RemoteConnectionForm"
 import { resolveRecoveryNextStep } from "./desktopRecoveryRouting"
 import { desktopHostsGet, desktopHostsSet } from "@/lib/desktopHosts"
 import { API_ENDPOINTS } from "@/lib/http"
@@ -15,14 +14,6 @@ type RecoveryScreenProps = {
   hostLabel?: string
   /** Callback when user wants to retry */
   onRetry?: () => void
-  /** Callback when user chooses remote */
-  onChooseRemote?: () => void
-  /** Whether to show the remote connection form */
-  showRemoteForm?: boolean
-  /** Callback when closing remote form */
-  onCloseRemoteForm?: () => void
-  /** Callback when switching to local from remote form */
-  onSwitchToLocalFromRemote?: () => void
   /** Callback when entering local setup */
   onEnterLocalSetup?: () => void
   /** Whether retry action is in progress */
@@ -34,23 +25,18 @@ export function RecoveryScreen({
   hostUrl,
   hostLabel,
   onRetry,
-  onChooseRemote,
-  showRemoteForm = false,
-  onCloseRemoteForm,
-  onSwitchToLocalFromRemote,
   onEnterLocalSetup,
   isRetrying = false,
 }: RecoveryScreenProps) {
-  // Persist the user's first choice (local or remote)
-  const persistFirstChoice = React.useCallback(async (choice: "local" | "remote") => {
+  // Keep the compatibility write local-only for older desktop shells.
+  const persistLocalChoice = React.useCallback(async () => {
     if (!isTauriShell()) return
 
     const config = await desktopHostsGet()
     await desktopHostsSet({
       ...config,
-      // Only change defaultHostId when switching to local; remote keeps
-      // whatever was there (or null) until a successful connect.
-      ...(choice === "local" ? { defaultHostId: "local" } : {}),
+      hosts: [],
+      defaultHostId: "local",
       initialHostChoiceCompleted: true,
     })
   }, [])
@@ -75,7 +61,7 @@ export function RecoveryScreen({
       return
     }
     // switch-default-to-local → persist local choice and restart
-    await persistFirstChoice("local")
+    await persistLocalChoice()
 
     if (isTauriShell()) {
       await restartDesktopApp()
@@ -83,41 +69,7 @@ export function RecoveryScreen({
     }
 
     window.location.reload()
-  }, [variant, persistFirstChoice, onEnterLocalSetup])
-
-  const handleRecoveryUseRemote = React.useCallback(() => {
-    const step = resolveRecoveryNextStep(variant, "use-remote")
-    if (step.kind === "remote-form") {
-      onChooseRemote?.()
-    }
-  }, [variant, onChooseRemote])
-
-  // Recovery mode — show recovery component first; only switch to remote form on explicit user action
-  if (showRemoteForm) {
-    // For remote-wrong-service, do NOT auto-populate the known bad URL
-    const prefillUrl = variant === "remote-wrong-service" ? "" : hostUrl || ""
-    const prefillLabel = variant === "remote-wrong-service" ? "" : hostLabel || ""
-    return (
-      <RemoteConnectionForm
-        onBack={onCloseRemoteForm || (() => onChooseRemote?.())}
-        initialUrl={prefillUrl}
-        initialLabel={prefillLabel}
-        isRecoveryMode={true}
-        onSwitchToLocal={
-          onSwitchToLocalFromRemote ||
-          (() => {
-            persistFirstChoice("local").then(() => {
-              if (isTauriShell()) {
-                restartDesktopApp()
-              } else {
-                onEnterLocalSetup?.()
-              }
-            })
-          })
-        }
-      />
-    )
-  }
+  }, [variant, persistLocalChoice, onEnterLocalSetup])
 
   return (
     <DesktopConnectionRecovery
@@ -126,7 +78,6 @@ export function RecoveryScreen({
       hostUrl={hostUrl}
       onRetry={handleRecoveryRetry}
       onUseLocal={handleRecoveryUseLocal}
-      onUseRemote={handleRecoveryUseRemote}
       isRetrying={isRetrying}
     />
   )

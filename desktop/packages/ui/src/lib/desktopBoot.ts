@@ -36,12 +36,9 @@ export type DesktopBootOutcome =
 
 export type DesktopBootView =
   | { screen: "main" }
-  | { screen: "main"; hostId: string; url: string }
   | { screen: "chooser" }
   | { screen: "recovery"; variant: "local-unavailable" }
-  | { screen: "recovery"; variant: "remote-unreachable"; hostId: string; url: string }
-  | { screen: "recovery"; variant: "remote-wrong-service"; hostId: string; url: string }
-  | { screen: "recovery"; variant: "remote-missing"; hostId: string }
+  | { screen: "recovery"; variant: "missing-default-host" }
 
 // ── Resolver inputs ──
 
@@ -167,13 +164,14 @@ export function resolveDesktopBootView(input: DesktopBootViewInput): DesktopBoot
     return null
   }
 
-  // Main screens - CLI or remote connection is working
-  if (outcome.status === "ok") {
-    if (outcome.target === "local") {
-      return { screen: "main" }
-    } else if (outcome.target === "remote") {
-      return { screen: "main", hostId: outcome.hostId, url: outcome.url }
-    }
+  // Remote outcomes may still be injected by an older shell or persisted boot
+  // state. Never enter a remote main view; guide the user back to local AX Code.
+  if (outcome.target === "remote") {
+    return { screen: "recovery", variant: "missing-default-host" }
+  }
+
+  if (outcome.status === "ok" && outcome.target === "local") {
+    return { screen: "main" }
   }
 
   // First launch - user hasn't made a choice yet
@@ -184,16 +182,6 @@ export function resolveDesktopBootView(input: DesktopBootViewInput): DesktopBoot
   // Recovery screens - something is wrong
   if (outcome.target === "local" && outcome.status === "unreachable") {
     return { screen: "recovery", variant: "local-unavailable" }
-  }
-
-  if (outcome.target === "remote") {
-    if (outcome.status === "unreachable") {
-      return { screen: "recovery", variant: "remote-unreachable", hostId: outcome.hostId, url: outcome.url }
-    } else if (outcome.status === "wrong-service") {
-      return { screen: "recovery", variant: "remote-wrong-service", hostId: outcome.hostId, url: outcome.url }
-    } else if (outcome.status === "missing") {
-      return { screen: "recovery", variant: "remote-missing", hostId: outcome.hostId }
-    }
   }
 
   // Unknown outcome — defensive null.

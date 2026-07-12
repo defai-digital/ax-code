@@ -86,6 +86,35 @@ const isAllowedDesktopHostTargetUrl = (targetRaw, { localOrigin, hosts, includeA
   )
 }
 
+const isLocalOnlyDesktopHostsConfigInput = (input) => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false
+  if (input.hosts !== undefined && (!Array.isArray(input.hosts) || input.hosts.length > 0)) return false
+  const defaultHostId = typeof input.defaultHostId === "string" ? input.defaultHostId.trim() : ""
+  return !defaultHostId || defaultHostId === LOCAL_HOST_ID
+}
+
+const DISABLED_REMOTE_SETTINGS_KEYS = [
+  "desktopHosts",
+  "desktopDefaultHostId",
+  "desktopInitialHostChoiceCompleted",
+  "desktopLocalClientToken",
+  "desktopSshInstances",
+  "desktopLanAccessEnabled",
+  "desktopUiPassword",
+  "publicOrigin",
+]
+
+const removeDisabledRemoteAccessSettingsFromRoot = (root) => {
+  if (!root || typeof root !== "object" || Array.isArray(root)) return false
+  let changed = false
+  for (const key of DISABLED_REMOTE_SETTINGS_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(root, key)) continue
+    delete root[key]
+    changed = true
+  }
+  return changed
+}
+
 const resolveStoredClientTokenForUrl = (targetRaw, { hosts } = {}) => {
   const normalizedTarget = normalizeHostUrl(targetRaw)
   if (!normalizedTarget) return ""
@@ -183,10 +212,12 @@ const applyDesktopHostsConfigToRoot = (root, config) => {
 module.exports = {
   applyDesktopHostsConfigToRoot,
   isAllowedDesktopHostTargetUrl,
+  isLocalOnlyDesktopHostsConfigInput,
   isLocalDesktopSenderUrl,
   isLoopbackDesktopHostname,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
+  removeDisabledRemoteAccessSettingsFromRoot,
   resolveStoredClientTokenForUrl,
   sanitizeClientTokenForStorage,
 }

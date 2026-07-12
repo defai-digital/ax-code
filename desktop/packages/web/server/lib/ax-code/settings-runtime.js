@@ -7,6 +7,31 @@ const DEFAULT_NOTIFICATION_TEMPLATES = {
   subtask: { title: "{agent_name} is ready", message: "{model_name} completed the task" },
 }
 
+const DISABLED_REMOTE_SETTINGS_KEYS = [
+  "desktopHosts",
+  "desktopDefaultHostId",
+  "desktopInitialHostChoiceCompleted",
+  "desktopLocalClientToken",
+  "desktopSshInstances",
+  "desktopLanAccessEnabled",
+  "desktopUiPassword",
+  "publicOrigin",
+]
+
+const removeDisabledRemoteAccessSettings = (settings) => {
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+    return { settings, changed: false }
+  }
+  const next = { ...settings }
+  let changed = false
+  for (const key of DISABLED_REMOTE_SETTINGS_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(next, key)) continue
+    delete next[key]
+    changed = true
+  }
+  return { settings: changed ? next : settings, changed }
+}
+
 const ensureNotificationTemplateShape = (templates) => {
   const input = templates && typeof templates === "object" ? templates : {}
   let changed = false
@@ -744,17 +769,19 @@ export const createSettingsRuntime = (deps) => {
     const migration4 = await migrateSettingsNotificationDefaults(migration3.settings)
     const migration6 = normalizeSettingsPaths(migration4.settings)
     const migration7 = await migrateSettingsToDeterministicProjectIds(migration6.settings)
+    const migration8 = removeDisabledRemoteAccessSettings(migration7.settings)
     if (
       migration1.changed ||
       migration2.changed ||
       migration3.changed ||
       migration4.changed ||
       migration6.changed ||
-      migration7.changed
+      migration7.changed ||
+      migration8.changed
     ) {
-      await writeSettingsToDisk(migration7.settings)
+      await writeSettingsToDisk(migration8.settings)
     }
-    return migration7.settings
+    return migration8.settings
   }
 
   const persistSettings = async (changes) => {
@@ -772,6 +799,7 @@ export const createSettingsRuntime = (deps) => {
         )
         const sanitized = sanitizeSettingsUpdate(changes)
         let next = mergePersistedSettings(current, sanitized)
+        next = removeDisabledRemoteAccessSettings(next).settings
 
         const normalizedState = normalizeSettingsPaths(next)
         if (normalizedState.changed) {

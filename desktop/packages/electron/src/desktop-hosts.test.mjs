@@ -5,13 +5,45 @@ const require = createRequire(import.meta.url)
 const {
   applyDesktopHostsConfigToRoot,
   isAllowedDesktopHostTargetUrl,
+  isLocalOnlyDesktopHostsConfigInput,
   isLocalDesktopSenderUrl,
   normalizeHostUrl,
   readDesktopHostsConfigFromRoot,
+  removeDisabledRemoteAccessSettingsFromRoot,
   resolveStoredClientTokenForUrl,
 } = require("./desktop-hosts.js")
 
 describe("desktop hosts config", () => {
+  test("accepts local-only compatibility writes and rejects remote host data", () => {
+    expect(isLocalOnlyDesktopHostsConfigInput({ hosts: [], defaultHostId: "local" })).toBe(true)
+    expect(isLocalOnlyDesktopHostsConfigInput({ hosts: [], defaultHostId: null })).toBe(true)
+    expect(
+      isLocalOnlyDesktopHostsConfigInput({
+        hosts: [{ id: "remote-a", url: "https://remote.example.com" }],
+        defaultHostId: "remote-a",
+      }),
+    ).toBe(false)
+    expect(isLocalOnlyDesktopHostsConfigInput({ hosts: "invalid", defaultHostId: "local" })).toBe(false)
+  })
+
+  test("purges persisted remote endpoints and credentials without touching local preferences", () => {
+    const root = {
+      themeId: "ax-dark",
+      desktopHosts: [{ id: "remote-a", clientToken: "secret-token" }],
+      desktopDefaultHostId: "remote-a",
+      desktopInitialHostChoiceCompleted: true,
+      desktopLocalClientToken: "local-secret",
+      desktopSshInstances: [{ id: "ssh-a", auth: { sshPassword: { value: "secret" } } }],
+      desktopLanAccessEnabled: true,
+      desktopUiPassword: "old-password",
+      publicOrigin: "https://remote.example.com",
+    }
+
+    expect(removeDisabledRemoteAccessSettingsFromRoot(root)).toBe(true)
+    expect(root).toEqual({ themeId: "ax-dark" })
+    expect(removeDisabledRemoteAccessSettingsFromRoot(root)).toBe(false)
+  })
+
   test("strips URL-carried credentials before storing or exposing hosts", () => {
     expect(normalizeHostUrl(" https://user:pass@remote.example.com/app?token=secret#frag ")).toBe(
       "https://remote.example.com/app",

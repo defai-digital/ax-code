@@ -35,6 +35,40 @@ const createRuntime = async () => {
 }
 
 describe("settings runtime", () => {
+  it("purges disabled remote endpoints and stored credentials during migration", async () => {
+    const { runtime, settingsFilePath, cleanup } = await createRuntime()
+    try {
+      await fsPromises.writeFile(
+        settingsFilePath,
+        JSON.stringify({
+          themeId: "ax-dark",
+          desktopHosts: [{ id: "remote-a", clientToken: "secret-token" }],
+          desktopDefaultHostId: "remote-a",
+          desktopLocalClientToken: "local-secret",
+          desktopSshInstances: [{ id: "ssh-a", auth: { sshPassword: { value: "secret" } } }],
+          desktopLanAccessEnabled: true,
+          desktopUiPassword: "old-password",
+          publicOrigin: "https://remote.example.com",
+        }),
+        "utf8",
+      )
+
+      const migrated = await runtime.readSettingsFromDiskMigrated()
+      expect(migrated).toMatchObject({ themeId: "ax-dark" })
+      expect(migrated).not.toHaveProperty("desktopHosts")
+      expect(migrated).not.toHaveProperty("desktopDefaultHostId")
+      expect(migrated).not.toHaveProperty("desktopLocalClientToken")
+      expect(migrated).not.toHaveProperty("desktopSshInstances")
+      expect(migrated).not.toHaveProperty("desktopLanAccessEnabled")
+      expect(migrated).not.toHaveProperty("desktopUiPassword")
+      expect(migrated).not.toHaveProperty("publicOrigin")
+
+      await expect(fsPromises.readFile(settingsFilePath, "utf8")).resolves.not.toContain("secret")
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("only remaps project plan paths within the migrated storage directory", async () => {
     const { runtime, settingsFilePath, tempRoot, cleanup } = await createRuntime()
     try {

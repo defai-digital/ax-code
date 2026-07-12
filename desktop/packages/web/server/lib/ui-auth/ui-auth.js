@@ -306,12 +306,7 @@ function persistJwtSecret(secret) {
   return new TextEncoder().encode(secret)
 }
 
-export const createUiAuth = ({
-  password,
-  cookieName = SESSION_COOKIE_NAME,
-  sessionTtlMs = SESSION_TTL_MS,
-  readSettingsFromDiskMigrated,
-} = {}) => {
+export const createUiAuth = ({ password, cookieName = SESSION_COOKIE_NAME, sessionTtlMs = SESSION_TTL_MS } = {}) => {
   const normalizedPassword = normalizePassword(password)
 
   if (!normalizedPassword) {
@@ -380,18 +375,12 @@ export const createUiAuth = ({
   let jwtSecret = getOrCreateJwtSecret()
   let passwordBinding = derivePasswordBinding(normalizedPassword, jwtSecret)
   const resolveSessionTtlMs = (trustDevice) => (trustDevice ? TRUSTED_DEVICE_SESSION_TTL_MS : sessionTtlMs)
-  let passkeyController = createUiPasskeys({
-    passwordBinding,
-    readSettingsFromDiskMigrated,
-  })
+  let passkeyController = createUiPasskeys({ passwordBinding })
 
   const rebuildPasskeyController = () => {
     passkeyController.dispose()
     passwordBinding = derivePasswordBinding(normalizedPassword, jwtSecret)
-    passkeyController = createUiPasskeys({
-      passwordBinding,
-      readSettingsFromDiskMigrated,
-    })
+    passkeyController = createUiPasskeys({ passwordBinding })
   }
 
   const rotateJwtSecret = () => {

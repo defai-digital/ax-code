@@ -17,7 +17,7 @@ describe("resolveDesktopBootView", () => {
     ).toEqual({ screen: "chooser" })
   })
 
-  test("returns recovery view for broken saved remote", () => {
+  test("routes broken saved remote state back to local recovery", () => {
     expect(
       resolveDesktopBootView({
         isDesktopShell: true,
@@ -28,7 +28,7 @@ describe("resolveDesktopBootView", () => {
           url: "https://x.test",
         },
       }),
-    ).toEqual({ screen: "recovery", variant: "remote-unreachable", hostId: "remote-a", url: "https://x.test" })
+    ).toEqual({ screen: "recovery", variant: "missing-default-host" })
   })
 
   test("returns main for local ok", () => {
@@ -40,16 +40,16 @@ describe("resolveDesktopBootView", () => {
     ).toEqual({ screen: "main" })
   })
 
-  test("returns main with hostId for remote ok", () => {
+  test("never enters the main view for a legacy remote-ok outcome", () => {
     expect(
       resolveDesktopBootView({
         isDesktopShell: true,
         bootOutcome: { target: "remote", status: "ok", hostId: "remote-1", url: "https://example.com" },
       }),
-    ).toEqual({ screen: "main", hostId: "remote-1", url: "https://example.com" })
+    ).toEqual({ screen: "recovery", variant: "missing-default-host" })
   })
 
-  test("returns recovery-remote for remote wrong-service", () => {
+  test("routes legacy remote wrong-service state back to local recovery", () => {
     expect(
       resolveDesktopBootView({
         isDesktopShell: true,
@@ -60,7 +60,7 @@ describe("resolveDesktopBootView", () => {
           url: "https://bad.test",
         },
       }),
-    ).toEqual({ screen: "recovery", variant: "remote-wrong-service", hostId: "bad-host", url: "https://bad.test" })
+    ).toEqual({ screen: "recovery", variant: "missing-default-host" })
   })
 
   test("returns recovery view for local unreachable", () => {
@@ -78,7 +78,7 @@ describe("resolveDesktopBootView", () => {
         isDesktopShell: true,
         bootOutcome: { target: "remote", status: "missing", hostId: "gone-1" },
       }),
-    ).toEqual({ screen: "recovery", variant: "remote-missing", hostId: "gone-1" })
+    ).toEqual({ screen: "recovery", variant: "missing-default-host" })
   })
 
   test("returns null for non-desktop shell", () => {
