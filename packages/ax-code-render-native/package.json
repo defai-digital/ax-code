@@ -1,7 +1,7 @@
 {
   "name": "@ax-code/render",
   "version": "0.1.0",
-  "description": "Rust render core for ax-code (ADR-046) — yoga layout + audio stubs behind AX_CODE_NATIVE_RENDER",
+  "description": "Experimental Rust render core for ax-code (ADR-046/047) — lab successor behind AX_CODE_NATIVE_RENDER; production TUI uses Zig",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {

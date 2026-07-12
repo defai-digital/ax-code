@@ -621,8 +621,12 @@ export const TuiThreadCommand = cmd({
       .option("tui-mode", {
         type: "string",
         choices: TUI_MODE_CHOICES as unknown as string[],
+        // Hidden: Zig is the only supported production backend (ADR-047).
+        // native/yoga remain for maintainer dogfood via this flag or
+        // AX_CODE_NATIVE_RENDER; do not re-surface in help until graduated.
+        hidden: true,
         describe:
-          "TUI render backend: zig (bundled library, default), native (Rust render core), yoga (Rust yoga/audio only)",
+          "[experimental] TUI render backend override (supported: zig). native/yoga are lab-only; prefer AX_CODE_NATIVE_RENDER",
       }),
   handler: async (args) => {
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.

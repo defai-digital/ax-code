@@ -44,29 +44,34 @@ pnpm --dir packages/ax-code exec vitest run test/cli/tui/opentui-ffi-coordinate-
 
 The vendored core must also preserve the ADR-046 native-render overlay
 (`applyNativeRenderOverlay` in the main bundle, applied at the end of
-`getOpenTUILib`). **It is OFF BY DEFAULT (opt in with `AX_CODE_NATIVE_RENDER=1`)**:
+`getOpenTUILib`). **Supported production backend is Zig. The Rust overlay is
+OFF BY DEFAULT and experimental** (opt in with `AX_CODE_NATIVE_RENDER=1`):
 after the v6.9.x field reports of CLI hangs/crash-to-quit with long-output
 models were traced to the Rust core, the battle-tested Zig library is the
-default again until the Rust core has more production mileage. When opted in,
-the ENTIRE render pipeline — the renderer, buffer, text-buffer/view,
-edit-buffer, editor-view, native-span-feed and terminal families, plus yoga and
-audio — routes to the `@ax-code/render` napi addon (Rust; yoga is vendored
-facebook/yoga v3.2.1, the same tag the upstream Zig build pins). If the addon
-can't be loaded (JS-only install, unbuilt dev checkout) it falls back to the
-bundled Zig library (with a warning, since `=1` was explicit). `@ax-code/render`
-is declared as a workspace optionalDependency of this package and is built +
-shipped per platform by the release workflow.
+only supported shipping path (ADR-047 blessed matrix). Product investment
+stays on Zig stability; Rust is a lab successor, not a user-facing mode.
 
-Switches (case-insensitive):
-- `AX_CODE_NATIVE_RENDER=1` (or `on`/`true`) — opt into the Rust render core.
+When opted in, the ENTIRE render pipeline — the renderer, buffer,
+text-buffer/view, edit-buffer, editor-view, native-span-feed and terminal
+families, plus yoga and audio — routes to the `@ax-code/render` napi addon
+(Rust; yoga is vendored facebook/yoga v3.2.1, the same tag the upstream Zig
+build pins). If the addon can't be loaded (JS-only install, unbuilt dev
+checkout) it falls back to the bundled Zig library (with a warning, since
+`=1` was explicit). `@ax-code/render` is declared as a workspace
+optionalDependency of this package and is built + shipped per platform by
+the release workflow.
+
+Switches (case-insensitive; **maintainer / CI only**):
+- `AX_CODE_NATIVE_RENDER=1` (or `on`/`true`) — opt into the experimental Rust
+  render core.
 - `AX_CODE_NATIVE_RENDER_SCOPE=yoga` — with `=1`, route only yoga/audio to
-  Rust; the render pipeline stays on Zig (the Phase-1 behavior).
+  Rust; the render pipeline stays on Zig (legacy Phase-1 migration scaffold).
 
-The TUI also exposes these as a first-class flag — `ax-code --tui-mode=zig`
-(default), `--tui-mode=native` (full Rust core), or `--tui-mode=yoga` (Rust
-yoga/audio only) — mapped onto the env switches in
+The TUI keeps a **hidden** `--tui-mode={zig,native,yoga}` escape hatch mapped
+onto those env switches in
 `packages/ax-code/src/cli/cmd/tui/render-backend.ts` before the renderer
-library is resolved.
+library is resolved. It does not appear in normal `--help`. Do not document
+native/yoga as product choices until ADR-047 graduation criteria are met.
 
 The render families share a backend-specific handle registry, so they flip
 atomically (a Zig renderer handle can't be used by a Rust buffer call). The

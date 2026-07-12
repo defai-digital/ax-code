@@ -1,19 +1,32 @@
-// --tui-mode: first-class CLI switch for the TUI render backend. It maps onto
-// the AX_CODE_NATIVE_RENDER / AX_CODE_NATIVE_RENDER_SCOPE env switches read by
-// the vendored opentui-core overlay (applyNativeRenderOverlay), so it must run
-// before the renderer library is first resolved and before the backend child
-// is spawned (children inherit the resolved env).
+// Experimental TUI render-backend override for maintainers / dogfood.
 //
-//   (no flag) -> leave env untouched; the overlay's built-in default is the
-//                battle-tested Zig library (post-v6.9.x rollback), while an
-//                explicitly exported AX_CODE_NATIVE_RENDER still works.
+// Supported production path is always Zig (OpenTUI bundled native library).
+// The Rust core (native / yoga scopes) remains in-tree as an experimental
+// successor candidate (ADR-046 overlay, ADR-047 blessed matrix) and must not
+// be presented as a user-facing product choice until graduation criteria are
+// met — see `.internal/tui-stability/ADR-047-tui-stability-hardening.md`.
+//
+// `--tui-mode` is a *hidden* CLI escape hatch that maps onto
+// AX_CODE_NATIVE_RENDER / AX_CODE_NATIVE_RENDER_SCOPE before the renderer
+// library is first resolved and before the backend child is spawned
+// (children inherit the resolved env). Prefer the env vars for scripts/CI.
+//
+//   (no flag) -> leave env untouched; overlay default = Zig. Explicit
+//                AX_CODE_NATIVE_RENDER still works for lab use.
 //   zig       -> force the bundled Zig library (overrides any env opt-in)
-//   native    -> full Rust render core (@ax-code/render napi addon)
-//   yoga      -> Rust yoga/audio only; the render pipeline stays on Zig
+//   native    -> full Rust render core (@ax-code/render napi addon) [experimental]
+//   yoga      -> Rust yoga/audio only; render pipeline stays on Zig [experimental]
 
 export const TUI_MODE_CHOICES = ["zig", "native", "yoga"] as const
 
+/** Supported production backend. All other choices are experimental. */
+export const TUI_SUPPORTED_RENDER_BACKEND = "zig" as const satisfies TuiRenderBackendMode
+
 export type TuiRenderBackendMode = (typeof TUI_MODE_CHOICES)[number]
+
+export function isExperimentalTuiRenderBackend(mode: TuiRenderBackendMode): boolean {
+  return mode !== TUI_SUPPORTED_RENDER_BACKEND
+}
 
 export function applyTuiRenderBackendMode(
   mode: string | undefined,
