@@ -108,7 +108,7 @@ async function run(group: string, files: string[], dir: string, run: number) {
   const command = [vitestCli(), "run", "--reporter=junit", `--outputFile=${file}`]
   const maxWorkers = process.env.AX_TEST_MAX_WORKERS
   if (maxWorkers) {
-    command.push(`--maxWorkers=${maxWorkers}`, "--minWorkers=1")
+    command.push(`--maxWorkers=${maxWorkers}`)
   }
   if (coverageDir) {
     command.push(
