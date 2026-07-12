@@ -57,7 +57,8 @@ describe("terminal transport multi-view subscribe", () => {
       onerror: ((ev?: unknown) => void) | null = null
       onclose: ((ev?: unknown) => void) | null = null
 
-      constructor(_url: string) {
+      constructor(url: string) {
+        void url
         sockets.push(this as unknown as MockSocket)
         queueMicrotask(() => {
           this.readyState = WS_OPEN
